@@ -34,6 +34,7 @@ import dnd.spells.divination as divination
 import dnd.spells.enchantment as enchantment
 import dnd.spells.evocation as evocation
 import dnd.spells.illusion as illusion
+import dnd.spells.ice_knife as ice_knife
 import dnd.spells.necromancy as necromancy
 import dnd.spells.transmutation as transmutation
 from dnd.spells.content_metadata import (
@@ -203,6 +204,7 @@ SPELL_CONTENT_IDENTITY_SPECS: tuple[SpellContentIdentitySpec, ...] = (
     SpellContentIdentitySpec("Inflict Wounds", necromancy.InflictWounds, SRD_SPELL_PACK_ID, "spell.inflict_wounds", "necromancy", 1, 157, 310),
     SpellContentIdentitySpec("Shield of Faith", abjuration.ShieldOfFaith, SRD_SPELL_PACK_ID, "spell.shield_of_faith", "abjuration", 1, 179, 320),
     SpellContentIdentitySpec("Sanctuary", abjuration.Sanctuary, SRD_SPELL_PACK_ID, "spell.sanctuary", "abjuration", 1, 176, 330),
+    SpellContentIdentitySpec("Ice Knife", ice_knife.IceKnife, NEURODRAGON_SPELL_PACK_ID, "spell.ice_knife", "conjuration", 1, None, 335),
     SpellContentIdentitySpec("Hold Person", enchantment.HoldPerson, SRD_SPELL_PACK_ID, "spell.hold_person", "enchantment", 2, 154, 340),
     SpellContentIdentitySpec("Shatter", evocation.Shatter, SRD_SPELL_PACK_ID, "spell.shatter", "evocation", 2, 178, 350),
     SpellContentIdentitySpec("Scorching Ray", evocation.ScorchingRay, SRD_SPELL_PACK_ID, "spell.scorching_ray", "evocation", 2, 176, 360),
@@ -326,6 +328,12 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     (conjuration.AcidSplash, _catalog(
         'acid_splash', '1-2 targets within 5ft of each other, DEX save or 1d6 acid', 'multi_entity', 'ranged', 60, 'missile_volley',
         projectile='orb', damage=(DamageType.ACID,), saves=_saving_throws('dexterity'), multi_target=_multi_target(1, 2, False, projectiles_per_cast=2), tags=('acid', 'orb'),
+    )),
+    (ice_knife.IceKnife, _catalog(
+        'ice_knife', 'A piercing attack followed by a 5ft cold burst, hit or miss', 'entity', 'ranged', 60, 'aoe_projectile',
+        projectile='bolt', area=_area('sphere', radius_ft=5), damage=(DamageType.PIERCING, DamageType.COLD),
+        attack_roll=True, saves=_saving_throws('dexterity'), verbal=False, somatic=True, material=True,
+        classes=('druid', 'sorcerer', 'wizard'), tags=('cold', 'piercing'),
     )),
     (necromancy.ChillTouch, _catalog(
         'chill_touch', "1d8 necrotic, target can't heal. Undead: disadvantage vs caster.", 'entity', 'ranged', 120, 'single_projectile',

@@ -152,6 +152,7 @@ class _ResourceBindings(AuthoredRecord):
     resources: FrozenMap[str]
     spells: FrozenMap[ContentRef] = Field(default_factory=dict)
     projectileStorage: FrozenMap[ProjectileStorage] = Field(default_factory=dict)
+    effectDrafts: FrozenMap[StudioSpellDraft] = Field(default_factory=dict)
 
 
 class _ContextFile(AuthoredRecord):
@@ -311,14 +312,16 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         drafts_by_ref[ref] = draft
         identities.add(ref.identity_key)
     if authored_bundles is None:
-        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery")
+        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells")
                                  if (data_root.parent / name).is_dir())
     bundle_resources: dict[str, Path] = {}
     projectile_storage: dict[str, ProjectileStorage] = {}
     spell_bindings = dict(bindings.spells)
     overridden: set[ContentRef] = set()
+    effect_drafts: dict[str, StudioSpellDraft] = {}
     for bundle in authored_bundles:
         resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
+        effect_drafts.update(resource_bindings.effectDrafts)
         for identity, ref in resource_bindings.spells.items():
             if identity in spell_bindings and spell_bindings[identity] != ref:
                 raise ValueError(f"authored spell binding disagrees with existing definitionRef: {identity}")
@@ -350,6 +353,10 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         drafts[semantic_id] = drafts_by_ref[ref]
     if set(spell_bindings.values()) != set(drafts_by_ref):
         raise ValueError("materialized spell drafts and local bindings differ")
+    for effect_id, draft in effect_drafts.items():
+        if draft.definitionRef not in drafts_by_ref or effect_id in drafts:
+            raise ValueError(f"effect draft must reference its existing owning spell: {effect_id}")
+        drafts[effect_id] = draft
 
     projectile_assets: dict[str, AuthoredProjectileAsset] = {}
     facing_order = rig.AUTHORED_PROJECTILE_ROW_ORDER

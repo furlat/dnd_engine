@@ -21,12 +21,13 @@ from game.animation import (
     ProjectileSample, body_clip, body_elevation_steps, body_rig, project_geometry_projectile, project_projectile,
     projectile_center_offset, projectile_phase_scale, projectile_contact, view_facing, cast_deliveries,
 )
-from game.animation_types import AnimationData, DepthMode, ElementColors, Facing8, ParticleMediaAsset, StudioActorLayer, RigLayer as RigLayer
+from game.animation_types import AnimationData, DepthMode, ElementColors, Facing8, PaletteTreatment, ParticleMediaAsset, StudioActorLayer, RigLayer as RigLayer
 from game.action_media import ActionStripCue, ActionStripSample
 from game.attack import AttackSample, AttackTimeline, attack_projectile_contact, project_attack_projectile
 from game.condition_animation import ConditionAppearance
 from game.condition_draw import CONDITION_BODY_SLOTS, condition_body_color
 from game.projectile_media import projectile_frame_layers
+from game.spell_palette import cached_palette, palette_noise, recolor_palette, retain_palette
 from game.particle_media import sample_particles
 from game.area_media import AreaLayer, AreaMedia, mask_ground_area
 from game.draw_commands import DrawCommand as AnimationDrawCommand
@@ -307,6 +308,17 @@ def load_animation_media(timeline: CastTimeline,
     loaded_rows = _load_body_rows(data, body_requests, cache)
     _load_cast_rows(data, source.caster, cast.actionClip, timeline.facing,
                     (cast.weaponGlow, cast.aura, *(cast.effects or ()), cast.slash), cache)
+    for application in timeline.applications:
+        damage = application.damage
+        if damage is None or not damage.hitFlash.enabled or damage.hitFlash.palette is None:
+            continue
+        target = application.source.target
+        clip = (data.death_context.bodyClip if target.life_state is LifeState.DEAD
+                or application.source.resulting_life_state is LifeState.DEAD else data.damage_context.bodyClip)
+        for quadrant in range(4):
+            pose = BodySample(target.actor_uuid, clip, 0, view_facing(target.facing, quadrant, data))
+            _body_image(pose, target, appearances[target.actor_uuid], loaded_rows, data,
+                        damage.hitFlash.palette, only_shadow=False)
     projectile_rows: dict[tuple[str, int], pygame.Surface] = {}
     for application, interval in ((application, interval) for application in cast_deliveries(timeline)
                                   for interval in application.projectile_intervals):
@@ -329,10 +341,23 @@ def load_animation_media(timeline: CastTimeline,
 
 def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLayer, ...],
                 body_rows: BodyRows, data: AnimationData,
-                flash: int | None, *, only_shadow: bool | None = None,
+                flash: int | PaletteTreatment | None, *, only_shadow: bool | None = None,
                 condition: ConditionAppearance | None = None) -> pygame.Surface:
     rig = body_rig(data, contact)
-    result = pygame.Surface((rig.cell_width, rig.cell_height), pygame.SRCALPHA)
+    treatment = flash if isinstance(flash, PaletteTreatment) and only_shadow is not True else None
+    key = (data.media_root, contact.rig_id, body.clip, body.facing, appearance,
+           body.hide_weapon, body.hidden_slots, body.cast_layers, treatment)
+    colored_row = cached_palette(key) if treatment is not None else None
+    if colored_row is not None:
+        colored = colored_row.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
+        if only_shadow is False:
+            return colored
+        result = _body_image(body, contact, appearance, body_rows, data, None, only_shadow=True)
+        result.blit(colored, (0, 0))
+        return result
+    # Palette mapping is cached per complete pose row, never repeated per frame.
+    width = rig.cell_width * body_clip(data, contact, body.clip).frames if treatment else rig.cell_width
+    result = pygame.Surface((width, rig.cell_height), pygame.SRCALPHA)
     layers = {layer.slot: layer for layer in appearance}
     # AnimatedEntity._updateHeadVisibility: ordinary helmets cover hair;
     # crowns Head5/Head8 preserve it. The identity layer remains in appearance.
@@ -347,6 +372,8 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             continue
         if only_shadow is not None and (slot == "shadow") != only_shadow:
             continue
+        if treatment is not None and slot == "shadow":
+            continue
         overlay = overlays.get(slot)
         layer = layers.get(slot)
         if overlay is None and layer is None:
@@ -357,7 +384,7 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             assert layer is not None
             category, tint = layer.category, layer.tint
         atlas = body_rows[contact.rig_id, body.clip, _cast_row_key(overlay) if overlay else category, row]
-        frame = atlas.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
+        frame = atlas if treatment is not None else atlas.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
         # Source hit flash clears filters and replaces tint. Never tint already
         # filtered pixels and then try to reconstruct the previous equipment.
         if slot == "shadow":
@@ -365,10 +392,23 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             colored = frame.copy()
             colored.set_alpha(round(layer.alpha * 255))
         else:
-            colored = frame if overlay is not None and flash is None else _colored(frame, flash if flash is not None else tint)
+            if treatment is not None:
+                colored = frame if treatment.untinted or overlay is not None else _colored(frame, tint)
+            else:
+                color = flash if isinstance(flash, int) else tint
+                colored = frame if overlay is not None and flash is None else _colored(frame, color)
             if (flash is None and condition is not None and condition.body_color is not None
                     and slot in CONDITION_BODY_SLOTS):
                 colored = condition_body_color(colored, condition.body_color)
+        result.blit(colored, (0, 0))
+    if treatment is not None:
+        noise = palette_noise(data.resources[treatment.noiseSheet]) if treatment.noiseSheet else None
+        colored_row = retain_palette(key, recolor_palette(result, treatment, noise=noise,
+            cell_size=(rig.cell_width, rig.cell_height)))
+        colored = colored_row.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
+        if only_shadow is False:
+            return colored
+        result = _body_image(body, contact, appearance, body_rows, data, None, only_shadow=True)
         result.blit(colored, (0, 0))
     return result
 
@@ -388,7 +428,7 @@ def _reference_actor_depth(grid: tuple[float, float], actor_uuid: str) -> float:
 
 
 def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLayer, ...], body_rows: BodyRows,
-                data: AnimationData, camera: Camera, flash: int | None,
+                data: AnimationData, camera: Camera, flash: int | PaletteTreatment | None,
                 *, only_shadow: bool | None = None,
                 condition: ConditionAppearance | None = None) -> tuple[pygame.Surface, tuple[int, int]]:
     factor = TILE_WIDTH / data.rig.TILE_W * camera.zoom
@@ -427,6 +467,13 @@ def projectile_layer_blits(timeline: CastTimeline, effect: ProjectileSample,
     # Authored offsets and pivots position art; they do not move world contacts.
     point = _reference_screen(effect.point, camera, data)
     offset = projectile_center_offset(timeline.recipe, asset, effect.phase)
+    if asset.anchorsByFacing is not None:
+        anchor = asset.anchorsByFacing[asset.rowOrder[effect.row]]
+        dx = (0.5 - anchor.x) * asset.frame.width * projectile_phase_scale(projectile, effect.phase)
+        dy = (0.5 - anchor.y) * asset.frame.height * projectile_phase_scale(projectile, effect.phase)
+        angle = effect.rotation_radians
+        offset = (visual.offsetX + dx * cos(angle) - dy * sin(angle),
+                  visual.offsetY + dx * sin(angle) + dy * cos(angle))
     center = (point[0] + offset[0] * factor, point[1] + offset[1] * factor)
     result = []
     for layer in layers:
@@ -436,6 +483,13 @@ def projectile_layer_blits(timeline: CastTimeline, effect: ProjectileSample,
             frame = pygame.transform.scale(frame, size)
         if effect.rotation_radians != 0:
             frame = pygame.transform.rotate(frame, -degrees(effect.rotation_radians))
+        if effect.opacity < 1:
+            frame = frame.copy()
+            if layer.blend == pygame.BLEND_RGB_ADD:
+                fade = round(effect.opacity * 255)
+                frame.fill((fade, fade, fade, 255), special_flags=pygame.BLEND_RGBA_MULT)
+            else:
+                frame.set_alpha(round((frame.get_alpha() or 255) * effect.opacity))
         destination = (round(center[0] - frame.width / 2), round(center[1] - frame.height / 2))
         result.append((frame, destination, layer.blend))
     return tuple(result)
@@ -515,7 +569,7 @@ def geometry_draw_command(data: AnimationData, effect: GeometryProjectileSample,
 
 def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorContact,
                         layers: tuple[RigLayer, ...], body_rows: BodyRows, camera: Camera,
-                        *, flash: int | None = None,
+                        *, flash: int | PaletteTreatment | None = None,
                         condition: ConditionAppearance | None = None) -> tuple[AnimationDrawCommand, ...]:
     """Compose one explicitly sampled actor using the map's shared painter."""
     commands: list[AnimationDrawCommand] = []

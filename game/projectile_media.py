@@ -45,7 +45,9 @@ class ProjectileFrameImage:
 
 
 # Four-camera reviews and concurrent historical cast media share source pixels.
-SHARED_PROJECTILE_FRAMES = ProjectileFrameCache()
+# Eight 4096px pages cover four cameras with two simultaneous source layers.
+# This is a ceiling, allocated only as requested; normal play needs one view.
+SHARED_PROJECTILE_FRAMES = ProjectileFrameCache(limit_bytes=640 * 1024 * 1024)
 
 
 def frame_cache_usage(cache: ProjectileFrameCache = SHARED_PROJECTILE_FRAMES) -> FrameCacheUsage:
@@ -112,15 +114,32 @@ def projectile_frame_layers(
         layers = storage.phases[phase_name].layers
         result = []
         for layer in layers:
-            path = data.media_root / layer.pattern.format(direction=direction, frame=frame)
-            key = (path, (0, 0, width, height), visual.tint, visual.alpha, layer.blendMode)
+            if layer.pages is not None:
+                page = next(page for page in layer.pages[direction]
+                            if page.firstFrame <= frame < page.firstFrame + page.frameCount)
+                path = data.media_root / page.file
+                local = frame - page.firstFrame
+                rectangle = ((local % page.columns) * width, (local // page.columns) * height, width, height)
+            else:
+                assert layer.pattern is not None
+                path = data.media_root / layer.pattern.format(direction=direction, frame=frame)
+                rectangle = (0, 0, width, height)
+            alpha = visual.alpha * layer.gain
+            key = (path, rectangle, visual.tint, alpha, layer.blendMode)
             image = _cached(cache, key)
             if image is None:
                 _reserve(cache, width * height * 4)
-                image = pygame.image.load(path).convert_alpha()
+                if layer.pages is not None:
+                    page_key = (path, (0, 0, 0, 0), 0xFFFFFF, 1.0, "normal")
+                    sheet = _cached(cache, page_key)
+                    if sheet is None:
+                        sheet = _remember(cache, page_key, pygame.image.load(path).convert_alpha())
+                    image = sheet.subsurface(rectangle).copy()
+                else:
+                    image = pygame.image.load(path).convert_alpha()
                 if image.get_size() != (width, height):
                     raise ValueError(f"projectile frame dimensions differ from its authored asset: {path}")
-                image = _remember(cache, key, _prepare(image, visual.tint, visual.alpha, layer.blendMode))
+                image = _remember(cache, key, _prepare(image, visual.tint, alpha, layer.blendMode))
             result.append(ProjectileFrameImage(image, pygame.BLEND_RGB_ADD if layer.blendMode == "add" else 0))
         return tuple(result)
     if visual.blendMode == "screen":

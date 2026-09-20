@@ -1,0 +1,13 @@
+Ice Knife legacy rules reference, reviewed 2026-09-20.
+Official reference: https://www.dndbeyond.com/spells/2384-ice-knife
+Rules baseline: 2014. This spell is not in SRD 5.1.
+
+Implementation summary: first-level conjuration, one action, range 60 feet,
+somatic and material components, instantaneous. Select one creature and make
+a ranged spell attack. A hit inflicts 1d10 piercing damage. After either attack
+outcome, a five-foot cold burst includes the selected target and nearby
+creatures. Each makes a Dexterity save; failure inflicts 2d6 cold damage and
+success avoids that cold damage. Higher slots add one cold d6 per extra level.
+
+This file is an authored rules summary and source citation, not a copy of the
+external publication. Its digest identifies this local reference note only.

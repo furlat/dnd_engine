@@ -1,0 +1,2663 @@
+{
+  "resources": {},
+  "spells": {
+    "spell.ray_of_frost": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.ray_of_frost",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "spell.ice_knife": {
+      "pack_id": "content.neurodragon",
+      "definition_kind": "spell",
+      "content_id": "spell.ice_knife",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "spell.chill_touch": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.chill_touch",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    }
+  },
+  "projectileStorage": {
+    "ice.v8.ray_of_frost.travel": {
+      "phases": {
+        "travel": {
+          "layers": [
+            {
+              "pages": {
+                "E": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/E/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/E/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/E/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/E/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/E/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "SE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/SE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/SE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/SE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/SE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/SE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "S": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/S/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/S/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/S/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/S/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/S/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "SW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/SW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/SW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/SW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/SW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/SW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "W": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/W/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/W/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/W/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/W/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/W/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "NW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/NW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/NW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/NW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/NW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/NW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "N": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/N/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/N/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/N/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/N/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/N/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "NE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/NE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/NE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/NE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/NE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travel/NE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ]
+              },
+              "blendMode": "add",
+              "gain": 0.8
+            },
+            {
+              "pages": {
+                "E": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/E/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/E/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/E/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/E/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/E/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "SE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/SE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/SE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/SE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/SE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/SE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "S": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/S/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/S/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/S/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/S/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/S/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "SW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/SW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/SW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/SW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/SW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/SW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "W": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/W/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/W/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/W/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/W/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/W/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "NW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/NW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/NW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/NW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/NW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/NW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "N": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/N/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/N/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/N/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/N/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/N/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "NE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/NE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/NE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/NE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/NE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/travelIce/NE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ]
+              },
+              "blendMode": "normal",
+              "gain": 1
+            }
+          ]
+        }
+      }
+    },
+    "ice.v8.ray_of_frost.impact": {
+      "phases": {
+        "impact": {
+          "layers": [
+            {
+              "pages": {
+                "E": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "SE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/SE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/SE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/SE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/SE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/SE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "S": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/S/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/S/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/S/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/S/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/S/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "SW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/SW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/SW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/SW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/SW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/SW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "W": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/W/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/W/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/W/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/W/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/W/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "NW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/NW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/NW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/NW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/NW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/NW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "N": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/N/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/N/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/N/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/N/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/N/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "NE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/NE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/NE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/NE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/NE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/NE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ]
+              },
+              "blendMode": "add",
+              "gain": 0.8
+            }
+          ]
+        }
+      }
+    },
+    "ice.v8.ice_knife.travel": {
+      "phases": {
+        "travel": {
+          "layers": [
+            {
+              "pages": {
+                "E": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/E/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/E/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/E/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/E/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/E/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "SE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/SE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/SE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/SE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/SE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/SE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "S": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/S/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/S/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/S/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/S/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/S/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "SW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/SW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/SW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/SW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/SW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/SW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "W": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/W/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/W/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/W/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/W/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/W/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "NW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/NW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/NW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/NW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/NW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/NW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "N": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/N/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/N/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/N/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/N/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/N/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ],
+                "NE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/NE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/NE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/NE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/NE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/travel/NE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 32,
+                    "columns": 8
+                  }
+                ]
+              },
+              "blendMode": "normal",
+              "gain": 1
+            }
+          ]
+        }
+      }
+    },
+    "ice.v8.ice_knife.impact": {
+      "phases": {
+        "impact": {
+          "layers": [
+            {
+              "pages": {
+                "E": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/E/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/E/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/E/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/E/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/E/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/E/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/E/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "SE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SE/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SE/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "S": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/S/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/S/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/S/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/S/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/S/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/S/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/S/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "SW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SW/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/SW/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "W": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/W/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/W/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/W/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/W/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/W/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/W/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/W/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "NW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NW/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NW/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "N": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/N/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/N/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/N/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/N/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/N/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/N/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/N/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "NE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NE/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impact/NE/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ]
+              },
+              "blendMode": "normal",
+              "gain": 1
+            },
+            {
+              "pages": {
+                "E": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/E/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/E/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/E/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/E/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/E/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/E/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/E/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "SE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SE/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SE/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "S": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/S/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/S/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/S/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/S/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/S/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/S/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/S/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "SW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SW/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/SW/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "W": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/W/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/W/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/W/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/W/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/W/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/W/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/W/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "NW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NW/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NW/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "N": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/N/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/N/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/N/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/N/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/N/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/N/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/N/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ],
+                "NE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NE/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/ice_knife/impactLight/NE/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 48,
+                    "columns": 8
+                  }
+                ]
+              },
+              "blendMode": "add",
+              "gain": 0.8
+            }
+          ]
+        }
+      }
+    },
+    "ice.v8.chill_touch.impact": {
+      "phases": {
+        "impact": {
+          "layers": [
+            {
+              "pages": {
+                "E": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/07.png",
+                    "firstFrame": 448,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/08.png",
+                    "firstFrame": 512,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/09.png",
+                    "firstFrame": 576,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/10.png",
+                    "firstFrame": 640,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
+                    "firstFrame": 704,
+                    "frameCount": 16,
+                    "columns": 8
+                  }
+                ],
+                "SE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/07.png",
+                    "firstFrame": 448,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/08.png",
+                    "firstFrame": 512,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/09.png",
+                    "firstFrame": 576,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/10.png",
+                    "firstFrame": 640,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SE/11.png",
+                    "firstFrame": 704,
+                    "frameCount": 16,
+                    "columns": 8
+                  }
+                ],
+                "S": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/07.png",
+                    "firstFrame": 448,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/08.png",
+                    "firstFrame": 512,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/09.png",
+                    "firstFrame": 576,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/10.png",
+                    "firstFrame": 640,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/S/11.png",
+                    "firstFrame": 704,
+                    "frameCount": 16,
+                    "columns": 8
+                  }
+                ],
+                "SW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/07.png",
+                    "firstFrame": 448,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/08.png",
+                    "firstFrame": 512,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/09.png",
+                    "firstFrame": 576,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/10.png",
+                    "firstFrame": 640,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/SW/11.png",
+                    "firstFrame": 704,
+                    "frameCount": 16,
+                    "columns": 8
+                  }
+                ],
+                "W": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/07.png",
+                    "firstFrame": 448,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/08.png",
+                    "firstFrame": 512,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/09.png",
+                    "firstFrame": 576,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/10.png",
+                    "firstFrame": 640,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/W/11.png",
+                    "firstFrame": 704,
+                    "frameCount": 16,
+                    "columns": 8
+                  }
+                ],
+                "NW": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/07.png",
+                    "firstFrame": 448,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/08.png",
+                    "firstFrame": 512,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/09.png",
+                    "firstFrame": 576,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/10.png",
+                    "firstFrame": 640,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NW/11.png",
+                    "firstFrame": 704,
+                    "frameCount": 16,
+                    "columns": 8
+                  }
+                ],
+                "N": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/07.png",
+                    "firstFrame": 448,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/08.png",
+                    "firstFrame": 512,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/09.png",
+                    "firstFrame": 576,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/10.png",
+                    "firstFrame": 640,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/N/11.png",
+                    "firstFrame": 704,
+                    "frameCount": 16,
+                    "columns": 8
+                  }
+                ],
+                "NE": [
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/00.png",
+                    "firstFrame": 0,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/01.png",
+                    "firstFrame": 64,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/02.png",
+                    "firstFrame": 128,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/03.png",
+                    "firstFrame": 192,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/04.png",
+                    "firstFrame": 256,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/05.png",
+                    "firstFrame": 320,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/06.png",
+                    "firstFrame": 384,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/07.png",
+                    "firstFrame": 448,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/08.png",
+                    "firstFrame": 512,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/09.png",
+                    "firstFrame": 576,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/10.png",
+                    "firstFrame": 640,
+                    "frameCount": 64,
+                    "columns": 8
+                  },
+                  {
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/NE/11.png",
+                    "firstFrame": 704,
+                    "frameCount": 16,
+                    "columns": 8
+                  }
+                ]
+              },
+              "blendMode": "normal",
+              "gain": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  "effectDrafts": {
+    "spell.ice_knife.burst": {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "spell",
+        "content_id": "spell.ice_knife",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 8900863,
+        "secondary": 9156075,
+        "tertiary": 11135743
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": null,
+        "holdReleaseForVolley": false,
+        "enabled": false,
+        "aura": null,
+        "slash": null
+      },
+      "projectile": {
+        "geometry": {
+          "renderer": "geometry_projectile",
+          "enabled": false,
+          "primitive": "bolt"
+        },
+        "sprite": {
+          "renderer": "sprite_projectile",
+          "assetId": "ice.v8.ice_knife.impact",
+          "alpha": 1,
+          "tint": 16777215,
+          "blendMode": "normal",
+          "offsetX": 0,
+          "offsetY": 0,
+          "geometryComposition": "replace_geometry",
+          "mediaFailurePolicy": "fail_transaction"
+        },
+        "prepare": {
+          "enabled": false,
+          "assetPhase": "cast"
+        },
+        "travel": {
+          "enabled": false,
+          "assetPhase": "travel",
+          "fps": 144,
+          "overlapContactMs": 13.888888888888888,
+          "assetId": "ice.v8.ice_knife.travel"
+        },
+        "impact": {
+          "enabled": true,
+          "assetPhase": "impact",
+          "fps": 144,
+          "assetId": "ice.v8.ice_knife.impact"
+        },
+        "trajectory": {
+          "type": "straight",
+          "sameTargetSpread": true
+        },
+        "speedPxPerSecond": 360,
+        "minimumTravelDurationMs": 150,
+        "fps": 144,
+        "scale": 0.5,
+        "depthMode": "world",
+        "orientation": {
+          "rowSource": "targetVector",
+          "fineRotation": "none",
+          "directionSource": "target_vector",
+          "rotationOffsetDeg": 0
+        },
+        "sourceAnchor": {
+          "basis": "tileCenter",
+          "liftY": 0,
+          "forwardPx": 0,
+          "sidePx": 0,
+          "axisPx": 24
+        },
+        "targetAnchor": {
+          "basis": "body",
+          "liftY": 0,
+          "forwardPx": 0
+        },
+        "sourceAnchorsByFacing": {
+          "S": {
+            "basis": "tileCenter",
+            "liftY": 0,
+            "forwardPx": 0,
+            "sidePx": 0,
+            "axisPx": 24
+          }
+        },
+        "missileStaggerMs": 0,
+        "sourceSockets": {
+          "release": {
+            "E": {
+              "x": 89.86191191132414,
+              "y": 52.82959008351395
+            },
+            "SE": {
+              "x": 86.82276000644455,
+              "y": 66.92759670314999
+            },
+            "S": {
+              "x": 70.33843316612338,
+              "y": 74.33560286544196
+            },
+            "SW": {
+              "x": 50.14004271997893,
+              "y": 71.60883981470197
+            },
+            "W": {
+              "x": 38.462535108155066,
+              "y": 59.63435387435307
+            },
+            "NW": {
+              "x": 42.87045439301047,
+              "y": 44.43906016691551
+            },
+            "N": {
+              "x": 59.492407804403065,
+              "y": 38.43449690157751
+            },
+            "NE": {
+              "x": 79.71508347584829,
+              "y": 40.83898092739828
+            }
+          }
+        },
+        "targetLocal": {
+          "contactAfterReleaseMs": 0
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      },
+      "damage": {
+        "impactDelayMs": 0,
+        "hitFlash": {
+          "enabled": true,
+          "frame": 0,
+          "durationMs": 150,
+          "color": 15610692,
+          "palette": {
+            "colors": [
+              792106,
+              2176343,
+              3101349,
+              4220591,
+              5405372,
+              5605592,
+              7573951,
+              5414134,
+              7381728,
+              8692691,
+              6861559,
+              9156075,
+              7586303,
+              6735359,
+              7392255,
+              9291517,
+              8441087,
+              9555199,
+              8900863,
+              10079487,
+              11128304,
+              9428735,
+              11135743
+            ],
+            "gamma": 0.65,
+            "noiseSheet": null,
+            "untinted": false
+          }
+        },
+        "floatingNumber": {
+          "enabled": true,
+          "frame": 7,
+          "durationMs": 1000,
+          "label": "Cold",
+          "color": 15610692
+        },
+        "death": {
+          "enabled": true,
+          "frame": 12
+        }
+      },
+      "area": {
+        "shapeSource": "authoritative_cue",
+        "phases": {
+          "shape": {
+            "enabled": true,
+            "durationMs": 500,
+            "effectProgress": 0
+          },
+          "explosion": {
+            "enabled": false,
+            "durationMs": 180,
+            "effectProgress": 0,
+            "startScale": 1,
+            "endScale": 1.15,
+            "fillAlphaEnd": 0,
+            "strokeAlphaEnd": 0
+          }
+        },
+        "geometry": {
+          "renderer": "geometry_area",
+          "enabled": false,
+          "depthMode": "ground",
+          "startScale": 0.2,
+          "endScale": 1,
+          "fillAlphaStart": 0.35,
+          "fillAlphaEnd": 0.105,
+          "strokeAlphaStart": 1,
+          "strokeAlphaEnd": 0.3,
+          "strokeWidth": 3
+        },
+        "sprite": null
+      }
+    }
+  }
+}

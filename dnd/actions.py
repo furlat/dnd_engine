@@ -3910,6 +3910,7 @@ class SpellEvent(ActionEvent):
     name: str = Field(default="Spell Cast", description="A spell cast event")
     event_type: EventType = Field(default=EventType.CAST_SPELL, description="The type of event")
     spell_id: Optional[str] = Field(default=None, description="Stable spell catalog id")
+    effect_id: Optional[str] = Field(default=None, description="Authored subeffect within the owning spell, when distinct from the cast.")
     spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
     cast_at_level: int = Field(default=0, description="Actual slot level used (0 = cantrip)")
     spell_school: str = Field(default="evocation", description="School of magic")

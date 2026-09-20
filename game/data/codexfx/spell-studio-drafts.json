@@ -98,6 +98,42 @@
         "anchor": "effect",
         "delayMs": 0,
         "feedbackEnabled": true
+      },
+      "damage": {
+        "impactDelayMs": 0.0,
+        "hitFlash": {
+          "enabled": true,
+          "frame": 0,
+          "durationMs": 150,
+          "color": 15610692,
+          "palette": {
+            "colors": [
+              2229802,
+              3409984,
+              4721232,
+              6163803,
+              7803494,
+              9509492,
+              11217541,
+              12927895,
+              14442667
+            ],
+            "gamma": 0.65,
+            "noiseSheet": null,
+            "untinted": false
+          }
+        },
+        "floatingNumber": {
+          "enabled": true,
+          "frame": 0,
+          "durationMs": 900.0,
+          "label": "Force",
+          "color": 15610692
+        },
+        "death": {
+          "enabled": true,
+          "frame": 14
+        }
       }
     }
   ]

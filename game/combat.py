@@ -176,7 +176,7 @@ def bind_cast(
         ))
     source = CastInput(root_event_uuid=str(root_node.uuid), caster=source_contact,
                        applications=tuple(applications), ground_target=ground_target)
-    timeline = compile_cast(data, root.behavior_id, source)
+    timeline = compile_cast(data, root.effect_id or root.behavior_id, source)
     appearances = {
         contact.actor_uuid: resolve_player_layers(data, target.actors[actor_uuid], rig_id=contact.rig_id)
         for actor_uuid, contact in actor_contacts.items()

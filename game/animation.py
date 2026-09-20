@@ -14,8 +14,9 @@ from typing import Literal
 from dnd.core.life_types import LifeState
 from game.animation_types import (
     AnimationData, AuthoredProjectileAsset, AuthoredProjectilePhase, BodyClip, BodyRig,
-    DamageDeath, EquipmentTransitionContext, Facing8, FloatingNumber, HitFlash,
+    DamageDeath, EquipmentTransitionContext, Facing8, FloatingNumber, HitFlash, PaletteTreatment,
     StudioActorLayer, StudioDamage, StudioProjectile, StudioProjectilePhase, StudioSpellDraft,
+    MediaTimePoint,
 )
 from game.projection import HEIGHT_STEP_PIXELS, TILE_HEIGHT, TILE_WIDTH, inverse_rotate_position, project_world
 
@@ -87,6 +88,7 @@ class ProjectileInterval:
     fps: float
     start_ms: float
     end_ms: float
+    time_map: tuple[MediaTimePoint, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +198,7 @@ class ProjectileSample:
     rotation_radians: float
     progress: float
     source_frame: int | None = None
+    opacity: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,7 +228,7 @@ class VitalsSample:
     actor_uuid: str
     hp: int | None
     life_state: LifeState
-    flash: int | None
+    flash: int | PaletteTreatment | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,6 +380,8 @@ def _anchored_points(caster: ActorContact, target_contact: ActorContact | Ground
                 raise ValueError(f"actor rig has no authored body attachment: {target_contact.rig_id}")
             tx = target[0] + (socket.x - rig.cell_width / 2) * target_contact.visual_scale * target_contact.visual_scale_x
             ty = target[1] + (socket.y - rig.cell_height + rig.origin_y_from_ground) * target_contact.visual_scale
+            tx += ux * projectile.targetAnchor.forwardPx * local_scales[1]
+            ty += (uy * projectile.targetAnchor.forwardPx + projectile.targetAnchor.liftY) * local_scales[1]
     if projectile.sourceSockets is not None:
         socket = projectile.sourceSockets.release[facing]
         frames = projectile.sourceSockets.preparation
@@ -483,6 +488,15 @@ def projectile_contact(timeline: CastTimeline, effect: ProjectileSample | Geomet
         return reference_point_contact(timeline.data, projected.point, height, quadrant), height
     ground = (source.grid[0] + (target.grid[0] - source.grid[0]) * progress,
               source.grid[1] + (target.grid[1] - source.grid[1]) * progress)
+    projectile = timeline.recipe.projectile
+    assert projectile is not None
+    local = projectile.targetLocal
+    if local is not None and isinstance(effect, ProjectileSample) and effect.column < local.approachUntilFrame:
+        dx, dy = source.grid[0] - target.grid[0], source.grid[1] - target.grid[1]
+        length = hypot(dx, dy)
+        if length:
+            ground = (target.grid[0] + dx / length * local.approachOffsetTiles,
+                      target.grid[1] + dy / length * local.approachOffsetTiles)
     if application.curvature:
         asset = timeline.data.projectile_assets[effect.asset_id]
         center = projectile_center_offset(timeline.recipe, asset, effect.phase)
@@ -561,7 +575,10 @@ def project_projectile(timeline: CastTimeline, effect: ProjectileSample, quadran
         raise ValueError("projectile phase progress must be finite and between zero and one")
     data = timeline.data
     asset = data.projectile_assets[effect.asset_id]
-    cx, cy = projectile_center_offset(timeline.recipe, asset, effect.phase)
+    # New paged exports register a measured facing-specific point. Keep their
+    # physical socket separate from the sprite canvas/pivot padding.
+    cx, cy = ((0, 0) if asset.anchorsByFacing is not None else
+              projectile_center_offset(timeline.recipe, asset, effect.phase))
     facing, first, last = _projected_endpoints(timeline, application, quadrant, (cx, cy), effect.source_frame)
     point = _projectile_point(effect.phase, effect.progress, first, last, application.curvature)
     lift, tangent = _projectile_arc(application, effect.phase, effect.progress)
@@ -646,9 +663,22 @@ def _phase(data: AnimationData, recipe: StudioSpellDraft, binding: StudioProject
     # and impact allow the explicit phase override before presentation FPS.
     fps = projectile.fps if name == "travel" else (binding.fps or projectile.fps)
     duration = duration if duration is not None else (
-        binding.durationMs if binding.durationMs is not None else phase.frames * 1000 / fps
+        binding.durationMs if binding.durationMs is not None else
+        binding.timeMap[-1].elapsedMs if binding.timeMap else phase.frames * 1000 / fps
     )
-    return ProjectileInterval(name, asset, phase, fps, start, start + duration)
+    return ProjectileInterval(name, asset, phase, fps, start, start + duration, binding.timeMap)
+
+
+def _media_frame(interval: ProjectileInterval, elapsed_ms: float) -> int:
+    if interval.time_map:
+        points = interval.time_map
+        for first, last in zip(points, points[1:]):
+            if elapsed_ms < last.elapsedMs:
+                progress = (elapsed_ms - first.elapsedMs) / (last.elapsedMs - first.elapsedMs)
+                return min(interval.phase.frames - 1, floor(first.sourceFrame +
+                    progress * (last.sourceFrame - first.sourceFrame) + 1e-9))
+        return interval.phase.frames - 1
+    return body_frame(elapsed_ms, interval.fps, interval.phase.frames, loop=interval.phase.loop)
 
 
 @dataclass(frozen=True, slots=True)
@@ -776,11 +806,11 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
             raise ValueError("optional-track media omission is outside this selected family")
         if projectile.orientation.directionSource != "target_vector":
             raise ValueError("tangent-facing projectile rows await source parity proof")
-        if projectile.travel.assetId not in (None, projectile.sprite.assetId):
+        if projectile.travel.enabled and projectile.travel.assetId not in (None, projectile.sprite.assetId):
             raise ValueError("alternate travel assets require source resolver parity")
         if projectile.sprite.paletteSwap is not None:
             raise ValueError("projectile palette-swap drawing is not implemented yet")
-    if not projectile.travel.enabled:
+    if not projectile.travel.enabled and projectile.targetLocal is None:
         raise ValueError("disabled travel requires the original resolved phase behavior")
     if cast.equipment.kind not in ("hidden", "unchanged"):
         raise ValueError("weapon selection requires a permitted resolved equipment loadout")
@@ -801,8 +831,8 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
             raise ValueError(f"actor rig lacks cast layer capability: {layer.slot}/{layer.category}")
         if (layer.sourceSheet or casting_clip.sheets.get(layer.category)) not in data.resources:
             raise ValueError(f"missing enabled cast layer resource: {layer.category}/{cast.actionClip}")
-    body_end = body_duration(casting_clip, cast.bodyPlaybackSpeed)
-    release = cast.releaseFrame * 1000 / (casting_clip.fps * cast.bodyPlaybackSpeed)
+    body_end = body_duration(casting_clip, cast.bodyPlaybackSpeed) if cast.enabled else 0
+    release = cast.releaseFrame * 1000 / (casting_clip.fps * cast.bodyPlaybackSpeed) if cast.enabled else 0
     anchors = [Anchor("action_start", 0), Anchor("release", release)]
     launch = release
     prepare: ProjectileInterval | None = None
@@ -828,12 +858,17 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
         height = (target.elevation_steps - body_elevation_steps(source.caster, data)) * HEIGHT_STEP_PIXELS / TILE_WIDTH * data.rig.TILE_W
         duration = max(projectile.minimumTravelDurationMs,
                        hypot(last[0] - first[0], last[1] - first[1], height) * 1000 / projectile.speedPxPerSecond)
+        if projectile.targetLocal is not None:
+            duration = projectile.targetLocal.contactAfterReleaseMs
         arrival = launch + duration
         intervals = [prepare] if prepare is not None else []
         if projectile.sprite is not None:
-            intervals.append(_phase(data, recipe, projectile.travel, "travel", launch, duration))
+            if projectile.travel.enabled:
+                intervals.append(_phase(data, recipe, projectile.travel, "travel", launch,
+                                        duration + projectile.travel.overlapContactMs))
             if projectile.impact.enabled:
-                intervals.append(_phase(data, recipe, projectile.impact, "impact", arrival))
+                intervals.append(_phase(data, recipe, projectile.impact, "impact",
+                                        0 if projectile.targetLocal is not None else arrival))
         ground_delivery = GroundDeliveryTimeline(target, facing, first, last, launch, arrival,
             projectile.trajectory.curvature if projectile.trajectory.type == "bezier" else 0,
             tuple(intervals))
@@ -871,6 +906,8 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
         height = (body_elevation_steps(target, data) - body_elevation_steps(source.caster, data)) * HEIGHT_STEP_PIXELS / TILE_WIDTH * data.rig.TILE_W
         duration = max(projectile.minimumTravelDurationMs,
                        hypot(last[0] - first[0], last[1] - first[1], height) * 1000 / projectile.speedPxPerSecond)
+        if projectile.targetLocal is not None:
+            duration = projectile.targetLocal.contactAfterReleaseMs
         start = launch + index * projectile.missileStaggerMs
         arrival = start + duration
         intervals: list[ProjectileInterval] = [prepare] if prepare is not None and index == 0 else []
@@ -878,9 +915,12 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
             start, arrival = ground_delivery.travel_start_ms, ground_delivery.travel_end_ms
             intervals = []
         elif projectile.sprite is not None:
-            intervals.append(_phase(data, recipe, projectile.travel, "travel", start, duration))
+            if projectile.travel.enabled:
+                intervals.append(_phase(data, recipe, projectile.travel, "travel", start,
+                                        duration + projectile.travel.overlapContactMs))
             if projectile.impact.enabled:
-                intervals.append(_phase(data, recipe, projectile.impact, "impact", arrival))
+                intervals.append(_phase(data, recipe, projectile.impact, "impact",
+                                        0 if projectile.targetLocal is not None else arrival))
         count, occurrence = counts[target.actor_uuid], indices.get(target.actor_uuid, 0)
         indices[target.actor_uuid] = occurrence + 1
         curvature = 0.0
@@ -977,7 +1017,7 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
                         body_frame(body_time, caster_metadata.fps * caster_speed,
                                caster_metadata.frames, loop=caster_clip == "Idle"),
                         timeline.facing, casting and cast.equipment.kind == "hidden", cast_layers)
-    bodies = [caster]
+    bodies = [caster] if cast.enabled else []
     vitals: list[VitalsSample] = []
     targets = {application.source.target.actor_uuid: application.source.target for application in timeline.applications}
     for actor_id, target_contact in targets.items():
@@ -1005,7 +1045,10 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
                                   and t < reaction.damage_end_ms):
             # An area may hit its own caster. One actor owns one body track;
             # the actual reaction interrupts the cast while effects continue.
-            bodies[0] = reaction_body
+            if bodies and bodies[0].actor_uuid == actor_id:
+                bodies[0] = reaction_body
+            else:
+                bodies.append(reaction_body)
         flashes = [application for application in applications
                    if application.damage is not None and application.damage.hitFlash.enabled
                    and application.flash_ms is not None and application.flash_ms <= t]
@@ -1014,7 +1057,7 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
             latest = max(flashes, key=lambda row: row.flash_ms if row.flash_ms is not None else 0)
             assert latest.damage is not None and latest.flash_ms is not None
             if t < latest.flash_ms + latest.damage.hitFlash.durationMs:
-                flash = latest.damage.hitFlash.color
+                flash = latest.damage.hitFlash.palette or latest.damage.hitFlash.color
         vitals.append(VitalsSample(actor_id, hp, life, flash))
     projectile = recipe.projectile
     assert projectile is not None
@@ -1032,15 +1075,21 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
             if not interval.start_ms <= t < interval.end_ms:
                 continue
             progress = (t - interval.start_ms) / (interval.end_ms - interval.start_ms)
+            opacity = 1.0
+            if interval.name == "travel":
+                progress = min(1, (t - application.travel_start_ms) /
+                               (application.travel_end_ms - application.travel_start_ms))
+                if t >= application.travel_end_ms:
+                    opacity = 1 - (t - application.travel_end_ms) / projectile.travel.overlapContactMs
             point = _projectile_point(interval.name, progress, application.from_point, application.to_point,
                                       application.curvature)
-            column = interval.phase.start + body_frame(t - interval.start_ms, interval.fps, interval.phase.frames, loop=interval.phase.loop)
+            column = interval.phase.start + _media_frame(interval, t - interval.start_ms)
             samples.append(ProjectileSample(identity, interval.name, interval.asset.assetId,
                                            column, interval.asset.rowOrder.index(application.facing), point,
                                            _projectile_rotation(timeline, interval.name, application.facing,
                                                                 application.from_point, application.to_point,
                                                                 curvature=application.curvature), progress,
-                                           caster.frame if interval.name == "prepare" else None))
+                                           caster.frame if interval.name == "prepare" else None, opacity))
     for application in timeline.applications:
         identity = application.source.application_id
         damage = application.damage

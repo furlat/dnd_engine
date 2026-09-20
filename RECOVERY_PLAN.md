@@ -27,6 +27,66 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**September 20 — proposed graphics cleanup and event coverage.** The
+[practical cleanup plan](agent_docs/GRAPHICS_CLEANUP_PLAN_2026-09-20.md)
+defines authoring/importer ownership, stable placement semantics, future TS
+reuse and a lean coverage view built from initialization/registries. The
+[event/content inventory](agent_docs/PRESENTATION_EVENT_COVERAGE_2026-09-20.md)
+distinguishes ingestion, player projection, parent-owned animation, state-only
+handling and missing selected bindings. No hashes, source audits or asset scans
+are part of coverage. **The user approved final rendered output, not raw JSON
+values:** preserve the effective code/data/media/post-processing result using
+the same saved inputs before and after migration. Both anti-slop and ECS reviews
+approved the revised sequence. The planning turn changes documentation only;
+implementation has not started.
+
+The [visual comparison idea](agent_docs/VISUAL_COMPARISON_IDEA_2026-09-20.md)
+is deferred for ad hoc use when difficult regressions warrant it. It is not a
+new testing framework, routine gate, or prerequisite for graphics cleanup.
+
+**September 20 — graphics portability review, before further alignment fixes.**
+The [consolidated review](agent_docs/GRAPHICS_PORTABILITY_REVIEW_2026-09-20.md)
+separates reusable authoring, shared execution semantics and renderer-specific
+implementation. Actual NeuroClient validation rejects seven of the nine approved
+combat-spell recipes; accepted extensions can also go unused there. Attachment
+ownership mixes legacy canvas registration, rig/socket coordinates and local
+corrections. Complete lineages and independent playback remain intact. The
+review records populated versus dormant presentation gaps and a bounded next
+sequence; this audit changes documentation only. The contact patch below is a
+local visual correction, not proof of a coherent shared attachment contract.
+**User clarification:** extending a restrictive old schema is acceptable when
+the feature is justified. Stable hand-tuned numerical placement is acceptable;
+full keypoint animation tracks are not required. Accidental importer inheritance
+and multiple authoring owners remain concrete problems. The user accepts omitted
+potion/source VFX strips; restoring them is not pending work. Drinking and effect
+timing already work. Walk/jump optional media and recovery fields are inactive
+legacy authoring, not missing walking/jumping: current jump trajectory, height,
+single-cycle body timing and prelaunch reactions remain implemented.
+
+**September 20 — Ray/Ice Knife body contact raised after visual review.**
+The two incoming recipes now author a 12-pixel upward body offset, keeping
+Ice Knife's ground burst separate. Renderer and native mechanics are unchanged.
+Both independent reviewers approved; 78 timing/area tests pass. The
+[12-clip correction gallery](http://127.0.0.1:8767/runs/20260920T093827Z-8a6af9/index.html)
+passes across 1,426 four-camera frames with no media gaps and unchanged saved
+input bytes. [The result records the correction](agent_docs/ICE_SPELL_AND_PALETTE_INTEGRATION_2026-09-20.md#body-contact-correction-after-visual-review).
+
+**September 20 — new spell handoff and spell palettes integrated.** The
+[reviewed implementation result](agent_docs/ICE_SPELL_AND_PALETTE_INTEGRATION_2026-09-20.md)
+connects production-v8 Ray of Frost, Ice Knife and Chill Touch through shared
+authored timing, directional registration and paged media. Ray/Chill retain
+their native rules; Ice Knife adds one paid attack-plus-burst cast with complete
+native child causality. Casting overlays and contact flashes use the actual
+palettes of nine approved spells, including the delivered Fireball/Eldritch
+color revision. Independent anti-slop/ECS reviews passed. The
+[27-clip gallery](http://127.0.0.1:8767/runs/20260920T005836Z-d15230/index.html)
+passes across 3,121 four-camera frames with no media gaps; the seven new
+experiments include both caster and recipient. All clips replay saved events.
+Older native archive compatibility is preserved without regenerating gameplay.
+The result records focused tests, unchanged broader failures and the explicit
+AI/art limits. [Chilled ground](agent_docs/CHILLED_GROUND_PROPOSAL_2026-09-20.md)
+remains a separately reviewed proposal; no freezing mechanics were added.
+
 **September 20 — material review actors corrected.** Bone examples now use
 the premade Undead Skeleton Archer, including the mixed-material scene. Toxic
 examples use the packaged Orc01 with an explicitly configured corrosive review

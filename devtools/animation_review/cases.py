@@ -203,7 +203,7 @@ class DreadResidueCase(BaseModel):
 class SpellHandoffCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["spell-handoff"]
-    program: Literal["eldritch", "guiding", "acid", "fireball"] = "eldritch"
+    program: Literal["eldritch", "guiding", "acid", "fireball", "ray", "chill", "ice"] = "eldritch"
     level: Literal[5, 11] = 5
     split: bool = False
     miss: bool = False

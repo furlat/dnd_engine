@@ -89,6 +89,7 @@ class StudioRecovery(AuthoredRecord):
 
 
 class StudioCast(AuthoredRecord):
+    enabled: bool = True
     actionClip: Literal["Attack1", "Attack2", "Attack3", "Attack4", "Attack5", "Attack6", "Special1"]
     bodyPlaybackSpeed: BodySpeed | None = None
     releaseFrame: BodyFrame
@@ -116,6 +117,11 @@ class StudioCondition(AuthoredRecord):
     feedbackEnabled: bool
 
 
+class MediaTimePoint(AuthoredRecord):
+    elapsedMs: NonNegative
+    sourceFrame: NonNegative
+
+
 class StudioProjectilePhase(AuthoredRecord):
     enabled: bool
     assetId: Identifier | None = None
@@ -125,6 +131,16 @@ class StudioProjectilePhase(AuthoredRecord):
     durationMs: Positive | None = None
     overlapRelease: bool = False
     scale: Positive | None = None
+    timeMap: tuple[MediaTimePoint, ...] = ()
+    overlapContactMs: NonNegative = 0
+
+
+class TargetLocalDelivery(AuthoredRecord):
+    """A target-local visual can begin before its mechanical contact anchor."""
+
+    contactAfterReleaseMs: NonNegative = 0
+    approachOffsetTiles: NonNegative = 0
+    approachUntilFrame: NonNegative = 0
 
 
 class Point(AuthoredRecord):
@@ -201,6 +217,7 @@ class SourceAnchor(TargetAnchor):
 
 
 class StudioProjectile(AuthoredRecord):
+    targetLocal: TargetLocalDelivery | None = None
     geometry: ProjectileGeometry
     sprite: ProjectileSprite | None
     prepare: StudioProjectilePhase
@@ -302,11 +319,21 @@ class StudioArea(AuthoredRecord):
     surfaceReveal: SurfaceReveal | None = None
 
 
+class PaletteTreatment(AuthoredRecord):
+    """Exact authored colors and optional source noise for isolated recoloring."""
+
+    colors: Annotated[tuple[Color, ...], Field(min_length=1)]
+    gamma: Positive = .65
+    noiseSheet: Identifier | None = None
+    untinted: bool = False
+
+
 class HitFlash(AuthoredRecord):
     enabled: bool
     frame: BodyFrame
     durationMs: Positive
     color: Color
+    palette: PaletteTreatment | None = None
 
 
 class FloatingNumber(AuthoredRecord):
@@ -404,6 +431,7 @@ class AuthoredProjectileAsset(AuthoredRecord):
     rowOrder: tuple[Facing8, ...]
     phases: AuthoredProjectilePhases
     anchor: ProjectileAssetAnchor
+    anchorsByFacing: FacingMap[ProjectileAssetAnchor] | None = None
     defaultScale: Positive
     tags: tuple[str, ...] | None = None
     palettePreview: PalettePreview
@@ -411,11 +439,20 @@ class AuthoredProjectileAsset(AuthoredRecord):
     validation: ProjectileValidation | None = None
 
 
+class ProjectilePage(AuthoredRecord):
+    file: Identifier
+    firstFrame: Annotated[int, Field(ge=0)]
+    frameCount: Annotated[int, Field(ge=1)]
+    columns: Annotated[int, Field(ge=1)]
+
+
 class ProjectileFrameLayer(AuthoredRecord):
     """Local storage/material binding; independent of the Studio spell recipe."""
 
-    pattern: str
+    pattern: str | None = None
+    pages: FacingMap[tuple[ProjectilePage, ...]] | None = None
     blendMode: Literal["normal", "add"]
+    gain: Annotated[float, Field(ge=0, le=1)] = 1
 
 
 class ProjectileFrameStorage(AuthoredRecord):

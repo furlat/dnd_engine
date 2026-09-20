@@ -500,3 +500,45 @@ catalog entries, including the mixed scene's separate bone donor; an isolated
 premade-skeleton card does not fulfill the request while other bone cards still
 show a modular clothed body. The Orc example is an explicitly configured
 corrosive review creature, not a change to every Orc's biology.
+
+### September 20 — review graphics ownership and actual NeuroClient portability
+
+After the Ray/Ice Knife contact-height correction, the user challenged the
+accumulation of manual placement and tuning. Review the graphics pipeline as a
+whole: distinguish authored reusable data from ad hoc compensation, and verify
+what the TypeScript client/editor can actually consume with minimal adaptation.
+Putting a correction in JSON does not establish a coherent shared contract.
+Measured media pivots and rig/clip sockets remain legitimate authored data;
+per-spell repairs must not conceal conflicting coordinate ownership. See
+`GRAPHICS_PORTABILITY_REVIEW_2026-09-20.md` and its independent format/ECS reviews.
+This request is for review before further graphics refactoring.
+
+Follow-up: rejection by the old TS schema is not itself a design defect; extending
+an overly restrictive schema is acceptable when justified by real behavior.
+Properly tuned, stable numerical positions are acceptable, and a comprehensive
+keypoint system would be excessive. The user specifically identifies scattered
+importer authoring/inheritance as a serious problem. Distinguish genuine missing
+presentation support from the potion VFX strip they had explicitly deferred;
+drinking animation and native effect timing already work.
+
+Further clarification: omitted VFX strips are acceptable, with the current focus
+on target-side spell presentation; leave potions as they are. Proper jumping is
+already implemented. Empty optional walk/jump effect tracks and disabled extra
+recovery clips are not missing movement/landing and must not become new work
+merely because their legacy fields are retained.
+
+### September 20 — cleanup coverage must be lean; preserve rendered approval
+
+The user requests an organized data-driven cleanup plan and an inventory of
+digestible events and missing presentation. Derive that inventory from existing
+initialization/registries and bindings; no SHA, source audits, asset-folder
+validation or other slow bookkeeping. Event-family ingestion, content bindings
+and observed playback are different coverage questions.
+
+The user explicitly approved **final rendered results, not JSON values**. Current
+code applies transformations and post-processing after those values are read.
+Preserving raw values while changing their consumer can cause regressions.
+Establish the effective visual baseline from code, data and selected media;
+compare the same recorded inputs before/after cleanup. Values may change to
+preserve appearance and timing. Distinguish user-approved outputs, current
+captures and known defects instead of labeling every present value approved.

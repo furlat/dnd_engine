@@ -454,11 +454,13 @@ No mechanics were rerun to generate these clips. Contact and charred aftermath
 were inspected for both axes and door states; extracted frames and comparison
 results live in the run's `inspection/` directory.
 
-## Pending art handoff — September 20
+## Received art handoff — September 20
 
-Queued, **not integrated**: ice production-v8 from art task
-`01a0b6af-5fa9-7ec0-9915-0ecee0a6baec`. Finish the current material-creature review
-unit before taking this up. Source handoff:
+Initially queued ice production-v8 from art task
+`01a0b6af-5fa9-7ec0-9915-0ecee0a6baec` was subsequently authorized after the
+material-creature review. Implementation and final validation are recorded in
+[the new spell integration plan](ICE_SPELL_AND_PALETTE_INTEGRATION_2026-09-20.md).
+Source handoff:
 `/home/tommaso/.codex/worktrees/1aac/dnd_engine/docs/ICE_SPELL_PRODUCTION_HANDOFF_2026-09-20.md`;
 package README and manifest are under
 `/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/ice-spells/production-v8/`.
@@ -470,8 +472,7 @@ recenter individual frames. It also relays the requirement for exact per-spell
 caster effects and target flashes across all authored spells, preserving actor
 body/clothes outside the isolated effects and the existing 150ms target flash.
 
-A chilled-ground design proposal is also requested: distinguish cosmetic traces,
+A chilled-ground design proposal was also requested: distinguish cosmetic traces,
 mechanical freezing and ground hazards, and consider existing blood/charred
-state. No ground-freezing behavior is approved or implemented by this handoff.
-Read and review the source before planning that separate unit; this entry is
-only a queue record, not an implementation plan or production verification.
+state. The [reviewed proposal](CHILLED_GROUND_PROPOSAL_2026-09-20.md) preserves
+that distinction. No ground-freezing behavior was added by this integration.

@@ -13,6 +13,7 @@ from game.animation_draw import AnimationMedia, projectile_layer_blits
 from game.animation_types import (
     AuthoredProjectilePhase, AuthoredProjectilePhases, ProjectileFrameLayer,
     ProjectileFrameStorage, ProjectileStorage,
+    ProjectilePage,
 )
 from game.projectile_media import ProjectileFrameCache, frame_cache_usage, projectile_frame_layers
 from game.projection import Camera
@@ -133,3 +134,33 @@ def test_missing_fire_does_not_return_an_incomplete_smoke_only_sample(original_d
     save_frame(tmp_path / "impact/smoke/E/00.png", (100, 80, 60, 128))
     with pytest.raises(FileNotFoundError):
         projectile_frame_layers(data, asset, "impact", 0, "E", visual, {}, cache=ProjectileFrameCache())
+
+
+def test_paged_frames_preserve_registration_alpha_and_seek_without_redecoding(original_data, tmp_path):
+    """A real page boundary and a non-first crop, including additive gain."""
+    data, asset, visual = sample_data(original_data, tmp_path)
+    page = pygame.Surface((4, 2), pygame.SRCALPHA)
+    page.fill((40, 80, 120, 128), (0, 0, 2, 2))
+    page.fill((120, 40, 80, 255), (2, 0, 2, 2))
+    pygame.image.save(page, tmp_path / "first.png")
+    save_frame(tmp_path / "last.png", (60, 100, 140, 128))
+    pages = (ProjectilePage(file="first.png", firstFrame=0, frameCount=2, columns=2),
+             ProjectilePage(file="last.png", firstFrame=2, frameCount=1, columns=2))
+    storage = ProjectileStorage(phases={"impact":ProjectileFrameStorage(layers=(
+        ProjectileFrameLayer(pages={"E":pages}, blendMode="normal"),
+        ProjectileFrameLayer(pages={"E":pages}, blendMode="add", gain=.5),
+    ))})
+    data = replace(data, projectile_storage={asset.assetId:storage})
+    cache = ProjectileFrameCache(limit_bytes=256)
+    first = projectile_frame_layers(data, asset, "impact", 0, "E", visual, {}, cache=cache)
+    assert tuple(first[0].image.get_at((0, 0))) == (40,80,120,128)
+    assert tuple(first[1].image.get_at((0, 0)))[:3] == (10,20,30)
+    (tmp_path / "first.png").unlink()
+    second = projectile_frame_layers(data, asset, "impact", 1, "E", visual, {}, cache=cache)
+    assert tuple(second[0].image.get_at((0, 0))) == (120,40,80,255)
+    assert tuple(second[1].image.get_at((0, 0)))[:3] == (60,20,40)
+    last = projectile_frame_layers(data, asset, "impact", 2, "E", visual, {}, cache=cache)
+    assert tuple(last[0].image.get_at((0, 0))) == (60,100,140,128)
+    assert frame_cache_usage(cache).decoded_bytes <= 256
+    again = projectile_frame_layers(data, asset, "impact", 0, "E", visual, {}, cache=cache)
+    assert pygame.image.tobytes(again[0].image, "RGBA") == pygame.image.tobytes(first[0].image, "RGBA")

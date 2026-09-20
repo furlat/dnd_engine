@@ -47,6 +47,14 @@ def test_native_spell_matrix_replays_both_subjective_views(case) -> None:
     elif scenario.program == "acid":
         assert [event.save_success for event in applications] == [False, True]
         assert [event.total_damage for event in applications] == [6, 0]
+    elif scenario.program in ("ray", "chill", "ice"):
+        assert spell.attack_outcome is (AttackOutcome.CRIT_MISS if scenario.miss else AttackOutcome.HIT)
+        if scenario.program=="ice":
+            burst, = [event for lineage in native.lineages for event in lineage.events
+                      if isinstance(event,SpellEvent) and event.effect_id=="spell.ice_knife.burst"
+                      and event.application_id is None]
+            assert burst.resolved_area_positions and burst.aoe_position
+            assert all(event.effect_id=="spell.ice_knife.burst" for event in applications)
     else:
         assert spell.resolved_area_positions
         assert (spell.total_targets == 0) is scenario.empty

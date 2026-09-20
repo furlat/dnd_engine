@@ -237,6 +237,7 @@ SORCERER_SPELL_RANKS: Mapping[str, int] = MappingProxyType({
     "spell.expeditious_retreat": 1,
     "spell.false_life": 1,
     "spell.fog_cloud": 1,
+    "spell.ice_knife": 1,
     "spell.jump": 1,
     "spell.mage_armor": 1,
     "spell.magic_missile": 1,

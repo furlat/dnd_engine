@@ -84,3 +84,41 @@ This narrow offline command selects native content references, adapts existing
 JSON and copies only the delivered frames. It does not regenerate VFX or replace
 the original NeuroClient/CodexFX bundles. Structural/media tests establish that
 these bindings play; final artwork acceptance belongs to the actual game clips.
+
+## Exact spell palettes — September 20
+
+The accepted Fireball/Eldritch color revision is now copied into the existing
+3,520 phase-frame paths. It replaces colors only, preserving counts, alpha,
+registration, timing and all current wall/area bindings. Reapply it offline
+with `python -m devtools.import_spell_color_revision --source /path/to/color-revision`.
+The original handoff importer predates this revision; run this color import and
+the palette bake below after reimporting original spell frames. Runtime reads
+only local selected PNGs and never verifies an external export directory.
+
+`devtools.bake_spell_palettes` reads the delivered color-revision palettes,
+the final production-v8 ice palettes and Magic Missile's actual wine10 asset
+palette. It bakes only enabled isolated casting layers, then records each
+spell's ordered target palette in `damage.hitFlash.palette`. Fire Bolt's new
+binding is an optional override here; its imported NeuroClient baseline remains
+available unchanged for source-parity tests. Magic Missile's current recipe has
+no casting overlay, so this work adds its target treatment without inventing a
+new gesture or layer.
+
+The explicit user request changes authored flashes from frame 5 / 90ms to
+contact frame 0 / 150ms, with no fade. Floating numbers, HP/death callback frames
+and TakeDamage playback rates retain their existing values. A target flash
+recolors its actual composed actor appearance, with source alpha preserved;
+casting effects never recolor clothing. Chill selects the original hand-noise
+texture and untinted source shading through passive data. Recolored pose rows
+are shared in a 32MiB cache, independent of camera scale and frame time.
+
+After importing the optional new ice bundle, run:
+
+```sh
+uv run --no-sync python -m devtools.bake_spell_palettes \
+  --vfx-root /home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx \
+  --draft-file game/data/ice_spells/spell-studio-drafts.json
+```
+
+The bake is an offline authoring operation. Runtime consumes its local pixels
+and serialized palette values and never opens the art workspace.

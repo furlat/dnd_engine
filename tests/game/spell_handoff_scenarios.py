@@ -23,13 +23,15 @@ from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.conjuration import AcidSplash
-from dnd.spells.evocation import EldritchBlast, Fireball, GuidingBolt
+from dnd.spells.evocation import EldritchBlast, Fireball, GuidingBolt, RayOfFrost
+from dnd.spells.ice_knife import IceKnife
+from dnd.spells.necromancy import ChillTouch
 from dnd.types.world import CardinalDirection
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
-HandoffProgram = Literal["eldritch", "guiding", "acid", "fireball"]
+HandoffProgram = Literal["eldritch", "guiding", "acid", "fireball", "ray", "chill", "ice"]
 HandoffEnvironment = Literal["open", "wall-east", "wall-north", "closed-door", "open-door"]
 
 
@@ -72,7 +74,8 @@ def spell_handoff_history(
         if empty:
             placements = {role: position for role, position in placements.items() if role in ("caster", "perceiver")}
             center = (10, 10)
-        spell = {"eldritch": EldritchBlast, "guiding": GuidingBolt, "acid": AcidSplash, "fireball": Fireball}[program]
+        spell = {"eldritch": EldritchBlast, "guiding": GuidingBolt, "acid": AcidSplash,
+                 "fireball": Fireball, "ray":RayOfFrost, "chill":ChillTouch, "ice":IceKnife}[program]
         actors: dict[str, Entity] = {}
         for role, position in placements.items():
             actor = Entity.create(uuid4(), role.title(), config=EntityConfig(
@@ -147,6 +150,12 @@ def spell_handoff_history(
         elif program == "acid":
             perform(caster, "spell.acid_splash", recipient=actors["first"], extras=(actors["second"],),
                 dice=(1, *((3,) * (2 if level == 5 else 3)), 20))
+        elif program in ("ray", "chill"):
+            perform(caster, "spell.ray_of_frost" if program=="ray" else "spell.chill_touch",
+                recipient=actors["first"], dice=(1,) if miss else (15,*((3,)*(2 if level==5 else 3))))
+        elif program=="ice":
+            perform(caster,"spell.ice_knife",recipient=actors["first"],
+                dice=((1,) if miss else (15,4))+(2,2,1,20))
         else:
             for index in range(2 if repeat else 1):
                 result = perform(caster, "spell.fireball", position=center,
@@ -154,8 +163,9 @@ def spell_handoff_history(
                 assert isinstance(result, SpellEvent) and result.resolved_area_positions is not None
                 if empty:
                     assert result.total_targets == 0
+        observers = {"caster":caster,"perceiver":actors["first"] if program in ("ray","chill","ice") else perceiver}
         history = capture_history(before, (), observers=tuple(
-            ObserverCapture(role, actors[role].uuid, baseline) for role in ("caster", "perceiver")))
+            ObserverCapture(role, observer.uuid, baseline) for role,observer in observers.items()))
         primary = history.views["caster"]
         return CapturedHistory(primary.initialization, before, primary.lineages, history.views)
     finally:

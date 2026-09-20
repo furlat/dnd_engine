@@ -61,19 +61,23 @@ def test_native_v2_before_additive_ai_facts_still_replays_presentation() -> None
     removed = set()
     additions = {
         "dnd.core.events.EntityCreatedEvent": ("healing_blocked",),
-        "dnd.core.events.SensoryUpdateEvent": ("hazardous_cells_changed",),
+        "dnd.core.events.SensoryUpdateEvent": (
+            "hazardous_cells_changed", "spatial_effects_changed", "spatial_effects_removed",
+        ),
         "dnd.core.events.SpatialChangeEvent": ("tile_state", "tile_present", "object_state"),
     }
     while pending:
         value = pending.pop()
         if isinstance(value, dict):
             for key in additions.get(value.get("wire_type", ""), ()):
-                value.pop(key)
+                previous = value.pop(key)
+                if key in {"spatial_effects_changed", "spatial_effects_removed"}:
+                    assert not previous
                 removed.add(key)
             pending.extend(value.values())
         elif isinstance(value, list):
             pending.extend(value)
-    assert {"healing_blocked", "hazardous_cells_changed"} <= removed
+    assert {"healing_blocked", "hazardous_cells_changed", "spatial_effects_changed", "spatial_effects_removed"} <= removed
     reset_engine_runtime()
     before, lineages = decode_sequence(json.dumps(payload).encode())
     expected = source.before
@@ -99,3 +103,30 @@ def test_incomplete_recorded_event_does_not_invent_identity() -> None:
     assert EventQueue.event_cursor() == 0
     assert BaseObject._registry == {}
     assert DiceRoll._registry == existing_rolls
+
+
+def test_native_spell_archives_before_subeffect_identity_replay_unchanged() -> None:
+    source = produce(next(case for case in load_cases() if case.id == "firebolt-level"))
+    payload = json.loads(encode_sequence(source.initialization, source.lineages))
+    pending, removed = [payload], 0
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            if value.get("wire_type") == "dnd.actions.SpellEvent":
+                assert value.pop("effect_id") is None
+                removed += 1
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    assert removed > 0
+    reset_engine_runtime()
+    before, lineages = decode_sequence(json.dumps(payload).encode())
+    assert before == source.before and lineages == source.lineages
+    player, public = player_inputs(source.initialization, lineages)
+    data = load_animation_data()
+    for lineage in public:
+        bound = bind_choreography(player, lineage, data)
+        assert not bound.gaps
+        assert sample_choreography(bound, bound.complete_ms).complete
+        player = reduce_player_lineage(player, lineage)
+    assert EventQueue.event_cursor() == 0 and not Entity.get_all_entities()

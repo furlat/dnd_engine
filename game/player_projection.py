@@ -191,6 +191,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 declared_target_entity_uuids=tuple(identity for identity in event.declared_target_entity_uuids
                     if not area or identity in known and _identified(event, identity, observer)),
                 application_id=event.application_id, application_index=event.application_index,
+                effect_id=event.effect_id,
                 aoe_position=area_position,
                 area_geometry=event.area_geometry if area_position is not None else None,
                 resolved_area_positions=resolved_positions)

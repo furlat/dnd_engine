@@ -1,0 +1,15 @@
+{
+  "source_id": "wotc.ice_knife_legacy",
+  "source_family": "provenance_unverified",
+  "title": "Ice Knife \u2014 legacy rules reference",
+  "source_version": "legacy-2014-reference-2026-09-20",
+  "rules_baseline": "2014",
+  "license_id": "LicenseRef-WotC-Legacy-Rules",
+  "canonical_uri": "https://www.dndbeyond.com/spells/2384-ice-knife",
+  "document_digest": "95d3a510475a6f12199366059197453ece74d9342ab78d12cb2e32ea110da08d",
+  "attribution_text": "Ice Knife rules by Wizards of the Coast; engine implementation by the Neurodragon project.",
+  "notices": [
+    "Not SRD 5.1 or Creative Commons content.",
+    "Document digest identifies the local authored reference summary ice_knife_legacy.txt; no external document is bundled or checked at runtime."
+  ]
+}

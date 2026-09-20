@@ -100,6 +100,6 @@ def sample_damage(cue: DamageCue, elapsed_ms: float) -> DamageSample:
             start_ms=timing.start_ms, end_ms=timing.end_ms,
             death_start_ms=timing.start_ms if life is LifeState.DEAD else None)
     flash = cue.damage.hitFlash
-    color = (flash.color if flash.enabled and not complete
+    color = ((flash.palette or flash.color) if flash.enabled and not complete
              and timing.flash_ms <= elapsed_ms < timing.flash_ms + flash.durationMs else None)
     return DamageSample(body, VitalsSample(cue.contact.actor_uuid, hp, life, color), complete)

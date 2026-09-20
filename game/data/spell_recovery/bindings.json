@@ -2,7 +2,16 @@
   "resources": {
     "/spell-recovery/caster/guiding_bolt-weaponGlow.png": "game/assets/spell_recovery/caster/guiding_bolt-weaponGlow.png",
     "/spell-recovery/caster/eldritch_blast-weaponGlow.png": "game/assets/spell_recovery/caster/eldritch_blast-weaponGlow.png",
-    "/spritesheets/Magic3/Special1.png": "game/assets/spell_recovery/spritesheets/Magic3/Special1.png"
+    "/spritesheets/Magic3/Special1.png": "game/assets/spell_recovery/spritesheets/Magic3/Special1.png",
+    "/spell-palettes/source-hand-noise.png": "game/assets/spell_recovery/palettes/source-hand-noise.png",
+    "/spell-palettes/acid_splash-weaponGlow.png": "game/assets/spell_recovery/palettes/acid_splash-weaponGlow.png",
+    "/spell-palettes/fire_bolt-weaponGlow.png": "game/assets/spell_recovery/palettes/fire_bolt-weaponGlow.png",
+    "/spell-palettes/guiding_bolt-weaponGlow.png": "game/assets/spell_recovery/palettes/guiding_bolt-weaponGlow.png",
+    "/spell-palettes/eldritch_blast-weaponGlow.png": "game/assets/spell_recovery/palettes/eldritch_blast-weaponGlow.png",
+    "/spell-palettes/fireball-weaponGlow.png": "game/assets/spell_recovery/palettes/fireball-weaponGlow.png",
+    "/spell-palettes/ray_of_frost-weaponGlow.png": "game/assets/spell_recovery/palettes/ray_of_frost-weaponGlow.png",
+    "/spell-palettes/ice_knife-weaponGlow.png": "game/assets/spell_recovery/palettes/ice_knife-weaponGlow.png",
+    "/spell-palettes/chill_touch-weaponGlow.png": "game/assets/spell_recovery/palettes/chill_touch-weaponGlow.png"
   },
   "spells": {
     "spell.acid_splash": {

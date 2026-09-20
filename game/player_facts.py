@@ -96,6 +96,7 @@ class SpellFact:
     declared_target_entity_uuids: tuple[UUID, ...]
     application_id: UUID | None
     application_index: int | None
+    effect_id: str | None = None
     aoe_position: tuple[int, int] | None = None
     area_geometry: AoEPresentationGeometry | None = None
     # A disclosed subset of the native result, never a physical blast mask.
