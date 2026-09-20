@@ -25,6 +25,7 @@ from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
 from game.player_facts import AttackFact, ForcedMovementFact, MovementFact, PlayerState, SpellFact, StepFact
 from game.player_reduction import reduce_lineage, stage_lineage
+from game.presentation_coverage import lineage_coverage, missing_observed_bindings, presentation_inventory
 from game.projection import Camera, TILE_WIDTH, ZOOM_LEVELS, project_screen
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
 from game.visual_position import VisualPosition
@@ -33,7 +34,8 @@ from devtools.animation_review.trace import LINEAGE, STATE, draw_trace, frame_tr
 
 
 def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
-                sequence: ReviewSequence, fps: int, size: tuple[int, int], ffmpeg: str) -> dict[str, Any]:
+                sequence: ReviewSequence, fps: int, size: tuple[int, int], ffmpeg: str,
+                coverage_inventory: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     before = sequence.before
     latest = before
     for lineage in sequence.lineages:
@@ -44,7 +46,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
         "latest": state_summary(latest),
         "lineages": [LINEAGE.dump_python(root, mode="json", serialize_as_any=True, warnings="error")
                      for root in sequence.lineages],
-        "heads": [], "frames": [], "checks": [], "gaps": [],
+        "heads": [], "frames": [], "checks": [], "gaps": [], "coverage": [],
     })
     checks, gaps = trace["checks"], trace["gaps"]
 
@@ -65,6 +67,8 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     view = pygame.Surface(size)
     pygame.display.set_caption(f"Animation review · {case.id}")
     data = load_animation_data(rig_files=tuple(sorted(Path("game/data/rigs").glob("*.json"))))
+    if coverage_inventory is not None and not coverage_inventory:
+        coverage_inventory.extend(presentation_inventory(data))
     fonts = tuple(pygame.font.SysFont(style.fontFamily, round(style.fontSizePx), bold=style.fontWeight == "bold")
                   for style in (data.number_style, data.badge_style))
     number_font, badge_font = fonts
@@ -80,6 +84,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     positions: dict[str, VisualPosition] = {}
     feedback_viewport = pygame.Rect(0, 44, size[0], size[1] - 44)
     actors = scene_actors(before, data, facings)
+    reported_scene_bindings: set[tuple[str, str]] = set()
     if not actors:
         raise ValueError("review scenario has no visible actors")
     focus = (sum(row.contact.grid[0] for row in actors) / len(actors),
@@ -255,10 +260,24 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
             pause_done = False
             for lineage in sequence.lineages:
                 after = reduce_lineage(before, lineage)
-                load_scene_media((
-                    *scene_actors(stage_lineage(before, lineage), data, facings, positions),
+                admitted = stage_lineage(before, lineage)
+                staged_actors = (
+                    *scene_actors(admitted, data, facings, positions),
                     *scene_actors(after, data, facings, positions),
-                ), data, body_rows=body_rows)
+                )
+                load_scene_media(staged_actors, data, body_rows=body_rows)
+                for actor in staged_actors:
+                    bindings = [("rig", actor.contact.rig_id)]
+                    retained = after.actors.get(UUID(actor.contact.actor_uuid)) or admitted.actors.get(UUID(actor.contact.actor_uuid))
+                    if retained is not None and retained.creature_content_ref is not None:
+                        bindings.append(("creature", retained.creature_content_ref))
+                    for family, identity in bindings:
+                        if (family, identity) in reported_scene_bindings:
+                            continue
+                        reported_scene_bindings.add((family, identity))
+                        trace["coverage"].append({"root_uuid": str(lineage.root.uuid), "event_uuid": None,
+                            "owner": "body rig", "observed": "scene_loaded", "issues": [],
+                            "family": family, "identity": identity})
                 contacts = {actor.contact.actor_uuid: actor.contact
                             for actor in scene_actors(before, data, facings, positions)}
                 motion = bind_motion(before, lineage, data, contacts=contacts)
@@ -286,6 +305,10 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     composition = group_trace(group)
                 for bound in groups:
                     gaps.extend(f"{identity}: {detail}" for identity, detail in bound.gaps)
+                evidence = lineage_coverage(lineage, group=group, motion=motion)
+                trace["coverage"].extend(evidence)
+                if coverage_inventory is not None:
+                    coverage_inventory.extend(missing_observed_bindings(coverage_inventory, evidence))
                 trace["heads"].append({
                     "root_uuid": str(lineage.root.uuid), "video_start_ms": frame_index * interval,
                     "presentation_start_ms": presentation_ms, "duration_ms": duration,
@@ -369,4 +392,4 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     trace["video"] = {**stream, "fps": fps, "frame_count": frame_index}
     return {"frame_count": frame_index, "duration_ms": frame_index * interval,
             "status": "passed" if all(row["passed"] for row in checks) else "failed",
-            "checks": checks, "gaps": sorted(set(gaps))}
+            "checks": checks, "gaps": sorted(set(gaps)), "coverage": trace["coverage"]}

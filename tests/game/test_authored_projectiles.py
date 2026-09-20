@@ -57,9 +57,21 @@ def test_default_bundle_replaces_geometry_without_changing_body_delivery_or_vita
         ]
     for at in (0, *(row.travel_end_ms for row in timeline.applications), timeline.complete_ms):
         actual, original = sample_cast(timeline, at), sample_cast(baseline, at)
-        assert (actual.bodies, actual.vitals, actual.numbers, actual.complete) == (
-            original.bodies, original.vitals, original.numbers, original.complete,
+        assert (actual.bodies, actual.numbers, actual.complete) == (
+            original.bodies, original.numbers, original.complete,
         )
+        assert [(v.actor_uuid, v.hp, v.life_state) for v in actual.vitals] == [
+            (v.actor_uuid, v.hp, v.life_state) for v in original.vitals]
+    # The selected media retains delivery/state timing while using the approved
+    # Force palette at contact instead of the reference's single-color flash.
+    damage = timeline.recipe.damage
+    assert damage is not None and damage.hitFlash.palette is not None
+    for application in timeline.applications:
+        assert application.flash_ms == application.travel_end_ms
+        for delta, flashing in ((0, True), (149.9, True), (150, False)):
+            sample = sample_cast(timeline, application.travel_end_ms + delta)
+            vital = next(v for v in sample.vitals if v.actor_uuid == application.source.target.actor_uuid)
+            assert vital.flash == (damage.hitFlash.palette if flashing else None)
 
 
 @pytest.mark.parametrize("quadrant", range(4))

@@ -10,9 +10,19 @@ from typing import Mapping
 from uuid import UUID
 
 from game.animation import ActorContact, BodySample, body_clip, body_duration, body_frame, facing_for_delta
-from game.animation_types import ActionFeedback, AnimationData, Facing8, StudioCondition, StudioRecovery
+from game.animation_types import (ActionFeedback, AnimationData, BodyActionRecipe, Facing8,
+                                  StudioCondition, StudioRecovery, StudioSpellDraft)
 from game.combat import actor_contact, actor_is_visible
 from game.player_facts import ActionFact, PlayerNode, PlayerState, SpellFact
+
+
+# The user accepted these existing potion source-strip omissions. This is a
+# review decision, not permission to silently omit media from future actions.
+ACCEPTED_SOURCE_STRIP_RECIPES = frozenset({
+    "action.item.potion_greater_invisibility.drink",
+    "action.item.potion_haste.drink",
+    "action.item.potion_healing.drink",
+})
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +47,17 @@ class BodyActionCue:
     gaps: tuple[str, ...] = ()
     interaction_object_uuid: UUID | None = None
     relocates: bool = False
+
+
+def body_cast_limitations(draft: StudioSpellDraft) -> tuple[str, ...]:
+    cast = draft.cast
+    return (("Body cast actor VFX layers are not bound",)
+            if any(layer is not None and layer.enabled and not layer.hidden
+                   for layer in (cast.weaponGlow, cast.aura, cast.slash, *(cast.effects or ()))) else ())
+
+
+def body_action_limitations(action: BodyActionRecipe) -> tuple[str, ...]:
+    return (("Authored body-action strip media is not bound",) if action.actor.media else ())
 
 
 def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData,
@@ -82,9 +103,7 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
             raise ValueError("body cast equipment selection requires its authored loadout binding")
         hide_weapon = cast.equipment.kind == "hidden"
         recovery, condition = cast.recovery, draft.condition
-        if any(layer is not None and layer.enabled and not layer.hidden
-               for layer in (cast.weaponGlow, cast.aura, cast.slash, *(cast.effects or ()))):
-            gaps.append("Body cast actor VFX layers are not bound")
+        gaps.extend(body_cast_limitations(draft))
         if fact.target_entity_uuid is not None and fact.target_entity_uuid != actor.uuid:
             target = contacts.get(str(fact.target_entity_uuid))
             other = before.actors.get(fact.target_entity_uuid)
@@ -105,8 +124,7 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
             raise ValueError("body action lacks an authored effect anchor")
         effect_frame = effect.frame
         feedback = binding.action_feedback if binding is not None else action.actionFeedback
-        if action.actor.media:
-            gaps.append("Authored body-action strip media is not bound")
+        gaps.extend(body_action_limitations(action))
     metadata = body_clip(data, contact, clip)
     if enabled and effect_frame >= metadata.frames:
         raise ValueError(f"unreachable body action effect frame {effect_frame} in {clip}")

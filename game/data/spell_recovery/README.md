@@ -69,7 +69,7 @@ Point spells retain Studio's `isometricHybrid`: select the actual authored
 directional row, then rotate by the residual angle to the hand-to-body path.
 This applies to travel and impact; preparation stays on its authored facing.
 The initial importer incorrectly disabled this by copying a canonical-direction
-preview's omission. The importer now preserves the original recipe setting.
+preview's omission. The canonical recipe preserves the original setting; media import does not edit it.
 Fireball's ground effect keeps its authored flat orientation.
 
 Reimport from the same delivered source directories with:
@@ -77,48 +77,41 @@ Reimport from the same delivered source directories with:
 ```sh
 uv run --no-sync python -m devtools.import_spell_recovery \
   --vfx-root /home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx \
-  --neuroclient-app /home/tommaso/Dev/NeuroClient/app
+  --neuroclient-app /home/tommaso/Dev/NeuroClient/app \
+  --color-revision /home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/color-revision
 ```
 
-This narrow offline command selects native content references, adapts existing
-JSON and copies only the delivered frames. It does not regenerate VFX or replace
-the original NeuroClient/CodexFX bundles. Structural/media tests establish that
-these bindings play; final artwork acceptance belongs to the actual game clips.
+This offline command copies media and updates packaging metadata only. The
+required color-revision input selects the accepted pixels during every import.
+`spell-studio-drafts.json` is authoritative authoring: timing, sockets, scale,
+colors and source-sheet choices are never reconstructed from another spell.
+Resource bindings for baked sheets and the Fire Bolt override survive reimport.
 
 ## Exact spell palettes — September 20
 
-The accepted Fireball/Eldritch color revision is now copied into the existing
-3,520 phase-frame paths. It replaces colors only, preserving counts, alpha,
-registration, timing and all current wall/area bindings. Reapply it offline
-with `python -m devtools.import_spell_color_revision --source /path/to/color-revision`.
-The original handoff importer predates this revision; run this color import and
-the palette bake below after reimporting original spell frames. Runtime reads
-only local selected PNGs and never verifies an external export directory.
+The accepted Fireball/Eldritch color revision occupies the existing 3,520
+phase-frame paths. Counts, alpha, registration and wall/area bindings stay the
+same. The normal importer requires the revision directory; the standalone
+`devtools.import_spell_color_revision` remains a media-only update command.
 
-`devtools.bake_spell_palettes` reads the delivered color-revision palettes,
-the final production-v8 ice palettes and Magic Missile's actual wine10 asset
-palette. It bakes only enabled isolated casting layers, then records each
-spell's ordered target palette in `damage.hitFlash.palette`. Fire Bolt's new
-binding is an optional override here; its imported NeuroClient baseline remains
-available unchanged for source-parity tests. Magic Missile's current recipe has
-no casting overlay, so this work adds its target treatment without inventing a
-new gesture or layer.
+Recipes declare target treatment in `damage.hitFlash.palette`, including the
+approved contact frame 0 / 150ms flash. The casting layers separately declare
+`palette` (offline bake input) and `sourceSheet` (already-colored runtime output).
+Chill's casting layer deliberately uses its full palette; its target treatment
+uses dark colors and source noise. Body/clothes are never part of the casting
+bake. These values are authored choices, not decisions made by a packaging tool.
 
-The explicit user request changes authored flashes from frame 5 / 90ms to
-contact frame 0 / 150ms, with no fade. Floating numbers, HP/death callback frames
-and TakeDamage playback rates retain their existing values. A target flash
-recolors its actual composed actor appearance, with source alpha preserved;
-casting effects never recolor clothing. Chill selects the original hand-noise
-texture and untinted source shading through passive data. Recolored pose rows
-are shared in a 32MiB cache, independent of camera scale and frame time.
-
-After importing the optional new ice bundle, run:
+Rebuild declared casting sheets from local source layers with:
 
 ```sh
-uv run --no-sync python -m devtools.bake_spell_palettes \
-  --vfx-root /home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx \
-  --draft-file game/data/ice_spells/spell-studio-drafts.json
+uv run --no-sync python -m devtools.bake_spell_palettes
 ```
 
-The bake is an offline authoring operation. Runtime consumes its local pixels
-and serialized palette values and never opens the art workspace.
+Use `--draft-file game/data/ice_spells/spell-studio-drafts.json` to select only
+one bundle. The baker writes PNGs to the declared resource locations and does
+not edit recipes, bindings or hit timing. Magic Missile has no casting overlay;
+its target palette remains ordinary authored data. The original NeuroClient
+materialized file stays a reference; selected overrides live in local bundles.
+
+See [the presentation contract](../PRESENTATION_CONTRACT.md) for format identity,
+ownership and the small shared execution rules needed by a future TS adapter.

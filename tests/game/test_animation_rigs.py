@@ -77,7 +77,14 @@ def test_target_metadata_controls_reaction_feedback_and_idle_without_retiming_re
     start = timeline.applications[0].damage_start_ms
     assert start is not None and start == original.applications[0].damage_start_ms
     assert timeline.applications[0].damage_end_ms == pytest.approx(start + 1500)
-    assert timeline.applications[0].flash_ms == pytest.approx(start + 5000 / 6)
+    # Contact flash is the approved 150ms palette treatment; slowing the
+    # recipient's reaction changes its body/HP frame clock, not this duration.
+    assert timeline.applications[0].flash_ms == start
+    damage = timeline.recipe.damage
+    assert damage is not None and damage.hitFlash.palette is not None
+    for at, flashing in ((start - .001, False), (start, True),
+                         (start + 149.9, True), (start + 150, False)):
+        assert sample_cast(timeline, at).vitals[0].flash == (damage.hitFlash.palette if flashing else None)
     assert timeline.applications[0].hp_ms == pytest.approx(start + 7000 / 6)
     before = sample_cast(timeline, start + 7000 / 6 - 0.001)
     feedback = sample_cast(timeline, start + 7000 / 6)

@@ -14,6 +14,13 @@ from game.player_facts import (
 )
 
 
+# These received families have ordinary state presentation, without a separate
+# actor cue. This describes the reducer below; it is not a second dispatcher.
+STATE_PRESENTATION_KINDS = frozenset({
+    "temporary_hit_points", "spatial", "turn", "sensory", "item_charge",
+})
+
+
 def copy_target(target: PlayerState) -> PlayerState:
     senses = target.senses
     return replace(target, tiles=dict(target.tiles), objects=dict(target.objects), actors=dict(target.actors),

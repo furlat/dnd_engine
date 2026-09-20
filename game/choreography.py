@@ -231,6 +231,12 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                     start_ms=at, facings=facings or {}, contacts=placed_contacts)
             except (ValueError, NotImplementedError) as error:
                 gaps.append((event.uuid, str(error)))
+            if body_action is None and isinstance(fact, ActionFact) and fact.behavior_id is not None:
+                recipe_id = binding.source_recipe if binding is not None else fact.behavior_id
+                actor = before.actors.get(fact.source_entity_uuid)
+                if (recipe_id not in data.body_action_recipes and actor is not None
+                        and (str(actor.uuid) in placed_contacts or actor_is_visible(before, actor))):
+                    gaps.append((event.uuid, f"Missing body-action recipe: {recipe_id}"))
             if body_action is not None:
                 actor_order.append((event.uuid, len(body_actions), True))
                 body_actions.append(body_action)
@@ -673,6 +679,25 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
             strips.extend(child.strips)
     return ChoreographySample(displayed, tuple(clips), conditions, tuple(vitals.values()),
                               elapsed_ms >= bound.complete_ms, tuple(bodies.values()), tuple(contacts.values()), tuple(strips))
+
+
+# Passive descriptions for the developer inventory. These never dispatch events.
+FACT_PRESENTATION = {
+    "attack": ("attack", "timeline; child results at contact"),
+    "spell": ("cast", "timeline or parent application"),
+    "movement": ("movement", "timeline"),
+    "step": ("movement", "parent motion edge"),
+    "forced_movement": ("forced_movement", "timeline"),
+    "shove": ("shove", "timeline; children own outcomes"),
+    "damage": ("damage", "parent contact or standalone; applied after-values"),
+    "heal": ("healing", "feedback; nested HP timing is partial"),
+    "life": ("lifecycle", "parent result or standalone lifecycle"),
+    "death_save": ("lifecycle", "outcome feedback"),
+    "equipment": ("equipment", "appearance transition or state"),
+    "condition": ("condition", "membership and selected appearance"),
+    "action": ("body_action", "selected body recipe or causal parent"),
+    "spatial_effect_state": ("world_animation", "observed trap transition"),
+}
 
 
 # Movement is a causal presentation primitive, at a root or below another effect.

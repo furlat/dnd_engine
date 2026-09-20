@@ -13,7 +13,7 @@ from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import EventType
 from game.animation import NumberSample
 from game.animation_types import FloatingFeedbackStyle, StudioCondition
-from game.condition_types import ConditionBodyColor, ConditionRecipe
+from game.condition_types import ConditionBodyColor, ConditionRecipe, ConditionTransition
 from game.actor_facts import ConditionFact
 from game.player_facts import ConditionChangeFact, PlayerNode
 
@@ -48,6 +48,22 @@ class ConditionSample:
     appearance: ConditionAppearance
     feedback: NumberSample | None
     complete: bool
+
+
+def persistent_limitations(recipe: ConditionRecipe) -> tuple[str, ...]:
+    """Selected unsupported tracks, shared by binding and developer inventory."""
+    identity, persistent = recipe.definitionRef.content_id, recipe.persistent
+    return (
+        *(f"Condition strip unsupported: {identity}/{layer.id}" for layer in persistent.layers),
+        *(f"Condition equipment modifier unsupported: {identity}/{modifier.id}"
+          for modifier in persistent.equipmentModifiers),
+        *(f"Condition rig layer unsupported: {identity}/{layer.id}" for layer in persistent.appearanceLayers),
+    )
+
+
+def transition_limitations(identity: str, transition: ConditionTransition) -> tuple[str, ...]:
+    return tuple(f"Condition transition strip unsupported: {identity}/{effect.id}"
+                 for effect in transition.effects)
 
 
 def resolve_condition_appearance(
@@ -85,11 +101,7 @@ def resolve_condition_appearance(
         alpha *= persistent.alphaMultiplier
         if body is None and persistent.bodyColor is not None:
             body = persistent.bodyColor
-        unsupported.extend(f"Condition strip unsupported: {identity}/{layer.id}" for layer in persistent.layers)
-        unsupported.extend(f"Condition equipment modifier unsupported: {identity}/{modifier.id}"
-                           for modifier in persistent.equipmentModifiers)
-        unsupported.extend(f"Condition rig layer unsupported: {identity}/{layer.id}"
-                           for layer in persistent.appearanceLayers)
+        unsupported.extend(persistent_limitations(recipe))
     return ConditionAppearance(alpha, body, tuple(selected), tuple(dict.fromkeys(unsupported)))
 
 
@@ -133,8 +145,7 @@ def compile_condition(
     feedback = override.feedbackEnabled if override is not None else transition.feedbackEnabled
     unsupported = tuple(dict.fromkeys((
         *old_appearance.unsupported, *new_appearance.unsupported,
-        *(f"Condition transition strip unsupported: {recipe.definitionRef.content_id}/{effect.id}"
-          for effect in transition.effects),
+        *transition_limitations(recipe.definitionRef.content_id, transition),
     )))
     return ConditionTimeline(
         event.uuid, change.target_entity_uuid, start, start + alpha_duration,

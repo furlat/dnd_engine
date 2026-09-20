@@ -499,7 +499,8 @@ def projectile_contact(timeline: CastTimeline, effect: ProjectileSample | Geomet
                       target.grid[1] + dy / length * local.approachOffsetTiles)
     if application.curvature:
         asset = timeline.data.projectile_assets[effect.asset_id]
-        center = projectile_center_offset(timeline.recipe, asset, effect.phase)
+        facing = view_facing(application.facing, quadrant, timeline.data)
+        center, _ = projectile_registration(timeline.recipe, asset, effect.phase, facing)
         _, first, last = _projected_endpoints(timeline, application, quadrant, center)
         point = projectile_curve_point(first, last, progress, application.curvature)
         straight = projectile_curve_point(first, last, progress, 0)
@@ -525,16 +526,32 @@ def projectile_phase_scale(projectile: StudioProjectile, phase: Literal["prepare
     return binding.scale if binding.scale is not None else projectile.scale
 
 
-def projectile_center_offset(recipe: StudioSpellDraft, asset: AuthoredProjectileAsset,
-                             phase: Literal["prepare", "travel", "impact"]) -> tuple[float, float]:
-    """Original SpriteProjectileFx canvas-center registration, before camera zoom."""
+def projectile_registration(recipe: StudioSpellDraft, asset: AuthoredProjectileAsset,
+                            phase: Literal["prepare", "travel", "impact"],
+                            facing: Facing8, rotation_radians: float = 0,
+                            ) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Return attachment compensation and image-center offset in reference pixels.
+
+    Legacy Studio art uses canvas-center compensation before interpolation,
+    scaled with each actor, and removes it again before drawing. Preserve that
+    convention exactly. Measured directional pivots attach directly to the
+    socket; only their image-center offset rotates with the art. Neither offset
+    participates in the compiled travel clock.
+    """
     projectile = recipe.projectile
     assert projectile is not None and projectile.sprite is not None
     visual = projectile.sprite
-    anchor = visual.anchor or asset.anchor
     scale = projectile_phase_scale(projectile, phase)
-    return (visual.offsetX + (0.5 - anchor.x) * asset.frame.width * scale,
-            visual.offsetY + (0.5 - anchor.y) * asset.frame.height * scale)
+    if asset.anchorsByFacing is not None:
+        anchor = asset.anchorsByFacing[facing]
+        dx, dy = (0.5 - anchor.x) * asset.frame.width * scale, (0.5 - anchor.y) * asset.frame.height * scale
+        offset = (visual.offsetX + dx * cos(rotation_radians) - dy * sin(rotation_radians),
+                  visual.offsetY + dx * sin(rotation_radians) + dy * cos(rotation_radians))
+        return (0, 0), offset
+    anchor = visual.anchor or asset.anchor
+    offset = (visual.offsetX + (0.5 - anchor.x) * asset.frame.width * scale,
+              visual.offsetY + (0.5 - anchor.y) * asset.frame.height * scale)
+    return offset, offset
 
 
 def _projected_endpoints(timeline: CastTimeline, application: ApplicationTimeline | GroundDeliveryTimeline, quadrant: int,
@@ -575,10 +592,8 @@ def project_projectile(timeline: CastTimeline, effect: ProjectileSample, quadran
         raise ValueError("projectile phase progress must be finite and between zero and one")
     data = timeline.data
     asset = data.projectile_assets[effect.asset_id]
-    # New paged exports register a measured facing-specific point. Keep their
-    # physical socket separate from the sprite canvas/pivot padding.
-    cx, cy = ((0, 0) if asset.anchorsByFacing is not None else
-              projectile_center_offset(timeline.recipe, asset, effect.phase))
+    facing = view_facing(application.facing, quadrant, data)
+    (cx, cy), _ = projectile_registration(timeline.recipe, asset, effect.phase, facing)
     facing, first, last = _projected_endpoints(timeline, application, quadrant, (cx, cy), effect.source_frame)
     point = _projectile_point(effect.phase, effect.progress, first, last, application.curvature)
     lift, tangent = _projectile_arc(application, effect.phase, effect.progress)

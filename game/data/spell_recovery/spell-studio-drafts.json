@@ -1,6 +1,6 @@
 {
-  "schema": "neuroclient.spellStudioDrafts",
-  "version": 6,
+  "schema": "dnd.spellStudioDrafts",
+  "version": 1,
   "spells": [
     {
       "definitionRef": {
@@ -53,7 +53,34 @@
             "secondary": 8978278,
             "mode": "multiTint"
           },
-          "sourceSheet": "/spell-palettes/acid_splash-weaponGlow.png"
+          "sourceSheet": "/spell-palettes/acid_splash-weaponGlow.png",
+          "palette": {
+            "colors": [
+              334855,
+              926232,
+              402986,
+              602890,
+              1457443,
+              673349,
+              871948,
+              2251824,
+              1339151,
+              1470301,
+              3309374,
+              2069524,
+              3842936,
+              4826447,
+              3128347,
+              6933603,
+              4972582,
+              8321845,
+              10023042,
+              11861835,
+              14876534,
+              16252853
+            ],
+            "gamma": 0.65
+          }
         }
       },
       "projectile": {
@@ -272,7 +299,22 @@
             "secondary": 16777055,
             "mode": "multiTint"
           },
-          "sourceSheet": "/spell-palettes/guiding_bolt-weaponGlow.png"
+          "sourceSheet": "/spell-palettes/guiding_bolt-weaponGlow.png",
+          "palette": {
+            "colors": [
+              1445122,
+              3021827,
+              5058820,
+              7358982,
+              9857033,
+              12290577,
+              14264866,
+              15582794,
+              16112243,
+              16443034
+            ],
+            "gamma": 0.65
+          }
         }
       },
       "projectile": {
@@ -479,7 +521,34 @@
             "secondary": 16777055,
             "mode": "multiTint"
           },
-          "sourceSheet": "/spell-palettes/eldritch_blast-weaponGlow.png"
+          "sourceSheet": "/spell-palettes/eldritch_blast-weaponGlow.png",
+          "palette": {
+            "colors": [
+              661535,
+              794180,
+              1844012,
+              1124916,
+              997244,
+              1589580,
+              4345435,
+              2055017,
+              1465272,
+              2652038,
+              2984160,
+              7373457,
+              3708320,
+              4629478,
+              5026748,
+              5553886,
+              6340342,
+              6671827,
+              6868464,
+              7852284,
+              8313082,
+              9887999
+            ],
+            "gamma": 0.65
+          }
         },
         "holdReleaseForVolley": true
       },
@@ -1176,7 +1245,33 @@
             "secondary": 16777055,
             "mode": "multiTint"
           },
-          "sourceSheet": "/spell-palettes/fireball-weaponGlow.png"
+          "sourceSheet": "/spell-palettes/fireball-weaponGlow.png",
+          "palette": {
+            "colors": [
+              3606786,
+              3084038,
+              5771010,
+              4593428,
+              5840650,
+              8525828,
+              7811110,
+              11675399,
+              8664080,
+              10830886,
+              14695946,
+              11686424,
+              16407568,
+              13855024,
+              14383396,
+              16744472,
+              16094760,
+              16754726,
+              16757802,
+              16761402,
+              16769136
+            ],
+            "gamma": 0.65
+          }
         }
       },
       "projectile": {
@@ -1431,7 +1526,33 @@
             "secondary": 16777055,
             "mode": "multiTint"
           },
-          "sourceSheet": "/spell-palettes/fire_bolt-weaponGlow.png"
+          "sourceSheet": "/spell-palettes/fire_bolt-weaponGlow.png",
+          "palette": {
+            "colors": [
+              3606786,
+              3084038,
+              5771010,
+              4593428,
+              5840650,
+              8525828,
+              7811110,
+              11675399,
+              8664080,
+              14695946,
+              11686424,
+              11884094,
+              16407568,
+              14383396,
+              16744472,
+              15702123,
+              16754726,
+              16427839,
+              16764748,
+              16772745,
+              16777184
+            ],
+            "gamma": 0.65
+          }
         }
       },
       "projectile": {

@@ -19,7 +19,7 @@ from dnd.core.life_types import LifeState
 from game.animation import (
     ActorContact, BodySample, CastSample, CastTimeline, GeometryProjectileSample, NumberSample,
     ProjectileSample, body_clip, body_elevation_steps, body_rig, project_geometry_projectile, project_projectile,
-    projectile_center_offset, projectile_phase_scale, projectile_contact, view_facing, cast_deliveries,
+    projectile_registration, projectile_phase_scale, projectile_contact, view_facing, cast_deliveries,
 )
 from game.animation_types import AnimationData, DepthMode, ElementColors, Facing8, PaletteTreatment, ParticleMediaAsset, StudioActorLayer, RigLayer as RigLayer
 from game.action_media import ActionStripCue, ActionStripSample
@@ -466,14 +466,8 @@ def projectile_layer_blits(timeline: CastTimeline, effect: ProjectileSample,
     scale = projectile_phase_scale(projectile, effect.phase) * factor
     # Authored offsets and pivots position art; they do not move world contacts.
     point = _reference_screen(effect.point, camera, data)
-    offset = projectile_center_offset(timeline.recipe, asset, effect.phase)
-    if asset.anchorsByFacing is not None:
-        anchor = asset.anchorsByFacing[asset.rowOrder[effect.row]]
-        dx = (0.5 - anchor.x) * asset.frame.width * projectile_phase_scale(projectile, effect.phase)
-        dy = (0.5 - anchor.y) * asset.frame.height * projectile_phase_scale(projectile, effect.phase)
-        angle = effect.rotation_radians
-        offset = (visual.offsetX + dx * cos(angle) - dy * sin(angle),
-                  visual.offsetY + dx * sin(angle) + dy * cos(angle))
+    _, offset = projectile_registration(timeline.recipe, asset, effect.phase,
+                                        asset.rowOrder[effect.row], effect.rotation_radians)
     center = (point[0] + offset[0] * factor, point[1] + offset[1] * factor)
     result = []
     for layer in layers:

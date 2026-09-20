@@ -1,8 +1,10 @@
 # Graphics cleanup and presentation coverage plan
 
 Date: 2026-09-20. Branch: `codex/recovery-design`.
-Status: independently reviewed proposal; runtime implementation has not started
-in this planning turn.
+Status: ownership, registration, portable contract and coverage units implemented
+from checkpoint `39d1f6c21b`. See the [implementation result](GRAPHICS_CLEANUP_RESULT_2026-09-20.md)
+for verification and remaining feature selection. The design below preserves the
+original scope; its references to the planning turn describe the proposal stage.
 
 This follows the [graphics review](GRAPHICS_PORTABILITY_REVIEW_2026-09-20.md)
 and the user's subsequent corrections. It replaces the review's preliminary

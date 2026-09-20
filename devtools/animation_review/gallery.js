@@ -11,6 +11,7 @@ let storageKey;
 let storageWarning = false;
 let exporting = false;
 let state = {reviews: {}, selected: [], speed: 1};
+let coverageRows = [];
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -103,6 +104,73 @@ function filterCards() {
     if (!visible && card.video) card.video.pause();
   }
   counts();
+}
+
+function initializeCoverage() {
+  const rows = new Map((manifest.coverage || []).map(row => [
+    `${row.family}:${row.identity}`, {...row, evidence: []},
+  ]));
+  for (const record of manifest.cases) {
+    const caseRows = new Map();
+    for (const observed of record.coverage || []) {
+      const key = `${observed.family}:${observed.identity}`;
+      if (!rows.has(key)) rows.set(key, {family: observed.family, identity: observed.identity,
+        owner: observed.owner, representation: "Received fact; selected support not classified",
+        status: "unassessed", binding: null, details: [], evidence: []});
+      if (!caseRows.has(key)) caseRows.set(key, {record, states: new Set(), issues: new Set()});
+      const evidence = caseRows.get(key);
+      evidence.states.add(observed.observed);
+      for (const issue of observed.issues || []) evidence.issues.add(issue.detail);
+    }
+    for (const [key, evidence] of caseRows) rows.get(key).evidence.push(evidence);
+  }
+  // This is the omitted source track of the same body action, not an event.
+  for (const row of rows.values()) if (row.family === "action_source_media") {
+    row.evidence = rows.get(`action:${row.identity}`)?.evidence || [];
+  }
+  coverageRows = [...rows.values()];
+  document.getElementById("coverage-panel").hidden = !coverageRows.length;
+  renderCoverage();
+}
+
+function renderCoverage() {
+  const filter = document.getElementById("coverage-filter").value;
+  const body = document.getElementById("coverage-rows");
+  body.replaceChildren();
+  for (const row of coverageRows) {
+    const exercised = row.evidence.some(item => [...item.states].some(value =>
+      ["bound", "state_only", "parent_owned", "scene_loaded"].includes(value)));
+    if (filter === "unexercised" ? exercised
+        : filter === "gaps" ? !row.evidence.some(item => item.issues.size)
+        : filter !== "all" && row.status !== filter) continue;
+    const tr = element("tr");
+    const identity = element("td", "", `${row.family} · ${row.identity}`);
+    const owner = element("td", "", `${row.owner} · ${row.representation}`);
+    const declared = element("td", "", row.status.replaceAll("_", " "));
+    if (row.binding) declared.append(element("p", "", row.binding));
+    for (const detail of row.details || []) declared.append(element("p", "", detail));
+    const observed = element("td");
+    if (!row.evidence.length) observed.textContent = "Not exercised in this run";
+    for (const evidence of row.evidence) {
+      const record = evidence.record;
+      observed.append(button(`${record.id} · ${[...evidence.states].join(", ")}`, () => {
+        ui.search.value = record.id;
+        ui["verdict-filter"].value = ui["checks-filter"].value = "all";
+        activeTags.clear();
+        for (const chip of ui.tags.children) chip.setAttribute("aria-pressed", "false");
+        filterCards();
+        cards.get(record.id).node.scrollIntoView({block: "start"});
+      }));
+      const trace = element("a", "", "Trace ↗");
+      trace.href = localURL(record.trace);
+      trace.target = "_blank";
+      trace.rel = "noopener";
+      observed.append(trace);
+      for (const issue of evidence.issues) observed.append(element("p", "", issue));
+    }
+    tr.append(identity, owner, declared, observed);
+    body.append(tr);
+  }
 }
 
 function refreshCard(id) {
@@ -363,6 +431,7 @@ async function initialize() {
       ui.tags.append(chip);
     }
     ui.gallery.append(...manifest.cases.map(makeCard));
+    initializeCoverage();
     filterCards();
   } catch (error) {
     ui["run-label"].textContent = "Run unavailable";
@@ -392,4 +461,5 @@ document.getElementById("clear-selection").addEventListener("click", () => {
   for (const id of [...state.selected]) select(id, false);
 });
 ui.export.addEventListener("click", () => exportCases([...state.selected]));
+document.getElementById("coverage-filter").addEventListener("change", renderCoverage);
 initialize();

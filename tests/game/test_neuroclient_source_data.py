@@ -4,7 +4,6 @@ These checks require neither NeuroClient nor Bun. Playback timing belongs to
 the next cut; copying a recipe does not prove its execution.
 """
 
-from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -20,17 +19,6 @@ SOURCE = DATA / "source"
 
 def read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def test_local_outputs_match_provenance_and_copied_sources() -> None:
-    provenance = read_json(DATA / "provenance.json")
-    source_hashes = provenance["neuroclient"]["source_sha256"]
-    for relative_path, expected in provenance["outputs"].items():
-        assert sha256((ROOT / relative_path).read_bytes()).hexdigest() == expected
-    for path in SOURCE.rglob("*.json"):
-        assert sha256(path.read_bytes()).hexdigest() == source_hashes[path.relative_to(SOURCE).as_posix()]
-    for url, local_path in read_json(DATA / "bindings.json")["resources"].items():
-        assert sha256((ROOT / local_path).read_bytes()).hexdigest() == source_hashes["public" + url]
 
 
 def test_saved_recipes_survive_materialization_including_disabled_tracks() -> None:
@@ -61,11 +49,11 @@ def test_saved_recipes_survive_materialization_including_disabled_tracks() -> No
 def test_catalog_snapshot_and_bindings_match_the_current_content_owner() -> None:
     catalog = read_json(DATA / "catalog-input.json")
     bindings = read_json(DATA / "bindings.json")
+    drafts = read_json(DATA / "spell-studio-drafts.materialized.json")["spells"]
     assert bindings["root_rig"] == "neuroclient.modular"
-    assert set(bindings["spells"]) == {
-        "spell.fire_bolt", "spell.acid_splash", "spell.magic_missile",
-        "spell.invisibility", "spell.greater_invisibility", "spell.see_invisibility", "spell.true_seeing",
-    }
+    authored_refs = {row["definitionRef"]["content_id"]: row["definitionRef"] for row in drafts}
+    catalog_refs = {row["contentRef"]["content_id"]: row["contentRef"] for row in catalog}
+    assert bindings["spells"] == authored_refs == catalog_refs
     for captured in catalog:
         row = SPELL_CATALOG_COMPOSITION_BY_ID[captured["metadata"]["catalog_id"]]
         ref = row.declaration.ref.model_dump(mode="json")

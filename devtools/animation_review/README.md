@@ -363,3 +363,25 @@ their existing presentation facing once. Movement and actions then own facing
 as usual. This supports frontal/rear comparisons of identical gameplay packets
 without adding facing-based combat rules. `weapon-motion` selects the corrected
 weapon-family examples; `backstab` selects three deliberate rear-hit examples.
+
+## Presentation coverage
+
+New runs include a collapsible **Presentation coverage** table. It joins selected
+recipe/rig metadata with evidence collected once when each received lineage is
+bound, including movement reactions. Its filters expose unsupported selected
+features, accepted source-media omissions, observed binding gaps and content
+without linked execution evidence. Clips and traces remain the existing review
+artifacts; replay checks and human approval remain separate.
+
+The gallery inventories its selected presentation data. For the broader native
+category/recording-model and registered-spell inventory, run explicitly:
+
+```sh
+uv run --no-sync python -m devtools.presentation_coverage > coverage.json
+```
+
+Use `--rig path/to/rig.json` to include additional selected rig metadata. The
+command reads authored metadata and existing registries, creates no encounter,
+and neither opens images nor audits asset files. Missing cast drafts do not mean
+their damage/condition children lack presentation. Neither declared bindings nor
+a successful run imply visual approval or support for every event combination.

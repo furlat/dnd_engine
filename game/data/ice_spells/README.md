@@ -26,23 +26,27 @@ Small serializable adaptations to the original Studio data:
   0–206 span 416.67ms, then 144fps; sample 236 contacts at 625ms. The original
   sequence completes once. It is not a projectile fired at artificial speed.
 - `cast.enabled=false` lets an already-created nested native effect play its
-  media without another caster gesture. The burst recipe in `effectDrafts`
+  media without another caster gesture. The burst recipe in `spell-studio-drafts.json.effectDrafts`
   retains Ice Knife's real ContentRef and selects native effect_id
   `spell.ice_knife.burst`; it is not a separately paid/catalog spell.
 - `damage.hitFlash.palette` is shared exact palette/noise data, baked onto each
   actual actor's animation during media preparation. Casting overlays use
   existing `sourceSheet` bindings, baked separately from body/clothing.
 
-Reproduce offline, in this order (the final step also synchronizes the burst
-palette with its owning spell):
+Reimport media, then rebuild declared casting sheets if their authoring changed:
 
 ```sh
 uv run --no-sync python -m devtools.import_ice_spells --source /path/to/production-v8
-uv run --no-sync python -m devtools.bake_spell_palettes --vfx-root /path/to/weapon-vfx \
-  --draft-file game/data/ice_spells/spell-studio-drafts.json
+uv run --no-sync python -m devtools.bake_spell_palettes --draft-file game/data/ice_spells/spell-studio-drafts.json
 ```
 
 The supplied Chill artwork remains the authored demonic hand mesh used in the
 approved preview. Native identity is the legacy ranged necrotic Chill Touch,
 with its existing NoHealing duration; this import does not change it into cold
 damage, invent persistent hand art or introduce a ground-freezing rule.
+
+`spell-studio-drafts.json` owns spell and child-effect behavior, including their
+separate damage palettes. The importer copies delivered pages, registration and
+noise; it never clones Guiding Bolt or edits those recipes. The baker consumes
+the casting layers' explicit `palette` and `sourceSheet` fields and writes PNGs
+only. See [the shared contract](../PRESENTATION_CONTRACT.md).

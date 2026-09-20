@@ -1,8 +1,10 @@
 """Closed capture, finite admission, and shared sensory reduction proofs."""
 
+import json
 from uuid import uuid4
 
 import pytest
+from pydantic import TypeAdapter
 
 from dnd.blocks.base_item import ItemLocationStateEvent
 from dnd.blocks.sensory import (
@@ -11,6 +13,7 @@ from dnd.blocks.sensory import (
     capture_senses_snapshot,
     reduce_senses_snapshot,
 )
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
 from dnd.core.events import (
     EntityCreatedEvent,
     EventQueue,
@@ -23,7 +26,8 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.types.senses import PerceivedContact, SenseMode, SensesType
 from dnd.types.world import LightLevel
 from game.demo import build_demo_intervals
-from game.presentation import Disposition, reduce_interval
+from game.event_record import encode_event
+from game.presentation import Disposition, IntervalEnvelope, reduce_interval
 
 
 def test_three_intervals_are_complete_passive_and_replay_after_reset() -> None:
@@ -60,7 +64,13 @@ def test_three_intervals_are_complete_passive_and_replay_after_reset() -> None:
             source = live_index[index]
             assert copied is not source
             assert type(copied) is type(source)
-            assert copied == source
+            source_payload = encode_event(source)
+            copied_payload = encode_event(copied)
+            # Detachment may disable registration; every recorded fact stays exact.
+            if source_payload["use_register"] != copied_payload["use_register"]:
+                assert (source_payload["use_register"], copied_payload["use_register"]) == (True, False)
+                source_payload["use_register"] = False
+            assert copied_payload == source_payload
             assert (
                 copied.uuid,
                 copied.lineage_uuid,
@@ -92,7 +102,13 @@ def test_three_intervals_are_complete_passive_and_replay_after_reset() -> None:
     assert live_observer.inventory.items == {}
 
     live_final = capture_senses_snapshot(live_observer.senses)
+    codec = TypeAdapter(tuple[IntervalEnvelope, ...])
+    recording = codec.dump_json(intervals, warnings="error")
     reset_engine_runtime()
+    startup, opened, closed = codec.validate_json(recording, context=PASSIVE_EVENT_REPLAY)
+    assert codec.dump_python((startup, opened, closed), mode="json", warnings="error") == json.loads(recording)
+    assert EventQueue.event_cursor() == 0
+    assert BaseObject._registry == {}
 
     target = None
     target, reduced_startup = reduce_interval(target, startup)
@@ -130,6 +146,8 @@ def test_three_intervals_are_complete_passive_and_replay_after_reset() -> None:
         for reduced in (reduced_startup, reduced_open, reduced_closed)
         for disposition in reduced.dispositions.values()
     )
+    assert EventQueue.event_cursor() == 0
+    assert BaseObject._registry == {}
 
 
 def test_wrong_observer_reduction_rejects_without_mutating_seed() -> None:
@@ -144,7 +162,7 @@ def test_wrong_observer_reduction_rejects_without_mutating_seed() -> None:
     assert (seed.visible, seed.seen, seed.objects) == before
 
 
-def test_pure_reduction_removes_before_after_values_and_copies_payloads() -> None:
+def test_pure_reduction_removes_before_after_values_and_isolates_mutable_state() -> None:
     observer_uuid = uuid4()
     contact_uuid = uuid4()
     old_contact = PerceivedContact(position=(1, 1), visual=True)
@@ -197,10 +215,18 @@ def test_pure_reduction_removes_before_after_values_and_copies_payloads() -> Non
         (2, 2): LightLevel.DIM_LIGHT,
     }
     assert reduced.entities == reduced.objects == {contact_uuid: changed_contact}
-    assert reduced.entities[contact_uuid] is not changed_contact
     assert reduced.passive_perception == 14
     assert reduced.visual_access == 0
     assert reduced.paths_dirty is True
+    assert previous.entities == previous.objects == {contact_uuid: old_contact}
+
+    # Frozen contacts may be shared; changing a container must stay local.
+    event.entity_contacts_changed.clear()
+    event.object_contacts_changed.clear()
+    assert reduced.entities == reduced.objects == {contact_uuid: changed_contact}
+    reduced.entities.clear()
+    assert reduced.objects == {contact_uuid: changed_contact}
+    reduced.objects.clear()
     assert previous.entities == previous.objects == {contact_uuid: old_contact}
 
 

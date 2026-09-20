@@ -1,24 +1,22 @@
-"""Bind an existing CodexFX export to an existing Studio spell recipe offline.
+"""Import media for an already-authored CodexFX Studio selection offline.
 
 The source pipeline supplies its original compatibility converter. This tool
-copies its PNG unchanged and emits the same asset/Studio JSON types consumed by
-the game; it never renders artwork or modifies the pinned NeuroClient export.
+copies its PNG unchanged and updates asset/resource packaging. Canonical spell
+recipes are read-only inputs; it never renders artwork or rewrites choreography.
 """
 
 from __future__ import annotations
 
 import argparse
-from copy import deepcopy
 import json
 import os
 from pathlib import Path
 import subprocess
-from devtools.import_neuroclient_presentation import REPO, contained_path, json_bytes, png_dimensions, sha256
+from devtools.import_neuroclient_presentation import REPO, contained_path, json_bytes, png_dimensions
 
 
 DATA_ROOT = "game/data/codexfx"
 ASSET_ROOT = "game/assets/codexfx"
-BASE_DRAFTS = "game/data/neuroclient/spell-studio-drafts.materialized.json"
 
 # Use the export package's existing adapter, with its own offline dependencies.
 CONVERT = """
@@ -40,15 +38,13 @@ print(json.dumps(compatibility_entry(
 
 
 def candidate_outputs(pipeline: Path, source_python: Path, package: Path,
-                      spell_id: str) -> dict[str, bytes]:
-    """Produce a local authored selection without rewriting the original recipe."""
+                      spell_id: str, *, authored_root: Path = REPO) -> dict[str, bytes]:
+    """Update selected media without changing its authored presentation."""
     source = {name: contained_path(package, name).read_bytes() for name in (
         "asset.json", "build.json", "readiness.json", "profiles/palette.json",
     )}
     asset = json.loads(source["asset.json"])
     sheet = contained_path(package, asset["sheet"]["uri"]).read_bytes()
-    if sha256(sheet) != asset["sheet"]["sha256"]:
-        raise ValueError("CodexFX sheet differs from its authored manifest")
     if png_dimensions(sheet, asset["sheet"]["uri"]) != (asset["sheet"]["width"], asset["sheet"]["height"]):
         raise ValueError("CodexFX sheet dimensions differ from its authored manifest")
     if (asset["sheet"]["sampling"], asset["sheet"]["alphaMode"], asset["sheet"]["colorSpace"]) != ("nearest", "straight", "srgb"):
@@ -63,54 +59,35 @@ def candidate_outputs(pipeline: Path, source_python: Path, package: Path,
         capture_output=True, text=True, check=True, env=environment,
     )
     entry = json.loads(result.stdout)
-    baseline = (REPO / BASE_DRAFTS).read_bytes()
-    document = json.loads(baseline)
+    document = json.loads((authored_root / DATA_ROOT / "spell-studio-drafts.json").read_text())
     selected = [row for row in document["spells"] if row["definitionRef"]["content_id"] == spell_id]
     if len(selected) != 1:
         raise ValueError(f"No unique existing Studio recipe for {spell_id}")
-    draft = deepcopy(selected[0])
-    projectile = draft["projectile"]
-    projectile["geometry"]["enabled"] = False
-    presentation = asset["presentation"]
-    projectile["sprite"] = {
-        "renderer": "sprite_projectile", "assetId": entry["assetId"],
-        "alpha": 1, "tint": 0xFFFFFF, "blendMode": asset["sheet"]["blend"],
-        "offsetX": presentation["offsetX"], "offsetY": presentation["offsetY"],
-        "anchor": entry["anchor"], "geometryComposition": "replace_geometry",
-        "mediaFailurePolicy": "fail_transaction",
-    }
-    projectile["scale"] = presentation["defaultScale"]
-    # Body/release, trajectory, endpoints, staggering and feedback keep their
-    # Studio values. Available export phases do not enable disabled tracks.
+    projectile = selected[0]["projectile"]
+    if projectile["sprite"]["assetId"] != entry["assetId"]:
+        raise ValueError(f"Export is not the authored media selection for {spell_id}")
+    # Import availability cannot enable disabled tracks or retune their timing.
     for name in ("prepare", "travel", "impact"):
         phase = projectile[name]
-        if phase["enabled"]:
+        if phase["enabled"] and (phase.get("assetId") or entry["assetId"]) == entry["assetId"]:
             if phase["assetPhase"] not in entry["phases"]:
                 raise ValueError(f"Export lacks selected Studio phase {phase['assetPhase']}")
-            phase["assetId"] = entry["assetId"]
 
     local_sheet = f"{ASSET_ROOT}/{identity}/sheet.png"
+    bindings = json.loads((authored_root / DATA_ROOT / "bindings.json").read_text())
+    bindings["resources"][sheet_url] = local_sheet
+    assets = {row["assetId"]: row for row in json.loads(
+        (authored_root / DATA_ROOT / "projectile-assets.json").read_text())}
+    assets[identity] = entry
     outputs = {
         **{f"{source_root}/{name}": payload for name, payload in source.items()},
         local_sheet: sheet,
-        f"{DATA_ROOT}/projectile-assets.json": json_bytes([entry]),
-        f"{DATA_ROOT}/spell-studio-drafts.json": json_bytes({**document, "spells": [draft]}),
-        f"{DATA_ROOT}/bindings.json": json_bytes({"resources": {sheet_url: local_sheet}}),
+        f"{DATA_ROOT}/projectile-assets.json": json_bytes(list(assets.values())),
+        f"{DATA_ROOT}/bindings.json": json_bytes(bindings),
     }
     provenance = {
         "package": str(package), "spell_id": spell_id,
-        "selection": "Existing exported media replaces generated geometry; original Studio choreography is retained.",
-        "inputs": {
-            str(package / name): sha256(payload) for name, payload in source.items()
-        } | {
-            str(package / "validation.json"): sha256((package / "validation.json").read_bytes()),
-            BASE_DRAFTS: sha256(baseline),
-            **{str(pipeline / name): sha256((pipeline / name).read_bytes()) for name in (
-                "src/codexfx_vfx/model.py", "src/codexfx_vfx/neuroclient.py",
-            )},
-        },
-        "exporter_text_sha256": sha256(Path(__file__).read_text(encoding="utf-8").encode()),
-        "outputs": {name: sha256(payload) for name, payload in outputs.items()},
+        "selection": "Selected media packaging only; canonical Studio choreography and palette treatment are retained.",
     }
     outputs[f"{DATA_ROOT}/provenance.json"] = json_bytes(provenance)
     return outputs
@@ -122,14 +99,15 @@ def main() -> None:
     parser.add_argument("--source-python", type=Path, required=True)
     parser.add_argument("--package", type=Path, required=True)
     parser.add_argument("--spell-id", required=True)
-    parser.add_argument("--output-root", type=Path, default=REPO)
+    parser.add_argument("--output-root", type=Path, default=REPO,
+                        help="Checkout containing the selected canonical recipes and media bindings")
     parser.add_argument("--check", action="store_true")
     arguments = parser.parse_args()
     root, package = arguments.output_root.resolve(), arguments.package.resolve()
     if root.is_relative_to(package) or package.is_relative_to(root):
         parser.error("Output and source export must be separate")
     outputs = candidate_outputs(arguments.pipeline_root.resolve(), arguments.source_python,
-                                package, arguments.spell_id)
+                                package, arguments.spell_id, authored_root=root)
     paths = {name: contained_path(root, name) for name in outputs}
     changed = [name for name, payload in outputs.items()
                if not paths[name].is_file() or paths[name].read_bytes() != payload]

@@ -27,6 +27,28 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**September 20 — all ten remaining ordinary test failures repaired.**
+The [study and repair result](agent_docs/TEST_FAILURE_STUDY_2026-09-20.md)
+records corrections in three test files, preserving and strengthening visibility,
+contact-time blood growth, real rendered pixels, complete trap ancestry,
+serialized replay and mutable-state isolation. No runtime changes or new skips
+were needed. The complete game test selection passed in three batches:
+**1,190 passed, 6 existing expected failures**; the separate gallery/HTTP lane
+passed **11 tests**. Those six expected failures still describe real terrain
+occlusion defects during jumps/forced movement and remain explicitly tracked.
+
+**September 20 — graphics cleanup implemented from `39d1f6c21b`.**
+The [implementation result](agent_docs/GRAPHICS_CLEANUP_RESULT_2026-09-20.md)
+records authored recipe ownership, media-only reimport, explicit casting bake
+inputs, shared projectile registration, and the initialized coverage inventory
+with gallery evidence. The [portable contract](game/data/PRESENTATION_CONTRACT.md)
+identifies the local Studio extension and its execution meaning. Eight saved-input
+clips before/after have identical video/poster bytes across 874 four-camera
+frames; no visual regression framework was introduced. Known presentation gaps
+remain explicit; the feature-selection portion of work unit 6 is still pending.
+The broader ordinary test failures were subsequently investigated and repaired
+as recorded above; checkpoint reproduction was not treated as a waiver.
+
 **September 20 — proposed graphics cleanup and event coverage.** The
 [practical cleanup plan](agent_docs/GRAPHICS_CLEANUP_PLAN_2026-09-20.md)
 defines authoring/importer ownership, stable placement semantics, future TS

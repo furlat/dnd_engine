@@ -1,6 +1,6 @@
 {
-  "schema": "neuroclient.spellStudioDrafts",
-  "version": 6,
+  "schema": "dnd.spellStudioDrafts",
+  "version": 1,
   "spells": [
     {
       "definitionRef": {

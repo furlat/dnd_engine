@@ -25,9 +25,13 @@ from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, camera_pose, project_screen
 from game.replay import RecordedSequence
+from game.residue_media import sample_residue_reveals
 from game.world_animation import sample_world_transitions
 from tests.game.body_residue_scenarios import body_residue_history, hidden_residue_history
 from tests.game.trap_scenarios import trap_history
+
+
+BLOOD_CELLS = {(x, y) for x in range(4, 7) for y in range(2, 5)}
 
 
 @pytest.fixture(scope="module", params=("plain", "poison-damage"))
@@ -59,14 +63,25 @@ def test_known_blood_ground_renders_without_revealing_donor_or_hidden_spikes(ren
         after = reduce_lineage(after, root)
     donor = history.views["donor"].initialization.observer_uuid
     assert donor not in after.actors
+    recorded_cells = {tile.position for root in roots for update in root.world_updates for tile in update.tiles
+                      if any(residue.residue_id == "residue.blood" for residue in tile.residues)}
+    assert recorded_cells == BLOOD_CELLS
+    assert {position for position, tile in after.tiles.items() if tile.residues} == recorded_cells
+    unbloodied = replace(after, tiles={position: tile.model_copy(update={"residues": ()})
+                                      for position, tile in after.tiles.items()})
     for quadrant in range(4):
         camera = Camera(quadrant=quadrant, zoom=1, viewport=(800, 600)).with_focus((5, 3))
         initial, _ = draw_world(before, camera, (), rendering)
-        rows, _ = draw_world(after, camera, (), rendering)
+        rows, pixels = draw_world(after, camera, (), rendering)
+        _, clean_pixels = draw_world(unbloodied, camera, (), rendering)
+        # Hold observer visibility and all other state fixed: first-sight FOV
+        # changes must not masquerade as proof of visible blood pixels.
+        assert not np.array_equal(pixels, clean_pixels)
         assert not any(len(row) > 6 and row[6] == "ground_residue" for row in initial)
-        ground, = [row for row in rows if len(row) > 6 and row[6] == "ground_residue"]
-        assert ground[1] == (5, 3)
-        assert ground[2] == f"residue.blood.{camera_pose('east', quadrant)}"
+        ground = [row for row in rows if len(row) > 6 and row[6] == "ground_residue"]
+        assert len(ground) == len(recorded_cells)
+        assert {row[1] for row in ground} == recorded_cells
+        assert {row[2] for row in ground} == {"particles.region.blood"}
         assert not any(len(row) > 6 and row[6] in ("spatial_effect", "residue_overlay") for row in rows)
 
 
@@ -81,11 +96,11 @@ def selected(history, role, kind, occurrence=0):
     raise AssertionError("Expected action is absent from the native narrative")
 
 
-def draw_world(state, camera, changes, rendering, *, clean=False):
+def draw_world(state, camera, changes, rendering, *, clean=False, reveals=()):
     screen, catalog, cache, _, clean_catalog, clean_cache = rendering
     evidence = draw_frame(screen, state, clean_catalog if clean else catalog,
         clean_cache if clean else cache, camera, 0, show_grid=False, show_debug=False,
-        mouse_position=None, collect_evidence=True, world_transitions=changes)
+        mouse_position=None, collect_evidence=True, world_transitions=changes, residue_reveals=reveals)
     assert evidence is not None and evidence.matches
     return evidence.actual_draws, pygame.surfarray.array3d(screen)
 
@@ -174,8 +189,16 @@ def test_bloodied_spike_pixels_follow_contact_and_existing_deployment_frames(his
     contact_ms = reaction.start_ms + reaction.choreography.damage[0].timing.start_ms
     pending = sample_motion(motion, data, contact_ms - 1)
     impact = sample_motion(motion, data, contact_ms)
-    assert pending.displayed is not None and pending.displayed.tiles[(5, 3)].residues == ()
-    assert impact.displayed is not None and len(impact.displayed.tiles[(5, 3)].residues) == 1
+    expected_entry = {tile.position: tile.residues for update in root.world_updates for tile in update.tiles
+                      if tile.residues}
+    assert set(expected_entry) == BLOOD_CELLS
+    assert pending.displayed is not None and impact.displayed is not None
+    for position, expected in expected_entry.items():
+        assert pending.displayed.tiles[position].residues == ()
+        assert impact.displayed.tiles[position].residues == expected
+        residue, = expected
+        contribution, = residue.contributions
+        assert residue.amount == contribution.amount == 1
     for quadrant in range(4):
         camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus((5, 3))
         rows, _ = draw_world(pending.displayed, camera, (), rendering)
@@ -192,20 +215,52 @@ def test_bloodied_spike_pixels_follow_contact_and_existing_deployment_frames(his
         before, root = selected(captured, role, ActionFact, occurrence)
         group = bind_choreography(before, root, data)
         cue, = group.body_actions
-        residue, = before.tiles[(5, 3)].residues
         # Reactivating occupied spikes causes another real injury. Lowering
         # keeps the amount; raising adds blood without replacing the condition.
-        expected = residue.model_copy(update={"amount": residue.amount + occurrence})
-        assert sample_choreography(group, cue.effect_ms - 1).displayed.tiles[(5, 3)].residues == (residue,)
+        recorded_tiles = {tile.position: tile for update in root.world_updates for tile in update.tiles}
+        expected = {}
+        pending = sample_choreography(group, cue.effect_ms - 1)
+        for position in BLOOD_CELLS:
+            prior, = before.tiles[position].residues
+            if occurrence:
+                assert position in recorded_tiles, "Occupied raising must record its new blood state"
+            expected[position] = recorded_tiles.get(position, before.tiles[position]).residues
+            residue, = expected[position]
+            previous_contribution, = prior.contributions
+            contribution, = residue.contributions
+            assert residue.condition_uuid == prior.condition_uuid
+            assert residue.residue_id == prior.residue_id == "residue.blood"
+            assert residue.max_amount == prior.max_amount
+            assert residue.amount == prior.amount + occurrence
+            assert contribution.ellipses == previous_contribution.ellipses
+            assert contribution.amount == previous_contribution.amount + occurrence
+            assert pending.displayed.tiles[position].residues == (prior,)
         for quadrant in range(4):
             camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus((5, 3))
             for offset, lower_frame in ((0, 6), (125, 3), (300, 0), (125, 3)):
                 at = cue.effect_ms + offset
                 sampled = sample_choreography(group, at)
-                assert sampled.displayed.tiles[(5, 3)].residues == (expected,)
+                assert {position: sampled.displayed.tiles[position].residues
+                        for position in BLOOD_CELLS} == expected
                 assert_shaft_raster(sampled.displayed, camera,
                     sample_world_transitions(group.world_transitions, at), rendering,
                     frame=6 - lower_frame if occurrence else lower_frame, coated=payload != "plain")
+            floor_frames = []
+            for at in (cue.effect_ms, group.complete_ms, cue.effect_ms):
+                sampled = sample_choreography(group, at)
+                changes = sample_world_transitions(group.world_transitions, at)
+                # Keep trap frame and visibility identical; vary only residue.
+                # Compare the full field, without demanding a mark in every cell.
+                previous_blood = replace(sampled.displayed, tiles={
+                    position: tile.model_copy(update={"residues": before.tiles[position].residues})
+                    for position, tile in sampled.displayed.tiles.items()})
+                _, previous_pixels = draw_world(previous_blood, camera, changes, rendering)
+                _, pixels = draw_world(sampled.displayed, camera, changes, rendering,
+                    reveals=sample_residue_reveals(group.residue_reveals, at))
+                assert np.array_equal(pixels, previous_pixels) is (not occurrence or at == cue.effect_ms)
+                floor_frames.append(pixels)
+            assert np.array_equal(floor_frames[0], floor_frames[-1])
+        assert sample_choreography(group, cue.effect_ms - 1).displayed == pending.displayed
     assert EventQueue.event_cursor() == 0 and not Entity.get_all_entities()
 
 

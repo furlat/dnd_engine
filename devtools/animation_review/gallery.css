@@ -601,3 +601,10 @@ footer {
     grid-template-columns: 80px 1fr;
   }
 }
+/* The support inventory stays a compact optional part of the existing gallery. */
+.coverage-scroll { overflow: auto; max-height: 30rem; margin-top: .75rem; }
+.coverage-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.coverage-table th, .coverage-table td { text-align: left; vertical-align: top; padding: .6rem; border-bottom: 1px solid #39404b; }
+.coverage-table td { min-width: 12rem; overflow-wrap: anywhere; }
+.coverage-table p { margin: .25rem 0; }
+.coverage-table button { margin: .15rem; }

@@ -1,7 +1,8 @@
 """Passive Python records for the imported NeuroStudio authoring format.
 
-Names and optional fields follow spellAuthoring/types.ts. Missing optional data
-stays missing; the offline TypeScript materializer owns authored defaults.
+Names and optional fields follow spellAuthoring/types.ts, with explicit local
+extensions documented in data/PRESENTATION_CONTRACT.md. The imported baseline
+retains its materialized defaults; local recipes own their authored values.
 """
 
 from __future__ import annotations
@@ -67,6 +68,15 @@ class LayerColors(AuthoredRecord):
     mode: Literal["tint", "multiTint", "paletteSwap", "shaderUniform"]
 
 
+class PaletteTreatment(AuthoredRecord):
+    """Exact authored colors and optional source noise for isolated recoloring."""
+
+    colors: Annotated[tuple[Color, ...], Field(min_length=1)]
+    gamma: Positive = .65
+    noiseSheet: Identifier | None = None
+    untinted: bool = False
+
+
 class StudioActorLayer(AuthoredRecord):
     id: Identifier
     slot: Literal["weaponGlow", "aura", "effect", "effect2", "effect3", "slash"]
@@ -76,6 +86,8 @@ class StudioActorLayer(AuthoredRecord):
     colors: LayerColors
     # Optional isolated, already-colored export; never recolor the actor body.
     sourceSheet: Identifier | None = None
+    # Offline bake input for sourceSheet; runtime uses the already-colored sheet.
+    palette: PaletteTreatment | None = None
 
 
 class StudioEquipment(AuthoredRecord):
@@ -319,15 +331,6 @@ class StudioArea(AuthoredRecord):
     surfaceReveal: SurfaceReveal | None = None
 
 
-class PaletteTreatment(AuthoredRecord):
-    """Exact authored colors and optional source noise for isolated recoloring."""
-
-    colors: Annotated[tuple[Color, ...], Field(min_length=1)]
-    gamma: Positive = .65
-    noiseSheet: Identifier | None = None
-    untinted: bool = False
-
-
 class HitFlash(AuthoredRecord):
     enabled: bool
     frame: BodyFrame
@@ -367,9 +370,17 @@ class StudioSpellDraft(AuthoredRecord):
 
 
 class StudioDraftFile(AuthoredRecord):
-    schema_: Literal["neuroclient.spellStudioDrafts"] = Field(alias="schema")
-    version: Literal[6]
+    schema_: Literal["neuroclient.spellStudioDrafts", "dnd.spellStudioDrafts"] = Field(alias="schema")
+    version: Literal[1, 6]
     spells: tuple[StudioSpellDraft, ...]
+    effectDrafts: FrozenMap[StudioSpellDraft] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def format_version(self) -> StudioDraftFile:
+        expected = 6 if self.schema_ == "neuroclient.spellStudioDrafts" else 1
+        if self.version != expected:
+            raise ValueError(f"{self.schema_} requires version {expected}")
+        return self
 
 
 class AuthoredProjectilePhase(AuthoredRecord):

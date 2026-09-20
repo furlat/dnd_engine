@@ -152,7 +152,6 @@ class _ResourceBindings(AuthoredRecord):
     resources: FrozenMap[str]
     spells: FrozenMap[ContentRef] = Field(default_factory=dict)
     projectileStorage: FrozenMap[ProjectileStorage] = Field(default_factory=dict)
-    effectDrafts: FrozenMap[StudioSpellDraft] = Field(default_factory=dict)
 
 
 class _ContextFile(AuthoredRecord):
@@ -321,12 +320,14 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     effect_drafts: dict[str, StudioSpellDraft] = {}
     for bundle in authored_bundles:
         resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
-        effect_drafts.update(resource_bindings.effectDrafts)
         for identity, ref in resource_bindings.spells.items():
             if identity in spell_bindings and spell_bindings[identity] != ref:
                 raise ValueError(f"authored spell binding disagrees with existing definitionRef: {identity}")
             spell_bindings[identity] = ref
         overrides = StudioDraftFile.model_validate_json(_read(bundle / "spell-studio-drafts.json"))
+        if set(effect_drafts) & set(overrides.effectDrafts):
+            raise ValueError("duplicate authored child-effect identity")
+        effect_drafts.update(overrides.effectDrafts)
         for draft in overrides.spells:
             if draft.definitionRef not in spell_bindings.values():
                 raise ValueError(f"authored bundle has no exact spell binding: {draft.definitionRef.identity_key}")

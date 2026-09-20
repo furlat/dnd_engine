@@ -16,6 +16,12 @@
       <div id="run-label" class="run-label">Loading run…</div>
     </header>
     <details class="run-details"><summary>Run &amp; reproduction</summary><dl id="run-details"></dl></details>
+    <details id="coverage-panel" class="run-details" hidden>
+      <summary>Presentation coverage</summary>
+      <p>Selected bindings and received facts from this run. Binding success, replay checks and your visual approval are separate. Unexercised does not mean unsupported.</p>
+      <label>Show <select id="coverage-filter"><option value="all">All selected support</option><option value="missing_binding">Missing binding</option><option value="partial">Unsupported selected feature</option><option value="accepted_omission">Accepted omission</option><option value="unexercised">Not exercised</option><option value="gaps">Observed binding gap</option></select></label>
+      <div class="coverage-scroll"><table class="coverage-table"><thead><tr><th>Family / identity</th><th>Owner / representation</th><th>Declared binding</th><th>Observed cases</th></tr></thead><tbody id="coverage-rows"></tbody></table></div>
+    </details>
     <section class="tools" aria-label="Review controls">
       <div class="filter-row">
         <label class="search">Find a case<input id="search" type="search" placeholder="Name, tag or description…"></label>

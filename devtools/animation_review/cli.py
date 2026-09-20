@@ -132,7 +132,7 @@ def main(
                                   "--fps", str(args.fps), "--width", str(args.width), "--height", str(args.height),
                                   "--output", str(output),
                                   *[arg for case in selected for arg in ("--case", case.id)]])}
-    manifest = {"schema_version": 1, "run": run, "cases": []}
+    manifest = {"schema_version": 1, "run": run, "cases": [], "coverage": []}
     write_json(destination / "sources.json", sources)
     for source, target in (("gallery.html", "index.html"), ("gallery.css", "styles.css"), ("gallery.js", "gallery.js")):
         shutil.copyfile(Path(__file__).with_name(source), destination / target)
@@ -159,7 +159,7 @@ def main(
             trace["review_origin"] = review_origins[case.id]
         item = {"id": case.id, "title": case.title, "tags": case.tags, "description": case.description,
                 "video": None, "poster": None, "input": None, "trace": (relative / "trace.json").as_posix(),
-                "duration_ms": 0, "frame_count": 0, "status": "failed", "checks": [], "gaps": []}
+                "duration_ms": 0, "frame_count": 0, "status": "failed", "checks": [], "gaps": [], "coverage": []}
         try:
             if case.id in capture_errors:
                 raise RuntimeError(f"Native input capture failed:\n{capture_errors[case.id]}")
@@ -181,11 +181,13 @@ def main(
             sequence = ReviewSequence(*decode_player_sequence(
                 json.dumps(persisted.sequence, separators=(",", ":")).encode("utf-8")))
             item.update(record_case(case, folder, trace, sequence=sequence, fps=args.fps,
-                                    size=(args.width, args.height), ffmpeg=ffmpeg))
+                                    size=(args.width, args.height), ffmpeg=ffmpeg,
+                                    coverage_inventory=manifest["coverage"]))
             item.update(video=(relative / "clip.mp4").as_posix(), poster=(relative / "poster.png").as_posix())
         except Exception as error:
             trace["error"] = traceback.format_exc()
-            item.update(error=f"{type(error).__name__}: {error}", checks=trace.get("checks", []), gaps=trace.get("gaps", []))
+            item.update(error=f"{type(error).__name__}: {error}", checks=trace.get("checks", []),
+                        gaps=trace.get("gaps", []), coverage=trace.get("coverage", []))
             print(item["error"], flush=True)
         write_json(folder / "trace.json", trace)
         manifest["cases"].append(item)

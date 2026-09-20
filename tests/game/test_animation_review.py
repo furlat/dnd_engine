@@ -28,6 +28,8 @@ def test_generated_clips_retain_their_frames_lineages_and_authored_maps(tmp_path
     assert {case["perspective"]["experiment_id"] for case in manifest["cases"]} == {
         "ranged-hit", "walk-paralyzed", "firebolt-level", "equipment-remove-active-weapon"}
     assert len(manifest["cases"]) == 9
+    assert any(row["family"] == "spell" and row["identity"] == "spell.fire_bolt"
+               for row in manifest["coverage"])
     assert (output / "index.html").is_file() and (output / "gallery.js").is_file()
     for case in manifest["cases"]:
         trace = json.loads((output / case["trace"]).read_text())
@@ -36,6 +38,8 @@ def test_generated_clips_retain_their_frames_lineages_and_authored_maps(tmp_path
         assert trace["sources"] == {key: manifest["run"][key] for key in ("branch", "commit", "dirty")}
         assert (output / case["input"]).read_bytes() == (tmp_path / "inputs" / case["id"] / "input.json").read_bytes()
         assert trace["mode"].startswith("decoded-recorded-input")
+        assert case["coverage"] == trace["coverage"]
+        assert any(row["observed"] == "bound" for row in case["coverage"])
         assert case["status"] == "passed" and all(check["passed"] for check in case["checks"])
         assert (output / case["video"]).stat().st_size > 1000
         assert int(trace["video"]["nb_read_frames"]) == len(trace["frames"]) == case["frame_count"]

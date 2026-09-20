@@ -6,7 +6,7 @@ from typing import Literal
 
 import pytest
 
-from dnd.core.events import DamageAppliedEvent, LifeStateChangeEvent, SpatialChangeEvent, TakeDamageEvent
+from dnd.core.events import DamageAppliedEvent, LifeStateChangeEvent, SpatialChangeEvent, SpatialChangeType, TakeDamageEvent
 from dnd.core.life_types import LifeState
 from game.animation import body_clip
 from game.animation_data import load_animation_data
@@ -120,9 +120,14 @@ def test_actual_spike_entries_keep_separate_damage_and_reached_contacts(
     working = before
     placements = []
     for index, event in enumerate(damages):
-        assert event.parent_lineage is not None
-        entry = by_lineage[event.parent_lineage]
-        assert isinstance(entry, SpatialChangeEvent)
+        # A ready trap raises before hurting its occupant. Follow the complete
+        # ancestry to entry; an already-raised trap can damage directly on entry.
+        entry = event
+        while not (isinstance(entry, SpatialChangeEvent)
+                   and entry.change_type is SpatialChangeType.ENTITY_ENTERED
+                   and entry.entity_uuid == target_uuid):
+            assert entry.parent_lineage is not None, "Trap damage lost its target's entry ancestor"
+            entry = by_lineage[entry.parent_lineage]
         assert event.target_entity_uuid is not None
         actor = working.actors[event.target_entity_uuid]
         contact = replace(actor_contact(working, actor, data), grid=entry.position,
