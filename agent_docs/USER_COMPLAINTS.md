@@ -11,6 +11,108 @@ does not introduce new gameplay rules or authorize unrelated work.
 
 ## Immediate complaints: event recording and the client boundary
 
+### September 23 — blocked attempts, expenditure and reaction ownership
+
+Sanctuary review must distinguish a failed attacker save from a later successful
+attack. Repair native targeting semantics; do not manufacture a block visually.
+Canceled-action presentation must reflect cancellation phase **and whether the
+actor actually spent action economy**. An unpaid preparation and a paid spell
+interrupted in flight are different. Preserve completed child facts and original
+lineages. Counterspell's source gesture and the incoming spell share presentation
+time; this does not permit reparenting native events or rerunning rules in replay.
+
+The user requested Counterspell artwork, later adding Globe of Invulnerability,
+and explicitly excluded Dispel Magic. Globe's existing native area protection is
+distinct from creature invulnerability/untargetability; check existing behavior
+before proposing new mechanics. Art preparation is not production integration.
+
+### September 21 — destruction is item state; cover the whole applicable catalog
+
+Implementation was subsequently authorized. The user explicitly clarified:
+**the transition must have a proper native event, which cascades the physical
+change**. ItemDestructionEvent therefore owns geometry/cleanup consequences;
+an ordinary spatial-change fact alone is insufficient as the semantic owner.
+The specified art task received the missing-asset creation assignment.
+
+The user selected an object becoming destroyed rather than requiring a separate
+debris object for every item. Preserve the native identity, use existing damage
+and destruction hooks, and drive remaining collision, description and visuals
+from real state. Difficult terrain is an authored possibility for larger debris;
+salvage/loot/repair is not automatically implied.
+
+The requested dedicated plan must cover existing items and assets **and** new
+delivered counterparts. Every applicable current door, trap/device and prop must
+adopt the shared lifecycle with methods and meaningful behavioral tests. Do not
+demonstrate a new furniture path while leaving existing doors inconsistent.
+Record art that lacks native breakability, native breakables lacking media,
+material/condition gaps and exact missing asset requests separately. An unbound
+delivered bank is not missing artwork. See the
+[destruction plan](DESTRUCTION_LIFECYCLE_PLAN_2026-09-21.md) and
+[coverage ledger](DESTRUCTION_COVERAGE_2026-09-21.md). This request is for planning;
+the existence of those documents does not mean the feature is implemented.
+
+### September 21 — interiors, multi-Z reasoning and usable windows
+
+Latest direction: prepare a **complete reviewed integration plan for all
+handoff assets**, with native items and visibility/walkability/placement/height
+and support data first. A demonstration room is only a proving step. The user
+then explicitly said **ignore the Z discussion for this** and asked to recover
+the separate XYZ task for a full scan of all affected rules/systems. That task
+is active again. Do not re-open a multi-Z sequencing question here or omit
+unused delivered props because they are absent from the first house.
+
+First core now explicitly prioritized: multi-cell furniture, windows and
+attacking/destruction must be understood and proved before bulk content work.
+Attackable traps already use ordinary item damage/destruction/remnant ownership;
+reuse it rather than designing a new destructible-object system. The broader
+asset plan remains, with core mechanics first and content expansion afterward.
+
+The consolidated interiors handoff contains new objects and concrete building
+prefabs, including overlapping floors. The user requested careful backend map
+design and proper content integration, then explicitly said to **reason first**
+and delegate a multi-Z plan. The earlier single-storey-first proposal is now
+superseded by the explicit separation above. Do not flatten supplied multistorey
+houses or mistake their preserved source records for playable native layouts.
+
+Windows must be usable gameplay features, not window pictures over solid-wall
+mechanics. The design must consider actual openings, observation/targeting and
+appropriate interaction/traversal; delivered fixed bars are not proof that
+operable-window or broken-glass animation exists. Multi-Z design is not a new
+authorization for flight, arbitrary falling or structural-collapse simulation.
+The [interiors plan](INTERIORS_INTEGRATION_PLAN_2026-09-21.md) records the study
+and independent reviews; the [multi-Z plan](MULTI_Z_MAP_PLAN_2026-09-21.md)
+develops the spatial contract. These remain design work, not implemented claims.
+
+### September 20 — trap artwork requires native gameplay and reusable triggers
+
+The user requires new backend traps matching the recovered mechanisms, using
+the existing condition/handler/event conventions. Pressure plates must support
+both held controls (for example a door held open) and one trap activation per
+new press, as explicitly selected in the follow-up. Delivered sprites do not
+establish these rules. Trigger placement and the linked mechanism's affected
+area are separate; preserved ground-contact and subjective replay rules still
+apply. The [trap implementation plan](TRAPS_AND_TRIGGERS_PLAN_2026-09-20.md)
+records code evidence and independent reviews; its existence is not evidence
+of implementation.
+
+September 21: the user proposes a portal beneath the hatch instead of adding
+stacked-floor/falling mechanics, and explicitly requests bare portals sharing
+that same native behavior. Portal appearance is authored presentation; reuse
+the removed magical-hand portal component and existing portal library before
+requesting more art. This does not authorize reverting the approved Chill Touch
+effect to an older full hand/portal sequence.
+
+### September 20 — consistent spell targets and integration ownership
+
+The user rejected Poison's low body contact after the travelling-cloud repair.
+Keep the intended anatomical target constant across spells; repeatedly lifting
+individual recipes does not satisfy this. Check actual rendered contacts and
+movement in every camera, rather than testing only the metadata we authored.
+The main integration task owns this diagnosis and repair. Contact the artwork
+task only when new renders are actually needed; do not pass responsibility for
+placement bugs back to that task. Provide one preview covering all the new
+spells, not another Poison-only gallery.
+
 ### C01 — Record once, serialize, and replay without rerunning mechanics
 
 The user explicitly expects Python to process a premade event sequence. Generate
@@ -542,3 +644,152 @@ Establish the effective visual baseline from code, data and selected media;
 compare the same recorded inputs before/after cleanup. Values may change to
 preserve appearance and timing. Distinguish user-approved outputs, current
 captures and known defects instead of labeling every present value approved.
+
+### September 20 — Web pacing and oversized Poison Spray
+
+The user found the pause/slow buildup between Web's projectile and deployment
+unacceptable. Inspection separated correct contact/event timing from slow source
+growth. The existing field binding now plays the expansion faster and omits its
+redundant static tail, preserving the resting field.
+
+The user then found Poison Spray enlarged and visibly coarser than its export.
+The renderer had overridden authored scale to make the whole cloud span the
+target distance. This is not an approved interpretation of the asset: preserve
+its particle size and authored scale. An endpoint-equality test had reinforced
+the wrong premise. It now checks scale, hand anchoring and aim independently.
+Any remaining range/contact mismatch must be addressed explicitly, not concealed
+by enlarging the raster. See `SPELL_BATCH_RESULT_2026-09-20.md` for the observed
+maximum-range arrival limitation and queued source/contact handoff.
+
+The user then rejected the range-v3 gallery's direction, apparent backside
+emission and cloud travelling beyond its recipient. Poison Spray is a single
+target spell in this engine; its appearance must not imply an unrecorded area
+or lingering hazard. Checking one contact frame was insufficient. The long
+baked source trajectory and large rotations at overlapping projected contacts
+are reproduced in `POISON_DELIVERY_CORRECTION_2026-09-20.md`; that correction
+must inspect onset, the entire journey and dissipation in all four cameras.
+
+### September 20 — preserve approved Fire Bolt; animate Sleep poses
+
+- Fire Bolt’s previously authored placement was changed without a demonstrated user problem. Restore its original registration/offsets; “shared target” tests cannot overrule approved pixels.
+- Sleep must play the fall, hold the sleeping body, receive hits at that body, and reverse the fall to rise after actual wake-up when alive. Keep native damage/state timing.
+
+
+## 2026-09-20 — spell injuries must release the creature’s material
+
+The user noticed missing blood with spell damage and asked whether it had been
+bound to weapon types. The cause was a physical-damage-only native filter plus
+missing body traits on newer review actors. Spells must use the existing injury
+and residue path. Any spell coloration must be **very light**: blood stays blood,
+bones stay bones, and deposited material keeps its palette and native properties.
+No spell targeting or authored registration change is part of this correction.
+
+
+## 2026-09-20 — restored spell releases are too uniform
+
+A shared blunt burst plus a subtle tint is not the final injury presentation.
+The user requests distinct responses for every spell damage type, explicitly
+all thirteen engine DamageTypes, with examples of frozen fragments/cold vapor,
+fire steam and stronger force splats. Material identity remains primary. The
+reviewed response plan and queued art brief cover these variations without
+per-spell executors or renderer-invented receiving tiles.
+
+## 2026-09-21 — portals share gameplay; backend first
+
+The user requests bare portals and a trap hatch opening over a portal to share
+one native behavior. A physical pit is unsuitable for the current one-support-
+per-X/Y world. Existing portal donors should be reused; the Godot task may
+prepare the hatch/portal composition, while implementation and necessary game
+fixes proceed independently. Do not make mechanics depend on art availability
+or invent a separate gameplay implementation for each appearance.
+
+### September 21 — trap work was narrowed incorrectly to portals
+
+The user asked "what about the traps" and then objected that the portal was the
+one mechanism without delivered assets. The broader reviewed trap plan remained
+authorized. A recent design conversation about portals did not replace that plan
+or justify returning after only that slice. Resume plates and delivered mechanisms,
+validate real native events and produce paired four-camera clips. Keep portal art
+separate until its delivery is ready.
+
+
+## September 21 — portal passage and trap avoidance corrections
+
+- A successful ground-trap reflex save must relocate the creature back to the
+  actual previous cell; never animate a hop that settles back inside the trap.
+  Reuse that behavior for appropriate plate-triggered ground mechanisms.
+- Open hatches must start the fall immediately, including at the end of an
+  incoming jump. Opening hatches need only a short contact delay and an
+  accelerating fall, not a mid-air pause.
+- Include walking into visible closed/open hatches and jumping into open ones,
+  from traveler and both endpoint witnesses, using actual saved native events.
+- Bare portals must clip the descending body at their own floor opening. Hatch
+  hardware is optional; its larger aperture cannot stand in for the bare ring.
+- Exiting a portal also needs motion: emerge through the opening and settle.
+  Upright, wall-like portal entrances/exits should eventually use horizontal
+  passage, but the user explicitly deferred them to another day. Keep the
+  current work limited to ground portals and hatches.
+- Damage inside blade/crusher doorway frames must respect physical occlusion;
+  UUID ordering must not decide whether the character paints over the frame.
+- Traps injure the creature's configured material through ordinary damage types.
+  The blood-only material handoff is authorized; its lab spell scaffolding is not.
+
+## September 21 — projectile orientation and lever use
+
+- Fireball's travelling projectile must follow its flight direction; the ground
+  explosion must keep its floor orientation. Use separate existing phase settings.
+- The authored lever motion must actually play when the lever is successfully
+  used, including resetting sprung traps. A working linked trap effect alone is
+  insufficient: retain the physical handle change in native events and replay it
+  at the user's hand contact.
+
+## September 21 — lethal opportunity attack missing blood
+
+The walk → opportunity hit → downing video had no visible blood. Damage must
+still release the creature's configured material when its consequence is DYING
+or death; a severe injury should not visually lose its blood because of that
+transition. The diagnosed case omitted its existing blood-response fixture
+option, so its saved damage carried no release. Correct the real experiment,
+preserve both subjective recordings, and verify the spray and ground residue
+alongside the interrupted fall. Existing critical amplification remains intact;
+a separate lethal-hit multiplier has not been authored.
+
+## September 22 — liquid barrels need real areas and coherent spilling
+
+- All six liquid barrels must spill over surrounding ground (up to 3×3), with
+  actual native effects across that area; a larger picture on one cell is wrong.
+- Water currently pops into existence. A visible liquid-spilling animation is a
+  necessary result; the user permits queuing it but not calling it completed.
+- The static output is also inadequate: use material tile-map-like artwork
+  whose interiors, borders and corners follow the desired pool pattern. Favor
+  rounded/circular outlines over a square patch or separate repeated splats.
+- Grease art remains deferred to its accepted spell handoff. Keep gameplay
+  ownership separate from authored media and preserve accepted injury output.
+
+Later approval supersedes that Grease-media deferral for this liquid unit:
+Godot supplied all six materials × three approved irregular variants, including
+Grease. All 18 are now integrated through the shared deposition path; see the
+[result](LIQUID_MEDIA_INTEGRATION_RESULT_2026-09-22.md). This does not authorize
+unrelated spell behavior or imply the separate Grease spell integration is done.
+
+## September 22 — latest spell review omitted blood; limit review scope
+
+The new spell clips again created humanoid fixtures without their existing
+blood-response behavior. Damage alone is not a complete demonstration: ordinary
+injury must retain real material-release events and persistent floor residue,
+including damage received while exercising protection/transformation spells.
+Correct the creature composition and recapture affected real gameplay inputs;
+do not invent blood in presentation or edit recorded events after the fact.
+
+The next feedback gallery must include **only the latest fourteen-spell batch
+and barrels**, not all 59 historical spell presentations. Preserve the existing
+four-camera and paired-perspective review workflow within that smaller scope.
+
+### September 23 — interruption timing and Counterspell expression
+
+- Sanctuary and Counterspell cut off direct/non-projectile attempts too early;
+  give their casting body several more visible frames without accelerating it.
+- Counterspell should visibly express one mage anticipating and breaking another's
+  magic, including dispersal of an emitted projectile, rather than an abrupt cut.
+- Preserve actual recorded outcomes and ordinary approved spell behavior while
+  adjusting these shared presentation rules; review the same saved input sequences.

@@ -17,6 +17,7 @@ from dnd.actions_functional import (
 from dnd.blocks.equipment import BodyArmor, Weapon
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_actions import TargetType
+from dnd.core.combat_log import CombatLogEntryType
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
@@ -1124,7 +1125,10 @@ def test_position_aoe_preview_execution_preserves_filters_and_cardinality() -> N
     assert not direct_result.canceled
     assert direct_result.total_targets == 2
     assert direct_result.combat_log is not None
-    assert len(direct_result.combat_log.sub_entries) == 2
+    recipient_logs = [entry for entry in direct_result.combat_log.sub_entries
+                      if entry.entry_type is CombatLogEntryType.SPELL_SAVE]
+    assert len(recipient_logs) == 2
+    assert {entry.target_uuid for entry in recipient_logs} == {str(enemy.uuid) for enemy in enemies}
     assert all(
         get_hp(enemy) < hp_before[enemy.uuid]
         for enemy in enemies
@@ -1205,7 +1209,10 @@ def test_position_aoe_preview_execution_preserves_filters_and_cardinality() -> N
     assert execution.total_targets == target.affected_count
     assert execution.aoe_position == target.position
     assert execution.combat_log is not None
-    assert len(execution.combat_log.sub_entries) == target.affected_count
+    recipient_logs = [entry for entry in execution.combat_log.sub_entries
+                      if entry.entry_type is CombatLogEntryType.SPELL_SAVE]
+    assert len(recipient_logs) == target.affected_count
+    assert {entry.target_uuid for entry in recipient_logs} == {str(identity) for identity in preview_ids}
     assert {
         actor.uuid
         for actor in preview_actors
@@ -1571,7 +1578,12 @@ def test_fireball_executes_save_upcast_relationship_and_aggregation_matrix() -> 
     assert hp_before[passed.uuid] - get_hp(passed) == 18
     assert result.total_damage == 126
     assert result.combat_log is not None
-    assert len(result.combat_log.sub_entries) == 4
+    recipient_logs = [entry for entry in result.combat_log.sub_entries
+                      if entry.entry_type is CombatLogEntryType.SPELL_SAVE]
+    assert len(recipient_logs) == 4
+    assert {entry.target_uuid for entry in recipient_logs} == {
+        str(target.uuid) for target in (caster, ally, failed, passed)
+    }
     assert caster.action_economy.actions.normalized_score == 0
     assert caster.action_economy.spell_slot_4.normalized_score == 0
     assert Fireball(

@@ -44,6 +44,8 @@ def import_fixed_rig(archive: Path, binding: Path, *, check: bool = False,
     expected: dict[str, tuple[int, int]] = {}
     for clip in rig["clips"].values():
         for url in clip["sheets"].values():
+            if url not in resources:
+                continue  # Shared media is owned and imported by its source binding.
             dimensions = (rig["cell_width"] * clip["frames"], rig["cell_height"] * len(rig["facing_rows"]))
             if url in expected and expected[url] != dimensions:
                 raise ValueError(f"inconsistent sheet dimensions: {url}")

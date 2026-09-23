@@ -56,7 +56,7 @@ def _child_binding(parent_binding, behavior_id: str, runtime_owner_uuid: UUID):
     })
 
 
-def _owning_template(action: BaseAction, entity: Entity) -> BaseAction:
+def _owning_template[ActionT: BaseAction](action: ActionT, entity: Entity) -> ActionT:
     """Resolve the exact Entity-owned template that produced an execution."""
     template_uuid = action.registered_template_uuid
     if template_uuid is None:
@@ -71,7 +71,8 @@ def _owning_template(action: BaseAction, entity: Entity) -> BaseAction:
     )
     if template is None:
         raise RuntimeError("Rage-family registered template owner is missing")
-    return template
+    # Executions are copies of this exact UUID-owned template.
+    return cast(ActionT, template)
 
 
 def _purge_mindless_rage_conditions(
@@ -473,7 +474,7 @@ class Raging(BaseCondition):
                 None,
             )
             if template is not None:
-                template.active_raging_condition_uuid = None
+                cast(Rage | Frenzy, template).active_raging_condition_uuid = None
         return super()._remove(event)
 
     def remove_condition_modifiers(self) -> bool:
@@ -609,7 +610,7 @@ class Rage(BaseAction):
             status_message="Rage ready"
         )
 
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+    def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
         """Apply Rage - enter the rage state."""
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
@@ -1121,7 +1122,7 @@ class Frenzy(BaseAction):
 
         return declaration_event.phase_to(EventPhase.EXECUTION)
 
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+    def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")

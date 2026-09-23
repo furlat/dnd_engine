@@ -6,6 +6,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.types.world import CardinalDirection, OccupancyLayer
+from dnd.types.material_deposits import MaterialDepositSource
+from dnd.core.creature_types import DamageType
 
 
 class ResidueEllipse(BaseModel):
@@ -26,6 +28,7 @@ class ResidueContribution(BaseModel):
 
     ellipses: tuple[ResidueEllipse, ...]
     amount: int = Field(default=1, ge=1)
+    deposit_source: MaterialDepositSource | None = None
 
 
 class BodyReleaseRegion(BaseModel):
@@ -50,6 +53,8 @@ class BodyReleaseResult(BaseModel):
     pattern: Literal["piercing", "slashing", "blunt"] | None = None
     critical_hit: bool = False
     regions: tuple[BodyReleaseRegion, ...] = ()
+    primary_damage_type: DamageType | None = None
+    secondary_damage_type: DamageType | None = None
 
 
 class TileResidueState(BaseModel):

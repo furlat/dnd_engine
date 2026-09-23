@@ -11,6 +11,7 @@ from uuid import UUID
 import pygame
 
 from dnd.core.events import EventPhase
+from dnd.core.presentation_geometry import SpherePresentationGeometry
 from game.animation import facing_for_delta
 from game.animation_data import load_animation_data
 from game.animation_draw import LoadedBodyRows, actor_screen_bounds
@@ -19,17 +20,24 @@ from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.choreography import BoundChoreography, bind_choreography
 from game.choreography_draw import ChoreographyMedia, load_choreography_media, load_motion_media
-from game.combat import actor_contact
+from game.combat import BoundCast, actor_contact
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
+from game.condition_media_lifetime import register_condition_lifetimes
+from game.spatial_media_lifetime import register_spatial_lifetimes
+from game.deposit_media import register_deposit_starts
+from game.motion_media import MotionMediaCue, bind_motion_media, choreography_motion_media
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
-from game.player_facts import AttackFact, ForcedMovementFact, MovementFact, PlayerState, SpellFact, StepFact
+from game.body_history import retain_body_head
+from game.player_facts import AttackFact, ForcedMovementFact, MovementFact, PlayerState, PortalTransferFact, SpellFact, StepFact
 from game.player_reduction import reduce_lineage, stage_lineage
+from game.presentation_group import presentation_groups, reduce_presentation_group, stage_presentation_group
 from game.presentation_coverage import lineage_coverage, missing_observed_bindings, presentation_inventory
 from game.projection import Camera, TILE_WIDTH, ZOOM_LEVELS, project_screen
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
 from game.visual_position import VisualPosition
 from devtools.animation_review.cases import ReviewCase, ReviewSequence
+from devtools.animation_review.framing import cast_media_bounds, projected_bounds
 from devtools.animation_review.trace import LINEAGE, STATE, draw_trace, frame_trace, group_trace, motion_trace, state_summary
 
 
@@ -95,9 +103,11 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     # Frame the whole history; media loads only as those heads enter playback.
     framing_contacts = [actor.contact for actor in actors]
     area_frames = []
+    anchored_frames = []
+    spatial_frames = set()
     for root in sequence.lineages:
         fact = root.root.fact
-        if (isinstance(fact, SpellFact) and fact.aoe_position is not None
+        if (case.framing == "scene" and isinstance(fact, SpellFact) and fact.aoe_position is not None
                 and fact.behavior_id is not None and fact.behavior_id in data.drafts):
             recipe = data.drafts[fact.behavior_id]
             projectile = recipe.projectile
@@ -118,7 +128,38 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 body_lift_px=leg.arc_height_px + leg.initial_lift_px)
                 for leg in flight.legs for grid, elevation in (
                     (leg.start, leg.start_height), (leg.end, leg.end_height)))
+        if case.framing == "scene" and any(
+                isinstance(event.fact, SpellFact)
+                and (recipe := data.drafts.get(event.fact.effect_id or event.fact.behavior_id or "")) is not None
+                and recipe.media for event in root.events):
+            groups = (tuple(reaction.choreography for reaction in flight.reactions) if flight is not None
+                      else (bind_choreography(before, root, data, facings=facings),))
+            anchored_frames.extend(bounds for group in groups for node in group.nodes
+                                   if isinstance(node.bound, BoundCast)
+                                   if (bounds := cast_media_bounds(node.bound.timeline)))
         before = reduce_lineage(before, root)
+        if case.framing == "scene" and before.senses is not None:
+            for effect in before.senses.spatial_effects.values():
+                binding = data.spatial_media.get(effect.content_ref.content_id)
+                geometry = effect.area_geometry
+                if binding is None or not isinstance(geometry, SpherePresentationGeometry):
+                    continue
+                support = before.tiles.get(geometry.center)
+                for layer in binding.layers:
+                    volume = layer.composition == "volume"
+                    if not volume and geometry.center not in before.senses.visible:
+                        continue
+                    elevation = support.elevation_steps if support is not None else effect.anchor_elevation_steps
+                    if elevation is None:
+                        continue
+                    radius_scale = (geometry.radius_feet / binding.referenceRadiusFeet
+                        if volume and binding.referenceRadiusFeet is not None else 1.)
+                    origin = tuple(geometry.center[axis] + layer.offsetCells[axis] * radius_scale
+                        for axis in (0, 1))
+                    asset = data.projectile_assets[layer.assetId]
+                    spatial_frames.add((origin, elevation,
+                        asset.frame.width * binding.scale * radius_scale, asset.frame.height * binding.scale * radius_scale,
+                        asset.anchor.x, asset.anchor.y))
         retained_actors = scene_actors(before, data, facings)
         framing_contacts.extend(actor.contact for actor in retained_actors)
     body_rows: LoadedBodyRows = {}
@@ -134,24 +175,29 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
         cameras = tuple(replace(camera, pan=(camera.pan[0], camera.pan[1] + 22)) for camera in cameras)
     # Keep the old framing when it already covers the history. Longer routes
     # use one fixed focus/zoom for all four views, never a moving-camera patch.
+    def frame_bounds(camera: Camera):
+        factor = TILE_WIDTH / data.rig.TILE_W * camera.zoom
+        for contact in framing_contacts:
+            rig = data.rigs[contact.rig_id]
+            x, y = project_screen(contact.grid, camera, elevation_steps=contact.elevation_steps)
+            width = rig.cell_width * contact.visual_scale * contact.visual_scale_x * factor
+            top = y + ((rig.origin_y_from_ground - rig.cell_height) * contact.visual_scale
+                       - contact.body_lift_px) * factor
+            bottom = y + (rig.origin_y_from_ground * contact.visual_scale - contact.body_lift_px) * factor
+            yield x - width / 2, top, x + width / 2, bottom
+        for position, elevation, width, height in area_frames:
+            x, y = project_screen(position, camera, elevation_steps=elevation)
+            yield x - width * factor / 2, y - height * factor / 2, x + width * factor / 2, y + height * factor / 2
+        for bounds in anchored_frames:
+            yield projected_bounds(bounds[camera.quadrant], camera)
+        for position, elevation, width, height, pivot_x, pivot_y in spatial_frames:
+            x, y = project_screen(position, camera, elevation_steps=elevation)
+            yield (x - width * pivot_x * factor, y - height * pivot_y * factor,
+                   x + width * (1 - pivot_x) * factor, y + height * (1 - pivot_y) * factor)
+
     def fits(views: tuple[Camera, ...]) -> bool:
-        for camera in views:
-            factor = TILE_WIDTH / data.rig.TILE_W * camera.zoom
-            for contact in framing_contacts:
-                rig = data.rigs[contact.rig_id]
-                x, y = project_screen(contact.grid, camera, elevation_steps=contact.elevation_steps)
-                width = rig.cell_width * contact.visual_scale * contact.visual_scale_x * factor
-                top = y + ((rig.origin_y_from_ground - rig.cell_height) * contact.visual_scale
-                           - contact.body_lift_px) * factor
-                bottom = y + (rig.origin_y_from_ground * contact.visual_scale - contact.body_lift_px) * factor
-                if x - width / 2 < 12 or x + width / 2 > size[0] - 12 or top < 56 or bottom > size[1] - 12:
-                    return False
-            for position, elevation, width, height in area_frames:
-                x, y = project_screen(position, camera, elevation_steps=elevation)
-                if (x - width * factor / 2 < 12 or x + width * factor / 2 > size[0] - 12
-                        or y - height * factor / 2 < 56 or y + height * factor / 2 > size[1] - 12):
-                    return False
-        return True
+        return all(left >= 12 and right <= size[0] - 12 and top >= 56 and bottom <= size[1] - 12
+                   for camera in views for left, top, right, bottom in frame_bounds(camera))
 
     if not fits(cameras):
         if not area_frames:
@@ -164,15 +210,30 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 (focus[0], focus[1]), elevation_steps=height) for quadrant in range(4))
             if area_frames:
                 cameras = tuple(replace(camera, pan=(camera.pan[0], camera.pan[1] + 22)) for camera in cameras)
+            if anchored_frames or spatial_frames:
+                # One fixed pan per corner includes asymmetric authored media
+                # such as a tall column or a line originating at the caster.
+                centered = []
+                for camera in cameras:
+                    bounds = tuple(frame_bounds(camera))
+                    center = ((min(row[0] for row in bounds) + max(row[2] for row in bounds)) / 2,
+                              (min(row[1] for row in bounds) + max(row[3] for row in bounds)) / 2)
+                    centered.append(camera.with_screen_pan((size[0] / 2 - center[0], (56 + size[1] - 12) / 2 - center[1])))
+                cameras = tuple(centered)
             if fits(cameras):
                 break
     trace["cameras"] = [{"quadrant": camera.quadrant, "focus": focus, "elevation_steps": height,
-                         "zoom": camera.zoom, "viewport": size,
+                         "zoom": camera.zoom, "pan": camera.pan, "viewport": size,
                          "video_offset": ((camera.quadrant % 2) * size[0], (camera.quadrant // 2) * size[1])}
                         for camera in cameras]
     before = sequence.before
     feedback: list[FeedbackTrack] = []
+    motion_media: list[MotionMediaCue] = []
     presentation_ms = 0.0
+    condition_lifetimes = register_condition_lifetimes({}, before, data, absolute_start_ms=0)
+    spatial_lifetimes = register_spatial_lifetimes({}, before, data, absolute_start_ms=0)
+    deposit_starts = register_deposit_starts({}, before, data, absolute_start_ms=0)
+    body_history = retain_body_head((), before, None, start_ms=0, facings=facings, positions=positions)
     frame_index = 0
     interval = 1000 / fps
     poster_written = False
@@ -204,15 +265,16 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     before, after, data, elapsed_ms, presentation_ms, camera, facings,
                     body_media, number_font, badge_font, choreography=choreography,
                     choreography_media=choreography_media, motion=motion, reaction_media=reaction_media,
-                    feedback=feedback,
-                    positions=positions, feedback_viewport=feedback_viewport,
+                    feedback=feedback, condition_lifetimes=condition_lifetimes,
+                    spatial_lifetimes=spatial_lifetimes, deposit_starts=deposit_starts,
+                    positions=positions, feedback_viewport=feedback_viewport, motion_media=motion_media, body_history=body_history,
                 )
                 samples.append(sample)
                 bodies_in_view &= all(feedback_viewport.contains(bounds)
                                       for bounds in actor_screen_bounds(sample.commands).values())
                 draw_frame(view, sample.displayed, catalog, cache, camera, presentation_ms / 1000,
                            show_grid=False, show_debug=False, mouse_position=None, extra_commands=sample.commands,
-                           world_transitions=sample.world_transitions, residue_reveals=sample.residue_reveals)
+                           world_transitions=sample.world_transitions, residue_reveals=sample.residue_reveals, deposited_materials=sample.deposited_materials)
                 draw_actor_labels(view, cache.debug_font, sample.actors, sample.displayed, camera,
                                   shown_hp=sample.shown_hp, active_uuid=None,
                                   commands=sample.commands, viewport=feedback_viewport)
@@ -258,9 +320,10 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 sampled = capture()
                 presentation_ms += interval
             pause_done = False
-            for lineage in sequence.lineages:
-                after = reduce_lineage(before, lineage)
-                admitted = stage_lineage(before, lineage)
+            for presentation in presentation_groups(sequence.lineages):
+                lineage = presentation.primary
+                after = reduce_presentation_group(before, presentation)
+                admitted = stage_presentation_group(before, presentation)
                 staged_actors = (
                     *scene_actors(admitted, data, facings, positions),
                     *scene_actors(after, data, facings, positions),
@@ -280,7 +343,10 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                             "family": family, "identity": identity})
                 contacts = {actor.contact.actor_uuid: actor.contact
                             for actor in scene_actors(before, data, facings, positions)}
-                motion = bind_motion(before, lineage, data, contacts=contacts)
+                activated_conditions = frozenset(owner for owner, lifetime in condition_lifetimes.items()
+                    if lifetime.activated_ms is not None and lifetime.activated_ms <= presentation_ms)
+                motion = bind_motion(before, lineage, data, contacts=contacts,
+                                     activated_conditions=activated_conditions)
                 if isinstance(lineage.root.fact, MovementFact) and any(
                     isinstance(event.fact, AttackFact) or isinstance(event.fact, StepFact) and event.fact.committed
                     for event in lineage.events
@@ -290,9 +356,20 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     if motion is None:
                         gaps.append(f"{lineage.root.uuid}: Movement reaction choreography is not bound")
                 group = None if motion is not None else bind_choreography(before, lineage, data,
-                                                                        facings=facings, contacts=contacts)
+                    facings=facings, contacts=contacts, activated_conditions=activated_conditions,
+                    reactions=presentation.reactions)
                 group_media = load_choreography_media(group, body_rows=body_rows) if group is not None else None
                 reaction_media = load_motion_media(motion, data, body_rows=body_rows) if motion is not None else {}
+                condition_lifetimes = register_condition_lifetimes(condition_lifetimes, before, data,
+                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
+                spatial_lifetimes = register_spatial_lifetimes(spatial_lifetimes, before, data,
+                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
+                deposit_starts = register_deposit_starts(deposit_starts, before, data,
+                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
+                if motion is not None:
+                    motion_media.extend(bind_motion_media(motion, data, presentation_ms))
+                elif group is not None:
+                    motion_media.extend(choreography_motion_media(group, data, presentation_ms))
                 duration = motion.complete_ms if motion is not None else group.complete_ms if group else 0
                 if motion is not None:
                     feedback.extend(motion_feedback(motion, data, presentation_ms))
@@ -305,16 +382,20 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     composition = group_trace(group)
                 for bound in groups:
                     gaps.extend(f"{identity}: {detail}" for identity, detail in bound.gaps)
-                evidence = lineage_coverage(lineage, group=group, motion=motion)
+                evidence = [entry for retained_root in presentation.lineages
+                    for entry in lineage_coverage(retained_root, group=group, motion=motion)]
                 trace["coverage"].extend(evidence)
                 if coverage_inventory is not None:
                     coverage_inventory.extend(missing_observed_bindings(coverage_inventory, evidence))
                 trace["heads"].append({
                     "root_uuid": str(lineage.root.uuid), "video_start_ms": frame_index * interval,
+                    "retained_roots": [str(root.root.uuid) for root in presentation.lineages],
                     "presentation_start_ms": presentation_ms, "duration_ms": duration,
                     "before": state_summary(before), "after": state_summary(after),
                     "composition": composition,
                 })
+                body_history = retain_body_head(body_history, before, after, start_ms=presentation_ms,
+                    facings=facings, positions=positions, choreography=group, motion=motion)
                 start = presentation_ms
                 for tick in range(ceil(duration / interval) + 1):
                     elapsed = min(tick * interval, duration)
@@ -335,25 +416,44 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                         if contact is not None:
                             check(f"forced-position:{node.uuid}", contact.grid == node.fact.end_position,
                                   f"Visible {contact.grid}; received displacement committed {node.fact.end_position}.")
-                steps = [event.fact for event in lineage.events if isinstance(event.fact, StepFact)]
+                step_nodes = [event for event in lineage.events if isinstance(event.fact, StepFact)]
+                steps = [event.fact for event in step_nodes if isinstance(event.fact, StepFact)]
                 if steps:
                     actor_uuid = str(steps[-1].source_entity_uuid)
                     contact = next((row.contact for row in sampled.actors if row.contact.actor_uuid == actor_uuid), None)
                     expected = steps[-1].to_position if steps[-1].committed else steps[-1].from_position
+                    # A nested displacement can settle later than its incoming Step,
+                    # while a paid Step after arrival can supersede it in turn.
+                    # Declaration order retains that causality across nested completion.
+                    starts = {}
+                    for version in lineage.version_rows:
+                        starts[version.lineage_uuid] = min(starts.get(version.lineage_uuid, version.source_index),
+                                                          version.source_index)
+                    relocations = [node for node in lineage.events if not node.canceled
+                        and (isinstance(node.fact, PortalTransferFact) and node.fact.committed
+                             and node.fact.end_position is not None
+                             or isinstance(node.fact, ForcedMovementFact) and node.fact.actual_distance > 0)
+                        and node.fact.target_entity_uuid == steps[-1].source_entity_uuid
+                        and starts[node.lineage_uuid] > starts[step_nodes[-1].lineage_uuid]]
+                    if relocations:
+                        relocation = max(relocations, key=lambda node: starts[node.lineage_uuid]).fact
+                        assert isinstance(relocation, (PortalTransferFact, ForcedMovementFact)) and relocation.end_position is not None
+                        expected = relocation.end_position
                     legal = (actor_contact(after, after.actors[steps[-1].source_entity_uuid], data)
                              if contact is not None else None)
                     if legal is not None:
                         check(f"committed-position:{lineage.root.uuid}", legal.grid == expected,
-                              f"Legal {legal.grid}; last received Step settled at {expected}.")
+                              f"Legal {legal.grid}; last received Step or subsequent displacement settled at {expected}.")
                     if motion is not None and legal is not None and contact is not None:
                         stopped = legal if steps[-1].committed else motion.reactions[-1].contact
                         check(f"visual-position:{lineage.root.uuid}",
-                              (contact.grid, contact.elevation_steps, contact.body_lift_px)
+                              stopped is not None and (contact.grid, contact.elevation_steps, contact.body_lift_px)
                               == (stopped.grid, stopped.elevation_steps, stopped.body_lift_px),
                               f"Rendered {contact.grid} retains its motion endpoint; legal tile is {expected}.")
                 before = after
                 presentation_ms += interval
-            tail = max(800, max((track.start_ms + track.duration_ms - presentation_ms for track in feedback), default=0))
+            tail = max(case.tail_duration_ms, max((track.start_ms + track.duration_ms - presentation_ms for track in feedback), default=0),
+                       max((cue.media.end_ms-presentation_ms for cue in motion_media), default=0))
             for _ in range(ceil(tail / interval)):
                 idle_sample = capture()
                 presentation_ms += interval

@@ -19,7 +19,7 @@ from game.animation_types import AnimationData, Facing8
 from game.attack import BoundAttack, bind_attack, sample_attack
 from game.choreography import bind_choreography, sample_choreography
 from game.choreography_draw import load_choreography_media, load_motion_media
-from game.combat import actor_contact, bind_cast
+from game.combat import BoundCast, actor_contact, bind_cast
 from game.combat_demo import iter_combat_demo
 from game.feedback import choreography_feedback, motion_feedback, sample_feedback
 from game.motion import bind_motion, sample_motion
@@ -64,7 +64,7 @@ def test_native_lifecycle_badges_keep_original_text_color_and_decorative_lifetim
 ) -> None:
     source = json.loads(data.context_source_json)["contexts"]["lifecycle"]
     assert data.death_save_context.model_dump(mode="json") == source["deathSave"]
-    assert data.life_state_context.model_dump(mode="json") == source["lifeState"]
+    assert data.life_state_context.model_dump(mode="json", exclude={"bodyPoses"}) == source["lifeState"]
     authored = {row["text"]: row for category in ("deathSave", "lifeState") for row in source[category].values()}
     assert len(authored) == 7
     captured = lifecycle_history(save_seeds=seeds, heal_after=heal_after)
@@ -73,9 +73,19 @@ def test_native_lifecycle_badges_keep_original_text_color_and_decorative_lifetim
     longer = replace(data, badge_style=data.badge_style.model_copy(update={"durationMs": 2 * data.badge_style.durationMs}))
     for lineage in roots:
         group = bind_choreography(before, lineage, data)
-        assert group.gaps == () and group.complete_ms == 0
-        assert bind_choreography(before, lineage, longer).complete_ms == 0
-        assert not sample_choreography(group, 0).bodies
+        assert group.gaps == ()
+        assert bind_choreography(before, lineage, longer).complete_ms == group.complete_ms
+        recovering = tuple(cue for cue in group.lifecycle if cue.body is not None)
+        if recovering:
+            cue, = recovering
+            assert cue.body is not None and cue.body_end_ms is not None
+            assert cue.body.reversed and cue.body_end_ms == group.complete_ms
+            frames = [sample_choreography(group, at).bodies[0].frame
+                      for at in (cue.start_ms, (cue.start_ms + cue.body_end_ms) / 2)]
+            assert frames == [cue.body.frames - 1, (cue.body.frames - 1) // 2]
+            assert not sample_choreography(group, group.complete_ms).bodies
+        else:
+            assert group.complete_ms == 0 and not sample_choreography(group, 0).bodies
         tracks = tuple(track for track in choreography_feedback(group, data, 5000) if track.kind == "badge")
         for track in tracks:
             seen.append(track.label)
@@ -90,7 +100,7 @@ def test_native_lifecycle_badges_keep_original_text_color_and_decorative_lifetim
     assert Counter(seen) == Counter(labels)
 
 
-def test_native_death_plays_once_then_corpse_and_revival_preserve_pose_in_four_cameras(
+def test_native_downed_death_does_not_refall_and_revival_preserves_position_in_four_cameras(
     data: AnimationData, pygame_runtime: None,
 ) -> None:
     captured = lifecycle_history(save_seeds=(1, 0, 31), revive_after=True)
@@ -109,7 +119,6 @@ def test_native_death_plays_once_then_corpse_and_revival_preserve_pose_in_four_c
     death_seen = revival_seen = False
     corpse_boundaries = 0
     corpse_pixels: dict[int, tuple[tuple[int, int], bytes]] = {}
-    first_death_pixels: dict[int, bytes] = {}
     for lineage in roots:
         after = reduce_lineage(before, lineage)
         contacts = {actor.contact.actor_uuid: actor.contact for actor in scene_actors(before, data, facings, positions)}
@@ -125,17 +134,17 @@ def test_native_death_plays_once_then_corpse_and_revival_preserve_pose_in_four_c
             assert death.start_ms == 0 and death.death_end_ms == group.complete_ms
             unplaced = bind_choreography(before, lineage, data)
             assert unplaced.gaps == () and unplaced.complete_ms == group.complete_ms
-            assert sample_choreography(unplaced, 0).bodies[0].frame == 0
+            assert sample_choreography(unplaced, 0).bodies[0].frame == 14
             clip = body_clip(data, held, data.death_context.bodyClip)
             interval = 1000 / (clip.fps * data.death_context.bodyPlaybackSpeed)
-            assert group.complete_ms == pytest.approx((clip.frames - 1) * interval)
+            assert group.complete_ms == 0
             samples = tuple(sample_choreography(group, time) for time in (0, interval, group.complete_ms))
-            assert [sample.bodies[0].frame for sample in samples] == [0, 1, clip.frames - 1]
+            assert [sample.bodies[0].frame for sample in samples] == [clip.frames - 1] * 3
             assert all(len(sample.bodies) == 1 and sample.bodies[0].clip == data.death_context.bodyClip
                        for sample in samples)
             # An absolute seek back to entry restarts the same retained body.
             assert sample_choreography(group, 0) == samples[0]
-            assert not samples[0].complete and samples[-1].complete
+            assert samples[0].complete and samples[-1].complete
             death_seen = True
         else:
             assert group.complete_ms == 0 and not sample_choreography(group, 0).bodies
@@ -154,11 +163,9 @@ def test_native_death_plays_once_then_corpse_and_revival_preserve_pose_in_four_c
                 if deaths:
                     assert command[4][8] == data.death_context.bodyClip
                     if time == 0:
-                        assert command[4][9] == 0
-                        first_death_pixels[camera.quadrant] = pygame.image.tobytes(command[1], "RGBA")
+                        assert command[4][9] == body_clip(data, held, data.death_context.bodyClip).frames - 1
                     if time == group.complete_ms:
                         assert command[4][9] == body_clip(data, held, data.death_context.bodyClip).frames - 1
-                        assert pygame.image.tobytes(command[1], "RGBA") != first_death_pixels[camera.quadrant]
                 if time == group.complete_ms:
                     assert frame.complete and frame.displayed == after
                     assert contact.hp == after.actors[target].normal_hp
@@ -213,8 +220,26 @@ def test_owned_lethal_delivery_keeps_its_original_timing_and_exactly_one_body(
         before, lineage = lethal_cast_history()
         bound = bind_cast(before, lineage, data)
     group = bind_choreography(before, lineage, data)
-    assert len(group.nodes) == 1 and group.nodes[0].bound.timeline == bound.timeline
-    assert group.complete_ms == bound.timeline.complete_ms
+    node, = group.nodes
+    if isinstance(bound, BoundAttack):
+        assert isinstance(node.bound, BoundAttack)
+        assert node.bound.timeline == bound.timeline
+    else:
+        assert isinstance(node.bound, BoundCast)
+        original, joined = bound.timeline, node.bound.timeline
+        # Native blood release is another finite child of this same lethal hit.
+        # Waiting for its tail may move recovery/completion, never delivery,
+        # injury, the death body, or their authored contact anchors.
+        assert joined.release_ms == original.release_ms
+        assert joined.body_end_ms == original.body_end_ms
+        assert joined.applications == original.applications
+        assert tuple(anchor for anchor in joined.anchors if anchor.name not in ("recover", "complete")) == tuple(
+            anchor for anchor in original.anchors if anchor.name not in ("recover", "complete"))
+        assert group.strips
+        assert joined.recovery_start_ms == max(original.recovery_start_ms, *(cue.end_ms for cue in group.strips))
+        assert joined.complete_ms - joined.recovery_start_ms == pytest.approx(
+            original.complete_ms - original.recovery_start_ms)
+    assert group.complete_ms == node.bound.timeline.complete_ms
     death, = (cue for cue in group.lifecycle if isinstance(cue.event.fact, LifeFact)
               and cue.event.fact.new_state is LifeState.DEAD)
     assert death.state_owned and death.death_end_ms is None
@@ -226,7 +251,14 @@ def test_owned_lethal_delivery_keeps_its_original_timing_and_exactly_one_body(
                      for style in (data.number_style, data.badge_style))
     for time in (0, death.start_ms, group.complete_ms):
         sample = sample_choreography(group, time)
-        expected = sample_attack(bound.timeline, time) if isinstance(bound, BoundAttack) else sample_cast(bound.timeline, time)
+        expected = (sample_attack(node.bound.timeline, time) if isinstance(node.bound, BoundAttack)
+                    else sample_cast(node.bound.timeline, time))
+        original_sample = (sample_attack(bound.timeline, time) if isinstance(bound, BoundAttack)
+                           else sample_cast(bound.timeline, time))
+        identity = death.contact.actor_uuid
+        assert next(body for body in expected.bodies if body.actor_uuid == identity) == next(
+            body for body in original_sample.bodies if body.actor_uuid == identity)
+        assert expected.vitals == original_sample.vitals
         assert sample.bodies == () and sample.clips[0].sample == expected
         for quadrant in range(4):
             frame = sample_playback_frame(before, group.after, data, time, time + 5000,
@@ -237,7 +269,7 @@ def test_owned_lethal_delivery_keeps_its_original_timing_and_exactly_one_body(
                 assert command[4][8:10] == (body.clip, body.frame)
 
 
-def test_opportunity_downing_keeps_hit_recovery_and_original_dying_child_badge(
+def test_opportunity_downing_falls_and_holds_with_original_dying_child_badge(
     data: AnimationData, pygame_runtime: None,
 ) -> None:
     captured = attack_history("weapon.longsword", 17, opportunity=True, whole_movement=True,
@@ -271,8 +303,10 @@ def test_opportunity_downing_keeps_hit_recovery_and_original_dying_child_badge(
     hit = sample_choreography(group, timing.start_ms)
     recovered = sample_choreography(group, timing.end_ms)
     assert not hit.bodies and not recovered.bodies
-    assert hit.clips[0].sample.bodies[1].clip == data.damage_context.bodyClip
-    assert recovered.clips[0].sample.bodies[1].clip == "Idle"
+    assert hit.clips[0].sample.bodies[1].clip == "Die"
+    assert recovered.clips[0].sample.bodies[1].clip == "Die"
+    assert hit.clips[0].sample.bodies[1].frame == 0
+    assert recovered.clips[0].sample.bodies[1].frame == 14
     target_uuid = cue.event.fact.entity_uuid
     pending = sample_choreography(group, timing.hp_ms - .001)
     assert pending.displayed.actors[target_uuid].normal_hp == 4
@@ -288,7 +322,7 @@ def test_opportunity_downing_keeps_hit_recovery_and_original_dying_child_badge(
     final = sample_motion(motion, data, motion.complete_ms)
     assert final.contact is not None and final.body is not None
     assert final.contact.life_state is LifeState.DYING and final.contact.grid != motion.actor.grid
-    assert final.body.clip == "Idle" and motion.complete_ms == reaction.end_ms
+    assert final.body.clip == "Die" and motion.complete_ms == reaction.end_ms
     body_rows: LoadedBodyRows = {}
     media = load_scene_media(scene_actors(before, data, {}), data, body_rows=body_rows)
     reactions = load_motion_media(motion, data, body_rows=body_rows)
@@ -302,5 +336,31 @@ def test_opportunity_downing_keeps_hit_recovery_and_original_dying_child_badge(
             media, number, badge, positions=frame.positions)
         command, idle_command = actor_body(frame, final.contact.actor_uuid), actor_body(idle, final.contact.actor_uuid)
         assert frame.shown_hp[final.contact.actor_uuid] == idle.displayed.actors[target_uuid].normal_hp == 0
-        assert command[4][8] == "Idle" and command[2:] == idle_command[2:]
+        assert command[4][8] == "Die" and command[2:] == idle_command[2:]
         assert pygame.image.tobytes(command[1], "RGBA") == pygame.image.tobytes(idle_command[1], "RGBA")
+
+
+def test_native_stable_recovery_preserves_remaining_sleep_pose(data: AnimationData) -> None:
+    captured = lifecycle_history(save_seeds=(0, 0, 0), heal_after=True, asleep_before_heal=True)
+    before, roots = player_history(captured)
+    for lineage in roots:
+        group = bind_choreography(before, lineage, data)
+        assert group.gaps == ()
+        recoveries = [cue for cue in group.lifecycle if isinstance(cue.event.fact, LifeFact)
+                      and cue.event.fact.new_state is LifeState.ALIVE]
+        if recoveries:
+            cue, = recoveries
+            assert isinstance(cue.event.fact, LifeFact)
+            identity = cue.event.fact.entity_uuid
+            assert before.actors[identity].life_state is LifeState.STABLE
+            assert cue.body is None and cue.body_end_ms is None
+            actor = group.after.actors[identity]
+            assert actor.life_state is LifeState.ALIVE and actor.normal_hp == 5
+            assert any(condition.behavior_id == "condition.spell.sleep" for condition in actor.conditions)
+            view = next(view for view in scene_actors(group.after, data, {}) if view.contact.actor_uuid == str(identity))
+            assert view.condition.body_pose == "Die"
+            assert not sample_choreography(group, group.complete_ms).bodies
+            break
+        before = group.after
+    else:
+        pytest.fail("Native healing did not produce its life transition")

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -27,6 +27,7 @@ from dnd.content.characters.class_definitions import (
     resolve_barbarian_level,
 )
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.base_object import BaseObject
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.equipment_types import ArmorType, WeaponProperty
@@ -485,9 +486,32 @@ def test_failed_frenzied_child_admission_releases_its_raging_root(
     )
     handler_uuids = set(entity.event_handlers)
     block_registry = set(BaseBlock._registry)
-    value_registry = set(BaseValue._registry)
     object_registry = set(BaseObject._registry)
     register_action = Entity.register_action
+    modifier_owners = (
+        entity.skill_set.get_skill("athletics").skill_bonus.self_static.advantage_modifiers,
+        entity.saving_throws.get_saving_throw("strength").bonus.self_static.advantage_modifiers,
+        entity.equipment.melee_damage_bonus.self_contextual.value_modifiers,
+        entity.health.damage_reduction.self_static.resistance_modifiers,
+    )
+    modifier_rows = tuple(set(owner) for owner in modifier_owners)
+    cost_owner = entity.action_economy.bonus_actions.self_static.value_modifiers
+    cost_ids = set(cost_owner)
+    rage_modifier_ids: set[UUID] = set()
+
+    def retain_raging_ownership(event: Event) -> None:
+        if (
+            isinstance(event, ConditionApplicationEvent)
+            and isinstance(event.condition, rage.Raging)
+            and event.phase is EventPhase.COMPLETION
+        ):
+            rage_modifier_ids.update(
+                modifier_uuid
+                for owner_ids in event.condition.modifers_uuids.values()
+                for modifier_uuid in owner_ids
+            )
+
+    EventQueue.add_on_event_callback(retain_raging_ownership)
 
     def reject_frenzied_strike(owner: Entity, action) -> None:
         if isinstance(action, rage.FrenziedStrike):
@@ -505,6 +529,7 @@ def test_failed_frenzied_child_admission_releases_its_raging_root(
         result = execution.apply()
         assert result is not None and result.canceled
 
+    EventQueue.remove_on_event_callback(retain_raging_ownership)
     assert entity.active_conditions == {}
     assert entity.active_conditions_by_uuid == {}
     assert frenzy.active_raging_condition_uuid is None
@@ -514,11 +539,15 @@ def test_failed_frenzied_child_admission_releases_its_raging_root(
     ) == action_rows
     assert set(entity.event_handlers) == handler_uuids
     assert set(BaseBlock._registry) == block_registry
-    assert set(BaseValue._registry) == value_registry
-    added_objects = set(BaseObject._registry) - object_registry
-    assert object_registry - set(BaseObject._registry) == set()
-    assert len(added_objects) == 1
-    committed_cost = BaseObject._registry[added_objects.pop()]
+    # Completion facts evaluate and register derived stat values;
+    # cleanup owns Rage's modifiers, not every value evaluated during execution.
+    assert tuple(set(owner) for owner in modifier_owners) == modifier_rows
+    assert rage_modifier_ids
+    assert all(BaseObject.get(modifier_id) is None for modifier_id in rage_modifier_ids)
+    assert object_registry <= set(BaseObject._registry)
+    committed_cost_ids = set(cost_owner) - cost_ids
+    assert len(committed_cost_ids) == 1
+    committed_cost = cost_owner[committed_cost_ids.pop()]
     assert isinstance(committed_cost, NumericalModifier)
     assert committed_cost.name == "Frenzy_cost"
     assert (

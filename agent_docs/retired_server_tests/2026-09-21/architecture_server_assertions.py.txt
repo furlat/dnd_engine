@@ -1,0 +1,76 @@
+# Original server-only architecture assertions, retained as historical source.
+
+def test_event_server_import_does_not_load_client_facing_ai_package() -> None:
+    """Importing the server in a fresh process must not import any ``ai`` module."""
+    marker = "__DND_ARCH_AI_MODULES__="
+    script = (
+        "import json, sys\n"
+        "import server.event_server\n"
+        "loaded = sorted(name for name in sys.modules "
+        "if name == 'ai' or name.startswith('ai.'))\n"
+        f"print({marker!r} + json.dumps(loaded))\n"
+    )
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=REPOSITORY_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise AssertionError(
+            "Fresh import of server.event_server exceeded the 30-second isolation timeout"
+        ) from error
+
+    assert completed.returncode == 0, (
+        "Fresh import of server.event_server failed before isolation could be checked:\n"
+        f"stdout:\n{completed.stdout}\n"
+        f"stderr:\n{completed.stderr}"
+    )
+    marker_lines = [
+        line for line in completed.stdout.splitlines() if line.startswith(marker)
+    ]
+    assert len(marker_lines) == 1, (
+        "Fresh import did not emit exactly one AI isolation result:\n"
+        f"stdout:\n{completed.stdout}\n"
+        f"stderr:\n{completed.stderr}"
+    )
+    loaded_ai_modules = json.loads(marker_lines[0][len(marker):])
+    assert loaded_ai_modules == [], (
+        "Importing server.event_server loaded client-facing ai modules:\n- "
+        + "\n- ".join(loaded_ai_modules)
+    )
+
+
+def test_world_contracts_are_a_cold_transport_leaf() -> None:
+    """World DTOs may depend only on dependency-neutral engine value types."""
+    source_module = _source_modules()["server.world_contracts"]
+    forbidden_imports = [
+        reference
+        for reference in _import_references()
+        if reference.importer == source_module.name
+        and _is_project_module_name(reference.target)
+        and reference.target not in WORLD_CONTRACT_ALLOWED_PROJECT_DEPENDENCIES
+    ]
+    mapper_methods = [
+        f"{node.name}.{child.name} at {source_module.display_path}:{child.lineno}"
+        for node in source_module.tree.body
+        if isinstance(node, ast.ClassDef)
+        for child in node.body
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and child.name in {"create", "from_entity", "from_grid", "from_item"}
+    ]
+    messages: list[str] = []
+    if forbidden_imports:
+        messages.append(
+            "World contracts import runtime project code:\n"
+            + _format_import_references(forbidden_imports)
+        )
+    if mapper_methods:
+        messages.append(
+            "World contracts own engine projection methods:\n- "
+            + "\n- ".join(mapper_methods)
+        )
+    assert not messages, "\n\n".join(messages)

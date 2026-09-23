@@ -45,6 +45,13 @@ class CastCase(BaseModel):
     magic_missile: bool = False
 
 
+class ProjectileLifeCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["projectile-life"]
+    initial: Literal["alive", "dying", "stable"] = "alive"
+    repeated: bool = False
+
+
 class ParalysisLifecycleCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["paralysis-lifecycle"]
@@ -116,7 +123,7 @@ class MovementCase(BaseModel):
 class ConcealmentCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["concealment"]
-    program: Literal["invisibility", "sight-expiry", "doorway", "hide-bright", "hide-dim", "stacked"] = "invisibility"
+    program: Literal["invisibility", "greater-invisibility", "see-invisibility", "sight-expiry", "doorway", "hide-bright", "hide-dim", "stacked"] = "invisibility"
     allied: bool = False
     sight_grant: Literal["none", "spell", "potion"] = "none"
     stealth_face: int = Field(default=18, ge=1, le=20)
@@ -156,12 +163,177 @@ class EnvironmentCase(BaseModel):
     second_light: bool = False
 
 
+class DeviceCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["device"]
+    program: Literal["mixed-spells", "sleep-area", "normal-sleep", "reposition", "break-cannon", "break-projector", "break-fireball"] = "mixed-spells"
+    wake_damage: int = Field(default=2, ge=1, le=10)
+
+
+class SupportCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["support"]
+    program: Literal["cure_wounds", "healing_word", "prayer_of_healing", "guidance",
+                     "resistance", "shield_of_faith", "light", "thaumaturgy", "stacked"]
+    diagonal: bool = False
+
+
+class HealingBatchCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["healing-batch"]
+    program: Literal["aid", "lesser_restoration", "greater_restoration", "heal", "mass_cure_wounds", "mass_heal"]
+    self_target: bool = False
+    clean_target: bool = False
+
+
+class TrueStrikeCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["true-strike"]
+    ranged: bool = False
+    miss: bool = False
+
+
+class InterruptionCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["interruption"]
+    blocker: Literal["sanctuary", "counterspell"]
+    spell: Literal["fire_bolt", "magic_missile", "sacred_flame", "fireball"] = "fire_bolt"
+    blocked: bool = True
+
+
+class GlobeCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["globe"]
+    spell: Literal["fireball", "fire_bolt", "ice_knife"] = "fireball"
+    protection: bool = True
+    source_inside: bool = False
+    impact_offset: tuple[int, int] = (3, 0)
+    walls: Literal["none", "wall", "door", "l-wall", "corridor"] = "none"
+
+
+class PersistentSpellCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["persistent-spell"]
+    shield_delivery: Literal["melee", "ranged", "missile"] = "melee"
+    program: Literal["mage_armor", "shield", "grease", "spike_growth", "fog_cloud", "cloudkill",
+        "stinking_cloud", "darkness", "incendiary_cloud", "insect_plague", "blur", "mirror_image",
+        "enlarge_reduce", "protection_from_energy", "sanctuary"]
+    mode: Literal["enlarge", "reduce"] = "enlarge"
+    energy: Literal["Acid", "Cold", "Fire", "Lightning", "Thunder"] = "Fire"
+    saved: bool = True
+    jump: bool = False
+    jump_across: bool = False
+    environment: Literal["flat", "raised", "wall"] = "flat"
+    discovered: bool = True
+    cast_level: int | None = Field(default=None, ge=1, le=9)
+    ward_expiry: bool = False
+    ward_retained: bool = False
+
+
+class ControlSpellCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["control-spell"]
+    program: Literal["charm", "blindness", "deafness", "grovel", "halt", "flee", "color-spray",
+                     "silence", "blindness-overlap", "deafness-overlap", "sleep-long"]
+    saved: bool = False
+    remove_first: Literal["independent", "area"] = "independent"
+    repeat_source: bool = False
+
+
+class PendingSpellCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["pending-spell"]
+    program: Literal["inflict_wounds", "hellish_rebuke", "shatter", "misty_step", "bless", "bane",
+                     "false_life", "jump", "expeditious_retreat", "haste"]
+    miss: bool = False
+    saved: bool = False
+    blocked: bool = False
+    raised: bool = False
+    long_jump: bool = False
+    replace_grant: bool = False
+    perspective: Literal["both", "departure", "arrival"] = "both"
+
+
+class CantripCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["cantrip"]
+    program: Literal["sacred", "shocking", "poison"]
+    outcome: Literal["hit", "saved", "miss"] = "hit"
+    layout: Literal["adjacent-axis", "adjacent-diagonal", "range-axis", "range-diagonal"] = "adjacent-axis"
+
+
+class AreaSpellCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["area-spell"]
+    program: Literal["burning_hands", "thunderwave", "gust_of_wind"]
+    diagonal: bool = False
+    blocked: bool = False
+
+
+class WebCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["web"]
+    delivery: Literal["cannon", "mage"] = "cannon"
+
+
 class EnvironmentControlCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["environment-control"]
     program: Literal["light", "door", "chest"] = "light"
     hidden_light: bool = False
     observer_darkvision: bool = False
+
+
+class MechanismCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["mechanism"]
+    program: Literal["darts", "blade", "crusher", "door", "light", "jaw", "gas", "tripwire"] = "darts"
+    jump: bool = False
+    jump_release: bool = False
+    save: bool = False
+    hidden_launcher: bool = False
+
+
+class PortalCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["portal"]
+    program: Literal["hatch-walk", "hatch-jump", "bare-walk", "blocked-exit",
+                     "occupied-activation", "hatch-open", "hatch-visible", "hatch-open-jump"] = "hatch-walk"
+    arrival_spikes: bool = False
+
+
+class DoorCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["door"]
+    item_id: str
+    program: Literal["preview", "passage", "break-closed", "break-open"] = "preview"
+    swing: Literal["inward", "outward"] = "inward"
+    jammed: bool = False
+    raised: bool = False
+
+
+class TrapHardwareCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["trap-hardware"]
+    item_id: str
+    deployed: bool = False
+
+
+class PropDestructionCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["prop-destruction"]
+    item_id: str
+    opened: bool = False
+
+
+class LiquidBarrelCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["liquid-barrel"]
+    liquid: Literal["oil", "water", "grease", "poison", "blood", "dread_blood"]
+    saved: bool = True
+    jump: bool = False
+    layout: Literal["open", "door-closed", "door-open"] = "open"
+    landing: Literal["edge", "center"] = "edge"
 
 
 class TrapCase(BaseModel):
@@ -226,12 +398,14 @@ class ReviewCase(BaseModel):
     title: str
     tags: tuple[str, ...]
     description: str
+    framing: Literal["scene", "actors"] = "scene"
     initial_facings: tuple[ReviewFacing, ...] = ()
-    scenario: Annotated[AttackCase | ParalysisCase | CastCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | TrapCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
+    scenario: Annotated[AttackCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
+                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | SupportCase | HealingBatchCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)
+    tail_duration_ms: float = Field(default=800, ge=0)
 
 
 @dataclass(frozen=True)

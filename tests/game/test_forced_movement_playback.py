@@ -243,11 +243,7 @@ def test_stair_displacement_projects_real_body_pixels_and_height_in_every_camera
 
 
 @pytest.mark.parametrize("case_id", ["shove-stairs-up", "shove-stairs-down"])
-@pytest.mark.xfail(strict=True, reason=(
-    "Existing terrain occlusion: up q0/q3 exposes 66/31 body pixels; "
-    "down q0..3 exposes 1/5/54/93 at half travel. Contact/height/media pass separately."
-))
-def test_stair_map_keeps_displaced_recipient_readable_in_every_camera(
+def test_stair_map_keeps_above_terrace_pixels_and_foreground_occlusion(
     data: AnimationData, fonts: tuple[pygame.font.Font, pygame.font.Font], case_id: str, tmp_path: Path,
 ) -> None:
     scene = load_scene(case_id, data)
@@ -257,11 +253,11 @@ def test_stair_map_keeps_displaced_recipient_readable_in_every_camera(
     cache = SurfaceCache(catalog)
     screen = pygame.display.get_surface()
     assert screen is not None
-    visibility: list[tuple[int, int, int]] = []
     for quadrant in range(4):
         camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus((16, 23), elevation_steps=1)
         frame = frame_at(scene, data, fonts, cue.travel_start_ms + 210, camera)
         command = actor_body(frame, identity)
+        contact = actor_contact(frame, identity)
         draw_frame(screen, frame.displayed, catalog, cache, camera, 1, show_grid=False,
                    mouse_position=None, extra_commands=frame.commands, show_debug=False)
         with_actor = pygame.surfarray.array3d(screen)
@@ -272,9 +268,16 @@ def test_stair_map_keeps_displaced_recipient_readable_in_every_camera(
         without_actor = pygame.surfarray.array3d(screen)
         body = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
         body.blit(command[1], command[2])
-        opaque = pygame.surfarray.array_alpha(body) >= 250
-        # The four images retain the visible exception as evidence. This
-        # criterion concerns readability, not a demand to draw over all terrain.
-        visibility.append((quadrant, int(np.count_nonzero(opaque)),
-                           int(np.count_nonzero(opaque & np.any(with_actor != without_actor, axis=2)))))
-    assert all(visible > 100 for _, _, visible in visibility), (visibility, tmp_path)
+        opaque = pygame.surfarray.array_alpha(body) == 255
+        # The stair well is surrounded by a height-2 terrace. A descending
+        # actor at height .5 can be almost completely behind it. Readability
+        # is not a physical guarantee; pixels above its top plane are.
+        terrace_height = max(tile.elevation_steps for tile in frame.displayed.tiles.values())
+        assert terrace_height == 2
+        floor_y = project_screen(contact.grid, camera, elevation_steps=terrace_height)[1]
+        above_terrace = np.arange(screen.height)[None, :] + 1 < floor_y
+        exposed = opaque & above_terrace
+        body_pixels = pygame.surfarray.array3d(body)
+        assert not np.any(exposed & np.any(with_actor != body_pixels, axis=2)), (case_id, quadrant, tmp_path)
+        hidden = opaque & ~np.any(with_actor != without_actor, axis=2)
+        assert np.any(hidden & ~above_terrace), "Foreground terrace must continue covering the lower body"

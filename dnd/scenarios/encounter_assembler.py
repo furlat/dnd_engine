@@ -222,7 +222,7 @@ def _apply_item_grant(entity: Entity, effect: RosterItemGrant) -> None:
                     raise TypeError("ignite setup effect requires a Torch")
                 item.ignite(entity.uuid)
         except BaseException:
-            item.destroy()
+            item.retire()
             raise
 
 

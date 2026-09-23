@@ -26,9 +26,7 @@ class BodyResponseProfile:
     release_id: str
     residue: ResidueProfile | None
     patterns: Mapping[str, tuple[ResidueEllipse, ...]]
-    qualifying_damage_types: frozenset[DamageType] = frozenset({
-        DamageType.BLUDGEONING, DamageType.PIERCING, DamageType.SLASHING,
-    })
+    qualifying_damage_types: frozenset[DamageType] = frozenset(DamageType)
     deposition_layers: frozenset[OccupancyLayer] = frozenset({OccupancyLayer.GROUND})
 
 
@@ -106,11 +104,21 @@ class BodyResponseProcessor:
             return event
         position = owner.position
         layer = owner.get_occupancy_layer()
+        # A magical rider must not replace the wound pattern of its weapon.
         component = max((row for row in resolution.components
-                         if row.damage_type in self.profile.qualifying_damage_types and row.after_affinity_damage > 0),
-                        key=lambda row: row.after_affinity_damage)
+                         if row.damage_type in PHYSICAL_PATTERNS
+                         and row.damage_type in self.profile.qualifying_damage_types
+                         and row.after_affinity_damage > 0),
+                        key=lambda row: row.after_affinity_damage, default=None)
+        elemental = max((row for row in resolution.components
+                         if row.damage_type not in PHYSICAL_PATTERNS
+                         and row.damage_type in self.profile.qualifying_damage_types
+                         and row.after_affinity_damage > 0),
+                        key=lambda row: row.after_affinity_damage, default=None)
+        primary = component or elemental
         direction = injury.impact_direction
-        pattern = PHYSICAL_PATTERNS[component.damage_type] if direction is not None and direction != (0, 0) else "blunt"
+        pattern = (PHYSICAL_PATTERNS[component.damage_type]
+                   if component is not None and direction is not None and direction != (0, 0) else "blunt")
         angle = atan2(direction[1], direction[0]) if direction is not None else 0
         deposited_position = None
         regions: tuple[BodyReleaseRegion, ...] = ()
@@ -135,6 +143,8 @@ class BodyResponseProcessor:
             release_id=self.profile.release_id, position=position,
             occupancy_layer=layer, deposited_position=deposited_position,
             pattern=pattern, critical_hit=injury.critical_hit, regions=regions,
+            primary_damage_type=primary.damage_type if primary is not None else None,
+            secondary_damage_type=elemental.damage_type if component is not None and elemental is not None else None,
         ))
 
 

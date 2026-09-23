@@ -2,11 +2,11 @@
 
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Mapping, Optional
+from typing import Literal, Mapping, Optional
 
 from dnd.core.creature_types import DamageType
 from dnd.core.equipment_types import ArmorType, BodyPart, WeaponProperty
-from dnd.core.item_types import EquippedVisualPolicy
+from dnd.core.item_types import EquippedVisualPolicy, ItemDestructionProfile
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 
 
@@ -64,7 +64,7 @@ class WeaponDefinition:
     visual_item_name: Optional[str] = None
     visual_variant_id: Optional[str] = None
     equipped_visual_policy: EquippedVisualPolicy = EquippedVisualPolicy.VISIBLE
-    damage_die: int = 4
+    damage_die: Literal[4, 6, 8, 10, 12, 20] = 4
     damage_dice_count: int = 1
     damage_type: DamageType = DamageType.BLUDGEONING
     properties: tuple[WeaponProperty, ...] = ()
@@ -74,7 +74,7 @@ class WeaponDefinition:
     attack_bonus: int = 0
     damage_bonus: int = 0
     attack_disadvantage: bool = False
-    extra_damage_die: Optional[int] = None
+    extra_damage_die: Optional[Literal[4, 6, 8, 10, 12, 20]] = None
     extra_damage_dice_count: int = 0
     extra_damage_type: Optional[DamageType] = None
 
@@ -136,6 +136,7 @@ class StaticBlockerDefinition:
     blocks_optics: bool = False
     blocks_propagation: bool = False
     placement_spec: WorldPlacementSpec = field(kw_only=True)
+    destruction_profile: ItemDestructionProfile = field(kw_only=True)
 
     def __post_init__(self) -> None:
         _validate_common_item_definition(
@@ -195,6 +196,17 @@ ACOLYTE_GEAR_DEFINITIONS: Mapping[str, AuthoredItemDefinition] = MappingProxyTyp
 })
 
 
+CHEST_DEFINITIONS: Mapping[str, AuthoredItemDefinition] = MappingProxyType({
+    f"environment.chest.fantasy_{style}": AuthoredItemDefinition(
+        item_id=f"environment.chest.fantasy_{style}",
+        name=f"Chest {style.upper()}",
+        description="A fixed chest whose contents can be accessed by opening its lid.",
+        tags=("environment", "container", "breakable"),
+    )
+    for style in ("a1", "a3", "b1")
+})
+
+
 _STATIC_BLOCKERS = (
     StaticBlockerDefinition(
         "environment.blocker.crate",
@@ -202,6 +214,9 @@ _STATIC_BLOCKERS = (
         "A destructible crate.",
         ("breakable", "crate", "environment"),
         hit_points=20,
+        destruction_profile=ItemDestructionProfile(name="Broken Crate",
+            placement_spec=WorldPlacementSpec(kind=WorldPlacementKind.CENTER,
+                occupies_bands=False, vertical_extent_steps=1)),
         placement_spec=WorldPlacementSpec(
             kind=WorldPlacementKind.CENTER,
             occupies_bands=False,
@@ -214,6 +229,9 @@ _STATIC_BLOCKERS = (
         "A durable boulder that blocks movement.",
         ("blocker", "boulder", "environment"),
         hit_points=30,
+        destruction_profile=ItemDestructionProfile(name="Broken Boulder",
+            placement_spec=WorldPlacementSpec(kind=WorldPlacementKind.CENTER,
+                occupies_bands=False, vertical_extent_steps=1)),
         blocks_movement=True,
         blocks_propagation=True,
         placement_spec=WorldPlacementSpec(
@@ -228,6 +246,9 @@ _STATIC_BLOCKERS = (
         "A destructible barricade that blocks movement and sight.",
         ("barricade", "blocker", "breakable", "environment"),
         hit_points=20,
+        destruction_profile=ItemDestructionProfile(name="Broken Barricade",
+            placement_spec=WorldPlacementSpec(kind=WorldPlacementKind.CENTER,
+                occupies_bands=False, vertical_extent_steps=1)),
         blocks_movement=True,
         blocks_optics=True,
         blocks_propagation=True,

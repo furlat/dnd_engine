@@ -9,6 +9,7 @@ import json
 from typing import Annotated, Any
 
 from pydantic import BeforeValidator, PlainSerializer, TypeAdapter
+from game.recording_compat import recorded_area_policy
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent
 from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
@@ -17,6 +18,8 @@ from dnd.blocks.equipment import (
     ShieldUnequipEvent, WeaponEquipEvent, WeaponUnequipEvent,
 )
 from dnd.core.base_actions import ActionEvent
+from dnd.spells.abjuration import CounterspellReactionEvent
+from dnd.core.base_conditions import ConditionStateChangedEvent
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.content.runtime import EffectiveHandlerPresentation
@@ -24,8 +27,8 @@ from dnd.core.events import (
     AttackD20RollResultEvent, D20Event, D20RollResultEvent, DamageAppliedEvent,
     DamageRollResultEvent, DeathEvent, DeathSaveEvent, EncounterEndEvent,
     EncounterEvent, EncounterStartEvent, EntityCreatedEvent, Event,
-    ForcedMovementEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
-    LifeStateChangeEvent, ReviveEvent, RoundEndEvent, RoundEvent, RoundStartEvent,
+    ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
+    ItemDestructionEvent, LifeStateChangeEvent, ReviveEvent, RoundEndEvent, RoundEvent, RoundStartEvent,
     SavingThrowD20RollResultEvent, SavingThrowEvent, SensoryUpdateEvent,
     SkillCheckD20RollResultEvent, SkillCheckEvent, SpatialChangeEvent, SpatialEffectChangeEvent,
     StepMovementEvent, TakeDamageEvent, TurnEndEvent, TurnEvent, TurnStartEvent,
@@ -37,18 +40,18 @@ from dnd.core.events import (
 # must first acquire a retained capture contract; they cannot decode by importing
 # arbitrary classes named by a file. Technical headers remain ordinary Event.
 EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
-    Event, ActionEvent, WorldInitializedEvent, WorldModifiedEvent, EntityCreatedEvent,
-    AttackEvent, SpellEvent, MovementEvent, JumpEvent, ShoveEvent,
+    Event, ActionEvent, WorldInitializedEvent, WorldModifiedEvent, EntityCreatedEvent, ConditionStateChangedEvent,
+    AttackEvent, SpellEvent, MovementEvent, JumpEvent, ShoveEvent, CounterspellReactionEvent,
     EquipmentEvent, WeaponEquipEvent, WeaponUnequipEvent, ArmorEquipEvent,
     ArmorUnequipEvent, ShieldEquipEvent, ShieldUnequipEvent, ItemLocationStateEvent,
-    ItemChargeConsumptionEvent,
+    ItemChargeConsumptionEvent, ItemDestructionEvent,
     D20Event, SavingThrowEvent, SkillCheckEvent, D20RollResultEvent,
     AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     DamageRollResultEvent, HealRollResultEvent, TakeDamageEvent, DamageAppliedEvent,
     HealEvent, TemporaryHitPointsChangedEvent, DeathEvent, DeathSaveEvent, InstantDeathEvent, ReviveEvent,
     LifeStateChangeEvent, SensoryUpdateEvent, SpatialChangeEvent, TileElevationChangeEvent,
     SpatialEffectChangeEvent, StepMovementEvent,
-    ForcedMovementEvent, EncounterEvent, EncounterStartEvent, EncounterEndEvent,
+    ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, EncounterEvent, EncounterStartEvent, EncounterEndEvent,
     RoundEvent, RoundStartEvent, RoundEndEvent, TurnEvent, TurnStartEvent, TurnEndEvent,
 )}
 LOG = TypeAdapter(CombatLogEntry | None)
@@ -59,17 +62,20 @@ GRANTS = TypeAdapter(dict[str, set[str]])
 # Their defaults keep those presentation archives readable; old archives do
 # not acquire facts that only newer native producers record.
 ADDITIVE_FIELDS = {
+    SpatialEffectChangeEvent: {"pressed", "previous_pressed"},
+    ItemLocationStateEvent: {"replacement_item_uuid"},
     ActionEvent: {"resolved_area_positions"},
-    AttackEvent: {"resolved_area_positions"},
-    SpellEvent: {"resolved_area_positions", "effect_id"},
+    AttackEvent: {"resolved_area_positions", "intercepted_by_condition_uuid"},
+    SpellEvent: {"resolved_area_positions", "effect_id", "cast_origin", "effect_source_position", "suppressions", "area_propagation"},
     ShoveEvent: {"resolved_area_positions"},
     DamageAppliedEvent: {"body_release", "critical_hit", "impact_direction"},
-    EntityCreatedEvent: {"healing_blocked", "occupancy_layer"},
+    TakeDamageEvent: {"intercepted_by_condition_uuid"},
+    EntityCreatedEvent: {"healing_blocked", "occupancy_layer", "temporary_hit_points_grant"},
     SensoryUpdateEvent: {"hazardous_cells_changed", "spatial_effects_changed", "spatial_effects_removed"},
     SpatialChangeEvent: {"tile_state", "tile_present", "object_state", "previous_occupancy_layer", "occupancy_layer"},
     MovementEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
     JumpEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
-    StepMovementEvent: {"movement_mode", "from_layer", "to_layer"},
+    StepMovementEvent: {"movement_mode", "from_layer", "to_layer", "resolved_speed_feet"},
 }
 
 
@@ -102,6 +108,8 @@ def decode_event(value: Any) -> Event:
     if wire_type not in EVENT_MODELS:
         raise ValueError(f"unknown or missing recorded event wire_type: {wire_type}")
     model = EVENT_MODELS[wire_type]
+    if model is SpellEvent:
+        payload = recorded_area_policy(payload)
     required = {name for name, field in model.model_fields.items() if field.exclude is not True}
     required.difference_update(ADDITIVE_FIELDS.get(model, set()))
     required.update(("combat_log", "identified_entity_observer_uuids",

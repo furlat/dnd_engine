@@ -23,6 +23,21 @@ def grid_distance_feet(
     return grid_distance_cells(origin, target) * 5
 
 
+def position_in_sector(
+    origin: Tuple[int, int],
+    forward: Tuple[int, int],
+    target: Tuple[int, int],
+    width_degrees: float,
+) -> bool:
+    """Test a selected point against a sector around a nonzero forward vector."""
+    dx, dy = target[0] - origin[0], target[1] - origin[1]
+    if forward == (0, 0) or (dx, dy) == (0, 0):
+        return False
+    angle = abs(math.atan2(forward[0] * dy - forward[1] * dx,
+                           forward[0] * dx + forward[1] * dy))
+    return angle <= math.radians(width_degrees / 2)
+
+
 def circle_positions(
     center: Tuple[int, int],
     radius: int,

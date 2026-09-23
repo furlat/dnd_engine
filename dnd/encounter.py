@@ -581,7 +581,7 @@ class Encounter(BaseObject):
         self._begin_turn_execution()
 
         try:
-            event = entity.on_turn_start(
+            entity.on_turn_start(
                 encounter_uuid=self.uuid,
                 round_number=self.round_number,
                 turn_index=self.current_turn_index,

@@ -8,6 +8,7 @@ from dnd.actions_functional import execute_by_index, get_available_actions, setu
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
+from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.controller import HumanController
 from dnd.core.dice import fixed_dice_faces
@@ -55,6 +56,7 @@ def ground_contact_history(
                 (build_authored_item("apparel.cloth_shoes.red", actor.uuid), BodyPart.FEET),
             ))
             setup_standard_actions(actor)
+            install_body_response(actor, BLOOD_BODY_RESPONSE)
             if role == "operator" and interrupted:
                 actor.install_initial_items(((
                     build_authored_item("weapon.longsword", actor.uuid), WeaponSlot.MELEE_MAIN,

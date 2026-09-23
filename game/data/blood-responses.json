@@ -1,0 +1,144 @@
+{
+  "Bludgeoning": null,
+  "Piercing": null,
+  "Slashing": null,
+  "Acid": {
+    "shape": "ragged",
+    "durationScale": 1.25,
+    "gravityScale": 0.8,
+    "sizeScale": 1.08,
+    "colors": [
+      6623000,
+      11182670
+    ],
+    "detail": "acid",
+    "surfaceSeconds": 2,
+    "tailScale": 0.45,
+    "vapor": {
+      "color": 9277521,
+      "life": 0.65
+    }
+  },
+  "Fire": {
+    "shape": "spray",
+    "durationScale": 0.925926,
+    "gravityScale": 1.05,
+    "sizeScale": 0.7,
+    "colors": [
+      5639444,
+      12735527
+    ],
+    "detail": "fire",
+    "surfaceSeconds": 2,
+    "heavyEvery": 9,
+    "heavyScale": 1.8,
+    "vapor": {
+      "color": 11182227,
+      "life": 0.65
+    }
+  },
+  "Force": {
+    "shape": "spray",
+    "durationScale": 0.588235,
+    "gravityScale": 0.75,
+    "sizeScale": 1.25,
+    "colors": [
+      6163478,
+      10889266
+    ],
+    "detail": "none",
+    "surfaceSeconds": 0,
+    "delayScale": 0.45,
+    "tailScale": 1.5
+  },
+  "Lightning": {
+    "shape": "spray",
+    "durationScale": 0.769231,
+    "gravityScale": 0.7,
+    "sizeScale": 0.75,
+    "colors": [
+      5770786,
+      10862300
+    ],
+    "detail": "lightning",
+    "surfaceSeconds": 2.5,
+    "tailScale": 1.25
+  },
+  "Necrotic": {
+    "shape": "ragged",
+    "durationScale": 1.538462,
+    "gravityScale": 0.45,
+    "sizeScale": 1.2,
+    "colors": [
+      3607832,
+      7575123
+    ],
+    "detail": "necrotic",
+    "surfaceSeconds": 2,
+    "delayScale": 1.6,
+    "tailScale": 0.45,
+    "vapor": {
+      "color": 7440726,
+      "life": 0.95
+    }
+  },
+  "Poison": {
+    "shape": "bead",
+    "durationScale": 1.538462,
+    "gravityScale": 0.6,
+    "sizeScale": 1.15,
+    "colors": [
+      6820897,
+      11644505
+    ],
+    "detail": "poison",
+    "surfaceSeconds": 2,
+    "delayScale": 1.6,
+    "tailScale": 0.45
+  },
+  "Psychic": {
+    "shape": "spray",
+    "durationScale": 2.222222,
+    "gravityScale": 0.18,
+    "sizeScale": 0.65,
+    "colors": [
+      5639721,
+      9059170
+    ],
+    "detail": "psychic",
+    "surfaceSeconds": 1.5
+  },
+  "Radiant": {
+    "shape": "spray",
+    "durationScale": 0.952381,
+    "gravityScale": 0.85,
+    "sizeScale": 0.8,
+    "colors": [
+      6624284,
+      14795905
+    ],
+    "detail": "radiant",
+    "surfaceSeconds": 2
+  },
+  "Thunder": {
+    "shape": "spray",
+    "durationScale": 0.740741,
+    "gravityScale": 0.25,
+    "sizeScale": 1,
+    "colors": [
+      6163478,
+      10889266
+    ],
+    "detail": "thunder",
+    "surfaceSeconds": 1.1
+  },
+  "Cold": {
+    "shape": "frozen",
+    "colors": [
+      6163478,
+      8854569
+    ],
+    "meltBase": 0.45,
+    "meltSize": 0.65
+  }
+}

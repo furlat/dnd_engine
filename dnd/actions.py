@@ -8,7 +8,7 @@ from dnd.core.base_actions import (
     Cost, CostType, DamageRollProfile, OutcomeApplicationScope, OutcomeResolution,
     PositionDiscoveryContract, RESTRICTED_ACTION_TEMPLATE_SEPARATOR,
     SPELL_SLOT_TEMPLATE_SEPARATOR, TargetType, ActionTargetEffectProfile,
-    spell_slot_cost_type,
+    spell_slot_cost_type, TargetEffectDisposition,
 )
 from dnd.core.values import ModifiableValue
 from dnd.core.condition_types import ConditionRemovalTrigger, DurationType
@@ -17,6 +17,7 @@ from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, MovementTrajectory
 from dnd.types.abilities import AbilityName
+from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.elevation import support_distance_feet
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.effect_types import EffectOrigin
@@ -66,6 +67,7 @@ from dnd.core.traversal_connectors import (
 )
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
+from dnd.core.geometry import grid_distance_feet, position_in_sector
 from dnd.core.aoe import (
     Sphere,
     Cone,
@@ -87,7 +89,7 @@ from dnd.core.combat_log import (
     md_color
 )
 from pydantic import BaseModel, Field, StrictBool, StrictInt, model_validator
-from typing import AbstractSet, Any, Callable, ClassVar, Dict, Iterable, Optional, List, Set, TypeVar, Tuple, Self, cast
+from typing import AbstractSet, Any, Callable, ClassVar, Dict, Iterable, Literal, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.blocks.action_economy import (
@@ -289,7 +291,9 @@ def _consume_entity_action_economy_costs(
         return action_event.cancel(
             status_message=f"Failed to commit costs for {action_event.name}"
         )
-    return action_event
+    return action_event.model_copy(update={
+        "action_economy_spent": action_event.action_economy_spent or bool(channel_costs or resource_costs),
+    })
 
 
 def entity_action_economy_cost_applier(
@@ -324,6 +328,36 @@ def resolve_paid_entry_retreats(source: Entity, *, since_cursor: int, parent_eve
             path=[source.position, request.destination], prefer_safe=False).apply(parent_event=parent_event)
     # The original path stays interrupted even if the retreat removed its fear.
     return bool(requests)
+
+
+def commit_forced_movement(target: Entity, event: ForcedMovementEvent, *,
+                           parent_event: Event,
+                           stop_on_incapacitation: bool = False) -> ForcedMovementEvent:
+    """Commit an admitted straight push cell by cell, then settle entry responses."""
+    if event.canceled:
+        return event
+    endpoint = event.start_position
+    moved_cells = 0
+    interrupted = False
+    entry_cursor = EventQueue.event_cursor()
+    for _ in range(event.actual_distance // 5):
+        next_pos = (endpoint[0] + event.direction[0], endpoint[1] + event.direction[1])
+        entry_cursor = EventQueue.event_cursor()
+        Entity.update_entity_position(target, next_pos, parent_event=event.uuid)
+        endpoint = next_pos
+        moved_cells += 1
+        if (target.position != next_pos or stop_on_incapacitation and not target.can_take_actions()
+                or any(condition.get_paid_entry_retreat(since_cursor=entry_cursor) is not None
+                       for condition in target.active_conditions.values())):
+            interrupted = True
+            break
+    # This event describes the pushed leg. A nested relocation has its own
+    # endpoints; the enclosing action reports the actor's final position.
+    result = event.with_updates(end_position=endpoint, actual_distance=moved_cells * 5,
+        blocked_by_obstacle=False if interrupted else event.blocked_by_obstacle,
+        blocked_by=None if interrupted else event.blocked_by).phase_to(EventPhase.COMPLETION)
+    resolve_paid_entry_retreats(target, since_cursor=entry_cursor, parent_event=parent_event)
+    return result
 
 
 class MovementEvent(ActionEvent):
@@ -860,19 +894,21 @@ class Move(BaseAction):
                     break
                 transition_check_seconds += time.perf_counter() - phase_started
 
+                resolved_speed_feet = source_entity.action_economy.current_speed()
                 phase_started = time.perf_counter()
                 source_entity.action_economy.consume("movement", step_cost_feet)
                 consume_movement_seconds += time.perf_counter() - phase_started
 
                 phase_started = time.perf_counter()
                 Entity.update_entity_position(source_entity, to_pos, parent_event=processed_step.uuid)
-                actual_end_position = to_pos
+                actual_end_position = source_entity.position
                 traversed_path.append(to_pos)
                 traversed_movement_cost += step_cost_feet
                 update_position_seconds += time.perf_counter() - phase_started
 
                 phase_started = time.perf_counter()
-                processed_step.phase_to(EventPhase.COMPLETION, committed=True)
+                processed_step.phase_to(EventPhase.COMPLETION, committed=True,
+                                        resolved_speed_feet=resolved_speed_feet)
                 step_completion_seconds += time.perf_counter() - phase_started
 
                 if resolve_paid_entry_retreats(source_entity, since_cursor=step_source_cursor_start, parent_event=effect_event):
@@ -880,6 +916,12 @@ class Move(BaseAction):
                     actual_end_position = source_entity.position
                     termination_reason = (MovementTerminationReason.POSITION_DIVERGED
                         if actual_end_position != to_pos else MovementTerminationReason.STEP_CANCELED)
+                    break
+
+                if source_entity.position != to_pos:
+                    interrupted_by_condition = True
+                    actual_end_position = source_entity.position
+                    termination_reason = MovementTerminationReason.POSITION_DIVERGED
                     break
 
                 if not source_entity.can_take_actions():
@@ -1450,6 +1492,7 @@ class TraverseConnector(BaseAction):
                 effect, source, MovementTerminationReason.INVALID_PATH
             )
 
+        resolved_speed_feet = source.action_economy.current_speed()
         receipt = source.action_economy.consume_aggregate_with_receipt(
             tuple(channel_costs)
         )
@@ -1465,6 +1508,7 @@ class TraverseConnector(BaseAction):
         processed_step.phase_to(
             EventPhase.COMPLETION,
             committed=True,
+            resolved_speed_feet=resolved_speed_feet,
             status_message=f"Connector transfer arrived at {destination}",
         )
         return cast(TraverseConnectorEvent, effect.with_updates(
@@ -1490,6 +1534,7 @@ class AttackEvent(ActionEvent):
     ac: Optional[ModifiableValue] = Field(default=None, description="Target armor class used for this attack.")
     dice_roll: Optional[DiceRoll] = Field(default=None, description="Attack d20 roll after result handlers.")
     attack_outcome: Optional[AttackOutcome] = Field(default=None, description="Resolved attack outcome.")
+    intercepted_by_condition_uuid: UUID | None = None
     damages: Optional[List[Damage]] = Field(default=None, description="Damage packets used on hit.")
     damage_rolls: Optional[List[DiceRoll]] = Field(default=None, description="Damage rolls after result handlers.")
     event_type: EventType = Field(default=EventType.ATTACK, description="Event category for attacks.")
@@ -3352,6 +3397,7 @@ class Jump(BaseAction):
                         processed_step.phase_to(EventPhase.COMPLETION, committed=False)
                         break
 
+                resolved_speed_feet = source_entity.action_economy.current_speed()
                 source_entity.action_economy.consume("movement", step_cost_feet)
                 Entity.update_entity_position(
                     source_entity, to_pos, parent_event=processed_step.uuid,
@@ -3362,14 +3408,19 @@ class Jump(BaseAction):
                         source_entity, to_pos, parent_event=processed_step.uuid,
                         occupancy_layer=OccupancyLayer.GROUND,
                     )
-                actual_end_position = to_pos
+                actual_end_position = source_entity.position
                 traversed_path.append(to_pos)
 
-                processed_step.phase_to(EventPhase.COMPLETION, committed=True)
+                processed_step.phase_to(EventPhase.COMPLETION, committed=True,
+                                        resolved_speed_feet=resolved_speed_feet)
 
                 if resolve_paid_entry_retreats(source_entity, since_cursor=step_source_cursor_start, parent_event=effect_event):
                     interrupted_by_condition = True
                     actual_end_position = source_entity.position
+                    break
+
+                if source_entity.position != to_pos:
+                    interrupted_by_condition = True
                     break
 
                 if not source_entity.can_take_actions():
@@ -3385,7 +3436,7 @@ class Jump(BaseAction):
                 )
                 if resolve_paid_entry_retreats(source_entity, since_cursor=settlement_cursor, parent_event=effect_event):
                     interrupted_by_condition = True
-                    actual_end_position = source_entity.position
+            actual_end_position = source_entity.position
             effect_event = effect_event.with_updates(end_layer=source_entity.occupancy_layer)
 
             if source_entity.position == execution_event.start_position:
@@ -3682,31 +3733,6 @@ class Shove(BaseAction):
 
         return current, actual_cells * 5, blocked, blocked_by
 
-    @staticmethod
-    def calculate_forced_movement_path(
-        start: Tuple[int, int],
-        direction: Tuple[int, int],
-        distance_feet: int
-    ) -> List[Tuple[int, int]]:
-        """Return every traversed cell for a straight forced displacement.
-
-        Args:
-            start: Position before forced movement begins.
-            direction: Unit displacement direction as `(dx, dy)`.
-            distance_feet: Distance to traverse in feet.
-
-        Returns:
-            Ordered destination cells, one per 5-foot transition.
-        """
-        path: List[Tuple[int, int]] = []
-        current = start
-
-        for _ in range(distance_feet // 5):
-            current = (current[0] + direction[0], current[1] + direction[1])
-            path.append(current)
-
-        return path
-
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[ShoveEvent]:
         """Create declaration event for shove."""
         source = Entity.get(self.source_entity_uuid)
@@ -3830,7 +3856,6 @@ class Shove(BaseAction):
         push_distance = actual_dist
 
         if actual_dist > 0:
-            movement_path = self.calculate_forced_movement_path(target.position, direction, actual_dist)
             forced_event = ForcedMovementEvent(
                 source_entity_uuid=source.uuid,
                 target_entity_uuid=target.uuid,
@@ -3851,45 +3876,10 @@ class Shove(BaseAction):
             forced_event = forced_event.phase_to(EventPhase.EXECUTION)
             forced_event = forced_event.phase_to(EventPhase.EFFECT)
 
-            moved_cells = 0
-            interrupted_by_condition = False
-            entry_cursor = EventQueue.event_cursor()
-
-            if not forced_event.canceled:
-                for next_pos in movement_path:
-                    entry_cursor = EventQueue.event_cursor()
-                    Entity.update_entity_position(target, next_pos, parent_event=forced_event.uuid)
-                    moved_cells += 1
-
-                    if any(condition.get_paid_entry_retreat(since_cursor=entry_cursor) is not None
-                           for condition in target.active_conditions.values()):
-                        interrupted_by_condition = True
-                        break
-
-                    if not target.can_take_actions():
-                        interrupted_by_condition = True
-                        break
-
-            push_distance = moved_cells * 5
-            final_pos = target.position
-
-            if interrupted_by_condition:
-                blocked = False
-                blocked_by = None
-
-            forced_event.phase_to(
-                EventPhase.COMPLETION,
-                end_position=final_pos,
-                actual_distance=push_distance,
-                blocked_by_obstacle=blocked,
-                blocked_by=blocked_by,
-                status_message=(
-                    f"Forced movement interrupted at {final_pos}"
-                    if interrupted_by_condition
-                    else f"Forced movement completed at {final_pos}"
-                )
-            )
-            resolve_paid_entry_retreats(target, since_cursor=entry_cursor, parent_event=execution_event)
+            forced_event = commit_forced_movement(target, forced_event, parent_event=execution_event,
+                                                 stop_on_incapacitation=True)
+            push_distance = forced_event.actual_distance
+            blocked, blocked_by = forced_event.blocked_by_obstacle, forced_event.blocked_by
             final_pos = target.position
 
         return execution_event.with_updates(
@@ -3910,11 +3900,22 @@ class SpellEvent(ActionEvent):
     name: str = Field(default="Spell Cast", description="A spell cast event")
     event_type: EventType = Field(default=EventType.CAST_SPELL, description="The type of event")
     spell_id: Optional[str] = Field(default=None, description="Stable spell catalog id")
+    target_type: TargetType = Field(default=TargetType.ENTITY, description="Native targeting mode captured before interception.")
+    harmful: bool = Field(default=False, description="Whether this cast includes an authored harmful effect.")
+    harmful_target_entity_uuids: List[UUID] = Field(default_factory=list, description="Declared recipients to whom this cast's native effects are harmful.")
     effect_id: Optional[str] = Field(default=None, description="Authored subeffect within the owning spell, when distinct from the cast.")
     spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
     cast_at_level: int = Field(default=0, description="Actual slot level used (0 = cantrip)")
     spell_school: str = Field(default="evocation", description="School of magic")
     verbal: bool = Field(default=True, description="Whether spell has a verbal component")
+    cast_origin: Literal["actor", "source_item"] = Field(
+        default="actor", description="Whether this cast originates from its actor or placed source item.",
+    )
+    effect_source_position: Optional[Tuple[int, int]] = Field(
+        default=None, description="Immutable spell emission position, including a placed device's origin.",
+    )
+    suppressions: tuple[SpellSuppression, ...] = ()
+    area_propagation: Literal["line_of_effect", "connected"] = "line_of_effect"
     source_position: Optional[Tuple[int, int]] = Field(
         default=None,
         description="Caster position captured when the spell was declared.",
@@ -3955,7 +3956,7 @@ class SpellEvent(ActionEvent):
         return EffectOrigin.spell(
             source_id=self.spell_id,
             source_event_lineage_uuid=str(self.lineage_uuid),
-            source_position=self.source_position,
+            source_position=self.effect_source_position or self.source_position,
             base_spell_level=self.spell_level,
             effective_spell_level=self.cast_at_level,
         )
@@ -4371,9 +4372,17 @@ class SpellAction(BaseAction):
     )
 
     alt_range: Optional[int] = Field(default=None, description="Override spell_range.normal")
+    cast_origin: Literal["actor", "source_item"] = Field(
+        default="actor", description="Actor or placed item supplying the spell's range and launch origin.",
+    )
+    target_sector_degrees: Optional[float] = Field(
+        default=None, gt=0, le=360,
+        description="Optional total target-sector width around the operator-to-item direction.",
+    )
 
     projectile_type: Optional[str] = Field(default=None, description="VFX projectile delivery type")
-    spell_damage_type: Optional[DamageType] = Field(default=None, description="Primary damage type for VFX")
+    spell_damage_type: Optional[DamageType] = Field(default=None, description="Primary native damage type, also available to presentation.")
+    harmful: Optional[bool] = Field(default=None, description="Explicit harmful intent for rules without damage or target-effect profiles; otherwise derive from those native declarations.")
     saving_throw_effect_id: Optional[str] = Field(
         default=None,
         description=(
@@ -4466,6 +4475,59 @@ class SpellAction(BaseAction):
     def get_range(self) -> Range:
         """Return spell range with alt_range override for position filtering."""
         return Range(type=self.spell_range.type, normal=self.effective_range, long=self.spell_range.long)
+
+    def get_target_origin(self) -> Optional[Tuple[int, int]]:
+        if self.cast_origin == "actor":
+            return super().get_target_origin()
+        return get_map().get_object_position(self.source_item_uuid) if self.source_item_uuid is not None else None
+
+    def _source_item_targeting_error(self) -> Optional[str]:
+        if self.cast_origin == "actor":
+            return None if self.target_sector_degrees is None else "A firing sector requires a source-item origin"
+        actor = Entity.get(self.source_entity_uuid)
+        origin = self.get_target_origin()
+        if actor is None or origin is None:
+            return "Spell source item is not placed"
+        if self.source_item_uuid not in actor.senses.objects:
+            return "Spell source item is not perceived"
+        if origin == actor.position or grid_distance_feet(actor.position, origin) > 5:
+            return "Operator must stand beside the spell source item"
+        return None
+
+    def target_position_error(self, position: Tuple[int, int]) -> Optional[str]:
+        error = self._source_item_targeting_error() or super().target_position_error(position)
+        if error is not None or self.target_sector_degrees is None:
+            return error
+        origin = self.get_target_origin()
+        actor_origin = super().get_target_origin()
+        if origin is None or actor_origin is None:
+            return "Spell targeting origin is not placed"
+        forward = (origin[0] - actor_origin[0], origin[1] - actor_origin[1])
+        if not position_in_sector(origin, forward, position, self.target_sector_degrees):
+            return "Target is outside the device firing sector"
+        return None
+
+    def targeting_error(self) -> Optional[str]:
+        if (error := self._concentration_capacity_error()) is not None:
+            return error
+        if self.cast_origin == "actor" and self.target_sector_degrees is None:
+            return None
+        error = self._source_item_targeting_error()
+        if error is not None:
+            return error
+        # Test selected centers/recipients, never secondary area occupants.
+        if self.effective_target_type in (TargetType.POSITION, TargetType.POSITION_LOS,
+                                          TargetType.POSITION_PATH, TargetType.POSITION_AOE):
+            positions = [self.end_position] if self.end_position is not None else []
+        elif self.effective_target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY):
+            positions = [target.position for identity in self.get_all_targets()
+                         if (target := Entity.get(identity)) is not None]
+        else:
+            positions = []
+        for position in positions:
+            if (error := self.target_position_error(position)) is not None:
+                return error
+        return None
 
     def get_upcast_bonus(self) -> int:
         """Get levels above base spell level (for upcast scaling)."""
@@ -4658,6 +4720,25 @@ class SpellAction(BaseAction):
         )
         return synced_event, save_roll, success
 
+    def get_concentration_owner(self) -> Entity | BaseItem | None:
+        """Resolve the actual sustainer independently of casting attribution."""
+        item = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid is not None else None
+        if isinstance(item, BaseItem) and item.concentration_capacity > 0:
+            return item
+        return Entity.get(self.source_entity_uuid)
+
+    def _concentration_capacity_error(self) -> Optional[str]:
+        if not self.concentration:
+            return None
+        owner = self.get_concentration_owner()
+        if not isinstance(owner, BaseItem):
+            return None
+        existing = owner.active_conditions.get("Concentrating")
+        if (isinstance(existing, Concentrating) and existing.uuid != self.cast_concentrating_uuid
+                and len(existing.concentration_slots) >= owner.concentration_capacity):
+            return "Device concentration capacity is full"
+        return None
+
     def ensure_concentration(self, parent_event: Event) -> "Concentrating":
         """Create or reuse Concentrating for this cast. Safe for convolution loop.
 
@@ -4665,23 +4746,24 @@ class SpellAction(BaseAction):
         concentration. Later calls in the same convolution loop reuse the UUID
         created by the first target.
         """
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            raise ValueError("Caster not found")
+        owner = self.get_concentration_owner()
+        if owner is None:
+            raise ValueError("Concentration owner not found")
 
         if self.cast_concentrating_uuid:
-            existing = caster.active_conditions_by_uuid.get(self.cast_concentrating_uuid)
+            existing = owner.active_conditions_by_uuid.get(self.cast_concentrating_uuid)
             if existing and isinstance(existing, Concentrating):
                 return existing
 
         conc = Concentrating(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
+            source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=owner.uuid,
             spell_name=self.name or "Unknown",
+            spell_id=self.behavior_binding.behavior_id if self.behavior_binding is not None else self.semantic_key,
         )
-        caster.add_condition(conc, parent_event=parent_event)
+        owner.add_condition(conc, parent_event=parent_event)
         self.cast_concentrating_uuid = conc.uuid
-        result = caster.active_conditions["Concentrating"]
+        result = owner.active_conditions["Concentrating"]
         assert isinstance(result, Concentrating)
         return result
 
@@ -4691,20 +4773,21 @@ class SpellAction(BaseAction):
         Also clean up empty slots in multi-slot scenarios."""
         if not self.cast_concentrating_uuid:
             return
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster or "Concentrating" not in caster.active_conditions:
+        owner = self.get_concentration_owner()
+        if not owner or "Concentrating" not in owner.active_conditions:
             return
-        conc = caster.active_conditions["Concentrating"]
+        conc = owner.active_conditions["Concentrating"]
         if not isinstance(conc, Concentrating) or conc.uuid != self.cast_concentrating_uuid:
             return
         conc.cleanup_if_no_effects(parent_event=effect_event)
-        if "Concentrating" in caster.active_conditions:
+        if "Concentrating" in owner.active_conditions:
             empty_slot_uuids = [slot_uuid for slot_uuid, slot in conc.concentration_slots.items() if not slot.linked_entries]
             for slot_uuid in empty_slot_uuids:
                 conc.concentration_slots[slot_uuid].remove_from_register()
                 del conc.concentration_slots[slot_uuid]
             if empty_slot_uuids:
                 conc._sync_spell_name()
+            conc.publish_owner_state(effect_event)
 
     def _get_aoe_radius_ft(self) -> Optional[int]:
         """Extract AoE size in feet from aoe_shape for VFX metadata."""
@@ -4864,10 +4947,46 @@ class SpellAction(BaseAction):
         costs.extend(self.alt_extra_costs)
         return costs
 
+    def get_harmful_intent(
+        self,
+        caster: Entity,
+        targets: List[UUID],
+    ) -> Tuple[bool, List[UUID]]:
+        """Resolve native intent once, preserving conditional recipient branches."""
+        if self.harmful is not None:
+            return self.harmful, list(dict.fromkeys(targets)) if self.harmful else []
+        if self.spell_damage_type is not None:
+            return True, list(dict.fromkeys(targets))
+        profile = self.get_target_effect_profile(caster)
+        branches = tuple(
+            branch for branch in profile.branches
+            if branch.disposition is TargetEffectDisposition.HARMFUL
+        ) if profile is not None else ()
+        if not branches:
+            return False, []
+        recipients: List[UUID] = []
+        for target_uuid in dict.fromkeys(targets):
+            target = Entity.get(target_uuid)
+            if target is None:
+                continue
+            creature_type = target.creature_type.value
+            if any(
+                (not branch.included_creature_types or creature_type in branch.included_creature_types)
+                and creature_type not in branch.excluded_creature_types
+                for branch in branches
+            ):
+                recipients.append(target_uuid)
+        return bool(branches), recipients
+
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for this spell."""
         source_entity = Entity.get(self.source_entity_uuid)
         target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        declared_targets = self._declared_target_entity_uuids()
+        harmful, harmful_targets = (
+            self.get_harmful_intent(source_entity, declared_targets)
+            if source_entity is not None else (False, [])
+        )
 
         source_name = source_entity.name if source_entity else None
         target_name = target_entity.name if target_entity else None
@@ -4875,6 +4994,9 @@ class SpellAction(BaseAction):
         event = SpellEvent(
             name=f"{self.name}",
             spell_id=normalize_spell_id(self.name or ""),
+            target_type=self.effective_target_type,
+            harmful=harmful,
+            harmful_target_entity_uuids=harmful_targets,
             parent_event=parent_event.uuid if parent_event else None,
             phase=EventPhase.DECLARATION,
             source_entity_uuid=self.source_entity_uuid,
@@ -4887,6 +5009,9 @@ class SpellAction(BaseAction):
             cast_at_level=self.cast_at_level,
             spell_school=self.spell_school,
             verbal=self.verbal,
+            cast_origin=self.cast_origin,
+            effect_source_position=self.get_target_origin(),
+            area_propagation=self.aoe_shape.propagation if self.aoe_shape is not None else "line_of_effect",
             source_position=source_entity.position if source_entity else None,
             area_geometry=(
                 snapshot_aoe_presentation_geometry(
@@ -4901,14 +5026,14 @@ class SpellAction(BaseAction):
             aoe_shape_type=self.aoe_shape.name.lower() if self.aoe_shape and self.aoe_shape.name else None,
             aoe_radius_ft=self._get_aoe_radius_ft(),
             range_type=self._get_range_type(),
-            range_ft=self.spell_range.normal,
+            range_ft=self.effective_range,
             projectile_type=self.projectile_type,
             damage_types=[self.spell_damage_type] if self.spell_damage_type else [],
             source_item_uuid=self.source_item_uuid,
             source_item_presentation=self.source_item_presentation,
             item_charge_cost=self.charge_cost if self.source_item_uuid is not None else 0,
             item_charge_action_lineage_uuid=None,
-            declared_target_entity_uuids=self._declared_target_entity_uuids(),
+            declared_target_entity_uuids=declared_targets,
         )
         event.item_charge_action_lineage_uuid = event.lineage_uuid
         if current_spell_execution() is not None:
@@ -4975,8 +5100,8 @@ class PickUp(BaseAction):
         item_pos = get_map().get_object_position(item.uuid)
         if item_pos is None:
             return declaration_event.cancel(status_message="Item not on the ground")
-        if entity.senses.get_feet_distance(item_pos) > 5:
-            return declaration_event.cancel(status_message="Item too far away")
+        if get_map().manual_object_contact(entity.uuid, item.uuid) is None:
+            return declaration_event.cancel(status_message="Item is out of reach")
 
         return declaration_event.phase_to(
             new_phase=EventPhase.EXECUTION,
@@ -4989,6 +5114,11 @@ class PickUp(BaseAction):
 
         if not entity or not isinstance(item, BaseItem):
             return execution_event.cancel(status_message="Entity or item not found")
+
+        if get_map().manual_object_contact(entity.uuid, item.uuid) is None:
+            return execution_event.cancel(status_message="Object is out of reach")
+        if not item.is_pickable or not entity.inventory.can_add(item):
+            return execution_event.cancel(status_message="Cannot pick up this object")
 
         entity.loot_item(item, parent_event=execution_event)
         return execution_event.phase_to(
@@ -5038,8 +5168,8 @@ class AttackObject(BaseAction):
         item_pos = get_map().get_object_position(item.uuid)
         if item_pos is None:
             return declaration_event.cancel(status_message="Object not on the ground")
-        if entity.senses.get_feet_distance(item_pos) > 5:
-            return declaration_event.cancel(status_message="Object too far away")
+        if get_map().manual_object_contact(entity.uuid, item.uuid) is None:
+            return declaration_event.cancel(status_message="Object is out of reach")
 
         return declaration_event.phase_to(
             new_phase=EventPhase.EXECUTION,
@@ -5052,6 +5182,11 @@ class AttackObject(BaseAction):
 
         if not entity or not isinstance(item, BaseItem):
             return execution_event.cancel(status_message="Entity or item not found")
+
+        if get_map().manual_object_contact(entity.uuid, item.uuid) is None:
+            return execution_event.cancel(status_message="Object is out of reach")
+        if not item.is_targetable or not item.is_breakable():
+            return execution_event.cancel(status_message="Cannot attack this object")
 
         weapon_slot = WeaponSlot.MELEE_MAIN
         damages = entity.equipment.get_damages(weapon_slot, entity.ability_scores)

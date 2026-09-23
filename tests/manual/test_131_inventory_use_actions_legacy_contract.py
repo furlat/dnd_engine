@@ -47,7 +47,6 @@ from dnd.items.consumables import (
     build_timed_fire_weapon_coat,
 )
 from dnd.items.spell_items import (
-    SpellGrantingItem,
     build_fire_bolt_scroll,
     build_fireball_scroll,
     build_hold_person_scroll,
@@ -57,7 +56,6 @@ from dnd.items.spell_items import (
     build_wand_of_fire,
     build_wand_of_magic_missiles,
 )
-from dnd.items.environment_interactables import ArcaneDevice
 from dnd.spells.evocation import Fireball
 from dnd.spells.transmutation import SpikeGrowthZone
 from tests.engine.support import (
@@ -746,29 +744,24 @@ def test_arcane_machine_gun_is_repeatable_environment_spell_source() -> None:
     caster = create_caster((1, 5))
     target = create_target((4, 5))
     gun = build_arcane_machine_gun(caster.uuid)
+    set_hp(target, 1)
     gun.place_on_grid((2, 5))
     Entity.update_all_entities_senses()
-    info = item_action(caster, gun.uuid, "Magic Missile")
+    info = item_action(caster, gun.uuid, "Sleep")
 
-    assert info.target_type is TargetType.MULTI_ENTITY
+    assert info.target_type is TargetType.POSITION_AOE
     assert not caster.inventory.has_item(gun.uuid)
     hp_before = get_hp(target)
     target_row = next(
-        row for row in info.valid_targets if row.target_uuid == target.uuid
+        row for row in info.valid_targets if row.position == target.position
     )
-    with fixed_dice_faces(2, 2, 2):
-        result = execute_use_action(
-            caster,
-            gun.uuid,
-            info.template_name,
-            target_row,
-        )
+    result = execute_use_action(caster, gun.uuid, info.template_name, target_row)
 
     assert result is not None and not result.canceled
-    assert get_hp(target) == hp_before - 9
+    assert get_hp(target) == hp_before and "Sleep" in target.active_conditions
     assert gun.charges == -1
     caster.action_economy.reset_all_costs()
-    assert item_action(caster, gun.uuid, "Magic Missile") is not None
+    assert item_action(caster, gun.uuid, "Sleep") is not None
 
 
 def test_fireball_cannon_depletes_and_disappears_from_discovery() -> None:

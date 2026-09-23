@@ -1156,7 +1156,11 @@ def test_spike_trap_uses_one_handler_reveals_once_and_extends_by_identity() -> N
     registration = EventQueue.get_spatial_handler_registration(handler_uuid)
     assert registration is not None
     assert registration[1] == frozenset({(1, 0), (2, 0), (3, 0)})
-    assert get_map().get_tile(3, 0).get_conditions() == {trap.uuid: trap}
+    extended_tile = get_map().get_tile(3, 0)
+    assert extended_tile.get_conditions()[trap.uuid] is trap
+    # Injuries can leave residue alongside the persistent trap identity.
+    assert any(row.residue_id == "residue.blood"
+               for row in extended_tile.to_world_tile_state().residues)
 
     assert trap.deactivate(parent_event=activation)
     assert EventQueue.get_spatial_handler_registration(handler_uuid) is None
@@ -1212,8 +1216,8 @@ def test_oil_barrel_destruction_uses_direct_material_transition() -> None:
     """The authored barrel spills Oil and fire damage transforms that Oil."""
     reset_engine_runtime(grid_size=(4, 2))
     source_uuid = uuid4()
-    mundane = build_oil_barrel(source_uuid)
-    burning = build_oil_barrel(source_uuid)
+    mundane = build_oil_barrel(source_uuid, radius_cells=0)
+    burning = build_oil_barrel(source_uuid, radius_cells=0)
     mundane.place_on_grid((1, 0))
     burning.place_on_grid((2, 0))
     cursor = EventQueue.event_cursor()

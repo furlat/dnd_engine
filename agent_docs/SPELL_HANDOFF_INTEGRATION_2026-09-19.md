@@ -226,6 +226,43 @@ audit, full-atlas startup load or renderer query into live GridMap was added.
 
 ## Follow-up: residual projectile rotation
 
+### September 21 correction: Fireball travel must also align
+
+The earlier instruction below to keep Fireball's orientation unchanged was too
+broad: its ground explosion and its travelling sprite require different rules.
+User review of `20260921T001500Z-8cd69a` found the projectile sliding obliquely.
+In the saved mage cast, cameras 0–3 need residual rotations of +12.1°, −8.3°,
+−15.2° and +17.5°; the selected recipe supplied zero for all four. Cannon travel
+also remained unrotated while its real flight tangent changed along the curve.
+
+Bounded plan, reviewed before editing by `fireball_antislop` and `fireball_ecs`:
+use the existing travel-phase `fineRotation: "isometricHybrid"` override only.
+Keep the overall `none` mode, which preserves the ground explosion's orientation.
+No trajectory, socket, pivot, scale, speed, backend, importer or renderer change.
+The source capture's camera `(12, 9.797958971, 12)` matches the canonical 2:1
+projected row basis; travel has a centered anchor and zero offsets. It needs
+residual alignment of the actual exported rows, not replacement artwork.
+
+Completed: the selected Fireball JSON now owns that one phase override. Eight
+new regression cases failed before the change and pass afterward. They load the
+actual selected Fireball recipe, test mage/cannon travel across four cameras and
+five points along the flight, and preserve positions, rows, clocks and impact.
+The device opt-out test now explicitly disables the phase override as well.
+Running the adjacent suite exposed an older movement import assertion that still
+required empty optional media; it now checks retained source timing together
+with the selected local Jump/Haste/Dash media. The Sleep sprite assertion also
+explicitly requires a sprite sample, fixing its existing union-type error.
+
+Validation: 84 focused cases across tangent projectiles, authored projectiles,
+device animation and pending-spell presentation pass after those test corrections;
+the three edited test modules pass Pyright. Six saved-event clips, 1,202 frames,
+both observers and four cameras each pass with zero presentation gaps:
+[Fireball alignment review](http://127.0.0.1:8767/runs/20260921T081914Z-ec0461/index.html).
+The mage input files are byte-identical to the user's reported run. Actual
+rendered projectile before/after contact sheets were inspected; residual rotation
+now follows travel while retaining the authored animated fire/sparks.
+Human visual approval remains pending.
+
 User review found Eldritch travel art locked to the eight canonical directions.
 NeuroClient's `SpriteProjectileFx.ts:776` selects the authored row and then, for
 `isometricHybrid`, rotates by the actual trajectory angle minus that row's

@@ -11,6 +11,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
+from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import build_directional_door, build_directional_wall
 from dnd.controller import HumanController
@@ -97,6 +98,7 @@ def spell_handoff_history(
             setup_standard_actions(actor)
             if role == "caster":
                 register_spell(actor, spell, caster_level=level)
+            install_body_response(actor, BLOOD_BODY_RESPONSE)
             actor.compose_entity()
             game.deploy_entity(actor, position)
             actors[role] = actor

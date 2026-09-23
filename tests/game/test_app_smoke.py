@@ -27,6 +27,7 @@ from game.app import (
 )
 from game.demo import _display_sources, _produce_intervals, build_demo_intervals, run
 from game.assets import SurfaceCache, load_catalog
+from game.environment_art import load_environment_art
 from game.presentation import PresentationTarget, reduce_interval
 from game.projection import Camera, pick_support, project_screen
 
@@ -63,11 +64,13 @@ def test_real_frames_prove_disclosure_door_torch_memory_and_locality() -> None:
     camera = Camera(viewport=screen.get_size()).with_focus((31, 31))
     target: PresentationTarget | None = None
     evidences = []
+    door_states = []
     exterior_patches = []
     exterior_x, exterior_y = map(round, project_screen((32, 31), camera))
     try:
         for envelope, time_seconds in zip(intervals, (0.2, 0.7, 1.2), strict=True):
             target, _ = reduce_interval(target, envelope)
+            door_states.append(target.objects[intervals[0].door_uuid].item)
             evidence = draw_frame(
                 screen,
                 target,
@@ -154,35 +157,19 @@ def test_real_frames_prove_disclosure_door_torch_memory_and_locality() -> None:
         assert not np.array_equal(exterior_patches[0], exterior_patches[1])
 
         door_uuid = intervals[0].door_uuid
-        assert [
-            (row[2], row[6], row[8] if len(row) > 8 else None)
-            for row in startup.actual_draws
-            if row[0] == door_uuid
-        ] == [
-            ("stone.door.frame.e", "door_frame", None),
-            ("wood.door.closed.e", "door_leaf", False),
-        ]
-        assert [
-            (row[2], row[6], row[8] if len(row) > 8 else None)
-            for row in opened.actual_draws
-            if row[0] == door_uuid
-        ] == [
-            ("stone.door.frame.e", "door_frame", None),
-            ("wood.door.open.e", "door_leaf", True),
-        ]
+        assert [item.is_open for item in door_states] == [False, True, False]
+        art = load_environment_art().doors[door_states[0].item_id]
+        bank = art.openings[door_states[0].door_swing.value]
+        for evidence, frame in ((startup, 0), (opened, bank.frame_count - 1), (closed, 0)):
+            # Geometry may split a door into several depth pieces; all pieces
+            # must still represent the one authored pose for its native state.
+            assert {(row[2], row[9]) for row in evidence.actual_draws
+                    if row[0] == door_uuid and row[6] == "environment_door"} == {(bank.identity, frame)}
         assert {
             row[3:6]
             for row in opened.actual_draws
             if row[0] == door_uuid
-        } == {("current", None, "world.authored")}
-        assert [
-            (row[2], row[6], row[8] if len(row) > 8 else None)
-            for row in closed.actual_draws
-            if row[0] == door_uuid
-        ] == [
-            ("stone.door.frame.e", "door_frame", None),
-            ("wood.door.closed.e", "door_leaf", False),
-        ]
+        } == {("current", None, "authored")}
 
         torch_uuid = intervals[0].standing_torch_uuid
         for evidence in evidences:

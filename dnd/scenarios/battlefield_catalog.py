@@ -7,6 +7,7 @@ from typing import Callable, cast
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.content.items.world_prop_builders import settle_world_prop
 from dnd.content.items.environment_item_builders import (
     build_control_lever,
     build_directional_door,
@@ -1154,6 +1155,7 @@ def build_battlefield(battlefield_id: str) -> BuiltBattlefield:
     published_world = EventQueue.publish_completed_fact(world_event)
     _materialize_authored_spike_traps(built, published_world)
     _settle_authored_wall_torches(grid, published_world)
+    _settle_authored_world_props(grid, published_world)
     return built
 
 
@@ -1295,3 +1297,14 @@ def _settle_authored_wall_torches(
             != placement.position
         ):
             raise RuntimeError("authored WallTorch did not publish IGNITE")
+
+
+def _settle_authored_world_props(
+    grid: GridMap,
+    parent_event: WorldInitializedEvent,
+) -> None:
+    """Install deferred physical-prop behaviors after the exact cold fact."""
+    for placement in grid.iter_object_placements():
+        item = BaseBlock.get(placement.object_uuid)
+        if isinstance(item, BaseItem):
+            settle_world_prop(item, parent_event)

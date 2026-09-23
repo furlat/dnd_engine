@@ -25,7 +25,7 @@ __all__ = [
     "DamageRollResultEvent",
     "SensesUpdateHint", "SpatialChangeEvent", "TileElevationChangeEvent", "TraversalConnectorChangeEvent", "FireExposureEvent", "ExposedFlameEvent",
     "WindExposureEvent", "ForcedMovementEvent",
-    "TakeDamageEvent", "DamageAppliedEvent",
+    "TakeDamageEvent", "DamageAppliedEvent", "ItemDestructionEvent",
     "Range", "Damage",
     "EncounterEvent", "EncounterStartEvent", "EncounterEndEvent",
     "RoundEvent", "RoundStartEvent", "RoundEndEvent",
@@ -40,6 +40,7 @@ from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, StrictInt, field_serializer, model_validator
 from typing import Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
 from dnd.core.values import ModifiableValue
+from dnd.types.actor import TemporaryHitPointsGrant
 
 from dnd.core.combat_log import (
     CombatLogEntry,
@@ -160,6 +161,8 @@ class EventType(str, Enum):
     MOVEMENT = "movement"
     STEP_MOVEMENT = "step_movement"
     FORCED_MOVEMENT = "forced_movement"
+    PORTAL_TRANSFER = "portal_transfer"
+    MECHANISM_ACTIVATION = "mechanism_activation"
     ABILITY_CHECK = "ability_check"
     SAVING_THROW = "saving_throw"
     SKILL_CHECK = "skill_check"
@@ -174,6 +177,7 @@ class EventType(str, Enum):
     ATTACK_CRITICAL = "attack_critical"
     CONDITION_APPLICATION = "condition_application"
     CONDITION_REMOVAL = "condition_removal"
+    CONDITION_STATE_CHANGED = "condition_state_changed"
     WEAPON_EQUIP = "weapon_equip"
     WEAPON_UNEQUIP = "weapon_unequip"
     ARMOR_EQUIP = "armor_equip"
@@ -181,6 +185,7 @@ class EventType(str, Enum):
     SHIELD_EQUIP = "shield_equip"
     SHIELD_UNEQUIP = "shield_unequip"
     ITEM_LOCATION_STATE = "item_location_state"
+    ITEM_DESTRUCTION = "item_destruction"
     ITEM_CHARGE_CONSUMPTION = "item_charge_consumption"
     WORLD_INITIALIZED = "world_initialized"
     WORLD_MODIFIED = "world_modified"
@@ -888,6 +893,10 @@ class WorldModifiedEvent(Event):
         return super().post(**updates)
 
     @model_validator(mode="after")
+    def _validate_materialized_transition(self) -> Self:
+        self.validate_materialized_transition()
+        return self
+
     def validate_materialized_transition(self) -> "WorldModifiedEvent":
         """Require one addressed family and phase-coherent cold values."""
         targets = (
@@ -985,6 +994,7 @@ class EntityCreatedEvent(Event):
     current_hit_points: StrictInt = 0
     maximum_hit_points: StrictInt = 0
     temporary_hit_points: StrictInt = 0
+    temporary_hit_points_grant: TemporaryHitPointsGrant | None = None
     damage_taken: StrictInt = Field(default=0, ge=0)
     healing_blocked: bool = False
     hit_dice: Tuple[
@@ -2315,6 +2325,10 @@ class EventQueue:
         started = time.perf_counter() if timing else 0.0
         parent_event = cls.get_event_by_uuid(event.parent_event) if event.parent_event else None
         if parent_event is not None:
+            if event.parent_lineage is None:
+                # Canceled children retain the same causal parent as completed
+                # ones; relationship identity exists before any terminal phase.
+                event.parent_lineage = parent_event.lineage_uuid
             for entity_uuid, observer_uuids in parent_event.identified_entity_observer_uuids.items():
                 identified.setdefault(entity_uuid, set()).update(observer_uuids)
         event.identified_entity_observer_uuids = identified
@@ -3493,6 +3507,8 @@ class SpatialEffectChangeEvent(Event):
     spatial_effect_name: str = Field(min_length=1)
     trap_state: Optional[TrapState] = None
     previous_trap_state: Optional[TrapState] = None
+    pressed: Optional[bool] = None
+    previous_pressed: Optional[bool] = None
     layer: SpatialEffectLayer
     anchor_position: Tuple[int, int]
     affected_positions: Tuple[Tuple[int, int], ...] = ()
@@ -4191,9 +4207,9 @@ class SpatialChangeEvent(Event):
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         positions = {self.position}
         if self.previous_placement is not None:
-            positions.add(self.previous_placement.position)
+            positions.update(self.previous_placement.positions)
         if self.placement is not None:
-            positions.add(self.placement.position)
+            positions.update(self.placement.positions)
         if self.old_position:
             positions.add(self.old_position)
         if self.directional_position:
@@ -4211,7 +4227,12 @@ class SpatialChangeEvent(Event):
         return positions
 
     def spatial_dispatch_positions(self) -> Tuple[Tuple[int, int], ...]:
-        """Dispatch this spatial fact once at its exact primary cell."""
+        """Object facts reach every changed support; movement keeps its exact cell."""
+        if self.change_type in (
+            SpatialChangeType.OBJECT_PLACED, SpatialChangeType.OBJECT_REMOVED,
+            SpatialChangeType.OBJECT_CHANGED,
+        ):
+            return tuple(sorted(self.get_affected_positions()))
         return (self.position,)
 
 
@@ -4343,6 +4364,55 @@ class WindExposureEvent(Event):
         return set(self.positions)
 
 
+class MechanismActivationEvent(Event):
+    """One finite environmental discharge, separate from fixture resting state."""
+
+    name: str = "Mechanism Activation"
+    event_type: EventType = EventType.MECHANISM_ACTIVATION
+    mechanism_uuid: UUID
+    mechanism_content_ref: ContentRef
+    origin_position: Tuple[int, int]
+    direction: Tuple[int, int]
+    affected_positions: Tuple[Tuple[int, int], ...]
+    end_position: Tuple[int, int]
+    committed: bool = False
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        return {self.origin_position, *self.affected_positions}
+
+
+class PortalTransferEvent(Event):
+    """One portal crossing; the exit remains distinct from later arrival reactions."""
+
+    name: str = "Portal Transfer"
+    event_type: EventType = EventType.PORTAL_TRANSFER
+    portal_uuid: UUID
+    portal_content_ref: ContentRef | None = None
+    start_position: Tuple[int, int]
+    end_position: Tuple[int, int]
+    committed: bool = False
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        return {self.start_position, self.end_position}
+
+    def completion_position_observer_evidence(
+        self, completion_locations: Dict[str, Set[str]],
+    ) -> Dict[str, Set[str]]:
+        evidence = super().completion_position_observer_evidence(completion_locations)
+        evidence[position_evidence_key(self.start_position)] = set(
+            self.located_entity_observer_uuids.get(str(self.target_entity_uuid), set()))
+        # A paid arrival reaction may already have moved the creature again.
+        # The crossing's direct entry child records who saw the actual exit.
+        for child in self.get_children_events():
+            if (isinstance(child, SpatialChangeEvent)
+                    and child.change_type is SpatialChangeType.ENTITY_ENTERED
+                    and child.entity_uuid == self.target_entity_uuid
+                    and child.position == self.end_position):
+                evidence[position_evidence_key(self.end_position)] = set(
+                    child.located_entity_observer_uuids.get(str(self.target_entity_uuid), set()))
+        return evidence
+
+
 class ForcedMovementEvent(Event):
     """Forced movement event for pushes, pulls, and similar displacement.
 
@@ -4447,6 +4517,16 @@ class ForcedMovementEvent(Event):
         evidence[position_evidence_key(self.end_position)] = set(
             completion_locations.get(entity_key, set())
         )
+        for child_uuid in self.lineage_children_events:
+            child = EventQueue.get_event_by_uuid(child_uuid)
+            if (isinstance(child, SpatialChangeEvent)
+                    and child.change_type is SpatialChangeType.ENTITY_ENTERED
+                    and child.entity_uuid == self.target_entity_uuid
+                    and child.position == self.end_position
+                    and child.phase is EventPhase.DECLARATION):
+                evidence[position_evidence_key(self.end_position)] = set(
+                    child.located_entity_observer_uuids.get(entity_key, set()))
+                break
         return evidence
 
 
@@ -4469,6 +4549,9 @@ class StepMovementEvent(Event):
     path_index: int = Field(default=0, description="Index of this step in the overall path")
     total_path_length: int = Field(default=0, description="Total number of positions in path")
     movement_cost: float = Field(default=5.0, description="Movement cost in feet for this step")
+    resolved_speed_feet: int | None = Field(
+        default=None, ge=0, description="Native speed at commitment, before destination effects.",
+    )
     trajectory: MovementTrajectory = Field(
         default=MovementTrajectory.PATH,
         description="Typed trajectory shared by every step in the movement action.",
@@ -4509,6 +4592,17 @@ class StepMovementEvent(Event):
         evidence[position_evidence_key(self.to_position)] = set(
             completion_locations.get(entity_key, set())
         )
+        for child_uuid in self.lineage_children_events:
+            child = EventQueue.get_event_by_uuid(child_uuid)
+            if (isinstance(child, SpatialChangeEvent)
+                    and child.change_type is SpatialChangeType.ENTITY_ENTERED
+                    and child.entity_uuid == self.source_entity_uuid
+                    and child.position == self.to_position
+                    and child.phase is EventPhase.DECLARATION):
+                # Entry handlers may relocate again before this step completes.
+                evidence[position_evidence_key(self.to_position)] = set(
+                    child.located_entity_observer_uuids.get(entity_key, set()))
+                break
         return evidence
 
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
@@ -5094,6 +5188,21 @@ class HealRollResultEvent(DiceRollResultEvent):
         )
 
 
+class ItemDestructionEvent(Event):
+    """Accepted physical destruction; placement and cleanup are its children."""
+
+    name: str = "Item Destruction"
+    event_type: EventType = EventType.ITEM_DESTRUCTION
+    item_uuid: UUID
+    previous_state: ItemPresentationState
+    previous_placement: WorldObjectPlacement | None = None
+    damage_types: tuple[DamageType, ...] = ()
+    resulting_state: ItemPresentationState | None = None
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        return set(self.previous_placement.positions) if self.previous_placement is not None else set()
+
+
 class TakeDamageEvent(Event):
     """Damage-application event for tracking, reduction, and cancellation.
 
@@ -5107,6 +5216,7 @@ class TakeDamageEvent(Event):
         description="Event category for damage application.",
     )
     total_damage: int = Field(description="Total damage before any modifications")
+    intercepted_by_condition_uuid: UUID | None = None
     damage_rolls: List[DiceRoll] = Field(default_factory=list, description="Individual damage rolls")
     damages: List['Damage'] = Field(default_factory=list, description="Damage specifications (types)")
     effect_id: Optional[str] = Field(
@@ -5270,6 +5380,7 @@ class TemporaryHitPointsChangedEvent(Event):
     event_type: EventType = EventType.TEMPORARY_HIT_POINTS_CHANGED
     entity_uuid: UUID
     resulting_temporary_hp: int
+    grant: TemporaryHitPointsGrant | None = None
 
 
 class HealEvent(Event):

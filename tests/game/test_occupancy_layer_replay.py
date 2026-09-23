@@ -190,6 +190,10 @@ def test_legacy_recording_without_layers_does_not_invent_grounded_actors(jump_hi
     while pending:
         value = pending.pop()
         if isinstance(value, dict):
+            # Body releases were introduced after contact layers. Their
+            # required layer is not an optional fact in historical recordings;
+            # omit that later feature when constructing the older packet.
+            value.pop("body_release", None)
             for name in ("occupancy_layer", "previous_occupancy_layer", "movement_mode",
                          "start_layer", "end_layer", "from_layer", "to_layer"):
                 value.pop(name, None)

@@ -19,7 +19,8 @@
     },
     "slot_order": [
       "shadow",
-      "body"
+      "body",
+      "slash"
     ],
     "slot_categories": {
       "shadow": [
@@ -27,6 +28,10 @@
       ],
       "body": [
         "Goblin01"
+      ],
+      "slash": [
+        "Slash1",
+        "Slash2"
       ]
     },
     "clips": {
@@ -81,7 +86,9 @@
         "fps": 12,
         "sheets": {
           "Goblin01": "/rigs/goblin01/body/Attack 1.png",
-          "Goblin01Shadow": "/rigs/goblin01/shadow/Attack 1.png"
+          "Goblin01Shadow": "/rigs/goblin01/shadow/Attack 1.png",
+          "Slash1": "/spritesheets/Slash1/Attack1.png",
+          "Slash2": "/spritesheets/Slash2/Attack1.png"
         }
       },
       "Attack2": {
@@ -90,13 +97,51 @@
         "fps": 12,
         "sheets": {
           "Goblin01": "/rigs/goblin01/body/Attack 2.png",
-          "Goblin01Shadow": "/rigs/goblin01/shadow/Attack 2.png"
+          "Goblin01Shadow": "/rigs/goblin01/shadow/Attack 2.png",
+          "Slash1": "/spritesheets/Slash1/Attack2.png",
+          "Slash2": "/spritesheets/Slash2/Attack2.png"
         }
       }
     },
     "body_anchor": {
       "x": 64,
       "y": 72
+    },
+    "rest_pose_anchors": {
+      "Die": {
+        "E": {
+          "x": 81,
+          "y": 96
+        },
+        "SE": {
+          "x": 70,
+          "y": 103
+        },
+        "S": {
+          "x": 52,
+          "y": 99
+        },
+        "SW": {
+          "x": 42,
+          "y": 90
+        },
+        "W": {
+          "x": 41,
+          "y": 77
+        },
+        "NW": {
+          "x": 55,
+          "y": 69
+        },
+        "N": {
+          "x": 75,
+          "y": 70
+        },
+        "NE": {
+          "x": 89,
+          "y": 83
+        }
+      }
     }
   },
   "resources": {
@@ -193,6 +238,6 @@
         "sha256": "79e82f6c3f212c9303e5a3cf53ddae7afe3517a0b7fa12cc48d62585d554201c"
       }
     },
-    "adaptation": "Body mapping to the NeuroClient root vocabulary. All selected original sheets contain fifteen meaningful 128 px frames in eight visually verified E, SE, S, SW, W, NW, N, NE rows. The PNG-only archive declares no FPS or pivot. 12 fps, frame 14 settlement and fixed support pixel (64, 87), equivalent to origin_y_from_ground 41, are reviewed execution choices. Separate shadow opacity 0.5 is a caller appearance choice supported by comparison to vendor Combined sprites, which are not an exact flattening of these separate sheets. Original PNG bytes, including alpha 1 corner export marks, are preserved. Normal and critical scimitar attacks bind the vendor Attack 1 and Attack 2 body/shadow sheets respectively; removable modular slash media is not added to this fixed rig."
+    "adaptation": "Body mapping to the NeuroClient root vocabulary. All selected original sheets contain fifteen meaningful 128 px frames in eight visually verified E, SE, S, SW, W, NW, N, NE rows. The PNG-only archive declares no FPS or pivot. 12 fps, frame 14 settlement and fixed support pixel (64, 87), equivalent to origin_y_from_ground 41, are reviewed execution choices. Separate shadow opacity 0.5 is a caller appearance choice supported by comparison to vendor Combined sprites, which are not an exact flattening of these separate sheets. Original PNG bytes, including alpha 1 corner export marks, are preserved. Attack1 and Attack2 retain their corresponding vendor body/shadow sheets. Their transient Slash1/Slash2 layers explicitly reuse the root NeuroClient attack sheets with matching cell size, frame count, facing rows, FPS and origin. The attack recipe selects normal/miss or critical slash without changing the body clip or timing. Vendor Goblin 01 Effects/Attack 1 and Attack 2 are empty export placeholders (maximum alpha 1), so they are not imported. Shared slash resources remain owned by the root binding; they are not baked appearance or copies of vendor art."
   }
 }

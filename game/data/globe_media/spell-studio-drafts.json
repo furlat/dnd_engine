@@ -1,0 +1,56 @@
+{
+  "schema": "dnd.spellStudioDrafts",
+  "version": 2,
+  "spells": [
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.globe_of_invulnerability",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 16770204,
+        "secondary": 13802296,
+        "tertiary": 7095578
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "globe-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "colors": {
+            "source": "override",
+            "primary": 16770204,
+            "secondary": 13802296,
+            "tertiary": 7095578,
+            "mode": "tint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      },
+      "contact": {
+        "delayMs": 0
+      }
+    }
+  ]
+}

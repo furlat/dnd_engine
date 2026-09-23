@@ -325,7 +325,7 @@ def test_spell_catalog_groups_representative_runtime_families(capsys) -> None:
     print("\n".join(readout_lines))
 
     expected_lines = [
-        "catalog size: 109 spells",
+        f"catalog size: {len(ALL_SPELLS)} spells",
         "cantrip Fire Bolt lookup: FireBolt",
         "level 1 Magic Missile lookup: MagicMissile",
         "level 2 Misty Step lookup: MistyStep",

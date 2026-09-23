@@ -33,6 +33,7 @@ from dnd.monsters.traits import GhoulClawsParalysisFeature
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
+from dnd.spells.enchantment import SleepEffect
 from game.presentation import (
     CompletedLineage, PresentationTarget, capture_interval, capture_lineage,
     reduce_interval, reduce_lineage,
@@ -450,6 +451,7 @@ def healing_history(*, dying: bool = False) -> CapturedHistory:
 
 def lifecycle_history(
     *, save_seeds: tuple[int, ...] = (0,), heal_after: bool = False, revive_after: bool = False,
+    asleep_before_heal: bool = False,
 ) -> CapturedHistory:
     """Retain actual turn-start death saves and native recovery of the same actor."""
     assert save_seeds and not (heal_after and revive_after)
@@ -494,6 +496,12 @@ def lifecycle_history(
             assert encounter.get_current_entity() is observer
         if heal_after:
             assert target.health.life_state is LifeState.STABLE
+            if asleep_before_heal:
+                cursor = EventQueue.event_cursor()
+                condition = target.add_condition(SleepEffect(source_entity_uuid=observer.uuid,
+                    target_entity_uuid=target.uuid), check_save_throw=False)
+                assert condition is not None and not condition.canceled
+                retain(cursor)
             cursor = EventQueue.event_cursor()
             healed = target.receive_healing(5, observer.uuid, source_description="Native stable recovery")
             assert healed == 5

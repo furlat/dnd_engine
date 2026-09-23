@@ -6,8 +6,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dnd.types.world_placement import BoundaryStructure
+from dnd.types.world_placement import BoundaryStructure, WorldPlacementSpec
 from dnd.types.residues import ObjectResidueState
+from dnd.types.traps import TrapState
 
 class ItemRarity(str, Enum):
     """Stable rarity labels carried by item definitions and presentation facts."""
@@ -46,6 +47,60 @@ class ItemLocation(str, Enum):
     DESTROYED = "destroyed"
 
 
+class ItemIntegrity(str, Enum):
+    """Physical state, independent of inventory or world placement."""
+
+    INTACT = "intact"
+    DESTROYED = "destroyed"
+
+
+class ItemConcentrationSlot(BaseModel):
+    """Public device capacity use, without private effect recipients."""
+
+    model_config = ConfigDict(frozen=True)
+
+    slot_uuid: UUID
+    spell_id: str | None = None
+    spell_name: str
+
+
+class DoorMechanism(str, Enum):
+    SINGLE_HINGED = "single_hinged"
+    DOUBLE_HINGED = "double_hinged"
+    LIFT = "lift"
+
+
+class DoorSwing(str, Enum):
+    INWARD = "inward"
+    OUTWARD = "outward"
+
+
+class ItemRemnantState(BaseModel):
+    """Physical configuration at destruction, retained by inert remains."""
+
+    model_config = ConfigDict(frozen=True)
+
+    door_open: bool | None = None
+    door_swing: DoorSwing | None = None
+    mechanism_state: TrapState | None = None
+
+
+class ItemDestructionProfile(BaseModel):
+    """Authored physical aftermath of the same item, without media identities."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    description: str | None = None
+    outcome: str | None = None
+    placement_spec: WorldPlacementSpec | None = None
+    boundary_structure: BoundaryStructure | None = None
+    blocks_movement: bool = False
+    blocks_optics: bool = False
+    blocks_propagation: bool = False
+    is_pickable: bool = False
+
+
 class ItemPresentationState(BaseModel):
     """Immutable item data needed to materialize an equipment/inventory row.
 
@@ -73,6 +128,11 @@ class ItemPresentationState(BaseModel):
     is_equippable: bool = False
     is_usable: bool = False
     is_targetable: bool = False
+    door_mechanism: DoorMechanism | None = None
+    door_swing: DoorSwing | None = None
+    remnant_state: ItemRemnantState | None = None
+    integrity: ItemIntegrity = ItemIntegrity.INTACT
+    destruction_outcome: str | None = None
     stack_id: Optional[str] = None
     visual_item_name: str = Field(description="Renderer item-catalog key.")
     visual_variant_id: Optional[str] = Field(default=None, description="Renderer variant key.")
@@ -99,6 +159,8 @@ class ItemPresentationState(BaseModel):
     include_in_available_object_actions: bool = True
     current_hit_points: Optional[int] = Field(default=None, ge=0)
     maximum_hit_points: Optional[int] = Field(default=None, ge=0)
+    concentration_capacity: int = Field(default=0, ge=0)
+    concentration_slots: tuple[ItemConcentrationSlot, ...] = ()
     boundary_structure: Optional[BoundaryStructure] = None
     surface_residues: tuple[ObjectResidueState, ...] = ()
     linked_spatial_condition_uuid: Optional[UUID] = None
@@ -126,25 +188,14 @@ class ItemPresentationProvider(Protocol):
         ...
 
 
-@runtime_checkable
-class FiniteChargeProvider(Protocol):
-    """Structural boundary for an item-backed finite action cost."""
-
-    charges: int
-
-    def consume_charge_with_event(
-        self,
-        amount: int,
-        source_entity_uuid: UUID,
-        parent_event: "Event",
-    ) -> "Event":
-        """Consume finite charges through the item's ordinary child event."""
-        ...
-
-
 __all__ = [
+    "DoorMechanism",
+    "DoorSwing",
+    "ItemConcentrationSlot",
+    "ItemDestructionProfile",
+    "ItemIntegrity",
+    "ItemRemnantState",
     "EquippedVisualPolicy",
-    "FiniteChargeProvider",
     "ItemLocation",
     "ItemPresentationKind",
     "ItemPresentationProvider",

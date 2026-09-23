@@ -1,9 +1,9 @@
 """Runtime actions and item types for interactive environment objects."""
 
 import random
-from typing import Literal, Optional, List, cast as type_cast
+from typing import Optional, List, cast as type_cast
 from uuid import UUID, uuid4
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from dnd.core.base_actions import (
     BaseAction,
@@ -16,13 +16,19 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.events import Event, EventPhase
 from dnd.types.abilities import SkillName
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import ItemLocation, ItemPresentationState
+from dnd.core.item_types import ItemDestructionProfile, ItemLocation, ItemPresentationState
 from dnd.blocks.base_item import UsableItem
 from dnd.blocks.inventory import Inventory
 from dnd.entity import Entity
 from dnd.items.environment import DirectionalDoor
+from dnd.items.environment_controls import control_value, linked_item
+from dnd.types.controls import ControlLink as LeverLink
 from dnd.items.torches import WallTorch
 from dnd.spatial.environmental_conditions import SpikeTrap
+from dnd.spatial.portals import Portal
+from dnd.spatial.mechanisms import FiniteTrap
+from dnd.spatial.jaws import JawTrap
+from dnd.spatial.gas_traps import GasVent
 from dnd.types.traps import TrapState
 
 
@@ -47,7 +53,7 @@ class OpenDoorAction(BaseAction):
         if self.source_item_uuid is None:
             return declaration_event.cancel(status_message="No door linked")
         door = BaseBlock.get(self.source_item_uuid)
-        if not door or not isinstance(door, DoorObject):
+        if not isinstance(door, DoorObject) or not door.is_active:
             return declaration_event.cancel(status_message="Door not found")
         if door.is_open:
             return declaration_event.cancel(status_message="Door already open")
@@ -57,7 +63,7 @@ class OpenDoorAction(BaseAction):
         if self.source_item_uuid is None:
             return execution_event.cancel(status_message="No door linked")
         door = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(door, DoorObject):
+        if not isinstance(door, DoorObject) or not door.is_active:
             return execution_event.cancel(status_message="Door not found")
         old_blocks_movement = door.blocks_movement
         old_blocks_optics = door.blocks_optics_field
@@ -97,7 +103,7 @@ class CloseDoorAction(BaseAction):
         if self.source_item_uuid is None:
             return declaration_event.cancel(status_message="No door linked")
         door = BaseBlock.get(self.source_item_uuid)
-        if not door or not isinstance(door, DoorObject):
+        if not isinstance(door, DoorObject) or not door.is_active:
             return declaration_event.cancel(status_message="Door not found")
         if not door.is_open:
             return declaration_event.cancel(status_message="Door already closed")
@@ -111,7 +117,7 @@ class CloseDoorAction(BaseAction):
         if self.source_item_uuid is None:
             return execution_event.cancel(status_message="No door linked")
         door = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(door, DoorObject):
+        if not isinstance(door, DoorObject) or not door.is_active:
             return execution_event.cancel(status_message="Door not found")
         old_blocks_movement = door.blocks_movement
         old_blocks_optics = door.blocks_optics_field
@@ -141,12 +147,23 @@ class DoorObject(UsableItem):
     blocks_propagation_field: bool = Field(default=True, description="Closed doors block physical propagation.")
     is_open: bool = Field(default=False, description="Whether the door is currently open.")
 
+    is_targetable: bool = True
+
+    def model_post_init(self, __context) -> None:
+        super().model_post_init(__context)
+        if self.health is None:
+            self.health = self.create_item_health(self.uuid, 18)
+        if self.destruction_profile is None:
+            self.destruction_profile = ItemDestructionProfile(name=f"Broken {self.name}")
+
     def get_spatial_open_state(self) -> Optional[bool]:
         """Return the door-open state used by spatial event metadata."""
         return self.is_open
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """Return open or close actions according to the door state."""
+        if not self.is_active:
+            return []
         if self.is_open:
             grid = get_map()
             door_pos = grid.get_object_position(self.uuid)
@@ -189,23 +206,29 @@ class PullLeverAction(BaseAction):
     )
     trap_condition_uuid: Optional[UUID] = Field(
         default=None,
-        description="Exact SpikeTrap condition UUID controlled by this lever.",
+        description="Exact installed mechanism UUID controlled by this lever.",
     )
-    desired_state: Literal[TrapState.ACTIVATED, TrapState.DEACTIVATED] = TrapState.DEACTIVATED
+    desired_state: TrapState = TrapState.DEACTIVATED
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        lever = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
+        if self.source_item_uuid is not None and (not isinstance(lever, TrapLever) or not lever.is_active):
+            return declaration_event.cancel(status_message="Lever is unavailable")
         if self.trap_condition_uuid is None:
             return declaration_event.cancel(status_message="No trap linked")
         condition = BaseCondition.get(self.trap_condition_uuid)
-        if not isinstance(condition, SpikeTrap) or not condition.applied:
+        if not isinstance(condition, (SpikeTrap, Portal, FiniteTrap, JawTrap, GasVent)) or not condition.applied:
             return declaration_event.cancel(status_message="Linked trap is unavailable")
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        lever = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
+        if self.source_item_uuid is not None and (not isinstance(lever, TrapLever) or not lever.is_active):
+            return execution_event.cancel(status_message="Lever is unavailable")
         if self.trap_condition_uuid is None:
             return execution_event.cancel(status_message="No trap linked")
         condition = BaseCondition.get(self.trap_condition_uuid)
-        if not isinstance(condition, SpikeTrap) or not condition.applied:
+        if not isinstance(condition, (SpikeTrap, Portal, FiniteTrap, JawTrap, GasVent)) or not condition.applied:
             return execution_event.cancel(status_message="Linked trap is unavailable")
         effect = execution_event.phase_to(
             EventPhase.EFFECT,
@@ -213,13 +236,16 @@ class PullLeverAction(BaseAction):
         )
         if effect.canceled:
             return effect
+        if isinstance(lever, TrapLever) and not lever.is_active:
+            return effect.cancel(status_message="Lever is unavailable")
         if condition.trap_state is not self.desired_state and not condition.set_trap_state(
             self.desired_state, parent_event=effect,
         ):
             return effect.cancel(status_message="Trap state change was rejected")
         lever = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
-        if isinstance(lever, TrapLever):
-            lever.is_engaged = self.desired_state is TrapState.DEACTIVATED
+        if isinstance(lever, TrapLever) and lever.is_active:
+            # The physical handle moves on a pull, independently of the trap's state.
+            lever.is_engaged = not lever.is_engaged
             lever.publish_location_state(ItemLocation.FLOOR, parent_event=effect)
         return effect.with_updates(status_message="Lever pulled")
 
@@ -243,11 +269,17 @@ class TrapLever(UsableItem):
                 available.append(action)
                 continue
             condition = BaseCondition.get(action.trap_condition_uuid) if action.trap_condition_uuid else None
-            if not isinstance(condition, SpikeTrap) or not condition.applied:
+            if not isinstance(condition, (SpikeTrap, Portal, FiniteTrap, JawTrap, GasVent)) or not condition.applied:
                 continue
-            action.desired_state = (TrapState.ACTIVATED if self.is_engaged
-                                    else TrapState.DEACTIVATED)
-            action.name = "Activate Trap" if action.desired_state is TrapState.ACTIVATED else "Deactivate Trap"
+            if isinstance(condition, (FiniteTrap, JawTrap, GasVent)):
+                action.desired_state = (TrapState.DEACTIVATED if condition.trap_state is TrapState.READY
+                                        else TrapState.READY)
+                action.name = {TrapState.READY: "Deactivate Trap", TrapState.ACTIVATED: "Reset Trap",
+                               TrapState.DEACTIVATED: "Arm Trap"}[condition.trap_state]
+            else:
+                action.desired_state = (TrapState.ACTIVATED if self.is_engaged
+                                        else TrapState.DEACTIVATED)
+                action.name = "Activate Trap" if action.desired_state is TrapState.ACTIVATED else "Deactivate Trap"
             available.append(action)
         return available
 
@@ -256,7 +288,7 @@ class TrapLever(UsableItem):
         *,
         stack_count: Optional[int] = None,
     ) -> ItemPresentationState:
-        """Expose the one exact authored SpikeTrap identity."""
+        """Expose the one exact authored mechanism identity."""
         targets = {
             action.trap_condition_uuid
             for action in self.use_action_templates
@@ -273,20 +305,6 @@ class TrapLever(UsableItem):
         })
 
 
-class LeverLink(BaseModel):
-    """Private authored connection and the target value for an engaged handle."""
-
-    model_config = ConfigDict(frozen=True)
-
-    target_item_uuid: UUID
-    target_kind: Literal["light", "door"]
-    engaged_value: bool = True
-
-
-def _control_value(target: WallTorch | DirectionalDoor) -> bool:
-    return target.is_lit if isinstance(target, WallTorch) else target.is_open
-
-
 class ToggleLeverAction(BaseAction):
     """Move the handle after its linked item's requested state is satisfied."""
 
@@ -296,19 +314,19 @@ class ToggleLeverAction(BaseAction):
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         lever = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
-        if not isinstance(lever, ControlLever):
+        if not isinstance(lever, ControlLever) or not lever.is_active:
             return declaration_event.cancel(status_message="Lever not found")
         target = lever.get_linked_item()
         if target is None:
             return declaration_event.cancel(status_message="Linked item not found")
         desired_value = lever.link.engaged_value if not lever.is_engaged else not lever.link.engaged_value
-        if _control_value(target) != desired_value and not target.get_use_actions(self.source_entity_uuid):
+        if control_value(target) != desired_value and not target.get_use_actions(self.source_entity_uuid):
             return declaration_event.cancel(status_message="Linked item cannot change state")
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         lever = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
-        if not isinstance(lever, ControlLever):
+        if not isinstance(lever, ControlLever) or not lever.is_active:
             return execution_event.cancel(status_message="Lever not found")
         target = lever.get_linked_item()
         if target is None:
@@ -318,16 +336,19 @@ class ToggleLeverAction(BaseAction):
         effect = execution_event.phase_to(EventPhase.EFFECT)
         if effect.canceled:
             return effect
-        if _control_value(target) != desired_value:
+        if not lever.is_active:
+            return effect.cancel(status_message="Lever is unavailable")
+        if control_value(target) != desired_value:
             actions = target.get_use_actions(self.source_entity_uuid)
             if not actions:
                 return effect.cancel(status_message="Linked item cannot change state")
             action = actions[0].instantiate() if actions[0].template else actions[0]
             result = action.apply(parent_event=effect)
-            if result is None or result.canceled or _control_value(target) != desired_value:
+            if result is None or result.canceled or control_value(target) != desired_value:
                 return effect.cancel(status_message="Linked item did not change state")
-        lever.is_engaged = next_engaged
-        lever.publish_location_state(ItemLocation.FLOOR, parent_event=effect)
+        if lever.is_active:
+            lever.is_engaged = next_engaged
+            lever.publish_location_state(ItemLocation.FLOOR, parent_event=effect)
         return effect.with_updates(status_message="Lever engaged" if next_engaged else "Lever disengaged")
 
 
@@ -340,14 +361,7 @@ class ControlLever(UsableItem):
     link: LeverLink
 
     def get_linked_item(self) -> WallTorch | DirectionalDoor | None:
-        target = BaseBlock.get(self.link.target_item_uuid)
-        if get_map().get_object_placement(self.link.target_item_uuid) is None:
-            return None
-        if self.link.target_kind == "light" and isinstance(target, WallTorch):
-            return target
-        if self.link.target_kind == "door" and isinstance(target, DirectionalDoor):
-            return target
-        return None
+        return linked_item(self.link)
 
     def to_item_presentation_state(self, *, stack_count: Optional[int] = None) -> ItemPresentationState:
         return super().to_item_presentation_state(stack_count=stack_count).model_copy(
@@ -355,6 +369,8 @@ class ControlLever(UsableItem):
         )
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
+        if not self.is_active:
+            return []
         return [self.bind_dynamic_use_action(ToggleLeverAction(
             source_entity_uuid=user_entity_uuid,
             source_item_uuid=self.uuid,
@@ -371,13 +387,13 @@ class OpenChestAction(BaseAction):
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
-        if not isinstance(chest, StorageChest) or chest.is_open:
+        if not isinstance(chest, StorageChest) or not chest.is_active or chest.is_open:
             return declaration_event.cancel(status_message="Chest cannot open")
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
-        if not isinstance(chest, StorageChest):
+        if not isinstance(chest, StorageChest) or not chest.is_active:
             return execution_event.cancel(status_message="Chest not found")
         effect = execution_event.phase_to(EventPhase.EFFECT)
         if not effect.canceled:
@@ -394,13 +410,13 @@ class CloseChestAction(BaseAction):
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
-        if not isinstance(chest, StorageChest) or not chest.is_open:
+        if not isinstance(chest, StorageChest) or not chest.is_active or not chest.is_open:
             return declaration_event.cancel(status_message="Chest cannot close")
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
-        if not isinstance(chest, StorageChest):
+        if not isinstance(chest, StorageChest) or not chest.is_active:
             return execution_event.cancel(status_message="Chest not found")
         effect = execution_event.phase_to(EventPhase.EFFECT)
         if not effect.canceled:
@@ -429,7 +445,7 @@ class LootAllAction(BaseAction):
         if self.source_item_uuid is None:
             return declaration_event.cancel(status_message="No chest linked")
         chest = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(chest, StorageChest):
+        if not isinstance(chest, StorageChest) or not chest.is_active:
             return declaration_event.cancel(status_message="Chest not found")
         if not chest.is_open:
             return declaration_event.cancel(status_message="Chest is closed")
@@ -444,7 +460,7 @@ class LootAllAction(BaseAction):
         if self.source_item_uuid is None:
             return execution_event.cancel(status_message="No chest linked")
         chest = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(chest, StorageChest):
+        if not isinstance(chest, StorageChest) or not chest.is_active:
             return execution_event.cancel(status_message="Chest not found")
         looted = 0
         for item in list(chest.chest_inventory.items.values()):
@@ -474,12 +490,14 @@ class StorageChest(UsableItem):
         return self.is_open
 
     def set_open(self, is_open: bool, *, parent_event: Event) -> None:
-        if self.is_open == is_open:
+        if not self.is_active or self.is_open == is_open:
             return
         self.is_open = is_open
         self.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
+        if not self.is_active:
+            return []
         lid_action = CloseChestAction if self.is_open else OpenChestAction
         actions = [self.bind_dynamic_use_action(lid_action(
             source_entity_uuid=user_entity_uuid,
@@ -496,7 +514,6 @@ class StorageChest(UsableItem):
 
     def _on_destroy(self, parent_event: Optional[Event]) -> None:
         """Spill all contents onto the ground at chest's position."""
-        _ = parent_event
         pos = self.position
         if pos is None:
             return
@@ -505,7 +522,7 @@ class StorageChest(UsableItem):
             if item:
                 item.owner_uuid = None
                 item.stored_in_uuid = None
-                item.place_on_grid(pos)
+                item.place_on_grid(pos, parent_event=parent_event.uuid if parent_event is not None else None)
 
 
 class RestAction(BaseAction):

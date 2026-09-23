@@ -1,5 +1,10 @@
 # Material releases and deposited floor geometry
 
+Current qualification update: [spell body releases](SPELL_BODY_RELEASE_2026-09-20.md)
+supersedes the physical-only filter described below. All positive normal-HP
+injuries can release the configured creature material; a positive physical
+component still selects its original pattern when present.
+
 Status: **implemented, independently code-reviewed and validated in 40 paired
 four-camera clips**. See the [implementation result](BODY_RELEASE_IMPLEMENTATION_RESULT_2026-09-20.md)
 for shipped behavior, evidence and explicit limits.

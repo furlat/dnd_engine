@@ -1,4 +1,9 @@
 {
+  "action.attack_object": {
+    "source_recipe": "action.attack_object",
+    "action_feedback": null,
+    "interaction_target": "target_item"
+  },
   "action.environment.trap_lever.pull": {
     "source_recipe": "action.environment.trap_lever.pull",
     "action_feedback": null,
@@ -60,5 +65,13 @@
       "text": "True Seeing Potion",
       "color": 12550143
     }
+  },
+  "action.environment.escape_jaw.athletics": {
+    "source_recipe": "action.spell.web.escape",
+    "action_feedback": null
+  },
+  "action.environment.escape_jaw.acrobatics": {
+    "source_recipe": "action.spell.web.escape",
+    "action_feedback": null
   }
 }

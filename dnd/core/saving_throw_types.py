@@ -51,6 +51,7 @@ class SavingThrowContext(BaseModel):
     ) -> str | None:
         if value is None:
             return None
+        assert info.field_name is not None  # This validator runs on named fields.
         return validate_namespaced_id(value, info.field_name)
 
     @model_validator(mode="after")

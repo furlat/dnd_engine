@@ -1,0 +1,53 @@
+"""Finite registered media at a disclosed, immutable world contact."""
+
+from dataclasses import dataclass
+from uuid import UUID
+
+from game.animation import media_track_duration, media_track_frame, view_facing
+from game.animation_types import AnimationData, Facing8, StudioMediaTrack
+from game.draw_commands import DrawCommand
+from game.projection import Camera, TILE_WIDTH, painter_key, project_screen, rotate_position, inverse_rotate_position
+from game.registered_media import registered_media_blits
+
+
+@dataclass(frozen=True, slots=True)
+class StationaryMediaCue:
+    event_uuid: UUID
+    track: StudioMediaTrack
+    position: tuple[float, float]
+    elevation_steps: float
+    facing: Facing8
+    start_ms: float
+    data: AnimationData
+    depth_offset_cells: float = 0
+
+    @property
+    def end_ms(self) -> float:
+        return self.start_ms + media_track_duration(self.data, self.track)
+
+
+def stationary_media_draw_commands(cues: tuple[StationaryMediaCue, ...], elapsed_ms: float,
+                                    camera: Camera) -> tuple[DrawCommand, ...]:
+    commands = []
+    for cue in cues:
+        if not cue.start_ms <= elapsed_ms < cue.end_ms:
+            continue
+        data, track = cue.data, cue.track
+        facing = view_facing(track.viewFacing or cue.facing, camera.quadrant, data)
+        frame = media_track_frame(data, track, elapsed_ms-cue.start_ms, facing)
+        anchor = project_screen(cue.position, camera, elevation_steps=cue.elevation_steps)
+        contact = rotate_position(cue.position, camera.quadrant)
+        depth_position = inverse_rotate_position((contact[0] + cue.depth_offset_cells,
+                                                  contact[1] + cue.depth_offset_cells), camera.quadrant)
+        key = painter_key(depth_position, elevation_steps=cue.elevation_steps, quadrant=camera.quadrant,
+            role="ground_effect" if track.depth == "ground" else "actor",
+            identity=(str(cue.event_uuid), track.id))
+        if track.depth in ("behind_body", "front_body"):
+            key = (*key[:3], key[3]+(-1 if track.depth == "behind_body" else 1), key[4])
+        for image, destination, blend in registered_media_blits(data, track.assetId, track.assetPhase,
+                frame, facing, scale=track.scale*TILE_WIDTH/data.rig.TILE_W*camera.zoom,
+                anchor=anchor, rows={}, alpha=track.alpha):
+            commands.append(DrawCommand(key, image, destination, blend,
+                (str(cue.event_uuid), cue.position, track.assetId, "current", None, "authored",
+                 "stationary_media", cue.elevation_steps, track.id, frame)))
+    return tuple(commands)

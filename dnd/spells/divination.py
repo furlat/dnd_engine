@@ -258,8 +258,8 @@ class TrueSeeing(SpellAction):
         if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message="Target not visible")
 
-        distance = caster.senses.get_feet_distance(target.position)
-        if distance > 5:
+        distance = self.get_target_distance(target.position)
+        if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Target out of touch range ({distance}ft)")
 
         parent_result = super()._validate(declaration_event)

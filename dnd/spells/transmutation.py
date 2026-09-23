@@ -42,6 +42,7 @@ from dnd.core.content.dependencies import (
 )
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.types.world import OccupancyLayer
 from dnd.core.action_types import (
     ActionEconomyCostType,
     HasteActionPolicy,
@@ -53,6 +54,7 @@ from dnd.core.events import (
     Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, ForcedMovementEvent, EventQueue
 )
 from dnd.types.abilities import AbilityName
+from dnd.types.actor import ConditionState
 from dnd.core.dice import AttackOutcome
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
@@ -105,9 +107,11 @@ class SpikeGrowthZone(AreaCondition):
         default_factory=lambda: {ConditionTag.MAGICAL},
         description="Condition tags used by cleanup, suppression, and rules filters.",
     )
+    has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=SPIKE_GROWTH_ZONE_CONTENT_REF)
     position: Tuple[int, int]
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.GROUND_SURFACE)
+    affected_occupancy_layers: frozenset[OccupancyLayer] = frozenset({OccupancyLayer.GROUND})
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
     )
@@ -133,6 +137,7 @@ class SpikeGrowthZone(AreaCondition):
         """Create handler for entry damage (2d4 piercing per tile entered)."""
         source_uuid = self.source_entity_uuid
         damage_dice = self.damage_dice
+        effect_id = self.content_ref.identity_key
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
@@ -163,7 +168,8 @@ class SpikeGrowthZone(AreaCondition):
                 damage_type=DamageType.PIERCING
             )
             damage_roll = damage_obj.get_dice(attack_outcome=AttackOutcome.HIT).roll
-            entity.receive_damage(damage_roll.total, DamageType.PIERCING, source_uuid, parent_event=event.uuid)
+            entity.receive_damage(damage_roll.total, DamageType.PIERCING, source_uuid,
+                                  parent_event=event.uuid, effect_id=effect_id)
 
             return None
 
@@ -229,7 +235,7 @@ class SpikeGrowth(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
@@ -658,7 +664,7 @@ class Slow(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not in LOS")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Out of range ({distance}ft)"
@@ -918,7 +924,7 @@ class Haste(SpellAction):
         if contact is None or not contact.visual:
             return declaration_event.cancel(status_message=f"{target.name} not visible")
 
-        distance = caster.senses.get_feet_distance(target.senses.position)
+        distance = self.get_target_distance(target.senses.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Out of range ({distance}ft)"
@@ -1053,8 +1059,8 @@ class DarkvisionSpell(SpellAction):
         if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message="Target not visible")
 
-        distance = caster.senses.get_feet_distance(target.position)
-        if distance > 5:
+        distance = self.get_target_distance(target.position)
+        if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Target out of touch range ({distance}ft)")
 
         parent_result = super()._validate(declaration_event)
@@ -1132,7 +1138,7 @@ class Disintegrate(SpellAction):
         if not source or not target:
             return declaration_event.cancel(status_message="Entity not found")
 
-        distance = source.senses.get_feet_distance(target.position)
+        distance = self.get_target_distance(target.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
@@ -1259,8 +1265,8 @@ class JumpSpell(SpellAction):
         if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message="Target not visible")
 
-        distance = caster.senses.get_feet_distance(target.position)
-        if distance > 5:
+        distance = self.get_target_distance(target.position)
+        if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Target out of touch range ({distance}ft)")
 
         parent_result = super()._validate(declaration_event)
@@ -1487,7 +1493,7 @@ class EnhanceAbility(SpellAction):
             self.target_entity_uuid = caster.uuid
 
         if target.uuid != caster.uuid:
-            distance = caster.senses.get_feet_distance(target.position)
+            distance = self.get_target_distance(target.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
 
@@ -1542,8 +1548,11 @@ class EnlargeReduceEffect(BaseCondition):
     """
     name: str = Field(default="Enlarge/Reduce", description="Condition name.")
     description: str = Field(default="Size changed by magic", description="Rules-facing condition summary.")
-    mode: str = Field(default="enlarge", description="Either 'enlarge' or 'reduce'.")
+    mode: Literal["enlarge", "reduce"] = Field(default="enlarge", description="Either 'enlarge' or 'reduce'.")
     original_size: Optional[str] = Field(default=None, description="Original size value restored when the effect ends.")
+
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={"size_change": self.mode})
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -1622,7 +1631,18 @@ class EnlargeReduce(SpellAction):
     )
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="all", description="Target filter key for available action discovery.")
-    enlarge_mode: str = Field(default="enlarge", description="Either 'enlarge' or 'reduce'.")
+    enlarge_mode: Literal["enlarge", "reduce"] = Field(default="enlarge", description="Either 'enlarge' or 'reduce'.")
+
+    def get_harmful_intent(
+        self, caster: Entity, targets: List[UUID],
+    ) -> Tuple[bool, List[UUID]]:
+        """Match the spell's existing unwilling-recipient saving throw rule."""
+        unwilling = [
+            target_uuid for target_uuid in dict.fromkeys(targets)
+            if (target := Entity.get(target_uuid)) is not None
+            and target.uuid != caster.uuid and caster.is_enemy(target)
+        ]
+        return bool(unwilling), unwilling
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1633,7 +1653,7 @@ class EnlargeReduce(SpellAction):
             return declaration_event.cancel(status_message="No target specified")
 
         if target.uuid != caster.uuid:
-            distance = caster.senses.get_feet_distance(target.position)
+            distance = self.get_target_distance(target.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
 
@@ -1980,6 +2000,7 @@ class Telekinesis(SpellAction):
     not the caster, the first grab resolves immediately without an extra action
     cost.
     """
+    harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Telekinesis", description="Spell name.")
     description: str = Field(default="Telekinetically grab, move, or restrain a creature (STR save)", description="Rules-facing spell summary.")
     spell_level: int = Field(default=5, description="Base spell level.")
@@ -2003,7 +2024,7 @@ class Telekinesis(SpellAction):
         if not source or not target:
             return declaration_event.cancel(status_message="Entity not found")
 
-        distance = source.senses.get_feet_distance(target.position)
+        distance = self.get_target_distance(target.position)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
 
@@ -2146,7 +2167,7 @@ class Regenerate(SpellAction):
         if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message="Target not in line of sight")
 
-        distance = caster.senses.get_feet_distance(target.position)
+        distance = self.get_target_distance(target.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"

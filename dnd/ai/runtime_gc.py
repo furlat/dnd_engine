@@ -24,6 +24,7 @@ class RuntimeGcPolicy(Protocol):
 
     def acquire(self) -> RuntimeGcLease:
         """Acquire the process policy for one runtime lifetime."""
+        ...
 
 
 class AutomaticGcLease:

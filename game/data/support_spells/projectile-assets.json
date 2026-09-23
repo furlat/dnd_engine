@@ -1,0 +1,1282 @@
+[
+  {
+    "assetId": "support.cure_wounds.back",
+    "displayName": "support.cure_wounds.back",
+    "kind": "projectile",
+    "sheet": "/support-spells/cure_wounds/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 432
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 432,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3359845,
+        4672939,
+        5279404,
+        6866129,
+        8052191,
+        8646899
+      ]
+    }
+  },
+  {
+    "assetId": "support.cure_wounds.front",
+    "displayName": "support.cure_wounds.front",
+    "kind": "projectile",
+    "sheet": "/support-spells/cure_wounds/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 432
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 432,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3359845,
+        4672939,
+        5279404,
+        6866129,
+        8052191,
+        8646899
+      ]
+    }
+  },
+  {
+    "assetId": "support.healing_word.back",
+    "displayName": "support.healing_word.back",
+    "kind": "projectile",
+    "sheet": "/support-spells/healing_word/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 432
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 432,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3160405,
+        3752615,
+        5343913,
+        8050664,
+        10283760,
+        12776947
+      ]
+    }
+  },
+  {
+    "assetId": "support.healing_word.front",
+    "displayName": "support.healing_word.front",
+    "kind": "projectile",
+    "sheet": "/support-spells/healing_word/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 432
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 432,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3160405,
+        3752615,
+        5343913,
+        8050664,
+        10283760,
+        12776947
+      ]
+    }
+  },
+  {
+    "assetId": "support.prayer_of_healing.back",
+    "displayName": "support.prayer_of_healing.back",
+    "kind": "projectile",
+    "sheet": "/support-spells/prayer_of_healing/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 432
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 432,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5962250448697917
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2704211,
+        4422045,
+        5348525,
+        6929350,
+        10279642,
+        13759215
+      ]
+    }
+  },
+  {
+    "assetId": "support.prayer_of_healing.front",
+    "displayName": "support.prayer_of_healing.front",
+    "kind": "projectile",
+    "sheet": "/support-spells/prayer_of_healing/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 432
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 432,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5962250448697917
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2704211,
+        4422045,
+        5348525,
+        6929350,
+        10279642,
+        13759215
+      ]
+    }
+  },
+  {
+    "assetId": "support.guidance.back",
+    "displayName": "support.guidance.back",
+    "kind": "projectile",
+    "sheet": "/support-spells/guidance/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4797734,
+        7885109,
+        10712121,
+        13145154,
+        14397789,
+        15783055
+      ]
+    }
+  },
+  {
+    "assetId": "support.guidance.front",
+    "displayName": "support.guidance.front",
+    "kind": "projectile",
+    "sheet": "/support-spells/guidance/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4797734,
+        7885109,
+        10712121,
+        13145154,
+        14397789,
+        15783055
+      ]
+    }
+  },
+  {
+    "assetId": "support.resistance.back",
+    "displayName": "support.resistance.back",
+    "kind": "projectile",
+    "sheet": "/support-spells/resistance/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3422540,
+        5790850,
+        7572894,
+        10797511,
+        13363951,
+        14741999
+      ]
+    }
+  },
+  {
+    "assetId": "support.resistance.front",
+    "displayName": "support.resistance.front",
+    "kind": "projectile",
+    "sheet": "/support-spells/resistance/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3422540,
+        5790850,
+        7572894,
+        10797511,
+        13363951,
+        14741999
+      ]
+    }
+  },
+  {
+    "assetId": "support.shield_of_faith.back",
+    "displayName": "support.shield_of_faith.back",
+    "kind": "projectile",
+    "sheet": "/support-spells/shield_of_faith/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 576
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 576,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5962250448697917
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4797480,
+        8410165,
+        12025916,
+        14530142,
+        15719059,
+        16773320
+      ]
+    }
+  },
+  {
+    "assetId": "support.shield_of_faith.front",
+    "displayName": "support.shield_of_faith.front",
+    "kind": "projectile",
+    "sheet": "/support-spells/shield_of_faith/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 576
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 576,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5962250448697917
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4797480,
+        8410165,
+        12025916,
+        14530142,
+        15719059,
+        16773320
+      ]
+    }
+  },
+  {
+    "assetId": "support.light.back",
+    "displayName": "support.light.back",
+    "kind": "projectile",
+    "sheet": "/support-spells/light/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3420743,
+        5657969,
+        8093862,
+        10394827,
+        13355255,
+        14605302
+      ]
+    }
+  },
+  {
+    "assetId": "support.light.front",
+    "displayName": "support.light.front",
+    "kind": "projectile",
+    "sheet": "/support-spells/light/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3420743,
+        5657969,
+        8093862,
+        10394827,
+        13355255,
+        14605302
+      ]
+    }
+  },
+  {
+    "assetId": "support.thaumaturgy.back",
+    "displayName": "support.thaumaturgy.back",
+    "kind": "projectile",
+    "sheet": "/support-spells/thaumaturgy/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 144
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 144,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3747909,
+        6706029,
+        9531755,
+        11897968,
+        14267800,
+        15980733
+      ]
+    }
+  },
+  {
+    "assetId": "support.thaumaturgy.front",
+    "displayName": "support.thaumaturgy.front",
+    "kind": "projectile",
+    "sheet": "/support-spells/thaumaturgy/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 144
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 144,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3747909,
+        6706029,
+        9531755,
+        11897968,
+        14267800,
+        15980733
+      ]
+    }
+  }
+]

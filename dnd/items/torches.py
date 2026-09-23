@@ -414,7 +414,7 @@ class IgniteWallTorchAction(BaseAction):
                 status_message="No wall torch linked",
             )
         torch = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(torch, WallTorch) or torch.is_lit:
+        if not isinstance(torch, WallTorch) or not torch.is_active or torch.is_lit:
             return declaration_event.cancel(status_message="Cannot light")
         return declaration_event.phase_to(
             EventPhase.EXECUTION,
@@ -430,7 +430,7 @@ class IgniteWallTorchAction(BaseAction):
                 status_message="No wall torch linked",
             )
         torch = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(torch, WallTorch):
+        if not isinstance(torch, WallTorch) or not torch.is_active:
             return execution_event.cancel(
                 status_message="Wall torch not found",
             )
@@ -475,7 +475,7 @@ class ExtinguishWallTorchAction(BaseAction):
                 status_message="No wall torch linked",
             )
         torch = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(torch, WallTorch) or not torch.is_lit:
+        if not isinstance(torch, WallTorch) or not torch.is_active or not torch.is_lit:
             return declaration_event.cancel(
                 status_message="Cannot extinguish",
             )
@@ -493,7 +493,7 @@ class ExtinguishWallTorchAction(BaseAction):
                 status_message="No wall torch linked",
             )
         torch = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(torch, WallTorch):
+        if not isinstance(torch, WallTorch) or not torch.is_active:
             return execution_event.cancel(
                 status_message="Wall torch not found",
             )
@@ -562,6 +562,8 @@ class WallTorch(UsableItem):
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """Return the light or extinguish action according to lit state."""
+        if not self.is_active:
+            return []
         if not self.is_lit:
             return [
                 self.bind_dynamic_use_action(
@@ -585,7 +587,7 @@ class WallTorch(UsableItem):
         parent_event: Optional[UUID] = None,
     ) -> Optional[ExposedFlameEvent]:
         """Create this fixture's fixed light source."""
-        if self.is_lit:
+        if not self.is_active or self.is_lit:
             return None
         placement = get_map().get_object_placement(self.uuid)
         if placement is None:
@@ -605,6 +607,8 @@ class WallTorch(UsableItem):
         current = current.phase_to(EventPhase.EXECUTION)
         if current.canceled:
             return current
+        if not self.is_active:
+            return current.cancel(status_message="Torch is destroyed")
         light_source_uuid = get_map().add_light_source(
             position=position,
             very_bright_radius_feet=self.very_bright_radius_feet,
@@ -642,6 +646,10 @@ class WallTorch(UsableItem):
                 if parent_event is not None else None
             ),
         )
+
+    def _on_destroy(self, parent_event: Optional[Event]) -> None:
+        self.put_out(parent_event=parent_event.uuid if parent_event is not None else None)
+        super()._on_destroy(parent_event)
 
     def is_exposed_flame(self) -> bool:
         """Return whether the wall torch is currently burning."""

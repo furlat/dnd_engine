@@ -17,10 +17,10 @@ from dnd.core.base_actions import (
     Cost,
     TargetType,
 )
-from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import ConditionTag
-from dnd.core.events import Event, EventPhase, SkillCheckEvent
+from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
+from dnd.core.events import Event, EventPhase, EventQueue, SkillCheckEvent
 from dnd.entity import Entity
+from dnd.types.abilities import SkillName
 from dnd.spatial.memberships import (
     MembershipAreaCondition,
     SpatialConditionMembershipSource,
@@ -37,7 +37,7 @@ class EscapeSpatialRestraintAction(BaseAction):
     target_type: TargetType = Field(default=TargetType.SELF)
     restraint_source_uuid: UUID
     check_dc: int = Field(ge=0)
-    skill_name: str = Field(default="athletics")
+    skill_name: SkillName = Field(default="athletics")
     costs: List[Cost] = Field(
         default_factory=lambda: [
             Cost(
@@ -113,16 +113,16 @@ class EscapeSpatialRestraintAction(BaseAction):
         )
         _, _, success = entity.skill_check(check_event)
         if success:
-            entity.remove_condition_by_uuid(
+            success = entity.remove_condition_by_uuid(
                 membership.uuid,
                 parent_event=execution_event,
             )
         return execution_event.phase_to(
             EventPhase.EFFECT,
             status_message=(
-                f"{entity.name} escapes {membership.name}"
+                f"{entity.name} escapes {membership.get_display_name()}"
                 if success
-                else f"{entity.name} fails to escape {membership.name}"
+                else f"{entity.name} fails to escape {membership.get_display_name()}"
             ),
         )
 
@@ -150,7 +150,7 @@ class SpatialRestraintSource(SpatialConditionMembershipSource):
         return Restrained(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=target.uuid,
-            tags={ConditionTag.MAGICAL},
+            tags=set(),
         )
 
     @staticmethod
@@ -197,7 +197,7 @@ class SpatialRestraintSource(SpatialConditionMembershipSource):
                     status_message="Restrained manifestation was rejected",
                 )
             self.restraint_manifestation_uuid = manifestation.uuid
-        elif other_sources:
+        elif any(source.restraint_manifestation_uuid == manifestation.uuid for source in other_sources):
             self.restraint_manifestation_uuid = manifestation.uuid
 
         for action_type in self.escape_action_types:
@@ -211,6 +211,7 @@ class SpatialRestraintSource(SpatialConditionMembershipSource):
             target.register_action(action)
             self.escape_action_uuids.append(action.uuid)
 
+        EventQueue.add_pre_completion_callback(preserve_spatial_restraint)
         return [], [], [], [], execution_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
@@ -238,6 +239,32 @@ class SpatialRestraintSource(SpatialConditionMembershipSource):
                     parent_event=event,
                 )
         return event
+
+
+def preserve_spatial_restraint(event: Event) -> None:
+    """Keep remaining leases mechanical when an independent restraint ends."""
+    if not isinstance(event, ConditionRemovalEvent) or not isinstance(event.condition, Restrained):
+        return
+    target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid is not None else None
+    if not isinstance(target, Entity) or SpatialRestraintSource._find_manifestation(target) is not None:
+        return
+    parent = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event is not None else None
+    if isinstance(parent, ConditionApplicationEvent) and isinstance(parent.condition, Restrained):
+        # The incoming standalone has already applied its mechanics; its index
+        # is committed just after the replaced condition finishes removal.
+        return
+    ending_source = (parent.condition.uuid if isinstance(parent, ConditionRemovalEvent)
+                     and isinstance(parent.condition, SpatialRestraintSource) else None)
+    sources = [condition for condition in target.active_conditions_by_uuid.values()
+               if isinstance(condition, SpatialRestraintSource) and condition.applied
+               and condition.uuid != ending_source]
+    if not sources:
+        return
+    replacement = sources[0].create_manifestation(target)
+    applied = target.add_condition(replacement, parent_event=event)
+    if applied is not None and not applied.canceled:
+        for source in sources:
+            source.restraint_manifestation_uuid = replacement.uuid
 
 
 class RestrainingAreaCondition(MembershipAreaCondition):

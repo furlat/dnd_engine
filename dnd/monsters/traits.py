@@ -6,6 +6,7 @@ from typing import Callable, Literal, Optional, Tuple, List
 from uuid import UUID
 
 from pydantic import Field
+from pydantic_core import PydanticUndefined
 
 from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, Move, build_weapon_attack_outcome_profile, entity_action_economy_cost_applier, entity_action_economy_cost_evaluator, validate_line_of_sight
 from dnd.blocks.equipment import Damage
@@ -1315,7 +1316,7 @@ class LeadershipAura(AreaCondition):
     anchor_kind: SpatialEffectAnchorKind = Field(
         default=SpatialEffectAnchorKind.ENTITY,
     )
-    anchor_uuid: UUID
+    anchor_uuid: UUID = Field(default=PydanticUndefined, validate_default=True)
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,

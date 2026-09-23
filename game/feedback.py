@@ -78,6 +78,8 @@ def choreography_feedback(bound: BoundChoreography, data: AnimationData, absolut
             tracks.append(FeedbackTrack(cue.contact, absolute_start_ms + cue.timing.number_ms,
                 number.durationMs, cue.applied_damage, number.label, number.color, data.number_style))
     for node in bound.nodes:
+        if node.interrupted:
+            continue
         start = absolute_start_ms + node.start_ms
         if isinstance(node.bound, BoundAttack):
             attack = node.bound.timeline
@@ -151,5 +153,6 @@ def motion_feedback(motion: MotionTimeline, data: AnimationData, absolute_start_
             tracks.append(FeedbackTrack(reaction.source, start, style.durationMs, None, label,
                                         context.feedbackColor, style, kind="badge"))
         tracks.extend(choreography_feedback(reaction.choreography, data, start,
-                                            contacts={reaction.contact.actor_uuid: reaction.contact}))
+                                            contacts={reaction.contact.actor_uuid: reaction.contact}
+                                            if reaction.contact is not None else {}))
     return tuple(sorted(tracks, key=lambda track: track.start_ms))

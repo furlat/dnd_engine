@@ -2,12 +2,15 @@
 
 from uuid import uuid4
 
+import pytest
+
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.core.life_types import LifeState
+from dnd.core.events import DamageAppliedEvent, EventPhase, EventQueue, LifeStateChangeEvent, TakeDamageEvent
 from dnd.core.creature_types import DamageType
 from dnd.entity import Entity, EntityConfig
 from dnd.core.gridmap import get_map
@@ -102,6 +105,45 @@ def test_initial_stable_and_dead_states_are_reconciled_during_creation() -> None
     assert dead.blocks_walking() is False
     stable.update_entity_senses()
     assert dead.uuid not in stable.senses.entities
+
+
+@pytest.mark.parametrize("state", (LifeState.DYING, LifeState.STABLE))
+@pytest.mark.parametrize(("amount", "temporary_hp", "critical", "failures", "outcome"), (
+    (1, 0, False, 1, LifeState.DYING),
+    (1, 0, True, 2, LifeState.DYING),
+    (18, 0, False, 3, LifeState.DEAD),
+    (2, 3, False, 0, None),
+))
+def test_damage_while_down_records_zero_hp_without_losing_damage_or_failures(
+    state: LifeState, amount: int, temporary_hp: int, critical: bool,
+    failures: int, outcome: LifeState | None,
+) -> None:
+    reset_core_action_state()
+    target = _raw_configured_entity("Downed recipient", state)
+    assert target.get_max_hp() == 18
+    if temporary_hp:
+        target.health.add_temporary_hit_points(temporary_hp, target.uuid)
+    cursor = EventQueue.event_cursor()
+    actual = target.receive_damage(amount, DamageType.FIRE, target.uuid, critical_hit=critical)
+    completed = [event for _, event in EventQueue.iter_events_since(cursor)
+                 if event.phase is EventPhase.COMPLETION]
+    injury, = (event for event in completed if isinstance(event, DamageAppliedEvent))
+    taken, = (event for event in completed if isinstance(event, TakeDamageEvent))
+    assert injury.resulting_normal_hp == target.get_normal_hp() == 0
+    assert injury.applied_damage == amount
+    assert injury.normal_hit_point_damage == actual == max(0, amount - temporary_hp)
+    assert injury.temporary_hit_point_damage == min(amount, temporary_hp)
+    assert injury.resulting_temporary_hp == max(0, temporary_hp - amount)
+    assert injury.resolution is not None and injury.resolution.normal_hit_point_damage == actual
+    assert injury.resolution.effective_normal_hit_point_damage == 0
+    assert injury.resolution.overkill_damage == actual
+    assert injury.parent_lineage == taken.lineage_uuid
+    assert completed.index(injury) < completed.index(taken)
+    assert taken.resulting_hp == 0 and taken.final_damage == amount
+    assert target.health.life_state is (outcome or state)
+    assert target.death_save_failures == failures
+    if state is LifeState.DYING and outcome is not LifeState.DEAD:
+        assert not any(isinstance(event, LifeStateChangeEvent) for event in completed)
 
 
 def test_dead_rejects_ordinary_healing_and_revive_restores_normal_hp_only() -> None:

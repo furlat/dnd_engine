@@ -1,0 +1,2882 @@
+[
+  {
+    "assetId": "pending.inflict_wounds.back",
+    "displayName": "Inflict Wounds \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/inflict_wounds/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 144
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 144,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5962250448697917
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        726288,
+        1323550,
+        2579250,
+        4885321,
+        8571251,
+        12381088
+      ]
+    }
+  },
+  {
+    "assetId": "pending.inflict_wounds.front",
+    "displayName": "Inflict Wounds \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/inflict_wounds/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 144
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 144,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5962250448697917
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        726288,
+        1323550,
+        2579250,
+        4885321,
+        8571251,
+        12381088
+      ]
+    }
+  },
+  {
+    "assetId": "pending.hellish_rebuke.back",
+    "displayName": "Hellish Rebuke \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/hellish_rebuke/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 120
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 120,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5962250448697917
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3745062,
+        7551792,
+        11296832,
+        14516810,
+        15508855,
+        16769454
+      ]
+    }
+  },
+  {
+    "assetId": "pending.hellish_rebuke.front",
+    "displayName": "Hellish Rebuke \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/hellish_rebuke/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 120
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 120,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5962250448697917
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3745062,
+        7551792,
+        11296832,
+        14516810,
+        15508855,
+        16769454
+      ]
+    }
+  },
+  {
+    "assetId": "pending.misty_step.back",
+    "displayName": "Misty Step \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/misty_step/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 216
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 216,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5962250448697917
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3158087,
+        4934512,
+        7567007,
+        9935040,
+        12105445,
+        14801649
+      ]
+    }
+  },
+  {
+    "assetId": "pending.misty_step.front",
+    "displayName": "Misty Step \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/misty_step/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 216
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 216,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5962250448697917
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5962250448697917
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3158087,
+        4934512,
+        7567007,
+        9935040,
+        12105445,
+        14801649
+      ]
+    }
+  },
+  {
+    "assetId": "pending.shatter.back",
+    "displayName": "Shatter \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/shatter/back.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 108
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 108,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836523437
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2168625,
+        4796516,
+        7819931,
+        10713802,
+        12887273,
+        15194106
+      ]
+    }
+  },
+  {
+    "assetId": "pending.shatter.front",
+    "displayName": "Shatter \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/shatter/front.png",
+    "frame": {
+      "width": 512,
+      "height": 512,
+      "rows": 8,
+      "cols": 108
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 108,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.5721687836523437
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.5721687836523437
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2168625,
+        4796516,
+        7819931,
+        10713802,
+        12887273,
+        15194106
+      ]
+    }
+  },
+  {
+    "assetId": "pending.bless.back",
+    "displayName": "Bless \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/bless/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 576
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 576,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4535080,
+        7887156,
+        11238969,
+        13345359,
+        14531952,
+        15520919
+      ]
+    }
+  },
+  {
+    "assetId": "pending.bless.front",
+    "displayName": "Bless \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/bless/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 576
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 576,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4535080,
+        7887156,
+        11238969,
+        13345359,
+        14531952,
+        15520919
+      ]
+    }
+  },
+  {
+    "assetId": "pending.bane.back",
+    "displayName": "Bane \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/bane/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 576
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 576,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        1445655,
+        3151135,
+        5512233,
+        7872818,
+        10825021,
+        12798033
+      ]
+    }
+  },
+  {
+    "assetId": "pending.bane.front",
+    "displayName": "Bane \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/bane/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 576
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 576,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        1445655,
+        3151135,
+        5512233,
+        7872818,
+        10825021,
+        12798033
+      ]
+    }
+  },
+  {
+    "assetId": "pending.false_life.back",
+    "displayName": "False Life \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/false_life/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 576
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 576,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        1124400,
+        2114382,
+        3302772,
+        4820895,
+        6929095,
+        9689052
+      ]
+    }
+  },
+  {
+    "assetId": "pending.false_life.front",
+    "displayName": "False Life \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/false_life/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 576
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 576,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        1124400,
+        2114382,
+        3302772,
+        4820895,
+        6929095,
+        9689052
+      ]
+    }
+  },
+  {
+    "assetId": "pending.bless_sustain.back",
+    "displayName": "Bless Sustain \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/bless_sustain/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4535080,
+        7887156,
+        11238969,
+        13345359,
+        14531952,
+        15520919
+      ]
+    }
+  },
+  {
+    "assetId": "pending.bless_sustain.front",
+    "displayName": "Bless Sustain \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/bless_sustain/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        4535080,
+        7887156,
+        11238969,
+        13345359,
+        14531952,
+        15520919
+      ]
+    }
+  },
+  {
+    "assetId": "pending.bane_sustain.back",
+    "displayName": "Bane Sustain \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/bane_sustain/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 864
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 864,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        1445655,
+        3151135,
+        5512233,
+        7872818,
+        10825021,
+        12798033
+      ]
+    }
+  },
+  {
+    "assetId": "pending.bane_sustain.front",
+    "displayName": "Bane Sustain \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/bane_sustain/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 864
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 864,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        1445655,
+        3151135,
+        5512233,
+        7872818,
+        10825021,
+        12798033
+      ]
+    }
+  },
+  {
+    "assetId": "pending.false_life_sustain.back",
+    "displayName": "False Life Sustain \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/false_life_sustain/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        1124400,
+        2114382,
+        3302772,
+        4820895,
+        6929095,
+        9689052
+      ]
+    }
+  },
+  {
+    "assetId": "pending.false_life_sustain.front",
+    "displayName": "False Life Sustain \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/false_life_sustain/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        1124400,
+        2114382,
+        3302772,
+        4820895,
+        6929095,
+        9689052
+      ]
+    }
+  },
+  {
+    "assetId": "pending.retreat.back",
+    "displayName": "Retreat \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/retreat/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2637129,
+        4612979,
+        7247524,
+        10076359,
+        12704477,
+        14872299
+      ]
+    }
+  },
+  {
+    "assetId": "pending.retreat.front",
+    "displayName": "Retreat \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/retreat/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2637129,
+        4612979,
+        7247524,
+        10076359,
+        12704477,
+        14872299
+      ]
+    }
+  },
+  {
+    "assetId": "pending.haste.back",
+    "displayName": "Haste \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/haste/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3226454,
+        5400193,
+        7903670,
+        10470097,
+        13164255,
+        15068639
+      ]
+    }
+  },
+  {
+    "assetId": "pending.haste.front",
+    "displayName": "Haste \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/haste/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3226454,
+        5400193,
+        7903670,
+        10470097,
+        13164255,
+        15068639
+      ]
+    }
+  },
+  {
+    "assetId": "pending.jump.back",
+    "displayName": "Jump \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/jump/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2508863,
+        4352857,
+        6657918,
+        9289120,
+        12049333,
+        14215889
+      ]
+    }
+  },
+  {
+    "assetId": "pending.jump.front",
+    "displayName": "Jump \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/jump/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2508863,
+        4352857,
+        6657918,
+        9289120,
+        12049333,
+        14215889
+      ]
+    }
+  },
+  {
+    "assetId": "pending.takeoff.back",
+    "displayName": "Takeoff \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/takeoff/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2508863,
+        4352857,
+        6657918,
+        9289120,
+        12049333,
+        14215889
+      ]
+    }
+  },
+  {
+    "assetId": "pending.takeoff.front",
+    "displayName": "Takeoff \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/takeoff/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2508863,
+        4352857,
+        6657918,
+        9289120,
+        12049333,
+        14215889
+      ]
+    }
+  },
+  {
+    "assetId": "pending.flight.back",
+    "displayName": "Flight \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/flight/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2508863,
+        4352857,
+        6657918,
+        9289120,
+        12049333,
+        14215889
+      ]
+    }
+  },
+  {
+    "assetId": "pending.flight.front",
+    "displayName": "Flight \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/flight/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2508863,
+        4352857,
+        6657918,
+        9289120,
+        12049333,
+        14215889
+      ]
+    }
+  },
+  {
+    "assetId": "pending.dash_retreat.back",
+    "displayName": "Dash Retreat \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/dash_retreat/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2637129,
+        4612979,
+        7247524,
+        10076359,
+        12704477,
+        14872299
+      ]
+    }
+  },
+  {
+    "assetId": "pending.dash_retreat.front",
+    "displayName": "Dash Retreat \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/dash_retreat/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2637129,
+        4612979,
+        7247524,
+        10076359,
+        12704477,
+        14872299
+      ]
+    }
+  },
+  {
+    "assetId": "pending.dash_haste.back",
+    "displayName": "Dash Haste \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/dash_haste/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3226454,
+        5400193,
+        7903670,
+        10470097,
+        13164255,
+        15068639
+      ]
+    }
+  },
+  {
+    "assetId": "pending.dash_haste.front",
+    "displayName": "Dash Haste \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/dash_haste/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3226454,
+        5400193,
+        7903670,
+        10470097,
+        13164255,
+        15068639
+      ]
+    }
+  },
+  {
+    "assetId": "pending.haste_feet.back",
+    "displayName": "Haste Feet \u00b7 back",
+    "kind": "projectile",
+    "sheet": "/pending-spells/haste_feet/back.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3226454,
+        5400193,
+        7903670,
+        10470097,
+        13164255,
+        15068639
+      ]
+    }
+  },
+  {
+    "assetId": "pending.haste_feet.front",
+    "displayName": "Haste Feet \u00b7 front",
+    "kind": "projectile",
+    "sheet": "/pending-spells/haste_feet/front.png",
+    "frame": {
+      "width": 256,
+      "height": 256,
+      "rows": 8,
+      "cols": 288
+    },
+    "fps": 144,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 288,
+        "fps": 144,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.6443375673046875
+    },
+    "anchorsByFacing": {
+      "E": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "S": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "SW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "W": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NW": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "N": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      },
+      "NE": {
+        "x": 0.5,
+        "y": 0.6443375673046875
+      }
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        3226454,
+        5400193,
+        7903670,
+        10470097,
+        13164255,
+        15068639
+      ]
+    }
+  }
+]

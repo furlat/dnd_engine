@@ -60,13 +60,22 @@ def test_authored_media_selection_preserves_existing_studio_choreography() -> No
     assert second.scale == 0.5
     assert (second.sprite.tint, second.sprite.alpha, second.sprite.blendMode) == (0xFFFFFF, 1, "add")
     assert (second.sprite.offsetX, second.sprite.offsetY) == (0, 0)
-    assert (second.trajectory, second.orientation, second.sourceAnchor, second.targetAnchor,
-            second.sourceAnchorsByFacing, second.speedPxPerSecond, second.minimumTravelDurationMs,
+    assert (second.trajectory, second.speedPxPerSecond, second.minimumTravelDurationMs,
             second.missileStaggerMs, second.depthMode) == (
-        first.trajectory, first.orientation, first.sourceAnchor, first.targetAnchor,
-        first.sourceAnchorsByFacing, first.speedPxPerSecond, first.minimumTravelDurationMs,
+        first.trajectory, first.speedPxPerSecond, first.minimumTravelDurationMs,
         first.missileStaggerMs, first.depthMode,
     )
+    # Selected sprite authoring deliberately replaced the geometric draft's
+    # ground anchors; its curved travel now follows its instantaneous heading.
+    assert second.orientation.directionSource == "tangent"
+    assert second.orientation.model_copy(update={"directionSource": first.orientation.directionSource}) == first.orientation
+    assert second.sourceAnchor.model_dump() == {
+        "basis": "rigRoot", "liftY": -80, "forwardPx": 0, "axisPx": 16, "sidePx": 0,
+    }
+    assert second.targetAnchor.model_dump() == {
+        "basis": "body", "liftY": 0, "forwardPx": 0, "axisPx": 0,
+    }
+    assert second.sourceAnchorsByFacing is None
     assert second.prepare == first.prepare  # Available cast frames do not enable preparation.
     assert not second.prepare.enabled
     for phase in (second.travel, second.impact):

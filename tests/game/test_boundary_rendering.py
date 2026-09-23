@@ -1,6 +1,7 @@
 """Finite wall, corner, door, light-face, and placement rendering proofs."""
 
 from collections import Counter
+from collections.abc import Iterator
 from copy import deepcopy
 from dataclasses import replace
 import os
@@ -19,12 +20,13 @@ from dnd.types.materials import Material
 from dnd.types.world import CardinalDirection, LightLevel
 from game.app import (
     BACKGROUND,
+    FrameEvidence,
     _authored_treatment,
     _treatment,
     draw_frame,
 )
 from game.demo import _display_sources, build_demo_intervals
-from game.assets import SurfaceCache, load_catalog
+from game.assets import AssetCatalog, SurfaceCache, load_catalog
 from game.presentation import PresentationTarget, reduce_interval
 from game.projection import Camera, MAP_CENTER, TILE_WIDTH, camera_pose, project_screen
 from game.water import WaterSupportInput, render_water_batch, water_source_origin
@@ -50,7 +52,7 @@ CORNER_POSES = {
 
 
 @pytest.fixture(scope="module")
-def rendering() -> tuple[pygame.Surface, object, SurfaceCache]:
+def rendering() -> Iterator[tuple[pygame.Surface, AssetCatalog, SurfaceCache]]:
     pygame.init()
     screen = pygame.display.set_mode((800, 600))
     catalog = load_catalog()
@@ -135,7 +137,7 @@ def _wall_target(
     return target, tuple(object_uuids)
 
 
-def _boundary_rows(evidence) -> tuple[tuple[object, ...], ...]:
+def _boundary_rows(evidence: FrameEvidence) -> tuple[tuple[object, ...], ...]:
     return tuple(
         row
         for row in evidence.actual_draws
@@ -171,6 +173,7 @@ def test_every_owner_tile_wall_subset_has_exact_four_camera_composition(
     if is_corner:
         assert len(rows) == 1
         assert rows[0][2] == f"stone.wall.corner.{CORNER_POSES[pair][quadrant]}"
+        assert isinstance(rows[0][0], tuple)
         represented = tuple(rows[0][0])
     else:
         assert len(rows) == len(directions)
@@ -213,6 +216,7 @@ def test_corner_coalescing_ignores_support_light_but_requires_equal_base_height(
     treatment_rows = _boundary_rows(treatment_evidence)
     assert [row[6] for row in treatment_rows] == ["wall_corner"]
     assert treatment_rows[0][3:6] == ("current", None, "world.authored")
+    assert isinstance(treatment_rows[0][0], tuple)
     assert Counter(treatment_rows[0][0]) == Counter(
         str(value) for value in treatment_uuids
     )
@@ -301,11 +305,11 @@ def test_real_lodge_and_storehouse_use_matching_corners_and_straights(
         mouse_position=None,
     )
     assert evidence is not None
-    rows_by_position = {
-        row[1][0]: row
-        for row in _boundary_rows(evidence)
-        if row[6] in {"wall", "wall_corner"}
-    }
+    rows_by_position = {}
+    for row in _boundary_rows(evidence):
+        if row[6] in {"wall", "wall_corner"}:
+            assert isinstance(row[1], tuple)
+            rows_by_position[row[1][0]] = row
     corner_references = {
         (24, 26): "west",
         (31, 26): "south",
@@ -569,7 +573,7 @@ def test_disclosed_props_follow_received_light_state_and_camera(rendering, base_
 
 @pytest.mark.parametrize("item_id,state_field,closed_ids,open_ids", (
     ("environment.storage_chest", "is_open",
-     {f"chest.closed.{pose}" for pose in "ensw"}, {f"chest.open.{pose}" for pose in "ensw"}),
+     {"prop.chest-a1.intact"}, {"prop.chest-a2.intact"}),
     ("environment.control_lever", "is_engaged",
      {f"lever.{pose}.0" for pose in "ensw"}, {f"lever.{pose}.6" for pose in "ensw"}),
 ))

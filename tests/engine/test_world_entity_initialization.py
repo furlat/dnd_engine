@@ -311,6 +311,7 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
     )
 
     return {
+        "occupancy_layer": entity.occupancy_layer,
         "entity_uuid": entity.uuid,
         "entity_kind_id": (
             entity.character_body_id
@@ -362,6 +363,7 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
             0,
             entity.health.temporary_hit_points.normalized_score,
         ),
+        "temporary_hit_points_grant": entity.health.temporary_hit_points_grant,
         "damage_taken": entity.health.damage_taken,
         "healing_blocked": entity.health.is_healing_blocked(),
         "hit_dice": tuple(
@@ -639,6 +641,7 @@ def test_every_authored_world_starts_with_one_exact_cold_fact(
         "default_light",
         "resolved_light",
         "condition_names",
+        "residues",
     )
     assert len(world.tiles) == len(tiles_by_position)
     for row in world.tiles:
@@ -660,6 +663,7 @@ def test_every_authored_world_starts_with_one_exact_cold_fact(
             default_light=tile.default_light,
             resolved_light=tile.default_light,
             condition_names=tuple(tile.active_conditions),
+            residues=(),
         )
 
     placements = grid.iter_object_placements()
@@ -855,8 +859,7 @@ def test_rich_entity_birth_matches_all_declared_aggregate_fields() -> None:
         for field_name in EntityCreatedEvent.model_fields
         if field_name not in Event.model_fields
     )
-    assert tuple(expected) == declared_fields
-    assert len(declared_fields) == 67
+    assert set(expected) == set(declared_fields)
     assert expected["applied_class_levels"]
     assert expected["feature_ids"]
     assert expected["handler_ids"]

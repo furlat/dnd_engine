@@ -2,7 +2,7 @@
 
 import math
 import time
-from typing import Any, Dict, List, Optional, Tuple, Set, DefaultDict, cast
+from typing import Any, Dict, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 
@@ -13,8 +13,8 @@ from dnd.core.elevation import support_distance_feet
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import breadth_first_paths, dijkstra
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
-from dnd.core.base_conditions import BaseCondition
-from dnd.core.item_types import ItemPresentationProvider
+from dnd.core.condition_types import HazardFilter
+from dnd.core.item_types import ItemPresentationProvider, ItemPresentationState
 from dnd.core.positioning import PositionCommitError
 from dnd.core.base_tiles import (
     release_tile_owned_movement_graph,
@@ -44,15 +44,17 @@ from dnd.core.world_edges import (
     world_edge_contribution_allows,
 )
 from dnd.types.world import CardinalDirection, OccupancyLayer, WorldEdgeChannel
-from dnd.types.senses import OpticalObscurement
+from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 from dnd.types.spatial_effects import (
     SpatialEffectLayer,
     SpatialEffectOccupancyPolicy,
 )
 from dnd.types.materials import TileSurface
+from dnd.types.traps import TrapState
 from dnd.types.world_placement import (
     BoundaryStructure,
     WorldObjectPlacement,
+    WorldObjectSupport,
     WorldPlacementKind,
 )
 from dnd.action_timing import action_timing_enabled, record_action_elapsed, record_action_timing
@@ -65,6 +67,43 @@ DIRECTIONAL_CHANNELS: Tuple[str, ...] = (
 )
 ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "entity.world_presence.absent"
 OBJECT_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "object.world_presence.absent"
+
+
+class SpatialConditionOwner(Protocol):
+    """Existing spatial-owner surface consumed by the map and perception."""
+
+    @property
+    def uuid(self) -> UUID: ...
+
+    @property
+    def name(self) -> Optional[str]: ...
+
+    @property
+    def hazard_filter(self) -> Optional[HazardFilter]: ...
+
+    def is_hazardous_for(
+        self, entity_uuid: Optional[UUID] = None, *,
+        occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND,
+    ) -> bool: ...
+
+    def blocks_walking_at(
+        self, position: Tuple[int, int],
+        requesting_entity_uuid: Optional[UUID] = None,
+        mode: MovementMode = MovementMode.WALKING,
+    ) -> bool: ...
+
+    def get_optical_obscurement_at(
+        self, position: Tuple[int, int],
+    ) -> Optional[OpticalObscurement]: ...
+
+    def blocks_physical_optics_at(self, position: Tuple[int, int]) -> bool: ...
+
+    def get_spatial_observation(
+        self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
+        discovered: bool = False,
+    ) -> Optional[PerceivedSpatialEffect]: ...
+
+    def snapshot_mechanism_state(self) -> Optional[TrapState]: ...
 
 
 class LightSourceData(BaseModel):
@@ -100,7 +139,7 @@ class GridMap:
         self._bounds_dirty: bool = True
 
         self._object_placements: Dict[UUID, WorldObjectPlacement] = {}
-        self._spatial_conditions: Dict[UUID, BaseCondition] = {}
+        self._spatial_conditions: Dict[UUID, SpatialConditionOwner] = {}
         self._spatial_condition_positions: Dict[
             UUID,
             Set[Tuple[int, int]],
@@ -259,6 +298,8 @@ class GridMap:
             ),
         )
         self._settle_entity_presence_before_completion(current_event)
+        self._settle_object_presence_before_completion(current_event)
+        self._recompute_lights_before_spatial_completion(current_event)
         return cast(
             SpatialChangeEvent,
             current_event.phase_to(
@@ -433,9 +474,11 @@ class GridMap:
     @staticmethod
     def _tile_movement_costs(tile: Tile) -> Tuple[int, int, int, int]:
         """Return all four effective intrinsic traversal after-values."""
-        return tuple(
-            tile.get_movement_cost(mode)
-            for mode in MovementMode
+        return (
+            tile.get_movement_cost(MovementMode.WALKING),
+            tile.get_movement_cost(MovementMode.FLYING),
+            tile.get_movement_cost(MovementMode.SWIMMING),
+            tile.get_movement_cost(MovementMode.BURROWING),
         )
 
     def set_tile(
@@ -673,7 +716,7 @@ class GridMap:
                 f"cannot detach Tile {position}: {error}"
             ) from error
         if any(
-            placement.tile_uuid == tile.uuid
+            any(support.tile_uuid == tile.uuid for support in placement.covered_supports)
             for placement in self._object_placements.values()
         ):
             raise ValueError(
@@ -1195,7 +1238,7 @@ class GridMap:
         if tile is None:
             raise ValueError(f"cannot set elevation on missing Tile {position}")
         if height != tile.height and any(
-            placement.position == position
+            position in placement.positions
             and placement.kind is WorldPlacementKind.CENTER
             for placement in self._object_placements.values()
         ):
@@ -1231,7 +1274,7 @@ class GridMap:
     def set_spatial_condition_positions(
         self,
         *,
-        condition: BaseCondition,
+        condition: SpatialConditionOwner,
         layer: SpatialEffectLayer,
         occupancy_policy: SpatialEffectOccupancyPolicy,
         positions: Set[Tuple[int, int]],
@@ -1307,7 +1350,7 @@ class GridMap:
     def validate_spatial_condition_positions(
         self,
         *,
-        condition: BaseCondition,
+        condition: SpatialConditionOwner,
         layer: SpatialEffectLayer,
         occupancy_policy: SpatialEffectOccupancyPolicy,
         positions: Set[Tuple[int, int]],
@@ -1366,7 +1409,7 @@ class GridMap:
     def get_spatial_condition(
         self,
         condition_uuid: UUID,
-    ) -> Optional[BaseCondition]:
+    ) -> Optional[SpatialConditionOwner]:
         """Return one exact active independent condition."""
         return self._spatial_conditions.get(condition_uuid)
 
@@ -1387,15 +1430,15 @@ class GridMap:
         position: Tuple[int, int],
         *,
         layer: Optional[SpatialEffectLayer] = None,
-    ) -> List[BaseCondition]:
+    ) -> List[SpatialConditionOwner]:
         """Resolve active independent conditions at one Tile."""
-        conditions: List[BaseCondition] = []
+        conditions: List[SpatialConditionOwner] = []
         for condition_uuid in sorted(
             self.get_spatial_condition_uuids_at(position, layer=layer),
             key=str,
         ):
             condition = self._spatial_conditions.get(condition_uuid)
-            if not isinstance(condition, BaseCondition):
+            if condition is None:
                 raise RuntimeError(
                     "Tile references a spatial condition missing from GridMap: "
                     f"{condition_uuid}",
@@ -1403,7 +1446,7 @@ class GridMap:
             conditions.append(condition)
         return conditions
 
-    def get_spatial_conditions(self) -> List[BaseCondition]:
+    def get_spatial_conditions(self) -> List[SpatialConditionOwner]:
         """Return every active independent condition once."""
         return [
             self._spatial_conditions[condition_uuid]
@@ -1650,9 +1693,12 @@ class GridMap:
         movement_mode: MovementMode = MovementMode.WALKING,
         requester_uuid: Optional[UUID] = None,
         subjective: bool = False,
+        ignored_provider_uuid: Optional[UUID] = None,
     ) -> bool:
         """Require both ordered Tile-side layers to transmit one channel."""
         for contribution in (*edge.exit_contributions, *edge.entry_contributions):
+            if contribution.provider_uuid == ignored_provider_uuid:
+                continue
             if (
                 channel is WorldEdgeChannel.MOVEMENT
                 and subjective
@@ -1981,11 +2027,8 @@ class GridMap:
             for ty in range(y, y + height)
         }
         for position in positions:
-            old_tile = self._tiles.get(position)
-            if old_tile is not None and old_tile.get_entity_uuids():
-                raise ValueError(
-                    f"cannot replace Tile {position} while entity occupancy is present"
-                )
+            if position in self._tiles:
+                self.validate_tile_detachment(position)
         events_were_enabled = self._events_enabled
         self.disable_events()
         try:
@@ -2219,6 +2262,69 @@ class GridMap:
             for object_uuid, placement in self._object_placements.items()
         }
 
+    def manual_object_contact(
+        self, requester_uuid: UUID, object_uuid: UUID,
+    ) -> Optional[Tuple[int, int]]:
+        """Find a reachable footprint surface without walking into the target.
+
+        The result is geometry, not an observation grant. Discovery must still
+        expose only the contact actually retained by the requester's senses.
+        """
+        requester = BaseBlock.get(requester_uuid)
+        origin = requester.get_position() if requester is not None else None
+        placement = self._object_placements.get(object_uuid)
+        if origin is None or placement is None or origin not in self._tiles:
+            return None
+        source_tile = self._tiles[origin]
+        positions = set(placement.positions)
+        if placement.boundary_direction is not None:
+            dx, dy = {
+                CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
+                CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0),
+            }[placement.boundary_direction]
+            positions.add((placement.position[0] + dx, placement.position[1] + dy))
+
+        def cell_allows(position: Tuple[int, int], *, intermediate: bool = False) -> bool:
+            if not self.is_walkable(*position, MovementMode.WALKING):
+                return False
+            occupants = set(self.get_center_objects_at(position)) - {object_uuid}
+            if intermediate:
+                occupants.update(self.get_entities_at(position))
+            for identity in occupants:
+                block = BaseBlock.get(identity)
+                if block is not None and block.blocks_walking(requester_uuid):
+                    return False
+            return not any(condition.blocks_walking_at(position, requester_uuid)
+                           for condition in self.get_spatial_conditions_at(position))
+
+        def side_allows(start: Tuple[int, int], end: Tuple[int, int]) -> bool:
+            return self._world_edge_channel_allows(
+                self.get_world_edge(start, end), WorldEdgeChannel.MOVEMENT,
+                ignored_provider_uuid=object_uuid,
+            )
+
+        def distance(position: Tuple[int, int]) -> int:
+            return support_distance_feet(origin, source_tile.height * 5,
+                                         position, placement.base_height_steps * 5)
+
+        for position in sorted(positions, key=lambda point: (distance(point), point)):
+            if position not in self._tiles or distance(position) > 5:
+                continue
+            if position == origin:
+                return position
+            if not cell_allows(position):
+                continue
+            dx, dy = position[0] - origin[0], position[1] - origin[1]
+            if not dx or not dy:
+                if side_allows(origin, position):
+                    return position
+            else:
+                for bridge in ((origin[0] + dx, origin[1]), (origin[0], origin[1] + dy)):
+                    if (bridge in self._tiles and cell_allows(bridge, intermediate=True)
+                            and side_allows(origin, bridge) and side_allows(bridge, position)):
+                        return position
+        return None
+
     def _object_placement_candidate(
         self,
         object_uuid: UUID,
@@ -2253,8 +2359,25 @@ class GridMap:
             base_height_steps = tile.height
         if type(base_height_steps) is not int:
             raise TypeError("base_height_steps must be an exact integer")
+        supports: list[WorldObjectSupport] = []
+        for dx, dy in spec.footprint_offsets:
+            # Authoring uses east as the unrotated cardinal orientation.
+            if orientation is CardinalDirection.SOUTH:
+                dx, dy = dy, -dx
+            elif orientation is CardinalDirection.WEST:
+                dx, dy = -dx, -dy
+            elif orientation is CardinalDirection.NORTH:
+                dx, dy = -dy, dx
+            covered_position = (position[0] + dx, position[1] + dy)
+            support = self._tiles.get(covered_position)
+            if support is None:
+                raise ValueError(f"cannot place object on missing Tile {covered_position}")
+            if len(spec.footprint_offsets) > 1 and support.height != tile.height:
+                raise ValueError("multi-cell footprint requires one support elevation")
+            supports.append(WorldObjectSupport(position=covered_position, tile_uuid=support.uuid))
         candidate = WorldObjectPlacement(
             object_uuid=object_uuid,
+            covered_supports=tuple(supports),
             tile_uuid=tile.uuid,
             position=position,
             kind=spec.kind,
@@ -2286,22 +2409,18 @@ class GridMap:
         placement: WorldObjectPlacement,
     ) -> None:
         """Reject only occupied bands on the exact owner Tile and side."""
-        tile = self._tiles.get(placement.position)
-        if tile is None or tile.uuid != placement.tile_uuid:
-            raise ValueError("placement support Tile is no longer current")
-        for height in range(
-            placement.base_height_steps,
-            placement.top_height_steps,
-        ):
-            band = self._placement_band(tile, placement, height)
-            if (
-                placement.occupies_bands
-                and band is not None
-                and band.occupant_uuid not in (None, placement.object_uuid)
-            ):
-                raise ValueError(
-                    "object placement collides with an occupied local band"
-                )
+        for support in placement.covered_supports:
+            tile = self._tiles.get(support.position)
+            if tile is None or tile.uuid != support.tile_uuid:
+                raise ValueError("placement support Tile is no longer current")
+            for height in range(placement.base_height_steps, placement.top_height_steps):
+                band = self._placement_band(tile, placement, height)
+                if (
+                    placement.occupies_bands
+                    and band is not None
+                    and band.occupant_uuid not in (None, placement.object_uuid)
+                ):
+                    raise ValueError("object placement collides with an occupied local band")
 
     def validate_object_placement(
         self,
@@ -2328,39 +2447,40 @@ class GridMap:
         add: bool,
     ) -> None:
         """Replace every immutable local band touched by one placement."""
-        tile = self._tiles[placement.position]
-        for height in range(
-            placement.base_height_steps,
-            placement.top_height_steps,
-        ):
-            old = self._placement_band(tile, placement, height)
-            object_uuids = set(old.object_uuids if old is not None else ())
-            occupant_uuid = old.occupant_uuid if old is not None else None
-            if add:
-                object_uuids.add(placement.object_uuid)
-                if placement.occupies_bands:
-                    occupant_uuid = placement.object_uuid
-            else:
-                object_uuids.discard(placement.object_uuid)
-                if occupant_uuid == placement.object_uuid:
-                    occupant_uuid = None
-            band = (
-                TileObjectBand(
-                    object_uuids=frozenset(object_uuids),
-                    occupant_uuid=occupant_uuid,
+        for support in placement.covered_supports:
+            tile = self._tiles[support.position]
+            for height in range(
+                placement.base_height_steps,
+                placement.top_height_steps,
+            ):
+                old = self._placement_band(tile, placement, height)
+                object_uuids = set(old.object_uuids if old is not None else ())
+                occupant_uuid = old.occupant_uuid if old is not None else None
+                if add:
+                    object_uuids.add(placement.object_uuid)
+                    if placement.occupies_bands:
+                        occupant_uuid = placement.object_uuid
+                else:
+                    object_uuids.discard(placement.object_uuid)
+                    if occupant_uuid == placement.object_uuid:
+                        occupant_uuid = None
+                band = (
+                    TileObjectBand(
+                        object_uuids=frozenset(object_uuids),
+                        occupant_uuid=occupant_uuid,
+                    )
+                    if object_uuids or occupant_uuid is not None
+                    else None
                 )
-                if object_uuids or occupant_uuid is not None
-                else None
-            )
-            if placement.kind is WorldPlacementKind.CENTER:
-                tile._replace_center_object_band(height, band)
-            else:
-                assert placement.boundary_direction is not None
-                tile._replace_boundary_object_band(
-                    placement.boundary_direction,
-                    height,
-                    band,
-                )
+                if placement.kind is WorldPlacementKind.CENTER:
+                    tile._replace_center_object_band(height, band)
+                else:
+                    assert placement.boundary_direction is not None
+                    tile._replace_boundary_object_band(
+                        placement.boundary_direction,
+                        height,
+                        band,
+                    )
 
     def _accept_event_effect(
         self,
@@ -2421,8 +2541,8 @@ class GridMap:
         hint = effect.senses_hint
         if hint is None or not hint.requires_light_recompute:
             return
-        self.recompute_lights_at_position(
-            effect.position,
+        self.recompute_lights_at_positions(
+            effect.get_affected_positions(),
             parent_event=effect.uuid,
         )
 
@@ -2633,7 +2753,7 @@ class GridMap:
         orientation: Optional[CardinalDirection],
         parent_event: Optional[UUID] = None,
     ) -> WorldObjectPlacement:
-        """Change only one placed object's independent facing fact."""
+        """Commit one object's facing and the footprint it resolves."""
         previous = self._object_placements.get(object_uuid)
         if previous is None:
             raise ValueError("object is not placed")
@@ -2649,11 +2769,15 @@ class GridMap:
         obj = BaseBlock.get(object_uuid)
         if obj is None:
             raise ValueError(f"placed object {object_uuid} is not registered")
+        changed_channels = self._object_revision_channels(obj) if candidate.positions != previous.positions else set()
         declaration = SpatialChangeEvent.object_changed(
             previous.position,
             object_uuid,
             placement=candidate,
             previous_placement=previous,
+            blocks_optics_changed="optical" in changed_channels,
+            blocks_propagation_changed="propagation" in changed_channels,
+            blocks_walking_changed="movement" in changed_channels,
             parent_event=parent_event,
             object_name=obj.name,
             object_map_char=obj.get_map_char(),
@@ -2668,7 +2792,10 @@ class GridMap:
         )
         if self._events_enabled and effect is None:
             raise ValueError("object orientation change was canceled")
+        self._replace_placement_bands(previous, add=False)
+        self._replace_placement_bands(candidate, add=True)
         self._object_placements[object_uuid] = candidate
+        self._bump_spatial_revisions(changed_channels)
         if effect is not None:
             self._complete_event_effect(effect)
         return candidate
@@ -2781,6 +2908,50 @@ class GridMap:
                 directional_channels=sorted(changed_channels),
             )
         )
+
+    def refresh_object_state(
+        self, previous: ItemPresentationState, current: ItemPresentationState,
+        *, parent_event: Optional[UUID] = None,
+    ) -> None:
+        """Reindex and publish one committed physical change on the same item."""
+        identity = current.item_uuid
+        old = self._object_placements[identity]
+        provider = BaseBlock.get(identity)
+        if provider is None or previous.item_uuid != identity:
+            raise ValueError("physical state change requires the same registered item")
+        spec = provider.get_world_placement_spec()
+        placement = self._object_placement_candidate(identity, old.position,
+            boundary_direction=old.boundary_direction if spec.kind is WorldPlacementKind.BOUNDARY else None,
+            base_height_steps=old.base_height_steps, orientation=old.orientation)
+        self._replace_placement_bands(old, add=False)
+        self._replace_placement_bands(placement, add=True)
+        self._object_placements[identity] = placement
+        channels: Set[str] = set()
+        for state in (previous, current):
+            if state.blocks_movement:
+                channels.add("movement")
+            if state.blocks_optics:
+                channels.add("optical")
+            if state.blocks_propagation:
+                channels.add("propagation")
+            if state.boundary_structure is not None:
+                channels.update(self._boundary_revision_channels(state.boundary_structure.blocked_channels))
+        self._bump_spatial_revisions(channels)
+        boundary = old.boundary_direction or placement.boundary_direction
+        event = SpatialChangeEvent.object_changed(placement.position, identity,
+            placement=placement, previous_placement=old, parent_event=parent_event,
+            blocks_optics_changed="optical" in channels,
+            blocks_propagation_changed="propagation" in channels,
+            blocks_walking_changed="movement" in channels,
+            object_name=current.name, object_map_char=current.map_char,
+            object_blocks_movement=current.blocks_movement, object_blocks_optics=current.blocks_optics,
+            object_blocks_propagation=current.blocks_propagation, object_is_open=current.is_open,
+            object_boundary_structure=current.boundary_structure,
+            directional_position=old.position if boundary is not None else None,
+            directional_directions=[boundary.value] if boundary is not None else None,
+            directional_channels=sorted(channels) if boundary is not None else None,
+        ).with_updates(object_state=current)
+        self._fire_committed_spatial_event(event)
 
     def get_objects_at(self, position: Tuple[int, int]) -> Set[UUID]:
         """Return objects from the exact Tile's local center and side bands."""
@@ -3679,15 +3850,15 @@ class GridMap:
     def get_optical_obscurements_at(
         self,
         position: Tuple[int, int],
+        *, excluded_owner_uuid: Optional[UUID] = None,
     ) -> Set[OpticalObscurement]:
         """Return conditional optical facts currently covering one Tile."""
-        result = set(
-            self._optical_obscurements_by_position.get(position, {}).values()
-        )
+        result = {value for owner, value in self._optical_obscurements_by_position.get(position, {}).items()
+                  if owner != excluded_owner_uuid}
         result.update(
             obscurement
             for condition in self.get_spatial_conditions_at(position)
-            if (
+            if condition.uuid != excluded_owner_uuid and (
                 obscurement := condition.get_optical_obscurement_at(position)
             ) is not None
         )
@@ -3697,13 +3868,14 @@ class GridMap:
         self,
         start: Tuple[int, int],
         end: Tuple[int, int],
+        *, excluded_owner_uuid: Optional[UUID] = None,
     ) -> Set[OpticalObscurement]:
         """Return conditional optical facts intersecting one optical ray."""
         if not self._optical_obscurements_by_position and not self._spatial_conditions:
             return set()
         result: Set[OpticalObscurement] = set()
         for position in supercover_line(start, end):
-            result.update(self.get_optical_obscurements_at(position))
+            result.update(self.get_optical_obscurements_at(position, excluded_owner_uuid=excluded_owner_uuid))
         return result
 
     def _publish_optical_obscurement_change(
@@ -3804,13 +3976,14 @@ class GridMap:
         block_uuid: UUID,
         *,
         publish_event: bool = True,
+        parent_event: Optional[UUID] = None,
     ) -> None:
         """Permanently remove all light sources attached to a destroyed block."""
         block = BaseBlock.get(block_uuid)
         if block is None:
             return
         for light_uuid in block.get_attached_light_sources():
-            self.remove_light_source(light_uuid, publish_event=publish_event)
+            self.remove_light_source(light_uuid, publish_event=publish_event, parent_event=parent_event)
         self._block_light_suppressions.pop(block_uuid, None)
 
     def _is_light_effectively_active(self, source: LightSourceData) -> bool:
@@ -4042,10 +4215,15 @@ class GridMap:
         self,
         effect: SpatialChangeEvent,
     ) -> None:
-        """Settle attached light inside its direct object-placement cause."""
+        """Settle owned conditions and light inside the committed placement cause."""
         object_uuid = effect.object_uuid
         if object_uuid is None:
             return
+        anchor = BaseBlock.get(object_uuid)
+        if anchor is not None and not (
+            effect.event_type is EventType.SPATIAL_OBJECT_REMOVED and effect.old_position is not None
+        ):
+            anchor.on_world_placement_committed(effect)
         if effect.event_type is EventType.SPATIAL_OBJECT_REMOVED:
             if effect.old_position is not None:
                 return
@@ -4058,7 +4236,6 @@ class GridMap:
             return
         if effect.event_type is not EventType.SPATIAL_OBJECT_PLACED:
             return
-        anchor = BaseBlock.get(object_uuid)
         if anchor is not None:
             for light_uuid in anchor.get_attached_light_sources():
                 if light_uuid in self._light_sources:
@@ -4093,6 +4270,10 @@ class GridMap:
             return
         if effect.event_type is not EventType.SPATIAL_ENTITY_ENTERED:
             return
+        if self.get_entity_position(entity_uuid) != effect.position:
+            # An entry consequence can relocate again before this entry closes.
+            # The newer membership has already settled the attached lights.
+            return
         anchor = BaseBlock.get(entity_uuid)
         if anchor is not None:
             for light_uuid in anchor.get_attached_light_sources():
@@ -4111,24 +4292,22 @@ class GridMap:
 
     def recompute_lights_at_position(self, position: Tuple[int, int],
                                      parent_event: Optional[UUID] = None) -> None:
-        """Recompute light sources affected by a blocking change at position.
+        """Recompute lights affected by one changed cell."""
+        self.recompute_lights_at_positions({position}, parent_event=parent_event)
 
-        When blocking geometry changes (door open/close, wall destruction),
-        light sources within range of the changed position must recompute
-        their illumination. Uses the same delta pattern as move_light_source()
-        — only tiles that actually change are touched.
-
-        Uses a distance check (position within light's max radius) rather than
-        affected_tiles membership, since geometry changes may have previously
-        removed the position from affected_tiles (e.g. remove_tile + set_tile).
-        """
+    def recompute_lights_at_positions(
+        self, positions: Set[Tuple[int, int]], parent_event: Optional[UUID] = None,
+    ) -> None:
+        """Recompute each in-range source once, applying only illumination deltas."""
         for source in self._light_sources.values():
             if not self._is_light_effectively_active(source):
                 continue
             total_radius_tiles = (source.bright_radius_feet + source.dim_radius_feet) / 5
-            dx = position[0] - source.position[0]
-            dy = position[1] - source.position[1]
-            if math.sqrt(dx * dx + dy * dy) > total_radius_tiles:
+            if not any(
+                (position[0] - source.position[0]) ** 2
+                + (position[1] - source.position[1]) ** 2 <= total_radius_tiles ** 2
+                for position in positions
+            ):
                 continue
 
             old_affected = dict(source.affected_tiles)
@@ -4378,7 +4557,7 @@ class GridMap:
                     )
                 )
             ):
-                barriers.add(placement.position)
+                barriers.update(placement.positions)
         self._barrier_positions_cache = frozenset(barriers)
         return set(barriers)
 

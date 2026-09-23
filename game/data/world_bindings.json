@@ -353,22 +353,6 @@
           "true": 6
         }
       }
-    },
-    "environment.storage_chest": {
-      "body_by_pose": {
-        "e": "chest.closed.e",
-        "n": "chest.closed.n",
-        "s": "chest.closed.s",
-        "w": "chest.closed.w"
-      },
-      "state_field": "is_open",
-      "active_body_by_pose": {
-        "e": "chest.open.e",
-        "n": "chest.open.n",
-        "s": "chest.open.s",
-        "w": "chest.open.w"
-      },
-      "lit_animation": null
     }
   },
   "spatial_effects": {
@@ -629,6 +613,2145 @@
           ]
         }
       }
+    },
+    "spatial_effect.spell.web": {
+      "frames_by_pose": {
+        "e": [
+          "web.field.E.0",
+          "web.field.E.0",
+          "web.field.E.0",
+          "web.field.E.0",
+          "web.field.E.0",
+          "web.field.E.0",
+          "web.field.E.0",
+          "web.field.E.0",
+          "web.field.E.8",
+          "web.field.E.9",
+          "web.field.E.10",
+          "web.field.E.11",
+          "web.field.E.12",
+          "web.field.E.13",
+          "web.field.E.14",
+          "web.field.E.15",
+          "web.field.E.16",
+          "web.field.E.17",
+          "web.field.E.18",
+          "web.field.E.19",
+          "web.field.E.20",
+          "web.field.E.21",
+          "web.field.E.22",
+          "web.field.E.23",
+          "web.field.E.24",
+          "web.field.E.25",
+          "web.field.E.26",
+          "web.field.E.27",
+          "web.field.E.28",
+          "web.field.E.29",
+          "web.field.E.30",
+          "web.field.E.31",
+          "web.field.E.32",
+          "web.field.E.33",
+          "web.field.E.34",
+          "web.field.E.35",
+          "web.field.E.36",
+          "web.field.E.37",
+          "web.field.E.38",
+          "web.field.E.39",
+          "web.field.E.40",
+          "web.field.E.41",
+          "web.field.E.42",
+          "web.field.E.43",
+          "web.field.E.44",
+          "web.field.E.45",
+          "web.field.E.46",
+          "web.field.E.47",
+          "web.field.E.48",
+          "web.field.E.49",
+          "web.field.E.50",
+          "web.field.E.51",
+          "web.field.E.52",
+          "web.field.E.53",
+          "web.field.E.54",
+          "web.field.E.55",
+          "web.field.E.56",
+          "web.field.E.57",
+          "web.field.E.58",
+          "web.field.E.59",
+          "web.field.E.60",
+          "web.field.E.61",
+          "web.field.E.62",
+          "web.field.E.63",
+          "web.field.E.64",
+          "web.field.E.65",
+          "web.field.E.66",
+          "web.field.E.67",
+          "web.field.E.68",
+          "web.field.E.69",
+          "web.field.E.70",
+          "web.field.E.71",
+          "web.field.E.72",
+          "web.field.E.73",
+          "web.field.E.74",
+          "web.field.E.75",
+          "web.field.E.76",
+          "web.field.E.77",
+          "web.field.E.78",
+          "web.field.E.79",
+          "web.field.E.80",
+          "web.field.E.81",
+          "web.field.E.82",
+          "web.field.E.83",
+          "web.field.E.84",
+          "web.field.E.85",
+          "web.field.E.86",
+          "web.field.E.87",
+          "web.field.E.88",
+          "web.field.E.89",
+          "web.field.E.90",
+          "web.field.E.91",
+          "web.field.E.92",
+          "web.field.E.93",
+          "web.field.E.94",
+          "web.field.E.95",
+          "web.field.E.96",
+          "web.field.E.97",
+          "web.field.E.98",
+          "web.field.E.99",
+          "web.field.E.100",
+          "web.field.E.101",
+          "web.field.E.102",
+          "web.field.E.103",
+          "web.field.E.104",
+          "web.field.E.105",
+          "web.field.E.106",
+          "web.field.E.107",
+          "web.field.E.108",
+          "web.field.E.109",
+          "web.field.E.110",
+          "web.field.E.111",
+          "web.field.E.112",
+          "web.field.E.113",
+          "web.field.E.114",
+          "web.field.E.115",
+          "web.field.E.116",
+          "web.field.E.117",
+          "web.field.E.118",
+          "web.field.E.119",
+          "web.field.E.120",
+          "web.field.E.121",
+          "web.field.E.122",
+          "web.field.E.123",
+          "web.field.E.124",
+          "web.field.E.125",
+          "web.field.E.126",
+          "web.field.E.127",
+          "web.field.E.128",
+          "web.field.E.129",
+          "web.field.E.130",
+          "web.field.E.131",
+          "web.field.E.132",
+          "web.field.E.133",
+          "web.field.E.134",
+          "web.field.E.135",
+          "web.field.E.136",
+          "web.field.E.137",
+          "web.field.E.138",
+          "web.field.E.139",
+          "web.field.E.140",
+          "web.field.E.141",
+          "web.field.E.142",
+          "web.field.E.143",
+          "web.field.E.144",
+          "web.field.E.145",
+          "web.field.E.146",
+          "web.field.E.147",
+          "web.field.E.148",
+          "web.field.E.149",
+          "web.field.E.150",
+          "web.field.E.151",
+          "web.field.E.152",
+          "web.field.E.153",
+          "web.field.E.154",
+          "web.field.E.155",
+          "web.field.E.156",
+          "web.field.E.157",
+          "web.field.E.158",
+          "web.field.E.159",
+          "web.field.E.160",
+          "web.field.E.161",
+          "web.field.E.162",
+          "web.field.E.163",
+          "web.field.E.164",
+          "web.field.E.165",
+          "web.field.E.166",
+          "web.field.E.167",
+          "web.field.E.168",
+          "web.field.E.169",
+          "web.field.E.170",
+          "web.field.E.171",
+          "web.field.E.172",
+          "web.field.E.173",
+          "web.field.E.174",
+          "web.field.E.175",
+          "web.field.E.176",
+          "web.field.E.177",
+          "web.field.E.178",
+          "web.field.E.179",
+          "web.field.E.180",
+          "web.field.E.181",
+          "web.field.E.182",
+          "web.field.E.183",
+          "web.field.E.184",
+          "web.field.E.185",
+          "web.field.E.186",
+          "web.field.E.187",
+          "web.field.E.188",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189",
+          "web.field.E.189"
+        ],
+        "s": [
+          "web.field.S.0",
+          "web.field.S.0",
+          "web.field.S.0",
+          "web.field.S.0",
+          "web.field.S.0",
+          "web.field.S.0",
+          "web.field.S.0",
+          "web.field.S.7",
+          "web.field.S.8",
+          "web.field.S.9",
+          "web.field.S.10",
+          "web.field.S.11",
+          "web.field.S.12",
+          "web.field.S.13",
+          "web.field.S.14",
+          "web.field.S.15",
+          "web.field.S.16",
+          "web.field.S.17",
+          "web.field.S.18",
+          "web.field.S.19",
+          "web.field.S.20",
+          "web.field.S.21",
+          "web.field.S.22",
+          "web.field.S.23",
+          "web.field.S.24",
+          "web.field.S.25",
+          "web.field.S.26",
+          "web.field.S.27",
+          "web.field.S.28",
+          "web.field.S.29",
+          "web.field.S.30",
+          "web.field.S.31",
+          "web.field.S.32",
+          "web.field.S.33",
+          "web.field.S.34",
+          "web.field.S.35",
+          "web.field.S.36",
+          "web.field.S.37",
+          "web.field.S.38",
+          "web.field.S.39",
+          "web.field.S.40",
+          "web.field.S.41",
+          "web.field.S.42",
+          "web.field.S.43",
+          "web.field.S.44",
+          "web.field.S.45",
+          "web.field.S.46",
+          "web.field.S.47",
+          "web.field.S.48",
+          "web.field.S.49",
+          "web.field.S.50",
+          "web.field.S.51",
+          "web.field.S.52",
+          "web.field.S.53",
+          "web.field.S.54",
+          "web.field.S.55",
+          "web.field.S.56",
+          "web.field.S.57",
+          "web.field.S.58",
+          "web.field.S.59",
+          "web.field.S.60",
+          "web.field.S.61",
+          "web.field.S.62",
+          "web.field.S.63",
+          "web.field.S.64",
+          "web.field.S.65",
+          "web.field.S.66",
+          "web.field.S.67",
+          "web.field.S.68",
+          "web.field.S.69",
+          "web.field.S.70",
+          "web.field.S.71",
+          "web.field.S.72",
+          "web.field.S.73",
+          "web.field.S.74",
+          "web.field.S.75",
+          "web.field.S.76",
+          "web.field.S.77",
+          "web.field.S.78",
+          "web.field.S.79",
+          "web.field.S.80",
+          "web.field.S.81",
+          "web.field.S.82",
+          "web.field.S.83",
+          "web.field.S.84",
+          "web.field.S.85",
+          "web.field.S.86",
+          "web.field.S.87",
+          "web.field.S.88",
+          "web.field.S.89",
+          "web.field.S.90",
+          "web.field.S.91",
+          "web.field.S.92",
+          "web.field.S.93",
+          "web.field.S.94",
+          "web.field.S.95",
+          "web.field.S.96",
+          "web.field.S.97",
+          "web.field.S.98",
+          "web.field.S.99",
+          "web.field.S.100",
+          "web.field.S.101",
+          "web.field.S.102",
+          "web.field.S.103",
+          "web.field.S.104",
+          "web.field.S.105",
+          "web.field.S.106",
+          "web.field.S.107",
+          "web.field.S.108",
+          "web.field.S.109",
+          "web.field.S.110",
+          "web.field.S.111",
+          "web.field.S.112",
+          "web.field.S.113",
+          "web.field.S.114",
+          "web.field.S.115",
+          "web.field.S.116",
+          "web.field.S.117",
+          "web.field.S.118",
+          "web.field.S.119",
+          "web.field.S.120",
+          "web.field.S.121",
+          "web.field.S.122",
+          "web.field.S.123",
+          "web.field.S.124",
+          "web.field.S.125",
+          "web.field.S.126",
+          "web.field.S.127",
+          "web.field.S.128",
+          "web.field.S.129",
+          "web.field.S.130",
+          "web.field.S.131",
+          "web.field.S.132",
+          "web.field.S.133",
+          "web.field.S.134",
+          "web.field.S.135",
+          "web.field.S.136",
+          "web.field.S.137",
+          "web.field.S.138",
+          "web.field.S.139",
+          "web.field.S.140",
+          "web.field.S.141",
+          "web.field.S.142",
+          "web.field.S.143",
+          "web.field.S.144",
+          "web.field.S.145",
+          "web.field.S.146",
+          "web.field.S.147",
+          "web.field.S.148",
+          "web.field.S.149",
+          "web.field.S.150",
+          "web.field.S.151",
+          "web.field.S.152",
+          "web.field.S.153",
+          "web.field.S.154",
+          "web.field.S.155",
+          "web.field.S.156",
+          "web.field.S.157",
+          "web.field.S.158",
+          "web.field.S.159",
+          "web.field.S.160",
+          "web.field.S.161",
+          "web.field.S.162",
+          "web.field.S.163",
+          "web.field.S.164",
+          "web.field.S.165",
+          "web.field.S.166",
+          "web.field.S.167",
+          "web.field.S.168",
+          "web.field.S.169",
+          "web.field.S.170",
+          "web.field.S.171",
+          "web.field.S.172",
+          "web.field.S.173",
+          "web.field.S.174",
+          "web.field.S.175",
+          "web.field.S.176",
+          "web.field.S.177",
+          "web.field.S.178",
+          "web.field.S.179",
+          "web.field.S.180",
+          "web.field.S.181",
+          "web.field.S.182",
+          "web.field.S.183",
+          "web.field.S.184",
+          "web.field.S.185",
+          "web.field.S.186",
+          "web.field.S.187",
+          "web.field.S.188",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189",
+          "web.field.S.189"
+        ],
+        "w": [
+          "web.field.W.0",
+          "web.field.W.0",
+          "web.field.W.0",
+          "web.field.W.0",
+          "web.field.W.0",
+          "web.field.W.0",
+          "web.field.W.0",
+          "web.field.W.0",
+          "web.field.W.8",
+          "web.field.W.9",
+          "web.field.W.10",
+          "web.field.W.11",
+          "web.field.W.12",
+          "web.field.W.13",
+          "web.field.W.14",
+          "web.field.W.15",
+          "web.field.W.16",
+          "web.field.W.17",
+          "web.field.W.18",
+          "web.field.W.19",
+          "web.field.W.20",
+          "web.field.W.21",
+          "web.field.W.22",
+          "web.field.W.23",
+          "web.field.W.24",
+          "web.field.W.25",
+          "web.field.W.26",
+          "web.field.W.27",
+          "web.field.W.28",
+          "web.field.W.29",
+          "web.field.W.30",
+          "web.field.W.31",
+          "web.field.W.32",
+          "web.field.W.33",
+          "web.field.W.34",
+          "web.field.W.35",
+          "web.field.W.36",
+          "web.field.W.37",
+          "web.field.W.38",
+          "web.field.W.39",
+          "web.field.W.40",
+          "web.field.W.41",
+          "web.field.W.42",
+          "web.field.W.43",
+          "web.field.W.44",
+          "web.field.W.45",
+          "web.field.W.46",
+          "web.field.W.47",
+          "web.field.W.48",
+          "web.field.W.49",
+          "web.field.W.50",
+          "web.field.W.51",
+          "web.field.W.52",
+          "web.field.W.53",
+          "web.field.W.54",
+          "web.field.W.55",
+          "web.field.W.56",
+          "web.field.W.57",
+          "web.field.W.58",
+          "web.field.W.59",
+          "web.field.W.60",
+          "web.field.W.61",
+          "web.field.W.62",
+          "web.field.W.63",
+          "web.field.W.64",
+          "web.field.W.65",
+          "web.field.W.66",
+          "web.field.W.67",
+          "web.field.W.68",
+          "web.field.W.69",
+          "web.field.W.70",
+          "web.field.W.71",
+          "web.field.W.72",
+          "web.field.W.73",
+          "web.field.W.74",
+          "web.field.W.75",
+          "web.field.W.76",
+          "web.field.W.77",
+          "web.field.W.78",
+          "web.field.W.79",
+          "web.field.W.80",
+          "web.field.W.81",
+          "web.field.W.82",
+          "web.field.W.83",
+          "web.field.W.84",
+          "web.field.W.85",
+          "web.field.W.86",
+          "web.field.W.87",
+          "web.field.W.88",
+          "web.field.W.89",
+          "web.field.W.90",
+          "web.field.W.91",
+          "web.field.W.92",
+          "web.field.W.93",
+          "web.field.W.94",
+          "web.field.W.95",
+          "web.field.W.96",
+          "web.field.W.97",
+          "web.field.W.98",
+          "web.field.W.99",
+          "web.field.W.100",
+          "web.field.W.101",
+          "web.field.W.102",
+          "web.field.W.103",
+          "web.field.W.104",
+          "web.field.W.105",
+          "web.field.W.106",
+          "web.field.W.107",
+          "web.field.W.108",
+          "web.field.W.109",
+          "web.field.W.110",
+          "web.field.W.111",
+          "web.field.W.112",
+          "web.field.W.113",
+          "web.field.W.114",
+          "web.field.W.115",
+          "web.field.W.116",
+          "web.field.W.117",
+          "web.field.W.118",
+          "web.field.W.119",
+          "web.field.W.120",
+          "web.field.W.121",
+          "web.field.W.122",
+          "web.field.W.123",
+          "web.field.W.124",
+          "web.field.W.125",
+          "web.field.W.126",
+          "web.field.W.127",
+          "web.field.W.128",
+          "web.field.W.129",
+          "web.field.W.130",
+          "web.field.W.131",
+          "web.field.W.132",
+          "web.field.W.133",
+          "web.field.W.134",
+          "web.field.W.135",
+          "web.field.W.136",
+          "web.field.W.137",
+          "web.field.W.138",
+          "web.field.W.139",
+          "web.field.W.140",
+          "web.field.W.141",
+          "web.field.W.142",
+          "web.field.W.143",
+          "web.field.W.144",
+          "web.field.W.145",
+          "web.field.W.146",
+          "web.field.W.147",
+          "web.field.W.148",
+          "web.field.W.149",
+          "web.field.W.150",
+          "web.field.W.151",
+          "web.field.W.152",
+          "web.field.W.153",
+          "web.field.W.154",
+          "web.field.W.155",
+          "web.field.W.156",
+          "web.field.W.157",
+          "web.field.W.158",
+          "web.field.W.159",
+          "web.field.W.160",
+          "web.field.W.161",
+          "web.field.W.162",
+          "web.field.W.163",
+          "web.field.W.164",
+          "web.field.W.165",
+          "web.field.W.166",
+          "web.field.W.167",
+          "web.field.W.168",
+          "web.field.W.169",
+          "web.field.W.170",
+          "web.field.W.171",
+          "web.field.W.172",
+          "web.field.W.173",
+          "web.field.W.174",
+          "web.field.W.175",
+          "web.field.W.176",
+          "web.field.W.177",
+          "web.field.W.178",
+          "web.field.W.179",
+          "web.field.W.180",
+          "web.field.W.181",
+          "web.field.W.182",
+          "web.field.W.183",
+          "web.field.W.184",
+          "web.field.W.185",
+          "web.field.W.186",
+          "web.field.W.187",
+          "web.field.W.188",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189",
+          "web.field.W.189"
+        ],
+        "n": [
+          "web.field.N.0",
+          "web.field.N.0",
+          "web.field.N.0",
+          "web.field.N.0",
+          "web.field.N.0",
+          "web.field.N.0",
+          "web.field.N.0",
+          "web.field.N.0",
+          "web.field.N.8",
+          "web.field.N.9",
+          "web.field.N.10",
+          "web.field.N.11",
+          "web.field.N.12",
+          "web.field.N.13",
+          "web.field.N.14",
+          "web.field.N.15",
+          "web.field.N.16",
+          "web.field.N.17",
+          "web.field.N.18",
+          "web.field.N.19",
+          "web.field.N.20",
+          "web.field.N.21",
+          "web.field.N.22",
+          "web.field.N.23",
+          "web.field.N.24",
+          "web.field.N.25",
+          "web.field.N.26",
+          "web.field.N.27",
+          "web.field.N.28",
+          "web.field.N.29",
+          "web.field.N.30",
+          "web.field.N.31",
+          "web.field.N.32",
+          "web.field.N.33",
+          "web.field.N.34",
+          "web.field.N.35",
+          "web.field.N.36",
+          "web.field.N.37",
+          "web.field.N.38",
+          "web.field.N.39",
+          "web.field.N.40",
+          "web.field.N.41",
+          "web.field.N.42",
+          "web.field.N.43",
+          "web.field.N.44",
+          "web.field.N.45",
+          "web.field.N.46",
+          "web.field.N.47",
+          "web.field.N.48",
+          "web.field.N.49",
+          "web.field.N.50",
+          "web.field.N.51",
+          "web.field.N.52",
+          "web.field.N.53",
+          "web.field.N.54",
+          "web.field.N.55",
+          "web.field.N.56",
+          "web.field.N.57",
+          "web.field.N.58",
+          "web.field.N.59",
+          "web.field.N.60",
+          "web.field.N.61",
+          "web.field.N.62",
+          "web.field.N.63",
+          "web.field.N.64",
+          "web.field.N.65",
+          "web.field.N.66",
+          "web.field.N.67",
+          "web.field.N.68",
+          "web.field.N.69",
+          "web.field.N.70",
+          "web.field.N.71",
+          "web.field.N.72",
+          "web.field.N.73",
+          "web.field.N.74",
+          "web.field.N.75",
+          "web.field.N.76",
+          "web.field.N.77",
+          "web.field.N.78",
+          "web.field.N.79",
+          "web.field.N.80",
+          "web.field.N.81",
+          "web.field.N.82",
+          "web.field.N.83",
+          "web.field.N.84",
+          "web.field.N.85",
+          "web.field.N.86",
+          "web.field.N.87",
+          "web.field.N.88",
+          "web.field.N.89",
+          "web.field.N.90",
+          "web.field.N.91",
+          "web.field.N.92",
+          "web.field.N.93",
+          "web.field.N.94",
+          "web.field.N.95",
+          "web.field.N.96",
+          "web.field.N.97",
+          "web.field.N.98",
+          "web.field.N.99",
+          "web.field.N.100",
+          "web.field.N.101",
+          "web.field.N.102",
+          "web.field.N.103",
+          "web.field.N.104",
+          "web.field.N.105",
+          "web.field.N.106",
+          "web.field.N.107",
+          "web.field.N.108",
+          "web.field.N.109",
+          "web.field.N.110",
+          "web.field.N.111",
+          "web.field.N.112",
+          "web.field.N.113",
+          "web.field.N.114",
+          "web.field.N.115",
+          "web.field.N.116",
+          "web.field.N.117",
+          "web.field.N.118",
+          "web.field.N.119",
+          "web.field.N.120",
+          "web.field.N.121",
+          "web.field.N.122",
+          "web.field.N.123",
+          "web.field.N.124",
+          "web.field.N.125",
+          "web.field.N.126",
+          "web.field.N.127",
+          "web.field.N.128",
+          "web.field.N.129",
+          "web.field.N.130",
+          "web.field.N.131",
+          "web.field.N.132",
+          "web.field.N.133",
+          "web.field.N.134",
+          "web.field.N.135",
+          "web.field.N.136",
+          "web.field.N.137",
+          "web.field.N.138",
+          "web.field.N.139",
+          "web.field.N.140",
+          "web.field.N.141",
+          "web.field.N.142",
+          "web.field.N.143",
+          "web.field.N.144",
+          "web.field.N.145",
+          "web.field.N.146",
+          "web.field.N.147",
+          "web.field.N.148",
+          "web.field.N.149",
+          "web.field.N.150",
+          "web.field.N.151",
+          "web.field.N.152",
+          "web.field.N.153",
+          "web.field.N.154",
+          "web.field.N.155",
+          "web.field.N.156",
+          "web.field.N.157",
+          "web.field.N.158",
+          "web.field.N.159",
+          "web.field.N.160",
+          "web.field.N.161",
+          "web.field.N.162",
+          "web.field.N.163",
+          "web.field.N.164",
+          "web.field.N.165",
+          "web.field.N.166",
+          "web.field.N.167",
+          "web.field.N.168",
+          "web.field.N.169",
+          "web.field.N.170",
+          "web.field.N.171",
+          "web.field.N.172",
+          "web.field.N.173",
+          "web.field.N.174",
+          "web.field.N.175",
+          "web.field.N.176",
+          "web.field.N.177",
+          "web.field.N.178",
+          "web.field.N.179",
+          "web.field.N.180",
+          "web.field.N.181",
+          "web.field.N.182",
+          "web.field.N.183",
+          "web.field.N.184",
+          "web.field.N.185",
+          "web.field.N.186",
+          "web.field.N.187",
+          "web.field.N.188",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189",
+          "web.field.N.189"
+        ]
+      },
+      "fps": 288,
+      "state_frames": {},
+      "default_frame": 189,
+      "creation_start_frame": 0,
+      "placement": "area",
+      "origin_offset": [
+        -0.5,
+        -0.5
+      ],
+      "tether": {
+        "frames_by_facing": {
+          "E": [
+            "web_tether.E"
+          ],
+          "SE": [
+            "web_tether.SE"
+          ],
+          "S": [
+            "web_tether.S"
+          ],
+          "SW": [
+            "web_tether.SW"
+          ],
+          "W": [
+            "web_tether.W"
+          ],
+          "NW": [
+            "web_tether.NW"
+          ],
+          "N": [
+            "web_tether.N"
+          ],
+          "NE": [
+            "web_tether.NE"
+          ]
+        },
+        "endpoints_by_facing": {
+          "E": [
+            [
+              -0.019348144531022626,
+              10.137298583983977
+            ],
+            [
+              362.019348144531,
+              10.137298583983977
+            ]
+          ],
+          "SE": [
+            [
+              0.0,
+              0.13726806640602263
+            ],
+            [
+              256.0,
+              128.13726806640602
+            ]
+          ],
+          "S": [
+            [
+              10.0,
+              -0.3724060058589771
+            ],
+            [
+              10.0,
+              180.64697265625
+            ]
+          ],
+          "SW": [
+            [
+              256.0,
+              0.13726806640602263
+            ],
+            [
+              0.0,
+              128.13726806640602
+            ]
+          ],
+          "W": [
+            [
+              352.019287109375,
+              9.137268066406023
+            ],
+            [
+              -10.019348144531023,
+              9.137298583983977
+            ]
+          ],
+          "NW": [
+            [
+              256.0,
+              133.13726806640602
+            ],
+            [
+              0.0,
+              5.137268066406023
+            ]
+          ],
+          "N": [
+            [
+              10.000061035156023,
+              184.64697265625
+            ],
+            [
+              10.0,
+              3.627593994141023
+            ]
+          ],
+          "NE": [
+            [
+              -6.1035156022626325e-05,
+              133.13726806640602
+            ],
+            [
+              256.000061035156,
+              5.137298583983977
+            ]
+          ]
+        },
+        "fps": 144
+      },
+      "footprint_tiles": [
+        4,
+        4
+      ]
+    },
+    "spatial_effect.environment.pressure_plate": {
+      "frames_by_pose": {
+        "e": [
+          "trap-workshop.plate.e.0",
+          "trap-workshop.plate.e.1",
+          "trap-workshop.plate.e.2",
+          "trap-workshop.plate.e.3",
+          "trap-workshop.plate.e.4",
+          "trap-workshop.plate.e.5",
+          "trap-workshop.plate.e.6",
+          "trap-workshop.plate.e.7",
+          "trap-workshop.plate.e.8",
+          "trap-workshop.plate.e.9",
+          "trap-workshop.plate.e.10",
+          "trap-workshop.plate.e.11"
+        ],
+        "s": [
+          "trap-workshop.plate.s.0",
+          "trap-workshop.plate.s.1",
+          "trap-workshop.plate.s.2",
+          "trap-workshop.plate.s.3",
+          "trap-workshop.plate.s.4",
+          "trap-workshop.plate.s.5",
+          "trap-workshop.plate.s.6",
+          "trap-workshop.plate.s.7",
+          "trap-workshop.plate.s.8",
+          "trap-workshop.plate.s.9",
+          "trap-workshop.plate.s.10",
+          "trap-workshop.plate.s.11"
+        ],
+        "w": [
+          "trap-workshop.plate.w.0",
+          "trap-workshop.plate.w.1",
+          "trap-workshop.plate.w.2",
+          "trap-workshop.plate.w.3",
+          "trap-workshop.plate.w.4",
+          "trap-workshop.plate.w.5",
+          "trap-workshop.plate.w.6",
+          "trap-workshop.plate.w.7",
+          "trap-workshop.plate.w.8",
+          "trap-workshop.plate.w.9",
+          "trap-workshop.plate.w.10",
+          "trap-workshop.plate.w.11"
+        ],
+        "n": [
+          "trap-workshop.plate.n.0",
+          "trap-workshop.plate.n.1",
+          "trap-workshop.plate.n.2",
+          "trap-workshop.plate.n.3",
+          "trap-workshop.plate.n.4",
+          "trap-workshop.plate.n.5",
+          "trap-workshop.plate.n.6",
+          "trap-workshop.plate.n.7",
+          "trap-workshop.plate.n.8",
+          "trap-workshop.plate.n.9",
+          "trap-workshop.plate.n.10",
+          "trap-workshop.plate.n.11"
+        ]
+      },
+      "fps": 12,
+      "state_frames": {
+        "false": 0,
+        "true": 5
+      },
+      "transition_frames": {
+        "false:true": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "true:false": [
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ]
+      }
+    },
+    "spatial_effect.environment.dart_launcher": {
+      "frames_by_pose": {
+        "e": [
+          "trap-workshop.darts.e.0",
+          "trap-workshop.darts.e.1",
+          "trap-workshop.darts.e.2",
+          "trap-workshop.darts.e.3",
+          "trap-workshop.darts.e.4",
+          "trap-workshop.darts.e.5",
+          "trap-workshop.darts.e.6",
+          "trap-workshop.darts.e.7",
+          "trap-workshop.darts.e.8",
+          "trap-workshop.darts.e.9",
+          "trap-workshop.darts.e.10",
+          "trap-workshop.darts.e.11"
+        ],
+        "s": [
+          "trap-workshop.darts.s.0",
+          "trap-workshop.darts.s.1",
+          "trap-workshop.darts.s.2",
+          "trap-workshop.darts.s.3",
+          "trap-workshop.darts.s.4",
+          "trap-workshop.darts.s.5",
+          "trap-workshop.darts.s.6",
+          "trap-workshop.darts.s.7",
+          "trap-workshop.darts.s.8",
+          "trap-workshop.darts.s.9",
+          "trap-workshop.darts.s.10",
+          "trap-workshop.darts.s.11"
+        ],
+        "w": [
+          "trap-workshop.darts.w.0",
+          "trap-workshop.darts.w.1",
+          "trap-workshop.darts.w.2",
+          "trap-workshop.darts.w.3",
+          "trap-workshop.darts.w.4",
+          "trap-workshop.darts.w.5",
+          "trap-workshop.darts.w.6",
+          "trap-workshop.darts.w.7",
+          "trap-workshop.darts.w.8",
+          "trap-workshop.darts.w.9",
+          "trap-workshop.darts.w.10",
+          "trap-workshop.darts.w.11"
+        ],
+        "n": [
+          "trap-workshop.darts.n.0",
+          "trap-workshop.darts.n.1",
+          "trap-workshop.darts.n.2",
+          "trap-workshop.darts.n.3",
+          "trap-workshop.darts.n.4",
+          "trap-workshop.darts.n.5",
+          "trap-workshop.darts.n.6",
+          "trap-workshop.darts.n.7",
+          "trap-workshop.darts.n.8",
+          "trap-workshop.darts.n.9",
+          "trap-workshop.darts.n.10",
+          "trap-workshop.darts.n.11"
+        ]
+      },
+      "fps": 12,
+      "state_frames": {
+        "ready": 0,
+        "activated": 0,
+        "deactivated": 0
+      },
+      "activation_frames": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "contact_frame": 3,
+      "projectile": {
+        "frames_by_pose": {
+          "e": [
+            "trap-workshop.dart-projectile.e.0",
+            "trap-workshop.dart-projectile.e.1",
+            "trap-workshop.dart-projectile.e.2",
+            "trap-workshop.dart-projectile.e.3",
+            "trap-workshop.dart-projectile.e.4",
+            "trap-workshop.dart-projectile.e.5",
+            "trap-workshop.dart-projectile.e.6",
+            "trap-workshop.dart-projectile.e.7"
+          ],
+          "s": [
+            "trap-workshop.dart-projectile.s.0",
+            "trap-workshop.dart-projectile.s.1",
+            "trap-workshop.dart-projectile.s.2",
+            "trap-workshop.dart-projectile.s.3",
+            "trap-workshop.dart-projectile.s.4",
+            "trap-workshop.dart-projectile.s.5",
+            "trap-workshop.dart-projectile.s.6",
+            "trap-workshop.dart-projectile.s.7"
+          ],
+          "w": [
+            "trap-workshop.dart-projectile.w.0",
+            "trap-workshop.dart-projectile.w.1",
+            "trap-workshop.dart-projectile.w.2",
+            "trap-workshop.dart-projectile.w.3",
+            "trap-workshop.dart-projectile.w.4",
+            "trap-workshop.dart-projectile.w.5",
+            "trap-workshop.dart-projectile.w.6",
+            "trap-workshop.dart-projectile.w.7"
+          ],
+          "n": [
+            "trap-workshop.dart-projectile.n.0",
+            "trap-workshop.dart-projectile.n.1",
+            "trap-workshop.dart-projectile.n.2",
+            "trap-workshop.dart-projectile.n.3",
+            "trap-workshop.dart-projectile.n.4",
+            "trap-workshop.dart-projectile.n.5",
+            "trap-workshop.dart-projectile.n.6",
+            "trap-workshop.dart-projectile.n.7"
+          ]
+        },
+        "muzzle_offsets_by_pose": {
+          "e": [
+            6.7882999999999925,
+            -50.05199999999999
+          ],
+          "s": [
+            -6.788200000000003,
+            -50.05199999999999
+          ],
+          "w": [
+            -6.788200000000003,
+            -56.84020000000001
+          ],
+          "n": [
+            6.788199999999989,
+            -56.84020000000001
+          ]
+        },
+        "muzzle_height_steps": 0.8350953125,
+        "speed_tiles_per_second": 12,
+        "tip_offsets_by_pose": {
+          "e": [
+            [
+              12.12190000000001,
+              6.060900000000004
+            ],
+            [
+              0,
+              8.571400000000011
+            ],
+            [
+              -12.121799999999993,
+              6.060900000000004
+            ],
+            [
+              -17.142799999999994,
+              0
+            ],
+            [
+              -12.121799999999993,
+              -6.060900000000004
+            ],
+            [
+              0,
+              -8.571400000000011
+            ],
+            [
+              12.12190000000001,
+              -6.060900000000004
+            ],
+            [
+              17.142899999999997,
+              0
+            ]
+          ],
+          "s": [
+            [
+              -12.121799999999993,
+              6.061000000000007
+            ],
+            [
+              -17.142899999999997,
+              0.00010000000000331966
+            ],
+            [
+              -12.121799999999993,
+              -6.060900000000004
+            ],
+            [
+              0,
+              -8.571400000000011
+            ],
+            [
+              12.121800000000007,
+              -6.060900000000004
+            ],
+            [
+              17.142799999999994,
+              0.00010000000000331966
+            ],
+            [
+              12.121800000000007,
+              6.061000000000007
+            ],
+            [
+              0,
+              8.571499999999986
+            ]
+          ],
+          "w": [
+            [
+              -12.121799999999993,
+              -6.060900000000004
+            ],
+            [
+              0,
+              -8.571400000000011
+            ],
+            [
+              12.121800000000007,
+              -6.060900000000004
+            ],
+            [
+              17.142899999999997,
+              0.00010000000000331966
+            ],
+            [
+              12.121800000000007,
+              6.061000000000007
+            ],
+            [
+              0,
+              8.571499999999986
+            ],
+            [
+              -12.121799999999993,
+              6.061000000000007
+            ],
+            [
+              -17.142799999999994,
+              0.00010000000000331966
+            ]
+          ],
+          "n": [
+            [
+              12.121800000000007,
+              -6.060900000000004
+            ],
+            [
+              17.142799999999994,
+              0
+            ],
+            [
+              12.121800000000007,
+              6.060900000000004
+            ],
+            [
+              0,
+              8.571400000000011
+            ],
+            [
+              -12.121899999999997,
+              6.060900000000004
+            ],
+            [
+              -17.142899999999997,
+              0
+            ],
+            [
+              -12.121899999999997,
+              -6.060900000000004
+            ],
+            [
+              0,
+              -8.571400000000011
+            ]
+          ]
+        }
+      },
+      "depth": "world"
+    },
+    "spatial_effect.environment.swinging_blade": {
+      "frames_by_pose": {
+        "e": [
+          "trap-workshop.blade.e.0",
+          "trap-workshop.blade.e.1",
+          "trap-workshop.blade.e.2",
+          "trap-workshop.blade.e.3",
+          "trap-workshop.blade.e.4",
+          "trap-workshop.blade.e.5",
+          "trap-workshop.blade.e.6",
+          "trap-workshop.blade.e.7",
+          "trap-workshop.blade.e.8",
+          "trap-workshop.blade.e.9",
+          "trap-workshop.blade.e.10",
+          "trap-workshop.blade.e.11"
+        ],
+        "s": [
+          "trap-workshop.blade.s.0",
+          "trap-workshop.blade.s.1",
+          "trap-workshop.blade.s.2",
+          "trap-workshop.blade.s.3",
+          "trap-workshop.blade.s.4",
+          "trap-workshop.blade.s.5",
+          "trap-workshop.blade.s.6",
+          "trap-workshop.blade.s.7",
+          "trap-workshop.blade.s.8",
+          "trap-workshop.blade.s.9",
+          "trap-workshop.blade.s.10",
+          "trap-workshop.blade.s.11"
+        ],
+        "w": [
+          "trap-workshop.blade.w.0",
+          "trap-workshop.blade.w.1",
+          "trap-workshop.blade.w.2",
+          "trap-workshop.blade.w.3",
+          "trap-workshop.blade.w.4",
+          "trap-workshop.blade.w.5",
+          "trap-workshop.blade.w.6",
+          "trap-workshop.blade.w.7",
+          "trap-workshop.blade.w.8",
+          "trap-workshop.blade.w.9",
+          "trap-workshop.blade.w.10",
+          "trap-workshop.blade.w.11"
+        ],
+        "n": [
+          "trap-workshop.blade.n.0",
+          "trap-workshop.blade.n.1",
+          "trap-workshop.blade.n.2",
+          "trap-workshop.blade.n.3",
+          "trap-workshop.blade.n.4",
+          "trap-workshop.blade.n.5",
+          "trap-workshop.blade.n.6",
+          "trap-workshop.blade.n.7",
+          "trap-workshop.blade.n.8",
+          "trap-workshop.blade.n.9",
+          "trap-workshop.blade.n.10",
+          "trap-workshop.blade.n.11"
+        ]
+      },
+      "fps": 12,
+      "successful_save_hop": {
+        "effect_id": "spatial_effect.environment.swinging_blade.avoidance",
+        "body_clip": "Rolling",
+        "duration_ms": 360,
+        "height_px": 10
+      },
+      "state_frames": {
+        "ready": 0,
+        "activated": 0,
+        "deactivated": 0
+      },
+      "activation_frames": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "contact_frame": 5,
+      "depth": "world",
+      "actor_depth": {
+        "asset_id": "trap-workshop.blade.actor-depth",
+        "cell": [
+          256,
+          256
+        ],
+        "rows_by_pose": {
+          "e": 0,
+          "s": 1,
+          "w": 2,
+          "n": 3
+        },
+        "depth_range": [
+          -4,
+          4
+        ],
+        "pixels_per_unit_by_pose": {
+          "e": 22.857127046414462,
+          "s": 22.857137836007496,
+          "w": 22.85714862560053,
+          "n": 22.857137836007496
+        }
+      }
+    },
+    "spatial_effect.environment.crusher": {
+      "frames_by_pose": {
+        "e": [
+          "trap-workshop.crusher.e.0",
+          "trap-workshop.crusher.e.1",
+          "trap-workshop.crusher.e.2",
+          "trap-workshop.crusher.e.3",
+          "trap-workshop.crusher.e.4",
+          "trap-workshop.crusher.e.5",
+          "trap-workshop.crusher.e.6",
+          "trap-workshop.crusher.e.7",
+          "trap-workshop.crusher.e.8",
+          "trap-workshop.crusher.e.9",
+          "trap-workshop.crusher.e.10",
+          "trap-workshop.crusher.e.11"
+        ],
+        "s": [
+          "trap-workshop.crusher.s.0",
+          "trap-workshop.crusher.s.1",
+          "trap-workshop.crusher.s.2",
+          "trap-workshop.crusher.s.3",
+          "trap-workshop.crusher.s.4",
+          "trap-workshop.crusher.s.5",
+          "trap-workshop.crusher.s.6",
+          "trap-workshop.crusher.s.7",
+          "trap-workshop.crusher.s.8",
+          "trap-workshop.crusher.s.9",
+          "trap-workshop.crusher.s.10",
+          "trap-workshop.crusher.s.11"
+        ],
+        "w": [
+          "trap-workshop.crusher.w.0",
+          "trap-workshop.crusher.w.1",
+          "trap-workshop.crusher.w.2",
+          "trap-workshop.crusher.w.3",
+          "trap-workshop.crusher.w.4",
+          "trap-workshop.crusher.w.5",
+          "trap-workshop.crusher.w.6",
+          "trap-workshop.crusher.w.7",
+          "trap-workshop.crusher.w.8",
+          "trap-workshop.crusher.w.9",
+          "trap-workshop.crusher.w.10",
+          "trap-workshop.crusher.w.11"
+        ],
+        "n": [
+          "trap-workshop.crusher.n.0",
+          "trap-workshop.crusher.n.1",
+          "trap-workshop.crusher.n.2",
+          "trap-workshop.crusher.n.3",
+          "trap-workshop.crusher.n.4",
+          "trap-workshop.crusher.n.5",
+          "trap-workshop.crusher.n.6",
+          "trap-workshop.crusher.n.7",
+          "trap-workshop.crusher.n.8",
+          "trap-workshop.crusher.n.9",
+          "trap-workshop.crusher.n.10",
+          "trap-workshop.crusher.n.11"
+        ]
+      },
+      "fps": 12,
+      "successful_save_hop": {
+        "effect_id": "spatial_effect.environment.crusher.avoidance",
+        "body_clip": "Rolling",
+        "duration_ms": 360,
+        "height_px": 10
+      },
+      "state_frames": {
+        "ready": 0,
+        "activated": 0,
+        "deactivated": 0
+      },
+      "activation_frames": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "contact_frame": 5,
+      "depth": "world",
+      "actor_depth": {
+        "asset_id": "trap-workshop.crusher.actor-depth",
+        "cell": [
+          256,
+          256
+        ],
+        "rows_by_pose": {
+          "e": 0,
+          "s": 1,
+          "w": 2,
+          "n": 3
+        },
+        "depth_range": [
+          -4,
+          4
+        ],
+        "pixels_per_unit_by_pose": {
+          "e": 22.857127046414462,
+          "s": 22.857137836007496,
+          "w": 22.85714862560053,
+          "n": 22.857137836007496
+        }
+      }
+    },
+    "spatial_effect.environment.jaw_trap": {
+      "frames_by_pose": {
+        "e": [
+          "trap-workshop.jaw.e.0",
+          "trap-workshop.jaw.e.1",
+          "trap-workshop.jaw.e.2",
+          "trap-workshop.jaw.e.3",
+          "trap-workshop.jaw.e.4",
+          "trap-workshop.jaw.e.5",
+          "trap-workshop.jaw.e.6",
+          "trap-workshop.jaw.e.7",
+          "trap-workshop.jaw.e.8",
+          "trap-workshop.jaw.e.9",
+          "trap-workshop.jaw.e.10",
+          "trap-workshop.jaw.e.11"
+        ],
+        "s": [
+          "trap-workshop.jaw.s.0",
+          "trap-workshop.jaw.s.1",
+          "trap-workshop.jaw.s.2",
+          "trap-workshop.jaw.s.3",
+          "trap-workshop.jaw.s.4",
+          "trap-workshop.jaw.s.5",
+          "trap-workshop.jaw.s.6",
+          "trap-workshop.jaw.s.7",
+          "trap-workshop.jaw.s.8",
+          "trap-workshop.jaw.s.9",
+          "trap-workshop.jaw.s.10",
+          "trap-workshop.jaw.s.11"
+        ],
+        "w": [
+          "trap-workshop.jaw.w.0",
+          "trap-workshop.jaw.w.1",
+          "trap-workshop.jaw.w.2",
+          "trap-workshop.jaw.w.3",
+          "trap-workshop.jaw.w.4",
+          "trap-workshop.jaw.w.5",
+          "trap-workshop.jaw.w.6",
+          "trap-workshop.jaw.w.7",
+          "trap-workshop.jaw.w.8",
+          "trap-workshop.jaw.w.9",
+          "trap-workshop.jaw.w.10",
+          "trap-workshop.jaw.w.11"
+        ],
+        "n": [
+          "trap-workshop.jaw.n.0",
+          "trap-workshop.jaw.n.1",
+          "trap-workshop.jaw.n.2",
+          "trap-workshop.jaw.n.3",
+          "trap-workshop.jaw.n.4",
+          "trap-workshop.jaw.n.5",
+          "trap-workshop.jaw.n.6",
+          "trap-workshop.jaw.n.7",
+          "trap-workshop.jaw.n.8",
+          "trap-workshop.jaw.n.9",
+          "trap-workshop.jaw.n.10",
+          "trap-workshop.jaw.n.11"
+        ]
+      },
+      "fps": 12,
+      "successful_save_hop": {
+        "effect_id": "spatial_effect.environment.jaw_trap.capture",
+        "body_clip": "Rolling",
+        "duration_ms": 360,
+        "height_px": 10
+      },
+      "state_frames": {
+        "ready": 0,
+        "activated": 5,
+        "deactivated": 0
+      },
+      "activation_frames": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "contact_frame": 5,
+      "transition_frames": {
+        "activated:ready": [
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "activated:deactivated": [
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ]
+      }
+    },
+    "spatial_effect.environment.gas_vent": {
+      "frames_by_pose": {
+        "e": [
+          "trap-workshop.vent.e.0",
+          "trap-workshop.vent.e.1",
+          "trap-workshop.vent.e.2",
+          "trap-workshop.vent.e.3",
+          "trap-workshop.vent.e.4",
+          "trap-workshop.vent.e.5",
+          "trap-workshop.vent.e.6",
+          "trap-workshop.vent.e.7",
+          "trap-workshop.vent.e.8",
+          "trap-workshop.vent.e.9",
+          "trap-workshop.vent.e.10",
+          "trap-workshop.vent.e.11"
+        ],
+        "s": [
+          "trap-workshop.vent.s.0",
+          "trap-workshop.vent.s.1",
+          "trap-workshop.vent.s.2",
+          "trap-workshop.vent.s.3",
+          "trap-workshop.vent.s.4",
+          "trap-workshop.vent.s.5",
+          "trap-workshop.vent.s.6",
+          "trap-workshop.vent.s.7",
+          "trap-workshop.vent.s.8",
+          "trap-workshop.vent.s.9",
+          "trap-workshop.vent.s.10",
+          "trap-workshop.vent.s.11"
+        ],
+        "w": [
+          "trap-workshop.vent.w.0",
+          "trap-workshop.vent.w.1",
+          "trap-workshop.vent.w.2",
+          "trap-workshop.vent.w.3",
+          "trap-workshop.vent.w.4",
+          "trap-workshop.vent.w.5",
+          "trap-workshop.vent.w.6",
+          "trap-workshop.vent.w.7",
+          "trap-workshop.vent.w.8",
+          "trap-workshop.vent.w.9",
+          "trap-workshop.vent.w.10",
+          "trap-workshop.vent.w.11"
+        ],
+        "n": [
+          "trap-workshop.vent.n.0",
+          "trap-workshop.vent.n.1",
+          "trap-workshop.vent.n.2",
+          "trap-workshop.vent.n.3",
+          "trap-workshop.vent.n.4",
+          "trap-workshop.vent.n.5",
+          "trap-workshop.vent.n.6",
+          "trap-workshop.vent.n.7",
+          "trap-workshop.vent.n.8",
+          "trap-workshop.vent.n.9",
+          "trap-workshop.vent.n.10",
+          "trap-workshop.vent.n.11"
+        ]
+      },
+      "fps": 12,
+      "state_frames": {
+        "ready": 0,
+        "activated": 0,
+        "deactivated": 0
+      },
+      "activation_frames": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "contact_frame": 5
+    },
+    "spatial_effect.environment.tripwire": {
+      "frames_by_pose": {
+        "e": [
+          "trap-workshop.tripwire.e.0",
+          "trap-workshop.tripwire.e.1",
+          "trap-workshop.tripwire.e.2",
+          "trap-workshop.tripwire.e.3",
+          "trap-workshop.tripwire.e.4",
+          "trap-workshop.tripwire.e.5",
+          "trap-workshop.tripwire.e.6",
+          "trap-workshop.tripwire.e.7",
+          "trap-workshop.tripwire.e.8",
+          "trap-workshop.tripwire.e.9",
+          "trap-workshop.tripwire.e.10",
+          "trap-workshop.tripwire.e.11"
+        ],
+        "s": [
+          "trap-workshop.tripwire.s.0",
+          "trap-workshop.tripwire.s.1",
+          "trap-workshop.tripwire.s.2",
+          "trap-workshop.tripwire.s.3",
+          "trap-workshop.tripwire.s.4",
+          "trap-workshop.tripwire.s.5",
+          "trap-workshop.tripwire.s.6",
+          "trap-workshop.tripwire.s.7",
+          "trap-workshop.tripwire.s.8",
+          "trap-workshop.tripwire.s.9",
+          "trap-workshop.tripwire.s.10",
+          "trap-workshop.tripwire.s.11"
+        ],
+        "w": [
+          "trap-workshop.tripwire.w.0",
+          "trap-workshop.tripwire.w.1",
+          "trap-workshop.tripwire.w.2",
+          "trap-workshop.tripwire.w.3",
+          "trap-workshop.tripwire.w.4",
+          "trap-workshop.tripwire.w.5",
+          "trap-workshop.tripwire.w.6",
+          "trap-workshop.tripwire.w.7",
+          "trap-workshop.tripwire.w.8",
+          "trap-workshop.tripwire.w.9",
+          "trap-workshop.tripwire.w.10",
+          "trap-workshop.tripwire.w.11"
+        ],
+        "n": [
+          "trap-workshop.tripwire.n.0",
+          "trap-workshop.tripwire.n.1",
+          "trap-workshop.tripwire.n.2",
+          "trap-workshop.tripwire.n.3",
+          "trap-workshop.tripwire.n.4",
+          "trap-workshop.tripwire.n.5",
+          "trap-workshop.tripwire.n.6",
+          "trap-workshop.tripwire.n.7",
+          "trap-workshop.tripwire.n.8",
+          "trap-workshop.tripwire.n.9",
+          "trap-workshop.tripwire.n.10",
+          "trap-workshop.tripwire.n.11"
+        ]
+      },
+      "fps": 12,
+      "state_frames": {},
+      "activation_frames": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "contact_frame": 3,
+      "placement": "anchor",
+      "origin_offset": [
+        0.5,
+        0
+      ]
     }
   },
   "treatments": {
@@ -972,5 +3095,1159 @@
     "residue.bone_fragments": "particles.region.bone",
     "residue.corrosive_demonic_blood": "particles.region.corrosive",
     "residue.dread_blood": "particles.region.dread"
+  },
+  "spatial_media": {
+    "spatial_effect.spell.gust_of_wind": {
+      "assetPhase": "impact",
+      "holdStartFrame": 252,
+      "holdFrames": 108,
+      "fps": 144,
+      "scale": 0.5,
+      "layers": [
+        {
+          "assetId": "area.gust_of_wind.v4",
+          "side": "center"
+        }
+      ]
+    },
+    "spatial_effect.spell.silence": {
+      "layers": [
+        {
+          "assetId": "control.silence.sustain.back",
+          "applicationAssetId": "control.silence.application.back",
+          "side": "rear"
+        },
+        {
+          "assetId": "control.silence.sustain.front",
+          "applicationAssetId": "control.silence.application.front",
+          "side": "front"
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 576,
+      "fps": 144,
+      "scale": 0.6111111115885417,
+      "removalFadeMs": 600
+    },
+    "spatial_effect.spell.grease": {
+      "layers": [
+        {
+          "assetId": "persistent.grease.hold",
+          "applicationAssetId": "persistent.grease.apply",
+          "removalAssetId": "persistent.grease.clear",
+          "composition": "floor",
+          "offsetCells": [
+            -0.5,
+            -0.5
+          ],
+          "delayMs": 0
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 288,
+      "fps": 144,
+      "scale": 0.5,
+      "contactMedia": {
+        "ground_entry": {
+          "id": "grease.contact",
+          "assetId": "persistent.grease_contact.contact",
+          "attachment": "target_ground",
+          "fps": 144,
+          "scale": 0.5,
+          "viewFacing": "E",
+          "depth": "ground"
+        }
+      }
+    },
+    "spatial_effect.spell.spike_growth": {
+      "layers": [
+        {
+          "assetId": "persistent.thorn1.hold",
+          "applicationAssetId": "persistent.thorn1.apply",
+          "removalAssetId": "persistent.thorn1.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -3.5444787759164575,
+            -0.19791464594054953
+          ],
+          "delayMs": 243.92576174571906
+        },
+        {
+          "assetId": "persistent.thorn4.hold",
+          "applicationAssetId": "persistent.thorn4.apply",
+          "removalAssetId": "persistent.thorn4.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -2.88619462403816,
+            -2.066973776363217
+          ],
+          "delayMs": 228.1592019558931
+        },
+        {
+          "assetId": "persistent.thorn10.hold",
+          "applicationAssetId": "persistent.thorn10.apply",
+          "removalAssetId": "persistent.thorn10.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -3.343477846962698,
+            -0.7799947398567966
+          ],
+          "delayMs": 222.2130282776817
+        },
+        {
+          "assetId": "persistent.thorn5.hold",
+          "applicationAssetId": "persistent.thorn5.apply",
+          "removalAssetId": "persistent.thorn5.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -3.38166458606929,
+            0.34334023591587587
+          ],
+          "delayMs": 297.638134575355
+        },
+        {
+          "assetId": "persistent.thorn8.hold",
+          "applicationAssetId": "persistent.thorn8.apply",
+          "removalAssetId": "persistent.thorn8.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -3.2866290396457476,
+            1.3418530306100107
+          ],
+          "delayMs": 181.53983353871183
+        },
+        {
+          "assetId": "persistent.thorn10.hold",
+          "applicationAssetId": "persistent.thorn10.apply",
+          "removalAssetId": "persistent.thorn10.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -2.948586312887835,
+            1.976951884960917
+          ],
+          "delayMs": 225.3109705317487
+        },
+        {
+          "assetId": "persistent.thorn5.hold",
+          "applicationAssetId": "persistent.thorn5.apply",
+          "removalAssetId": "persistent.thorn5.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -2.2140410270157522,
+            -2.774981500963751
+          ],
+          "delayMs": 223.60455923796223
+        },
+        {
+          "assetId": "persistent.thorn5.hold",
+          "applicationAssetId": "persistent.thorn5.apply",
+          "removalAssetId": "persistent.thorn5.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -1.9983843441261038,
+            -1.9199944602786276
+          ],
+          "delayMs": 234.08088521893373
+        },
+        {
+          "assetId": "persistent.thorn0.hold",
+          "applicationAssetId": "persistent.thorn0.apply",
+          "removalAssetId": "persistent.thorn0.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -2.1498223929143907,
+            -0.6510662879338667
+          ],
+          "delayMs": 152.42467130171272
+        },
+        {
+          "assetId": "persistent.thorn0.hold",
+          "applicationAssetId": "persistent.thorn0.apply",
+          "removalAssetId": "persistent.thorn0.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -1.8524743734150722,
+            0.2264794280372649
+          ],
+          "delayMs": 198.51095458909612
+        },
+        {
+          "assetId": "persistent.thorn7.hold",
+          "applicationAssetId": "persistent.thorn7.apply",
+          "removalAssetId": "persistent.thorn7.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -1.9608069606441818,
+            0.5898962509293351
+          ],
+          "delayMs": 271.18754025640555
+        },
+        {
+          "assetId": "persistent.thorn6.hold",
+          "applicationAssetId": "persistent.thorn6.apply",
+          "removalAssetId": "persistent.thorn6.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -2.158737926019299,
+            2.1676743818771222
+          ],
+          "delayMs": 298.52863066863546
+        },
+        {
+          "assetId": "persistent.thorn6.hold",
+          "applicationAssetId": "persistent.thorn6.apply",
+          "removalAssetId": "persistent.thorn6.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -1.7871673005684092,
+            3.0673332130335993
+          ],
+          "delayMs": 295.9706318173374
+        },
+        {
+          "assetId": "persistent.thorn7.hold",
+          "applicationAssetId": "persistent.thorn7.apply",
+          "removalAssetId": "persistent.thorn7.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -0.9438281675764005,
+            -2.5740075308879433
+          ],
+          "delayMs": 310.45065571893565
+        },
+        {
+          "assetId": "persistent.thorn8.hold",
+          "applicationAssetId": "persistent.thorn8.apply",
+          "removalAssetId": "persistent.thorn8.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -0.7265906820173169,
+            -1.785873478084679
+          ],
+          "delayMs": 168.81676845073218
+        },
+        {
+          "assetId": "persistent.thorn9.hold",
+          "applicationAssetId": "persistent.thorn9.apply",
+          "removalAssetId": "persistent.thorn9.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -0.832155961326833,
+            -1.3889671024503734
+          ],
+          "delayMs": 107.03880164591612
+        },
+        {
+          "assetId": "persistent.thorn6.hold",
+          "applicationAssetId": "persistent.thorn6.apply",
+          "removalAssetId": "persistent.thorn6.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -1.0765645200957301,
+            -0.05066858948938052
+          ],
+          "delayMs": 88.43143033874104
+        },
+        {
+          "assetId": "persistent.thorn5.hold",
+          "applicationAssetId": "persistent.thorn5.apply",
+          "removalAssetId": "persistent.thorn5.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -0.8773370051239162,
+            0.8316601018378749
+          ],
+          "delayMs": 121.3916866279353
+        },
+        {
+          "assetId": "persistent.thorn4.hold",
+          "applicationAssetId": "persistent.thorn4.apply",
+          "removalAssetId": "persistent.thorn4.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -1.11530831427381,
+            1.7121495784651861
+          ],
+          "delayMs": 190.36150470254842
+        },
+        {
+          "assetId": "persistent.thorn7.hold",
+          "applicationAssetId": "persistent.thorn7.apply",
+          "removalAssetId": "persistent.thorn7.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -1.2517411453854588,
+            2.8852825769111607
+          ],
+          "delayMs": 323.34926585118717
+        },
+        {
+          "assetId": "persistent.thorn5.hold",
+          "applicationAssetId": "persistent.thorn5.apply",
+          "removalAssetId": "persistent.thorn5.clear",
+          "composition": "clump",
+          "offsetCells": [
+            0.2729214802725803,
+            -3.5394934476003517
+          ],
+          "delayMs": 350.509972120054
+        },
+        {
+          "assetId": "persistent.thorn8.hold",
+          "applicationAssetId": "persistent.thorn8.apply",
+          "removalAssetId": "persistent.thorn8.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -0.06821375680808572,
+            -2.968499031144884
+          ],
+          "delayMs": 303.6402878446789
+        },
+        {
+          "assetId": "persistent.thorn11.hold",
+          "applicationAssetId": "persistent.thorn11.apply",
+          "removalAssetId": "persistent.thorn11.clear",
+          "composition": "clump",
+          "offsetCells": [
+            0.3810190787782803,
+            -1.82591829322088
+          ],
+          "delayMs": 261.3189693394529
+        },
+        {
+          "assetId": "persistent.thorn3.hold",
+          "applicationAssetId": "persistent.thorn3.apply",
+          "removalAssetId": "persistent.thorn3.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -0.27064215730166286,
+            -0.6884967011396181
+          ],
+          "delayMs": 99.41784835393474
+        },
+        {
+          "assetId": "persistent.thorn10.hold",
+          "applicationAssetId": "persistent.thorn10.apply",
+          "removalAssetId": "persistent.thorn10.clear",
+          "composition": "clump",
+          "offsetCells": [
+            -0.2400746684245088,
+            -0.40003683270091994
+          ],
+          "delayMs": 41.25480576777856
+        },
+        {
+          "assetId": "persistent.thorn0.hold",
+          "applicationAssetId": "persistent.thorn0.apply",
+          "removalAssetId": "persistent.thorn0.clear",
+          "composition": "clump",
+          "offsetCells": [
+            0.05034300642304612,
+            1.045495269024923
+          ],
+          "delayMs": 166.71539658820643
+        },
+        {
+          "assetId": "persistent.thorn5.hold",
+          "applicationAssetId": "persistent.thorn5.apply",
+          "removalAssetId": "persistent.thorn5.clear",
+          "composition": "clump",
+          "offsetCells": [
+            0.3434763064614131,
+            2.32694518839037
+          ],
+          "delayMs": 252.10644444181796
+        },
+        {
+          "assetId": "persistent.thorn7.hold",
+          "applicationAssetId": "persistent.thorn7.apply",
+          "removalAssetId": "persistent.thorn7.clear",
+          "composition": "clump",
+          "offsetCells": [
+            0.0023055145840095714,
+            3.4012268585986996
+          ],
+          "delayMs": 170.52023288883473
+        },
+        {
+          "assetId": "persistent.thorn10.hold",
+          "applicationAssetId": "persistent.thorn10.apply",
+          "removalAssetId": "persistent.thorn10.clear",
+          "composition": "clump",
+          "offsetCells": [
+            0.021581986260872203,
+            3.5499343962767864
+          ],
+          "delayMs": 340.9135651345939
+        },
+        {
+          "assetId": "persistent.thorn3.hold",
+          "applicationAssetId": "persistent.thorn3.apply",
+          "removalAssetId": "persistent.thorn3.clear",
+          "composition": "clump",
+          "offsetCells": [
+            0.7333977512154672,
+            -2.7455565273056455
+          ],
+          "delayMs": 221.98301419002868
+        },
+        {
+          "assetId": "persistent.thorn11.hold",
+          "applicationAssetId": "persistent.thorn11.apply",
+          "removalAssetId": "persistent.thorn11.clear",
+          "composition": "clump",
+          "offsetCells": [
+            0.9530632269086923,
+            -2.175433910273815
+          ],
+          "delayMs": 217.9103262461071
+        },
+        {
+          "assetId": "persistent.thorn4.hold",
+          "applicationAssetId": "persistent.thorn4.apply",
+          "removalAssetId": "persistent.thorn4.clear",
+          "composition": "clump",
+          "offsetCells": [
+            1.1876219062672289,
+            -0.9427378632736102
+          ],
+          "delayMs": 234.85372794881823
+        },
+        {
+          "assetId": "persistent.thorn9.hold",
+          "applicationAssetId": "persistent.thorn9.apply",
+          "removalAssetId": "persistent.thorn9.clear",
+          "composition": "clump",
+          "offsetCells": [
+            0.8154370974070054,
+            -0.3026200995241695
+          ],
+          "delayMs": 94.67740519218454
+        },
+        {
+          "assetId": "persistent.thorn11.hold",
+          "applicationAssetId": "persistent.thorn11.apply",
+          "removalAssetId": "persistent.thorn11.clear",
+          "composition": "clump",
+          "offsetCells": [
+            1.1690172065121032,
+            1.4269926876115233
+          ],
+          "delayMs": 86.38261858154709
+        },
+        {
+          "assetId": "persistent.thorn9.hold",
+          "applicationAssetId": "persistent.thorn9.apply",
+          "removalAssetId": "persistent.thorn9.clear",
+          "composition": "clump",
+          "offsetCells": [
+            1.0759724478403205,
+            1.673222923517152
+          ],
+          "delayMs": 271.7097340073119
+        },
+        {
+          "assetId": "persistent.thorn0.hold",
+          "applicationAssetId": "persistent.thorn0.apply",
+          "removalAssetId": "persistent.thorn0.clear",
+          "composition": "clump",
+          "offsetCells": [
+            0.8600047236888523,
+            2.6546083453540232
+          ],
+          "delayMs": 244.53929205567405
+        },
+        {
+          "assetId": "persistent.thorn6.hold",
+          "applicationAssetId": "persistent.thorn6.apply",
+          "removalAssetId": "persistent.thorn6.clear",
+          "composition": "clump",
+          "offsetCells": [
+            1.859413881162312,
+            -3.024083335250685
+          ],
+          "delayMs": 228.13514462678722
+        },
+        {
+          "assetId": "persistent.thorn4.hold",
+          "applicationAssetId": "persistent.thorn4.apply",
+          "removalAssetId": "persistent.thorn4.clear",
+          "composition": "clump",
+          "offsetCells": [
+            2.1526502116004878,
+            -2.2227598339845027
+          ],
+          "delayMs": 201.2477751057777
+        },
+        {
+          "assetId": "persistent.thorn8.hold",
+          "applicationAssetId": "persistent.thorn8.apply",
+          "removalAssetId": "persistent.thorn8.clear",
+          "composition": "clump",
+          "offsetCells": [
+            1.8831844248433232,
+            -1.0053949929440595
+          ],
+          "delayMs": 146.1853056527319
+        },
+        {
+          "assetId": "persistent.thorn4.hold",
+          "applicationAssetId": "persistent.thorn4.apply",
+          "removalAssetId": "persistent.thorn4.clear",
+          "composition": "clump",
+          "offsetCells": [
+            1.730474377574264,
+            0.075159357592887
+          ],
+          "delayMs": 249.11336953623436
+        },
+        {
+          "assetId": "persistent.thorn3.hold",
+          "applicationAssetId": "persistent.thorn3.apply",
+          "removalAssetId": "persistent.thorn3.clear",
+          "composition": "clump",
+          "offsetCells": [
+            2.2543754420460718,
+            1.2554822850536387
+          ],
+          "delayMs": 198.6831053604479
+        },
+        {
+          "assetId": "persistent.thorn6.hold",
+          "applicationAssetId": "persistent.thorn6.apply",
+          "removalAssetId": "persistent.thorn6.clear",
+          "composition": "clump",
+          "offsetCells": [
+            2.1611332205412266,
+            1.6775840349744446
+          ],
+          "delayMs": 257.9563222295155
+        },
+        {
+          "assetId": "persistent.thorn1.hold",
+          "applicationAssetId": "persistent.thorn1.apply",
+          "removalAssetId": "persistent.thorn1.clear",
+          "composition": "clump",
+          "offsetCells": [
+            2.1493423183838187,
+            2.6911777718225656
+          ],
+          "delayMs": 263.66099774137695
+        },
+        {
+          "assetId": "persistent.thorn8.hold",
+          "applicationAssetId": "persistent.thorn8.apply",
+          "removalAssetId": "persistent.thorn8.clear",
+          "composition": "clump",
+          "offsetCells": [
+            2.8387269453288333,
+            -2.1316963502957056
+          ],
+          "delayMs": 299.8946647987891
+        },
+        {
+          "assetId": "persistent.thorn0.hold",
+          "applicationAssetId": "persistent.thorn0.apply",
+          "removalAssetId": "persistent.thorn0.clear",
+          "composition": "clump",
+          "offsetCells": [
+            3.2358302138264534,
+            -1.336625114613046
+          ],
+          "delayMs": 183.44792193644938
+        },
+        {
+          "assetId": "persistent.thorn3.hold",
+          "applicationAssetId": "persistent.thorn3.apply",
+          "removalAssetId": "persistent.thorn3.clear",
+          "composition": "clump",
+          "offsetCells": [
+            2.6788794141452055,
+            0.12481000540837367
+          ],
+          "delayMs": 310.53976920257907
+        },
+        {
+          "assetId": "persistent.thorn11.hold",
+          "applicationAssetId": "persistent.thorn11.apply",
+          "removalAssetId": "persistent.thorn11.clear",
+          "composition": "clump",
+          "offsetCells": [
+            3.1244989603217794,
+            0.9710166250442388
+          ],
+          "delayMs": 252.39592949142576
+        },
+        {
+          "assetId": "persistent.thorn0.hold",
+          "applicationAssetId": "persistent.thorn0.apply",
+          "removalAssetId": "persistent.thorn0.clear",
+          "composition": "clump",
+          "offsetCells": [
+            3.100737415858478,
+            1.7285622574542374
+          ],
+          "delayMs": 345.95894363156896
+        },
+        {
+          "assetId": "persistent.thorn9.hold",
+          "applicationAssetId": "persistent.thorn9.apply",
+          "removalAssetId": "persistent.thorn9.clear",
+          "composition": "clump",
+          "offsetCells": [
+            3.536320577411872,
+            0.3113467099125419
+          ],
+          "delayMs": 319.1161068569356
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 288,
+      "fps": 144,
+      "scale": 0.5,
+      "contactMedia": {
+        "damage": {
+          "id": "spike_growth.contact",
+          "assetId": "persistent.thorn_contact.contact",
+          "attachment": "target_ground",
+          "fps": 144,
+          "scale": 0.5,
+          "viewFacing": "E",
+          "depth": "front_body"
+        }
+      }
+    },
+    "spatial_effect.spell.insect_plague": {
+      "layers": [
+        {
+          "assetId": "persistent.insect_plague.hold",
+          "applicationAssetId": "persistent.insect_plague.apply",
+          "composition": "volume"
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 1152,
+      "fps": 144,
+      "scale": 0.5,
+      "removalFadeMs": 630,
+      "removalEasing": "smoothstep",
+      "referenceRadiusFeet": 20
+    },
+    "spatial_effect.spell.cloudkill": {
+      "layers": [
+        {
+          "assetId": "persistent.cloudkill.hold",
+          "applicationAssetId": "persistent.cloudkill.apply",
+          "composition": "volume"
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 4032,
+      "fps": 144,
+      "scale": 0.5,
+      "removalFadeMs": 630,
+      "removalEasing": "smoothstep",
+      "referenceRadiusFeet": 20,
+      "movementSpeedCellsPerSecond": 2
+    },
+    "spatial_effect.spell.incendiary_cloud": {
+      "layers": [
+        {
+          "assetId": "persistent.incendiary_cloud.hold",
+          "applicationAssetId": "persistent.incendiary_cloud.apply",
+          "composition": "volume"
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 2304,
+      "fps": 144,
+      "scale": 0.5,
+      "removalFadeMs": 630,
+      "removalEasing": "smoothstep",
+      "referenceRadiusFeet": 20,
+      "movementSpeedCellsPerSecond": 2
+    },
+    "spatial_effect.spell.fog_cloud": {
+      "layers": [
+        {
+          "assetId": "persistent.fog_cloud.hold",
+          "applicationAssetId": "persistent.fog_cloud.apply",
+          "composition": "volume"
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 4032,
+      "fps": 144,
+      "scale": 0.5,
+      "removalFadeMs": 630,
+      "removalEasing": "smoothstep",
+      "referenceRadiusFeet": 20
+    },
+    "spatial_effect.spell.darkness": {
+      "layers": [
+        {
+          "assetId": "persistent.darkness.hold",
+          "applicationAssetId": "persistent.darkness.apply",
+          "composition": "volume"
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 4032,
+      "fps": 144,
+      "scale": 0.5,
+      "removalFadeMs": 630,
+      "removalEasing": "smoothstep",
+      "referenceRadiusFeet": 15
+    },
+    "spatial_effect.spell.stinking_cloud": {
+      "layers": [
+        {
+          "assetId": "persistent.stinking_cloud.hold",
+          "applicationAssetId": "persistent.stinking_cloud.apply",
+          "composition": "volume"
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 4032,
+      "fps": 144,
+      "scale": 0.5,
+      "removalFadeMs": 630,
+      "removalEasing": "smoothstep",
+      "referenceRadiusFeet": 20
+    },
+    "spatial_effect.spell.globe_of_invulnerability": {
+      "layers": [
+        {
+          "assetId": "globe.hold.back",
+          "applicationAssetId": "globe.apply.back",
+          "suppressionAssetId": "globe.response.back",
+          "side": "rear"
+        },
+        {
+          "assetId": "globe.hold.front",
+          "applicationAssetId": "globe.apply.front",
+          "suppressionAssetId": "globe.response.front",
+          "side": "front"
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 576,
+      "fps": 144,
+      "scale": 0.5,
+      "surfaceHeightScale": 1.224744871391589,
+      "suppressionDirection": {
+        "x": -1,
+        "y": 1
+      },
+      "removalFadeMs": 600,
+      "removalEasing": "smoothstep"
+    }
+  },
+  "liquid_surfaces": {
+    "residue.blood": {
+      "asset_id": "particles.region.blood",
+      "ellipse": {
+        "center": [
+          0,
+          0
+        ],
+        "radius_x": 0.75,
+        "radius_y": 0.65,
+        "angle": 0
+      },
+      "opacity": 1
+    },
+    "residue.poison": {
+      "asset_id": "particles.region.poison",
+      "ellipse": {
+        "center": [
+          0,
+          0
+        ],
+        "radius_x": 0.75,
+        "radius_y": 0.65,
+        "angle": 0
+      },
+      "opacity": 1
+    },
+    "residue.dread_blood": {
+      "asset_id": "particles.region.dread",
+      "ellipse": {
+        "center": [
+          0,
+          0
+        ],
+        "radius_x": 0.75,
+        "radius_y": 0.65,
+        "angle": 0
+      },
+      "opacity": 1
+    },
+    "spatial_effect.material.water_surface": {
+      "asset_id": "particles.region.water",
+      "ellipse": {
+        "center": [
+          0,
+          0
+        ],
+        "radius_x": 0.75,
+        "radius_y": 0.65,
+        "angle": 0
+      },
+      "opacity": 0.66
+    },
+    "spatial_effect.material.oil": {
+      "asset_id": "particles.region.oil",
+      "ellipse": {
+        "center": [
+          0,
+          0
+        ],
+        "radius_x": 0.75,
+        "radius_y": 0.65,
+        "angle": 0
+      },
+      "opacity": 0.9
+    }
+  },
+  "deposit_media": {
+    "spatial_effect.material.water_surface": {
+      "radiusCells": 1,
+      "variants": [
+        {
+          "layers": [
+            {
+              "assetId": "liquid.water.s0.floor.sustain",
+              "applicationAssetId": "liquid.water.s0.floor.application"
+            },
+            {
+              "assetId": "liquid.water.s0.air.sustain",
+              "applicationAssetId": "liquid.water.s0.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.water.s1.floor.sustain",
+              "applicationAssetId": "liquid.water.s1.floor.application"
+            },
+            {
+              "assetId": "liquid.water.s1.air.sustain",
+              "applicationAssetId": "liquid.water.s1.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.water.s2.floor.sustain",
+              "applicationAssetId": "liquid.water.s2.floor.application"
+            },
+            {
+              "assetId": "liquid.water.s2.air.sustain",
+              "applicationAssetId": "liquid.water.s2.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        }
+      ]
+    },
+    "spatial_effect.spell.grease": {
+      "radiusCells": 1,
+      "variants": [
+        {
+          "layers": [
+            {
+              "assetId": "liquid.grease.s0.floor.sustain",
+              "applicationAssetId": "liquid.grease.s0.floor.application"
+            },
+            {
+              "assetId": "liquid.grease.s0.air.sustain",
+              "applicationAssetId": "liquid.grease.s0.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.grease.s1.floor.sustain",
+              "applicationAssetId": "liquid.grease.s1.floor.application"
+            },
+            {
+              "assetId": "liquid.grease.s1.air.sustain",
+              "applicationAssetId": "liquid.grease.s1.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.grease.s2.floor.sustain",
+              "applicationAssetId": "liquid.grease.s2.floor.application"
+            },
+            {
+              "assetId": "liquid.grease.s2.air.sustain",
+              "applicationAssetId": "liquid.grease.s2.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        }
+      ]
+    },
+    "spatial_effect.material.oil": {
+      "radiusCells": 1,
+      "variants": [
+        {
+          "layers": [
+            {
+              "assetId": "liquid.oil.s0.floor.sustain",
+              "applicationAssetId": "liquid.oil.s0.floor.application"
+            },
+            {
+              "assetId": "liquid.oil.s0.air.sustain",
+              "applicationAssetId": "liquid.oil.s0.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.oil.s1.floor.sustain",
+              "applicationAssetId": "liquid.oil.s1.floor.application"
+            },
+            {
+              "assetId": "liquid.oil.s1.air.sustain",
+              "applicationAssetId": "liquid.oil.s1.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.oil.s2.floor.sustain",
+              "applicationAssetId": "liquid.oil.s2.floor.application"
+            },
+            {
+              "assetId": "liquid.oil.s2.air.sustain",
+              "applicationAssetId": "liquid.oil.s2.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        }
+      ]
+    },
+    "residue.blood": {
+      "radiusCells": 1,
+      "variants": [
+        {
+          "layers": [
+            {
+              "assetId": "liquid.blood.s0.floor.sustain",
+              "applicationAssetId": "liquid.blood.s0.floor.application"
+            },
+            {
+              "assetId": "liquid.blood.s0.air.sustain",
+              "applicationAssetId": "liquid.blood.s0.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.blood.s1.floor.sustain",
+              "applicationAssetId": "liquid.blood.s1.floor.application"
+            },
+            {
+              "assetId": "liquid.blood.s1.air.sustain",
+              "applicationAssetId": "liquid.blood.s1.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.blood.s2.floor.sustain",
+              "applicationAssetId": "liquid.blood.s2.floor.application"
+            },
+            {
+              "assetId": "liquid.blood.s2.air.sustain",
+              "applicationAssetId": "liquid.blood.s2.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        }
+      ]
+    },
+    "residue.poison": {
+      "radiusCells": 1,
+      "variants": [
+        {
+          "layers": [
+            {
+              "assetId": "liquid.poison.s0.floor.sustain",
+              "applicationAssetId": "liquid.poison.s0.floor.application"
+            },
+            {
+              "assetId": "liquid.poison.s0.air.sustain",
+              "applicationAssetId": "liquid.poison.s0.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.poison.s1.floor.sustain",
+              "applicationAssetId": "liquid.poison.s1.floor.application"
+            },
+            {
+              "assetId": "liquid.poison.s1.air.sustain",
+              "applicationAssetId": "liquid.poison.s1.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.poison.s2.floor.sustain",
+              "applicationAssetId": "liquid.poison.s2.floor.application"
+            },
+            {
+              "assetId": "liquid.poison.s2.air.sustain",
+              "applicationAssetId": "liquid.poison.s2.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        }
+      ]
+    },
+    "residue.dread_blood": {
+      "radiusCells": 1,
+      "variants": [
+        {
+          "layers": [
+            {
+              "assetId": "liquid.dread.s0.floor.sustain",
+              "applicationAssetId": "liquid.dread.s0.floor.application"
+            },
+            {
+              "assetId": "liquid.dread.s0.air.sustain",
+              "applicationAssetId": "liquid.dread.s0.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.dread.s1.floor.sustain",
+              "applicationAssetId": "liquid.dread.s1.floor.application"
+            },
+            {
+              "assetId": "liquid.dread.s1.air.sustain",
+              "applicationAssetId": "liquid.dread.s1.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        },
+        {
+          "layers": [
+            {
+              "assetId": "liquid.dread.s2.floor.sustain",
+              "applicationAssetId": "liquid.dread.s2.floor.application"
+            },
+            {
+              "assetId": "liquid.dread.s2.air.sustain",
+              "applicationAssetId": "liquid.dread.s2.air.application"
+            }
+          ],
+          "assetPhase": "impact",
+          "holdStartFrame": 0,
+          "holdFrames": 288,
+          "fps": 144,
+          "scale": 1
+        }
+      ]
+    }
   }
 }

@@ -7,7 +7,7 @@ UsableItem provides actions via get_use_actions() with charge tracking.
 
 from typing import Optional, List, Literal, Tuple, cast
 from uuid import UUID, uuid4
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.creature_types import DamageType
@@ -16,15 +16,22 @@ from dnd.core.events import (
     Damage,
     Event,
     EventPhase,
+    EventQueue,
     EventType,
+    ItemDestructionEvent,
     SpatialChangeEvent,
     TakeDamageEvent,
 )
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.types.world import CardinalDirection
-from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementSpec
+from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement, WorldPlacementSpec
 from dnd.core.item_types import (
     EquippedVisualPolicy,
+    ItemDestructionProfile,
+    ItemIntegrity,
+    ItemRemnantState,
+    DoorMechanism,
+    DoorSwing,
     ItemLocation,
     ItemPresentationKind,
     ItemPresentationState,
@@ -75,6 +82,10 @@ class ItemLocationStateEvent(Event):
     merged_into_item_uuid: Optional[UUID] = Field(
         default=None,
         description="Surviving stack UUID when this item was fully merged.",
+    )
+    replacement_item_uuid: Optional[UUID] = Field(
+        default=None,
+        description="New floor remnant created by this item's destruction.",
     )
     entity_armor_class_after: Optional[int] = Field(
         default=None,
@@ -173,6 +184,17 @@ class BaseItem(BaseBlock):
     blocks_propagation_field: bool = Field(default=False, description="Blocks physical propagation when on grid")
     is_targetable: bool = Field(default=False, description="Can be targeted by attacks")
     health: Optional[Health] = Field(default=None, description="Health block for breakable items")
+    concentration_capacity: int = Field(default=0, ge=0,
+        description="Independent sustained spell slots; zero leaves concentration with the item user.")
+    destruction_profile: Optional[ItemDestructionProfile] = Field(
+        default=None,
+        description="Persistent physical aftermath on this same item; absent for terminal breakage.",
+    )
+    integrity: ItemIntegrity = ItemIntegrity.INTACT
+    _destruction_in_progress: bool = PrivateAttr(default=False)
+    perception_condition_uuid: UUID | None = Field(default=None, exclude=True,
+        description="Exact existing spatial discovery owner of this physical hardware.")
+    remnant_state: ItemRemnantState | None = None
     is_equipped: bool = Field(default=False, description="Whether this item is currently equipped")
     equipped_slot: Optional[str] = Field(default=None, description="Slot this item is equipped in")
     owner_uuid: Optional[UUID] = Field(default=None, description="UUID of the entity or item (e.g. chest) that owns this item")
@@ -183,6 +205,32 @@ class BaseItem(BaseBlock):
     def validate_item_id(self) -> "BaseItem":
         validate_namespaced_id(self.item_id, "item_id")
         return self
+
+    @model_validator(mode="after")
+    def initialize_integrity(self) -> "BaseItem":
+        """An authored initial wreck starts inert, without a past break event."""
+        if self.integrity is ItemIntegrity.DESTROYED:
+            if self.destruction_profile is None:
+                raise ValueError("Initially destroyed items require persistent aftermath")
+            self._set_destroyed_properties()
+        return self
+
+    def _set_destroyed_properties(self) -> None:
+        """Resolve the same authored after-state at construction and breakage."""
+        self.integrity = ItemIntegrity.DESTROYED
+        if self.health is not None:
+            self.health.add_damage(max(0, self.get_hp()))
+        profile = self.destruction_profile
+        if profile is None:
+            return
+        self.name = profile.name
+        self.description = profile.description or profile.name
+        self.is_usable = False
+        self.is_targetable = False
+        self.is_equippable = False
+        self.is_pickable = profile.is_pickable
+        self.include_in_available_object_actions = profile.is_pickable
+        self.perception_condition_uuid = None
 
     def to_item_presentation_state(
         self,
@@ -230,7 +278,16 @@ class BaseItem(BaseBlock):
             maximum_hit_points=(
                 self.get_max_hp() if self.health is not None else None
             ),
+            concentration_capacity=self.concentration_capacity,
+            concentration_slots=tuple(slot for condition in self.active_conditions.values()
+                for slot in condition.snapshot_concentration_slots()),
             boundary_structure=self.get_boundary_structure(),
+            door_mechanism=self.get_door_mechanism(),
+            door_swing=self.get_door_swing(),
+            remnant_state=self.remnant_state,
+            integrity=self.integrity,
+            destruction_outcome=(self.destruction_profile.outcome
+                if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None else None),
             surface_residues=tuple(
                 residue for condition in self.active_conditions.values()
                 if (residue := condition.snapshot_object_residue()) is not None
@@ -256,6 +313,7 @@ class BaseItem(BaseBlock):
         world_placement: Optional[WorldObjectPlacement] = None,
         equipment_slot: Optional[EquipmentSlot] = None,
         merged_into_item_uuid: Optional[UUID] = None,
+        replacement_item_uuid: Optional[UUID] = None,
         entity_armor_class_after: Optional[int] = None,
         stack_count: Optional[int] = None,
         source_entity_uuid: Optional[UUID] = None,
@@ -281,6 +339,7 @@ class BaseItem(BaseBlock):
             world_placement=world_placement,
             equipment_slot=equipment_slot,
             merged_into_item_uuid=merged_into_item_uuid,
+            replacement_item_uuid=replacement_item_uuid,
             entity_armor_class_after=entity_armor_class_after,
             use_register=False,
         )
@@ -291,15 +350,31 @@ class BaseItem(BaseBlock):
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
                        mode: MovementMode = MovementMode.WALKING) -> bool:
         """Whether this item blocks walking through its grid position."""
+        if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
+            return self.destruction_profile.blocks_movement
         return self.blocks_movement
 
     def blocks_optics_at_center(self) -> bool:
         """Whether this item blocks ordinary optics through its grid position."""
+        if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
+            return self.destruction_profile.blocks_optics
         return self.blocks_optics_field
 
     def blocks_propagation(self) -> bool:
         """Whether this item blocks physical propagation through its grid position."""
+        if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
+            return self.destruction_profile.blocks_propagation
         return self.blocks_propagation_field
+
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
+            return self.destruction_profile.placement_spec or super().get_world_placement_spec()
+        return super().get_world_placement_spec()
+
+    def get_boundary_structure(self) -> BoundaryStructure | None:
+        if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
+            return self.destruction_profile.boundary_structure
+        return super().get_boundary_structure()
 
     def get_map_char(self) -> Optional[str]:
         """Return the glyph used to render this item on text maps."""
@@ -308,6 +383,19 @@ class BaseItem(BaseBlock):
     def should_include_in_senses_objects(self) -> bool:
         """Return whether senses should list this floor object."""
         return self.include_in_senses_objects
+
+    def is_observable_to(self, observer_uuid: UUID) -> bool:
+        if self.perception_condition_uuid is None:
+            return True
+        condition = get_map().get_spatial_condition(self.perception_condition_uuid)
+        return condition is not None and condition.get_spatial_observation(
+            {self.position}, observer_uuid=observer_uuid) is not None
+
+    def get_door_mechanism(self) -> DoorMechanism | None:
+        return None
+
+    def get_door_swing(self) -> DoorSwing | None:
+        return None
 
     def should_include_in_adjacent_senses_objects(self) -> bool:
         """Return whether adjacent-object sensing may include this item."""
@@ -468,51 +556,91 @@ class BaseItem(BaseBlock):
         pass
 
     def destroy(self, parent_event: Optional[Event] = None) -> None:
-        """Destroy this item and remove every owned runtime registration.
+        """Apply physical breakage once; authored scenery keeps its identity."""
+        if (self._destruction_in_progress or self.integrity is ItemIntegrity.DESTROYED
+                or BaseBlock.get(self.uuid) is None):
+            return
+        self._destruction_in_progress = True
+        try:
+            event = EventQueue.publish_preflighted(ItemDestructionEvent(
+                source_entity_uuid=parent_event.source_entity_uuid if parent_event is not None else self.source_entity_uuid,
+                target_entity_uuid=self.uuid, item_uuid=self.uuid,
+                previous_state=self.to_item_presentation_state(),
+                previous_placement=get_map().get_object_placement(self.uuid),
+                parent_event=parent_event.uuid if parent_event is not None else None,
+                damage_types=tuple(damage.damage_type for damage in parent_event.damages)
+                    if isinstance(parent_event, TakeDamageEvent) else (),
+                use_register=False,
+            ))
+            for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
+                event = EventQueue.publish_committed_phase(
+                    event.model_copy(update={"use_register": False}).phase_to(phase))
+            self._apply_destruction(event)
+            event.phase_to(EventPhase.COMPLETION, resulting_state=self.to_item_presentation_state())
+        finally:
+            self._destruction_in_progress = False
 
-        The destruction hook runs before cleanup while subclasses can still
-        inspect the item's container and floor location. After the hook, cleanup
-        removes attached light, active conditions, container membership, floor
-        placement, equipment flags, and registry state.
-        """
-        previous_owner_uuid = self.owner_uuid
-        previous_owner = (
-            BaseBlock.get(previous_owner_uuid)
-            if previous_owner_uuid is not None
-            else None
-        )
+    def _apply_destruction(self, parent_event: ItemDestructionEvent) -> None:
+        """Commit the transition and cascade its ordinary native consequences."""
+        previous = parent_event.previous_state
+        mechanism = (get_map().get_spatial_condition(self.perception_condition_uuid)
+                     if self.perception_condition_uuid is not None else None)
+        self.remnant_state = ItemRemnantState(
+            door_open=self.get_spatial_open_state(), door_swing=self.get_door_swing(),
+            mechanism_state=mechanism.snapshot_mechanism_state() if mechanism is not None else None)
+        self._set_destroyed_properties()
+        profile = self.destruction_profile
+        if profile is None:
+            self._on_destroy(parent_event)
+            self.retire(parent_event)
+            return
+
+        # The inert body has its own ordinary physical visibility. The old
+        # mechanism's retired discovery owner must not hide an observed wreck.
+        grid = get_map()
+        if self.tile_uuid is not None:
+            grid.refresh_object_state(previous, self.to_item_presentation_state(),
+                parent_event=parent_event.uuid if parent_event is not None else None)
         self._on_destroy(parent_event)
-        gridmap = get_map()
-        gridmap.cleanup_block_light_sources(self.uuid)
-        for cond_name in list(self.active_conditions.keys()):
-            self.remove_condition(cond_name)
+        grid.cleanup_block_light_sources(self.uuid,
+            parent_event=parent_event.uuid if parent_event is not None else None)
+        for condition in tuple(self.active_conditions.values()):
+            if condition.requires_intact_item:
+                self.remove_condition_by_uuid(condition.uuid, parent_event=parent_event)
+        if self.tile_uuid is not None:
+            self.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
+        elif self.stored_in_uuid is not None:
+            self.publish_location_state(ItemLocation.INVENTORY, owner_uuid=self.owner_uuid,
+                container_uuid=self.stored_in_uuid, parent_event=parent_event)
+
+    def retire(self, parent_event: Optional[Event] = None) -> None:
+        """Consume, despawn or clear the item; this does not trigger breakage."""
+        if BaseBlock.get(self.uuid) is None:
+            return
+        previous_owner_uuid = self.owner_uuid
+        previous_owner = BaseBlock.get(previous_owner_uuid) if previous_owner_uuid is not None else None
+        grid = get_map()
+        grid.cleanup_block_light_sources(self.uuid,
+            parent_event=parent_event.uuid if parent_event is not None else None)
+        for condition_name in tuple(self.active_conditions):
+            self.remove_condition(condition_name, parent_event=parent_event)
         if self.stored_in_uuid is not None:
             container = BaseBlock.get(self.stored_in_uuid)
             if container is not None:
                 container.remove_contained_item(self.uuid)
+        if grid.get_object_position(self.uuid) is not None:
+            grid.remove_object(self.uuid,
+                parent_event=parent_event.uuid if parent_event is not None else None)
         self.owner_uuid = None
         self.stored_in_uuid = None
         self.tile_uuid = None
         self.is_equipped = False
         self.equipped_slot = None
-        gridmap = get_map()
-        if gridmap.get_object_position(self.uuid) is not None:
-            gridmap.remove_object(
-                self.uuid,
-                parent_event=(parent_event.uuid if parent_event is not None else None),
-            )
-        owner_published = (
-            previous_owner.on_owned_item_destroyed(self, parent_event=parent_event)
-            if previous_owner is not None
-            else False
-        )
+        owner_published = (previous_owner.on_owned_item_destroyed(self, parent_event=parent_event)
+            if previous_owner is not None else False)
         if not owner_published:
-            self.publish_location_state(
-                ItemLocation.DESTROYED,
-                owner_uuid=previous_owner_uuid,
-                stack_count=0,
-                parent_event=parent_event,
-            )
+            self.publish_location_state(ItemLocation.DESTROYED, owner_uuid=previous_owner_uuid,
+                stack_count=0, parent_event=parent_event)
         BaseBlock._registry.pop(self.uuid, None)
 
     def _on_destroy(self, parent_event: Optional[Event]) -> None:
@@ -521,7 +649,7 @@ class BaseItem(BaseBlock):
 
     def is_breakable(self) -> bool:
         """Whether this item can be damaged and destroyed."""
-        return self.is_targetable and self.health is not None
+        return self.is_active and self.is_targetable and self.health is not None
 
     @property
     def has_hp(self) -> bool:
@@ -533,7 +661,7 @@ class BaseItem(BaseBlock):
     @property
     def is_active(self) -> bool:
         """Item is active if intact (non-breakable = always active)."""
-        return self.has_hp
+        return self.integrity is ItemIntegrity.INTACT and self.has_hp
 
     def get_hp(self) -> int:
         """Get current hit points (0 constitution modifier for items)."""
@@ -545,7 +673,7 @@ class BaseItem(BaseBlock):
         """Get maximum hit points (0 constitution modifier for items)."""
         if self.health is None:
             return 0
-        return self.health.get_max_hit_dices_points(0)
+        return self.health.get_max_hit_dices_points(0) + self.health.max_hit_points_bonus.score
 
     def receive_damage(
         self,
@@ -555,7 +683,7 @@ class BaseItem(BaseBlock):
         parent_event: Optional[Event] = None,
     ) -> int:
         """Apply item damage through the existing damage-event lifecycle."""
-        if self.health is None:
+        if self.health is None or not self.is_active:
             return 0
 
         source = BaseBlock.get(source_uuid)
@@ -599,6 +727,8 @@ class BaseItem(BaseBlock):
         actual = self.health.apply_damage_preview(preview, source_uuid)
         if not self.has_hp:
             self.destroy(parent_event=damage_event)
+        elif self.tile_uuid is not None:
+            self.publish_location_state(ItemLocation.FLOOR, parent_event=damage_event)
         damage_event.phase_to(
             EventPhase.COMPLETION,
             final_damage=actual,
@@ -639,6 +769,7 @@ class BaseItem(BaseBlock):
                 hit_dice_count=hit_dice_count,
                 mode="maximums"
             )],
+            max_hit_points_bonus=hp - hit_dice_count * hit_dice_value,
             immunities=immunities,
             resistances=resistances or [],
             vulnerabilities=vulnerabilities or [],
@@ -650,9 +781,17 @@ class WorldItem(BaseItem):
     """Item with an explicitly authored world-placement capability."""
 
     world_placement_spec: WorldPlacementSpec = Field(frozen=True)
+    boundary_structure: BoundaryStructure | None = Field(default=None, frozen=True)
 
     def get_world_placement_spec(self) -> WorldPlacementSpec:
+        if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
+            return super().get_world_placement_spec()
         return self.world_placement_spec
+
+    def get_boundary_structure(self) -> BoundaryStructure | None:
+        if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
+            return super().get_boundary_structure()
+        return self.boundary_structure
 
 
 class EquippableItem(BaseItem):
@@ -826,7 +965,7 @@ class UsableItem(BaseItem):
         source_item_uuid injected. Returns [] if charges == 0.
         Override in subclasses for adaptive behavior.
         """
-        if self.charges == 0:
+        if not self.is_active or self.charges == 0:
             return []
         result = []
         source_item_presentation = self.to_item_presentation_state()
@@ -855,6 +994,8 @@ class UsableItem(BaseItem):
         the stack (decrement count, reset charges) instead of destroying.
         Override for custom charge logic (e.g., recharge on rest).
         """
+        if not self.is_active:
+            return False
         if self.charges == -1:
             return True
         if self.charges < amount:
@@ -865,7 +1006,7 @@ class UsableItem(BaseItem):
                 self.stack_count -= 1
                 self.charges = self.max_charges
             else:
-                self.destroy(parent_event=parent_event)
+                self.retire(parent_event=parent_event)
         return True
 
     def consume_charge_with_event(

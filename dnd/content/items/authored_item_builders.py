@@ -38,6 +38,7 @@ from dnd.core.events import (
 from dnd.core.values import ModifiableValue
 from dnd.content.items.authored_item_definitions import (
     ACOLYTE_GEAR_DEFINITIONS,
+    CHEST_DEFINITIONS,
     AUTHORED_WEAPON_DEFINITIONS,
     AUTHORED_WEARABLE_DEFINITIONS,
     STATIC_BLOCKER_DEFINITIONS,
@@ -47,6 +48,8 @@ from dnd.content.items.authored_item_definitions import (
     WearableDefinition,
 )
 from dnd.content.items.environment_item_builders import (
+    LIQUID_BARREL_PROFILES,
+    build_authored_door,
     build_arcane_device,
     build_arcane_machine_gun,
     build_campfire,
@@ -54,11 +57,15 @@ from dnd.content.items.environment_item_builders import (
     build_directional_door,
     build_directional_wall,
     build_fireball_cannon,
-    build_oil_barrel,
+    build_liquid_barrel,
     build_storage_chest,
     build_trap_lever,
     build_wall_torch,
 )
+from dnd.content.items.door_profiles import DOOR_PROFILES
+from dnd.content.items.trap_hardware_builders import TRAP_HARDWARE_PROFILES, build_trap_hardware
+from dnd.content.items.ground_hardware_builders import GROUND_HARDWARE_PROFILES, build_ground_hardware
+from dnd.content.items.world_prop_builders import WORLD_PROP_PROFILES, build_world_prop
 from dnd.extensions.field_focus import build_field_kit
 from dnd.items.consumables import (
     build_concentration_fire_weapon_coat,
@@ -142,7 +149,6 @@ class _DirectAssassinDagger(Weapon):
         entity = Entity.get(entity_uuid)
         if entity is None:
             return
-        behavior_id = "handler.item.assassin_dagger.unseen_strike"
         handler = EventHandler(
             name="Unseen Strike",
             content_kind=RuntimeBehaviorKind.ITEM,
@@ -547,6 +553,7 @@ def _static_blocker_definition_builder(
             blocks_optics_field=definition.blocks_optics,
             blocks_propagation_field=definition.blocks_propagation,
             world_placement_spec=definition.placement_spec,
+            destruction_profile=definition.destruction_profile,
         )
 
     return build
@@ -586,6 +593,40 @@ def _build_directional_door(_source_entity_uuid: UUID) -> BaseItem:
     return build_directional_door()
 
 
+def _door_profile_builder(item_id: str) -> ItemBuilder:
+    return _single_item_builder(item_id, lambda source: build_authored_door(
+        item_id, source_entity_uuid=source))
+
+
+def _chest_definition_builder(definition: AuthoredItemDefinition) -> ItemBuilder:
+    def build(source_entity_uuid: UUID) -> BaseItem:
+        chest = build_storage_chest(definition.name, item_id=definition.item_id,
+            source_entity_uuid=source_entity_uuid, include_loot_all_action=True)
+        chest.description = definition.description
+        chest.tags = list(definition.tags)
+        return chest
+    return _single_item_builder(definition.item_id, build)
+
+
+def _trap_hardware_builder(item_id: str) -> ItemBuilder:
+    return _single_item_builder(item_id, lambda source: build_trap_hardware(
+        item_id, source_entity_uuid=source))
+
+
+def _ground_hardware_builder(item_id: str) -> ItemBuilder:
+    return _single_item_builder(item_id, lambda source: build_ground_hardware(
+        item_id, source_entity_uuid=source))
+
+
+def _world_prop_builder(item_id: str) -> ItemBuilder:
+    return _single_item_builder(item_id, lambda source: build_world_prop(
+        item_id, source_entity_uuid=source))
+
+
+def _liquid_barrel_builder(item_id: str) -> ItemBuilder:
+    return _single_item_builder(item_id, lambda source: build_liquid_barrel(item_id, source))
+
+
 def _build_wall_torch(_source_entity_uuid: UUID) -> BaseItem:
     return build_wall_torch()
 
@@ -603,6 +644,12 @@ def _build_fireball_cannon(_source_entity_uuid: UUID) -> BaseItem:
 
 
 DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
+    **{item_id: _chest_definition_builder(definition) for item_id, definition in CHEST_DEFINITIONS.items()},
+    **{item_id: _door_profile_builder(item_id) for item_id in DOOR_PROFILES},
+    **{item_id: _trap_hardware_builder(item_id) for item_id in TRAP_HARDWARE_PROFILES},
+    **{item_id: _ground_hardware_builder(item_id) for item_id in GROUND_HARDWARE_PROFILES},
+    **{item_id: _world_prop_builder(item_id) for item_id in WORLD_PROP_PROFILES},
+    **{item_id: _liquid_barrel_builder(item_id) for item_id in LIQUID_BARREL_PROFILES},
     **{
         item_id: _fixed_definition_builder(definition)
         for item_id, definition in ACOLYTE_GEAR_DEFINITIONS.items()
@@ -706,9 +753,6 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
     "environment.fireball_cannon": _single_item_builder(
         "environment.fireball_cannon", _build_fireball_cannon,
     ),
-    "environment.blocker.oil_barrel": _single_item_builder(
-        "environment.blocker.oil_barrel", build_oil_barrel,
-    ),
     "environment.spell_object.heroes_feast": _single_item_builder(
         "environment.spell_object.heroes_feast", build_heroes_feast_object,
     ),
@@ -719,10 +763,6 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
         "weapon.assassin_dagger", build_assassin_dagger,
     ),
 })
-
-if len(DIRECT_ITEM_BUILDERS) != 151:
-    raise ValueError("direct item builder table must contain exactly 151 IDs")
-
 
 def build_authored_item(
     item_id: str,

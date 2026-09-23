@@ -17,6 +17,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
+from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.content_system.runtime import SERVER_CONTENT_SYSTEM_RUNTIME
@@ -89,6 +90,7 @@ def iter_combat_demo(
                     ),
                 ),
             )
+            install_body_response(actor, BLOOD_BODY_RESPONSE)
             # This authored battlefield is dark. The Goblin already owns its
             # authored darkvision; give the ordinary actors a real sense too.
             actor.senses.add_sense_mode_source(

@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.creature_proficiencies import CreatureProficienciesConfig
@@ -828,3 +829,25 @@ def test_sorcerer_root_cleanup_rejects_fear_in_an_awe_presence_row() -> None:
     assert entity.active_conditions_by_uuid[root_uuid].uuid == root_uuid
     assert entity.character_grant_receipt(level.step_id) is receipt
     assert entity.applied_class_levels[-1] == level
+
+
+@pytest.mark.parametrize("anchor_state", ["omitted", "null", "present"])
+def test_draconic_presence_requires_explicit_entity_anchor(anchor_state: str) -> None:
+    source_uuid = uuid4()
+    authored = {
+        "source_entity_uuid": source_uuid,
+        "owning_action_template_uuid": uuid4(),
+        "position": (1, 1),
+        "use_register": False,
+    }
+    if anchor_state == "null":
+        authored["anchor_uuid"] = None
+    elif anchor_state == "present":
+        authored["anchor_uuid"] = source_uuid
+
+    if anchor_state == "present":
+        aura = sorcerer.DraconicPresenceAura.model_validate(authored)
+        assert aura.anchor_uuid == source_uuid
+    else:
+        with pytest.raises(ValidationError, match="anchor_uuid"):
+            sorcerer.DraconicPresenceAura.model_validate(authored)

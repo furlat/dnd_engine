@@ -17,6 +17,8 @@ from game.draw_commands import DrawCommand
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.combat import bind_cast
+from game.environment_art import load_environment_art
+from game.environment_draw import environment_command
 from game.projection import Camera, camera_pose, painter_key, project_screen
 from tests.game.player_helpers import player_inputs
 from tests.game.spell_handoff_scenarios import spell_handoff_history
@@ -41,6 +43,34 @@ def scene(request, rendering):
     state, lineages = player_inputs(history.initialization, history.lineages)
     cast = bind_cast(state, lineages[0], data)
     return request.param, state, cast
+
+
+def boundary_silhouette(state, catalog, cache, camera, *, close_doors=False):
+    """Registered selected artwork, including the doorway's open/closed hole."""
+    silhouette = pygame.Surface(camera.viewport, pygame.SRCALPHA)
+    environment = load_environment_art()
+    for identity, obj in state.objects.items():
+        placement, item = obj.placement, obj.item
+        boundary_pose = camera_pose(placement.boundary_direction.value, camera.quadrant)
+        contact = project_screen(placement.position, camera,
+                                 elevation_steps=placement.base_height_steps)
+        if item.boundary_structure.structure.value == "wall":
+            bindings = (catalog.bindings["stone_wall_straight"][boundary_pose],)
+        else:
+            door = environment.doors[item.item_id]
+            bank = door.openings[item.door_swing.value]
+            pose = ("e", "s", "w", "n")[
+                (("e", "s", "w", "n").index(boundary_pose) - door.pose_offset) % 4]
+            frame = bank.frame_count - 1 if item.is_open and not close_doors else 0
+            command = environment_command(bank, frame, identity=identity,
+                position=placement.position, elevation=placement.base_height_steps,
+                pose=pose, boundary_pose=boundary_pose, camera=camera, multiplier=(1, 1, 1))
+            silhouette.blit(command.surface, command.destination)
+            bindings = (door.frame_resource_by_pose[boundary_pose],) if door.frame_resource_by_pose else ()
+        for asset in bindings:
+            silhouette.blit(cache.scaled(asset, camera.zoom),
+                            cache.blit_position(asset, camera.zoom, contact))
+    return silhouette
 
 
 @pytest.mark.parametrize("quadrant", range(4))
@@ -71,22 +101,8 @@ def test_area_cannot_overwrite_any_part_of_foreground_wall_or_door(rendering, sc
                      if row[4][6] == "projectile" and row[4][8] == "impact" and row[3] == blend)
     assert commands, "Exercise each actual exported impact layer separately"
 
-    # A wall-only alpha silhouette comes from the same public catalog, with its
-    # actual pose/registration. Open doors contribute the frame and swung leaf.
-    silhouette = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-    closed_leaf = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-    for obj in state.objects.values():
-        placement, item = obj.placement, obj.item
-        pose = camera_pose(placement.boundary_direction.value, quadrant)
-        bindings = ("stone_wall_straight",) if item.boundary_structure.structure.value == "wall" else (
-            "stone_door_frame", "wood_door_open" if item.is_open else "wood_door_closed")
-        for binding in bindings:
-            asset = catalog.bindings[binding][pose]
-            contact = project_screen(placement.position, camera, elevation_steps=height)
-            silhouette.blit(cache.scaled(asset, camera.zoom), cache.blit_position(asset, camera.zoom, contact))
-        if item.is_open is True:
-            asset = catalog.bindings["wood_door_closed"][pose]
-            closed_leaf.blit(cache.scaled(asset, camera.zoom), cache.blit_position(asset, camera.zoom, contact))
+    silhouette = boundary_silhouette(state, catalog, cache, camera)
+    closed_leaf = boundary_silhouette(state, catalog, cache, camera, close_doors=True)
     opaque = pygame.surfarray.array_alpha(silhouette) == 255
     isolated = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
     for command in commands:
@@ -132,16 +148,7 @@ def test_area_reaches_exposed_rear_wall_face_without_reopening_space_beyond_it(r
                      if row[4][6] == "projectile" and row[4][8] == "impact" and row.blend == blend)
 
     commands, raw_commands = impacts(media), impacts(raw_media)
-    silhouette = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-    for obj in state.objects.values():
-        placement, item = obj.placement, obj.item
-        pose = camera_pose(placement.boundary_direction.value, quadrant)
-        bindings = ("stone_wall_straight",) if item.boundary_structure.structure.value == "wall" else (
-            "stone_door_frame", "wood_door_open" if item.is_open else "wood_door_closed")
-        for binding in bindings:
-            asset = catalog.bindings[binding][pose]
-            contact = project_screen(placement.position, camera)
-            silhouette.blit(cache.scaled(asset, camera.zoom), cache.blit_position(asset, camera.zoom, contact))
+    silhouette = boundary_silhouette(state, catalog, cache, camera)
     opaque = pygame.surfarray.array_alpha(silhouette) == 255
 
     def effect_pixels(rows):

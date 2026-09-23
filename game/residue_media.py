@@ -10,8 +10,26 @@ from typing import Mapping
 
 from dnd.types.residues import ResidueEllipse, TileResidueState
 from game.animation_types import (
-    LandingTemplate, ParticleMediaAsset, RegionParticleStyle, ReleaseFamily,
+    LandingParticle, LandingTemplate, ParticleMediaAsset, RegionParticleStyle, ReleaseFamily, BloodResponse,
 )
+
+
+def particle_schedule(particle: LandingParticle, family: ReleaseFamily,
+                       response: BloodResponse | None, copy: int = 0) -> tuple[float, float, float]:
+    """One delay/flight/melt schedule shared by flight, field growth and tails."""
+    delay = particle.delay * family.delayScale * (response.delayScale if response else 1)
+    duration = particle.duration * family.durationScale * (1.08 if copy else 1) * (
+        response.durationScale if response else 1)
+    melt = response.meltBase + min(1, particle.size / 2.75) * response.meltSize if response else 0
+    return delay, duration, melt
+
+
+def landed_fraction(particle: LandingParticle, family: ReleaseFamily,
+                      response: BloodResponse | None, age: float) -> float:
+    delay, duration, melt = particle_schedule(particle, family, response)
+    if age < delay + duration:
+        return 0
+    return min(1, max(0, (age - delay - duration) / melt)) if melt else 1
 
 
 @lru_cache(maxsize=1)
@@ -28,6 +46,20 @@ def region_media_assets() -> Mapping[str, ParticleMediaAsset]:
             for value in row["templates"]) if "templates" in row else templates, families=families,
             primitive=row["primitive"], palette=tuple(row["palette"]) if row["palette"] else None),
     ) for row in raw["materials"]})
+
+
+def surface_start_time(asset_id: str, pattern: str, response: BloodResponse) -> float:
+    """First deposited particle on the shared clock of this authored region asset."""
+    return _surface_start_time(asset_id, pattern, response.delayScale, response.durationScale)
+
+
+@lru_cache(maxsize=64)
+def _surface_start_time(asset_id: str, pattern: str, delay_scale: float, duration_scale: float) -> float:
+    style = region_media_assets()[asset_id].region
+    assert style is not None
+    return min(delay * delay_scale + flight * duration_scale
+               for template in style.templates for p in template.particles
+               for delay, flight, _ in (particle_schedule(p, style.families[pattern], None),))
 
 
 def landing_template(style: RegionParticleStyle, ellipse: ResidueEllipse) -> LandingTemplate:
@@ -56,6 +88,7 @@ class ResidueReveal:
     start_ms: float
     end_ms: float
     rate: float
+    response: BloodResponse | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -193,11 +193,14 @@ class BehaviorBinder:
     ) -> BehaviorBinding:
         declaration = self._declarations_by_id.get(behavior_id)
         if behavior.content_kind is RuntimeBehaviorKind.UNCLASSIFIED:
-            behavior.content_kind = (
+            kind = (
                 declaration.runtime_behavior_kind
                 if declaration is not None
                 else RuntimeBehaviorKind.TRAIT
             )
+            if kind is None:
+                raise ValueError(f"Behavior {behavior_id} has no runtime kind")
+            behavior.content_kind = kind
         if behavior.content_kind not in _HANDLER_RUNTIME_KINDS:
             raise ValueError(
                 f"Unsupported private handler kind {behavior.content_kind.value}",

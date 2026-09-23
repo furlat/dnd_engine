@@ -1084,7 +1084,7 @@ def _build_direct_weapon_coat(
     concentration: bool = False,
 ) -> UsableItem:
     """Construct one weapon coating from explicit mechanical facts."""
-    actions = [_ApplyWeaponCoatAction(
+    actions: list[BaseAction] = [_ApplyWeaponCoatAction(
         source_entity_uuid=uuid4(),
         source_item_uuid=uuid4(),
         name="Coat Main Hand",

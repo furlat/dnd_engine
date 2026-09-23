@@ -2,17 +2,18 @@
 
 from dataclasses import replace
 import json
-from math import atan2, pi
+from math import atan2, cos, pi, sin
 from types import MappingProxyType
 
 import pytest
 
 from game.animation import (
-    ActorContact, CastApplication, CastInput, CastTimeline, ProjectileSample,
+    ActorContact, CastApplication, CastInput, CastTimeline, GroundContact, ProjectileSample,
     compile_cast, project_projectile, projectile_contact, sample_cast,
 )
 from game.animation_data import DATA_ROOT, load_animation_data
 from game.animation_types import StudioSpellDraft
+from game.device_art import DeviceEmission, device_bank
 from game.projection import TILE_WIDTH, project_world
 
 
@@ -39,7 +40,17 @@ def effect_at(timeline: CastTimeline, index: int, progress: float) -> Projectile
 
 
 def test_default_bundle_replaces_geometry_without_changing_body_delivery_or_vital_clock(timeline: CastTimeline) -> None:
-    baseline = compile_cast(load_animation_data(authored_bundles=()), "spell.magic_missile", timeline.source)
+    # Compare media choices with the same authored contacts. The original
+    # imported recipe's old canvas/insets no longer describe the selected
+    # palm-to-torso trajectory, so its absolute arrivals are not a baseline.
+    reference = load_animation_data(authored_bundles=())
+    document = reference.drafts["spell.magic_missile"].model_dump(mode="json", exclude_unset=True)
+    assert timeline.recipe.projectile is not None
+    document["projectile"]["sourceAnchor"] = timeline.recipe.projectile.sourceAnchor.model_dump(mode="json")
+    document["projectile"]["targetAnchor"] = timeline.recipe.projectile.targetAnchor.model_dump(mode="json")
+    reference = replace(reference, drafts=MappingProxyType({**reference.drafts,
+        "spell.magic_missile": StudioSpellDraft.model_validate_json(json.dumps(document))}))
+    baseline = compile_cast(reference, "spell.magic_missile", timeline.source)
     assert timeline.recipe.projectile is not None and baseline.recipe.projectile is not None
     assert timeline.recipe.projectile.sprite is not None
     assert baseline.recipe.projectile.sprite is None
@@ -97,6 +108,11 @@ def test_authored_sprite_spread_and_depth_follow_the_shared_bezier(timeline: Cas
 
 def test_target_vector_sprite_rotation_retains_the_original_initial_curve_tangent(timeline: CastTimeline) -> None:
     document = timeline.recipe.model_dump(mode="json", exclude_unset=True)
+    # This is the retained legacy mode's contract, not the selected spell's mode.
+    document["projectile"]["orientation"]["directionSource"] = "target_vector"
+    curved_draft = StudioSpellDraft.model_validate_json(json.dumps(document))
+    curved_data = replace(timeline.data, drafts={**timeline.data.drafts, "spell.magic_missile": curved_draft})
+    timeline = compile_cast(curved_data, "spell.magic_missile", timeline.source)
     document["projectile"]["trajectory"] = {"type": "straight", "sameTargetSpread": True}
     draft = StudioSpellDraft.model_validate_json(json.dumps(document))
     data = replace(timeline.data, drafts=MappingProxyType({**timeline.data.drafts, "spell.magic_missile": draft}))
@@ -111,7 +127,92 @@ def test_target_vector_sprite_rotation_retains_the_original_initial_curve_tangen
     assert (actual + pi) % (2 * pi) - pi == pytest.approx((expected + pi) % (2 * pi) - pi)
 
 
-def test_movement_context_preserves_original_source_data() -> None:
+@pytest.mark.parametrize("quadrant", range(4))
+@pytest.mark.parametrize("index", range(3), ids=("A-first", "B", "A-second"))
+def test_magic_missile_faces_its_curve_without_moving_contacts_or_changing_timing(
+    timeline: CastTimeline, quadrant: int, index: int,
+) -> None:
+    projectile = timeline.recipe.projectile
+    assert projectile is not None
+    legacy_recipe = timeline.recipe.model_copy(update={"projectile": projectile.model_copy(update={
+        "orientation": projectile.orientation.model_copy(update={"directionSource": "target_vector"}),
+    })})
+    legacy = compile_cast(replace(timeline.data, drafts={**timeline.data.drafts,
+        "spell.magic_missile": legacy_recipe}), "spell.magic_missile", timeline.source)
+    assert timeline.anchors == legacy.anchors
+    assert timeline.applications == legacy.applications
+    assert (timeline.release_ms, timeline.body_end_ms, timeline.complete_ms) == (
+        legacy.release_ms, legacy.body_end_ms, legacy.complete_ms,
+    )
+    for progress in (.01, .25, .5, .75, .99):
+        effect = effect_at(timeline, index, progress)
+        actual = project_projectile(timeline, effect, quadrant)
+        travel = replace(effect, phase="travel", progress=progress)
+        before = project_projectile(timeline, replace(travel, progress=progress - .0001), quadrant)
+        after = project_projectile(timeline, replace(travel, progress=progress + .0001), quadrant)
+        direction = atan2(after.point[1] - before.point[1], after.point[0] - before.point[0])
+        facing = timeline.data.projectile_assets[actual.asset_id].rowOrder[actual.row]
+        row_index = timeline.data.rig.AUTHORED_PROJECTILE_ROW_ORDER.index(facing)
+        angle = row_index * pi / 4 - pi / 4
+        x, y = cos(angle), sin(angle)
+        row_angle = atan2((x + y) * timeline.data.rig.TILE_H, (x - y) * timeline.data.rig.TILE_W)
+        error = (row_angle + actual.rotation_radians - direction + pi) % (2 * pi) - pi
+        assert abs(error) < 1e-6
+        original = project_projectile(legacy, effect_at(legacy, index, progress), quadrant)
+        assert actual.point == original.point
+    # Its directional body impact continues the arriving dart's orientation.
+    impact = effect_at(timeline, index, 1)
+    landed = project_projectile(timeline, impact, quadrant)
+    arriving = project_projectile(timeline, replace(impact, phase="travel", progress=1), quadrant)
+    assert (landed.point, landed.row, landed.rotation_radians) == (
+        arriving.point, arriving.row, arriving.rotation_radians,
+    )
+
+
+def test_movement_preserves_source_timing_with_the_selected_local_media() -> None:
     source = json.loads((DATA_ROOT / "source/src/render/data/animation/actionContextPresentation.json").read_text())
+    media = json.loads((DATA_ROOT.parent / "movement-media.json").read_text())
     data = load_animation_data()
-    assert data.movement_context.model_dump(mode="json") == source["contexts"]["voluntary_movement"]
+    expected = {**source["contexts"]["voluntary_movement"],
+                "walkMedia": media["walkMedia"], "jumpMedia": media["jumpMedia"]}
+    assert data.movement_context.model_dump(mode="json", exclude_unset=True) == expected
+
+
+@pytest.mark.parametrize("device", (False, True))
+@pytest.mark.parametrize("travel_override", (False, True))
+def test_directional_travel_and_floor_aligned_impact_have_independent_authored_rotation(
+    timeline: CastTimeline, device: bool, travel_override: bool,
+) -> None:
+    document = timeline.recipe.model_dump(mode="json", exclude_unset=True)
+    projectile = document["projectile"]
+    projectile["trajectory"] = {"type": "straight", "sameTargetSpread": False}
+    projectile["orientation"]["fineRotation"] = "none" if travel_override else "isometricHybrid"
+    if travel_override:
+        projectile["travel"]["fineRotation"] = "isometricHybrid"
+    projectile["impact"]["fineRotation"] = "none"
+    draft = StudioSpellDraft.model_validate_json(json.dumps(document))
+    data = replace(timeline.data, drafts={**timeline.data.drafts, "spell.magic_missile": draft})
+    art = data.devices["environment.fireball_cannon"]
+    emitter = DeviceEmission("fixture", (1, 1), 0, "E", art, device_bank(art)) if device else None
+    bound = compile_cast(data, "spell.magic_missile", CastInput(
+        "ground-shot", ActorContact("caster", (0, 1), "S", 1), (),
+        ground_target=GroundContact((7, 3)), emitter=emitter,
+    ))
+    delivery = bound.ground_delivery
+    assert delivery is not None
+    travel, = (effect for effect in sample_cast(bound,
+        delivery.travel_start_ms + (delivery.travel_end_ms - delivery.travel_start_ms) * .35).projectiles
+        if isinstance(effect, ProjectileSample) and effect.phase == "travel")
+    impact, = (effect for effect in sample_cast(bound, delivery.travel_end_ms + 1).projectiles
+               if isinstance(effect, ProjectileSample) and effect.phase == "impact")
+    angles = []
+    for quadrant in range(4):
+        flying = project_projectile(bound, travel, quadrant)
+        landed = project_projectile(bound, impact, quadrant)
+        angles.append(flying.rotation_radians)
+        assert landed.rotation_radians == 0
+        assert projectile_contact(bound, landed, quadrant=quadrant) == ((7, 3), 0)
+        # Phase orientation cannot change the recorded arrival or its position.
+        arrived = project_projectile(bound, replace(travel, progress=1), quadrant)
+        assert arrived.point == pytest.approx(landed.point)
+    assert all(abs(angle) > .01 for angle in angles), "Noncanonical travel must retain its authored fine rotation"

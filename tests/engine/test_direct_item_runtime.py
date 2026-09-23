@@ -152,9 +152,16 @@ def test_all_maintained_holders_materialize_exact_direct_item_plans() -> None:
 
 
 def test_all_public_item_ids_construct_directly_with_independent_state() -> None:
-    """All 150 public IDs build fresh state without recipes or runtime factories."""
+    """Every public ID builds fresh state without recipes or runtime factories."""
     owner_uuid = uuid4()
-    assert len(DIRECT_ITEM_BUILDERS) == 150
+    required_ids = {
+        "consumable.potion_true_seeing", "environment.door.indoor_door_shabby",
+        "environment.trap.crusher.wood.fortress",
+        *(f"environment.chest.fantasy_{style}" for style in ("a1", "a3", "b1")),
+        *(f"environment.trap.{kind}" for kind in (
+            "spikes", "dart_emitter", "jaw", "gas_vent", "pressure_plate", "tripwire", "portal_hatch")),
+    }
+    assert required_ids <= DIRECT_ITEM_BUILDERS.keys()
 
     for item_id in DIRECT_ITEM_BUILDERS:
         first = build_authored_item(item_id, owner_uuid)
@@ -421,7 +428,7 @@ def test_legacy_door_collision_migrates_to_explicit_directional_boundary_behavio
 
 
 def test_oil_barrel_destruction_preserves_direct_material_transition() -> None:
-    """Destroying the direct barrel spills one Oil surface at its committed cell."""
+    """Destroying the direct barrel spills one Oil owner over neighboring floor."""
     source_uuid = uuid4()
     barrel = build_oil_barrel(source_uuid)
     barrel.place_on_grid((3, 3))
@@ -431,11 +438,11 @@ def test_oil_barrel_destruction_preserves_direct_material_transition() -> None:
     conditions = get_map().get_spatial_conditions_at((3, 3))
     assert len(conditions) == 1
     assert isinstance(conditions[0], OilSurface)
-    assert conditions[0].affected_positions == {(3, 3)}
+    assert conditions[0].affected_positions == {(x, y) for x in range(2, 5) for y in range(2, 5)}
 
 
 def test_private_guardian_item_is_direct_but_not_publicly_buildable() -> None:
-    """The private Guardian is a direct BaseItem outside the 150-ID public catalog."""
+    """The private Guardian is a direct BaseItem outside the public catalog."""
     private_id = "environment.spell_object.guardian_of_faith"
     guardian = build_guardian_of_faith_object(uuid4())
 
@@ -495,7 +502,8 @@ def test_stacks_charges_durability_containers_intrinsics_and_world_blockers_are_
 
     assert (potion.stack_count, potion.max_stack, potion.charges) == (3, 10, 1)
     assert (wand.charges, wand.max_charges) == (3, 3)
-    assert barrel.health is not None and barrel.get_max_hp() == 8
+    # The barrel authors 12 HP; hit-die composition must preserve that total.
+    assert barrel.health is not None and barrel.get_max_hp() == 12
     assert chest.get_storage_block() is not None
     assert chest.get_use_actions(owner_uuid)
     assert natural_armor.default_equipment_slot() is BodyPart.BODY

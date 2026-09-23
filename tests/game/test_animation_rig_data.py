@@ -2,14 +2,17 @@
 
 import hashlib
 import json
+from collections.abc import MutableMapping
 from pathlib import Path
 import subprocess
 import sys
+from typing import cast
 import zipfile
 
 import pytest
 
 from game.animation_data import DATA_ROOT, load_animation_data
+from game.animation_types import BodyClip, BodyRig
 
 
 BINDING = DATA_ROOT.parent / "rigs/goblin01.json"
@@ -33,19 +36,35 @@ def test_root_binding_reuses_imported_metadata_without_fixed_rig_dependency() ->
             assert url in data.resources
 
 
+def test_root_rig_json_round_trip_retains_every_authored_pose_socket() -> None:
+    data = load_animation_data()
+    rig = data.rigs[data.root_rig]
+    decoded = BodyRig.model_validate_json(rig.model_dump_json())
+    assert decoded == rig
+    assert json.loads(rig.model_dump_json())["pose_sockets"] == json.loads(
+        (DATA_ROOT / "pose-sockets.json").read_text())
+
+
 def test_explicit_goblin_binding_preserves_original_sheets_and_semantic_mapping() -> None:
     data = load_animation_data(rig_files=(BINDING,))
     document = json.loads(BINDING.read_text())
     rig = data.rigs[RIG_ID]
-    assert rig.model_dump(mode="json") == document["rig"]
+    assert rig.model_dump(mode="json", exclude_unset=True) == document["rig"]
+    assert not rig.pose_sockets  # This fixed rig has no authored head/face tracks.
     assert {name: clip.source_clip for name, clip in rig.clips.items()} == {
         "Idle": "Idle", "TakeDamage": "TakeDamage 1", "Die": "Die 1",
         "Run": "Run", "Rolling": "Roll 1",
         "Attack1": "Attack 1", "Attack2": "Attack 2",
     }
     assert (rig.cell_width, rig.cell_height, rig.origin_y_from_ground) == (128, 128, 41)
-    assert rig.slot_order == ("shadow", "body")
-    assert rig.slot_categories == {"body": ("Goblin01",), "shadow": ("Goblin01Shadow",)}
+    assert rig.slot_order == ("shadow", "body", "slash")
+    assert rig.slot_categories == {"body": ("Goblin01",), "shadow": ("Goblin01Shadow",),
+                                   "slash": ("Slash1", "Slash2")}
+    for name in ("Attack1", "Attack2"):
+        for category in ("Slash1", "Slash2"):
+            url = rig.clips[name].sheets[category]
+            assert url == data.rigs[data.root_rig].clips[name].sheets[category]
+            assert url not in document["resources"]  # Root media retains its original owner.
     copied = document["provenance"]["files"]
     for url, record in copied.items():
         path = data.resources[url]
@@ -53,12 +72,14 @@ def test_explicit_goblin_binding_preserves_original_sheets_and_semantic_mapping(
         payload = path.read_bytes()
         assert len(payload) == record["bytes"]
         assert hashlib.sha256(payload).hexdigest() == record["sha256"]
+    # Deliberately cross the read-only type boundary to verify mutation rejects
+    # at runtime too; these casts describe forbidden inputs only for this test.
     with pytest.raises(TypeError):
-        data.rigs["unexpected"] = rig
+        cast(MutableMapping[str, BodyRig], data.rigs)["unexpected"] = rig
     with pytest.raises(TypeError):
-        rig.clips["unexpected"] = rig.clips["Idle"]
+        cast(MutableMapping[str, BodyClip], rig.clips)["unexpected"] = rig.clips["Idle"]
     with pytest.raises(TypeError):
-        rig.clips["Idle"].sheets["unexpected"] = "/unexpected.png"
+        cast(MutableMapping[str, str], rig.clips["Idle"].sheets)["unexpected"] = "/unexpected.png"
 
 
 @pytest.mark.parametrize("case,error", [
@@ -110,8 +131,10 @@ def test_archive_provenance_is_not_a_runtime_readiness_requirement(tmp_path: Pat
 def small_archive(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
     """Two real sheets exercise the CLI without the external purchased ZIP."""
     document = json.loads(BINDING.read_text())
-    document["rig"]["clips"] = {"Idle": document["rig"]["clips"]["Idle"]}
-    urls = set(document["rig"]["clips"]["Idle"]["sheets"].values())
+    # The attack also refers to two existing root slash sheets. This importer
+    # must copy its own two body/shadow files, not duplicate the shared media.
+    document["rig"]["clips"] = {"Attack1": document["rig"]["clips"]["Attack1"]}
+    urls = set(document["rig"]["clips"]["Attack1"]["sheets"].values())
     resources = {url: path for url, path in document["resources"].items() if url in urls}
     document["resources"] = resources
     files = {url: source for url, source in document["provenance"]["files"].items() if url in urls}

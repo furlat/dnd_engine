@@ -90,7 +90,8 @@ def test_native_routes_keep_actual_costs_conditions_terrain_and_replayable_steps
                 expected_ms = sum(hypot(step.to_position[0] - step.from_position[0],
                                         step.to_position[1] - step.from_position[1])
                                   for step in steps) * data.movement_context.walkStepDurationMs
-                assert motion.complete_ms == pytest.approx(expected_ms)
+                # Native Haste doubles locomotion speed. Dash adds allowance only.
+                assert motion.complete_ms == pytest.approx(expected_ms / (2 if boost == "haste" else 1))
                 assert motion.playback_speed == data.movement_context.walkPlaybackSpeed
         latest = after
         player_latest = reduce_player(player_latest, public_root)

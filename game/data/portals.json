@@ -1,0 +1,184 @@
+{
+  "banks": {
+    "entrance": {
+      "pages": [
+        [
+          "environment/portal/portal-0.png",
+          "environment/portal/portal-1.png",
+          "environment/portal/portal-2.png",
+          "environment/portal/portal-3.png",
+          "environment/portal/portal-4.png",
+          "environment/portal/portal-5.png",
+          "environment/portal/portal-6.png"
+        ],
+        [
+          "environment/portal/entrance-q1-0.png",
+          "environment/portal/entrance-q1-1.png",
+          "environment/portal/entrance-q1-2.png",
+          "environment/portal/entrance-q1-3.png",
+          "environment/portal/entrance-q1-4.png",
+          "environment/portal/entrance-q1-5.png",
+          "environment/portal/entrance-q1-6.png"
+        ],
+        [
+          "environment/portal/entrance-q2-0.png",
+          "environment/portal/entrance-q2-1.png",
+          "environment/portal/entrance-q2-2.png",
+          "environment/portal/entrance-q2-3.png",
+          "environment/portal/entrance-q2-4.png",
+          "environment/portal/entrance-q2-5.png",
+          "environment/portal/entrance-q2-6.png"
+        ],
+        [
+          "environment/portal/entrance-q3-0.png",
+          "environment/portal/entrance-q3-1.png",
+          "environment/portal/entrance-q3-2.png",
+          "environment/portal/entrance-q3-3.png",
+          "environment/portal/entrance-q3-4.png",
+          "environment/portal/entrance-q3-5.png",
+          "environment/portal/entrance-q3-6.png"
+        ]
+      ],
+      "cell": [
+        256,
+        256
+      ],
+      "columns": 8,
+      "framesPerPage": 64,
+      "pivot": [
+        128,
+        160
+      ],
+      "fps": 144,
+      "openingFrames": 72,
+      "holdFrames": 288,
+      "closingFrames": 73
+    },
+    "exit": {
+      "pages": [
+        [
+          "environment/portal/exit-0.png",
+          "environment/portal/exit-1.png",
+          "environment/portal/exit-2.png",
+          "environment/portal/exit-3.png",
+          "environment/portal/exit-4.png",
+          "environment/portal/exit-5.png",
+          "environment/portal/exit-6.png"
+        ],
+        [
+          "environment/portal/exit-q1-0.png",
+          "environment/portal/exit-q1-1.png",
+          "environment/portal/exit-q1-2.png",
+          "environment/portal/exit-q1-3.png",
+          "environment/portal/exit-q1-4.png",
+          "environment/portal/exit-q1-5.png",
+          "environment/portal/exit-q1-6.png"
+        ],
+        [
+          "environment/portal/exit-q2-0.png",
+          "environment/portal/exit-q2-1.png",
+          "environment/portal/exit-q2-2.png",
+          "environment/portal/exit-q2-3.png",
+          "environment/portal/exit-q2-4.png",
+          "environment/portal/exit-q2-5.png",
+          "environment/portal/exit-q2-6.png"
+        ],
+        [
+          "environment/portal/exit-q3-0.png",
+          "environment/portal/exit-q3-1.png",
+          "environment/portal/exit-q3-2.png",
+          "environment/portal/exit-q3-3.png",
+          "environment/portal/exit-q3-4.png",
+          "environment/portal/exit-q3-5.png",
+          "environment/portal/exit-q3-6.png"
+        ]
+      ],
+      "cell": [
+        256,
+        256
+      ],
+      "columns": 8,
+      "framesPerPage": 64,
+      "pivot": [
+        128,
+        160
+      ],
+      "fps": 144,
+      "openingFrames": 72,
+      "holdFrames": 288,
+      "closingFrames": 73
+    }
+  },
+  "bindings": {
+    "spatial_effect.environment.portal": {
+      "entrance": "exit",
+      "exit": "exit",
+      "scale": 1.0,
+      "fallDelayMs": 50,
+      "fallMs": 450,
+      "fallDepthPx": 80,
+      "transitMs": 0,
+      "exitHoldMs": 700,
+      "emergeMs": 400,
+      "entranceAperture": {
+        "shape": "ellipse",
+        "halfWidthPx": 28,
+        "halfHeightPx": 14
+      },
+      "exitAperture": {
+        "shape": "ellipse",
+        "halfWidthPx": 28,
+        "halfHeightPx": 14
+      }
+    },
+    "spatial_effect.environment.portal_hatch": {
+      "entrance": "entrance",
+      "exit": "exit",
+      "scale": 1.0,
+      "fallDelayMs": 50,
+      "fallMs": 450,
+      "fallDepthPx": 80,
+      "transitMs": 0,
+      "exitHoldMs": 700,
+      "hatch": {
+        "sheet": "environment/portal/hatch-overlay.png",
+        "front": "environment/portal/hatch-front.png",
+        "cell": [
+          256,
+          256
+        ],
+        "pivot": [
+          128,
+          208
+        ],
+        "opening": [
+          0,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "closing": [
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "fps": 12
+      },
+      "emergeMs": 400,
+      "entranceAperture": {
+        "shape": "diamond",
+        "halfWidthPx": 49.78032,
+        "halfHeightPx": 24.89016
+      },
+      "exitAperture": {
+        "shape": "ellipse",
+        "halfWidthPx": 28,
+        "halfHeightPx": 14
+      }
+    }
+  }
+}

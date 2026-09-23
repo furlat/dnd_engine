@@ -25,6 +25,7 @@ import dnd.monsters.skeleton_abilities as skeleton_abilities
 import dnd.monsters.traits as monster_traits
 import dnd.spells.abjuration as abjuration
 import dnd.spells.conjuration as conjuration
+import dnd.spatial.jaws as jaws
 import dnd.spells.enchantment as enchantment
 import dnd.spells.evocation as evocation
 import dnd.spells.necromancy as necromancy
@@ -198,6 +199,8 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _srd(abjuration.FreedomOfMovementEscape, "action.spell.freedom_of_movement.escape", "Freedom of Movement Escape", "Spend movement to escape an eligible nonmagical restraint."),
     _srd(conjuration.CallLightningStrike, "action.spell.call_lightning.strike", "Call Lightning Strike", "Call another bolt from an active Call Lightning spell."),
     _srd(conjuration.EatFromFeast, "action.environment.heroes_feast.eat", "Eat from Feast", "Consume one serving from a Heroes' Feast."),
+    _original(jaws.ForceJawOpen, "action.environment.escape_jaw.athletics", "Force jaws open", "Use an action and Athletics to escape one jaw."),
+    _original(jaws.SlipFreeOfJaw, "action.environment.escape_jaw.acrobatics", "Slip free of jaws", "Use an action and Acrobatics to escape one jaw."),
     _srd(conjuration.EscapeWebAction, "action.spell.web.escape", "Escape Web", "Attempt to escape the restraint imposed by Web."),
     _original(
         enchantment.TestBless,

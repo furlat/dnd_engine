@@ -47,6 +47,9 @@ def with_clip(data: AnimationData, rig_id: str, clip: str, *,
               fps: float, frames: int) -> AnimationData:
     document = data.rigs[rig_id].model_dump(mode="json")
     document["clips"][clip].update(fps=fps, frames=frames)
+    for clips in document["pose_sockets"].values():
+        if clip in clips:
+            clips[clip] = {facing: points[:frames] for facing, points in clips[clip].items()}
     rig = BodyRig.model_validate_json(json.dumps(document))
     return replace(data, rigs=MappingProxyType({**data.rigs, rig_id: rig}))
 
@@ -55,16 +58,28 @@ def with_clip(data: AnimationData, rig_id: str, clip: str, *,
 def test_selected_fixed_target_preserves_shared_cast_and_feedback(data: AnimationData, lethal: bool) -> None:
     goblin = compile_cast(data, "spell.fire_bolt", cast_input(lethal=lethal))
     root = compile_cast(data, "spell.fire_bolt", cast_input(target_rig=ROOT, lethal=lethal))
-    assert goblin.anchors == root.anchors
-    assert goblin.applications[0].damage_start_ms is not None and goblin.applications[0].hp_ms is not None
-    for elapsed in (0, goblin.release_ms, goblin.applications[0].damage_start_ms, goblin.applications[0].hp_ms,
-                    goblin.complete_ms, goblin.complete_ms + 1000):
-        assert sample_cast(goblin, elapsed) == sample_cast(root, elapsed)
-    assert sample_cast(goblin, goblin.applications[0].hp_ms).vitals[0].hp == (0 if lethal else 13)
-    final = sample_cast(goblin, goblin.complete_ms)
-    assert final.complete
-    assert final.bodies[1].clip == ("Die" if lethal else "Idle")
-    assert final.vitals[0].life_state == (LifeState.DEAD if lethal else LifeState.ALIVE)
+    assert goblin.release_ms == root.release_ms
+    assert goblin.body_end_ms == root.body_end_ms
+    for elapsed in (0, goblin.release_ms):
+        assert sample_cast(goblin, elapsed).bodies[0] == sample_cast(root, elapsed).bodies[0]
+    # Different rig torso points can change travel distance. The same reaction
+    # and feedback begin at each target's own contact, not one fixed timestamp.
+    goblin_hit, root_hit = goblin.applications[0], root.applications[0]
+    for timeline, hit in ((goblin, goblin_hit), (root, root_hit)):
+        assert hit.damage is not None
+        assert hit.damage_start_ms == hit.travel_end_ms + hit.damage.impactDelayMs
+        assert hit.hp_ms is not None
+        assert sample_cast(timeline, hit.hp_ms).vitals[0].hp == (0 if lethal else 13)
+        final = sample_cast(timeline, timeline.complete_ms)
+        assert final.complete
+        assert final.bodies[1].clip == ("Die" if lethal else "Idle")
+        assert final.vitals[0].life_state == (LifeState.DEAD if lethal else LifeState.ALIVE)
+    for offset in (0, 250, 7000 / 12, 1500):
+        fixed = sample_cast(goblin, goblin_hit.travel_end_ms + offset)
+        modular = sample_cast(root, root_hit.travel_end_ms + offset)
+        assert fixed.bodies[1] == modular.bodies[1]
+        assert fixed.vitals == modular.vitals
+        assert fixed.numbers == modular.numbers
 
 
 def test_target_metadata_controls_reaction_feedback_and_idle_without_retiming_release(data: AnimationData) -> None:

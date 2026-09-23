@@ -53,7 +53,7 @@ def test_authored_recovery_follows_native_late_child_without_moving_delivery(
 ) -> None:
     lineage = concentrating_hit.lineages[0]
     data = load_animation_data()
-    fact, = lineage.conditions
+    fact, = (fact for fact in lineage.conditions if fact.behavior_id == "condition.concentrating")
     assert fact.behavior_id == "condition.concentrating"
     removal = next(event for event in lineage.events if event.uuid == fact.event_uuid)
     assert removal.event_type is EventType.CONDITION_REMOVAL

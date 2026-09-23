@@ -62,16 +62,35 @@ def histories(renderer: tuple[AnimationData, AssetCatalog, SurfaceCache]) -> dic
     return result
 
 
-class RaisedTerrainOcclusion(AssertionError):
-    """Only this known pixel defect may satisfy its narrow expected failure."""
+@pytest.mark.parametrize("quadrant", range(4))
+def test_raised_support_keeps_its_whole_authored_billboard(
+    renderer: tuple[AnimationData, AssetCatalog, SurfaceCache],
+    histories: dict[str, tuple[PlayerState, PlayerState, MotionTimeline, BodyRows]],
+    quadrant: int,
+) -> None:
+    """Landing on a terrace must not put its floor in front of the feet."""
+    data, catalog, cache = renderer
+    _, after, _, media = histories["uphill"]
+    number, badge = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx))
+                     for style in (data.number_style, data.badge_style))
+    screen = pygame.Surface((640, 480))
+    camera = Camera(quadrant=quadrant, zoom=.75, viewport=screen.get_size()).with_focus(
+        (14, 20), elevation_steps=2)
+    frame = sample_playback_frame(after, None, data, 0, 5000, camera, {}, media, number, badge)
+    body, = (command for command in frame.commands if command.evidence[6] == "actor")
+    assert body.evidence[1] == (14, 20) and body.evidence[7] == 2
+    draw_frame(screen, frame.displayed, catalog, cache, camera, 0,
+        show_grid=False, show_debug=False, mouse_position=None, extra_commands=frame.commands)
+    x, y = body.destination
+    rendered = pygame.surfarray.array3d(screen)[x:x + body.surface.width, y:y + body.surface.height]
+    opaque = pygame.surfarray.array_alpha(body.surface) == 255
+    assert np.count_nonzero(opaque) > 100
+    assert not np.any(opaque & np.any(rendered != pygame.surfarray.array3d(body.surface), axis=2))
 
 
 @pytest.mark.parametrize(("name", "elapsed", "airborne", "quadrant"), [
     pytest.param(name, elapsed, airborne, quadrant,
-        id=f"{name}-{'air' if airborne else 'ground'}-q{quadrant}",
-        marks=pytest.mark.xfail(strict=True, raises=RaisedTerrainOcclusion,
-            reason="Known raised floor/cliff painter hides above-plane body pixels in rear views")
-        if airborne and quadrant in (0, 1) else ())
+        id=f"{name}-{'air' if airborne else 'ground'}-q{quadrant}")
     for name, air_time, ground_time in (("uphill", 500.0, 0.0), ("downhill", 250.0, 750.0))
     for elapsed, airborne in ((air_time, True), (ground_time, False))
     for quadrant in range(4)
@@ -108,6 +127,16 @@ def test_native_jump_terrain_pixels(
         body[2][0]:body[2][0] + body[1].get_width(),
         body[2][1]:body[2][1] + body[1].get_height(),
     ]
+    composed_pixels = pygame.surfarray.array3d(screen)
+    dynamic_pixels = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+    for command in frame.commands:
+        dynamic_pixels.blit(command.surface, command.destination)
+    draw_frame(screen, frame.displayed, catalog, cache, camera, elapsed / 1000,
+        show_grid=False, mouse_position=None, show_debug=False)
+    outside = pygame.surfarray.array_alpha(dynamic_pixels) == 0
+    assert not np.any(outside & np.any(composed_pixels != pygame.surfarray.array3d(screen), axis=2)), (
+        "Depth correction must not reshuffle terrain outside the passing body's pixels"
+    )
     missing = opaque & np.any(rendered != pixels, axis=2)
     missing_count = int(np.count_nonzero(missing))
     assert np.count_nonzero(opaque) > 100
@@ -165,7 +194,6 @@ def test_native_jump_terrain_pixels(
         "opaque_below_floor": int(np.count_nonzero(opaque & ~above_floor)),
         "occluders": occluders})
     if airborne:
-        if missing_above_floor:
-            raise RaisedTerrainOcclusion(detail)
+        assert missing_above_floor == 0, detail
     else:
         assert (missing_count == 0) == (quadrant in (2, 3)), detail

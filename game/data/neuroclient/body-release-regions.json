@@ -20139,6 +20139,32 @@
         9709652
       ],
       "legacyAssetId": "strip.body.dread_blood"
+    },
+    {
+      "assetId": "particles.region.water",
+      "primitive": "liquid",
+      "colors": [
+        1195349,
+        7844284
+      ],
+      "palette": [
+        1195349,
+        2648449,
+        7844284
+      ]
+    },
+    {
+      "assetId": "particles.region.oil",
+      "primitive": "liquid",
+      "colors": [
+        1381659,
+        7430735
+      ],
+      "palette": [
+        1381659,
+        3289152,
+        7430735
+      ]
     }
   ],
   "templates": [

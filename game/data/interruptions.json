@@ -1,0 +1,60 @@
+{
+  "outcomes": [
+    "spell.sanctuary.blocked",
+    "spell.globe_of_invulnerability.blocked",
+    "spell.counterspell.interrupted"
+  ],
+  "rules": [
+    {
+      "phases": [
+        "declaration",
+        "execution"
+      ],
+      "actionEconomySpent": false,
+      "anticipationFraction": 0.8
+    },
+    {
+      "phases": [
+        "execution"
+      ],
+      "actionEconomySpent": true,
+      "anticipationFraction": 0.95,
+      "travelFraction": 0.5,
+      "nonProjectileBodyFraction": 0.9
+    }
+  ],
+  "reactions": {
+    "reaction.spell.counterspell": {
+      "successByCamera": [
+        "counterspell.success.q0",
+        "counterspell.success.q1",
+        "counterspell.success.q2",
+        "counterspell.success.q3"
+      ],
+      "failureByCamera": [
+        "counterspell.failure.q0",
+        "counterspell.failure.q1",
+        "counterspell.failure.q2",
+        "counterspell.failure.q3"
+      ],
+      "dissipationMask": "counterspell.dissipation",
+      "durationMs": 500,
+      "scale": 1,
+      "castLayers": [
+        {
+          "id": "counterspell-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "colors": {
+            "source": "override",
+            "primary": 16777215,
+            "mode": "tint"
+          },
+          "sourceSheet": "/counterspell-media/cast-hands.png"
+        }
+      ]
+    }
+  }
+}

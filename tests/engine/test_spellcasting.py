@@ -49,7 +49,6 @@ from tests.spell_test_exports import (
     SPELL_CATALOG_METADATA_BY_NAME,
 )
 from tests.engine.support import create_test_entity, get_hp, reset_combat_state, set_hp
-from server.spell_catalog import build_spell_catalog_entry
 
 
 def reset_spell_state(width: int = 8, height: int = 4) -> None:
@@ -929,9 +928,7 @@ def test_eb_14_017_spell_catalog_identity_matches_spell_events() -> None:
     before_registry_count = len(BaseObject._registry)
     entries = {
         SPELL_CATALOG_METADATA_BY_NAME[display_name].catalog_id:
-            build_spell_catalog_entry(
-                SPELL_CATALOG_COMPOSITION_BY_CLASS[spell_cls],
-            )
+            SPELL_CATALOG_COMPOSITION_BY_CLASS[spell_cls]
         for display_name, spell_cls in ALL_SPELLS.items()
     }
     after_registry_count = len(BaseObject._registry)
@@ -949,7 +946,7 @@ def test_eb_14_017_spell_catalog_identity_matches_spell_events() -> None:
                 display_name
             ].catalog_id
             entry = entries[catalog_id]
-            assert entry.name == display_name
+            assert entry.display_name == display_name
             assert entry.level == expected_level
 
     for display_name in ("Fire Bolt", "Magic Missile", "Fireball"):
@@ -963,16 +960,15 @@ def test_eb_14_017_spell_catalog_identity_matches_spell_events() -> None:
 
         assert isinstance(event, SpellEvent)
         catalog_id = SPELL_CATALOG_METADATA_BY_NAME[display_name].catalog_id
-        assert event.spell_id == entries[catalog_id].id
+        assert event.spell_id == entries[catalog_id].metadata.catalog_id
         assert event.spell_level == entries[catalog_id].level
 
-    magic_missile = entries["magic_missile"]
-    fireball = entries["fireball"]
+    magic_missile = entries["magic_missile"].metadata
+    fireball = entries["fireball"].metadata
 
     assert magic_missile.multi_target is not None
     assert magic_missile.multi_target.projectiles_per_cast == 3
-    assert magic_missile.vfx is not None
-    assert magic_missile.vfx.route_hint == "missile_volley"
+    assert magic_missile.delivery == "missile_volley"
     assert tuple(save.ability for save in fireball.saving_throws) == (
         "dexterity",
     )

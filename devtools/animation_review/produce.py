@@ -1,13 +1,34 @@
 """Explicit native scenario composition for new review captures."""
 
+from dnd.core.life_types import LifeState
+from devtools.animation_review.control_cases import control_spell_history
 from game.combat_demo import capture_combat_demo
 from game.replay import CapturedHistory
 from tests.game.body_residue_scenarios import body_residue_history, hidden_residue_history
 from tests.game.creature_scenarios import creature_history
 from tests.game.concealment_scenarios import concealment_history
 from tests.game.discovery_scenarios import discovery_history
+from tests.game.device_scenarios import device_history
+from tests.game.web_scenarios import web_history
+from tests.game.cantrip_scenarios import cantrip_history
+from tests.game.area_spell_scenarios import area_spell_history
+from tests.game.support_scenarios import support_history
+from tests.game.healing_batch_scenarios import healing_batch_history
+from tests.game.pending_spell_scenarios import pending_spell_history
+from tests.game.persistent_spell_scenarios import persistent_spell_history
+from tests.game.interruption_scenarios import interruption_history
+from tests.game.globe_scenarios import globe_history
+from tests.game.projectile_life_scenarios import projectile_life_history
+from tests.game.true_strike_scenarios import true_strike_history
 from tests.game.dread_residue_scenarios import dread_residue_history
 from tests.game.equipment_scenarios import equipment_sequence_history
+from tests.game.mechanism_scenarios import mechanism_history
+from tests.game.trap_expansion_scenarios import trap_expansion_history
+from tests.game.portal_scenarios import portal_history
+from tests.game.door_destruction_scenarios import door_destruction_history
+from tests.game.trap_hardware_scenarios import trap_hardware_history
+from tests.game.prop_destruction_scenarios import prop_destruction_history
+from tests.game.liquid_barrel_scenarios import liquid_barrel_history
 from tests.game.environment_scenarios import environment_history
 from tests.game.environment_control_scenarios import control_history
 from tests.game.forced_movement_scenarios import forced_movement_history
@@ -22,15 +43,60 @@ from tests.game.scenarios import (
 )
 
 from devtools.animation_review.cases import (
-    AttackCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,
-    EnvironmentCase, EnvironmentControlCase, EquipmentCase, ForcedMovementCase, GroundContactCase, HealingCase, LifecycleCase, MovementCase,
-    ParalysisCase, ParalysisLifecycleCase, ReviewCase, SpellHandoffCase, TeleportCase, TrapCase, VisibilityCase,
+    AreaSpellCase, CantripCase, AttackCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DeviceCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,
+    MechanismCase, PortalCase, DoorCase, TrapHardwareCase, PropDestructionCase, LiquidBarrelCase, EnvironmentCase, EnvironmentControlCase, EquipmentCase, ForcedMovementCase, GroundContactCase, HealingCase, LifecycleCase, MovementCase,
+    ParalysisCase, ParalysisLifecycleCase, PendingSpellCase, PersistentSpellCase, GlobeCase, InterruptionCase, ControlSpellCase, ProjectileLifeCase, ReviewCase, SpellHandoffCase, SupportCase, HealingBatchCase, TrueStrikeCase, TeleportCase, TrapCase, VisibilityCase, WebCase,
 )
 
 
 def produce(case: ReviewCase) -> CapturedHistory:
     """Run real rules once, then hand only retained values to the recorder."""
     match case.scenario:
+        case GlobeCase() as scenario:
+            return globe_history(spell=scenario.spell, protection=scenario.protection,
+                source_inside=scenario.source_inside, impact_offset=scenario.impact_offset, walls=scenario.walls)
+        case InterruptionCase() as scenario:
+            return interruption_history(blocker=scenario.blocker, spell=scenario.spell, blocked=scenario.blocked)
+        case PersistentSpellCase() as scenario:
+            return persistent_spell_history(program=scenario.program, mode=scenario.mode, energy=scenario.energy,
+                saved=scenario.saved, jump=scenario.jump, shield_delivery=scenario.shield_delivery,
+                environment=scenario.environment, jump_across=scenario.jump_across, discovered=scenario.discovered,
+                cast_level=scenario.cast_level, ward_expiry=scenario.ward_expiry,
+                ward_retained=scenario.ward_retained)
+        case ControlSpellCase() as scenario:
+            return control_spell_history(program=scenario.program, saved=scenario.saved,
+                remove_first=scenario.remove_first, repeat_source=scenario.repeat_source)
+        case ProjectileLifeCase() as scenario:
+            return projectile_life_history(initial=LifeState(scenario.initial), repeated=scenario.repeated)
+        case PendingSpellCase() as scenario:
+            return pending_spell_history(program=scenario.program, miss=scenario.miss, saved=scenario.saved,
+                blocked=scenario.blocked, raised=scenario.raised, long_jump=scenario.long_jump,
+                replace_grant=scenario.replace_grant, perspective=scenario.perspective)
+        case DoorCase() as scenario:
+            return door_destruction_history(item_id=scenario.item_id, program=scenario.program,
+                swing=scenario.swing, jammed=scenario.jammed, raised=scenario.raised)
+        case TrapHardwareCase() as scenario:
+            return trap_hardware_history(item_id=scenario.item_id, deployed=scenario.deployed)
+        case PropDestructionCase() as scenario:
+            return prop_destruction_history(item_id=scenario.item_id, opened=scenario.opened)
+        case LiquidBarrelCase() as scenario:
+            return liquid_barrel_history(liquid=scenario.liquid, saved=scenario.saved, jump=scenario.jump,
+                layout=scenario.layout, landing=scenario.landing)
+        case SupportCase() as scenario:
+            return support_history(program=scenario.program, diagonal=scenario.diagonal)
+        case HealingBatchCase() as scenario:
+            return healing_batch_history(program=scenario.program, self_target=scenario.self_target,
+                clean_target=scenario.clean_target)
+        case TrueStrikeCase() as scenario:
+            return true_strike_history(ranged=scenario.ranged, miss=scenario.miss)
+        case CantripCase() as scenario:
+            return cantrip_history(program=scenario.program, outcome=scenario.outcome, layout=scenario.layout)
+        case AreaSpellCase() as scenario:
+            return area_spell_history(program=scenario.program, diagonal=scenario.diagonal, blocked=scenario.blocked)
+        case WebCase() as scenario:
+            return web_history(delivery=scenario.delivery)
+        case DeviceCase() as scenario:
+            return device_history(program=scenario.program, wake_damage=scenario.wake_damage)
         case SpellHandoffCase() as scenario:
             return spell_handoff_history(program=scenario.program, level=scenario.level,
                 split=scenario.split, miss=scenario.miss, environment=scenario.environment,
@@ -46,6 +112,13 @@ def produce(case: ReviewCase) -> CapturedHistory:
                 creature_identity=scenario.creature_identity)
         case GroundContactCase() as scenario:
             return ground_contact_history(program=scenario.program)
+        case PortalCase() as scenario:
+            return portal_history(program=scenario.program, arrival_spikes=scenario.arrival_spikes)
+        case MechanismCase() as scenario:
+            if scenario.program in ("jaw", "gas", "tripwire"):
+                return trap_expansion_history(program=scenario.program, jump=scenario.jump, save=scenario.save)
+            return mechanism_history(program=scenario.program, jump=scenario.jump, save=scenario.save,
+                hidden_launcher=scenario.hidden_launcher, jump_release=scenario.jump_release)
         case TrapCase() as scenario:
             return trap_history(detected=scenario.detected, payload=scenario.payload,
                 save_face=scenario.save_face, bloodied=scenario.bloodied)

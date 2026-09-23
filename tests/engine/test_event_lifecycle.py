@@ -99,6 +99,23 @@ def test_event_history_uses_only_the_queue_and_resets_without_removing_objects()
     assert BaseObject.get(owner.uuid) is owner
 
 
+def test_canceled_child_keeps_its_parent_lineage_before_completion() -> None:
+    reset_event_state()
+    source = uuid4()
+    parent = Event(source_entity_uuid=source, event_type=EventType.BASE_ACTION)
+    child = Event(source_entity_uuid=source, event_type=EventType.TAKE_DAMAGE,
+                  parent_event=parent.uuid)
+    execution = child.phase_to(EventPhase.EXECUTION)
+    canceled = execution.cancel(status_message="Intercepted before damage")
+    parent = parent.phase_to(EventPhase.COMPLETION)
+    assert all(version.parent_lineage == parent.lineage_uuid for version in (child, execution, canceled))
+    assert canceled.lineage_uuid in parent.children_lineages
+    terminal_roots = [event for _, event in EventQueue.iter_events_since(0)
+                      if event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)
+                      and event.parent_lineage is None]
+    assert terminal_roots == [parent]
+
+
 def test_event_registration_opt_out_applies_to_constructed_and_posted_versions() -> None:
     """A caller can create and phase an Event without retaining its history."""
     reset_event_state()

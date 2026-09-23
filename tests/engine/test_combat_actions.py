@@ -754,11 +754,15 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
 
     assert [damage_event.total_damage for damage_event in damage_completions] == [4, 4]
     assert [damage_event.final_damage for damage_event in damage_completions] == [4, 4]
-    entered_event_uuids = {event.uuid for event in entered_effect_events}
-    assert all(
-        damage_event.parent_event in entered_event_uuids
-        for damage_event in damage_completions
-    )
+    # Raising the first trap adds a state-change child; already raised
+    # spikes apply damage directly. Both hits descend from their own entry.
+    for damage_event, entry in zip(damage_completions, entered_effect_events, strict=True):
+        ancestor = damage_event
+        while ancestor.uuid != entry.uuid:
+            assert ancestor.parent_event is not None
+            parent = EventQueue.get_event_by_uuid(ancestor.parent_event)
+            assert parent is not None
+            ancestor = parent
     assert all(
         event.parent_event is not None
         and (parent := EventQueue.get_event_by_uuid(event.parent_event)) is not None

@@ -74,11 +74,11 @@ def world_event_positions(
                 positions.add(event.tile_position)
             identity = event.object_uuid
             if isinstance(event.after, WorldObjectState):
-                positions.add(event.after.placement.position)
+                positions.update(event.after.placement.positions)
         case ItemLocationStateEvent():
             identity = event.item_state.item_uuid
             if event.world_placement is not None:
-                positions.add(event.world_placement.position)
+                positions.update(event.world_placement.positions)
         case ItemChargeConsumptionEvent():
             identity = event.item_uuid
         case TileElevationChangeEvent():
@@ -92,7 +92,7 @@ def world_event_positions(
                 positions.add(event.old_position)
             for placement in (event.placement, event.previous_placement):
                 if placement is not None:
-                    positions.add(placement.position)
+                    positions.update(placement.positions)
             for key in event.light_level_map or {}:
                 x, y = key.split(",", maxsplit=1)
                 positions.add((int(x), int(y)))
@@ -102,7 +102,7 @@ def world_event_positions(
             if event.resulting_item is not None:
                 identity = event.resulting_item.item_uuid
     if identity is not None and (obj := world.objects.get(identity)) is not None:
-        positions.add(obj.placement.position)
+        positions.update(obj.placement.positions)
     return positions | {
         (x + dx, y + dy) for x, y in positions for dx, dy in CARDINAL_DELTAS.values()
     }

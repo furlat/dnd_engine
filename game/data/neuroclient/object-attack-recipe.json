@@ -1,0 +1,31 @@
+{
+  "definitionRef": {
+    "pack_id": "core.rules",
+    "definition_kind": "action",
+    "content_id": "action.attack_object",
+    "content_version": 1,
+    "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+  },
+  "compatibleCueKinds": ["action"],
+  "previewChildCueKinds": [],
+  "disposition": "authored",
+  "mediaFailurePolicy": "fail_transaction",
+  "actor": {
+    "enabled": true,
+    "clip": "Attack1",
+    "playbackSpeed": 1,
+    "hiddenSlots": [],
+    "media": []
+  },
+  "anchors": [
+    {"name": "action_start", "frame": 0},
+    {"name": "contact", "frame": 8},
+    {"name": "effect", "frame": 8},
+    {"name": "recover", "frame": 10}
+  ],
+  "attackFeedback": null,
+  "counterspellFeedback": null,
+  "variants": [],
+  "projectile": null,
+  "actionFeedback": null
+}

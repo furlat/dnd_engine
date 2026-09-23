@@ -10,6 +10,7 @@ import pytest
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import EventPhase, EventType
 from game.animation_types import FloatingFeedbackStyle, StudioCondition
+from game.animation_data import load_animation_data
 from game.condition_animation import (
     compile_condition, condition_transition_appearances, resolve_condition_appearance, sample_condition,
 )
@@ -157,3 +158,25 @@ def test_late_neutral_wrapper_keeps_active_alpha_and_current_aggregate_color(rec
     assert current[actor].matched_behavior_ids == baseline[actor].matched_behavior_ids
     assert baseline[actor].alpha == .5
     assert condition_transition_appearances((fade, leaf), fade.complete_ms, baseline) == baseline
+
+
+def test_authored_resting_pose_and_media_follow_exact_condition_contact_and_removal(badge_style) -> None:
+    data = load_animation_data()
+    recipes = data.condition_recipes
+    sleep = condition_fact("condition.spell.sleep", "Sleep")
+    applied = compile_condition(recipes, header(sleep), sleep, (), start_ms=150, badge_style=badge_style,
+                                media=data.condition_media)
+    assert sample_condition(applied, 149).appearance.body_pose is None
+    contact = sample_condition(applied, 150)
+    assert contact.appearance.body_pose == "Die"
+    assert contact.appearance.label is None
+    assert {layer.layer.assetId for layer in contact.appearance.layers} == {
+        "control.sleep.sustain.back", "control.sleep.sustain.front"}
+    assert contact.complete  # A resting pose creates no second transition clock.
+    removal = replace(sleep, event_uuid=uuid4())
+    removed = compile_condition(recipes, header(removal, applied=False), removal, (sleep,),
+                                start_ms=400, badge_style=badge_style)
+    assert sample_condition(removed, 399).appearance.body_pose == "Die"
+    assert sample_condition(removed, 400).appearance.body_pose is None
+    assert sample_condition(removed, 400).appearance.label is None
+    assert sample_condition(applied, 149).appearance.body_pose is None  # Seeking is passive.

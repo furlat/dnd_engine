@@ -1,36 +1,46 @@
-"""Focused checks for encounters, turns, controllers, and APIs."""
+"""Native encounters and controllers, independent of the retired HTTP server.
 
-import warnings
+The former HTTP/session assertions are preserved with their disposition in
+agent_docs/retired_server_tests/2026-09-21/README.md.
+"""
+
 from typing import Optional
 from uuid import UUID, uuid4
 
-warnings.filterwarnings(
-    "ignore",
-    message="Using `httpx` with `starlette.testclient` is deprecated.*",
-)
-
-from fastapi.testclient import TestClient
 from pydantic import Field
 
 from dnd.actions import Attack
 from dnd.controller import Controller, HumanController, PassController, TurnContext
 from dnd.core.base_actions import BaseAction
-from dnd.core.base_block import BaseBlock
-from dnd.core.base_object import BaseObject
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventQueue
-from dnd.core.gridmap import get_map
 from dnd.core.life_types import LifeState
-from dnd.core.values import BaseValue
 from dnd.encounter import Encounter, EncounterState, TurnState
 from dnd.entity import Entity
-from dnd.monsters.bestiary import create_caster, create_goblin, create_skeleton
-from dnd.monsters.bestiary_content import (
-    BESTIARY_CREATURE_DECLARATIONS_BY_ID,
-)
-from tests.engine.support import force_attack_hit, get_hp, remove_attack_modifier, reset_combat_state, set_hp
-from server.event_server import _available_actions_cache, app, sim
-from server.event_stream import event_stream
+from dnd.game import Game
+from dnd.monsters.bestiary import create_goblin as _create_goblin, create_skeleton as _create_skeleton
+from dnd.monsters.bestiary_content import BESTIARY_CREATURE_DECLARATIONS_BY_ID
+from dnd.runtime_reset import reset_engine_runtime
+from tests.engine.support import force_attack_hit, get_hp, remove_attack_modifier, set_hp
+
+
+def create_goblin(**kwargs) -> Entity:
+    entity = _create_goblin(**kwargs)
+    entity.compose_entity()
+    Game().deploy_entity(entity, entity.position)
+    return entity
+
+
+def create_skeleton(**kwargs) -> Entity:
+    entity = _create_skeleton(**kwargs)
+    entity.compose_entity()
+    Game().deploy_entity(entity, entity.position)
+    return entity
+
+
+def reset_runtime_tutorial_state(width: int = 16, height: int = 10) -> None:
+    """Start one clean native test world."""
+    reset_engine_runtime(grid_size=(width, height))
 
 
 class RecordingController(Controller):
@@ -85,34 +95,6 @@ class OneAttackController(Controller):
         return not self.used
 
 
-def reset_runtime_tutorial_state(width: int = 16, height: int = 10) -> None:
-    """Clear global runtime state and create a rectangular tutorial arena."""
-    reset_combat_state()
-    EventQueue.set_combat_log_callback(None)
-    EventQueue.set_perceiver_computer(None)
-    EventQueue.set_revealed_computer(None)
-    BaseObject._registry.clear()
-    BaseValue._registry.clear()
-    BaseBlock._registry.clear()
-    Controller.clear_registry()
-    Encounter.clear_registry()
-    Encounter._combat_log_listeners.clear()
-    event_stream.ensure_attached()
-    event_stream._clear_source_journal()
-    _available_actions_cache.clear()
-
-    manager = sim.get_session_manager()
-    manager.sessions.clear()
-    manager.games.clear()
-    manager.active_game = None
-    sim.encounter = None
-    sim._game_session = None
-    sim.combat_task = None
-    sim.paused = True
-
-    get_map().create_rectangle(0, 0, width, height)
-
-
 def create_runtime_pair() -> tuple[Entity, Entity]:
     """Create two opposing tutorial combatants."""
     hero = create_goblin(
@@ -148,86 +130,6 @@ def start_ordered_encounter(
     encounter.current_turn_index = 0
     encounter.start_encounter()
     return encounter
-
-
-def create_session_controlled_turn() -> tuple[TestClient, str, Entity, Entity, Encounter]:
-    """Create an in-process API session that controls the active hero turn."""
-    reset_runtime_tutorial_state()
-    hero, monster = create_runtime_pair()
-    encounter = start_ordered_encounter(
-        hero,
-        monster,
-        HumanController(source_entity_uuid=hero.uuid),
-        PassController(source_entity_uuid=monster.uuid),
-        hero,
-    )
-    encounter.start_turn()
-    sim.encounter = encounter
-    sim.create_game_session(encounter)
-
-    client = TestClient(app)
-    session_response = client.post(
-        "/session/create",
-        json={"player_type": "human", "name": "Runtime Player"},
-    )
-    assert session_response.status_code == 200
-    assert session_response.json()["player_type"] == "human"
-    session_id = session_response.json()["session_id"]
-
-    join_response = client.post(
-        "/game/join",
-        json={"session_id": session_id, "entity_uuids": [str(hero.uuid)]},
-    )
-    assert join_response.status_code == 200
-    assert join_response.json()["controlled_entities"] == [str(hero.uuid)]
-
-    return client, session_id, hero, monster, encounter
-
-
-def player_replication_seed(client: TestClient, session_id: str) -> dict:
-    """Open the sole expectation-free player replication entry point."""
-    response = client.get(
-        "/replication/bootstrap",
-        params={"session_id": session_id},
-    )
-    assert response.status_code == 200
-    return response.json()
-
-
-def player_replication_after(
-    client: TestClient,
-    session_id: str,
-    bootstrap: dict,
-) -> tuple[dict, dict, dict]:
-    """Read exact player reducer and log windows after a captured seed."""
-    identity = {
-        "session_id": session_id,
-        "expected_source_stream_id": bootstrap["protocol"]["source_stream_id"],
-        "expected_generation_id": bootstrap["protocol"]["generation_id"],
-        "expected_perspective_epoch_id": bootstrap["perspective"]["perspective_epoch_id"],
-    }
-    frames_response = client.get(
-        "/replication/frames",
-        params={
-            **identity,
-            "from_observation_cursor": bootstrap["watermarks"]["observation_cursor"],
-        },
-    )
-    logs_response = client.get(
-        "/replication/combat-log",
-        params={
-            **identity,
-            "from_combat_log_cursor": bootstrap["watermarks"]["combat_log_cursor"],
-        },
-    )
-    current_response = client.get(
-        "/replication/bootstrap",
-        params={"session_id": session_id},
-    )
-    assert frames_response.status_code == 200
-    assert logs_response.status_code == 200
-    assert current_response.status_code == 200
-    return current_response.json(), frames_response.json(), logs_response.json()
 
 
 def test_encounter_start_and_end_own_runtime_callbacks() -> None:
@@ -391,217 +293,3 @@ def test_death_checks_mark_dead_combatants_and_end_by_faction_survival() -> None
     assert Encounter.get_active() is None
     assert len(encounter.get_alive_combatants()) == 1
     assert encounter.get_dead_combatants()[0].entity_uuid == monster.uuid
-
-
-def test_session_api_exposes_authoritative_turn_actions_and_results() -> None:
-    """The API boundary gates actions by session ownership and active turn."""
-    client, session_id, hero, monster, encounter = create_session_controlled_turn()
-
-    before = player_replication_seed(client, session_id)
-    turn_payload = before["world"]["state"]["encounter"]
-    ping_response = client.post(f"/session/{session_id}/ping")
-    ping_payload = ping_response.json()
-    current_entity = next(
-        entity
-        for entity in before["world"]["state"]["entities"]
-        if entity["uuid"] == turn_payload["current_entity_uuid"]
-    )
-
-    assert turn_payload["state"] == "active"
-    assert turn_payload["current_entity_uuid"] == str(hero.uuid)
-    assert current_entity["name"] == "Runtime Hero"
-    assert ping_response.status_code == 200
-    assert ping_payload["is_my_turn"] is True
-    assert ping_payload["active_entity_uuid"] == str(hero.uuid)
-    assert before["perspective"]["controlled_entity_uuids"] == [str(hero.uuid)]
-
-    actions_response = client.get(
-        f"/entity/{hero.uuid}/available-actions",
-        params={"session_id": session_id},
-    )
-    actions_payload = actions_response.json()
-
-    assert actions_response.status_code == 200
-    assert actions_payload["entity_uuid"] == str(hero.uuid)
-    attack_rows = [
-        action for action in actions_payload["entity_actions"]
-        if action["template_name"] == "Attack_MELEE_MAIN"
-    ]
-    assert attack_rows
-    assert any(
-        target.get("target_uuid") == str(monster.uuid)
-        for target in attack_rows[0]["valid_targets"]
-    )
-
-    force_uuid = force_attack_hit(hero)
-    starting_hp = get_hp(monster)
-    try:
-        action_response = client.post(
-            "/action/execute",
-            json={
-                "session_id": session_id,
-                "entity_uuid": str(hero.uuid),
-                "template_name": "Attack_MELEE_MAIN",
-                "target_index": 0,
-            },
-        )
-    finally:
-        remove_attack_modifier(hero, force_uuid)
-
-    action_payload = action_response.json()
-    current, frame_window, log_window = player_replication_after(
-        client,
-        session_id,
-        before,
-    )
-    replicated_monster = next(
-        row
-        for row in current["world"]["state"]["entities"]
-        if row["uuid"] == str(monster.uuid)
-    )
-
-    assert action_response.status_code == 200
-    assert action_payload["success"] is True
-    assert replicated_monster["hp"] < starting_hp
-    assert frame_window["frames"]
-    assert log_window["frames"]
-    assert "target_hp" not in action_payload
-    assert "combat_log_entries" not in action_payload
-    assert encounter.combat_log
-
-    denied_response = client.post(
-        "/action/execute",
-        json={
-            "session_id": session_id,
-            "entity_uuid": str(monster.uuid),
-            "template_name": "Attack_MELEE_MAIN",
-            "target_index": 0,
-        },
-    )
-
-    assert denied_response.status_code == 403
-    assert denied_response.json()["detail"]["code"] == "entity_not_controlled"
-
-
-def test_lethal_multi_entity_command_reports_causal_death_and_primary_hp() -> None:
-    """Lethal Magic Missile reports its nested death without fallback duplication."""
-    reset_runtime_tutorial_state()
-    caster = create_caster(
-        name="Runtime Caster",
-        position=(1, 1),
-        faction="heroes",
-        content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID[
-            "generic_caster"
-        ].ref,
-    )
-    monster = create_skeleton(
-        name="Runtime Target",
-        position=(2, 1),
-        faction="monsters",
-        content_ref=BESTIARY_CREATURE_DECLARATIONS_BY_ID["skeleton"].ref,
-    )
-    Entity.update_all_entities_senses()
-    encounter = start_ordered_encounter(
-        caster,
-        monster,
-        HumanController(source_entity_uuid=caster.uuid),
-        PassController(source_entity_uuid=monster.uuid),
-        caster,
-    )
-    encounter.start_turn()
-    sim.encounter = encounter
-    sim.create_game_session(encounter)
-    client = TestClient(app)
-    session_response = client.post(
-        "/session/create",
-        json={"player_type": "human", "name": "Runtime Caster Player"},
-    )
-    session_id = session_response.json()["session_id"]
-    join_response = client.post(
-        "/game/join",
-        json={"session_id": session_id, "entity_uuids": [str(caster.uuid)]},
-    )
-    assert join_response.status_code == 200
-    set_hp(monster, 1)
-    before = player_replication_seed(client, session_id)
-
-    available_response = client.get(
-        f"/entity/{caster.uuid}/available-actions",
-        params={"session_id": session_id},
-    )
-    assert available_response.status_code == 200
-    available = available_response.json()
-    missile = next(
-        row
-        for row in available["entity_actions"]
-        if row.get("base_template_name") == "Magic Missile"
-        and row.get("cast_at_level") == 1
-    )
-    target_index = next(
-        target["index"]
-        for target in missile["valid_targets"]
-        if target.get("target_uuid") == str(monster.uuid)
-    )
-
-    response = client.post(
-        "/action/execute",
-        json={
-            "session_id": session_id,
-            "entity_uuid": str(caster.uuid),
-            "template_name": missile["template_name"],
-            "target_index": target_index,
-            "extra_target_uuids": [str(monster.uuid), str(monster.uuid)],
-        },
-    )
-    payload = response.json()
-    current, frame_window, log_window = player_replication_after(
-        client,
-        session_id,
-        before,
-    )
-    patches = [patch for frame in frame_window["frames"] for patch in frame["patches"]]
-    cues = [cue for frame in frame_window["frames"] for cue in frame["presentation"]]
-    damage_cues = [
-        cue
-        for cue in cues
-        if cue["kind"] == "damage" and cue["target_uuid"] == str(monster.uuid)
-    ]
-    life_cues = [
-        cue
-        for cue in cues
-        if cue["kind"] == "life_state" and cue["entity_uuid"] == str(monster.uuid)
-    ]
-
-    assert response.status_code == 200
-    assert damage_cues[-1]["resulting_hp"] == monster.get_hp()
-    assert life_cues[-1]["current"] == LifeState.DEAD.value
-    assert life_cues[-1]["causing_effect_presentation_id"] in {
-        cue["presentation_id"] for cue in damage_cues
-    }
-    assert {
-        "kind": "entity_remove",
-        "entity_uuid": str(monster.uuid),
-    } in patches
-    assert all(
-        row["uuid"] != str(monster.uuid)
-        for row in current["world"]["state"]["entities"]
-    )
-    assert frame_window["frames"]
-    assert payload["encounter_ended"] is True
-    death_entries = [
-        entry
-        for frame in log_window["frames"]
-        for root in [frame["entry"]]
-        for entry in _walk_combat_log_entries(root)
-        if entry["entry_type"] == "death"
-    ]
-    assert len(death_entries) == 1
-    assert {"deaths", "target_hp", "combat_log_entries"}.isdisjoint(payload)
-
-
-def _walk_combat_log_entries(entry: dict) -> list[dict]:
-    """Return one combat-log subtree in depth-first order."""
-    descendants = [entry]
-    for child in entry.get("sub_entries", []):
-        descendants.extend(_walk_combat_log_entries(child))
-    return descendants

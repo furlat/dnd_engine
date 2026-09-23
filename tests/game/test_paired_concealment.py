@@ -36,6 +36,8 @@ def contact_pattern(
 @pytest.mark.parametrize("case_id, expected_contact, expected_steps", [
     ("conceal-invisible-enemy", (True, False, True), 0),
     ("conceal-invisible-ally", (True, False, True), 0),
+    ("conceal-greater-invisibility", (True, False, True), 0),
+    ("conceal-see-invisibility", (True,), 2),
     ("conceal-true-spell-enemy", (True,), 2),
     ("conceal-true-spell-ally", (True,), 2),
     ("conceal-true-expiry", (True, False, True, False), 2),
@@ -111,9 +113,12 @@ def test_concealment_matrix_records_real_contact_and_replays_both_views(
             assert state.senses.position == expected_position
         else:
             true_remains = scenario.sight_grant != "none" and scenario.program != "sight-expiry"
-            assert conditions == ({"True Seeing"} if true_remains else set())
+            see_remains = scenario.program == "see-invisibility"
+            assert conditions == ({"True Seeing"} if true_remains else {"See Invisibility"} if see_remains else set())
             assert any(mode.sense_type == SensesType.TRUESIGHT and mode.range_feet == 120
                        for mode in state.senses.sense_modes) == true_remains
+            assert any(mode.sense_type == SensesType.SEE_INVISIBLE
+                       for mode in state.senses.sense_modes) == see_remains
 
         charges = [node.fact for lineage in lineages for node in lineage.events if isinstance(node.fact, ItemChargeFact)]
         if scenario.sight_grant == "potion" and role == "perceiver":

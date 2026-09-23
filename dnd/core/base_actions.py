@@ -21,16 +21,33 @@ from dnd.core.content.runtime import (
     runtime_behavior_provider,
 )
 from dnd.core.aoe import AoEShape
+from dnd.core.geometry import grid_distance_feet
 from dnd.core.item_types import (
-    FiniteChargeProvider,
     ItemPresentationProvider,
     ItemPresentationState,
 )
 from dnd.core.modifiers import AdvantageStatus
 from dnd.blocks.sensory import Senses
-from typing import Any, Optional, Callable, ClassVar, OrderedDict, List, Dict, Literal, Sequence, Set, Tuple, cast
+from typing import Any, Optional, Callable, ClassVar, OrderedDict, List, Dict, Literal, Protocol, Sequence, Set, Tuple, cast, runtime_checkable
 from uuid import UUID, uuid4, uuid5
 from enum import Enum
+
+
+@runtime_checkable
+class FiniteChargeProvider(Protocol):
+    """Structural boundary for an item-backed finite action cost."""
+
+    charges: int
+
+    def consume_charge_with_event(
+        self,
+        amount: int,
+        source_entity_uuid: UUID,
+        parent_event: "Event",
+    ) -> "Event":
+        """Consume finite charges through the item's ordinary child event."""
+        ...
+
 
 CostType = Literal[
     "actions", "bonus_actions", "reactions", "movement",
@@ -566,6 +583,11 @@ class Cost(BaseCost):
 
 class ActionEvent(Event):
     """Event emitted by the base action pipeline."""
+
+    action_economy_spent: bool = Field(
+        default=False,
+        description="Whether this action committed a positive action-economy or named-resource cost.",
+    )
 
     behavior_id: Optional[str] = Field(
         default=None,
@@ -1197,6 +1219,42 @@ class BaseAction(BaseObject):
         """
         return None
 
+    def get_target_origin(self) -> Optional[Tuple[int, int]]:
+        """Return the grid origin used to measure this action's target range."""
+        source = BaseBlock.get(self.source_entity_uuid)
+        return source.position if source is not None else None
+
+    def get_target_distance(self, position: Tuple[int, int]) -> int:
+        """Measure target distance using the same origin as target validation."""
+        origin = self.get_target_origin()
+        if origin is None:
+            raise ValueError("Action has no placed targeting origin")
+        return grid_distance_feet(origin, position)
+
+    def target_position_error(self, position: Tuple[int, int]) -> Optional[str]:
+        """Return a range error for one candidate, independently of perception."""
+        if self.get_target_origin() is None:
+            return "Action has no placed targeting origin"
+        action_range = self.get_range()
+        if action_range is not None and action_range.normal > 0:
+            distance = self.get_target_distance(position)
+            if distance > action_range.normal:
+                return f"Target out of range ({distance}ft > {action_range.normal}ft)"
+        return None
+
+    def targeting_error(self) -> Optional[str]:
+        """Optional authored origin constraints, checked before action-specific rules."""
+        return None
+
+    def source_item_error(self) -> Optional[str]:
+        """Admission check; accepted last-charge effects may outlive their item."""
+        if self.source_item_uuid is None:
+            return None
+        item = BaseBlock.get(self.source_item_uuid)
+        if item is None or not item.is_active:
+            return "Source item is no longer active"
+        return None
+
     def get_valid_positions(self) -> List[Tuple[int, int]]:
         """Get valid target positions for POSITION_LOS and POSITION_AOE actions.
 
@@ -1217,9 +1275,6 @@ class BaseAction(BaseObject):
         if not isinstance(senses_block, Senses):
             return []
 
-        action_range = self.get_range()
-        max_range = action_range.normal if action_range else 0
-
         valid: List[Tuple[int, int]] = []
         visible = senses_block.visible
         position = senses_block.position
@@ -1232,10 +1287,8 @@ class BaseAction(BaseObject):
                 continue
             if pos == position:
                 continue
-            if max_range > 0:
-                distance = senses_block.get_feet_distance(pos)
-                if distance > max_range:
-                    continue
+            if self.target_position_error(pos) is not None:
+                continue
             valid.append(pos)
         return valid
 
@@ -1648,6 +1701,8 @@ class BaseAction(BaseObject):
             return False
         if declaration_event.phase != EventPhase.DECLARATION:
             return False
+        if self.source_item_error() is not None or self.targeting_error() is not None:
+            return False
         validation_event = self._validate(declaration_event)
         if validation_event is None or validation_event.canceled:
             return False
@@ -1671,14 +1726,14 @@ class BaseAction(BaseObject):
             and self.validate_requirements_for_discovery()
         )
 
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+    def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
         """Apply the action's effects.
 
         Args:
             execution_event: Execution-phase event for this action.
 
         Returns:
-            Accepted effect event, canceled event, or `None`.
+            Accepted ActionEvent effect, canceled child Event, or `None`.
         """
         return execution_event.phase_to(
             EventPhase.EFFECT,
@@ -1844,7 +1899,11 @@ class BaseAction(BaseObject):
             update={"use_register": False},
         )
         started = start_phase()
-        execution_event = self._validate(detached_declaration)
+        targeting_error = self.source_item_error() or self.targeting_error()
+        execution_event = (
+            detached_declaration.cancel(status_message=targeting_error)
+            if targeting_error is not None else self._validate(detached_declaration)
+        )
         record_phase("validate", started)
         if execution_event is None:
             record_total()
@@ -1966,6 +2025,9 @@ class BaseAction(BaseObject):
                     if result_event is None or result_event.canceled:
                         record_phase("convolution_target_apply", target_started)
                         continue
+                    # Successful applications return the action effect; only
+                    # the canceled path above may return a child Event.
+                    result_event = cast(ActionEvent, result_event)
                     if result_event.phase is not EventPhase.EFFECT:
                         raise ValueError(
                             f"Action {self.name} target application must end "
@@ -2006,6 +2068,8 @@ class BaseAction(BaseObject):
         if effect_event is None or effect_event.canceled:
             record_total()
             return effect_event
+        # Canceled child Events propagate above; success retains ActionEvent.
+        effect_event = cast(ActionEvent, effect_event)
         if effect_event.phase is not EventPhase.EFFECT:
             raise ValueError(
                 f"Action {self.name} must finish authored mechanics at effect phase"

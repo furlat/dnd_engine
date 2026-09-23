@@ -1,6 +1,6 @@
 """Authored environmental conditions with independent world ownership."""
 
-from typing import Optional, Set, Tuple
+from typing import NotRequired, Optional, Set, Tuple, TypedDict
 from uuid import UUID, uuid4
 
 from pydantic import Field
@@ -46,6 +46,7 @@ from dnd.spatial.memberships import (
 )
 from dnd.spatial.transitions import bind_spatial_interactions
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
+from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.traps import TrapConditionPayload, TrapDamage, TrapPayload, TrapState
 from dnd.types.world import OccupancyLayer
 from dnd.types.spatial_effects import (
@@ -243,6 +244,7 @@ class FireSurface(AreaCondition):
     """Short-lived burning ground with direct dousing reactions."""
 
     name: str = Field(default="Fire Surface")
+    has_visible_presence: bool = True
     description: str = Field(
         default="Burning ground sheds light and deals 2d4 fire damage.",
     )
@@ -551,6 +553,7 @@ class WetSurface(WetAreaCondition):
     """Persistent water surface with exact source-owned Wet membership."""
 
     name: str = Field(default="Wet Surface")
+    has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=WET_SURFACE_CONTENT_REF)
     layer: SpatialEffectLayer = Field(
         default=SpatialEffectLayer.GROUND_SURFACE,
@@ -581,6 +584,7 @@ class IceSurface(AreaCondition):
     """Frozen difficult ground with an authored Dexterity slip save."""
 
     name: str = Field(default="Ice Surface")
+    has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=ICE_SURFACE_CONTENT_REF)
     layer: SpatialEffectLayer = Field(
         default=SpatialEffectLayer.GROUND_SURFACE,
@@ -702,6 +706,7 @@ class ElectrifiedWater(WetAreaCondition):
     """Wet ground carrying first-per-turn lightning damage."""
 
     name: str = Field(default="Electrified Water")
+    has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=ELECTRIFIED_WATER_CONTENT_REF)
     layer: SpatialEffectLayer = Field(
         default=SpatialEffectLayer.GROUND_SURFACE,
@@ -825,6 +830,7 @@ class SteamCloud(WetAreaCondition):
     """Short-lived wet, heavily obscuring cloud."""
 
     name: str = Field(default="Steam Cloud")
+    has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=STEAM_CLOUD_CONTENT_REF)
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.CLOUD)
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
@@ -893,6 +899,7 @@ class OilSurface(AreaCondition):
     """Persistent slippery oil transformed directly by ignition."""
 
     name: str = Field(default="Oil Surface")
+    has_visible_presence: bool = True
     description: str = Field(
         default="Slippery flammable oil creates hazardous difficult terrain.",
     )
@@ -935,6 +942,18 @@ class OilSurface(AreaCondition):
         return modifiers, handlers, children, spatial_handlers, effect
 
 
+class EnvironmentalReplacementFields(TypedDict):
+    """Only the authored transition inputs forwarded to the selected material."""
+
+    source_entity_uuid: UUID
+    faction: str | None
+    position: tuple[int, int]
+    affected_positions: set[tuple[int, int]]
+    deposit_source: MaterialDepositSource | None
+    affected_occupancy_layers: NotRequired[frozenset[OccupancyLayer]]
+    duration: NotRequired[Duration]
+
+
 def build_environmental_replacement(
     recipe: ContentRecipe,
     replaced: SpatialCondition,
@@ -956,12 +975,17 @@ def build_environmental_replacement(
     else:
         raise ValueError("Environmental transition selected an unknown recipe")
 
-    fields: dict[str, object] = {
+    fields: EnvironmentalReplacementFields = {
         "source_entity_uuid": event.source_entity_uuid,
         "faction": replaced.faction,
         "position": min(positions),
         "affected_positions": set(positions),
+        "deposit_source": replaced.deposit_source,
     }
+    if recipe in (FIRE_SURFACE_RECIPE, ICE_SURFACE_RECIPE, ELECTRIFIED_WATER_RECIPE):
+        # A transformed ground material keeps its actual contact domain. Steam
+        # is a cloud and deliberately retains its own occupancy defaults.
+        fields["affected_occupancy_layers"] = replaced.affected_occupancy_layers
     if event.duration_rounds is not None:
         fields["duration"] = Duration(
             duration=event.duration_rounds,

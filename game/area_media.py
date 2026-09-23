@@ -12,13 +12,25 @@ import numpy as np
 import pygame
 
 from dnd.types.world import CardinalDirection
+from dnd.core.events import WorldTileState
 from dnd.types.world_placement import WorldObjectPlacement
 from game.projection import Camera, camera_pose, project_screen, project_world
+
+
+@dataclass(frozen=True, slots=True)
+class AreaSolid:
+    """Disclosed solid support; absent top means topology only, not a wall."""
+
+    position: tuple[int, int]
+    base_height_steps: float
+    top_height_steps: float | None = None
 
 
 @dataclass(slots=True)
 class AreaMedia:
     boundaries: tuple[WorldObjectPlacement, ...]
+    solids: tuple[AreaSolid, ...] = ()
+    supports: tuple[WorldTileState, ...] = ()
     masks: dict[tuple, pygame.Surface] = field(default_factory=dict)
     compositions: dict[tuple, "_AreaMasks"] = field(default_factory=dict)
 

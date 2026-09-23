@@ -557,16 +557,18 @@ def _atomic_root_is_fully_authorized(
     if requested_elevation is not None and requested_elevation != final_elevation:
         return False
 
-    costs = [step.data.get("movement_cost") for step in original_steps]
-    if any(
-        not isinstance(cost, (int, float))
-        or isinstance(cost, bool)
-        or not isfinite(float(cost))
-        or cost < 0
-        for cost in costs
-    ):
-        return False
-    total_cost = sum(float(cost) for cost in costs)
+    costs: list[float] = []
+    for step in original_steps:
+        cost = step.data.get("movement_cost")
+        if (
+            not isinstance(cost, (int, float))
+            or isinstance(cost, bool)
+            or not isfinite(float(cost))
+            or cost < 0
+        ):
+            return False
+        costs.append(float(cost))
+    total_cost = sum(costs)
     if original.data.get("movement_cost") != total_cost:
         return False
     if movement_type == "jump":

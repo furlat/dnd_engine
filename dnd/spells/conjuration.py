@@ -3,10 +3,11 @@
 Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web, Cloudkill,
           SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud
 """
-from typing import Any, Dict, Literal, Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, Dict, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
-from pydantic import Field, PrivateAttr
+from pydantic import Field
+from pydantic_core import PydanticUndefined
 
 from dnd.core.base_actions import (
     ActionCategory,
@@ -21,7 +22,6 @@ from dnd.core.base_actions import (
     ActionWorldEffectScope,
     ActionWorldEffectShape,
     BaseAction,
-    BaseCost,
     Cost,
     InformationEffectProfile,
     OutcomeResolution,
@@ -58,7 +58,7 @@ from dnd.core.condition_types import (
     HazardFilter,
 )
 from dnd.blocks.base_item import BaseItem, UsableItem
-from dnd.types.senses import OpticalObscurement
+from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 import random
 from dnd.core.dice import AttackOutcome
 from dnd.core.values import ModifiableValue
@@ -72,13 +72,14 @@ from dnd.core.modifiers import (
 )
 from dnd.core.saving_throw_types import SavingThrowEffectTag
 from dnd.core.base_block import BaseBlock, LightLevel
+from dnd.core.presentation_geometry import CubePresentationGeometry
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.types.world import OccupancyLayer
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
 from dnd.spells.content_metadata import srd_action_identity
-from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
+from dnd.spatial.area_conditions import AreaCondition
 from dnd.spatial.environmental_conditions import (
     BURNING_WEB_RECIPE,
     build_environmental_replacement,
@@ -94,6 +95,7 @@ from dnd.spatial.memberships import (
 )
 from dnd.spatial.transitions import bind_spatial_interactions
 from dnd.types.spatial_effects import (
+    SpatialEffectChangeOperation,
     SpatialEffectAnchorKind,
     SpatialEffectBlockingPolicy,
     SpatialEffectInteractionIntensity,
@@ -272,7 +274,7 @@ class CallLightning(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -397,9 +399,9 @@ class PoisonSpray(SpellAction):
         if not source or not target:
             return declaration_event.cancel(status_message="Entity not found")
 
-        distance = source.senses.get_feet_distance(target.position)
-        if distance > 10:
-            return declaration_event.cancel(status_message=f"Out of range ({distance}ft > 10ft)")
+        distance = self.get_target_distance(target.position)
+        if distance > self.effective_range:
+            return declaration_event.cancel(status_message=f"Out of range ({distance}ft > {self.effective_range}ft)")
 
         return los_event.phase_to(EventPhase.EXECUTION, status_message="Validated Poison Spray")
 
@@ -519,7 +521,7 @@ class AcidSplash(SpellAction):
             if contact is None or not contact.visual:
                 return declaration_event.cancel(status_message=f"{target.name} not in line of sight")
 
-            distance = source.senses.get_feet_distance(target.position)
+            distance = self.get_target_distance(target.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target.name} out of range ({distance}ft > {self.effective_range}ft)"
@@ -635,8 +637,8 @@ class MistyStep(SpellAction):
     teleport_range: int = Field(default=30, description="Maximum teleport distance in feet for misty step.")
 
     def get_range(self) -> Range:
-        """Expose destination reach while retaining the spell's self origin."""
-        return Range(type=RangeType.RANGE, normal=self.teleport_range)
+        """Expose destination reach with the same authored override as other spells."""
+        return Range(type=RangeType.RANGE, normal=self.alt_range if self.alt_range is not None else self.teleport_range)
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate destination is visible and within range."""
@@ -651,10 +653,10 @@ class MistyStep(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Destination {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
-        if distance > self.teleport_range:
+        distance = self.get_target_distance(target_pos)
+        if distance > self.get_range().normal:
             return declaration_event.cancel(
-                status_message=f"Destination out of range ({distance}ft > {self.teleport_range}ft)"
+                status_message=f"Destination out of range ({distance}ft > {self.get_range().normal}ft)"
             )
 
         grid = get_map()
@@ -725,10 +727,12 @@ class GreaseZone(AreaCondition):
     Applied to the caster, manages the zone via position-indexed handlers.
     """
     name: str = Field(default="Grease Zone", description="Display name for the grease zone zone condition.")
+    has_visible_presence: bool = True
     description: str = Field(default="Slippery grease - DEX save or fall prone", description="Rules-facing summary for the grease zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the grease zone for cleanup and filtering.")
 
     content_ref: ContentRef = Field(default=GREASE_ZONE_CONTENT_REF)
+    affected_occupancy_layers: frozenset[OccupancyLayer] = frozenset({OccupancyLayer.GROUND})
     position: Tuple[int, int]
     layer: SpatialEffectLayer = Field(
         default=SpatialEffectLayer.GROUND_SURFACE,
@@ -772,7 +776,7 @@ class GreaseZone(AreaCondition):
         prone = Prone(
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=entity.uuid,
-            tags={ConditionTag.MAGICAL},
+            tags=set(self.tags),
         )
         entity.add_condition(prone, parent_event=parent_event)
 
@@ -909,7 +913,7 @@ class Grease(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
@@ -976,11 +980,16 @@ class EscapeWebAction(EscapeSpatialRestraintAction):
 class WebRestrained(SpatialRestraintSource):
     """Exact membership contributed by one Web zone."""
 
+    condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, frozen=True)
+    name: str = Field(default="Web restraint")
+
     description: str = Field(
         default="Restrained by one exact Web zone until leaving or escaping.",
     )
     escape_action_types = (EscapeWebAction,)
 
+    def get_display_name(self) -> str:
+        return "Web restraint"
 
 WEB_ZONE_CONTENT_REF = ContentRef(
     pack_id="content.srd_5_1_cc",
@@ -1039,6 +1048,34 @@ class WebZone(RestrainingAreaCondition):
         description="Whether the webs are anchored or layered across a surface and persist past the caster's next turn start.",
     )
     restraint_source_type = WebRestrained
+
+    def get_spatial_observation(
+        self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
+        discovered: bool = False,
+    ) -> Optional[PerceivedSpatialEffect]:
+        """Disclose this web through the existing observed-cell sensory delta."""
+        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
+            return None
+        sustainer_item_uuid = None
+        concentration_slot_uuid = None
+        observer = Entity.get(observer_uuid)
+        previous = observer.senses.spatial_effects.get(self.uuid) if observer is not None else None
+        anchor_position = (self.position if self.position in positions
+                           else previous.anchor_position if previous is not None else None)
+        if self.parent_link is not None and observer is not None:
+            owner_uuid, parent_uuid = self.parent_link
+            owner = BaseBlock.get(owner_uuid)
+            concentration = BaseCondition.get(parent_uuid)
+            if (isinstance(owner, BaseItem) and owner_uuid in observer.senses.objects
+                    and isinstance(concentration, Concentrating)):
+                for slot_uuid, slot in concentration.concentration_slots.items():
+                    if (self.uuid, self.uuid) in slot.linked_entries:
+                        sustainer_item_uuid, concentration_slot_uuid = owner_uuid, slot_uuid
+                        break
+        return PerceivedSpatialEffect(content_ref=self.content_ref, name=self.name,
+            description=self.description, positions=tuple(sorted(positions)),
+            sustainer_item_uuid=sustainer_item_uuid, concentration_slot_uuid=concentration_slot_uuid,
+            anchor_position=anchor_position)
 
     def restraint_check_dc(self) -> int:
         return self.spell_dc
@@ -1248,7 +1285,7 @@ class Web(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
@@ -1298,8 +1335,21 @@ class Web(SpellAction):
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
 
-        return effect_event.with_updates(
-            status_message=f"Web active: 20ft cube at {target_pos}"
+        if isinstance(self.get_concentration_owner(), BaseItem):
+            zone._complete_change(zone._open_change(
+                SpatialEffectChangeOperation.STATE_CHANGED,
+                previous_positions=set(zone.affected_positions),
+                affected_positions=set(zone.affected_positions),
+                parent_event=effect_event,
+            ))
+
+        return effect_event.post(
+            status_message=f"Web active: 20ft cube at {target_pos}",
+            aoe_position=zone.position,
+            area_geometry=CubePresentationGeometry(
+                origin=zone.position, size_feet=zone.zone_radius_feet, centered=True,
+            ),
+            resolved_area_positions=tuple(sorted(zone.affected_positions)),
         )
 
 
@@ -1458,7 +1508,7 @@ class Entangle(SpellAction):
             return declaration_event.cancel(
                 status_message=f"Position {target_pos} not visible",
             )
-        if caster.senses.get_feet_distance(target_pos) > self.effective_range:
+        if self.get_target_distance(target_pos) > self.effective_range:
             return declaration_event.cancel(status_message="Position out of range")
         return declaration_event.phase_to(
             EventPhase.EXECUTION,
@@ -1495,8 +1545,9 @@ class Entangle(SpellAction):
             )
         concentration = self.ensure_concentration(effect_event)
         concentration.add_linked_condition(zone.uuid, zone.uuid)
-        return effect_event.with_updates(
+        return effect_event.post(
             status_message=f"Entangle active at {target_pos}",
+            resolved_area_positions=tuple(sorted(zone.affected_positions)),
         )
 
 
@@ -1760,7 +1811,7 @@ class EvardsBlackTentacles(SpellAction):
             return declaration_event.cancel(
                 status_message=f"Position {target_pos} not visible",
             )
-        if caster.senses.get_feet_distance(target_pos) > self.effective_range:
+        if self.get_target_distance(target_pos) > self.effective_range:
             return declaration_event.cancel(status_message="Position out of range")
         return declaration_event.phase_to(
             EventPhase.EXECUTION,
@@ -1839,6 +1890,7 @@ class CloudkillZone(AreaCondition):
     description: str = Field(default="Poisonous fog - CON save or 5d8 poison, half on save", description="Rules-facing summary for the cloudkill zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the cloudkill zone for cleanup and filtering.")
 
+    has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=CLOUDKILL_ZONE_CONTENT_REF)
     position: Tuple[int, int]
     anchor_kind: SpatialEffectAnchorKind = Field(
@@ -2100,7 +2152,7 @@ class Cloudkill(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
@@ -2341,7 +2393,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
     anchor_kind: SpatialEffectAnchorKind = Field(
         default=SpatialEffectAnchorKind.ENTITY,
     )
-    anchor_uuid: UUID
+    anchor_uuid: UUID = Field(default=PydanticUndefined, validate_default=True)
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
@@ -2656,6 +2708,7 @@ class FogCloudZone(AreaCondition):
     description: str = Field(default="Heavily obscured fog — blocks vision including darkvision", description="Rules-facing summary for the fog cloud zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the fog cloud zone for cleanup and filtering.")
 
+    has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=FOG_CLOUD_ZONE_CONTENT_REF)
     position: Tuple[int, int]
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.CLOUD)
@@ -2762,7 +2815,7 @@ class FogCloud(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
@@ -2837,6 +2890,7 @@ class DarknessZone(AreaCondition):
     description: str = Field(default="Magical darkness — blocks all vision including darkvision", description="Rules-facing summary for the darkness zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the darkness zone for cleanup and filtering.")
 
+    has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=DARKNESS_ZONE_CONTENT_REF)
     position: Tuple[int, int]
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
@@ -2963,7 +3017,7 @@ class Darkness(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
@@ -3162,7 +3216,7 @@ class Daylight(SpellAction):
         ):
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
@@ -3230,6 +3284,7 @@ class InsectPlagueZone(AreaCondition):
     description: str = Field(default="Swarming biting locusts - CON save or 4d10 piercing", description="Rules-facing summary for the insect plague zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the insect plague zone for cleanup and filtering.")
 
+    has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=INSECT_PLAGUE_ZONE_CONTENT_REF)
     position: Tuple[int, int]
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
@@ -3395,7 +3450,7 @@ class InsectPlague(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
 
@@ -3464,6 +3519,7 @@ class IncendiaryCloudZone(AreaCondition):
     description: str = Field(default="Roiling fire cloud - DEX save or 10d8 fire", description="Rules-facing summary for the incendiary cloud zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the incendiary cloud zone for cleanup and filtering.")
 
+    has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=INCENDIARY_CLOUD_ZONE_CONTENT_REF)
     position: Tuple[int, int]
     anchor_kind: SpatialEffectAnchorKind = Field(
@@ -3681,7 +3737,7 @@ class IncendiaryCloud(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
 
@@ -3803,6 +3859,7 @@ class StinkingCloudZone(AreaCondition):
     description: str = Field(default="Nauseating gas - CON save or spend action", description="Rules-facing summary for the stinking cloud zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the stinking cloud zone for cleanup and filtering.")
 
+    has_visible_presence: bool = True
     content_ref: ContentRef = Field(default=STINKING_CLOUD_ZONE_CONTENT_REF)
     position: Tuple[int, int]
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.CLOUD)
@@ -3902,6 +3959,7 @@ class StinkingCloud(SpellAction):
 
     Duration: Concentration, up to 1 minute
     """
+    harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Stinking Cloud", description="Display name for the stinking cloud spell.")
     description: str = Field(default="20ft sphere nauseating fog, CON save or spend action", description="Rules-facing summary for the stinking cloud spell.")
     spell_level: int = Field(default=3, description="Spell slot level required to cast stinking cloud; cantrips use 0.")
@@ -3934,7 +3992,7 @@ class StinkingCloud(SpellAction):
             return declaration_event.cancel(status_message="No target position")
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Position out of range ({distance}ft)")
         return declaration_event.phase_to(new_phase=EventPhase.EXECUTION, status_message=f"Validated {self.name}")
@@ -4269,6 +4327,7 @@ class SleetStorm(SpellAction):
 
     Duration: Concentration, up to 1 minute
     """
+    harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Sleet Storm", description="Display name for the sleet storm spell.")
     description: str = Field(default="40ft cylinder: difficult terrain, heavily obscured, DEX save/prone, conc disruption", description="Rules-facing summary for the sleet storm spell.")
     spell_level: int = Field(default=3, description="Spell slot level required to cast sleet storm; cantrips use 0.")
@@ -4297,7 +4356,7 @@ class SleetStorm(SpellAction):
             return declaration_event.cancel(status_message="No target position")
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Position out of range ({distance}ft)")
         return declaration_event.phase_to(new_phase=EventPhase.EXECUTION, status_message=f"Validated {self.name}")
@@ -4383,7 +4442,7 @@ class DimensionDoor(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Position out of range ({distance}ft)")
 
@@ -4462,7 +4521,7 @@ class GuardianOfFaithZone(AreaCondition):
     anchor_kind: SpatialEffectAnchorKind = Field(
         default=SpatialEffectAnchorKind.WORLD_OBJECT,
     )
-    anchor_uuid: UUID
+    anchor_uuid: UUID = Field(default=PydanticUndefined, validate_default=True)
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
@@ -4528,7 +4587,7 @@ class GuardianOfFaithZone(AreaCondition):
             if zone.damage_dealt >= zone.damage_budget:
                 guardian = BaseItem.get(zone.anchor_uuid)
                 if isinstance(guardian, GuardianOfFaithObject):
-                    guardian.destroy(parent_event=event)
+                    guardian.retire(parent_event=event)
                 elif zone.applied:
                     zone.deactivate(parent_event=event)
             return None
@@ -4619,7 +4678,7 @@ class GuardianOfFaith(SpellAction):
         )
         zone_result = zone.activate(parent_event=effect_event)
         if zone_result is None or zone_result.canceled or not zone.applied:
-            guardian.destroy(parent_event=effect_event)
+            guardian.retire(parent_event=effect_event)
             return execution_event.cancel(
                 status_message="Guardian of Faith zone could not be installed",
             )

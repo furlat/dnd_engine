@@ -118,7 +118,28 @@ def test_four_camera_framing_keeps_the_airborne_body_below_the_header(tmp_path: 
     assert len(trace["cameras"]) == 4 and len({camera["zoom"] for camera in trace["cameras"]}) == 1
 
 
-def test_paused_death_pixels_remain_historical_while_latest_has_revived(tmp_path: Path) -> None:
+def test_four_camera_review_frames_tall_and_directional_authored_media(tmp_path: Path) -> None:
+    assert capture_review.main(["--case", "batch-sacred-adjacent-axis", "--case", "batch-gust-of-wind-axis",
+                               "--fps", "6", "--width", "640", "--height", "480",
+                               "--output", str(tmp_path)]) == 0
+    run = latest_run(tmp_path)
+    manifest = json.loads((run / "manifest.json").read_text())
+    assert len(manifest["cases"]) == 4  # The two actual participants in each experiment.
+    for case in manifest["cases"]:
+        trace = json.loads((run / case["trace"]).read_text())
+        assert case["status"] == "passed"
+        assert len({camera["zoom"] for camera in trace["cameras"]}) == 1
+        media = [draw for frame in trace["frames"] for view in frame["views"] for draw in view["draws"]
+                 if len(draw["evidence"]) > 6 and draw["evidence"][6] == "cast_media"]
+        assert media
+        for draw in media:
+            left, top = draw["screen_xy"]
+            width, height = draw["size"]
+            assert 0 <= left and left + width <= 640
+            assert 44 <= top and top + height <= 480
+
+
+def test_paused_downed_pixels_remain_historical_while_latest_has_revived(tmp_path: Path) -> None:
     assert capture_review.main(["--case", "death-save-revival-paused", "--fps", "12", "--width", "640",
                         "--height", "480", "--output", str(tmp_path)]) == 0
     run = latest_run(tmp_path)
@@ -130,7 +151,7 @@ def test_paused_death_pixels_remain_historical_while_latest_has_revived(tmp_path
     frozen, = (check for check in trace["checks"] if check["name"] == "frozen-presentation")
     assert frozen["passed"]  # The recorder compares the held RGB bytes directly.
     for frame in held:
-        assert frame["state"]["actors"][target]["life"] == "dead"
+        assert frame["state"]["actors"][target]["life"] == "dying"
         assert frame["state"]["actors"][target]["hp"] == 0
         assert frame["state"]["cursor"] < frame["latest_cursor"]
         assert frame["presentation_ms"] == held[0]["presentation_ms"]
@@ -139,7 +160,7 @@ def test_paused_death_pixels_remain_historical_while_latest_has_revived(tmp_path
         for view in frame["views"]:
             body, = (draw["evidence"] for draw in view["draws"]
                      if draw["evidence"][0] == target and draw["evidence"][6] == "actor")
-            assert body[8] == "Die" and body[9] > 0
+            assert body[8:10] == ["Die", 14]
     last = trace["frames"][-1]
     assert last["state"] == trace["latest"]
     for view in last["views"]:

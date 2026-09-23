@@ -6,7 +6,10 @@ scenario helpers supply real event histories; reporting never reruns gameplay.
 
 from dataclasses import replace
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -18,6 +21,18 @@ from game.presentation_coverage import lineage_coverage, missing_observed_bindin
 from tests.game.concealment_scenarios import concealment_history
 from tests.game.player_helpers import player_history
 from tests.game.scenarios import attack_history
+
+
+def test_coverage_cli_stdout_is_directly_readable_json():
+    environment = dict(os.environ)
+    environment.pop("PYGAME_HIDE_SUPPORT_PROMPT", None)
+    result = subprocess.run([sys.executable, "-m", "devtools.presentation_coverage"],
+                            capture_output=True, text=True, env=environment, check=True)
+    report = json.loads(result.stdout)
+    assert report["event_categories"] and report["retained_models"]
+    fire_bolt, = (row for row in report["presentation"]
+                  if row["family"] == "spell" and row["identity"] == "spell.fire_bolt")
+    assert fire_bolt["status"] == "binding_selected"
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +53,13 @@ def test_initialized_inventory_distinguishes_missing_casts_partial_tracks_and_ac
     assert indexed["action_source_media", potion["identity"]]["status"] == "accepted_omission"
     assert indexed["condition", "condition.consumable.weapon_coat.fire"]["status"] == "partial"
     assert indexed["fact", "turn"]["status"] == "state_only"
+    reaction = indexed["action", "reaction.spell.hellish_rebuke"]
+    assert reaction["owner"] == "cast" and reaction["binding"] == "spell.hellish_rebuke"
+    assert ("spell", reaction["identity"]) not in indexed
     assert all("observed" not in row for row in rows)
+    for state in ("dying", "stable"):
+        assert indexed["lifecycle", state]["status"] == "binding_selected"
+        assert indexed["lifecycle", state]["binding"] == "Die"
     json.dumps(rows)  # An ordinary TS/browser-consumable report, without Python-only values.
 
 

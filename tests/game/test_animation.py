@@ -14,7 +14,7 @@ from types import MappingProxyType
 import pytest
 
 from dnd.core.life_types import LifeState
-from game.animation import ActorContact, CastApplication, CastInput, ProjectileSample, compile_cast, crossed_anchors, sample_cast
+from game.animation import ActorContact, CastApplication, CastInput, ProjectileSample, compile_cast, crossed_anchors, project_projectile, sample_cast
 from game.animation_data import DATA_ROOT, load_animation_data
 from game.animation_types import AnimationData, DamageContext, StudioSpellDraft
 
@@ -74,7 +74,20 @@ def reference_cast(data: AnimationData, case_id: str):
 def test_loader_preserves_materialized_and_disabled_authoring_fields(data: AnimationData) -> None:
     document = json.loads((DATA_ROOT / "spell-studio-drafts.materialized.json").read_text())
     for source in document["spells"]:
-        assert data.drafts[source["definitionRef"]["content_id"]].model_dump(mode="json", exclude_unset=True) == source
+        # The historical document remains lossless. Loading converts only its
+        # attachment representation; execution fields and disabled tracks stay.
+        assert StudioSpellDraft.model_validate_json(json.dumps(source)).model_dump(mode="json", exclude_unset=True) == source
+        loaded = data.drafts[source["definitionRef"]["content_id"]].model_dump(mode="json", exclude_unset=True)
+        for record in (source, loaded):
+            projectile = record.get("projectile")
+            if projectile is None:
+                continue
+            for field in ("sourceAnchor", "targetAnchor", "sourceAnchorsByFacing"):
+                projectile.pop(field, None)
+            if projectile["sprite"] is not None:
+                for field in ("anchor", "offsetX", "offsetY"):
+                    projectile["sprite"].pop(field, None)
+        assert loaded == source
     assets = json.loads((DATA_ROOT / "source/public/studio/spell-projectile-assets.json").read_text())
     for source in assets:
         assert data.projectile_assets[source["assetId"]].model_dump(mode="json", exclude_unset=True) == source
@@ -154,7 +167,7 @@ def test_valid_source_area_remains_preserved_before_unsupported_execution(data: 
     selected = authored_data(data, document)
     assert selected.drafts["spell.fire_bolt"].model_dump(mode="json", exclude_unset=True) == document
     source = reference_cast(data, "queue-saved-speed1").source
-    with pytest.raises(ValueError, match="selected executor requires projectile delivery"):
+    with pytest.raises(ValueError, match="requires authored projectile or anchored media delivery"):
         compile_cast(selected, "spell.fire_bolt", source)
 
 
@@ -220,7 +233,14 @@ def test_selected_visible_frames_match_original_queue(data: AnimationData, case_
             assert isinstance(aligned, ProjectileSample)
             assert aligned.column - phase.phase.start == original["frame"]
             assert data.rig.AUTHORED_PROJECTILE_ROW_ORDER[aligned.row] == original["facing"]
-            assert aligned.point == pytest.approx(original["root"], abs=1e-6)
+            # The old queue reports a bottom-registered image root. The new
+            # attachment is its center; compare the same visible image point.
+            asset = data.projectile_assets[aligned.asset_id]
+            assert timeline.recipe.projectile is not None
+            image_scale = timeline.recipe.projectile.scale
+            old_center = (original["root"][0] + (.5 - asset.anchor.x) * asset.frame.width * image_scale,
+                          original["root"][1] + (.5 - asset.anchor.y) * asset.frame.height * image_scale)
+            assert aligned.point == pytest.approx(old_center, abs=1e-6)
             assert aligned.rotation_radians == pytest.approx(original["rotation"], abs=1e-10)
 
 
@@ -342,20 +362,31 @@ def test_life_transition_uses_the_disclosed_fact_not_hp_arithmetic(
 
 @pytest.mark.parametrize("initial_dying", [False, True])
 @pytest.mark.parametrize("life", [LifeState.DYING, LifeState.STABLE])
-def test_dying_requires_its_own_life_presentation(data: AnimationData, initial_dying: bool, life: LifeState) -> None:
+def test_projectile_life_pose_enters_once_or_retains_its_downed_rest(
+    data: AnimationData, initial_dying: bool, life: LifeState,
+) -> None:
     original = reference_cast(data, "queue-saved-speed1")
-    source = (replace(
-        original.source,
-        applications=(
-            replace(
-                original.source.applications[0],
-                target=replace(original.source.applications[0].target, life_state=life),
-            ),
-        ),
-    )
-              if initial_dying else replace(original.source, applications=(replace(original.source.applications[0], resulting_life_state=life),)))
-    with pytest.raises(ValueError, match="dying"):
-        compile_cast(data, "spell.fire_bolt", source)
+    original_application = original.source.applications[0]
+    target = replace(original_application.target, hp=0 if initial_dying else 1,
+                     life_state=life if initial_dying else LifeState.ALIVE)
+    source = replace(original.source, applications=(replace(original_application, target=target,
+        damage_total=1, resulting_hp=0, resulting_life_state=life),))
+    timeline = compile_cast(data, "spell.fire_bolt", source)
+    application, = timeline.applications
+    assert application.hp_ms is not None
+    before = sample_cast(timeline, application.hp_ms - .001)
+    entered = sample_cast(timeline, application.hp_ms)
+    held = sample_cast(timeline, timeline.complete_ms)
+    assert before.vitals[0].life_state is target.life_state and before.vitals[0].hp == target.hp
+    assert entered.vitals[0].life_state is held.vitals[0].life_state is life
+    assert entered.vitals[0].hp == held.vitals[0].hp == 0
+    assert life is LifeState.DYING or life is LifeState.STABLE
+    pose = data.life_state_context.bodyPoses[life.value].bodyPose
+    last = data.rigs[data.root_rig].clips[pose].frames - 1
+    assert entered.bodies[1].clip == held.bodies[1].clip == pose
+    assert entered.bodies[1].frame == (last if initial_dying else 0)
+    assert held.bodies[1].frame == last
+    assert sample_cast(timeline, application.hp_ms - .001) == before
 
 
 @pytest.mark.parametrize("amount", [0, -1])
@@ -365,19 +396,21 @@ def test_damage_application_requires_a_positive_disclosed_amount(data: Animation
         compile_cast(data, 'spell.fire_bolt', replace(source, applications=(replace(source.applications[0], damage_total=amount),)))
 
 
-def test_facing_override_does_not_replace_the_global_projectile_axis_inset(data: AnimationData) -> None:
+def test_facing_override_changes_view_attachment_without_retiming_the_reference(data: AnimationData) -> None:
     source = reference_cast(data, "queue-saved-speed1").source
     source = replace(source, applications=(replace(source.applications[0], target=replace(source.applications[0].target, grid=(3, 3))),))
     document = data.drafts["spell.fire_bolt"].model_dump(mode="json", exclude_unset=True)
     document["projectile"]["sourceAnchorsByFacing"]["S"]["axisPx"] = 100
     timeline = compile_cast(authored_data(data, document), "spell.fire_bolt", source)
-    # Original runtimeResolver.ts binds sourceForwardPx from sourceAnchor.axisPx
-    # globally. The facing-specific axis remains authoring data, not that input.
+    # The original global-axis distance remains the reference clock. Rendering
+    # honors the explicit per-facing inset, measured from the registered center.
     sample = sample_cast(timeline, 100)
     assert sample.bodies[0].facing == "S"
     assert sample.projectiles[0].phase == "prepare"
-    assert sample.projectiles[0].point == pytest.approx((0, 44.5))
-    assert timeline.applications[0].to_point == pytest.approx((0, 100.5))
+    assert sample.projectiles[0].point == pytest.approx((0, 44.5 - 64))
+    assert timeline.applications[0].to_point == pytest.approx((0, 100.5 - 64))
+    assert isinstance(sample.projectiles[0], ProjectileSample)
+    assert project_projectile(timeline, sample.projectiles[0], 0).point == pytest.approx((0, 38.5))
 
 
 def test_subpixel_delivery_requires_the_separate_zero_travel_proof(data: AnimationData) -> None:
@@ -426,8 +459,7 @@ def test_authored_recovery_joins_delivery_while_number_finishes_its_own_lifetime
     ("missing-media", "missing local projectile media"),
     ("missing-glow", "missing enabled cast layer resource"),
     ("geometry", "geometry projectile"),
-    ("tangent", "tangent-facing projectile rows"),
-    ("locked_initial_tangent", "tangent-facing projectile rows"),
+    ("locked_initial_tangent", "locked initial tangent projectile rows"),
     ("missing-recovery", "missing body clip resource: neuroclient.modular/Taunt"),
 ])
 def test_unimplemented_or_missing_resources_fail_before_sampling(data: AnimationData, case: str, error: str) -> None:
@@ -445,7 +477,7 @@ def test_unimplemented_or_missing_resources_fail_before_sampling(data: Animation
                                                             if url != "/spritesheets/Magic2/Attack5.png"}))
     elif case == "geometry":
         document["projectile"]["geometry"]["enabled"] = True
-    elif case in {"tangent", "locked_initial_tangent"}:
+    elif case == "locked_initial_tangent":
         document["projectile"]["orientation"]["directionSource"] = case
     elif case == "missing-recovery":
         document["cast"]["recovery"]["enabled"] = True

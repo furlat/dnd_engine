@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from math import gcd
-from typing import AbstractSet, Optional, Set, Tuple
+from typing import AbstractSet, Literal, Optional, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field
@@ -40,6 +40,32 @@ class AoEShape(BaseObject):
     computed_origin: Optional[Tuple[int, int]] = Field(default=None, description="Origin used by the last computation.")
     affected_positions: Set[Tuple[int, int]] = Field(default_factory=set, description="Positions affected by the last computation.")
     affected_entity_uuids: Set[UUID] = Field(default_factory=set, description="Entity UUIDs affected by the last computation.")
+    propagation: Literal["line_of_effect", "connected"] = "line_of_effect"
+
+    def _connected_positions(self, origin: Tuple[int, int], geometric: Set[Tuple[int, int]]) -> Set[Tuple[int, int]]:
+        """Spread through open edges without extending the original footprint.
+
+        A solid cell may receive the effect on its surface, but cannot carry it
+        onward. Directional structures are handled by the map's edge channels.
+        """
+        grid = get_map()
+        if origin not in geometric or not grid.has_tile(*origin):
+            return set()
+        reached = {origin}
+        pending = [origin]
+        while pending:
+            current = pending.pop()
+            if current != origin and grid.is_blocking_propagation(*current):
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                neighbor = (current[0] + dx, current[1] + dy)
+                if (neighbor in reached or neighbor not in geometric
+                        or not grid.has_tile(*neighbor)
+                        or not grid.can_propagate_transition(current, neighbor)):
+                    continue
+                reached.add(neighbor)
+                pending.append(neighbor)
+        return reached
 
     def _default_origin(self, caster_pos: Tuple[int, int]) -> Tuple[int, int]:
         """Return default origin for this shape type. Override in subclasses."""
@@ -112,7 +138,10 @@ class AoEShape(BaseObject):
             else {pos for pos, visible in senses.visible.items() if visible}
         )
 
-        if self.computed_origin != caster_pos:
+        if self.propagation == "connected":
+            geometric = self._get_positions_in_shape(self.computed_origin)
+            self.affected_positions = self._connected_positions(self.computed_origin, geometric).intersection(caster_fov)
+        elif self.computed_origin != caster_pos:
             geometric = self._get_positions_in_shape(self.computed_origin)
 
             if barrier_positions is not None and geometric.isdisjoint(barrier_positions):
@@ -206,7 +235,9 @@ class AoEShape(BaseObject):
         geometric = self._get_positions_in_shape(self.computed_origin)
 
         barriers = grid.get_barrier_positions()
-        if geometric.isdisjoint(barriers):
+        if self.propagation == "connected":
+            self.affected_positions = self._connected_positions(self.computed_origin, geometric)
+        elif geometric.isdisjoint(barriers):
             self.affected_positions = geometric
         else:
             fov_from_origin = set(

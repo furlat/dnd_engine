@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Mapping
+from typing import Mapping, cast
 
 from dnd.types.abilities import AbilityName, SkillName
 from dnd.types.character_progression import (
@@ -777,7 +777,7 @@ def _parse_asi(values: tuple[str, ...]) -> tuple[
         }:
             raise ValueError(f"unsupported ASI ability {ability!r}")
         amount = int(parts[2])
-        parsed.append((ability, amount))
+        parsed.append((cast(AbilityName, ability), amount))
     if len(parsed) == 1 and parsed[0][1] == 2:
         return tuple(parsed), None
     if (
@@ -859,7 +859,11 @@ def resolve_fighter_level(
         if any(value not in requirement.allowed_values for value in values):
             raise ValueError(f"{requirement.choice_id} contains an illegal value")
 
-    skills = tuple(choices.get("class.fighter.proficiencies.skills", ()))
+    # The class choice requirements above admit only Fighter skill names.
+    skills = cast(
+        tuple[SkillName, ...],
+        choices.get("class.fighter.proficiencies.skills", ()),
+    )
     equipment = choices.get("class.fighter.first_class.starting_equipment", ())
     style_choice_id = (
         "class.fighter.level_1.fighting_style"
@@ -1009,7 +1013,11 @@ def resolve_barbarian_level(
         ):
             raise ValueError("feat.lucky cannot be selected more than once")
 
-    skills = tuple(choices.get("class.barbarian.proficiencies.skills", ()))
+    # The class choice requirements above admit only Barbarian skill names.
+    skills = cast(
+        tuple[SkillName, ...],
+        choices.get("class.barbarian.proficiencies.skills", ()),
+    )
     equipment = choices.get(
         "class.barbarian.first_class.starting_equipment",
         (),
@@ -1213,7 +1221,11 @@ def resolve_sorcerer_level(
         if ancestry_id is not None
         else None
     )
-    skills = tuple(choices.get("class.sorcerer.proficiencies.skills", ()))
+    # The class choice requirements above admit only Sorcerer skill names.
+    skills = cast(
+        tuple[SkillName, ...],
+        choices.get("class.sorcerer.proficiencies.skills", ()),
+    )
     equipment = choices.get(
         "class.sorcerer.first_class.starting_equipment",
         (),
@@ -1222,7 +1234,8 @@ def resolve_sorcerer_level(
         *SORCERER_DEFINITION.levels[expected_class_level - 1].feature_ids,
         *SORCERER_DEFINITION.draconic_levels[expected_class_level - 1].feature_ids,
         *metamagic_ids,
-        *((ancestry_id,) if expected_class_level == 1 else ()),
+        *((choices["subclass.sorcerer.draconic_bloodline.level_1.ancestry"][0],)
+          if expected_class_level == 1 else ()),
         *((feat_id,) if feat_id is not None else ()),
     )
     slots = FULL_CASTER_SPELL_SLOTS[expected_class_level]

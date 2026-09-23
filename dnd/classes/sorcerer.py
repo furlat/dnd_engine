@@ -9,9 +9,10 @@ Implements:
 - Draconic Bloodline: DraconicResilience, ElementalAffinity
 """
 
-from typing import Any, Optional, List, Tuple, Dict, Literal
+from typing import Any, Optional, List, Tuple, Dict, Literal, cast
 from uuid import UUID
 from pydantic import Field, PrivateAttr
+from pydantic_core import PydanticUndefined
 
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
@@ -63,7 +64,7 @@ def _child_binding(parent_binding, behavior_id: str, runtime_owner_uuid: UUID):
     })
 
 
-def _owning_template(action: BaseAction, entity: Entity) -> BaseAction:
+def _owning_template[ActionT: BaseAction](action: ActionT, entity: Entity) -> ActionT:
     """Resolve the exact Entity-owned template that produced an execution."""
     template_uuid = action.registered_template_uuid
     if template_uuid is None:
@@ -78,7 +79,8 @@ def _owning_template(action: BaseAction, entity: Entity) -> BaseAction:
     )
     if template is None:
         raise RuntimeError("Sorcerer registered template owner is missing")
-    return template
+    # Executions are copies of this exact UUID-owned template.
+    return cast(ActionT, template)
 
 
 class DraconicResilience(BaseCondition):
@@ -227,6 +229,7 @@ class ElementalAffinityResistance(BaseCondition):
         )
         if template is None:
             raise RuntimeError("Elemental Affinity action owner is missing")
+        template = cast(ElementalAffinityResistanceAction, template)
         if template.active_resistance_condition_uuid != self.uuid:
             raise RuntimeError("Elemental Affinity owner edge is inconsistent")
         result = super()._remove(event)
@@ -412,6 +415,7 @@ class DragonWingsActive(BaseCondition):
         )
         if template is None:
             raise RuntimeError("Dragon Wings action owner is missing")
+        template = cast(DragonWings, template)
         if template.active_wings_condition_uuid != self.uuid:
             raise RuntimeError("Dragon Wings owner edge is inconsistent")
         result = super()._remove(event)
@@ -604,6 +608,7 @@ class DraconicPresenceImmunity(BaseCondition):
         )
         if template is None:
             raise RuntimeError("Draconic Presence immunity owner is missing")
+        template = cast(DraconicPresence, template)
         target_uuid = self.target_entity_uuid
         if (
             target_uuid is None
@@ -658,7 +663,8 @@ class DraconicPresenceAura(AreaCondition):
     anchor_kind: SpatialEffectAnchorKind = Field(
         default=SpatialEffectAnchorKind.ENTITY,
     )
-    anchor_uuid: UUID
+    # This entity-bound aura requires an anchor, unlike a world-space area.
+    anchor_uuid: UUID = Field(default=PydanticUndefined, validate_default=True)
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
@@ -730,6 +736,7 @@ class DraconicPresenceAura(AreaCondition):
             )
             if template is None:
                 raise RuntimeError("Draconic Presence template owner is missing")
+            template = cast(DraconicPresence, template)
             immunity = DraconicPresenceImmunity(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid,
@@ -830,6 +837,7 @@ class DraconicPresenceConcentrating(Concentrating):
         )
         if template is None:
             raise RuntimeError("Draconic Presence action owner is missing")
+        template = cast(DraconicPresence, template)
         if template.active_concentrating_condition_uuid != self.uuid:
             raise RuntimeError("Draconic Presence owner edge is inconsistent")
         result = super()._remove(event)
@@ -1140,6 +1148,7 @@ class MetamagicActive(BaseCondition):
         )
         if template is None:
             raise RuntimeError("Metamagic action owner is missing")
+        template = cast(QuickenedSpell | TwinnedSpell | DistantSpell, template)
         if template.active_metamagic_condition_uuid != self.uuid:
             raise RuntimeError("Metamagic owner edge is inconsistent")
         result = super()._remove(event)

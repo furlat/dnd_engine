@@ -6,7 +6,7 @@ from math import hypot
 from game.action_media import ActionStripSample
 from game.animation import body_elevation_steps
 from game.animation_types import ParticleMediaAsset
-from game.residue_media import landing_point, landing_template, target_cell
+from game.residue_media import landing_point, landing_template, particle_schedule, target_cell
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +18,8 @@ class ParticleSample:
     previous_elevation: float
     size: float
     fragment: tuple[tuple[float, float], ...] = ()
+    solid: float = 1
+    age: float = 0
 
 
 def sample_particles(sample: ActionStripSample, asset: ParticleMediaAsset) -> tuple[ParticleSample, ...]:
@@ -69,19 +71,76 @@ def sample_region_particles(sample: ActionStripSample, asset: ParticleMediaAsset
             if target_cell(goal) not in region.positions:
                 continue
             for copy in range(copies):
-                duration = particle.duration * family.durationScale * (1.08 if copy else 1)
-                t = age - particle.delay * family.delayScale
-                if not 0 <= t < duration:
+                delay, duration, melt = particle_schedule(particle, family, cue.response, copy)
+                t = age - delay
+                if not 0 <= t < duration + melt:
                     continue
-                vx, vy = (goal[0] - source[0]) / duration, (goal[1] - source[1]) / duration
-                vz = (region.elevation_steps - source_height + .5 * particle.gravity * duration ** 2) / duration
-                point = source[0] + vx * t, source[1] + vy * t
-                height = source_height + vz * t - .5 * particle.gravity * t * t
-                previous = point[0] - vx * asset.tailSeconds, point[1] - vy * asset.tailSeconds
-                previous_height = height - (vz - particle.gravity * t) * asset.tailSeconds
+                gravity = particle.gravity * (cue.response.gravityScale if cue.response else 1)
+                point, height = _flight_point(source, source_height, goal, region.elevation_steps,
+                    min(t, duration), duration, gravity)
+                vx, vy = (goal[0]-source[0])/duration, (goal[1]-source[1])/duration
+                vz = (region.elevation_steps-source_height+.5*gravity*duration**2)/duration
+                previous = point[0]-vx*asset.tailSeconds, point[1]-vy*asset.tailSeconds
+                previous_height = height-(vz-gravity*min(t,duration))*asset.tailSeconds
                 identity = (region_index * len(template.particles) + particle.id) * copies + copy
+                size = particle.size * (cue.response.sizeScale if cue.response else 1)
+                if cue.response is not None and cue.response.heavyEvery and particle.id % cue.response.heavyEvery == 0:
+                    size *= cue.response.heavyScale
+                solid = 1 - max(0, t - duration) / melt if melt else 1
                 result.append(ParticleSample(identity, point, height, previous, previous_height,
-                    particle.size, tuple((point[0] - goal[0], point[1] - goal[1])
+                    size, tuple((point[0] - goal[0], point[1] - goal[1])
                         for vertex in particle.fragment for point in (landing_point(region.ellipse, vertex),))
-                        if style.primitive == "fragments" else ()))
+                        if style.primitive == "fragments" else (), solid, t))
+    return tuple(result)
+
+
+def _flight_point(source: tuple[float, float], source_height: float,
+                   goal: tuple[float, float], goal_height: float, t: float,
+                   duration: float, gravity: float) -> tuple[tuple[float, float], float]:
+    vx, vy = (goal[0] - source[0]) / duration, (goal[1] - source[1]) / duration
+    vz = (goal_height - source_height + .5 * gravity * duration ** 2) / duration
+    return (source[0] + vx * t, source[1] + vy * t), source_height + vz * t - .5 * gravity * t * t
+
+
+@dataclass(frozen=True, slots=True)
+class VaporSample:
+    identity: tuple[int, int]
+    grid: tuple[float, float]
+    elevation: float
+    size: float
+    alpha: float
+    color: int
+
+
+def sample_vapor(sample: ActionStripSample, asset: ParticleMediaAsset) -> tuple[VaporSample, ...]:
+    """Finite emissions keep their own historical droplet origin while rising."""
+    cue, style = sample.cue, asset.region
+    response, release = cue.response, cue.release
+    if style is None or response is None or response.vapor is None or release is None or release.pattern is None:
+        return ()
+    vapor, family = response.vapor, style.families[release.pattern]
+    age = sample.elapsed_ms / 1000 * cue.track.fps / asset.defaultFps
+    source_height = body_elevation_steps(cue.contact, cue.data) + style.sourceHeight
+    result = []
+    copies = style.criticalCopies if release.critical_hit else 1
+    for region_index, region in enumerate(release.regions):
+        template = landing_template(style, region.ellipse)
+        for particle in template.particles:
+            goal = landing_point(region.ellipse, particle.target)
+            if particle.id % vapor.every or target_cell(goal) not in region.positions:
+                continue
+            for copy in range(copies):
+                delay, duration, _ = particle_schedule(particle, family, response, copy)
+                identity = (region_index * len(template.particles) + particle.id) * copies + copy
+                for emission in range(vapor.count):
+                    emit = duration * vapor.startFraction + emission * vapor.interval
+                    t = age - delay - emit
+                    if not 0 <= t < vapor.life:
+                        continue
+                    point, height = _flight_point(cue.contact.grid, source_height, goal, region.elevation_steps,
+                        min(emit, duration), duration, particle.gravity * response.gravityScale)
+                    u = t / vapor.life
+                    drift = ((identity * 31 + emission * 17) % 101 / 100 - .5) * .15
+                    result.append(VaporSample((identity, emission), (point[0] + drift * u, point[1]),
+                        height + vapor.rise * u, 1 + int(u * 2), (1-u) * vapor.opacity, vapor.color))
     return tuple(result)

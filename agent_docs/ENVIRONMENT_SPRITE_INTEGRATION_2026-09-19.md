@@ -68,3 +68,114 @@ Anti-slop reviewer: `environment_native_review` checks native trap/lever meaning
 and disclosure. Anti-OOP reviewer: `environment_timeline_review` checks passive
 data, original timing ownership and reuse of existing rendering paths. Both
 review the concrete implementation. Tests follow `HOW_TO_TEST.md`.
+
+## September 20 — recovered art backlog and ranged-ammunition candidate
+
+This is an intake record, not an implementation plan or a claim of runtime
+integration. The existing art task confirmed the inventory below. Its current
+prefab corrections retain priority; the thirteen damage-type response art is
+queued behind that work. All source paths below are relative to
+`/home/tommaso/.codex/worktrees/23a9/dnd_engine/output/environment-sprites/`.
+
+### Trap workshop v7
+
+`trap-workshop/PRODUCTION-HANDOFF.md` and `trap-studies-v7.zip` are the saved
+handoff. The user positively reviewed this revision; its original dispatch was
+held. The current request recovers that backlog. `manifest.json`,
+`export-banks.json` and `wall-registration.json` describe the exports and explicit
+style/material bindings.
+
+- Six mechanisms: wall dart strip, jaw trap, gas vent, trapdoor/pit, swinging
+  blade and crusher.
+- Three aesthetics: Workshop, Brassbound and Fortress iron; blade and crusher
+  also have stone/timber support variants.
+- Twenty-four mechanism/style/material banks, four pressure-plate shapes,
+  tripwire and a separate dart projectile: thirty banks, 1,424 cells.
+- Mechanism sheets have twelve phases and four camera rows. These rows view
+  one fixed world orientation; they do not provide four physical placements.
+- Ready/activation/hold/reset poses are available. Broken, jammed and disarmed
+  states are absent. Blade/crusher concealment does not conceal their supports.
+- Dart launch uses the explicit release at column 3 / 0.25 seconds, not the
+  older generic phase label at column 7. Snapshot muzzle sockets at launch;
+  cartridge recoil must not move an already released projectile. The launcher
+  fires along its fixed world normal; eight projectile aims do not grant the
+  launcher unrestricted targeting.
+- Gas vapor is provisional baked art. The pit mask does not implement a hole,
+  falling or navigation. Gameplay must own detection, activation, obstruction,
+  damage and state; art contact sockets alone do not define these rules.
+
+### Dart reuse for bows and other ranged weapons
+
+The user identified these darts as reusable bow ammunition. The supplied
+`trap-workshop/dart-projectile/metadata.json` confirms a 2,048 × 1,024 sheet with
+256-square cells: **eight world aiming directions across columns and four
+camera views E/S/W/N down rows**. Columns are not animation frames despite the
+nominal FPS field. `PROJECTILE_CENTER` supplies placement and `PROJECTILE_TIP`
+supplies the directional axis; preserve the supplied socket registration.
+Blender X maps to game X and Blender Y to negative game Y; lengths remain
+authoring units, not game tile distances.
+
+The current `ActionProjectile` and ranged attack profile select a geometric
+bolt. `bind_attack` explicitly requires that geometry. Therefore this art is a
+reusable candidate, **not yet a drop-in integrated bow sprite**. Its eventual
+selection belongs in authored weapon profiles through the existing ranged
+projectile path, retaining release/contact clocks, source/target attachment,
+resting-target offsets, height and occlusion. A trap-specific renderer or a
+second attack timeline is unnecessary. Existing exports are sufficient to
+evaluate this reuse without requesting new renders.
+
+### Other recovered handoffs
+
+- `ground-traps/README.md` and `manifest.json`: plain/coated and bloodied spike
+  variants, seven extension poses, E/N/S/W rows. The integration recorded above
+  supersedes those older art-only status labels.
+- `HANDOFF_LEVER_AND_TRAPS.md` and `blender-lever-pixel/README.md`: selected
+  lever source and poses; use current game bindings to establish live status.
+- `weapon-workshop/README.md` and `device-destruction/README.md`: cannon/projector
+  art; `device-destruction/device-destruction-v2.zip` is the accepted fractured
+  body revision, ending in persistent wrecks. Runtime cannon integration is
+  tracked separately in the device implementation documents.
+- `architecture-handoff/PRODUCTION-HANDOFF.md`, `WALL-REGISTER.md`,
+  `backend-mapping.json`, `backend-evidence.json` and `handoff-status.json`:
+  saved, previously undispatched wall/door package, 225 wall/frame configurations
+  and ten door families. It excludes roofs and stairs. Current smaller indoor
+  doors/furniture belong to the separate, actively revised house-prefab work.
+- `PRODUCTION-FIREBALL-SCORCH-HANDOFF.md`, `firing-sequence/README.md`,
+  `burnt-environment/scorch-production-manifest.json` and
+  `scorch-painter/README.md`: floor/wall scorch and wall-aware blast material.
+- `high56-region-replacement/HANDOFF.md`: authoritative material replacement;
+  do not substitute earlier blood-painter/body-residue experiments.
+
+The art task verified its deliveries, not this checkout's integration state.
+No runtime asset scans, fingerprints or validation jobs are introduced by this
+inventory.
+
+### September 21 — enclosing trap occlusion supplement
+
+Real blade/crusher damage clips exposed whole-sprite sorting of both arch
+supports against an actor at the center. The accepted original v7 sheets remain
+unchanged. The same producer supplied `trap-workshop/actor-occlusion-v7/HANDOFF.md`
+with source-derived part ownership and horizontal mesh depth for every frame and
+camera. Production imports only the two `ground-depth-rg.png` data atlases and
+compact source camera registration; source audit scripts/hashes are not runtime
+inputs. Optional `actor_depth` in the ordinary prop binding partitions the
+original RGBA through existing world painter depths when an actor overlaps.
+
+All four views now preserve actor-before/inside/after ordering without identity
+ties or altered actor alpha. Forty-four focused checks and 157 combined
+map/projection/mechanism checks pass. Ordinary door boundary probes with Idle
+and TakeDamage bodies, open/closed leaf states and both sides showed no leak.
+After the concurrent choreography parent lookup correction, all four paired
+blade/crusher replays pass in
+[the focused gallery](http://127.0.0.1:8767/runs/20260921T001132Z-fea6e9/index.html).
+Contact and injury frames were inspected across all four cameras; near supports
+occlude the body while blood remains independently drawn. This replays saved
+native inputs rather than rerunning their mechanics. Independent code review
+(gore_antislop) found no blocker; selected Pyright checks report zero errors.
+
+The producer also delivered `output/environment-sprites/DOORS-AND-TRAPS-PRODUCTION-HANDOFF.md`
+in the same art worktree. Keep that wider doors/debris/backend-family delivery
+queued against the existing architecture inventory above. Its full contents
+have not been inspected in this bounded correction;
+neither importing these arch depth maps nor receiving that package authorizes
+broader door mechanics changes.

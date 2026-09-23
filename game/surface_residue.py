@@ -12,8 +12,8 @@ import pygame
 
 from game.projection import Camera, TILE_HEIGHT, TILE_WIDTH
 from dnd.types.residues import ResidueEllipse, TileResidueState
-from game.animation_types import LandingTemplate, ParticleMediaAsset
-from game.residue_media import ResidueRevealSample, landing_template
+from game.animation_types import BloodResponse, LandingTemplate, ParticleMediaAsset, RegionParticleStyle
+from game.residue_media import ResidueRevealSample, landed_fraction, landing_template, surface_start_time
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +22,15 @@ class ResidueSurfaceStyle:
     wall_atlas: str
     floor_opacity: float
     wall_opacity: float
+
+
+@dataclass(frozen=True, slots=True)
+class LiquidSurfaceStyle:
+    """Local pool artwork; the received membership owns its actual tile."""
+
+    asset: ParticleMediaAsset
+    ellipse: ResidueEllipse
+    opacity: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,18 +207,23 @@ def wall_residue_image(cache: ResidueSurfaceCache, atlas: pygame.Surface,
 def geometric_residue_image(cache: ResidueSurfaceCache, asset: ParticleMediaAsset,
                              position: tuple[int, int], residue: TileResidueState, camera: Camera,
                              multiplier: tuple[float, float, float],
-                             reveals: Sequence[ResidueRevealSample] = ()) -> pygame.Surface:
+                             reveals: Sequence[ResidueRevealSample] = (), *,
+                             pool: ResidueEllipse | None = None) -> pygame.Surface:
     """Sample retained local ellipses; no template is refitted at a tile seam."""
     style = asset.region
     assert style is not None
     active = tuple(row for row in reveals if row.reveal.position == position
                    and row.reveal.after.condition_uuid == residue.condition_uuid)
-    masks = tuple(tuple(tuple(p.id for p in template.particles
-                              if row.elapsed_ms / 1000 >= p.delay * style.families[row.reveal.pattern].delayScale
-                              + p.duration * style.families[row.reveal.pattern].durationScale)
+    fractions = tuple(tuple(tuple(landed_fraction(p, style.families[row.reveal.pattern],
+                                                  row.reveal.response, row.elapsed_ms / 1000)
+                              for p in template.particles)
                         for template in style.templates) for row in active)
+    surface_ages = tuple(_surface_age(row) for row in active)
+    unshaped = max(0, residue.amount - sum(row.amount for row in residue.contributions if row.ellipses))
     source_key = ("deposited", asset.assetId, position, residue.max_amount, residue.contributions,
-                  tuple((row.reveal.before, row.reveal.after) for row in active), masks)
+                  (pool, unshaped) if pool is not None else None,
+                  tuple((row.reveal.before, row.reveal.after,
+                         row.reveal.response, age) for row, age in zip(active, surface_ages)), fractions)
     key = (*source_key, camera.quadrant, camera.zoom, multiplier)
     result = _read(cache, key)
     if result is not None:
@@ -217,8 +231,44 @@ def geometric_residue_image(cache: ResidueSurfaceCache, asset: ParticleMediaAsse
     texture = _read(cache, source_key)
     size = 64
     if texture is None:
-        texture = _deposit_texture(cache, asset, position, residue, active, masks, size)
+        texture = _deposit_texture(cache, asset, position, residue, active, fractions, surface_ages, size, pool)
         _keep(cache, source_key, texture)
+    return _project_texture(cache, key, texture, camera, multiplier)
+
+
+def liquid_surface_image(cache: ResidueSurfaceCache, style: LiquidSurfaceStyle,
+                         position: tuple[int, int], camera: Camera,
+                         multiplier: tuple[float, float, float], *,
+                         amount: int = 1, max_amount: int = 1) -> pygame.Surface:
+    """Draw a data-authored pool without manufacturing a native deposit."""
+    region = style.asset.region
+    assert region is not None and region.primitive == "liquid"
+    source_key = ("liquid-pool", style.asset.assetId, style.ellipse, style.opacity,
+                  position, amount, max_amount)
+    key = (*source_key, camera.quadrant, camera.zoom, multiplier)
+    result = _read(cache, key)
+    if result is not None:
+        return result
+    texture = _read(cache, source_key)
+    if texture is None:
+        world = style.ellipse.model_copy(update={"center": (
+            position[0] + style.ellipse.center[0], position[1] + style.ellipse.center[1])})
+        template = landing_template(region, world)
+        field = _deposit_patch(cache, style.asset.assetId, style.ellipse, template,
+            (amount / max_amount,) * len(template.particles), region.primitive, 64)
+        texture = pygame.Surface((64, 64), pygame.SRCALPHA)
+        _shade_liquid(texture, region, position, field)
+        alpha = pygame.surfarray.pixels_alpha(texture)
+        alpha[:] = np.rint(alpha * style.opacity).astype(np.uint8)
+        del alpha
+        _keep(cache, source_key, texture)
+    return _project_texture(cache, key, texture, camera, multiplier)
+
+
+def _project_texture(cache: ResidueSurfaceCache, key: tuple, texture: pygame.Surface,
+                     camera: Camera, multiplier: tuple[float, float, float]) -> pygame.Surface:
+    """The same tile-plane projection for native deposits and local pool media."""
+    size = texture.width
     width, height = round(TILE_WIDTH * camera.zoom), round(TILE_HEIGHT * camera.zoom)
     px, py = np.indices((width, height), dtype=np.float32)
     dx = (px + .5 - width / 2) / width + (py + .5 - height / 2) / height
@@ -253,35 +303,53 @@ def _field_noise(x: np.ndarray, y: np.ndarray, seed: int) -> np.ndarray:
 
 
 def _deposit_texture(cache: ResidueSurfaceCache, asset: ParticleMediaAsset, position: tuple[int, int], residue: TileResidueState,
-                     active: tuple[ResidueRevealSample, ...], masks: tuple[tuple[tuple[int, ...], ...], ...],
-                     size: int) -> pygame.Surface:
+                     active: tuple[ResidueRevealSample, ...], fractions: tuple[tuple[tuple[float, ...], ...], ...],
+                     surface_ages: tuple[float, ...], size: int, pool: ResidueEllipse | None) -> pygame.Surface:
     style = asset.region
     assert style is not None
     px, py = np.indices((size, size), dtype=np.float32)
     x, y = (px + .5) / size - .5, (py + .5) / size - .5
     field = np.zeros((size, size), dtype=np.float32)
     fragments = np.zeros((size, size), dtype=bool)
+    fresh_fields: dict[int, np.ndarray] = {}
+    unshaped = max(0, residue.amount - sum(row.amount for row in residue.contributions if row.ellipses))
+    if pool is not None and unshaped:
+        world = pool.model_copy(update={"center": (position[0] + pool.center[0], position[1] + pool.center[1])})
+        template = landing_template(style, world)
+        field += _deposit_patch(cache, asset.assetId, pool, template,
+            (unshaped / residue.max_amount,) * len(template.particles), style.primitive, size)
     for contribution in residue.contributions:
         reductions = []
-        for row, template_masks in zip(active, masks):
+        for index, (row, template_fractions) in enumerate(zip(active, fractions)):
             changed = next((c for c in row.reveal.after.contributions if c.ellipses == contribution.ellipses), None)
             if changed is None or contribution.amount < changed.amount:
                 continue
             before = next((c.amount for c in row.reveal.before.contributions if c.ellipses == contribution.ellipses), 0) if row.reveal.before else 0
             if changed.amount > before:
-                reductions.append((changed.amount - before, template_masks))
+                reductions.append((index, changed.amount - before, template_fractions))
         for ellipse in contribution.ellipses:
             world = ellipse.model_copy(update={"center": (ellipse.center[0] + position[0], ellipse.center[1] + position[1])})
             template = landing_template(style, world)
             template_index = style.templates.index(template)
-            units = tuple(max(0, contribution.amount - sum(delta for delta, landed in reductions
-                           if particle.id not in landed[template_index])) for particle in template.particles)
+            units = tuple(max(0, contribution.amount - sum(delta * (1 - landed[template_index][p_index])
+                           for _, delta, landed in reductions)) for p_index in range(len(template.particles)))
             patch = _deposit_patch(cache, asset.assetId, ellipse, template,
                                    tuple(value / residue.max_amount for value in units), style.primitive, size)
             if style.primitive == "fragments":
                 fragments |= patch
             else:
                 field += patch
+                for index, delta, landed in reductions:
+                    response = active[index].reveal.response
+                    age = surface_ages[index]
+                    if response is None or response.surfaceSeconds <= age:
+                        continue
+                    # Shade only this fresh field increment. An earlier deposit,
+                    # even in the same retained ellipse, remains ordinary blood.
+                    previous = _deposit_patch(cache, asset.assetId, ellipse, template,
+                        tuple(max(0, value - delta * amount) / residue.max_amount
+                              for value, amount in zip(units, landed[template_index])), style.primitive, size)
+                    fresh_fields.setdefault(index, np.zeros_like(field))[:] += np.maximum(0, patch - previous)
     texture = pygame.Surface((size, size), pygame.SRCALPHA)
     rgb, alpha = pygame.surfarray.pixels3d(texture), pygame.surfarray.pixels_alpha(texture)
     if style.primitive == "fragments":
@@ -291,27 +359,96 @@ def _deposit_texture(cache: ResidueSurfaceCache, asset: ParticleMediaAsset, posi
         rgb[:] = np.where(edge[:, :, None], colors[2], colors[1])
         alpha[:] = fragments * 240
     else:
-        # Noise is stable in world coordinates across tiles and camera rotations.
+        shares = {index: np.divide(fresh, field, out=np.zeros_like(field), where=field > 0)
+                  for index, fresh in fresh_fields.items()}
+        del rgb, alpha
+        _shade_liquid(texture, style, position, field)
+        rgb, alpha = pygame.surfarray.pixels3d(texture), pygame.surfarray.pixels_alpha(texture)
         wx, wy = (x + position[0]) * size, (y + position[1]) * size
-        n, fine = _field_noise(wx / 9, wy / 9, 0), _field_noise(wx / 2.8, wy / 2.8, 3)
-        field *= .72 + n * .65
-        threshold = .13 + (fine - .5) * .045
-        depth = np.clip((field - threshold) * 1.6, 0, 1)
-        rim = np.maximum(0, 1 - depth * 5)
-        wet = _field_noise(wx / 17, wy / 13, 9)
-        highlight = (depth > .12) & (depth < .5) & (wet > .66) & (_field_noise(wx / 4, wy / 4, 8) > .56)
-        red = 88 - 38 * depth + rim * 24 + (n - .5) * 27 + highlight * 37
-        if style.palette is None:
-            rgb[:] = np.stack((red, 8 - 3 * depth + highlight * 10, 15 - 5 * depth + highlight * 9), axis=2).round().astype(np.uint8)
-        else:
-            colors = np.array([((c >> 16) & 255, (c >> 8) & 255, c & 255) for c in style.palette])
-            t = np.clip((red - 35) / 105, 0, 1)
-            low, high = np.where((t < .55)[:, :, None], colors[0], colors[1]), np.where((t < .55)[:, :, None], colors[1], colors[2])
-            mix = np.where(t < .55, t / .55, (t - .55) / .45)[:, :, None]
-            rgb[:] = np.rint(low * (1 - mix) + high * mix).astype(np.uint8)
-        alpha[:] = np.where(field >= threshold, np.minimum(246, 120 + depth * 150), 0).round().astype(np.uint8)
+        for index, share in shares.items():
+            row = active[index]
+            assert row.reveal.response is not None
+            _shade_fresh_blood(rgb, alpha, wx, wy, share, row.reveal.response, surface_ages[index])
     del rgb, alpha
     return texture
+
+
+def _shade_liquid(texture: pygame.Surface, style: RegionParticleStyle,
+                  position: tuple[int, int], field: np.ndarray) -> None:
+    """Shared authored liquid shading for injury shapes and settled pools."""
+    size = texture.width
+    px, py = np.indices((size, size), dtype=np.float32)
+    x, y = (px + .5) / size - .5, (py + .5) / size - .5
+    # Noise is stable in world coordinates across tiles and camera rotations.
+    wx, wy = (x + position[0]) * size, (y + position[1]) * size
+    n, fine = _field_noise(wx / 9, wy / 9, 0), _field_noise(wx / 2.8, wy / 2.8, 3)
+    field = field.copy()
+    field *= .72 + n * .65
+    threshold = .13 + (fine - .5) * .045
+    depth = np.clip((field - threshold) * 1.6, 0, 1)
+    rim = np.maximum(0, 1 - depth * 5)
+    wet = _field_noise(wx / 17, wy / 13, 9)
+    highlight = (depth > .12) & (depth < .5) & (wet > .66) & (_field_noise(wx / 4, wy / 4, 8) > .56)
+    red = 88 - 38 * depth + rim * 24 + (n - .5) * 27 + highlight * 37
+    rgb, alpha = pygame.surfarray.pixels3d(texture), pygame.surfarray.pixels_alpha(texture)
+    if style.palette is None:
+        rgb[:] = np.stack((red, 8 - 3 * depth + highlight * 10, 15 - 5 * depth + highlight * 9), axis=2).round().astype(np.uint8)
+    else:
+        colors = np.array([((c >> 16) & 255, (c >> 8) & 255, c & 255) for c in style.palette])
+        t = np.clip((red - 35) / 105, 0, 1)
+        low, high = np.where((t < .55)[:, :, None], colors[0], colors[1]), np.where((t < .55)[:, :, None], colors[1], colors[2])
+        mix = np.where(t < .55, t / .55, (t - .55) / .45)[:, :, None]
+        rgb[:] = np.rint(low * (1 - mix) + high * mix).astype(np.uint8)
+    alpha[:] = np.where(field >= threshold, np.minimum(246, 120 + depth * 150), 0).round().astype(np.uint8)
+    del rgb, alpha
+
+
+def _surface_age(row: ResidueRevealSample) -> float:
+    response = row.reveal.response
+    if response is None or response.surfaceSeconds == 0:
+        return 0
+    first = surface_start_time(row.reveal.asset.assetId, row.reveal.pattern, response)
+    age = max(0, row.elapsed_ms / 1000 - first)
+    return response.surfaceSeconds if age >= response.surfaceSeconds else floor(age * 12) / 12
+
+
+def _shade_fresh_blood(rgb: np.ndarray, alpha: np.ndarray, wx: np.ndarray, wy: np.ndarray,
+                       share: np.ndarray, response: BloodResponse, age: float) -> None:
+    """The handoff's finite internal treatment, confined to new landed blood."""
+    t = floor(max(0, age) * 12) / 12
+    strength = np.clip(share, 0, 1) * max(0, 1 - t / response.surfaceSeconds) * (alpha > 0)
+    n, vein, fine = (_field_noise(wx / 4, wy / 4, 31), _field_noise(wx / 12, wy / 12, 47),
+                     _field_noise(wx / 2, wy / 2, 11))
+    rim = alpha < 175
+    color = np.zeros((*alpha.shape, 3), dtype=np.float32)
+    mix = np.zeros(alpha.shape, dtype=np.float32)
+
+    def paint(mask: np.ndarray, tint: tuple[int, int, int], amount: float) -> None:
+        color[mask] = tint
+        mix[mask] = amount
+
+    if response.detail == "acid":
+        paint((rim & (n > .42)) | (~rim & (n > .61)), (122, 131, 48), .8)
+    elif response.detail == "necrotic":
+        paint(alpha > 0, (24, 11, 18), .4)
+        paint((n > .55) & (fine > .45), (80, 112, 49), .7)
+    elif response.detail == "poison":
+        ribbon = np.abs(vein - .5)
+        paint((ribbon < .085) & (n > .35), (113, 128, 39), .82)
+        paint((ribbon >= .085) & (ribbon < .11) & (fine > .5), (179, 163, 93), .72)
+    elif response.detail == "fire":
+        paint(alpha > 0, (34, 12, 14), .3)
+        paint((n > .62) & (fine > .55), (183, 85, 32), .7)
+    elif response.detail == "radiant":
+        paint((np.abs(vein - .52) < .085) & (fine > .46), (207, 170, 83), .88)
+    elif response.detail == "lightning" and floor(t * 12) % 3 != 0:
+        paint((np.abs(vein - .5) < .04) & (n > .37), (150, 184, 220), .88)
+    elif response.detail == "psychic":
+        paint(np.abs(vein - .5) < .025, (108, 46, 102), .45)
+    elif response.detail == "thunder":
+        paint(np.abs(n - .5) < .03, (121, 31, 41), .4)
+    weight = (mix * strength)[:, :, None]
+    rgb[:] = np.rint(rgb * (1 - weight) + color * weight).astype(np.uint8)
 
 
 def _deposit_patch(cache: ResidueSurfaceCache, asset_id: str, ellipse: ResidueEllipse,

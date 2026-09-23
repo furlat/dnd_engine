@@ -12,6 +12,7 @@ class ResidueFearOrigin(BaseModel):
 
     tile_uuid: UUID
     condition_uuid: UUID
+    residue_id: str
     position: tuple[int, int]
     retreat_position: tuple[int, int] | None
     entry_event_uuid: UUID

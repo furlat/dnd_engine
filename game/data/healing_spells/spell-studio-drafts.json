@@ -1,0 +1,433 @@
+{
+  "schema": "dnd.spellStudioDrafts",
+  "version": 2,
+  "spells": [
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.aid",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 7590360,
+        "secondary": 13694445,
+        "tertiary": 2703193
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 11,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/healing-spells/aid/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 7590360,
+            "secondary": 13694445,
+            "tertiary": 2703193,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "media": [],
+      "contact": {
+        "delayMs": 0
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.lesser_restoration",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 6933972,
+        "secondary": 13104366,
+        "tertiary": 2505561
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 11,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/healing-spells/lesser_restoration/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 6933972,
+            "secondary": 13104366,
+            "tertiary": 2505561,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "media": [
+        {
+          "id": "back",
+          "assetId": "healing.lesser_restoration.back",
+          "attachment": "target_ground",
+          "viewFacing": "E",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "behind_body",
+          "scaleWithActor": true
+        },
+        {
+          "id": "front",
+          "assetId": "healing.lesser_restoration.front",
+          "attachment": "target_ground",
+          "viewFacing": "E",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "front_body",
+          "scaleWithActor": true
+        }
+      ],
+      "contact": {
+        "delayMs": 500
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.greater_restoration",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 7394271,
+        "secondary": 13694189,
+        "tertiary": 2701656
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 11,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/healing-spells/greater_restoration/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 7394271,
+            "secondary": 13694189,
+            "tertiary": 2701656,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "media": [
+        {
+          "id": "back",
+          "assetId": "healing.greater_restoration.back",
+          "attachment": "target_ground",
+          "viewFacing": "E",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "behind_body",
+          "scaleWithActor": true
+        },
+        {
+          "id": "front",
+          "assetId": "healing.greater_restoration.front",
+          "attachment": "target_ground",
+          "viewFacing": "E",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "front_body",
+          "scaleWithActor": true
+        }
+      ],
+      "contact": {
+        "delayMs": 500
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.heal",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 7064543,
+        "secondary": 13039086,
+        "tertiary": 2570584
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 11,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/healing-spells/heal/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 7064543,
+            "secondary": 13039086,
+            "tertiary": 2570584,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "media": [
+        {
+          "id": "back",
+          "assetId": "healing.heal.back",
+          "attachment": "target_ground",
+          "viewFacing": "E",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "behind_body",
+          "scaleWithActor": true
+        },
+        {
+          "id": "front",
+          "assetId": "healing.heal.front",
+          "attachment": "target_ground",
+          "viewFacing": "E",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "front_body",
+          "scaleWithActor": true
+        }
+      ],
+      "contact": {
+        "delayMs": 500
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.mass_cure_wounds",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 7787481,
+        "secondary": 13497839,
+        "tertiary": 2571606
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 11,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/healing-spells/mass_cure_wounds/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 7787481,
+            "secondary": 13497839,
+            "tertiary": 2571606,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "media": [
+        {
+          "id": "back",
+          "assetId": "healing.mass_cure_wounds.back",
+          "attachment": "target_ground",
+          "viewFacing": "E",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "behind_body",
+          "scaleWithActor": true
+        },
+        {
+          "id": "front",
+          "assetId": "healing.mass_cure_wounds.front",
+          "attachment": "target_ground",
+          "viewFacing": "E",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "front_body",
+          "scaleWithActor": true
+        }
+      ],
+      "contact": {
+        "delayMs": 500
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.mass_heal",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 9231845,
+        "secondary": 14874332,
+        "tertiary": 2900061
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 11,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/healing-spells/mass_heal/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 9231845,
+            "secondary": 14874332,
+            "tertiary": 2900061,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "media": [
+        {
+          "id": "back",
+          "assetId": "healing.mass_heal.back",
+          "attachment": "target_ground",
+          "viewFacing": "E",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "behind_body",
+          "scaleWithActor": true
+        },
+        {
+          "id": "front",
+          "assetId": "healing.mass_heal.front",
+          "attachment": "target_ground",
+          "viewFacing": "E",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "front_body",
+          "scaleWithActor": true
+        }
+      ],
+      "contact": {
+        "delayMs": 500
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    }
+  ]
+}

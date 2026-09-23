@@ -1043,13 +1043,13 @@ def reconcile_origin_total_level(
         if action.uuid not in receipt.action_uuids or action.behavior_binding is None:
             continue
         if action.behavior_binding.behavior_id == "action.origin.dragonborn.breath_weapon":
-            action.character_level = new_level
+            cast(DragonbornBreathWeapon, action).character_level = new_level
         elif action.behavior_binding.behavior_id in {
             "spell.fire_bolt",
             "spell.thaumaturgy",
             "spell.darkness",
         }:
-            action.caster_level = new_level
+            cast(SpellAction, action).caster_level = new_level
 
     for source_id in receipt.spell_source_ids:
         source = entity.spellcasting.sources[source_id]

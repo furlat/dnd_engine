@@ -9,7 +9,7 @@ from dnd.actions import Jump, Move
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.body_responses import BLOOD_BODY_RESPONSE, BONE_BODY_RESPONSE, CORROSIVE_BODY_RESPONSE, install_body_response
+from dnd.body_responses import BLOOD_BODY_RESPONSE, BONE_BODY_RESPONSE, CORROSIVE_BODY_RESPONSE, DREAD_BODY_RESPONSE, install_body_response
 from dnd.content.characters.premades import FIGHTER_PREMADE_ID, create_premade_character
 from dnd.content_system.creature_materialization import materialize_creature
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
@@ -65,12 +65,14 @@ def injuries_since(cursor: int) -> list[DamageAppliedEvent]:
     (DamageType.PIERCING, 0, False, True),
     (DamageType.BLUDGEONING, 0, False, True),
     (DamageType.SLASHING, 0, False, True),
-    (DamageType.FIRE, 0, False, False),
-    (DamageType.PSYCHIC, 0, False, False),
+    (DamageType.FIRE, 0, False, True),
+    (DamageType.PSYCHIC, 0, False, True),
+    (DamageType.COLD, 8, False, False),
+    (DamageType.ACID, 0, True, False),
     (DamageType.PIERCING, 8, False, False),
     (DamageType.PIERCING, 0, True, False),
 ))
-def test_only_resolved_physical_normal_hp_injury_releases(
+def test_only_resolved_normal_hp_injury_releases(
     world: Game, damage_type: DamageType, temporary_hp: int, immunity: bool, expected: bool,
 ) -> None:
     creature = actor(world, health=HealthConfig(
@@ -90,22 +92,46 @@ def test_only_resolved_physical_normal_hp_injury_releases(
 
 
 @pytest.mark.parametrize("physical_immune", (False, True))
-def test_mixed_packet_uses_post_affinity_physical_component(world: Game, physical_immune: bool) -> None:
+def test_mixed_packet_releases_once_even_if_only_nonphysical_damage_gets_through(world: Game, physical_immune: bool) -> None:
     creature = actor(world, health=HealthConfig(
         hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=2)],
         immunities=[DamageType.PIERCING] if physical_immune else [],
     ))
     install_body_response(creature, BLOOD_BODY_RESPONSE)
-    components = [Damage(source_entity_uuid=creature.uuid, damage_type=kind, damage_dice=4, dice_numbers=1,
+    components = [Damage(source_entity_uuid=creature.uuid, damage_type=kind,
+                         damage_dice=4 if kind is DamageType.PIERCING else 8, dice_numbers=1,
                          damage_bonus=ModifiableValue.create(source_entity_uuid=creature.uuid, base_value=0))
-                  for kind in (DamageType.PIERCING, DamageType.POISON)]
-    with fixed_dice_faces(2, 2):
+                  for kind in (DamageType.PIERCING, DamageType.FIRE)]
+    with fixed_dice_faces(2, 8):
         rolls = [damage.get_dice(AttackOutcome.HIT).roll for damage in components]
     cursor = EventQueue.event_cursor()
-    creature.receive_damage(4, DamageType.PIERCING, creature.uuid, damages=components, damage_rolls=rolls)
+    creature.receive_damage(10, DamageType.PIERCING, creature.uuid, damages=components, damage_rolls=rolls,
+                            impact_direction=(1, 0))
     injury = injuries_since(cursor)[0]
-    assert injury.normal_hit_point_damage == (2 if physical_immune else 4)
-    assert (injury.body_release is not None) is (not physical_immune)
+    assert injury.normal_hit_point_damage == (8 if physical_immune else 10)
+    assert injury.body_release is not None
+    assert injury.body_release.pattern == ("blunt" if physical_immune else "piercing")
+    assert injury.body_release.primary_damage_type is (DamageType.FIRE if physical_immune else DamageType.PIERCING)
+    assert injury.body_release.secondary_damage_type is (None if physical_immune else DamageType.FIRE)
+    assert len(injuries_since(cursor)) == 1
+
+
+@pytest.mark.parametrize("damage_type", tuple(DamageType))
+@pytest.mark.parametrize("profile", (BLOOD_BODY_RESPONSE, BONE_BODY_RESPONSE, CORROSIVE_BODY_RESPONSE, DREAD_BODY_RESPONSE))
+def test_damage_preserves_the_creatures_material(world, damage_type, profile):
+    creature = actor(world)
+    install_body_response(creature, profile)
+    cursor = EventQueue.event_cursor()
+    creature.receive_damage(3, damage_type, creature.uuid)
+    injury, = injuries_since(cursor)
+    assert injury.body_release is not None
+    assert injury.body_release.release_id == profile.release_id
+    assert injury.body_release.primary_damage_type is damage_type
+    assert injury.body_release.secondary_damage_type is None
+    tile = get_map().get_tile(*creature.position)
+    assert tile is not None and profile.residue is not None
+    residue, = tile.to_world_tile_state().residues
+    assert residue.residue_id == profile.residue.residue_id
 
 
 def test_repeated_and_lethal_wounds_leave_one_tile_owned_residue(world: Game) -> None:
@@ -158,7 +184,9 @@ def test_repeated_injuries_record_authored_amount_without_changing_membership_or
             cells = {cell for region in injury.body_release.regions for cell in region.positions}
             assert len(changes) == len(cells) * int(prior[0].amount != amount)
             if changes:
-                at_origin, = [change for change in changes if change.tile_state.position == creature.position]
+                at_origin, = [change for change in changes
+                              if change.tile_state is not None and change.tile_state.position == creature.position]
+                assert at_origin.tile_state is not None and changes[0].parent_event is not None
                 assert at_origin.tile_state.residues == (residue,)
                 parent = EventQueue.get_event_by_uuid(changes[0].parent_event)
                 assert parent is not None and parent.lineage_uuid == injury.lineage_uuid
@@ -346,6 +374,7 @@ def test_native_injury_retains_directional_receiving_regions(world, kind, patter
     assert (2, 1) in cells and ahead in cells
     for cell in cells:
         tile = get_map().get_tile(*cell)
+        assert tile is not None
         residue, = tile.to_world_tile_state().residues
         assert residue.amount == 1 and sum(row.amount for row in residue.contributions) == 1
         world_shapes = tuple((shape.center[0] + cell[0], shape.center[1] + cell[1], shape.radius_x, shape.radius_y, shape.angle)
@@ -389,6 +418,7 @@ def test_different_directions_accumulate_current_geometry_then_freeze_at_cap(wor
     Entity.update_entity_position(creature, (2, 1))
     install_body_response(creature, BLOOD_BODY_RESPONSE)
     tile = get_map().get_tile(*creature.position)
+    assert tile is not None
     snapshots = []
     for direction in ((1, 0), (0, 1), (1, 0), (0, 1), (1, 0), (-1, 0), (0, -1)):
         creature.receive_damage(1, DamageType.PIERCING, creature.uuid, impact_direction=direction)

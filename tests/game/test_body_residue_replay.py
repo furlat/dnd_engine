@@ -5,6 +5,7 @@ import json
 import pytest
 
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
+from dnd.core.creature_types import DamageType
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
 from dnd.types.world import OccupancyLayer
@@ -83,13 +84,22 @@ def test_repeated_native_injuries_leave_one_persistent_residue_and_replay_crossi
     expected_release = {"blood": "body.blood", "bone": "body.bone", "corrosive": "body.corrosive_blood"}[profile]
     expected_residue = {"blood": "residue.blood", "bone": "residue.bone_fragments",
                         "corrosive": "residue.corrosive_demonic_blood"}[profile]
-    injuries = [node.fact for root in roots for node in root.events
+    releases = [node.fact for root in roots for node in root.events
                 if isinstance(node.fact, DamageFact) and node.fact.body_release is not None]
+    injuries = [row for row in releases if row.damage_type is DamageType.PIERCING]
     assert len(injuries) == 2
     assert all(row.target_entity_uuid == donor and row.body_release is not None
                and row.body_release.release_id == expected_release
                and row.body_release.position == row.body_release.deposited_position == (5, 3)
                and row.body_release.occupancy_layer is OccupancyLayer.GROUND for row in injuries)
+    # The non-immune corrosive donor steps into its own deposited acid at (6,3).
+    # Nonphysical HP injury now also releases its existing material there.
+    acid_releases = [row for row in releases if row.damage_type is DamageType.ACID]
+    assert len(acid_releases) == int(profile == "corrosive")
+    for row in acid_releases:
+        assert row.target_entity_uuid == donor and row.body_release is not None
+        assert row.body_release.release_id == expected_release
+        assert row.body_release.position == (6, 3) and row.body_release.pattern == "blunt"
     state = before
     memberships = []
     for root in roots:

@@ -6,6 +6,7 @@ from math import hypot
 from pathlib import Path
 
 import pytest
+import pygame
 
 from dnd.actions import AttackEvent, JumpEvent
 from dnd.core.dice import AttackOutcome
@@ -15,12 +16,13 @@ from dnd.core.life_types import LifeState
 from dnd.runtime_reset import reset_engine_runtime
 from game.animation import body_clip
 from game.animation_data import load_animation_data
+from game.animation_draw import actor_draw_commands, load_attack_media
 from game.animation_types import AnimationData
 from game.attack import attack_projectile_contact, bind_attack, project_attack_projectile, sample_attack, select_attack_profile
 from game.choreography import sample_choreography
 from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
-from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
+from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
 from tests.game.scenarios import attack_history
 from tests.game.player_helpers import player_history, visible_body, visible_contact
 from game.player_facts import AttackFact
@@ -98,14 +100,22 @@ def test_weapon_facts_choose_authored_profile_and_contact_feedback(
         random.setstate(random_state)
 
 
-def test_real_goblin_opportunity_attack_uses_same_profile_and_preserves_pre_step_contact(data: AnimationData) -> None:
+@pytest.mark.parametrize("seed,outcome,slash", [
+    (17, AttackOutcome.HIT, "Slash1"),
+    (1, AttackOutcome.MISS, "Slash1"),
+    (5, AttackOutcome.CRIT, "Slash2"),
+])
+def test_real_goblin_opportunity_attack_uses_same_profile_and_preserves_pre_step_contact(
+    data: AnimationData, seed: int, outcome: AttackOutcome, slash: str,
+) -> None:
     random_state = random.getstate()
     try:
-        captured = attack_history("weapon.longsword", 17, opportunity=True)
+        captured = attack_history("weapon.longsword", seed, opportunity=True)
         lineage = captured.lineages[0]
         player, (received,) = player_history(captured)
         assert isinstance(lineage.root, AttackEvent)
         assert lineage.root.behavior_id == "reaction.opportunity_attack"
+        assert lineage.root.attack_outcome is outcome
         assert lineage.root.parent_lineage is not None
         bound = bind_attack(player, received, data)
         assert bound is not None
@@ -115,12 +125,34 @@ def test_real_goblin_opportunity_attack_uses_same_profile_and_preserves_pre_step
         assert timeline.profile_id == "melee-main"
         assert timeline.contact_ms == pytest.approx(8 * 1000 / 12)
         assert timeline.body_end_ms == pytest.approx(14 * 1000 / 12)
-        assert timeline.missing_media == ("smallscale.goblin01/Attack1/slash/Slash1",)
+        assert not timeline.missing_media
+        assert tuple(layer.category for layer in timeline.layers) == (slash,)
         assert sample_attack(timeline, timeline.contact_ms).bodies[0].frame == 8
         assert bound.after.senses is not None and bound.after.senses.position == (3, 3)
+
+        # The real authored overlay must change attack pixels in every camera,
+        # without becoming part of the baked appearance or surviving recovery.
+        pygame.init()
+        pygame.display.set_mode((1, 1))
+        rows = load_attack_media(timeline, bound.appearances)
+        appearance = bound.appearances[timeline.source.actor_uuid]
+        assert {layer.slot for layer in appearance} == {"shadow", "body"}
+        attacking = sample_attack(timeline, timeline.contact_ms).bodies[0]
+        settled = sample_attack(timeline, timeline.complete_ms).bodies[0]
+        assert settled.clip == "Idle" and not settled.cast_layers
+        for quadrant in range(4):
+            camera = Camera(viewport=(320, 240), zoom=1, quadrant=quadrant)
+            with_slash = actor_draw_commands(data, attacking, timeline.source, appearance, rows, camera)[-1]
+            body_only = actor_draw_commands(data, replace(attacking, cast_layers=()),
+                                           timeline.source, appearance, rows, camera)[-1]
+            assert with_slash.destination == body_only.destination
+            assert pygame.image.tobytes(with_slash.surface, "RGBA") != pygame.image.tobytes(body_only.surface, "RGBA")
+            idle = actor_draw_commands(data, settled, timeline.source, appearance, rows, camera)[-1]
+            assert pygame.mask.from_surface(idle.surface).count() > 0
     finally:
         reset_engine_runtime()
         random.setstate(random_state)
+        pygame.quit()
 
 
 @pytest.mark.parametrize(("destination", "maximum_hp"), [
@@ -225,6 +257,7 @@ def test_later_edge_reaction_binds_the_hp_left_by_the_earlier_attack(data: Anima
         first, second = timeline.reactions
         prior_result = sample_choreography(first.choreography, first.choreography.complete_ms).vitals[0]
         assert prior_result.hp is not None and prior_result.hp < 80
+        assert first.contact is not None and second.contact is not None
         assert second.contact.hp == prior_result.hp
         assert first.contact.grid[0] > 2
         assert second.contact.grid[0] < 1

@@ -1,0 +1,767 @@
+{
+  "schema": "dnd.spellStudioDrafts",
+  "version": 2,
+  "spells": [
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.inflict_wounds",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 4885321,
+        "secondary": 12381088,
+        "tertiary": 1323550
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/pending-spells/inflict_wounds/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 4885321,
+            "secondary": 12381088,
+            "tertiary": 1323550,
+            "mode": "multiTint"
+          },
+          "palette": {
+            "colors": [
+              726288,
+              1323550,
+              2579250,
+              4885321,
+              8571251,
+              12381088
+            ],
+            "gamma": 0.65
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      },
+      "media": [
+        {
+          "id": "back",
+          "assetId": "pending.inflict_wounds.back",
+          "attachment": "target_ground",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "behind_body",
+          "viewFacing": "SE",
+          "onMiss": "omit"
+        },
+        {
+          "id": "front",
+          "assetId": "pending.inflict_wounds.front",
+          "attachment": "target_ground",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "front_body",
+          "viewFacing": "SE",
+          "onMiss": "omit"
+        }
+      ],
+      "contact": {
+        "delayMs": 0
+      },
+      "damage": {
+        "impactDelayMs": 0,
+        "hitFlash": {
+          "enabled": true,
+          "frame": 0,
+          "durationMs": 150,
+          "color": 4885321,
+          "palette": {
+            "colors": [
+              726288,
+              1323550,
+              2579250,
+              4885321,
+              8571251,
+              12381088
+            ],
+            "gamma": 0.65
+          }
+        },
+        "floatingNumber": {
+          "enabled": true,
+          "frame": 0,
+          "durationMs": 800,
+          "label": "",
+          "color": 4885321
+        }
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.hellish_rebuke",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 14516810,
+        "secondary": 16769454,
+        "tertiary": 7551792
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/pending-spells/hellish_rebuke/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 14516810,
+            "secondary": 16769454,
+            "tertiary": 7551792,
+            "mode": "multiTint"
+          },
+          "palette": {
+            "colors": [
+              3745062,
+              7551792,
+              11296832,
+              14516810,
+              15508855,
+              16769454
+            ],
+            "gamma": 0.65
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      },
+      "media": [
+        {
+          "id": "back",
+          "assetId": "pending.hellish_rebuke.back",
+          "attachment": "target_ground",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "behind_body",
+          "viewFacing": "SE",
+          "onMiss": "play"
+        },
+        {
+          "id": "front",
+          "assetId": "pending.hellish_rebuke.front",
+          "attachment": "target_ground",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "front_body",
+          "viewFacing": "SE",
+          "onMiss": "play"
+        }
+      ],
+      "contact": {
+        "delayMs": 0
+      },
+      "damage": {
+        "impactDelayMs": 0,
+        "hitFlash": {
+          "enabled": true,
+          "frame": 0,
+          "durationMs": 150,
+          "color": 14516810,
+          "palette": {
+            "colors": [
+              3745062,
+              7551792,
+              11296832,
+              14516810,
+              15508855,
+              16769454
+            ],
+            "gamma": 0.65
+          }
+        },
+        "floatingNumber": {
+          "enabled": true,
+          "frame": 0,
+          "durationMs": 800,
+          "label": "",
+          "color": 14516810
+        }
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.shatter",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 10713802,
+        "secondary": 15194106,
+        "tertiary": 4796516
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/pending-spells/shatter/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 10713802,
+            "secondary": 15194106,
+            "tertiary": 4796516,
+            "mode": "multiTint"
+          },
+          "palette": {
+            "colors": [
+              2168625,
+              4796516,
+              7819931,
+              10713802,
+              12887273,
+              15194106
+            ],
+            "gamma": 0.65
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      },
+      "media": [
+        {
+          "id": "back",
+          "assetId": "pending.shatter.back",
+          "attachment": "area_ground",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "behind_body",
+          "viewFacing": "SE",
+          "onMiss": "play"
+        },
+        {
+          "id": "front",
+          "assetId": "pending.shatter.front",
+          "attachment": "area_ground",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "front_body",
+          "viewFacing": "SE",
+          "onMiss": "play"
+        }
+      ],
+      "contact": {
+        "delayMs": 0
+      },
+      "damage": {
+        "impactDelayMs": 0,
+        "hitFlash": {
+          "enabled": true,
+          "frame": 0,
+          "durationMs": 150,
+          "color": 10713802,
+          "palette": {
+            "colors": [
+              2168625,
+              4796516,
+              7819931,
+              10713802,
+              12887273,
+              15194106
+            ],
+            "gamma": 0.65
+          }
+        },
+        "floatingNumber": {
+          "enabled": true,
+          "frame": 0,
+          "durationMs": 800,
+          "label": "",
+          "color": 10713802
+        }
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.misty_step",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 9935040,
+        "secondary": 14801649,
+        "tertiary": 4934512
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 8,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/pending-spells/misty_step/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 9935040,
+            "secondary": 14801649,
+            "tertiary": 4934512,
+            "mode": "multiTint"
+          },
+          "palette": {
+            "colors": [
+              3158087,
+              4934512,
+              7567007,
+              9935040,
+              12105445,
+              14801649
+            ],
+            "gamma": 0.65
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      },
+      "media": [
+        {
+          "id": "departure-back",
+          "assetId": "pending.misty_step.back",
+          "attachment": "departure_ground",
+          "startOffsetMs": -500,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "behind_body",
+          "viewFacing": "SE"
+        },
+        {
+          "id": "departure-front",
+          "assetId": "pending.misty_step.front",
+          "attachment": "departure_ground",
+          "startOffsetMs": -500,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "front_body",
+          "viewFacing": "SE"
+        },
+        {
+          "id": "arrival-back",
+          "assetId": "pending.misty_step.back",
+          "attachment": "arrival_ground",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "behind_body",
+          "viewFacing": "SE"
+        },
+        {
+          "id": "arrival-front",
+          "assetId": "pending.misty_step.front",
+          "attachment": "arrival_ground",
+          "startOffsetMs": 0,
+          "fps": 144,
+          "scale": 0.5,
+          "depth": "front_body",
+          "viewFacing": "SE"
+        }
+      ]
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.bless",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 13345359,
+        "secondary": 15520919,
+        "tertiary": 7887156
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/pending-spells/bless/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 13345359,
+            "secondary": 15520919,
+            "tertiary": 7887156,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.bane",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 7872818,
+        "secondary": 12798033,
+        "tertiary": 3151135
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/pending-spells/bane/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 7872818,
+            "secondary": 12798033,
+            "tertiary": 3151135,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.false_life",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 4820895,
+        "secondary": 9689052,
+        "tertiary": 2114382
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/pending-spells/false_life/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 4820895,
+            "secondary": 9689052,
+            "tertiary": 2114382,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.jump",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 9289120,
+        "secondary": 14215889,
+        "tertiary": 4352857
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/pending-spells/jump/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 9289120,
+            "secondary": 14215889,
+            "tertiary": 4352857,
+            "mode": "multiTint"
+          },
+          "palette": {
+            "colors": [
+              2508863,
+              4352857,
+              6657918,
+              9289120,
+              12049333,
+              14215889
+            ],
+            "gamma": 0.65
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.expeditious_retreat",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 10076359,
+        "secondary": 14872299,
+        "tertiary": 4612979
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/pending-spells/expeditious_retreat/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 10076359,
+            "secondary": 14872299,
+            "tertiary": 4612979,
+            "mode": "multiTint"
+          },
+          "palette": {
+            "colors": [
+              2637129,
+              4612979,
+              7247524,
+              10076359,
+              12704477,
+              14872299
+            ],
+            "gamma": 0.65
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.haste",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 10470097,
+        "secondary": 15068639,
+        "tertiary": 5400193
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/pending-spells/haste/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 10470097,
+            "secondary": 15068639,
+            "tertiary": 5400193,
+            "mode": "multiTint"
+          },
+          "palette": {
+            "colors": [
+              3226454,
+              5400193,
+              7903670,
+              10470097,
+              13164255,
+              15068639
+            ],
+            "gamma": 0.65
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": true
+      }
+    }
+  ]
+}

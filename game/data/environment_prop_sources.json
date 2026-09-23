@@ -1,0 +1,136 @@
+{
+  "description": "Exact accepted source entries. Scale follows the source house-preview 127px tile to 128px world tile registration. Native state bindings live in environment_art.json.",
+  "banks": {
+    "chest-a1": {
+      "metadata": "candidates-volumetric-timber-v3-contact/chest-a1/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "chest-a2": {
+      "metadata": "candidates-volumetric-timber-v9-contact/chest-a2/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "chest-a3": {
+      "metadata": "candidates-volumetric-timber-v3-contact/chest-a3/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "chest-a4": {
+      "metadata": "candidates-volumetric-timber-v9-contact/chest-a4/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "chest-b1": {
+      "metadata": "candidates-volumetric-timber-v3-contact/chest-b1/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "chest-b2": {
+      "metadata": "candidates-volumetric-timber-v12-contact/chest-b2/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "crate": {
+      "metadata": "candidates-wood-v6-contact/misc-b1/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "oil-barrel": {
+      "metadata": "candidates-wood-v7-contact-only/misc-a8/impact-a/metadata.json",
+      "release_frame": 6,
+      "scale": 1.0078740157480315
+    },
+    "bed": {
+      "metadata": "native-candidates-v5/bed/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "table": {
+      "metadata": "native-breakables/plain-dining-table/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-wardrobe": {
+      "metadata": "native-candidates-v5/wardrobe/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 8
+    },
+    "interior-bookshelf": {
+      "metadata": "native-candidates-v5/bookshelf/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 10
+    },
+    "interior-writing-desk": {
+      "metadata": "native-candidates-v5/writing-desk/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-bedside-stand": {
+      "metadata": "native-breakables/bedside-stand/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-work-stool": {
+      "metadata": "native-breakables/work-stool/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-storage-shelving": {
+      "metadata": "native-breakables/storage-shelving/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 10
+    },
+    "interior-ingredient-shelves": {
+      "metadata": "native-candidates-v5/ingredient-shelves/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 10
+    },
+    "interior-preparation-counter": {
+      "metadata": "native-breakables/preparation-counter/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-sack-bundles": {
+      "metadata": "native-candidates-v5/sack-bundles/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-wooden-chair": {
+      "metadata": "candidates-wood-v7-contact-only/misc-b53/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-wooden-bench": {
+      "metadata": "candidates-wood-v7-contact-only/misc-b26/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-pottery-jar": {
+      "metadata": "candidates-v5-final/pottery-jar/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-pottery-group": {
+      "metadata": "candidates-v5-family-review-r2/misc-a3/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-pottery-cluster": {
+      "metadata": "candidates-v5-family-review-r2/misc-a4/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 8
+    },
+    "interior-barrel-cluster": {
+      "metadata": "candidates-wood-v7-contact-only/misc-a9/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-crate-stack": {
+      "metadata": "candidates-wood-v7-contact-only/misc-b2/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-large-crate-stack": {
+      "metadata": "candidates-wood-v7-contact-only/misc-b3/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 10
+    },
+    "interior-animal-statue": {
+      "metadata": "candidates-stone-v7-contact-r3/statue-animal/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-winged-statue": {
+      "metadata": "candidates-winged-contact-v10/statue-winged/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-stone-pedestal": {
+      "metadata": "candidates-stone-settled-v9-contact/ornamental-pedestal/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    },
+    "interior-stone-bench": {
+      "metadata": "candidates-stone-objects-v11-contact/misc-c9/impact-a/metadata.json",
+      "scale": 1.0078740157480315
+    }
+  }
+}

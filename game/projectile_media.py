@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass, field
+import gzip
 from pathlib import Path
+import struct
 from typing import Literal, Mapping
 
 import numpy as np
@@ -19,7 +21,31 @@ from game.animation_types import (
 )
 
 
-FrameKey = tuple[Path, tuple[int, int, int, int], int, float, BlendMode]
+FrameKey = tuple[Path, tuple[int, int, int, int], int, float, BlendMode | Literal["raw"]]
+
+
+@dataclass(frozen=True, slots=True)
+class SurfacePositions:
+    """Raw XYZ and ownership, aligned with the color before any transform."""
+
+    coordinates: np.ndarray
+    ownership: np.ndarray
+    bounds: tuple[float, float]
+    vertical_scale: float
+    position_scale: float = 1
+
+
+@dataclass(frozen=True, slots=True)
+class CachedSource:
+    image: pygame.Surface
+    positions: SurfacePositions | None = None
+    offset: tuple[int, int] = (0, 0)
+
+    @property
+    def nbytes(self) -> int:
+        return (self.image.get_pitch() * self.image.height
+                + (self.positions.coordinates.nbytes + self.positions.ownership.nbytes
+                   if self.positions is not None else 0))
 
 
 @dataclass(slots=True)
@@ -27,7 +53,7 @@ class ProjectileFrameCache:
     """Session pixel storage; the byte limit counts owned decoded surfaces."""
 
     limit_bytes: int = 128 * 1024 * 1024
-    frames: OrderedDict[FrameKey, pygame.Surface] = field(default_factory=OrderedDict)
+    frames: OrderedDict[FrameKey, CachedSource] = field(default_factory=OrderedDict)
     decoded_bytes: int = 0
 
 
@@ -39,9 +65,20 @@ class FrameCacheUsage:
 
 
 @dataclass(frozen=True, slots=True)
+class FootpointImage:
+    """Raw aligned XY bytes; its alpha byte is data, never coverage."""
+
+    image: pygame.Surface
+    bounds: tuple[float, float]
+
+
+@dataclass(frozen=True, slots=True)
 class ProjectileFrameImage:
     image: pygame.Surface
     blend: int
+    offset: tuple[float, float] = (0, 0)
+    footpoint: FootpointImage | None = None
+    positions: SurfacePositions | None = None
 
 
 # Four-camera reviews and concurrent historical cast media share source pixels.
@@ -56,25 +93,30 @@ def frame_cache_usage(cache: ProjectileFrameCache = SHARED_PROJECTILE_FRAMES) ->
 
 
 def _cached(cache: ProjectileFrameCache, key: FrameKey) -> pygame.Surface | None:
-    image = cache.frames.get(key)
-    if image is not None:
+    source = cache.frames.get(key)
+    if source is not None:
         cache.frames.move_to_end(key)
-    return image
+        return source.image
+    return None
 
 
 def _reserve(cache: ProjectileFrameCache, size: int) -> None:
     while cache.frames and cache.decoded_bytes + size > cache.limit_bytes:
         _, expired = cache.frames.popitem(last=False)
-        cache.decoded_bytes -= expired.get_pitch() * expired.height
+        cache.decoded_bytes -= expired.nbytes
 
 
 def _remember(cache: ProjectileFrameCache, key: FrameKey, image: pygame.Surface) -> pygame.Surface:
-    size = image.get_pitch() * image.height
+    _remember_source(cache, key, CachedSource(image))
+    return image
+
+
+def _remember_source(cache: ProjectileFrameCache, key: FrameKey, source: CachedSource) -> None:
+    size = source.nbytes
     _reserve(cache, size)
     if size <= cache.limit_bytes:
-        cache.frames[key] = image
+        cache.frames[key] = source
         cache.decoded_bytes += size
-    return image
 
 
 def _prepare(image: pygame.Surface, tint: int, alpha: float, blend: BlendMode) -> pygame.Surface:
@@ -91,6 +133,53 @@ def _prepare(image: pygame.Surface, tint: int, alpha: float, blend: BlendMode) -
         rgb[:] = np.rint(rgb * opacity[:, :, None]).astype(np.uint8)
         del rgb
     return image
+
+
+def _raw_part(cache: ProjectileFrameCache, path: Path,
+              rectangle: tuple[int, int, int, int]) -> pygame.Surface:
+    """Read data pixels without display conversion or any material operation."""
+    key: FrameKey = (path, rectangle, 0xFFFFFF, 1, "raw")
+    image = _cached(cache, key)
+    if image is None:
+        page_key: FrameKey = (path, (0, 0, 0, 0), 0xFFFFFF, 1, "raw")
+        page = _cached(cache, page_key)
+        if page is None:
+            page = _remember(cache, page_key, pygame.image.load(path))
+        image = _remember(cache, key, page.subsurface(rectangle).copy())
+    return image
+
+
+def _surface_packet(cache: ProjectileFrameCache, path: Path, blends: tuple[Literal["normal", "add"], ...],
+                    visual: ProjectileSprite, bounds: tuple[float, float], vertical_scale: float,
+                    position_scale: float) -> tuple[CachedSource, ...]:
+    keys: tuple[FrameKey, ...] = tuple((path, (index, 0, 0, 0), visual.tint, visual.alpha, blend)
+                                     for index, blend in enumerate(blends))
+    if all(key in cache.frames for key in keys):
+        for key in keys:
+            cache.frames.move_to_end(key)
+        return tuple(cache.frames[key] for key in keys)
+    payload = gzip.decompress(path.read_bytes())
+    width, height, ox, oy = struct.unpack_from("<HHhh", payload)
+    pixels, offset = width * height, 8
+    sources = []
+    for key, blend in zip(keys, blends):
+        image = pygame.image.frombytes(payload[offset:offset + pixels * 4], (width, height), "RGBA")
+        offset += pixels * 4
+        xyz = np.frombuffer(payload, dtype=">u2", count=pixels * 3, offset=offset).reshape(
+            height, width, 3).transpose(1, 0, 2).copy()
+        offset += pixels * 6
+        owners = np.frombuffer(payload, dtype=np.uint8, count=pixels, offset=offset).reshape(height, width).T.copy()
+        offset += pixels
+        xyz.setflags(write=False)
+        owners.setflags(write=False)
+        source = CachedSource(_prepare(image, visual.tint, visual.alpha, blend),
+            SurfacePositions(xyz, owners, bounds, vertical_scale, position_scale), (ox, oy))
+        prior = cache.frames.pop(key, None)
+        if prior is not None:
+            cache.decoded_bytes -= prior.nbytes
+        _remember_source(cache, key, source)
+        sources.append(source)
+    return tuple(sources)
 
 
 def projectile_frame_layers(
@@ -111,9 +200,51 @@ def projectile_frame_layers(
     width, height = asset.frame.width, asset.frame.height
     storage = data.projectile_storage.get(asset.assetId)
     if storage is not None:
+        packet = storage.phases[phase_name].surfaceFrames
+        if packet is not None:
+            pivot = (asset.anchorsByFacing or {}).get(direction, asset.anchor)
+            asset_pivot = pivot.x * asset.frame.width, pivot.y * asset.frame.height
+            files: list[tuple[str, tuple[Literal["normal", "add"], ...], tuple[float, float]]]
+            if packet.componentsByFacing is not None:
+                files = [(part.pattern, (part.blendMode,), part.pivot)
+                         for part in packet.componentsByFacing[direction]]
+            else:
+                assert packet.pattern is not None
+                files = [(packet.pattern, packet.blendModes, asset_pivot)]
+            result = []
+            for pattern, blends, source_pivot in files:
+                path = data.media_root / pattern.format(direction=direction, frame=packet.frameIndices[frame])
+                sources = _surface_packet(cache, path, blends, visual, packet.bounds,
+                                          packet.verticalScale, packet.positionScale)
+                for source, blend in zip(sources, blends):
+                    offset = tuple(source.offset[i] + round(source_pivot[i]) - source_pivot[i]
+                                   + asset_pivot[i] for i in range(2))
+                    result.append(ProjectileFrameImage(source.image,
+                        pygame.BLEND_RGB_ADD if blend == "add" else 0, (offset[0], offset[1]),
+                        positions=source.positions))
+            return tuple(result)
         layers = storage.phases[phase_name].layers
         result = []
         for layer in layers:
+            parts = layer.partsByFacing[direction] if layer.partsByFacing is not None else layer.parts
+            if parts is not None:
+                for part in parts[frame]:
+                    path = data.media_root / part.file
+                    alpha = visual.alpha * layer.gain
+                    key = (path, part.rect, visual.tint, alpha, layer.blendMode)
+                    image = _cached(cache, key)
+                    if image is None:
+                        page_key = (path, (0, 0, 0, 0), 0xFFFFFF, 1.0, "normal")
+                        sheet = _cached(cache, page_key)
+                        if sheet is None:
+                            sheet = _remember(cache, page_key, pygame.image.load(path).convert_alpha())
+                        image = _remember(cache, key, _prepare(sheet.subsurface(part.rect).copy(),
+                                                              visual.tint, alpha, layer.blendMode))
+                    footpoint = (FootpointImage(_raw_part(cache, data.media_root / part.footpoint.file,
+                        part.rect), part.footpoint.bounds) if part.footpoint is not None else None)
+                    result.append(ProjectileFrameImage(image,
+                        pygame.BLEND_RGB_ADD if layer.blendMode == "add" else 0, part.offset, footpoint))
+                continue
             if layer.pages is not None:
                 page = next(page for page in layer.pages[direction]
                             if page.firstFrame <= frame < page.firstFrame + page.frameCount)

@@ -22,14 +22,14 @@ from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from dnd.spells.divination import TrueSeeing
+from dnd.spells.divination import SeeInvisibility, TrueSeeing
 from dnd.spells.evocation import FireBolt
-from dnd.spells.illusion import Invisibility
+from dnd.spells.illusion import GreaterInvisibility, Invisibility
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
-ConcealmentProgram = Literal["invisibility", "sight-expiry", "doorway", "hide-bright", "hide-dim", "stacked"]
+ConcealmentProgram = Literal["invisibility", "greater-invisibility", "see-invisibility", "sight-expiry", "doorway", "hide-bright", "hide-dim", "stacked"]
 SightGrant = Literal["none", "spell", "potion"]
 RevealOperation = Literal["none", "drop-concentration", "attack", "cast"]
 
@@ -61,7 +61,7 @@ def concealment_history(
         for role, position in placements:
             actor = Entity.create(uuid4(), "Perceiver" if role == "perceiver" else "Subject", config=EntityConfig(
                 position=position, faction="heroes" if role == "perceiver" or allied else "enemies",
-                action_economy=ActionEconomyConfig(spell_slots={2: 1, 6: 1}),
+                action_economy=ActionEconomyConfig(spell_slots={2: 1, 4: 1, 6: 1}),
                 spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
                 health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=8, mode="maximums")]),
                 appearance=AppearanceConfig(body_category="NakedBody", has_beard=False,
@@ -76,7 +76,7 @@ def concealment_history(
             if role == "perceiver" and sight_grant == "potion":
                 actor.install_initial_items(((build_authored_item("consumable.potion_true_seeing", actor.uuid), None),))
             setup_standard_actions(actor)
-            for spell in (Invisibility, TrueSeeing, FireBolt):
+            for spell in (Invisibility, GreaterInvisibility, SeeInvisibility, TrueSeeing, FireBolt):
                 register_spell(actor, spell, caster_level=1)
             actor.compose_entity()
             actors[role] = actor
@@ -127,7 +127,9 @@ def concealment_history(
             return result
 
         def grant_sight() -> None:
-            if sight_grant == "spell":
+            if program == "see-invisibility":
+                perform(perceiver, "spell.see_invisibility")
+            elif sight_grant == "spell":
                 perform(perceiver, "spell.true_seeing", target=perceiver)
             elif sight_grant == "potion":
                 perform(perceiver, "action.item.potion_true_seeing.drink")
@@ -160,15 +162,22 @@ def concealment_history(
             assert "True Seeing" not in perceiver.active_conditions
             assert subject.uuid not in perceiver.senses.entities
             assert subject.is_invisible
-        elif program in ("invisibility", "doorway"):
+        elif program in ("invisibility", "greater-invisibility", "see-invisibility", "doorway"):
             grant_sight()
-            perform(subject, "spell.invisibility", target=subject)
+            perform(subject, "spell.greater_invisibility" if program == "greater-invisibility"
+                    else "spell.invisibility", target=subject)
             assert subject.is_invisible
             if program == "doorway":
                 perform(subject, "action.move", destination=(8, 4))
                 perform(subject, "action.move", destination=(8, 10))
             else:
                 perform(subject, "action.move", destination=(9, 3))
+                if program == "greater-invisibility":
+                    # Advantage attack, weapon damage, then the existing
+                    # Greater Invisibility persistence check (DC 15).
+                    with fixed_dice_faces(15, 14, 4, 15):
+                        perform(subject, "action.attack", target=perceiver, weapon_slot=WeaponSlot.RANGED_MAIN)
+                    assert subject.is_invisible
                 reveal_subject()
                 if reveal != "none":
                     assert not subject.is_invisible

@@ -8,6 +8,7 @@ from pydantic import Field, PrivateAttr, StrictInt, model_validator
 from dnd.core.base_block import BaseBlock, LightLevel, MovementMode
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.condition_types import DurationType, HazardFilter
+from dnd.core.item_types import ItemIntegrity
 from dnd.core.content.identities import ContentRef
 from dnd.core.effect_types import EffectOriginKind
 from dnd.core.events import (
@@ -22,11 +23,12 @@ from dnd.core.events import (
     TurnEvent,
 )
 from dnd.core.gridmap import get_map
-from dnd.core.aoe import Cone, Cube, Cylinder, Line, Sphere
+from dnd.core.aoe import AoEShape, Cone, Cube, Cylinder, Line, Sphere, snapshot_aoe_presentation_geometry
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
-from dnd.types.senses import OpticalObscurement
+from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
+from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.traps import TrapState
 from dnd.types.world import OccupancyLayer
 from dnd.types.spatial_effects import (
@@ -65,6 +67,8 @@ class SpatialCondition(BaseCondition):
     arbitration_potency: int = Field(default=0, ge=0)
     optical_obscurement: Optional[OpticalObscurement] = None
     blocks_physical_optics: bool = False
+    has_visible_presence: bool = False
+    deposit_source: MaterialDepositSource | None = None
 
     _activation_positions: Optional[Set[Tuple[int, int]]] = PrivateAttr(
         default=None,
@@ -100,6 +104,22 @@ class SpatialCondition(BaseCondition):
     def get_position(self) -> Tuple[int, int]:
         """Return the condition anchor."""
         return self.position
+
+    def get_spatial_observation(
+        self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
+        discovered: bool = False,
+    ) -> Optional[PerceivedSpatialEffect]:
+        """Expose an authored visible presence only in already observed cells."""
+        if not self.has_visible_presence:
+            return None
+        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
+            return None
+        return PerceivedSpatialEffect(
+            content_ref=self.content_ref, name=self.name, description=self.description,
+            positions=tuple(sorted(positions)),
+            anchor_position=self.position if self.position in positions else None,
+            deposit_source=self.deposit_source,
+        )
 
     def resolve_condition_footprint(self) -> Set[Tuple[int, int]]:
         """Return the intended activation footprint."""
@@ -432,7 +452,10 @@ class SpatialCondition(BaseCondition):
                 return None
             if event.object_uuid != anchor_uuid:
                 return None
-            if event.event_type is EventType.SPATIAL_OBJECT_REMOVED:
+            if (event.event_type is EventType.SPATIAL_OBJECT_REMOVED
+                    or event.object_state is not None
+                    and event.object_state.integrity is ItemIntegrity.DESTROYED
+                    and condition.requires_intact_item):
                 condition.deactivate(parent_event=event)
             elif event.placement is not None:
                 condition.relocate_anchor(
@@ -592,6 +615,8 @@ class SpatialCondition(BaseCondition):
         parent_event: Optional[Event],
         trap_state: Optional[TrapState] = None,
         previous_trap_state: Optional[TrapState] = None,
+        pressed: Optional[bool] = None,
+        previous_pressed: Optional[bool] = None,
     ) -> SpatialEffectChangeEvent:
         """Publish the non-vetoable phases that directly cause a spatial change."""
         declaration = SpatialEffectChangeEvent(
@@ -608,6 +633,7 @@ class SpatialCondition(BaseCondition):
             spatial_effect_name=self.name,
             trap_state=trap_state,
             previous_trap_state=previous_trap_state,
+            pressed=pressed, previous_pressed=previous_pressed,
             layer=self.layer,
             anchor_position=self.position,
             affected_positions=tuple(sorted(affected_positions)),
@@ -645,7 +671,8 @@ class SpatialCondition(BaseCondition):
         for child_uuid in list(self.sub_conditions):
             child = BaseCondition.get(child_uuid)
             if isinstance(child, BaseCondition):
-                owner = BaseBlock.get(child.target_entity_uuid)
+                owner = (BaseBlock.get(child.target_entity_uuid)
+                         if child.target_entity_uuid is not None else None)
                 if isinstance(owner, BaseBlock):
                     owner._discard_condition_indexes(child)
                     owner._discard_uncommitted_condition_tree(child)
@@ -717,11 +744,7 @@ class SpatialCondition(BaseCondition):
             _, parent_condition_uuid = self.parent_link
             parent = BaseCondition.get(parent_condition_uuid)
             if isinstance(parent, BaseCondition):
-                parent.linked_conditions = [
-                    link
-                    for link in parent.linked_conditions
-                    if link[1] != self.uuid
-                ]
+                parent.unlink_condition(self.uuid, parent_event=removed)
             self.parent_link = None
         self.remove_from_register()
         self._complete_change(prepared_removal_effect)
@@ -864,16 +887,41 @@ class AreaCondition(SpatialCondition):
         default_factory=dict,
     )
 
-    def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
-        """Compute the objective authored geometry around the anchor."""
+    def get_spatial_observation(
+        self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
+        discovered: bool = False,
+    ) -> Optional[PerceivedSpatialEffect]:
+        """Retain disclosed geometry with the same visibility and discovery gate."""
+        observed = super().get_spatial_observation(
+            positions, observer_uuid=observer_uuid, discovered=discovered,
+        )
+        if observed is None:
+            return None
+        # Geometry registers an observed volume without claiming its center cell
+        # is visible. Ground fields retain only a previously established frame.
+        anchor = self.position if self.layer is not SpatialEffectLayer.GROUND_SURFACE else observed.anchor_position
+        if anchor is None and self.anchor_kind is SpatialEffectAnchorKind.FIXED_POSITION:
+            observer = Entity.get(observer_uuid)
+            previous = observer.senses.spatial_effects.get(self.uuid) if observer is not None else None
+            if previous is not None:
+                return observed.model_copy(update={"area_geometry": previous.area_geometry,
+                    "anchor_elevation_steps": previous.anchor_elevation_steps})
+        geometry = (snapshot_aoe_presentation_geometry(self._area_shape(anchor), anchor)
+                    if anchor is not None else None)
+        support = get_map().get_tile(*anchor) if anchor is not None else None
+        return observed.model_copy(update={"area_geometry": geometry,
+            "anchor_elevation_steps": support.height if support is not None else None})
+
+    def _area_shape(self, anchor: Tuple[int, int]) -> AoEShape:
+        """Build the same native geometry for execution and retained registration."""
         if self.zone_shape in {"cone", "line"}:
             if self.zone_direction is None:
                 raise ValueError(
                     f"{self.zone_shape} area conditions require a direction",
                 )
             target = (
-                self.position[0] + self.zone_direction[0],
-                self.position[1] + self.zone_direction[1],
+                anchor[0] + self.zone_direction[0],
+                anchor[1] + self.zone_direction[1],
             )
             shape = (
                 Cone(
@@ -892,24 +940,29 @@ class AreaCondition(SpatialCondition):
         elif self.zone_shape == "cube":
             shape = Cube(
                 source_entity_uuid=self.source_entity_uuid,
-                target=self.position,
+                target=anchor,
                 size_feet=self.zone_radius_feet,
                 centered=True,
             )
         elif self.zone_shape == "cylinder":
             shape = Cylinder(
                 source_entity_uuid=self.source_entity_uuid,
-                target=self.position,
+                target=anchor,
                 radius_feet=self.zone_radius_feet,
             )
         elif self.zone_shape == "sphere":
             shape = Sphere(
                 source_entity_uuid=self.source_entity_uuid,
-                target=self.position,
+                target=anchor,
                 radius_feet=self.zone_radius_feet,
             )
         else:
             raise ValueError(f"Unsupported area shape: {self.zone_shape}")
+        return shape
+
+    def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
+        """Compute the objective authored geometry around the anchor."""
+        shape = self._area_shape(self.position)
         shape.compute_objective(self.position)
         return set(shape.affected_positions)
 
@@ -925,10 +978,10 @@ class AreaCondition(SpatialCondition):
             position for position in computed if grid.has_tile(*position)
         }
         spell_level = self._protection_spell_level()
-        source = Entity.get(self.source_entity_uuid)
-        if spell_level is not None and self.magical_origin and source is not None:
+        origin = self.effect_origin
+        if spell_level is not None and self.magical_origin and origin is not None and origin.source_position is not None:
             positions -= SpellProtectionRegistry.get_excluded_positions(
-                source.position,
+                origin.source_position,
                 spell_level,
             )
         return positions
@@ -952,14 +1005,14 @@ class AreaCondition(SpatialCondition):
                 if grid.has_tile(*cell)
             }
             spell_level = self._protection_spell_level()
-            source = Entity.get(self.source_entity_uuid)
+            origin = self.effect_origin
             if (
                 spell_level is not None
                 and self.magical_origin
-                and source is not None
+                and origin is not None and origin.source_position is not None
             ):
                 positions -= SpellProtectionRegistry.get_excluded_positions(
-                    source.position,
+                    origin.source_position,
                     spell_level,
                 )
             return self.change_footprint(positions, parent_event=parent_event)

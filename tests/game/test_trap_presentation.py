@@ -22,13 +22,19 @@ from game.projection import Camera, camera_pose
 from game.scene import load_scene_media, scene_actors
 from game.world_animation import sample_world_transitions, world_transitions
 from tests.game.player_helpers import player_history
-from tests.game.test_trap_player_replay import recorded_traps
+from tests.game.test_trap_player_replay import recorded_traps as recorded_traps
 from tests.game.trap_scenarios import trap_history
+from tests.game.trap_expansion_scenarios import trap_expansion_history
 
 
 @pytest.fixture(scope="module")
 def histories():
     return {detected: trap_history(detected=detected) for detected in (False, True)}
+
+
+@pytest.fixture(scope="module")
+def jaw_history():
+    return trap_expansion_history(program="jaw")
 
 
 @pytest.fixture(scope="module")
@@ -69,6 +75,7 @@ def test_entry_plays_damage_and_received_deployment_after_arrival_in_four_views(
     assert motion is not None
     reaction, = motion.reactions
     assert reaction.start_ms == motion.legs[-1].end_ms
+    assert reaction.contact is not None
     assert reaction.contact.grid == (5, 3)
     assert reaction.end_ms >= reaction.start_ms + 250, "the head must retain all seven deployment poses"
     assert len(reaction.choreography.damage) == 1 and not reaction.choreography.gaps
@@ -132,9 +139,39 @@ def test_lever_and_spikes_share_original_contact_anchor_and_seek_back(histories,
             assert spike[2] == f"spikes.{camera_pose('east', quadrant)}.{spike_frame}"
 
 
+@pytest.mark.parametrize("role", ("traveler", "witness"))
+def test_reset_lever_moves_at_hand_contact_in_both_saved_views(jaw_history, rendering, role):
+    screen, _, _, data, font = rendering
+    before, roots = player_history(jaw_history, role=role)
+    for root in roots:
+        fact = root.root.fact
+        if isinstance(fact, ActionFact) and fact.behavior_id == "action.environment.trap_lever.pull":
+            break
+        before = reduce_lineage(before, root)
+    else:
+        pytest.fail("The native narrative must contain the reset lever use")
+    group = bind_choreography(before, root, data)
+    cue, = group.body_actions
+    identity = cue.interaction_object_uuid
+    assert identity is not None and not group.gaps
+    rows = {}
+    body_media = load_scene_media(scene_actors(stage_lineage(before, root), data, {}), data, body_rows=rows)
+    media = load_choreography_media(group, body_rows=rows)
+    for quadrant in range(4):
+        camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus((4, 3))
+        # Replay includes a backwards seek; the final handle must not leak early.
+        for offset, expected in ((-1, 0), (0, 0), (42, 1), (84, 2), (125, 3),
+                                 (167, 4), (209, 5), (300, 6), (-1, 0)):
+            at = cue.effect_ms + offset
+            sample = sample_playback_frame(before, group.after, data, at, at, camera, {}, body_media, font, font,
+                choreography=group, choreography_media=media)
+            lever, = (row for row in drawn(sample, camera, rendering) if row[0] == identity)
+            assert lever[2] == f"lever.{camera_pose('east', quadrant)}.{expected}"
+
+
 @pytest.mark.parametrize("payload", ("poison-damage", "poisoned"))
 def test_explicit_received_poison_content_selects_coated_sheet(rendering, payload):
-    screen, catalog, cache, data, font = rendering
+    screen, _, _, data, font = rendering
     before, root = selected(trap_history(payload=payload), "walker", MovementFact)
     motion = bind_motion(before, root, data)
     assert motion is not None
@@ -182,7 +219,8 @@ def test_observed_spikes_finish_motion_without_an_actor_animation(recorded_traps
     for root in roots:
         after = reduce_lineage(before, root)
         changes = [row.fact for row in root.events if isinstance(row.fact, SpatialEffectStateFact)
-                   and row.fact.previous_state.value == "activated" and row.fact.state.value == "deactivated"]
+        and row.fact.previous_state is not None and row.fact.state is not None
+        and row.fact.previous_state.value == "activated" and row.fact.state.value == "deactivated"]
         if changes:
             break
         before = after

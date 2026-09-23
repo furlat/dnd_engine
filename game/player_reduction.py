@@ -24,6 +24,7 @@ STATE_PRESENTATION_KINDS = frozenset({
 def copy_target(target: PlayerState) -> PlayerState:
     senses = target.senses
     return replace(target, tiles=dict(target.tiles), objects=dict(target.objects), actors=dict(target.actors),
+        spatial_commit_cursors=dict(target.spatial_commit_cursors),
         senses=None if senses is None else replace(senses, visible=set(senses.visible), seen=set(senses.seen),
             entities=dict(senses.entities), objects=dict(senses.objects),
             effective_light_levels=dict(senses.effective_light_levels), hazardous_cells=dict(senses.hazardous_cells),
@@ -112,15 +113,17 @@ def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
             actor = target.actors[fact.target_entity_uuid]
             if fact.resulting_normal_hp is None or fact.resulting_temporary_hp is None:
                 raise ValueError("applied damage requires exact committed HP")
-            target.actors[actor.uuid] = replace(actor, normal_hp=fact.resulting_normal_hp, temporary_hp=fact.resulting_temporary_hp)
+            target.actors[actor.uuid] = replace(actor, normal_hp=fact.resulting_normal_hp, temporary_hp=fact.resulting_temporary_hp,
+                temporary_hp_grant=actor.temporary_hp_grant if fact.resulting_temporary_hp > 0 else None)
         case HealFact(was_blocked=False):
             actor = target.actors[fact.target_entity_uuid]
             if fact.resulting_normal_hp is None or fact.resulting_temporary_hp is None:
                 raise ValueError("healing requires exact committed HP")
-            target.actors[actor.uuid] = replace(actor, normal_hp=fact.resulting_normal_hp, temporary_hp=fact.resulting_temporary_hp)
+            target.actors[actor.uuid] = replace(actor, normal_hp=fact.resulting_normal_hp, temporary_hp=fact.resulting_temporary_hp,
+                temporary_hp_grant=actor.temporary_hp_grant if fact.resulting_temporary_hp > 0 else None)
         case TemporaryHitPointsFact():
             actor = target.actors[fact.entity_uuid]
-            target.actors[actor.uuid] = replace(actor, temporary_hp=fact.resulting_temporary_hp)
+            target.actors[actor.uuid] = replace(actor, temporary_hp=fact.resulting_temporary_hp, temporary_hp_grant=fact.grant)
         case LifeFact():
             actor = target.actors[fact.entity_uuid]
             target.actors[actor.uuid] = replace(actor, life_state=fact.new_state, normal_hp=fact.normal_hit_points)
@@ -138,8 +141,15 @@ def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
             elif condition.category is not ConditionCategory.INTERNAL:
                 members[condition.condition_uuid] = condition
             target.actors[actor.uuid] = replace(actor, conditions=tuple(members.values()),
-                maximum_hp=actor.maximum_hp if condition.resulting_max_hp is None else condition.resulting_max_hp,
-                armor_class=actor.armor_class if condition.resulting_ac is None else condition.resulting_ac)
+                normal_hp=(condition.resulting_stats.normal_hp
+                    if condition.resulting_stats is not None else actor.normal_hp),
+                maximum_hp=(condition.resulting_stats.maximum_hp if condition.resulting_stats is not None else
+                    actor.maximum_hp if condition.resulting_max_hp is None else condition.resulting_max_hp),
+                armor_class=(condition.resulting_stats.armor_class if condition.resulting_stats is not None else
+                    actor.armor_class if condition.resulting_ac is None else condition.resulting_ac),
+                resolved_size=(condition.resulting_stats.resolved_size
+                    if condition.resulting_stats is not None and condition.resulting_stats.resolved_size is not None
+                    else actor.resolved_size))
         case TurnFact():
             if fact.round_number is not None:
                 target.round_number = fact.round_number
@@ -152,6 +162,9 @@ def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: t
     """Fold received values in source order, including a timed partial group."""
     result = copy_target(target)
     indexes = {row.event_uuid: row.source_index for row in versions}
+    first_versions: dict[UUID, int] = {}
+    for row in versions:
+        first_versions.setdefault(row.lineage_uuid, row.source_index)
     pending = iter(sorted(observations, key=lambda row: indexes[row.event_uuid]))
     observation = next(pending, None)
     world_updates = {row.event_uuid: row for row in updates}
@@ -162,6 +175,18 @@ def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: t
         if node.uuid in world_updates:
             apply_world_update(result, world_updates[node.uuid])
         if not node.canceled and node.fact is not None:
+            if (isinstance(node.fact, SpatialFact) and node.fact.entity_uuid is not None
+                    and node.fact.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT)):
+                # Membership is committed before its spatial declaration. An
+                # entry can cause another entry before the first one completes;
+                # completion order must not restore that older position/layer.
+                committed_at = first_versions[node.lineage_uuid]
+                # Only a nested commit supersedes this closing transition.
+                # Independent earlier transitions can be deliberately retimed
+                # (e.g. jump takeoff after all preflight opportunity attacks).
+                if committed_at < result.spatial_commit_cursors.get(node.fact.entity_uuid, -1) < indexes[node.uuid]:
+                    continue
+                result.spatial_commit_cursors[node.fact.entity_uuid] = committed_at
             _apply_fact(result, node.fact)
     if observation is not None:
         _observe(result, observation)

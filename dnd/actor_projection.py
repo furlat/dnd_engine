@@ -8,12 +8,13 @@ from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
+from dnd.core.creature_types import Size
 from dnd.core.events import DamageAppliedEvent, EntityCreatedEvent, Event, EventType, HealEvent, LifeStateChangeEvent, SpatialChangeEvent, SpatialChangeType, TemporaryHitPointsChangedEvent
 from dnd.core.item_types import ItemLocation
 from dnd.core.life_types import LifeState
 from dnd.types.actor_facts import ActorState, ConditionFact
 from dnd.types.actor import EntityStatsState
-from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
+from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent, ConditionStateChangedEvent
 
 
 def actor_from_birth(birth: EntityCreatedEvent) -> ActorState:
@@ -30,6 +31,8 @@ def actor_from_birth(birth: EntityCreatedEvent) -> ActorState:
         faction=birth.faction, creature_type=birth.creature_type,
         healing_blocked=birth.healing_blocked, damage_affinities=birth.damage_affinities,
         occupancy_layer=birth.occupancy_layer,
+        temporary_hp_grant=birth.temporary_hit_points_grant,
+        resolved_size=Size(birth.size), structural_base_size=Size(birth.structural_base_size),
     )
 
 
@@ -42,7 +45,7 @@ def actor_fact_owner(event: Event) -> UUID | None:
             return event.source_entity_uuid
         case DamageAppliedEvent() | HealEvent():
             return event.target_entity_uuid
-        case Event(event_type=EventType.CONDITION_APPLICATION | EventType.CONDITION_REMOVAL):
+        case Event(event_type=EventType.CONDITION_APPLICATION | EventType.CONDITION_REMOVAL | EventType.CONDITION_STATE_CHANGED):
             return event.target_entity_uuid
         case LifeStateChangeEvent() | TemporaryHitPointsChangedEvent():
             return event.entity_uuid
@@ -73,15 +76,17 @@ def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact |
             return replace(actor, active_weapon_set=selected)
         case DamageAppliedEvent():
             return replace(actor, normal_hp=event.resulting_normal_hp,
-                           temporary_hp=event.resulting_temporary_hp)
+                           temporary_hp=event.resulting_temporary_hp,
+                           temporary_hp_grant=actor.temporary_hp_grant if event.resulting_temporary_hp > 0 else None)
         case HealEvent():
             if event.was_blocked:
                 return actor
             if event.resulting_normal_hp is None or event.resulting_temporary_hp is None:
                 raise ValueError("healing requires committed HP after-values")
             return replace(actor, normal_hp=event.resulting_normal_hp,
-                           temporary_hp=event.resulting_temporary_hp)
-        case Event(event_type=EventType.CONDITION_APPLICATION | EventType.CONDITION_REMOVAL):
+                           temporary_hp=event.resulting_temporary_hp,
+                           temporary_hp_grant=actor.temporary_hp_grant if event.resulting_temporary_hp > 0 else None)
+        case Event(event_type=EventType.CONDITION_APPLICATION | EventType.CONDITION_REMOVAL | EventType.CONDITION_STATE_CHANGED):
             if condition is None:
                 raise ValueError("condition membership requires its recorded condition fact")
             members = {member.condition_uuid: member for member in actor.conditions}
@@ -96,7 +101,7 @@ def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact |
         case LifeStateChangeEvent():
             return replace(actor, life_state=event.new_state, normal_hp=event.normal_hit_points)
         case TemporaryHitPointsChangedEvent():
-            return replace(actor, temporary_hp=event.resulting_temporary_hp)
+            return replace(actor, temporary_hp=event.resulting_temporary_hp, temporary_hp_grant=event.grant)
         case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT):
             item = event.item_state
             items = {row.item_uuid: row for row in actor.items}
@@ -119,13 +124,15 @@ def apply_stats(actor: ActorState, stats: EntityStatsState | None) -> ActorState
     if stats is None:
         return actor
     return replace(actor, normal_hp=stats.normal_hp, maximum_hp=stats.maximum_hp,
-                   temporary_hp=stats.temporary_hp, armor_class=stats.armor_class,
-                   healing_blocked=stats.healing_blocked, damage_affinities=stats.damage_affinities)
+                   temporary_hp=stats.temporary_hp, temporary_hp_grant=stats.temporary_hp_grant,
+                   armor_class=stats.armor_class,
+                   healing_blocked=stats.healing_blocked, damage_affinities=stats.damage_affinities,
+                   resolved_size=stats.resolved_size if stats.resolved_size is not None else actor.resolved_size)
 
 
 def condition_fact(event: Event, *, source_index: int | None = None) -> ConditionFact | None:
     """Read committed cold metadata; never inspect the executable condition graph."""
-    if not isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent)):
+    if not isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent, ConditionStateChangedEvent)):
         return None
     state = event.condition_state
     if state is None:
@@ -135,7 +142,9 @@ def condition_fact(event: Event, *, source_index: int | None = None) -> Conditio
     return ConditionFact(
         event_uuid=event.uuid, condition_uuid=state.condition_uuid, name=state.name,
         category=state.category, behavior_id=event.behavior_id,
-        resulting_max_hp=event.resulting_max_hp, resulting_ac=event.resulting_ac,
-        state=state, resulting_stats=event.resulting_stats, resulting_tile=event.resulting_tile,
-        resulting_item=event.resulting_item,
+        resulting_max_hp=event.resulting_stats.maximum_hp if isinstance(event, ConditionStateChangedEvent) else event.resulting_max_hp,
+        resulting_ac=event.resulting_stats.armor_class if isinstance(event, ConditionStateChangedEvent) else event.resulting_ac,
+        state=state, resulting_stats=event.resulting_stats,
+        resulting_tile=None if isinstance(event, ConditionStateChangedEvent) else event.resulting_tile,
+        resulting_item=None if isinstance(event, ConditionStateChangedEvent) else event.resulting_item,
     )

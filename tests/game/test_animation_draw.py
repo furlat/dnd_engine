@@ -211,10 +211,10 @@ def test_fixed_target_hit_and_death_seek_restore_pixels_without_reloading(screen
 def test_different_rigs_can_use_the_same_category_names(screen, timeline) -> None:
     rig = timeline.data.rigs["smallscale.goblin01"]
     document = rig.model_dump(mode="json")
-    document["slot_categories"] = {"body": ["NakedBody"], "shadow": ["Shadow"]}
+    document["slot_categories"].update(body=["NakedBody"], shadow=["Shadow"])
     for clip in document["clips"].values():
-        clip["sheets"] = {"NakedBody": clip["sheets"]["Goblin01"],
-                          "Shadow": clip["sheets"]["Goblin01Shadow"]}
+        clip["sheets"]["NakedBody"] = clip["sheets"].pop("Goblin01")
+        clip["sheets"]["Shadow"] = clip["sheets"].pop("Goblin01Shadow")
     shared_names = BodyRig.model_validate_json(json.dumps(document))
     source = replace(timeline.source, applications=(replace(
         timeline.source.applications[0], target=replace(timeline.source.applications[0].target, rig_id="smallscale.goblin01"),

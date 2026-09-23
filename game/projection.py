@@ -164,7 +164,7 @@ def inverse_plane(
     screen: tuple[float, float],
     camera: Camera,
     *,
-    elevation_steps: int = 0,
+    elevation_steps: float = 0,
 ) -> tuple[float, float]:
     """Invert a screen point onto one candidate support-elevation plane."""
     world_x = (screen[0] - camera.pan[0]) / camera.zoom

@@ -12,9 +12,10 @@ from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEv
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
 from dnd.core.base_actions import ActionEvent, BaseCost
+from dnd.spells.abjuration import CounterspellReactionEvent
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.combat_log import CombatLogEntry
-from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
+from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent, ConditionStateChangedEvent
 from dnd.core.events import (
     DamageAppliedEvent,
     DamageRollResultEvent,
@@ -29,9 +30,11 @@ from dnd.core.events import (
     EventQueue,
     EventType,
     ForcedMovementEvent,
+    PortalTransferEvent, MechanismActivationEvent,
     HealEvent,
     HealRollResultEvent,
     InstantDeathEvent,
+    ItemDestructionEvent,
     LifeStateChangeEvent,
     ReviveEvent,
     RoundEvent,
@@ -41,6 +44,7 @@ from dnd.core.events import (
     SpatialEffectChangeEvent,
     StepMovementEvent,
     TakeDamageEvent,
+    TileElevationChangeEvent,
     TemporaryHitPointsChangedEvent,
     TurnEvent,
     WorldInitializedEvent,
@@ -226,10 +230,15 @@ def _admitted(
         return False
     if type(event) is WorldInitializedEvent:
         return event.battlefield_id == battlefield_id
+    if isinstance(event, (WorldModifiedEvent, TileElevationChangeEvent)):
+        # Retain native support changes before the baseline, just as placements
+        # below. The player projection still owns which after-values are seen.
+        return True
     if type(event) is ItemLocationStateEvent:
         return (
             event.location is ItemLocation.FLOOR
             and event.world_placement is not None
+            or event.location is ItemLocation.DESTROYED
         )
     if type(event) is SpatialChangeEvent:
         # Initialization may include ordinary placements after the cold map was
@@ -424,7 +433,7 @@ def reduce_interval(
         elif type(event) is ItemLocationStateEvent:
             apply_world_fact(target, event)
             pending.add(index)
-        elif type(event) is SpatialChangeEvent:
+        elif isinstance(event, (SpatialChangeEvent, WorldModifiedEvent)):
             apply_world_fact(target, event)
             pending.add(index)
         elif type(event) is SensoryUpdateEvent:
@@ -602,11 +611,13 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
                 **common, "dice": None, "dc": event.get_dc(),
                 "bonus": event.dice_roll.bonus if event.dice_roll is not None else None,
             })
+        case CounterspellReactionEvent():
+            copied = event.model_copy(update=common)
         case ShoveEvent():
             copied = event.model_copy(update={**common, "shover_athletics": None})
-        case MovementEvent() | JumpEvent() | StepMovementEvent() | ForcedMovementEvent():
+        case MovementEvent() | JumpEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent():
             copied = event.model_copy(update=common)
-        case SensoryUpdateEvent() | LifeStateChangeEvent() | DeathEvent() | HealEvent() | TemporaryHitPointsChangedEvent():
+        case SensoryUpdateEvent() | LifeStateChangeEvent() | DeathEvent() | HealEvent() | TemporaryHitPointsChangedEvent() | ConditionStateChangedEvent():
             copied = event.model_copy(update=common)
         case DeathSaveEvent() | ReviveEvent() | InstantDeathEvent() | TurnEvent() | RoundEvent() | EncounterEvent():
             copied = event.model_copy(update=common)
@@ -616,7 +627,7 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
             copied = event.model_copy(update=common)
         case EquipmentEvent() | ItemChargeConsumptionEvent():
             copied = event.model_copy(update=common)
-        case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT | ItemLocation.FLOOR):
+        case ItemLocationStateEvent() | ItemDestructionEvent():
             copied = event.model_copy(update=common)
         case _:
             copied = _event_header(event).model_copy(update=common)
@@ -647,7 +658,7 @@ def _actor_participants(event: Event) -> tuple[UUID, ...]:
             | SpatialChangeType.ENTITY_LEFT | SpatialChangeType.MOVEMENT_COLLISION
         )):
             return (event.entity_uuid,) if event.entity_uuid is not None else ()
-        case ConditionApplicationEvent() | ConditionRemovalEvent() | TakeDamageEvent() | DamageAppliedEvent() | HealEvent():
+        case ConditionApplicationEvent() | ConditionRemovalEvent() | ConditionStateChangedEvent() | TakeDamageEvent() | DamageAppliedEvent() | HealEvent() | PortalTransferEvent():
             return (event.target_entity_uuid,) if event.target_entity_uuid is not None else ()
         case ActionEvent() | StepMovementEvent() | ForcedMovementEvent() | D20Event() | D20RollResultEvent() | DamageRollResultEvent() | HealRollResultEvent():
             return tuple(identity for identity in (event.source_entity_uuid, event.target_entity_uuid)
@@ -933,15 +944,15 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 # These facts explain causality. Only the committed applied
                 # packet changes HP, so aggregate totals cannot apply it twice.
                 pass
-            case SpatialChangeEvent() | ItemLocationStateEvent(location=ItemLocation.FLOOR):
+            case SpatialChangeEvent() | ItemLocationStateEvent():
                 apply_world_fact(result, event)
-            case DeathEvent() | DeathSaveEvent() | ReviveEvent() | InstantDeathEvent():
+            case DeathEvent() | DeathSaveEvent() | ReviveEvent() | InstantDeathEvent() | ItemDestructionEvent():
                 # Keep the cause. The actual life and sensory children supply
                 # the successor facts; do not infer them from death/occupancy.
                 pass
             case TurnEvent() | RoundEvent() | EncounterEvent():
                 _reduce_turn_fact(result, event)
-            case StepMovementEvent() | ForcedMovementEvent() | SpatialEffectChangeEvent():
+            case StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | SpatialEffectChangeEvent():
                 # Senses supplies committed positions and observed fixture state.
                 # Spatial lifecycle events retain causality, not another state writer.
                 pass

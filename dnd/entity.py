@@ -979,6 +979,7 @@ class Entity(BaseBlock):
                 0,
                 self.health.temporary_hit_points.normalized_score,
             ),
+            temporary_hit_points_grant=self.health.temporary_hit_points_grant,
             damage_taken=self.health.damage_taken,
             healing_blocked=self.health.is_healing_blocked(),
             hit_dice=tuple(
@@ -1876,7 +1877,9 @@ class Entity(BaseBlock):
             normal_hp=maximum_hp - self.health.damage_taken,
             maximum_hp=maximum_hp,
             temporary_hp=self.health.temporary_hit_points.normalized_score,
+            temporary_hp_grant=self.health.temporary_hit_points_grant,
             armor_class=self.ac_bonus().normalized_score,
+            resolved_size=self.size,
             healing_blocked=self.health.is_healing_blocked(),
             damage_affinities=tuple(
                 (damage_type.value, status.value) for damage_type in DamageType
@@ -3077,6 +3080,11 @@ class Entity(BaseBlock):
         temporary_hit_point_damage = max(0, temporary_hp_before - temporary_hp_after)
         applied_damage = actual_damage + temporary_hit_point_damage
         if applied_damage > 0 and damage_resolution is not None:
+            if (actual_damage > 0 and normal_hp_before <= 0 and self.uses_death_saves
+                    and self.health.life_state in (LifeState.DYING, LifeState.STABLE)):
+                # Already-down actors stay at zero. Publish that actual pool;
+                # the resolved damage still owns death-save failures/overkill.
+                self._set_normal_hp(0)
             self._complete_damage_applied_event(
                 source_entity_uuid=source_entity_uuid,
                 damage_type=damage_type,
@@ -4396,7 +4404,7 @@ class Entity(BaseBlock):
         path_costs: Dict[Tuple[int, int], int] = {}
         for position, path in paths.items():
             if (
-                position in self.senses.visible
+                (position in self.senses.seen or position in self.senses.visible)
                 and all(
                     step in self.senses.seen or step in self.senses.visible
                     for step in path
@@ -4427,7 +4435,7 @@ class Entity(BaseBlock):
             )
             for position, path in safe_raw_paths.items():
                 if (
-                    position in self.senses.visible
+                    (position in self.senses.seen or position in self.senses.visible)
                     and all(
                         step in self.senses.seen or step in self.senses.visible
                         for step in path
@@ -4816,7 +4824,7 @@ class Entity(BaseBlock):
                 target_uuid=target_uuid,
                 position=target_pos,
                 target_name=target_entity.name if target_entity else None,
-                distance=self.senses.get_feet_distance(target_pos)
+                distance=template.get_target_distance(target_pos)
             ))
         return valid_targets, rules_valid_count
 
@@ -4918,7 +4926,7 @@ class Entity(BaseBlock):
         return AvailableTarget(
             index=idx,
             position=pos,
-            distance=self.senses.get_feet_distance(pos),
+            distance=template.get_target_distance(pos),
             affected_entity_uuids=affected_uuids,
             affected_entity_names=affected_names,
             affected_count=len(affected_uuids),
@@ -4940,6 +4948,8 @@ class Entity(BaseBlock):
         computed_origin = shape.get_origin(self.position)
         shape.computed_origin = computed_origin
         geometric = shape._get_positions_in_shape(computed_origin)
+        if shape.propagation == "connected":
+            return shape._connected_positions(computed_origin, geometric)
         if computed_origin == self.position:
             return set(geometric)
         if geometric.isdisjoint(barrier_positions):
@@ -4972,6 +4982,7 @@ class Entity(BaseBlock):
         """
         return (
             shape_definition_key,
+            template.get_target_origin(),
             tuple(valid_positions),
             template.valid_target_filter,
             template.include_self,
@@ -5720,7 +5731,7 @@ class Entity(BaseBlock):
                         paths_by_position = {
                             pos: path
                             for pos, path in computed_paths.items()
-                            if pos in self.senses.visible
+                            if (pos in self.senses.seen or pos in self.senses.visible)
                             and all(
                                 step in self.senses.seen or step in self.senses.visible
                                 for step in path
@@ -5834,7 +5845,7 @@ class Entity(BaseBlock):
         self,
         movement_mode: MovementMode,
     ) -> bool:
-        """Return whether one visible adjacent movement transition is known."""
+        """Return whether one adjacent movement transition is known."""
         grid = get_map()
         for delta_x in (-1, 0, 1):
             for delta_y in (-1, 0, 1):
@@ -5844,7 +5855,7 @@ class Entity(BaseBlock):
                     self.position[0] + delta_x,
                     self.position[1] + delta_y,
                 )
-                if not self.senses.visible.get(position, False):
+                if position not in self.senses.seen and not self.senses.visible.get(position, False):
                     continue
                 if grid.can_transition(
                     self.position,
@@ -6462,14 +6473,13 @@ class Entity(BaseBlock):
                 (use_template, item_uuid, item_name, item_stack, True),
             )
 
-        for obj_uuid, contact in self.senses.objects.items():
-            obj_pos = contact.position
+        for obj_uuid in self.senses.objects:
             obj = BaseBlock.get(obj_uuid)
             if not isinstance(obj, UsableItem):
                 continue
             if not obj.should_include_in_available_object_actions():
                 continue
-            if self.senses.get_feet_distance(obj_pos) > 5:
+            if grid.manual_object_contact(self.uuid, obj_uuid) is None:
                 continue
             for use_template in obj.get_use_actions(self.uuid):
                 use_sources.append(
@@ -6729,7 +6739,7 @@ class Entity(BaseBlock):
                         use_valid_positions_los.append(AvailableTarget(
                             index=use_idx,
                             position=pos,
-                            distance=self.senses.get_feet_distance(pos),
+                            distance=use_template.get_target_distance(pos),
                         ))
                         use_idx += 1
                 if use_valid_positions_los:
@@ -6769,7 +6779,7 @@ class Entity(BaseBlock):
                         continue
                     if pos == self.senses.position:
                         continue
-                    dist = self.senses.get_feet_distance(pos)
+                    dist = use_template.get_target_distance(pos)
                     if max_range > 0 and dist > max_range:
                         continue
                     targeted_template = use_template.model_copy(

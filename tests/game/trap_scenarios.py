@@ -74,8 +74,7 @@ def trap_history(
                 (build_authored_item("apparel.cloth_shoes.red", actor.uuid), BodyPart.FEET),
             ))
             setup_standard_actions(actor)
-            if bloodied and role == "walker":
-                install_body_response(actor, BLOOD_BODY_RESPONSE)
+            install_body_response(actor, BLOOD_BODY_RESPONSE)
             actor.compose_entity()
             game.deploy_entity(actor, position)
             actors[role] = actor

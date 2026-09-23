@@ -46,8 +46,8 @@ from dnd.actions import (
 )
 from dnd.conditions import Frightened
 from pydantic import Field
-from typing import Any, Optional, List, Tuple
-from uuid import UUID
+from typing import Any, Optional, List, Tuple, cast
+from uuid import UUID, uuid4
 from functools import partial
 
 from dnd.classes.rage import (
@@ -226,7 +226,7 @@ class RecklessAttacking(BaseCondition):
                 None,
             )
             if template is not None:
-                template.active_reckless_condition_uuid = None
+                cast(RecklessAttack, template).active_reckless_condition_uuid = None
         return super()._remove(event)
 
 
@@ -287,7 +287,7 @@ class RecklessAttack(BaseAction):
             status_message="Reckless Attack ready"
         )
 
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+    def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
         entity = Entity.get(self.source_entity_uuid)
         if entity is None:
             return execution_event.cancel(status_message="Entity not found")
@@ -322,7 +322,7 @@ class RecklessAttack(BaseAction):
         applied = entity.add_condition(reckless, parent_event=execution_event)
         if applied is None or applied.canceled:
             return applied
-        template.active_reckless_condition_uuid = reckless.uuid
+        cast(RecklessAttack, template).active_reckless_condition_uuid = reckless.uuid
 
         return execution_event.phase_to(
             EventPhase.EFFECT,
@@ -945,7 +945,7 @@ def create_indomitable_might_handler(
 ) -> EventHandler:
     """Create handler for Indomitable Might."""
     return EventHandler(
-        **({} if handler_uuid is None else {"uuid": handler_uuid}),
+        uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Indomitable Might",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
@@ -1099,7 +1099,6 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
         target_entity_uuid=event.source_entity_uuid,
         weapon_slot=WeaponSlot.MELEE_MAIN,
         costs=[],
-        parent_event=event
     )
     result = attack.apply(parent_event=event)
     if result is not None and not result.canceled:
@@ -1119,7 +1118,7 @@ def create_retaliation_handler(
 ) -> RetaliationReactionHandler:
     """Create handler for Retaliation."""
     return RetaliationReactionHandler(
-        **({} if handler_uuid is None else {"uuid": handler_uuid}),
+        uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Retaliation",
         semantic_key="feature.barbarian.retaliation",
         content_kind=RuntimeBehaviorKind.REACTION,

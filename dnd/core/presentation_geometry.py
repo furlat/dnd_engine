@@ -25,7 +25,7 @@ class SpherePresentationGeometry(PresentationGeometryModel):
 
     shape: Literal["sphere"] = "sphere"
     center: Position
-    radius_feet: int = Field(gt=0)
+    radius_feet: int = Field(ge=0)
 
 
 class ConePresentationGeometry(PresentationGeometryModel):
@@ -72,7 +72,7 @@ class CylinderPresentationGeometry(PresentationGeometryModel):
 
     shape: Literal["cylinder"] = "cylinder"
     center: Position
-    radius_feet: int = Field(gt=0)
+    radius_feet: int = Field(ge=0)
     height_feet: int = Field(gt=0)
 
 

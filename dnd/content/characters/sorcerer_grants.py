@@ -6,6 +6,7 @@ from uuid import UUID, uuid5
 from dnd.actions import SpellAction
 from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
 from dnd.blocks.equipment import ArmorClassFormulaCandidate
+from dnd.blocks.saving_throws import SAVING_THROW_TO_ABILITY
 from dnd.blocks.health import HitDice, HitDiceConfig
 from dnd.classes import feats, sorcerer
 from dnd.content.characters.class_definitions import (
@@ -23,7 +24,7 @@ from dnd.core.progression import CasterProgression, FULL_CASTER_SPELL_SLOTS
 from dnd.entity import Entity
 from dnd.spells.catalog_content import SPELL_CONTENT_IDENTITY_SPECS
 from dnd.spells.reaction_spell_content import LEARNED_REACTION_SPELL_SPECS
-from dnd.types.abilities import AbilityName, SavingThrowName
+from dnd.types.abilities import AbilityName, SavingThrowName, SkillName
 from dnd.types.character_progression import (
     AppliedClassLevel,
     CharacterClass,
@@ -288,7 +289,7 @@ def _apply_proficiencies(
     entity: Entity,
     resolved: ResolvedSorcererLevel,
     creature_sources: list[UUID],
-    skills: list[tuple[str, UUID]],
+    skills: list[tuple[SkillName, UUID]],
     saves: list[tuple[SavingThrowName, UUID]],
 ) -> None:
     if resolved.proficiencies:
@@ -308,11 +309,12 @@ def _apply_proficiencies(
         skills.append((skill, source_id))
     for ability in resolved.saving_throws:
         source_id = _source(entity, f"{resolved.level.step_id}.save.{ability}")
-        entity.saving_throws.get_saving_throw(ability).add_proficiency_source(
+        saving_throw = entity.saving_throws.get_saving_throw(ability)
+        saving_throw.add_proficiency_source(
             source_id,
             ProficiencyMode.FULL,
         )
-        saves.append((f"{ability}_saving_throw", source_id))
+        saves.append((saving_throw.name, source_id))
 
 
 def _apply_lucky(
@@ -836,7 +838,7 @@ def _validate_sorcerer_receipt_ownership(
             raise RuntimeError("Sorcerer creature proficiency ownership changed")
     for saving_throw, source_id in receipt.saving_throw_proficiency_sources:
         if source_id not in entity.saving_throws.get_saving_throw(
-            saving_throw.removesuffix("_saving_throw"),
+            SAVING_THROW_TO_ABILITY[saving_throw],
         ).proficiency_sources.sources:
             raise RuntimeError("Sorcerer saving-throw source ownership changed")
     for skill, source_id in receipt.skill_proficiency_sources:
@@ -937,7 +939,7 @@ def _remove_sorcerer_receipt(
         receipt.saving_throw_proficiency_sources,
     ):
         if not entity.saving_throws.get_saving_throw(
-            saving_throw.removesuffix("_saving_throw"),
+            SAVING_THROW_TO_ABILITY[saving_throw],
         ).remove_proficiency_source(source_id):
             raise RuntimeError("Sorcerer saving-throw source is missing")
     for skill, source_id in reversed(receipt.skill_proficiency_sources):
@@ -986,7 +988,7 @@ def apply_sorcerer_level(
     source_id = _source(entity, level.step_id)
     previous_class_level = level.resulting_class_level - 1
     hit_dice: list[UUID] = []
-    skills: list[tuple[str, UUID]] = []
+    skills: list[tuple[SkillName, UUID]] = []
     saves: list[tuple[SavingThrowName, UUID]] = []
     creature_sources: list[UUID] = []
     ability_modifiers: list[tuple[AbilityName, UUID]] = []

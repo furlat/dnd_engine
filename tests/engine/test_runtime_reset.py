@@ -12,7 +12,7 @@ from dnd.core.content.runtime import (
     active_runtime_behavior_binding,
     runtime_behavior_provider,
 )
-from dnd.core.events import EventQueue
+from dnd.core.events import EventPhase, EventQueue, EventType, SpatialChangeEvent
 from dnd.core.gridmap import get_map
 from dnd.core.values import BaseValue
 from dnd.encounter import Encounter
@@ -65,7 +65,15 @@ def test_reset_engine_runtime_clears_every_engine_registry_and_rebuilds_grid() -
     assert Encounter._active_encounter is None
     assert Encounter._combat_log_listeners == []
     assert SpellProtectionRegistry._protections == []
-    assert EventQueue._all_events == []
+    fresh_events = [event for _, event in EventQueue.iter_events_since(0)]
+    assert len(fresh_events) == new_grid.tile_count()
+    assert all(isinstance(event, SpatialChangeEvent)
+               and event.event_type is EventType.SPATIAL_TILE_CHANGED
+               and event.phase is EventPhase.COMPLETION
+               and event.tile_present and event.tile_state is not None
+               and event.tile_state.tile_uuid == new_grid.get_tile(*event.position).uuid
+               for event in fresh_events)
+    assert {event.position for event in fresh_events} == set(new_grid.get_all_tiles())
     assert EventQueue._combat_log_callback is None
 
 

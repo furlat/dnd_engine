@@ -1,5 +1,20 @@
 # Animation clip extraction and review
 
+The `liquid-barrels` tag now defines fourteen native experiments (28 paired clips):
+oil, water, grease, poison, blood and dread blood barrels; actual destruction,
+entry/exit/re-entry, failed slip/fear saves, and jumping over then landing in a
+spill. The cases exercise the surrounding 3×3 footprint, closed/open doorways
+and landing inside dread blood before retreating out. The
+[current 28-clip gallery](http://127.0.0.1:8767/runs/20260922T075227Z-718226/index.html)
+uses all six approved Godot materials, with three variants installed per material,
+rupture-synchronized discharge and continuing settled loops. Every card has four
+camera corners. The older one-cell/static-pool runs are historical evidence.
+Five seconds of final review hold show settling without changing game timing.
+See the [liquid-media result](../../agent_docs/LIQUID_MEDIA_INTEGRATION_RESULT_2026-09-22.md)
+for verification and limits: existing Wet body presentation is unbound, arbitrary
+clipped patterns have no separate visual approval, and persistent fire media is
+still pending. Oil ignition mechanics and removal of its former puddle are tested.
+
 From the repository root, use the [WSL uv setup](../../README.md) and installed
 `ffmpeg`/`ffprobe`. Export the same `UV_PROJECT_ENVIRONMENT` in each new shell:
 
@@ -53,6 +68,25 @@ then encoded as a synchronized 2×2 video: 0/1 above, 2/3 below. Defaults are
 fullscreen control to inspect the pixels. The state/condition rules stay in
 the engine; this recorder adds no animation rules or gameplay queue.
 
+Cases default to `framing: "scene"`, which reserves the full area-effect canvas.
+For a close review of actor/object interactions, `framing: "actors"` uses the
+existing whole-history actor envelope instead. All four cameras share the same
+fixed zoom; effect edges may leave the viewport. This is saved review metadata,
+not gameplay or animation authoring. Existing inputs retain their saved framing.
+
+The `control-batch` tag selects sixteen real experiments (thirty-two subjective
+clips): Charm, Blindness/Deafness including successful saves, Command's three
+supported words and actual recipient turn, Color Spray, Silence entry/exit,
+overlapping sense conditions in both removal orders, and sustained Sleep followed
+by damage wake. These exercise shared condition transitions, head/face attachment,
+turn activation and maintained spatial media. `walk-downed` additionally records
+the Hero's ordinary blood response during a lethal opportunity hit; its spray and
+body retain the interrupted visual position while residues use native floor state.
+
+```bash
+uv run --no-sync python -m devtools.animation_review --case 'control-*' --case walk-downed
+```
+
 The original 72 experiments cover: melee profiles and outcomes, modular and
 fixed-rig ranged attacks, ordinary movement, walking/jumping opportunity attacks
 with save/miss/paralysis/death, paused retained playback, two-cast histories,
@@ -63,8 +97,13 @@ original standalone feedback context: capped living healing and a dying player
 restored by native healing. Eight life-transition cases add real death-save
 outcomes, stabilization/healing, death/revival, paused death while latest is
 revived, and opportunity downing. Original badges accompany mechanical
-DYING/STABLE, whose body remains Idle. Actual death plays Die and holds its
-last frame until native revival restores Idle; the source has no stand-up clip.
+DYING/STABLE. Local life-state authoring plays the mapped fall, holds the downed
+pose and reverses it on recovery; changing DYING to STABLE does not replay the
+fall. Actual death retains its established context and keeps an already-downed
+body down. Four projectile-life cases add a 4-HP Fire Bolt downing, initially
+DYING/STABLE recipients and repeated Magic Missile consequences, each recorded
+from both participants in one native generation. Their different sensory views
+are preserved.
 The paralysis rider is the
 existing configurable native mechanic, not a weapon-triggered Hold Person
 spell. The pause case freezes an offline presentation clock over already
@@ -134,8 +173,9 @@ arrival-only, and a pre-release pause. Each uses a discovered native bonus-actio
 cast. The existing Studio Special1 track relocates at frame 8; remaining frames
 continue on the destination support. No intermediate walking path or opportunity
 attack is generated. The dark vertical map uses native Darkvision; the doorway
-uses ordinary sight. These clips currently have no dedicated mist VFX. Capture
-once with `python -m devtools.animation_review.capture --tag misty-step`, then
+uses ordinary sight. The original captures preceded dedicated mist VFX; current
+replay now uses the registered departure/arrival mist described in the ten-spell
+section below. Capture once with `python -m devtools.animation_review.capture --tag misty-step`, then
 replay the saved packets with `python -m devtools.animation_review --tag misty-step`.
 
 September 11 validation: `runs/20260911T212148Z-a25e65` contains all thirty
@@ -385,3 +425,86 @@ command reads authored metadata and existing registries, creates no encounter,
 and neither opens images nor audits asset files. Missing cast drafts do not mean
 their damage/condition children lack presentation. Neither declared bindings nor
 a successful run imply visual approval or support for every event combination.
+
+The September 20 support integration adds saved native cases `support-*` for
+eight support spells, a four-condition stack and True Strike melee/ranged
+hit/miss. Contact timing, healing, illumination and condition lifetime come from
+those actual histories. `conceal-greater-invisibility` and
+`conceal-see-invisibility` complete the existing authored visibility-spell
+coverage; Greater Invisibility includes its real successful persistence check.
+The [complete authored-spell review](../../agent_docs/AUTHORED_SPELL_REVIEW_2026-09-20.md)
+records every loaded spell, the chosen native clip and the final combined gallery.
+
+Sleep reviews now include actual fall/held sleep/reversed fall on damage wake,
+with damage received while resting and no separate standing hit flinch.
+`spell-sleep-lethal` captures native Fire Bolt killing one sleeper while the
+other remains asleep; both observer packets are saved. The dead observer need
+not acquire sight of the caster: its own received damage/life facts remain the
+authority. `device-arcane-sleep` exercises the same condition pose from a cannon.
+
+### Delivered traps and reusable triggers
+
+`--tag mechanisms` selects fifteen native stories, each recorded for traveler
+and witness. The thirty clips render four camera corners each. The catalog
+covers finite darts/blades/crushers, held door/light, plate and wire jump bypass,
+plate release at jump takeoff, hidden launcher, jaw escape/reset and independent
+cloud expiry after vent deactivation. The lingering gas field's clean artwork is
+pending; its vent and native consequences are present.
+
+Generate the native inputs once with `python -m devtools.animation_review.capture
+--tag mechanisms`; later use `python -m devtools.animation_review --tag mechanisms`
+to rerender the saved public packets without running the game. Successful
+capture checks do not imply human visual approval. Ownership, concrete replay
+corrections and final evidence are in the
+[trap implementation record](../../agent_docs/TRAP_MECHANISMS_IMPLEMENTATION_2026-09-21.md).
+
+### Doors and damageable trap hardware
+
+`--tag environment-production` selects 73 native stories with an attacker and
+independent witness: 16 door families opening/closing in both authored directions,
+closed and open destruction, clear/jammed remains, raised passage, and 12 blade/
+crusher hardware appearances. Trap narratives attack the hardware, then press
+its plate again: the broken mechanism stays inert and its surviving peer fires.
+Every clip is a four-camera mosaic. Use `--tag doors` or `--tag trap-destruction`
+to review the two groups separately.
+
+Generate inputs once with `python -m devtools.animation_review.capture --tag
+environment-production`; rerender them with `python -m devtools.animation_review
+--tag environment-production`. Door state, typed damage, remnant placement and
+mechanism mode come from the saved public packets. Sprite banks, sample times,
+mounting pivots and geometry depth live in `game/data/environment_art.json`.
+Supported destruction entries are settled closed/open doors and ready/deployed
+hardware; arbitrary interruption midway through door opening is not implemented.
+See the [integration record](../../agent_docs/DOORS_AND_TRAP_DESTRUCTION_2026-09-21.md)
+for checks and review links.
+
+### Ten recovered spell presentations
+
+`--tag pending-spells` selects 19 real gameplay stories and 38 observer clips.
+Each clip contains the four camera corners. The set covers Inflict Wounds hit/
+miss, native Hellish Rebuke reaction saves, Shatter terrain/footprints, Misty Step
+endpoint visibility, Bless/Bane membership, False Life depletion/replacement,
+short/long/raised Jump, actual Retreat bonus Dash and Haste movement/attack/cast.
+
+Capture once with `python -m devtools.animation_review.capture --tag pending-spells`.
+Use `python -m devtools.animation_review --tag pending-spells` for subsequent
+renders of those saved subjective inputs. Individual catalog IDs start with
+`pending-`; the existing `--case` glob also accepts `pending-misty-*`, for example.
+No per-spell synthetic event scripts or objective world lookup enter playback.
+See the [implementation record](../../agent_docs/PENDING_SPELLS_IMPLEMENTATION_2026-09-21.md)
+for the data contract, review corrections and validation status.
+
+### Freestanding interiors content
+
+`--tag interiors-content` selects 21 native destruction stories: furniture,
+shelving, pottery, stacks and stone objects. Each records attacker and witness
+separately, giving 42 clips with four camera corners apiece. Real attacks damage
+and break each object, followed by walking through its persistent aftermath.
+Tall opaque furniture may hide the attacker from the witness; the clips preserve
+that subjective difference.
+
+Capture with `python -m devtools.animation_review.capture --tag interiors-content`.
+Rerender saved inputs with `python -m devtools.animation_review --tag interiors-content`.
+The [implementation record](../../agent_docs/ENVIRONMENT_CONTENT_IMPLEMENTATION_2026-09-23.md)
+contains physical profiles, test results and the complete gallery. Authored long
+stone collapses retain their full duration and settled final frame.

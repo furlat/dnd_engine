@@ -10,15 +10,19 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from math import atan2, cos, floor, hypot, isfinite, pi, sin
 from typing import Literal
+from uuid import UUID
 
 from dnd.core.life_types import LifeState
+from dnd.types.senses import PerceivedSpatialEffect
 from game.animation_types import (
     AnimationData, AuthoredProjectileAsset, AuthoredProjectilePhase, BodyClip, BodyRig,
     DamageDeath, EquipmentTransitionContext, Facing8, FloatingNumber, HitFlash, PaletteTreatment,
     StudioActorLayer, StudioDamage, StudioProjectile, StudioProjectilePhase, StudioSpellDraft,
-    MediaTimePoint,
+    MediaTimePoint, StudioMediaTrack,
 )
 from game.projection import HEIGHT_STEP_PIXELS, TILE_HEIGHT, TILE_WIDTH, inverse_rotate_position, project_world
+from game.device_art import DeviceEmission, device_frame, device_muzzle_offset
+from game.condition_types import ConditionBodyAnimation
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,11 +39,37 @@ class ActorContact:
     rig_id: str = "neuroclient.modular"
     visual_scale_x: float = 1.0
     body_lift_px: float = 0.0
+    rest_pose: str | None = None
+    condition_scale: float = 1.0
 
 
 def body_elevation_steps(contact: ActorContact, data: AnimationData) -> float:
     """Body attachment height; lift is unscaled rig pixels above support."""
     return contact.elevation_steps + contact.body_lift_px * TILE_WIDTH / data.rig.TILE_W / HEIGHT_STEP_PIXELS
+
+
+def actor_point_offset(data: AnimationData, contact: ActorContact,
+                       point: tuple[float, float]) -> tuple[float, float]:
+    """Rig-cell point relative to support, in scaled reference pixels."""
+    rig = body_rig(data, contact)
+    return ((point[0] - rig.cell_width / 2) * contact.visual_scale * contact.visual_scale_x,
+            (point[1] - rig.cell_height + rig.origin_y_from_ground) * contact.visual_scale)
+
+
+def rest_pose_offset(data: AnimationData, contact: ActorContact, quadrant: int = 0) -> tuple[float, float]:
+    """Authored final-pose displacement from this rig's standing body point.
+
+    Preserve each delivery's existing registration; rotate the target's facing,
+    independently of the incoming attack direction.
+    """
+    rig = body_rig(data, contact)
+    pose = actor_rest_pose(data, contact)
+    points = rig.rest_pose_anchors.get(pose) if pose is not None else None
+    if points is None or rig.body_anchor is None:
+        return 0.0, 0.0
+    point = points[view_facing(contact.facing, quadrant, data)]
+    return ((point.x - rig.body_anchor.x) * contact.visual_scale * contact.visual_scale_x,
+            (point.y - rig.body_anchor.y) * contact.visual_scale)
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +85,7 @@ class CastApplication:
     damage_type: str | None = None
     # Explicit world-height adaptation above the authored endpoint segment.
     travel_apex_steps: float = 0.0
+    hit: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +102,11 @@ class CastInput:
     caster: ActorContact
     applications: tuple[CastApplication, ...]
     ground_target: GroundContact | None = None
+    emitter: DeviceEmission | None = None
+    area_direction: tuple[int, int] | None = None
+    area_radius_feet: float = 0
+    area_propagation: Literal["line_of_effect", "connected"] = "line_of_effect"
+    protections: tuple[tuple[UUID, PerceivedSpatialEffect], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +143,7 @@ class ApplicationTimeline:
     hp_ms: float | None
     flash_ms: float | None
     number_ms: float | None
+    life_body: BodyTransition | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,6 +195,18 @@ class BodySample:
     hide_weapon: bool = False
     cast_layers: tuple[StudioActorLayer, ...] = ()
     hidden_slots: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class BodyTransition:
+    """Finite authored body gesture shared by condition and life transitions."""
+
+    contact: ActorContact
+    clip: str
+    fps: float
+    frames: int
+    reversed: bool
+    data: AnimationData
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,6 +287,9 @@ class CastSample:
     numbers: tuple[NumberSample, ...]
     vitals: tuple[VitalsSample, ...]
     complete: bool
+    device_frame: int | None = None
+    media_elapsed_ms: float = 0
+    delivery_enabled: bool = True
 
 
 def body_frame(elapsed_ms: float, fps: float, count: int, *, loop: bool) -> int:
@@ -270,6 +322,52 @@ def body_duration(clip: BodyClip, speed: float) -> float:
     return (clip.frames - 1) * 1000 / (clip.fps * speed)
 
 
+def life_body_pose(data: AnimationData, state: LifeState) -> str | None:
+    if state is LifeState.DEAD:
+        return data.death_context.bodyClip
+    if state is LifeState.ALIVE:
+        return None
+    presentation = data.life_state_context.bodyPoses.get(state.value)
+    return presentation.bodyPose if presentation is not None else None
+
+
+def actor_rest_pose(data: AnimationData, contact: ActorContact) -> str | None:
+    return life_body_pose(data, contact.life_state) or contact.rest_pose
+
+
+def compile_body_transition(data: AnimationData, contact: ActorContact,
+                            animation: ConditionBodyAnimation) -> BodyTransition:
+    clip = body_clip(data, contact, animation.bodyClip)
+    return BodyTransition(contact, animation.bodyClip, clip.fps * animation.bodyPlaybackSpeed,
+                          clip.frames, animation.reversed, data)
+
+
+def sample_body_transition(cue: BodyTransition, age_ms: float) -> BodySample | None:
+    if age_ms < 0 or age_ms >= cue.frames * 1000 / cue.fps:
+        return None
+    frame = body_frame(age_ms, cue.fps, cue.frames, loop=False)
+    if cue.reversed:
+        frame = cue.frames - 1 - frame
+    return BodySample(cue.contact.actor_uuid, cue.clip, frame, cue.contact.facing)
+
+
+def compile_life_body(data: AnimationData, contact: ActorContact, resulting_state: LifeState,
+                      remaining_condition_pose: str | None) -> BodyTransition | None:
+    """A changed life-owned pose enters/exits once; an extant rest owner stays."""
+    old = actor_rest_pose(data, contact)
+    new = life_body_pose(data, resulting_state) or remaining_condition_pose
+    if old == new:
+        return None
+    state = contact.life_state if resulting_state is LifeState.ALIVE else resulting_state
+    if state is LifeState.ALIVE or state is LifeState.DEAD:
+        return None
+    presentation = data.life_state_context.bodyPoses.get(state.value)
+    if presentation is None or resulting_state is LifeState.ALIVE and new is not None:
+        return None
+    animation = presentation.removalBody if resulting_state is LifeState.ALIVE else presentation.applicationBody
+    return compile_body_transition(data, contact, animation) if animation is not None else None
+
+
 def _require_frame(clip: BodyClip, frame: int, anchor: str) -> None:
     if not 0 <= frame < clip.frames:
         raise ValueError(f"unreachable {anchor} frame {frame} in {clip.source_clip} ({clip.frames} frames)")
@@ -295,9 +393,9 @@ def sample_idle_body(data: AnimationData, actor: ActorContact, elapsed_ms: float
     """Sample a retained actor between actions, preserving its final death pose."""
     if not isfinite(elapsed_ms) or elapsed_ms < 0:
         raise ValueError("elapsed time must be finite and nonnegative")
-    clip = data.death_context.bodyClip if actor.life_state == LifeState.DEAD else "Idle"
+    clip = life_body_pose(data, actor.life_state) or "Idle"
     metadata = body_clip(data, actor, clip)
-    frame = (metadata.frames - 1 if actor.life_state == LifeState.DEAD
+    frame = (metadata.frames - 1 if clip != "Idle"
              else body_frame(elapsed_ms, metadata.fps, metadata.frames, loop=True))
     return BodySample(actor.actor_uuid, clip, frame, actor.facing)
 
@@ -333,7 +431,8 @@ def facing_for_delta(grid_delta: tuple[float, float], data: AnimationData) -> Fa
     return data.rig.AUTHORED_PROJECTILE_ROW_ORDER[sector]
 
 
-def _facing_vector(facing: Facing8, data: AnimationData) -> tuple[float, float]:
+def facing_vector(facing: Facing8, data: AnimationData) -> tuple[float, float]:
+    """Canonical screen direction of one authored facing row."""
     index = data.rig.AUTHORED_PROJECTILE_ROW_ORDER.index(facing)
     angle = index * pi / 4 - pi / 4
     return _iso((cos(angle), sin(angle)), data)
@@ -351,52 +450,57 @@ def _anchored_points(caster: ActorContact, target_contact: ActorContact | Ground
                      data: AnimationData, facing: Facing8,
                      origin: tuple[float, float], target: tuple[float, float],
                      *, local_scales: tuple[float, float] = (1, 1),
-                     anchor_basis: Literal["rig_root", "tile_center"] = "rig_root",
+                     reference_clock: bool = False,
                      source_frame: int | None = None,
                      ) -> tuple[tuple[float, float], tuple[float, float]]:
     """Bind screen-local authored offsets after projecting support contacts."""
     projectile = recipe.projectile
     assert projectile is not None
     anchor = (projectile.sourceAnchorsByFacing or {}).get(facing, projectile.sourceAnchor)
-    vx, vy = _facing_vector(facing, data)
+    vx, vy = facing_vector(facing, data)
     length = hypot(vx, vy)
     ux, uy = vx / length, vy / length
     x, y = origin
     tx, ty = target
-    # Original execution/timing uses the rig root. Point-geometry projection
-    # honors its tileCenter data instead; sprites retain canvas registration.
-    if anchor_basis == "rig_root":
+    # Studio's reference distance uses the actor canvas root for tileCenter
+    # geometry too. Preserve that timing metric independently of view placement.
+    if anchor.basis == "rigRoot" or reference_clock and anchor.basis == "tileCenter":
         y += body_rig(data, caster).origin_y_from_ground * caster.visual_scale
-        if isinstance(target_contact, ActorContact):
-            ty += body_rig(data, target_contact).origin_y_from_ground * target_contact.visual_scale
+    elif anchor.basis == "body":
+        socket = body_rig(data, caster).body_anchor
+        if socket is None:
+            raise ValueError(f"actor rig has no authored body attachment: {caster.rig_id}")
+        dx, dy = actor_point_offset(data, caster, (socket.x, socket.y))
+        x, y = origin[0] + dx, origin[1] + dy
     x += (ux * anchor.forwardPx - uy * anchor.sidePx) * local_scales[0]
     y += (uy * anchor.forwardPx + ux * anchor.sidePx + anchor.liftY) * local_scales[0]
     if isinstance(target_contact, ActorContact):
-        ty += projectile.targetAnchor.liftY * local_scales[1]
-        if projectile.targetAnchor.basis == "body":
+        target_anchor = projectile.targetAnchor
+        if target_anchor.basis == "rigRoot" or reference_clock and target_anchor.basis == "tileCenter":
+            ty += body_rig(data, target_contact).origin_y_from_ground * target_contact.visual_scale
+        elif target_anchor.basis == "body":
             rig = body_rig(data, target_contact)
             socket = rig.body_anchor
             if socket is None:
                 raise ValueError(f"actor rig has no authored body attachment: {target_contact.rig_id}")
-            tx = target[0] + (socket.x - rig.cell_width / 2) * target_contact.visual_scale * target_contact.visual_scale_x
-            ty = target[1] + (socket.y - rig.cell_height + rig.origin_y_from_ground) * target_contact.visual_scale
-            tx += ux * projectile.targetAnchor.forwardPx * local_scales[1]
-            ty += (uy * projectile.targetAnchor.forwardPx + projectile.targetAnchor.liftY) * local_scales[1]
+            dx, dy = actor_point_offset(data, target_contact, (socket.x, socket.y))
+            tx, ty = target[0] + dx, target[1] + dy
+        tx += ux * target_anchor.forwardPx * local_scales[1]
+        ty += (uy * target_anchor.forwardPx + target_anchor.liftY) * local_scales[1]
     if projectile.sourceSockets is not None:
         socket = projectile.sourceSockets.release[facing]
         frames = projectile.sourceSockets.preparation
         if source_frame is not None and frames is not None:
             socket = frames[facing][source_frame] or socket
-        rig = body_rig(data, caster)
-        x = origin[0] + (socket.x - rig.cell_width / 2) * caster.visual_scale * caster.visual_scale_x
-        y = origin[1] + (socket.y - rig.cell_height + rig.origin_y_from_ground) * caster.visual_scale
+        dx, dy = actor_point_offset(data, caster, (socket.x, socket.y))
+        x, y = origin[0] + dx, origin[1] + dy
     return (x, y), (tx, ty)
 
 
 def projectile_endpoints(first: tuple[float, float], last: tuple[float, float],
                source_axis_px: float, target_axis_px: float,
                ) -> tuple[tuple[float, float], tuple[float, float]]:
-    """Apply the source axis-inset rule, retaining coincident view contacts."""
+    """Apply source and target chord insets, retaining coincident view contacts."""
     x, y = first
     tx, ty = last
     dx, dy = tx - x, ty - y
@@ -433,12 +537,12 @@ def _projectile_rotation(timeline: CastTimeline, phase: Literal["prepare", "trav
     projectile = timeline.recipe.projectile
     assert projectile is not None
     orientation = projectile.orientation
-    if orientation.fineRotation == "none":
+    if projectile_phase_rotation(projectile, phase) == "none":
         return 0.0
     offset = orientation.rotationOffsetDeg * pi / 180
     if phase == "prepare":
         return offset
-    vx, vy = _facing_vector(facing, timeline.data)
+    vx, vy = facing_vector(facing, timeline.data)
     # A camera may collapse distinct raised world contacts. Keep the frozen
     # world-facing row and its orientation rather than derive a new direction.
     dx, dy = last[0] - first[0], last[1] - first[1]
@@ -469,6 +573,30 @@ def projectile_contact(timeline: CastTimeline, effect: ProjectileSample | Geomet
     application = _application(timeline, effect.application_id)
     source, target = timeline.source.caster, delivery_target(application)
     progress = effect.progress if effect.phase == "travel" else (0 if effect.phase == "prepare" else 1)
+    emitter = timeline.source.emitter
+    if emitter is not None and isinstance(effect, ProjectileSample):
+        row = emitter.art.rows.index(emitter.facing)
+        source_height = emitter.elevation_steps + emitter.bank.muzzle_heights[row] * emitter.art.scale
+        target_height = target.elevation_steps
+        if isinstance(target, ActorContact):
+            target_height = body_elevation_steps(target, timeline.data)
+            projectile = timeline.recipe.projectile
+            assert projectile is not None
+            anchor = projectile.targetAnchor
+            rig = body_rig(timeline.data, target)
+            local_y = anchor.liftY
+            if anchor.basis == "body" and rig.body_anchor is not None:
+                local_y += rig.body_anchor.y - rig.cell_height + rig.origin_y_from_ground
+            elif anchor.basis == "rigRoot":
+                local_y += rig.origin_y_from_ground
+            target_height -= local_y * target.visual_scale * TILE_WIDTH / timeline.data.rig.TILE_W / HEIGHT_STEP_PIXELS
+        controls = tuple(_device_control(timeline, application, q) for q in range(4))
+        lift = -sum(control[1] for control in controls if control is not None) / 4 * TILE_WIDTH / timeline.data.rig.TILE_W / HEIGHT_STEP_PIXELS
+        t, u = progress, 1 - progress
+        height = (u**3 * source_height + 3*u*u*t*(source_height + lift)
+                  + 3*u*t*t*(target_height + (source_height - target_height)/3) + t**3*target_height)
+        projected = project_projectile(timeline, effect, quadrant)
+        return reference_point_contact(timeline.data, projected.point, height, quadrant), height
     lift, _ = _projectile_arc(application, effect.phase, effect.progress)
     source_height = body_elevation_steps(source, timeline.data)
     target_height = body_elevation_steps(target, timeline.data) if isinstance(target, ActorContact) else target.elevation_steps
@@ -498,10 +626,7 @@ def projectile_contact(timeline: CastTimeline, effect: ProjectileSample | Geomet
             ground = (target.grid[0] + dx / length * local.approachOffsetTiles,
                       target.grid[1] + dy / length * local.approachOffsetTiles)
     if application.curvature:
-        asset = timeline.data.projectile_assets[effect.asset_id]
-        facing = view_facing(application.facing, quadrant, timeline.data)
-        center, _ = projectile_registration(timeline.recipe, asset, effect.phase, facing)
-        _, first, last = _projected_endpoints(timeline, application, quadrant, center)
+        _, first, last = _projected_endpoints(timeline, application, quadrant)
         point = projectile_curve_point(first, last, progress, application.curvature)
         straight = projectile_curve_point(first, last, progress, 0)
         factor = TILE_WIDTH / timeline.data.rig.TILE_W
@@ -526,36 +651,28 @@ def projectile_phase_scale(projectile: StudioProjectile, phase: Literal["prepare
     return binding.scale if binding.scale is not None else projectile.scale
 
 
+def projectile_phase_rotation(projectile: StudioProjectile, phase: Literal["prepare", "travel", "impact"]
+                              ) -> Literal["none", "isometricHybrid"]:
+    binding = {"prepare": projectile.prepare, "travel": projectile.travel, "impact": projectile.impact}[phase]
+    return binding.fineRotation if binding.fineRotation is not None else projectile.orientation.fineRotation
+
+
 def projectile_registration(recipe: StudioSpellDraft, asset: AuthoredProjectileAsset,
                             phase: Literal["prepare", "travel", "impact"],
                             facing: Facing8, rotation_radians: float = 0,
-                            ) -> tuple[tuple[float, float], tuple[float, float]]:
-    """Return attachment compensation and image-center offset in reference pixels.
-
-    Legacy Studio art uses canvas-center compensation before interpolation,
-    scaled with each actor, and removes it again before drawing. Preserve that
-    convention exactly. Measured directional pivots attach directly to the
-    socket; only their image-center offset rotates with the art. Neither offset
-    participates in the compiled travel clock.
-    """
+                            ) -> tuple[float, float]:
+    """Image-center offset from its registered pivot; never moves attachments."""
     projectile = recipe.projectile
     assert projectile is not None and projectile.sprite is not None
     visual = projectile.sprite
     scale = projectile_phase_scale(projectile, phase)
-    if asset.anchorsByFacing is not None:
-        anchor = asset.anchorsByFacing[facing]
-        dx, dy = (0.5 - anchor.x) * asset.frame.width * scale, (0.5 - anchor.y) * asset.frame.height * scale
-        offset = (visual.offsetX + dx * cos(rotation_radians) - dy * sin(rotation_radians),
-                  visual.offsetY + dx * sin(rotation_radians) + dy * cos(rotation_radians))
-        return (0, 0), offset
-    anchor = visual.anchor or asset.anchor
-    offset = (visual.offsetX + (0.5 - anchor.x) * asset.frame.width * scale,
-              visual.offsetY + (0.5 - anchor.y) * asset.frame.height * scale)
-    return offset, offset
+    anchor = (asset.anchorsByFacing or {}).get(facing, visual.anchor or asset.anchor)
+    dx, dy = (0.5 - anchor.x) * asset.frame.width * scale, (0.5 - anchor.y) * asset.frame.height * scale
+    return (visual.offsetX + dx * cos(rotation_radians) - dy * sin(rotation_radians),
+            visual.offsetY + dx * sin(rotation_radians) + dy * cos(rotation_radians))
 
 
 def _projected_endpoints(timeline: CastTimeline, application: ApplicationTimeline | GroundDeliveryTimeline, quadrant: int,
-                         center: tuple[float, float] = (0, 0),
                          source_frame: int | None = None,
                          ) -> tuple[Facing8, tuple[float, float], tuple[float, float]]:
     caster, target, data = timeline.source.caster, delivery_target(application), timeline.data
@@ -570,55 +687,115 @@ def _projected_endpoints(timeline: CastTimeline, application: ApplicationTimelin
     first, last = _anchored_points(
         caster, target, timeline.recipe, data, facing, (x * scale, y * scale), (tx * scale, ty * scale),
         local_scales=(caster.visual_scale, target_scale),
-        # Generated geometry has no sprite canvas whose registration cancels
-        # root padding. Applying the source's forced root put darts at feet.
-        anchor_basis="tile_center" if projectile.geometry.enabled else "rig_root",
         source_frame=source_frame,
     )
-    cx, cy = center
+    emitter = timeline.source.emitter
+    if emitter is not None:
+        x, y = project_world(emitter.grid, elevation_steps=emitter.elevation_steps, quadrant=quadrant)
+        offset = device_muzzle_offset(emitter, quadrant)
+        first = ((x + offset[0]) * scale, (y + offset[1]) * scale)
+    source_anchor = (projectile.sourceAnchorsByFacing or {}).get(facing, projectile.sourceAnchor)
     first, last = projectile_endpoints(
-        (first[0] + cx * caster.visual_scale, first[1] + cy * caster.visual_scale),
-        (last[0] + cx * target_scale, last[1] + cy * target_scale),
-        projectile.sourceAnchor.axisPx * caster.visual_scale if projectile.sourceSockets is None else 0,
-        projectile.targetAnchor.forwardPx * target_scale if isinstance(target, ActorContact) and projectile.targetAnchor.basis != "body" else 0,
+        first, last,
+        source_anchor.axisPx * caster.visual_scale if projectile.sourceSockets is None and emitter is None else 0,
+        projectile.targetAnchor.axisPx * target_scale if isinstance(target, ActorContact) else 0,
     )
+    if isinstance(target, ActorContact):
+        dx, dy = rest_pose_offset(data, target, quadrant)
+        last = last[0] + dx, last[1] + dy
     return facing, first, last
 
 
+def _device_control(timeline: CastTimeline, application: ApplicationTimeline | GroundDeliveryTimeline,
+                    quadrant: int) -> tuple[float, float] | None:
+    """Project one world-consistent initial control leg from the measured bore."""
+    emitter = timeline.source.emitter
+    if emitter is None:
+        return None
+    row = emitter.art.rows.index(emitter.facing)
+    vectors = tuple(camera[row] for camera in emitter.bank.forward_screen)
+    vertical = -sum(vector[1] for vector in vectors) / 4
+    vx, vy = vectors[0]
+    gx, gy = vx / TILE_WIDTH + (vy + vertical) / TILE_HEIGHT, (vy + vertical) / TILE_HEIGHT - vx / TILE_WIDTH
+    target = delivery_target(application)
+    distance = hypot(target.grid[0] - emitter.grid[0], target.grid[1] - emitter.grid[1])
+    factor = distance * emitter.art.control_distance_fraction / hypot(gx, gy) * timeline.data.rig.TILE_W / TILE_WIDTH
+    return vectors[quadrant][0] * factor, vectors[quadrant][1] * factor
+
+
 def project_projectile(timeline: CastTimeline, effect: ProjectileSample, quadrant: int) -> ProjectileSample:
-    """Reproject sprite canvas attachments without changing the compiled clock."""
+    """Reproject registered sprite attachments without changing the compiled clock."""
     application = _application(timeline, effect.application_id)
     if not isfinite(effect.progress) or not 0 <= effect.progress <= 1:
         raise ValueError("projectile phase progress must be finite and between zero and one")
     data = timeline.data
     asset = data.projectile_assets[effect.asset_id]
     facing = view_facing(application.facing, quadrant, data)
-    (cx, cy), _ = projectile_registration(timeline.recipe, asset, effect.phase, facing)
-    facing, first, last = _projected_endpoints(timeline, application, quadrant, (cx, cy), effect.source_frame)
-    point = _projectile_point(effect.phase, effect.progress, first, last, application.curvature)
+    facing, first, last = _projected_endpoints(timeline, application, quadrant, effect.source_frame)
+    control = _device_control(timeline, application, quadrant)
+    point = (projectile_curve_point(first, last, effect.progress, application.curvature, launch_control=control)
+             if effect.phase == "travel" else first if effect.phase == "prepare" else last)
     lift, tangent = _projectile_arc(application, effect.phase, effect.progress)
     height_pixels = HEIGHT_STEP_PIXELS * data.rig.TILE_W / TILE_WIDTH
-    return replace(effect, point=(point[0] - cx, point[1] - cy - lift * height_pixels),
+    rotation = _projectile_rotation(timeline, effect.phase, facing, first, last,
+                                   vertical_tangent_px=tangent * height_pixels, curvature=application.curvature)
+    projectile = timeline.recipe.projectile
+    assert projectile is not None
+    if projectile.orientation.directionSource == "tangent" and effect.phase != "prepare":
+        progress = effect.progress if effect.phase == "travel" else 1.0
+        dx, dy = projectile_curve_tangent(first, last, progress, application.curvature, launch_control=control)
+        dy -= tangent * height_pixels
+        # NeuroStudio chooses screen octants, then corrects the selected row's
+        # authored isometric angle. Registration above remains contact-owned;
+        # changing the image's measured pivot must never move this curve.
+        if dx != 0 or dy != 0:
+            angle = atan2(dy, dx)
+            sector = floor(angle / (pi / 4) + 0.5) % 8
+            facing = data.rig.AUTHORED_PROJECTILE_ROW_ORDER[sector]
+        else:
+            vx, vy = facing_vector(facing, data)
+            angle = atan2(vy, vx)
+        vx, vy = facing_vector(facing, data)
+        rotation = (0.0 if projectile_phase_rotation(projectile, effect.phase) == "none" else
+                    (angle - atan2(vy, vx) + pi) % (2 * pi) - pi
+                    + projectile.orientation.rotationOffsetDeg * pi / 180)
+    elif control is not None and effect.phase == "travel" and projectile_phase_rotation(projectile, effect.phase) != "none":
+        dx, dy = projectile_curve_tangent(first, last, effect.progress, application.curvature, launch_control=control)
+        vx, vy = facing_vector(facing, data)
+        rotation = atan2(dy, dx) - atan2(vy, vx) + projectile.orientation.rotationOffsetDeg * pi / 180
+    phase = {"prepare": projectile.prepare, "travel": projectile.travel, "impact": projectile.impact}[effect.phase]
+    if phase.viewFacing is not None:
+        facing = view_facing(phase.viewFacing, quadrant, data)
+    return replace(effect, point=(point[0], point[1] - lift * height_pixels),
                    row=asset.rowOrder.index(facing),
-                   rotation_radians=_projectile_rotation(
-                       timeline, effect.phase, facing, first, last,
-                       vertical_tangent_px=tangent * height_pixels, curvature=application.curvature,
-                   ))
+                   rotation_radians=rotation)
 
 
 def projectile_curve_point(first: tuple[float, float], last: tuple[float, float],
-                 progress: float, curvature: float) -> tuple[float, float]:
+                 progress: float, curvature: float, *, launch_control: tuple[float, float] | None = None) -> tuple[float, float]:
     # Source quadratic control = midpoint + perpendicular(chord) * curvature.
     dx, dy = last[0] - first[0], last[1] - first[1]
+    if launch_control is not None:
+        t, u = progress, 1 - progress
+        c1 = first[0] + launch_control[0], first[1] + launch_control[1]
+        c2 = last[0] - dx / 3 - dy * curvature * 2 / 3, last[1] - dy / 3 + dx * curvature * 2 / 3
+        point = tuple(u**3 * first[i] + 3*u*u*t*c1[i] + 3*u*t*t*c2[i] + t**3 * last[i] for i in range(2))
+        return point[0], point[1]
     bend = 2 * (1 - progress) * progress * curvature
     return (first[0] + dx * progress - dy * bend,
             first[1] + dy * progress + dx * bend)
 
 
 def projectile_curve_tangent(first: tuple[float, float], last: tuple[float, float],
-                             progress: float, curvature: float) -> tuple[float, float]:
+                             progress: float, curvature: float, *, launch_control: tuple[float, float] | None = None) -> tuple[float, float]:
     """Derivative of the same source quadratic used by sprite/dart travel."""
     dx, dy = last[0] - first[0], last[1] - first[1]
+    if launch_control is not None:
+        t, u = progress, 1 - progress
+        c1 = first[0] + launch_control[0], first[1] + launch_control[1]
+        c2 = last[0] - dx / 3 - dy * curvature * 2 / 3, last[1] - dy / 3 + dx * curvature * 2 / 3
+        tangent = tuple(3*u*u*(c1[i]-first[i]) + 6*u*t*(c2[i]-c1[i]) + 3*t*t*(last[i]-c2[i]) for i in range(2))
+        return tangent[0], tangent[1]
     bend = 2 * (1 - 2 * progress) * curvature
     return dx - dy * bend, dy + dx * bend
 
@@ -681,6 +858,8 @@ def _phase(data: AnimationData, recipe: StudioSpellDraft, binding: StudioProject
         binding.durationMs if binding.durationMs is not None else
         binding.timeMap[-1].elapsedMs if binding.timeMap else phase.frames * 1000 / fps
     )
+    if binding.fitDuration:
+        fps = phase.frames * 1000 / duration
     return ProjectileInterval(name, asset, phase, fps, start, start + duration, binding.timeMap)
 
 
@@ -703,6 +882,7 @@ class DamageTiming:
     hp_ms: float
     flash_ms: float
     number_ms: float
+    life_body: BodyTransition | None = None
 
 
 def resolve_damage(data: AnimationData, damage_type: str | None,
@@ -736,7 +916,7 @@ def compile_damage(data: AnimationData, target: ActorContact, damage: StudioDama
         raise ValueError("disclosed death requires enabled authored death presentation")
     if terminal or lethal:
         end = start
-        if lethal and not terminal:
+        if lethal and not terminal and actor_rest_pose(data, target) is None:
             end += body_duration(body_clip(data, target, data.death_context.bodyClip), data.death_context.bodyPlaybackSpeed)
         return DamageTiming(start, end, start, start, start)
     metadata = body_clip(data, target, data.damage_context.bodyClip)
@@ -744,16 +924,41 @@ def compile_damage(data: AnimationData, target: ActorContact, damage: StudioDama
     if damage.hitFlash.enabled:
         _require_frame(metadata, damage.hitFlash.frame, "hit flash")
     fps = metadata.fps * data.damage_context.bodyPlaybackSpeed
-    return DamageTiming(start, start + body_duration(metadata, data.damage_context.bodyPlaybackSpeed),
-                        start + damage.floatingNumber.frame * 1000 / fps,
+    hp_ms = start + damage.floatingNumber.frame * 1000 / fps
+    life_body = (compile_life_body(data, target, resulting_life_state, target.rest_pose)
+                 if resulting_life_state is not None else None)
+    end = start + body_duration(metadata, data.damage_context.bodyPlaybackSpeed)
+    if life_body is not None:
+        end = max(end, hp_ms + life_body.frames * 1000 / life_body.fps)
+    return DamageTiming(start, end, hp_ms,
                         start + damage.hitFlash.frame * 1000 / fps,
-                        start + damage.floatingNumber.frame * 1000 / fps)
+                        hp_ms, life_body)
 
 
 def sample_damage_body(data: AnimationData, target: ActorContact, elapsed_ms: float, *,
                        start_ms: float | None = None, end_ms: float | None = None,
-                       death_start_ms: float | None = None) -> BodySample:
+                       death_start_ms: float | None = None,
+                       resulting_life_state: LifeState | None = None,
+                       life_start_ms: float | None = None,
+                       life_body: BodyTransition | None = None) -> BodySample:
     """One recipient body; callers select the latest actual hit/death interval."""
+    if life_body is not None and life_start_ms is not None:
+        body = sample_body_transition(life_body, elapsed_ms - life_start_ms)
+        if body is not None:
+            return body
+        if elapsed_ms >= life_start_ms and resulting_life_state is not None:
+            target = replace(target, life_state=resulting_life_state)
+    if (resulting_life_state is not None and resulting_life_state is not LifeState.DEAD
+            and life_start_ms is not None and elapsed_ms >= life_start_ms):
+        target = replace(target, life_state=resulting_life_state)
+    rest_pose = actor_rest_pose(data, target)
+    if rest_pose is not None:
+        if death_start_ms is not None or target.life_state is LifeState.DEAD:
+            return BodySample(target.actor_uuid, rest_pose,
+                              body_clip(data, target, rest_pose).frames - 1, target.facing)
+        # Retained condition pose owns resting; removal owns the rise. There
+        # is no standing hit flinch to resume after that finite wake gesture.
+        return sample_idle_body(data, target, elapsed_ms)
     clip, start, speed = "Idle", 0.0, 1.0
     if target.life_state == LifeState.DEAD:
         clip = data.death_context.bodyClip
@@ -783,14 +988,155 @@ def sample_damage_number(data: AnimationData, actor_uuid: str, damage: StudioDam
     return NumberSample(actor_uuid, total, row.label, row.color, progress, alpha, application_id)
 
 
-def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastTimeline:
+def media_track_duration(data: AnimationData, track: StudioMediaTrack) -> float:
+    asset = data.projectile_assets[track.assetId]
+    phase = {"cast": asset.phases.cast, "travel": asset.phases.travel, "impact": asset.phases.impact}[track.assetPhase]
+    if phase is None:
+        raise ValueError(f"missing media phase: {track.assetId}/{track.assetPhase}")
+    return (track.durationMs if track.durationMs is not None else
+            track.timeMap[-1].elapsedMs if track.timeMap else
+            phase.frames * 1000 / (track.fps or phase.fps or asset.fps))
+
+
+def media_track_frame(data: AnimationData, track: StudioMediaTrack, elapsed_ms: float,
+                      facing: Facing8) -> int:
+    """Facing-specific source sampling never changes the cast contact clock."""
+    asset = data.projectile_assets[track.assetId]
+    phase = {"cast": asset.phases.cast, "travel": asset.phases.travel, "impact": asset.phases.impact}[track.assetPhase]
+    assert phase is not None
+    points = (track.timeMapsByFacing or {}).get(facing, track.timeMap)
+    if points:
+        for first, last in zip(points, points[1:]):
+            if elapsed_ms < last.elapsedMs:
+                return _media_segment_frame(elapsed_ms, first.elapsedMs, last.elapsedMs,
+                                            first.sourceFrame, last.sourceFrame, phase.frames)
+        return min(phase.frames - 1, floor(points[-1].sourceFrame))
+    return body_frame(elapsed_ms, track.fps or phase.fps or asset.fps, phase.frames, loop=track.loop)
+
+
+def _media_segment_frame(at: float, start: float, end: float, first: float, last: float, frames: int) -> int:
+    progress = (at-start) / (end-start)
+    return max(0, min(frames-1, floor(first + progress*(last-first) + 1e-9)))
+
+
+def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
+                           source: CastInput) -> CastTimeline:
+    """Use the same body, application and damage clocks for non-travel media."""
+    cast = recipe.cast
+    assert cast.bodyPlaybackSpeed is not None
+    clip = body_clip(data, source.caster, cast.actionClip)
+    _require_frame(clip, cast.releaseFrame, "release")
+    release = cast.releaseFrame * 1000 / (clip.fps * cast.bodyPlaybackSpeed) if cast.enabled else 0
+    body_end = body_duration(clip, cast.bodyPlaybackSpeed) if cast.enabled else 0
+    target = source.ground_target or (source.applications[0].target if source.applications else None)
+    delta = source.area_direction or ((target.grid[0] - source.caster.grid[0], target.grid[1] - source.caster.grid[1])
+                                      if target is not None else None)
+    facing = facing_for_delta(delta, data) if delta is not None else source.caster.facing
+    rule = recipe.contact
+    contact = release + (rule.delayMs if rule is not None else 0)
+    anchors = [Anchor("action_start", 0), Anchor("release", release)]
+    if not source.applications:
+        anchors.append(Anchor("impact", contact))
+    applications = []
+    complete = max(body_end, contact)
+    for application in source.applications:
+        recipient = application.target
+        offset = (recipient.grid[0] - source.caster.grid[0], recipient.grid[1] - source.caster.grid[1])
+        arrival = contact
+        if rule is not None:
+            if rule.speedTilesPerSecond is not None:
+                arrival += hypot(*offset) * 1000 / rule.speedTilesPerSecond
+            if rule.cellsByFacing is not None:
+                arrival += rule.cellsByFacing[facing].get(f"{int(offset[0])}_{int(offset[1])}", 0)
+        damage = resolve_damage(data, application.damage_type, recipe.damage) if application.damage_applied else None
+        timing = compile_damage(data, recipient, damage, arrival, application.resulting_life_state) if damage else None
+        applications.append(ApplicationTimeline(application, facing,
+            _iso(source.caster.grid, data), _iso(recipient.grid, data), release, arrival, 0, (), damage,
+            timing.start_ms if timing else None, timing.end_ms if timing else None,
+            timing.hp_ms if timing else None, timing.flash_ms if timing else None, timing.number_ms if timing else None,
+            timing.life_body if timing else None))
+        identity = application.application_id
+        anchors.append(Anchor("impact", arrival, identity))
+        if timing is not None:
+            anchors.extend((Anchor("effect", timing.start_ms, identity), Anchor("vitals", timing.hp_ms, identity)))
+        complete = max(complete, timing.end_ms if timing else arrival)
+    for track in recipe.media:
+        start = release + track.startOffsetMs
+        if start < -1e-7:
+            raise ValueError(f"media starts before its cast: {track.id}")
+        complete = max(complete, start + media_track_duration(data, track))
+    ground = (GroundDeliveryTimeline(source.ground_target, facing, _iso(source.caster.grid, data),
+              _iso(source.ground_target.grid, data), release, contact, 0, ())
+              if source.ground_target is not None else None)
+    recovery_start = complete
+    if cast.recovery.enabled:
+        complete += body_duration(body_clip(data, source.caster, cast.recovery.bodyClip), cast.recovery.bodyPlaybackSpeed)
+        anchors.append(Anchor("recover", recovery_start))
+    anchors.append(Anchor("complete", complete))
+    return CastTimeline(source, recipe, data, facing, body_end, release, tuple(applications),
+                        recovery_start, complete, tuple(sorted(anchors, key=lambda anchor: anchor.at_ms)), ground)
+
+
+def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_rate: float = 1) -> CastTimeline:
     """Compile one cast body and its ordered sprite/dart applications."""
     if spell_id not in data.drafts:
         raise ValueError(f"unknown authored spell binding: {spell_id}")
     recipe = data.drafts[spell_id]
+    if body_rate != 1:
+        cast = recipe.cast
+        assert cast.bodyPlaybackSpeed is not None
+        projectile = recipe.projectile
+        if projectile is not None:
+            prepared_phase = projectile.prepare
+            projectile = projectile.model_copy(update={"prepare": prepared_phase.model_copy(update={
+                "fps": (prepared_phase.fps or projectile.fps)*body_rate,
+                "durationMs": prepared_phase.durationMs/body_rate if prepared_phase.durationMs is not None else None,
+                "timeMap": tuple(point.model_copy(update={"elapsedMs": point.elapsedMs/body_rate})
+                                 for point in prepared_phase.timeMap)})})
+        media = []
+        for track in recipe.media:
+            update: dict[str, object] = {"startOffsetMs": track.startOffsetMs/body_rate} if track.startOffsetMs < 0 else {}
+            if track.attachment == "source_hand":
+                asset = data.projectile_assets[track.assetId]
+                phase = {"cast": asset.phases.cast, "travel": asset.phases.travel,
+                         "impact": asset.phases.impact}[track.assetPhase]
+                assert phase is not None
+                update.update({"fps": (track.fps or phase.fps or asset.fps)*body_rate,
+                    "durationMs": media_track_duration(data, track)/body_rate,
+                    "timeMap": tuple(point.model_copy(update={"elapsedMs": point.elapsedMs/body_rate})
+                                     for point in track.timeMap),
+                    "timeMapsByFacing": ({facing: tuple(point.model_copy(update={
+                        "elapsedMs": point.elapsedMs/body_rate}) for point in points)
+                        for facing, points in track.timeMapsByFacing.items()}
+                        if track.timeMapsByFacing is not None else None)})
+            media.append(track.model_copy(update=update))
+        recipe = recipe.model_copy(update={
+            "cast": cast.model_copy(update={"bodyPlaybackSpeed": cast.bodyPlaybackSpeed*body_rate}),
+            "projectile": projectile,
+            "media": tuple(media)})
+    emitter = source.emitter
+    if emitter is not None:
+        # The authored device operation owns the source gesture. The granted
+        # spell continues to own delivery, impact, palette and target reactions.
+        operation = data.body_action_recipes[emitter.art.operator_recipe]
+        contact_frame = next(anchor.frame for anchor in operation.anchors if anchor.name == "contact")
+        cast = recipe.cast.model_copy(update={"actionClip": operation.actor.clip,
+            "bodyPlaybackSpeed": operation.actor.playbackSpeed, "releaseFrame": contact_frame,
+            "weaponGlow": None, "aura": None, "effects": (), "slash": None,
+            "holdReleaseForVolley": False,
+            "recovery": recipe.cast.recovery.model_copy(update={"enabled": False})})
+        projectile = recipe.projectile
+        if projectile is None:
+            raise NotImplementedError("device source requires an authored projectile delivery")
+        recipe = recipe.model_copy(update={"cast": cast,
+            "projectile": projectile.model_copy(update={"prepare": projectile.prepare.model_copy(update={"enabled": False})})})
     cast, projectile = recipe.cast, recipe.projectile
+    source_grid = emitter.grid if emitter is not None else source.caster.grid
+    source_height = emitter.elevation_steps if emitter is not None else body_elevation_steps(source.caster, data)
     if not source.applications and source.ground_target is None:
-        raise ValueError("projectile cast requires an application")
+        if projectile is not None or not recipe.media or any(
+                not track.attachment.startswith("source_") for track in recipe.media):
+            raise ValueError("recipient-free cast requires source-anchored media")
     identities = [application.application_id for application in source.applications]
     if len(set(identities)) != len(identities):
         raise ValueError("cast applications require distinct retained identities")
@@ -805,10 +1151,12 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
         raise ValueError("cast requires the complete original TS-materialized defaults")
     if len({layer.slot for layer in cast.effects}) != len(cast.effects):
         raise ValueError("duplicate cast effect slots require original last-write clearing semantics")
-    if projectile is None:
-        raise ValueError("selected executor requires projectile delivery")
+    if projectile is None and not recipe.media:
+        raise ValueError("cast requires authored projectile or anchored media delivery")
     if recipe.area is not None and source.ground_target is None:
         raise ValueError("area delivery requires its observed ground destination")
+    if projectile is None:
+        return _compile_anchored_cast(data, recipe, source)
     if projectile.geometry.enabled:
         if projectile.geometry.primitive != "dart" or projectile.sprite is not None:
             raise ValueError("geometry projectile support is the authored standalone dart")
@@ -819,8 +1167,8 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
             raise ValueError("selected sprite projectile requires media")
         if projectile.sprite.mediaFailurePolicy != "fail_transaction":
             raise ValueError("optional-track media omission is outside this selected family")
-        if projectile.orientation.directionSource != "target_vector":
-            raise ValueError("tangent-facing projectile rows await source parity proof")
+        if projectile.orientation.directionSource == "locked_initial_tangent":
+            raise ValueError("locked initial tangent projectile rows await source parity proof")
         if projectile.travel.enabled and projectile.travel.assetId not in (None, projectile.sprite.assetId):
             raise ValueError("alternate travel assets require source resolver parity")
         if projectile.sprite.paletteSwap is not None:
@@ -857,7 +1205,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
             raise ValueError("selected prepare requires an explicit frame before release")
         _require_frame(casting_clip, prepare_frame, "prepare")
         start = prepare_frame * 1000 / (casting_clip.fps * cast.bodyPlaybackSpeed)
-        cap = max(1, (cast.releaseFrame - prepare_frame) * 1000 / casting_clip.fps)
+        cap = max(1, (cast.releaseFrame - prepare_frame) * 1000 / casting_clip.fps) / body_rate
         duration = (projectile.prepare.durationMs or cap) if projectile.prepare.overlapRelease else min(projectile.prepare.durationMs or cap, cap)
         prepare = _phase(data, recipe, projectile.prepare, "prepare", start, duration)
         anchors.append(Anchor("prepare", start))
@@ -865,12 +1213,16 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
     ground_delivery = None
     if source.ground_target is not None:
         target = source.ground_target
-        facing = facing_for_delta((target.grid[0] - source.caster.grid[0], target.grid[1] - source.caster.grid[1]), data)
+        facing = facing_for_delta((target.grid[0] - source_grid[0], target.grid[1] - source_grid[1]), data)
         first, last = _anchored_points(source.caster, target, recipe, data, facing,
-                                      _iso(source.caster.grid, data), _iso(target.grid, data))
+                                      _iso(source.caster.grid, data), _iso(target.grid, data), reference_clock=True)
         first, last = projectile_endpoints(first, last,
             projectile.sourceAnchor.axisPx if projectile.sourceSockets is None else 0, 0)
-        height = (target.elevation_steps - body_elevation_steps(source.caster, data)) * HEIGHT_STEP_PIXELS / TILE_WIDTH * data.rig.TILE_W
+        if emitter is not None:
+            offset = device_muzzle_offset(emitter, 0)
+            base = _iso(source_grid, data)
+            first = base[0] + offset[0] * data.rig.TILE_W / TILE_WIDTH, base[1] + offset[1] * data.rig.TILE_W / TILE_WIDTH
+        height = (target.elevation_steps - source_height) * HEIGHT_STEP_PIXELS / TILE_WIDTH * data.rig.TILE_W
         duration = max(projectile.minimumTravelDurationMs,
                        hypot(last[0] - first[0], last[1] - first[1], height) * 1000 / projectile.speedPxPerSecond)
         if projectile.targetLocal is not None:
@@ -898,9 +1250,6 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
             raise ValueError("self delivery is outside the selected projectile family")
         if not isfinite(application.travel_apex_steps) or application.travel_apex_steps < 0:
             raise ValueError("travel apex requires a finite nonnegative world height")
-        if (target.life_state in (LifeState.DYING, LifeState.STABLE)
-                or application.resulting_life_state in (LifeState.DYING, LifeState.STABLE)):
-            raise ValueError("D&D dying/stable are distinct from death; their body presentation is outside this slice")
         if application.resulting_life_state == LifeState.ALIVE:
             raise ValueError("revival is outside the selected damage application")
         if not application.damage_applied and any(value is not None for value in (
@@ -910,15 +1259,21 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
         if application.damage_total is not None and application.damage_total <= 0:
             raise ValueError("DamageApplied requires a positive disclosed total, or None when undisclosed")
         body_clip(data, target, "Idle")
-        facing = facing_for_delta((target.grid[0] - source.caster.grid[0], target.grid[1] - source.caster.grid[1]), data)
+        facing = facing_for_delta((target.grid[0] - source_grid[0], target.grid[1] - source_grid[1]), data)
         first, last = _anchored_points(source.caster, target, recipe, data, facing,
-                                      _iso(source.caster.grid, data), _iso(target.grid, data))
+                                      _iso(source.caster.grid, data), _iso(target.grid, data), reference_clock=True)
         if hypot(last[0] - first[0], last[1] - first[1]) < 1 and ground_delivery is None:
             raise ValueError("coincident projectile endpoints require the separate source zero-travel case")
         first, last = projectile_endpoints(first, last,
             projectile.sourceAnchor.axisPx if projectile.sourceSockets is None else 0,
-            projectile.targetAnchor.forwardPx if projectile.targetAnchor.basis != "body" else 0)
-        height = (body_elevation_steps(target, data) - body_elevation_steps(source.caster, data)) * HEIGHT_STEP_PIXELS / TILE_WIDTH * data.rig.TILE_W
+            projectile.targetAnchor.axisPx)
+        dx, dy = rest_pose_offset(data, target)
+        last = last[0] + dx, last[1] + dy
+        if emitter is not None:
+            offset = device_muzzle_offset(emitter, 0)
+            base = _iso(source_grid, data)
+            first = base[0] + offset[0] * data.rig.TILE_W / TILE_WIDTH, base[1] + offset[1] * data.rig.TILE_W / TILE_WIDTH
+        height = (body_elevation_steps(target, data) - source_height) * HEIGHT_STEP_PIXELS / TILE_WIDTH * data.rig.TILE_W
         duration = max(projectile.minimumTravelDurationMs,
                        hypot(last[0] - first[0], last[1] - first[1], height) * 1000 / projectile.speedPxPerSecond)
         if projectile.targetLocal is not None:
@@ -945,14 +1300,21 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
             curvature = projectile.trajectory.curvature * spread
         damage = resolve_damage(data, application.damage_type, recipe.damage) if application.damage_applied else None
         damage_start = damage_end = hp_ms = flash_ms = number_ms = None
+        life_body = None
         if target.life_state == LifeState.DEAD:
             body_clip(data, target, data.death_context.bodyClip)
         if damage is not None:
-            timing = compile_damage(data, target, damage, arrival, application.resulting_life_state)
+            previous = next((row.source.resulting_life_state for row in reversed(applications)
+                             if row.source.target.actor_uuid == target.actor_uuid
+                             and row.source.resulting_life_state is not None), target.life_state)
+            timing = compile_damage(data, replace(target, life_state=previous), damage,
+                                    arrival, application.resulting_life_state)
             damage_start, damage_end = timing.start_ms, timing.end_ms
             hp_ms, flash_ms, number_ms = timing.hp_ms, timing.flash_ms, timing.number_ms
+            life_body = timing.life_body
         applications.append(ApplicationTimeline(application, facing, first, last, start, arrival, curvature,
-                                                 tuple(intervals), damage, damage_start, damage_end, hp_ms, flash_ms, number_ms))
+                                                 tuple(intervals), damage, damage_start, damage_end, hp_ms, flash_ms, number_ms,
+                                                 life_body))
     # TakingHit reentry flushes pending callbacks, then restarts the one body.
     # Current Magic Missile uses frame 0; this also retains the source's exit
     # meaning for an already authored delayed callback on an earlier hit.
@@ -986,13 +1348,17 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput) -> CastT
             delivery_end = max(delivery_end, application.damage_end_ms)
         if application.projectile_intervals:
             delivery_end = max(delivery_end, *(phase.end_ms for phase in application.projectile_intervals))
+    if emitter is not None:
+        body_end = max(body_end, release + (emitter.art.frame_count - emitter.art.release_frame) * 1000 / emitter.art.fps)
     recovery_start = max(body_end, delivery_end)
     complete = recovery_start
     if cast.recovery.enabled:
         complete += body_duration(body_clip(data, source.caster, cast.recovery.bodyClip), cast.recovery.bodyPlaybackSpeed)
         anchors.append(Anchor("recover", recovery_start))
     anchors.append(Anchor("complete", complete))
-    return CastTimeline(source, recipe, data, ground_delivery.facing if ground_delivery else applications[0].facing,
+    caster_facing = (facing_for_delta((emitter.grid[0] - source.caster.grid[0], emitter.grid[1] - source.caster.grid[1]), data)
+                     if emitter is not None else ground_delivery.facing if ground_delivery else applications[0].facing)
+    return CastTimeline(source, recipe, data, caster_facing,
                         body_end, release, tuple(applications), recovery_start, complete,
                         tuple(sorted(anchors, key=lambda anchor: anchor.at_ms)), ground_delivery)
 
@@ -1039,24 +1405,34 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
         applications = [application for application in timeline.applications if application.source.target.actor_uuid == actor_id]
         hp, life = target_contact.hp, target_contact.life_state
         for application in sorted(applications, key=lambda row: row.hp_ms if row.hp_ms is not None else float("inf")):
-            if application.hp_ms is not None and t >= application.hp_ms and application.source.resulting_hp is not None:
-                hp = application.source.resulting_hp
+            if application.hp_ms is not None and t >= application.hp_ms:
+                if application.source.resulting_hp is not None:
+                    hp = application.source.resulting_hp
+                if application.source.resulting_life_state is not None:
+                    life = application.source.resulting_life_state
         started = sorted((application for application in applications
                           if application.damage_start_ms is not None and application.damage_start_ms <= t),
                          key=lambda row: row.damage_start_ms if row.damage_start_ms is not None else 0)
         death = next((application for application in started if application.source.resulting_life_state == LifeState.DEAD), None)
-        if death is not None:
-            life = LifeState.DEAD
         reaction = started[-1] if started else None
+        transition = next((application for application in reversed(applications)
+                           if application.life_body is not None and application.hp_ms is not None
+                           and t >= application.hp_ms), None)
+        committed = [application for application in applications
+                     if application.hp_ms is not None and t >= application.hp_ms]
         reaction_body = sample_damage_body(
             data, target_contact, t,
             start_ms=reaction.damage_start_ms if reaction is not None else None,
             end_ms=reaction.damage_end_ms if reaction is not None else None,
             death_start_ms=death.damage_start_ms if death is not None else None,
+            resulting_life_state=life,
+            life_start_ms=(transition.hp_ms if transition is not None else
+                           committed[-1].hp_ms if committed else None),
+            life_body=transition.life_body if transition is not None else None,
         )
         if actor_id != source.caster.actor_uuid:
             bodies.append(reaction_body)
-        elif death is not None or (reaction is not None and reaction.damage_end_ms is not None
+        elif life is not LifeState.ALIVE or (reaction is not None and reaction.damage_end_ms is not None
                                   and t < reaction.damage_end_ms):
             # An area may hit its own caster. One actor owns one body track;
             # the actual reaction interrupts the cast while effects continue.
@@ -1075,10 +1451,10 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
                 flash = latest.damage.hitFlash.palette or latest.damage.hitFlash.color
         vitals.append(VitalsSample(actor_id, hp, life, flash))
     projectile = recipe.projectile
-    assert projectile is not None
     samples: list[ProjectileSample | GeometryProjectileSample] = []
     numbers: list[NumberSample] = []
-    for application in cast_deliveries(timeline):
+    for application in cast_deliveries(timeline) if projectile is not None else ():
+        assert projectile is not None
         identity = delivery_identity(application)
         if projectile.geometry.enabled and application.travel_start_ms <= t < application.travel_end_ms:
             progress = (t - application.travel_start_ms) / (application.travel_end_ms - application.travel_start_ms)
@@ -1113,4 +1489,5 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
                 application.source.damage_total, application.number_ms, t, timeline.complete_ms, identity)
             if number is not None:
                 numbers.append(number)
-    return CastSample(tuple(bodies), tuple(samples), tuple(numbers), tuple(vitals), t >= timeline.complete_ms)
+    return CastSample(tuple(bodies), tuple(samples), tuple(numbers), tuple(vitals), t >= timeline.complete_ms,
+                      device_frame(source.emitter, t, timeline.release_ms) if source.emitter is not None else None, t)

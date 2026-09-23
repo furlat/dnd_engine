@@ -77,6 +77,7 @@ SAFE_LEAF_MODULES = frozenset({
 NEUTRAL_VALUE_DEPENDENCIES = {
     "dnd.types.senses": frozenset({
         "dnd.types.world", "dnd.core.content.identities", "dnd.types.traps",
+        "dnd.core.presentation_geometry",
     }),
     "dnd.types.traps": frozenset({"dnd.core.creature_types", "dnd.types.abilities"}),
 }
@@ -997,14 +998,14 @@ def test_dependency_direction_is_respected() -> None:
     )
 
 
-def test_event_server_import_does_not_load_client_facing_ai_package() -> None:
-    """Importing the server in a fresh process must not import any ``ai`` module."""
+def test_game_import_does_not_load_ai_or_server_packages() -> None:
+    """Importing the active client must not load AI or the retired server."""
     marker = "__DND_ARCH_AI_MODULES__="
     script = (
         "import json, sys\n"
-        "import server.event_server\n"
+        "import game.app\n"
         "loaded = sorted(name for name in sys.modules "
-        "if name == 'ai' or name.startswith('ai.'))\n"
+        "if name in ('ai', 'server') or name.startswith(('ai.', 'server.')))\n"
         f"print({marker!r} + json.dumps(loaded))\n"
     )
     try:
@@ -1018,11 +1019,11 @@ def test_event_server_import_does_not_load_client_facing_ai_package() -> None:
         )
     except subprocess.TimeoutExpired as error:
         raise AssertionError(
-            "Fresh import of server.event_server exceeded the 30-second isolation timeout"
+            "Fresh import of game.app exceeded the 30-second isolation timeout"
         ) from error
 
     assert completed.returncode == 0, (
-        "Fresh import of server.event_server failed before isolation could be checked:\n"
+        "Fresh import of game.app failed before isolation could be checked:\n"
         f"stdout:\n{completed.stdout}\n"
         f"stderr:\n{completed.stderr}"
     )
@@ -1036,7 +1037,7 @@ def test_event_server_import_does_not_load_client_facing_ai_package() -> None:
     )
     loaded_ai_modules = json.loads(marker_lines[0][len(marker):])
     assert loaded_ai_modules == [], (
-        "Importing server.event_server loaded client-facing ai modules:\n- "
+        "Importing game.app loaded AI/server modules:\n- "
         + "\n- ".join(loaded_ai_modules)
     )
 
@@ -1224,36 +1225,6 @@ def test_cold_content_contract_imports_do_not_load_gameplay_or_server_layers() -
     )
 
 
-def test_world_contracts_are_a_cold_transport_leaf() -> None:
-    """World DTOs may depend only on dependency-neutral engine value types."""
-    source_module = _source_modules()["server.world_contracts"]
-    forbidden_imports = [
-        reference
-        for reference in _import_references()
-        if reference.importer == source_module.name
-        and _is_project_module_name(reference.target)
-        and reference.target not in WORLD_CONTRACT_ALLOWED_PROJECT_DEPENDENCIES
-    ]
-    mapper_methods = [
-        f"{node.name}.{child.name} at {source_module.display_path}:{child.lineno}"
-        for node in source_module.tree.body
-        if isinstance(node, ast.ClassDef)
-        for child in node.body
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and child.name in {"create", "from_entity", "from_grid", "from_item"}
-    ]
-    messages: list[str] = []
-    if forbidden_imports:
-        messages.append(
-            "World contracts import runtime project code:\n"
-            + _format_import_references(forbidden_imports)
-        )
-    if mapper_methods:
-        messages.append(
-            "World contracts own engine projection methods:\n- "
-            + "\n- ".join(mapper_methods)
-        )
-    assert not messages, "\n\n".join(messages)
 
 
 def test_persistent_spell_zones_receive_explicit_effect_provenance() -> None:

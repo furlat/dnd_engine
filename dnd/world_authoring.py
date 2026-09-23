@@ -119,18 +119,15 @@ def project_world_connector(
     connector: TraversalConnector,
 ) -> WorldConnectorState:
     """Project one live connector without runtime integrity derivations."""
+    start, end = connector.endpoints
     return WorldConnectorState(
         connector_uuid=connector.uuid,
         authored_id=connector.authored_id,
         kind=connector.kind,
         presentation_key=connector.presentation_key,
-        endpoints=tuple(endpoint.position for endpoint in connector.endpoints),
-        support_tile_uuids=tuple(
-            endpoint.support_tile_uuid for endpoint in connector.endpoints
-        ),
-        endpoint_elevations_feet=tuple(
-            endpoint.elevation_feet for endpoint in connector.endpoints
-        ),
+        endpoints=(start.position, end.position),
+        support_tile_uuids=(start.support_tile_uuid, end.support_tile_uuid),
+        endpoint_elevations_feet=(start.elevation_feet, end.elevation_feet),
         movement_cost_feet=connector.movement_cost_feet,
         action_cost_type=connector.action_cost_type,
         action_cost_amount=connector.action_cost_amount,

@@ -8,24 +8,30 @@ from dataclasses import dataclass, field
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, BeforeValidator
+from game.recording_compat import upgrade_player_fact
 
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.action_execution import MovementProvocationPolicy
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.content.runtime import HandlerDispatchOutcome
-from dnd.core.creature_types import DamageType
+from dnd.core.creature_types import DamageType, Size
 from dnd.core.dice import AttackOutcome
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.events import EventPhase, EventType, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState
-from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationKind, ItemPresentationState
+from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot,
+    ItemIntegrity, ItemPresentationKind, ItemPresentationState, ItemRemnantState)
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState
 from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SenseMode, SensesSnapshot
+from dnd.types.spatial_effects import SpatialEffectChangeOperation
+from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.traps import TrapState
 from dnd.types.world import MovementMode, OccupancyLayer
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
+from dnd.types.abilities import AbilityName
+from dnd.types.actor import TemporaryHitPointsGrant
 from game.actor_facts import ConditionFact
 
 
@@ -63,6 +69,9 @@ class PlayerActor:
     last_visual_position: tuple[int, int] | None = None
     controlled_items: tuple[ItemPresentationState, ...] | None = None
     occupancy_layer: OccupancyLayer | None = None
+    temporary_hp_grant: TemporaryHitPointsGrant | None = None
+    resolved_size: Size | None = None
+    structural_base_size: Size | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -83,6 +92,7 @@ class AttackFact:
     attack_outcome: AttackOutcome | None
     damage_types: tuple[DamageType, ...]
     source_item_id: str | None
+    intercepted_by_condition_uuid: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -96,12 +106,17 @@ class SpellFact:
     declared_target_entity_uuids: tuple[UUID, ...]
     application_id: UUID | None
     application_index: int | None
+    attack_outcome: AttackOutcome | None = None
+    cast_origin: Literal["actor", "source_item"] = "actor"
+    source_item_uuid: UUID | None = None
     effect_id: str | None = None
     aoe_position: tuple[int, int] | None = None
     area_geometry: AoEPresentationGeometry | None = None
     # A disclosed subset of the native result, never a physical blast mask.
     # None means no recorded result; () is a resolved result with no granted cells.
     resolved_area_positions: tuple[tuple[int, int], ...] | None = None
+    suppressions: tuple[SpellSuppression, ...] = ()
+    area_propagation: Literal["line_of_effect", "connected"] = "line_of_effect"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -133,6 +148,7 @@ class StepFact:
     trajectory: MovementTrajectory
     provocation_policy: MovementProvocationPolicy
     committed: bool
+    resolved_speed_feet: int | None = None
     movement_mode: MovementMode | None = None
     from_layer: OccupancyLayer | None = None
     to_layer: OccupancyLayer | None = None
@@ -146,6 +162,17 @@ class ForcedMovementFact:
     start_position: tuple[int, int]
     end_position: tuple[int, int]
     actual_distance: int
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PortalTransferFact:
+    kind: Literal["portal_transfer"] = "portal_transfer"
+    target_entity_uuid: UUID
+    portal_uuid: UUID | None
+    start_position: tuple[int, int] | None
+    end_position: tuple[int, int] | None
+    committed: bool
+    portal_content_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -170,6 +197,19 @@ class DamageFact:
     resulting_temporary_hp: int | None = None
     damage_type: DamageType | None = None
     body_release: BodyReleaseResult | None = None
+    intercepted_by_condition_uuid: UUID | None = None
+    effect_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SavingThrowFact:
+    """The disclosed outcome of one native save, without private roll modifiers."""
+
+    kind: Literal["saving_throw"] = "saving_throw"
+    target_entity_uuid: UUID
+    ability_name: AbilityName
+    succeeded: bool
+    effect_id: str | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -188,6 +228,7 @@ class TemporaryHitPointsFact:
     kind: Literal["temporary_hit_points"] = "temporary_hit_points"
     entity_uuid: UUID
     resulting_temporary_hp: int
+    grant: TemporaryHitPointsGrant | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -254,6 +295,15 @@ class ItemChargeFact:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class ActionReaction:
+    """Disclosed reaction result and its native triggering lineage."""
+
+    triggered_lineage_uuid: UUID
+    succeeded: bool
+    automatic: bool
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ActionFact:
     kind: Literal["action"] = "action"
     source_entity_uuid: UUID
@@ -261,6 +311,7 @@ class ActionFact:
     behavior_id: str | None
     name: str | None
     source_item_uuid: UUID | None = None
+    reaction: ActionReaction | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -298,15 +349,59 @@ class SpatialEffectStateFact:
     kind: Literal["spatial_effect_state"] = "spatial_effect_state"
     spatial_effect_uuid: UUID
     positions: tuple[tuple[int, int], ...]
-    previous_state: TrapState
-    state: TrapState
+    previous_state: TrapState | None
+    state: TrapState | None
+    previous_pressed: bool | None = None
+    pressed: bool | None = None
+    operation: SpatialEffectChangeOperation = SpatialEffectChangeOperation.STATE_CHANGED
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MechanismActivationFact:
+    """A witnessed discharge with independently disclosed origin and footprint."""
+
+    kind: Literal["mechanism_activation"] = "mechanism_activation"
+    mechanism_uuid: UUID | None
+    mechanism_content_id: str
+    target_entity_uuid: UUID | None
+    origin_position: tuple[int, int] | None
+    direction: tuple[int, int]
+    affected_positions: tuple[tuple[int, int], ...]
+    end_position: tuple[int, int] | None
+    committed: bool
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObjectDamageFact:
+    """The completed damage result for an observed item, not an actor."""
+
+    kind: Literal["object_damage"] = "object_damage"
+    object_uuid: UUID
+    applied_damage: int
+    resulting_hp: int
+    damage_type: DamageType | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ObjectDestroyedFact:
+    """A witnessed break; replacement identity is retained only for old recordings."""
+
+    kind: Literal["object_destroyed"] = "object_destroyed"
+    object_uuid: UUID
+    replacement_uuid: UUID | None = None
+    placement: WorldObjectPlacement
+    item_id: str
+    remnant_state: ItemRemnantState | None = None
+    destruction_outcome: str | None = None
 
 
 PlayerFact = Annotated[
-    AttackFact | SpellFact | MovementFact | StepFact | ForcedMovementFact | ShoveFact
+    AttackFact | SpellFact | MovementFact | StepFact | ForcedMovementFact | PortalTransferFact | ShoveFact
     | DamageFact | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact | EquipmentFact
-    | ConditionChangeFact | SpatialFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact,
+    | ConditionChangeFact | SpatialFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
+    | ObjectDamageFact | ObjectDestroyedFact | MechanismActivationFact | SavingThrowFact,
     Field(discriminator="kind"),
+    BeforeValidator(upgrade_player_fact),
 ]
 
 
@@ -326,6 +421,13 @@ class ContentAttribution:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class ActionCancellation:
+    phase: EventPhase | None
+    action_economy_spent: bool
+    outcome_code: str | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class PlayerNode:
     uuid: UUID
     lineage_uuid: UUID
@@ -335,6 +437,7 @@ class PlayerNode:
     phase: EventPhase
     canceled: bool
     fact: PlayerFact | None
+    cancellation: ActionCancellation | None = None
     combat_log: CombatLogEntry | None = None
     content_attributions: tuple[ContentAttribution, ...] = ()
 
@@ -357,8 +460,18 @@ class FloorItem:
     boundary_structure: BoundaryStructure | None
     is_open: bool | None
     is_lit: bool | None
+    blocks_propagation: bool = False
     is_engaged: bool | None = None
     surface_residues: tuple[ObjectResidueState, ...] = ()
+    current_hit_points: int | None = None
+    maximum_hit_points: int | None = None
+    concentration_capacity: int = 0
+    concentration_slots: tuple[ItemConcentrationSlot, ...] = ()
+    door_mechanism: DoorMechanism | None = None
+    door_swing: DoorSwing | None = None
+    remnant_state: ItemRemnantState | None = None
+    integrity: ItemIntegrity = ItemIntegrity.INTACT
+    destruction_outcome: str | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -427,6 +540,9 @@ class PlayerState:
     connectors: tuple[WorldConnectorState, ...] = ()
     senses: SensesSnapshot | None = None
     reducer_cursor: int = 0
+    # Local reduction bookkeeping, reconstructed from saved version rows.
+    # Keep spatial commit order across separately timed presentation groups.
+    spatial_commit_cursors: dict[UUID, int] = field(default_factory=dict)
     actors: dict[UUID, PlayerActor] = field(default_factory=dict)
     current_actor_uuid: UUID | None = None
     round_number: int = 0

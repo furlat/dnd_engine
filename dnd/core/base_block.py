@@ -24,7 +24,7 @@ from dnd.types.senses import (
     SensesType as SensesType,
     SensesView,
 )
-from dnd.types.world import LightLevel, MovementMode, OccupancyLayer
+from dnd.types.world import LightLevel as LightLevel, MovementMode, OccupancyLayer
 from dnd.types.actor import EntityStatsState
 from dnd.types.world_placement import (
     BoundaryStructure,
@@ -160,6 +160,10 @@ class BaseBlock(BaseModel):
 
     def should_include_in_senses_objects(self) -> bool:
         """Whether this block should appear in entity senses.objects."""
+        return True
+
+    def is_observable_to(self, observer_uuid: UUID) -> bool:
+        """Admit ordinary contacts; composed objects can share an existing discovery owner."""
         return True
 
     def appears_in_entity_contacts(self) -> bool:
@@ -561,6 +565,11 @@ class BaseBlock(BaseModel):
         """
         pass
 
+    def on_world_placement_committed(self, event: Event) -> None:
+        """Let active condition owners settle inside the committed spatial cause."""
+        for condition in tuple(self.active_conditions.values()):
+            condition.on_owner_placement_committed(event)
+
     def get_position(self) -> Tuple[int, int]:
         """Return this block's current objective position value."""
         return self.position
@@ -858,6 +867,8 @@ class BaseBlock(BaseModel):
         for sub_uuid in list(condition.sub_conditions):
             sub_condition = BaseCondition.get(sub_uuid)
             if isinstance(sub_condition, BaseCondition):
+                if sub_condition.has_surviving_parent({condition.uuid}):
+                    continue
                 self._discard_condition_indexes(sub_condition)
                 self._discard_uncommitted_condition_tree(sub_condition)
 
@@ -1015,11 +1026,7 @@ class BaseBlock(BaseModel):
                 _, parent_condition_uuid = condition.parent_link
                 parent_condition = BaseCondition.get(parent_condition_uuid)
                 if isinstance(parent_condition, BaseCondition):
-                    parent_condition.linked_conditions = [
-                        link
-                        for link in parent_condition.linked_conditions
-                        if link[1] != condition.uuid
-                    ]
+                    parent_condition.unlink_condition(condition.uuid, parent_event=removed)
 
             condition.remove_from_register()
             condition.on_membership_changed(removed)
@@ -1067,10 +1074,15 @@ class BaseBlock(BaseModel):
         for child_uuid in list(condition.sub_conditions):
             child = BaseCondition.get(child_uuid)
             if isinstance(child, BaseCondition) and child.applied:
+                if child.has_surviving_parent(visited):
+                    continue
                 if child.is_active_spatial_condition():
                     child_owner = None
                 else:
-                    resolved_owner = BaseBlock.get(child.target_entity_uuid)
+                    resolved_owner = (
+                        BaseBlock.get(child.target_entity_uuid)
+                        if child.target_entity_uuid is not None else None
+                    )
                     child_owner = (
                         resolved_owner
                         if isinstance(resolved_owner, BaseBlock)

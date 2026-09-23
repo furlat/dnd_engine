@@ -4,7 +4,7 @@ The [user complaint record](agent_docs/USER_COMPLAINTS.md) preserves the user's
 corrections and required contracts, including record-once event replay. Read it
 alongside this plan; a bounded implementation status does not relax those contracts.
 
-Updated 2026-09-13, retaining the user's correction: **develop the game, not a
+Updated 2026-09-22, retaining the user's correction: **develop the game, not a
 sequence of spell demonstrations.** Working branch: **codex/recovery-design**,
 based on **codex/july-reconstruction at 16a6bfe**. The human committed the
 validated recovery implementation as **58b0946** (`visio nextraction working`).
@@ -27,811 +27,336 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
-**September 20 — all ten remaining ordinary test failures repaired.**
-The [study and repair result](agent_docs/TEST_FAILURE_STUDY_2026-09-20.md)
-records corrections in three test files, preserving and strengthening visibility,
-contact-time blood growth, real rendered pixels, complete trap ancestry,
-serialized replay and mutable-state isolation. No runtime changes or new skips
-were needed. The complete game test selection passed in three batches:
-**1,190 passed, 6 existing expected failures**; the separate gallery/HTTP lane
-passed **11 tests**. Those six expected failures still describe real terrain
-occlusion defects during jumps/forced movement and remain explicitly tracked.
-
-**September 20 — graphics cleanup implemented from `39d1f6c21b`.**
-The [implementation result](agent_docs/GRAPHICS_CLEANUP_RESULT_2026-09-20.md)
-records authored recipe ownership, media-only reimport, explicit casting bake
-inputs, shared projectile registration, and the initialized coverage inventory
-with gallery evidence. The [portable contract](game/data/PRESENTATION_CONTRACT.md)
-identifies the local Studio extension and its execution meaning. Eight saved-input
-clips before/after have identical video/poster bytes across 874 four-camera
-frames; no visual regression framework was introduced. Known presentation gaps
-remain explicit; the feature-selection portion of work unit 6 is still pending.
-The broader ordinary test failures were subsequently investigated and repaired
-as recorded above; checkpoint reproduction was not treated as a waiver.
-
-**September 20 — proposed graphics cleanup and event coverage.** The
-[practical cleanup plan](agent_docs/GRAPHICS_CLEANUP_PLAN_2026-09-20.md)
-defines authoring/importer ownership, stable placement semantics, future TS
-reuse and a lean coverage view built from initialization/registries. The
-[event/content inventory](agent_docs/PRESENTATION_EVENT_COVERAGE_2026-09-20.md)
-distinguishes ingestion, player projection, parent-owned animation, state-only
-handling and missing selected bindings. No hashes, source audits or asset scans
-are part of coverage. **The user approved final rendered output, not raw JSON
-values:** preserve the effective code/data/media/post-processing result using
-the same saved inputs before and after migration. Both anti-slop and ECS reviews
-approved the revised sequence. The planning turn changes documentation only;
-implementation has not started.
-
-The [visual comparison idea](agent_docs/VISUAL_COMPARISON_IDEA_2026-09-20.md)
-is deferred for ad hoc use when difficult regressions warrant it. It is not a
-new testing framework, routine gate, or prerequisite for graphics cleanup.
-
-**September 20 — graphics portability review, before further alignment fixes.**
-The [consolidated review](agent_docs/GRAPHICS_PORTABILITY_REVIEW_2026-09-20.md)
-separates reusable authoring, shared execution semantics and renderer-specific
-implementation. Actual NeuroClient validation rejects seven of the nine approved
-combat-spell recipes; accepted extensions can also go unused there. Attachment
-ownership mixes legacy canvas registration, rig/socket coordinates and local
-corrections. Complete lineages and independent playback remain intact. The
-review records populated versus dormant presentation gaps and a bounded next
-sequence; this audit changes documentation only. The contact patch below is a
-local visual correction, not proof of a coherent shared attachment contract.
-**User clarification:** extending a restrictive old schema is acceptable when
-the feature is justified. Stable hand-tuned numerical placement is acceptable;
-full keypoint animation tracks are not required. Accidental importer inheritance
-and multiple authoring owners remain concrete problems. The user accepts omitted
-potion/source VFX strips; restoring them is not pending work. Drinking and effect
-timing already work. Walk/jump optional media and recovery fields are inactive
-legacy authoring, not missing walking/jumping: current jump trajectory, height,
-single-cycle body timing and prelaunch reactions remain implemented.
-
-**September 20 — Ray/Ice Knife body contact raised after visual review.**
-The two incoming recipes now author a 12-pixel upward body offset, keeping
-Ice Knife's ground burst separate. Renderer and native mechanics are unchanged.
-Both independent reviewers approved; 78 timing/area tests pass. The
-[12-clip correction gallery](http://127.0.0.1:8767/runs/20260920T093827Z-8a6af9/index.html)
-passes across 1,426 four-camera frames with no media gaps and unchanged saved
-input bytes. [The result records the correction](agent_docs/ICE_SPELL_AND_PALETTE_INTEGRATION_2026-09-20.md#body-contact-correction-after-visual-review).
-
-**September 20 — new spell handoff and spell palettes integrated.** The
-[reviewed implementation result](agent_docs/ICE_SPELL_AND_PALETTE_INTEGRATION_2026-09-20.md)
-connects production-v8 Ray of Frost, Ice Knife and Chill Touch through shared
-authored timing, directional registration and paged media. Ray/Chill retain
-their native rules; Ice Knife adds one paid attack-plus-burst cast with complete
-native child causality. Casting overlays and contact flashes use the actual
-palettes of nine approved spells, including the delivered Fireball/Eldritch
-color revision. Independent anti-slop/ECS reviews passed. The
-[27-clip gallery](http://127.0.0.1:8767/runs/20260920T005836Z-d15230/index.html)
-passes across 3,121 four-camera frames with no media gaps; the seven new
-experiments include both caster and recipient. All clips replay saved events.
-Older native archive compatibility is preserved without regenerating gameplay.
-The result records focused tests, unchanged broader failures and the explicit
-AI/art limits. [Chilled ground](agent_docs/CHILLED_GROUND_PROPOSAL_2026-09-20.md)
-remains a separately reviewed proposal; no freezing mechanics were added.
-
-**September 20 — material review actors corrected.** Bone examples now use
-the premade Undead Skeleton Archer, including the mixed-material scene. Toxic
-examples use the packaged Orc01 with an explicitly configured corrosive review
-response. Canonical Orc rules are unchanged. The [14-clip gallery](http://127.0.0.1:8767/runs/20260920T002005Z-c8c90f/index.html)
-passes across 2,938 four-camera frames with no media gaps; 25 replay tests pass
-and affected modules typecheck clean. This is a creature/fixture selection
-correction, not a change to counterpart residue extent or quantity.
-
-**September 20 — blood reference restored for visual review.** The user rejected the
-modest tuning below: the compact replacement lost the two-goblin reference's
-spray and cross-tile distribution. The [reference correction](agent_docs/BLOOD_REFERENCE_CORRECTION_2026-09-20.md)
-records the moderately high target, independent reviews and ordinary-blood
-geometry/media correction. Production now uses the original 56-droplet
-distribution, broader native receiving regions and five-hit irregular pool
-growth. Counterpart hazard coverage is preserved. The [28-clip saved-event gallery](http://127.0.0.1:8767/runs/20260920T001053Z-bfa9ce/index.html)
-passes across 3,260 four-camera frames with no media gaps. Both reviews and
-focused regressions pass; the user's visual judgment remains distinct from
-replay correctness.
-
-**September 20 — moderate gore tuning, subsequently visually rejected.** Six existing native
-ellipse records now give approximately 35% wider stains and modestly more spread.
-No new renderer or handler behavior was needed. Blood's five-unit growth and
-non-blood saturation remain explicit. The [reviewed tuning record](agent_docs/MODERATE_GORE_TUNING_2026-09-20.md)
-contains the visual comparison, unchanged canonical tile-membership check and
-hazard/replay verification. **101 tests passed**. The [new 28-clip gallery](http://127.0.0.1:8767/runs/20260919T235102Z-e50471/index.html)
-passes across 5,024 four-camera frames, including seven-hit blood, bone,
-corrosive and dread sequences from both participants. Counterpart cases document
-their existing one-unit floor cap; they do not claim growing quantities. The
-prior gallery remains the before-comparison.
-
-
-**September 20 — weapon motion and facing corrected after visual review.**
-The [bounded correction and results](agent_docs/WEAPON_ANIMATION_AND_FACING_2026-09-20.md)
-replace global critical/elemental motion overrides with shared authored profiles:
-weapon-specific choices precede damage-type defaults. Dagger criticals use the
-requested overhead strike; ordinary piercing thrusts and swung morningstars
-remain distinct. Contact anchors and effects are recipe data, with no native
-combat change. Starting review poses now face participants toward each other;
-three deliberate rear-hit examples preserve the recipient's facing. The
-[updated 40-clip gallery](http://127.0.0.1:8767/runs/20260919T233559Z-0ebdbd/index.html)
-passes across 3,506 four-camera frames from saved player inputs. Focused and
-review/export regressions: **68 passed**; affected modules typecheck clean;
-anti-slop and ECS reviews approved. The document records the explicit offhand
-and fixed-rig coverage limits and the small TS-portable `sourceItemIds` extension.
-
-
-**September 20 — directed material releases implemented.** The
-[implementation result](agent_docs/BODY_RELEASE_IMPLEMENTATION_RESULT_2026-09-20.md)
-records the completed native geometry, capped tile contributions, subjective
-replay, historical particle arrivals and persistent organic/fragment floor.
-Piercing/slashing/blunt and critical detail share one native/presentation path.
-Blood, bones and existing demonic materials are connected; same-height supports
-and propagation admit deposits, with no new flight/cross-height mechanics.
-The [reviewed plan](agent_docs/BODY_RELEASE_IMPLEMENTATION_PLAN_2026-09-20.md)
-remains the contract, with its clipped-edge presentation limit documented in the
-result. Both final independent reviewers approved. Focused tests: 101 passed;
-affected modules typecheck clean. The broader run's 14 failures are inventoried
-explicitly rather than treated as a passing whole-repository suite.
-The [final gallery](http://127.0.0.1:8767/runs/20260919T230628Z-0a2658/index.html) passed all 40 clips
-(3,503 four-camera frames), replayed from saved player packets. The four
-opportunity cards retain a reported fixed-goblin decorative slash media gap. Wider
-skill-authored blood layouts suggested in the asset task remain a future gameplay
-decision. The result also records a concrete world-edit initialization follow-up
-found while preparing height fixtures; the final cases use the existing authored
-terrace.
-
-**Completed current unit — delivered spells and Fireball surfaces.**
-The user authorized the Fireball/walls, Eldritch Blast, Guiding Bolt and Acid
-Splash handoffs after the body/residue unit. The
-[implementation plan](agent_docs/SPELL_HANDOFF_INTEGRATION_2026-09-19.md) owns this
-work. Fireball now applies an inert native **Ashen** condition to its resolved
-floor supports, as explicitly requested by the user. Contacted wall faces retain
-their own condition state; rendering receives permitted after-values. Native
-area publication, subjective filtering, shared playback and selected artwork are
-connected. Eldritch uses independent native beam attacks; Guiding's mark and
-Acid's separate saves retain their existing native mechanics. The
-[30-clip spell gallery](http://127.0.0.1:8767/runs/20260919T151344Z-4b12b5/index.html)
-passes all replay checks across 3,304 four-camera frames, from both participants.
-Saved playback created **zero native events**. Input bytes and semantic traces
-match the preceding replay; only Fireball's review-camera framing changed.
-The implementation plan's results section records tests, independent anti-slop
-and ECS review, visual inspection, and the ground-mask/stair-art limits. These
-four spells extend shared capabilities; this is not completion of the encounter
-plan or acceptance of every artwork detail.
-
-**Projectile orientation correction after user review:** the imported point
-recipes now preserve NeuroClient's `isometricHybrid` residual rotation after
-selecting the actual authored row. The importer had disabled it. Shared sampler
-and renderer were already correct; neither needed new behavior. All 142 focused
-checks pass, including off-axis/socket/elevated alignment in all four cameras.
-The [corrected 16 point-spell clips](http://127.0.0.1:8767/runs/20260919T161448Z-2a27a7/index.html)
-pass from unchanged saved inputs, with zero native events during replay.
-The newer Fireball contact/timing gallery is below.
-
-**Fireball contact and travel correction:** recorded Ashen changes now join the
-ground-impact anchor, then reveal outward at 10 tiles/second (about 400ms over
-20ft). Existing marks remain visible on repeated hits. Travel is twice as fast
-and 20% larger; explosion size is preserved. The
-[updated 14 Fireball clips](http://127.0.0.1:8767/runs/20260919T162630Z-c573f3/index.html)
-pass across 1,594 four-camera frames from unchanged saved inputs and identical
-final states, with zero native event creation. Targeted timing/media tests pass
-47; separate regression and expanded area suites pass 169 and 76 respectively
-(overlapping runs, not summed). Anti-slop and ECS review passed the timing fix.
-
-**Foreground wall overwrite corrected:** an extended area sprite is now masked
-by actual foreground wall/frame/leaf silhouettes at final scene composition.
-The camera and impact's sides of the physical boundary determine occlusion;
-individual wall-segment Y keys no longer allow the blast to overwrite the wall.
-64 final-image cases pass (both layers, doors, orientations, all cameras, both
-sides and matching raised supports), plus 250 related tests. The open-door cases
-also require visible fire in the aperture. Native facts and timelines are unchanged.
-The [updated 14 clips](http://127.0.0.1:8767/runs/20260919T164739Z-060990/index.html)
-pass across 1,594 four-camera frames. Direct comparison with the preceding run
-confirms identical saved inputs, states, lineages, bound heads and frame traces;
-only final composed pixels change. Another 41 gallery/live/ranged/trap tests pass.
-See the [bounded fix and reviews](agent_docs/SPELL_HANDOFF_INTEGRATION_2026-09-19.md#foreground-wall-leak-correction--2026-09-19).
-
-**Exposed wall contact corrected after the user's clarification:** fire may
-wash over a physically reachable wall face; it may not cross the wall. The shared
-compositor now restores only receiving silhouette pixels at that wall's depth,
-with disjoint ground/wall ownership and a world-space check for intervening walls.
-Existing native wall-face Ashen conditions and their soot rendering were already
-working and are preserved. 104 final-composition tests pass, including foreground
-blocking, rear contact, doors, both blends, all cameras, an intervening wall and
-foreground-body ordering. The composition/timeline suite passes 180; a separate
-native/projection/timing/media suite passes 171 (overlapping sets). Geometry masks
-are reused across frames and capped at four views per cast. See the
-[implementation and independent reviews](agent_docs/SPELL_HANDOFF_INTEGRATION_2026-09-19.md#exposed-wall-contact-correction--2026-09-19).
-The [updated 14 paired clips](http://127.0.0.1:8767/runs/20260919T172957Z-0a2de3/index.html)
-pass across 1,594 four-camera frames from unchanged saved event inputs. Contact
-and persistent charred aftermath were inspected; no native scenario was rerun.
-Mixed front/rear corners retain conservative occlusion; full elevated/L-junction
-native scene videos and stair-shaped soot are not claimed by these tests.
-
-**Completed preceding unit — body releases, tile residues, skeletons and demons.**
-The [approved unit](agent_docs/BODY_RELEASES_AND_RESIDUES_PLAN_2026-09-19.md#13-bodyresidue-implementation-and-review)
-now connects shared creature responses, tile-owned blood/bone/corrosive/dread
-profiles, paid fear retreat and saved subjective playback. Delivered floor traces,
-injury strips and bloodied spike overlays are integrated. The Blood and Bone
-Workshop is playable with `python -m game --encounter encounter.residue_workshop`;
-the actual frame-loop test covers its lever, turn progression and enemy AI.
-The integrated suite passed 193 tests with two existing stair-occlusion xfails;
-the expanded strip suite passes 11 and live session/frame-loop checks pass four.
-These counts overlap and are separate runs, not a summed total.
-The linked results record owns gallery evidence and remaining limits, including
-the earlier interrupted-jump discrepancy below and unselected blood-amount rules.
-The [current 22-clip gallery](http://127.0.0.1:8767/runs/20260919T021723Z-83290f/index.html)
-covers 11 paired native experiments. All 4,121 four-camera frames replay with
-identical input/video bytes and matching semantic traces, without native execution.
-The subsequent spell/scorch handoff is completed above; this remains separate
-body/residue evidence.
-
-**Jump/floor-contact prerequisite and scope correction.**
-The user explicitly rejected expanding this into flight behavior: “we are not
-implementing flight stuff … we were just fixing jump.” The added Move-based
-flight/hover transitions, hover experiments and Land-before-walking gate are
-removed. No landing-price, Land-action or wing-dismissal decision blocks this work.
-The [A0 contract](agent_docs/BODY_RELEASES_AND_RESIDUES_PLAN_2026-09-19.md#a0-close-the-demonstrated-jumpfloor-contact-defect-first)
-now states that scope directly. Jump crosses traps in AIR and settles GROUND at
-its actual endpoint; walking and Misty Step contact remain intact. Native layers,
-shared effect admission and saved player facts support this correction without
-turning it into a flight implementation.
-
-The narrowed implementation passes **195 integrated tests**, including 30 native
-contact/admission cases. [Four paired jump-only clips](http://127.0.0.1:8767/runs/20260919T011700Z-43319b/index.html)
-replay identically from saved events and are available in the main archive. The
-former 206-test/six-clip counts included the withdrawn hover scenario and are
-historical. Two late interrupted-jump views remain explicitly flagged: the
-existing pre-takeoff reaction presentation holds the body at launch while native
-partial movement can land on a trap. Passing event checks does not accept that
-discrepancy.
-
-The user refined dread blood to paid retreat toward the entry cell, ending fear
-on that exit and remaining frightened when retreat is unaffordable. This phase E
-rule now works through native movement and the shared historical compositor.
-Misty Step uses one paid adjacent step toward departure on a failed save; jumping
-lands before its recorded return walk. No flight feature was added.
-Anti-slop and ECS/anti-OOP review cover the narrowed contract and implementation.
-
-**September 19 current follow-up — full trap lifecycle implemented:** native
-discovered actions now record detected/undetected entry, exit and damaging
-re-entry while raised, lever deactivation and safe crossings, then lever
-activation beneath a stationary occupant. Tests follow that same ten-action
-narrative from both saved viewpoints. Actual lever/plain/coated sheets use the
-shared painter and historical clock; seven experiments produce 14 four-camera
-clips. **14/14 fresh-process saved-input replays pass, with unchanged inputs and
-final states and no reported gaps.** The
-[acceptance/results record](agent_docs/TRAP_STATE_PLAN_2026-09-19.md#current-clip-acceptance-unit)
-owns this scope and reviews. Earlier pending-occupant-decision and staged-only
-language below is historical and superseded.
-
-The review [archive](http://127.0.0.1:8767/) now lists all saved runs, with a
-backlink from each gallery. Pixel-difference regression comparison is a
-[documented future idea](devtools/animation_review/README.md#proposed-visual-regression-comparison--documented-not-implemented),
-explicitly not implemented. **Bloodied is now approved as a tile-owned property**,
-mechanically inert for now and available for later elemental/magic interactions.
-The requested next unit has a
-[full body-release/residue plan](agent_docs/BODY_RELEASES_AND_RESIDUES_PLAN_2026-09-19.md):
-one shared configured response per creature, repeated release facts, persistent
-tile conditions, bloodied spike art, both modular Body 2 and fixed skeleton rigs,
-and selected demon variants with corrosive or low-DC fear residue. The approved
-initial content uses entry-only 1d4 acid and Wisdom DC 10 paid retreat.
-Hazardous residues use existing local spatial handlers;
-ground-sourced fear needs a bounded extension of the existing condition. The
-plan includes implementation order, paired four-camera narratives, saved-event
-replay and anti-slop/anti-OOP review. This supersedes the earlier spike-only and
-map-global subscription proposals. Current implementation status is at the top
-of the body/residue plan; older study checkpoints below are historical.
-
-**Historical ground-contact baseline — flight expansion superseded:** the initial
-matrix had 15 passing and 6 failing cases, including flight rows. It exposed real
-jump-over-trap failures, but also encoded the assistant's later-withdrawn hover
-scope. The active A0 contract above supersedes those flight expectations and the
-proposed flight-touchdown blocker. Walking, jump landing and Misty Step remain
-controls in the selected native jump/contact suite.
-
-**September 19 trap backend unit validated:** persistent trap mechanics,
-state-based descriptions, remembered observer discovery and three shared spike
-payload profiles now cross native and saved player events. Finite levers lower
-without deleting; reusable controls request activation/deactivation from their
-own handle state. **128 gameplay/replay tests and four architecture checks pass.**
-The [results and limits](agent_docs/TRAP_STATE_PLAN_2026-09-19.md#backend-result)
-record validation and existing type/legacy-fixture failures. Manual activation
-currently changes state without processing existing occupants; that gameplay
-choice is still pending. The authorized artwork request has been sent to the
-existing sprite task after backend validation, prioritizing matching spike
-variants before the wire/clamp/vent families. Actual sheet binding and visual
-acceptance remain outstanding.
-
-**September 19 trap design and variant study:** the user requested a small
-backend-first plan before resuming art integration. The
-[trap state plan](agent_docs/TRAP_STATE_PLAN_2026-09-19.md) separates persistent
-Ready / Activated / Deactivated mechanics from observer discovery and ordinary
-spatial installation/removal. Handlers own causal state/effects; descriptions
-and presentation consume permitted recorded state. The first proposed content
-unit is plain spikes, poison-damage spikes and save-gated Poisoned spikes on one
-shared owner. A [twelve-variant study](agent_docs/GROUND_TRAP_VARIANTS_2026-09-19.md)
-maps later content onto existing damage, conditions and surfaces, with small
-reusable art families. It is a design backlog, not twelve implementation
-commitments. Manual activation against existing occupants remains an unanswered
-gameplay choice. Anti-slop and anti-OOP reviews approved this plan. The user
-subsequently authorized backend implementation, then an artwork handoff to the
-existing sprite task after backend validation. That bounded unit is now active.
-
-**September 19 selected prop art integration checkpoint:** the earlier pause
-allowed the backend unit above to establish real mechanical and observer state.
-Selected PNGs and an unused passive binding extension are staged; the current
-scene retains its existing bindings. The trap plan supersedes the original
-assumption that art could bind only the old trap lifecycle facts.
-The intended integration is to replace actual lever
-instances with the delivered Blender sheet and connect the approved spike
-overlay through existing world data/rendering. The
-[bounded unit](agent_docs/ENVIRONMENT_SPRITE_INTEGRATION_2026-09-19.md) preserves
-hand-contact timing, native state/disclosure and saved subjective replay, with
-anti-slop and anti-OOP reviews. The old screenshot-overlay preview is not proof
-of integration.
-
-**September 18 Misty Step unit complete:** native teleport discovery and causal
-parenting now connect to an ordinary Studio cast and a passive relocation binding.
-The received position/support/sight changes at release frame 8; no intermediate
-movement or opportunity attack is invented. Eight experiments yield **16 paired
-four-camera clips**, covering flat/reverse, water, elevation, doorway departure
-and arrival, and pause. All clips pass and fresh-process saved-input replay
-produces identical video bytes without native execution. A concrete projection
-fix prevents a located arrival from disclosing its hidden departure coordinate.
-The [gallery](http://127.0.0.1:8767/runs/20260918T184756Z-b1f17a/index.html) and
-[implementation/checks](agent_docs/MISTY_STEP_2026-09-18.md) retain the evidence,
-review approval and limits. Dedicated mist VFX remains unauthored. Native sight
-rules are unchanged. Continue the parent gameplay/environment lane below.
-
-**September 18 controls/contact unit complete:** reusable light/door controls and
-real chest lids now emit their state through the existing native owners. One
-shared arm-extension recipe uses the existing Studio schema and original Attack5
-clip. Recorded object/sight/loot changes appear at contact frame 3 (250ms), with
-retraction afterward; a lever's target child shares the outer physical reach.
-Native event progression remains independent. **233 gameplay checks pass**, with
-two existing stair-occlusion expected failures; **24 paired four-corner clips
-pass and replay from saved public input in a fresh process**, producing identical
-video bytes. Hidden target identity and foreign private inventory remain absent.
-Anti-slop and anti-OOP reviews approved the changes. The
-[combined gallery](http://127.0.0.1:8767/runs/20260918T144144Z-c728cc/index.html)
-and [completed results](agent_docs/GAMEPLAY_ENVIRONMENT_AND_DELIVERY_2026-09-18.md#completed-controls-and-contact-unit)
-record checks, the separate native catalog-count failure, art provenance and
-limits. Precise hand placement across prop heights and fixed rigs without this
-clip remain unimplemented. Broader shared action delivery and the environmental
-capabilities listed in that plan remain the parent lane; this unit does not
-claim they are complete. Immediate recipes below describe the older checkpoint.
-
-**September 18 environment checkpoint complete:** placed standing/wall lights
-and the linked trap lever now connect real actions, item after-values and shared
-prop drawing. An authored workshop and paired experiments prove extinguish /
-relight, ordinary vision versus darkvision, an independent light, trap damage
-before pulling, safe recrossing afterward and a different trap remaining active.
-**97 focused checks pass; all 12 four-corner clips pass and replay from saved
-public input in a fresh process without native execution.** Results, the
-[gallery](http://127.0.0.1:8767/runs/20260918T140227Z-342b3b/index.html), art limits
-and commands are in the
-[environment plan](agent_docs/GAMEPLAY_ENVIRONMENT_AND_DELIVERY_2026-09-18.md).
-The user clarified that **new backend behavior is explicitly part of this work**:
-existing actions are a starting point, not the feature boundary. The next native
-unit authors controls linked to placed lights/doors and actual container
-open/closed state at existing item/action owners. Preserve causal target changes,
-subjective event replay and passive presentation data. Anti-slop and anti-OOP
-reviews remain required; broader shared action delivery remains the parent lane.
-
-**Environment scope correction:** the user explicitly requested going beyond
-the familiar door/chest loop, especially levers and switching off placed lights.
-The [environment plan](agent_docs/GAMEPLAY_ENVIRONMENT_AND_DELIVERY_2026-09-18.md)
-now prioritizes actual extinguish/relight consequences and a linked lever that
-deactivates a trap, with paired subjective recordings. Passive prop bindings
-connect existing state/art through the current painter; no new interaction
-framework or rule-in-the-renderer is planned. Breakable containers, oil/fire
-surfaces, campfires and skill-gated/spell devices are the broader existing
-capabilities to connect next. The previous door/loot-only ordering below is
-superseded. Anti-slop and anti-OOP reviewers retain their stated roles.
-
-**September 18 gameplay resumption:** the user approved returning to broader
-shared action delivery and added environment interaction: lootable containers,
-doors and other props with their states/animations. The
-[bounded gameplay plan](agent_docs/GAMEPLAY_ENVIRONMENT_AND_DELIVERY_2026-09-18.md)
-starts with asset/native/client study, then a usable room exercising existing
-door and loot actions through the same saved subjective event/playback path.
-Original Studio environment rows are mostly immediate state-only recipes;
-static open/closed art must be distinguished from authored animation. Reuse
-current world/item/interaction owners and passive art bindings. Anti-slop review
-is assigned to `environment_native_review`, anti-OOP review to
-`environment_timeline_review`, and asset inspection to `environment_asset_scan`.
-The broader self/touch/direct/area/persistent delivery objective remains active.
-Older performance-pause instructions below record completed stages; they do not
-override this return to gameplay. No new gameplay implementation is claimed by
-the asset study. Its first concrete native blocker is now repaired: Loot All
-preserves items rejected by inventory capacity and parents accepted transfer
-facts to the existing action. Three regressions failed before the small call-site
-fix; **26 focused checks pass** afterward, with clean changed-file Pyright and
-both reviews approved. The [asset study](agent_docs/ENVIRONMENT_ASSET_STUDY_2026-09-18.md)
-confirms three four-direction chest state pairs and other usable props. Ordinary
-prop drawing, an explicit chest-lid state and the playable interaction room are
-the next connection; they are not claimed implemented by this checkpoint.
-
-**September 18 startup decision:** the requested fresh Linux source copy confirms
-that filesystem placement matters: native imports measure **1.595s versus 2.898s**
-on C:, and the complete one-frame headless game launch **3.050s versus 5.032s**.
-These are three-run medians with the same existing WSL uv Python environment.
-The user requested stopping this optimization track if the copy was fast; stop
-startup code changes here and migrate the source folder later. The active checkout
-remains on C:. `/home/tommaso/Dev/dnd_engine-startup-check-20260918` is only a
-diagnostic snapshot. No startup cache/launcher, source audit or engine change was
-introduced for this result. Details and reproduction are in the
-[September 18 unit](agent_docs/STARTUP_AND_CATALOG_RECOVERY_2026-09-18.md).
-The separately authorized catalog/provider unit is also complete: the original
-80-decision warband regression uses the current direct Barbarian premade, and the
-real HTTP provider matrix exercises current native encounters plus saved paired
-subjective lineages. **41 distinct focused checks pass** across catalog, provider
-and session coverage. Old game-hosting HTTP routes remain retired; an additional
-historical torch scenario still depends on a deleted Sorcerer recipe. The bounded
-plan records those limits instead of claiming the full retired catalog/server works.
-
-**Loading checkpoint:** the user accepts the measured ~200ms GC pauses
-for now and selected WSL. Controlled comparisons put native imports at **1.709s**
-with uv's Python 3.13.12 and Linux source/packages, versus the earlier mounted
-Python 3.12 environment's **4.529s**. Package versions are unchanged. The new WSL
-environment is prepared; imports against the actual C: checkout measure
-**2.909s**. The checkout remains there pending the source-location decision.
-A diagnostic Linux source copy is not the active branch. See the results for
-separate comparisons, setup and native turn costs;
-these figures do not measure whole-game startup. Leave GC tuning and capture
-persistence aside.
-
-**Native execution scope:** after loading, investigate
-sensory cascades, listing available items/actions, pathfinding and their cost
-inside real native turns. Study and profile these paths after imports/setup;
-keep capture, reduction and drawing outside that clock. Start with the current
-encounter, then use existing focused scenarios where it does not exercise a
-requested path. Choose repairs from measured work and actual caller needs,
-preserving per-step perception, available choices, legal paths, reactions and
-complete event lineages. This native unit takes priority over capture persistence
-and rendering work. Anti-slop reviewer `recorded_gallery` traces sensory cascade
-semantics; anti-OOP reviewer `lifecycle_source_review` traces discovery/pathfinding
-ownership. Both review the concrete changes before the next checkpoint.
-The first profile and source findings are in the
-[repair results](agent_docs/PERFORMANCE_REPAIR_RESULTS_2026-09-12.md): sensory
-recomputation and AI known-tile projection dominate this encounter's instrumented
-execution. Those findings motivated the completed sensory/AI unit below.
-Targeted elapsed timers confirm this ordering: about 1.10s sensory refresh,
-0.82s AI world projection, 0.285s discovery and 0.081s path computation across
-the same native workload. These nested diagnostic totals include instrumentation
-and are not additive; the results preserve the separate uninstrumented reference.
-**Current plan, September 13 — repair sensory production and AI consumption:**
-the [completed study](agent_docs/SENSORY_EVENT_FLOW_STUDY_2026-09-12.md), committed
-in `8f6677c`, confirms that hints mostly narrow observers, not each observer's
-work, and native AI reconstructs knowledge instead of consuming events.
-The [practical execution plan](agent_docs/PERFORMANCE_FIX_PLAN_2026-09-12.md#current-execution-plan-sensory-updates-and-ai-knowledge)
-now specifies four checkpoints: targeted contact updates for stationary movement
-witnesses; mapping the existing AI world fields to recorded facts; replacing live
-AI reconstruction with an assignment-owned event fold; and narrowing remaining
-sensory work according to measurements. Preserve actual light-child ordering,
-typed special-sense contacts and navigation invalidation. AI knowledge advances
-at committed Steps while rendering still consumes complete subjective lineages.
-Anti-slop and anti-OOP reviews refined the scope, shared-observer/memory rules,
-source cursor versus decision identity and acceptance checks. The user authorized
-carrying all checkpoints through without stopping for approval. **This unit is
-complete:** stationary contact updates, the recorded field map, assignment-owned
-event consumption, restricted unchanged condition/turn reuse and empty optical
-route returns are implemented. The final integrated selection passes **240
-checks**. Native activity falls from 2.376s to **1.419s median** for the same eight
-human turns plus AI; diagnostic AI projection falls from 0.818s to **0.035s**, and
-full sensory refreshes from 240 to **82**. Complete lineages and committed-Step
-knowledge remain separate. Missing condition/health/world/hazard after-values are
-recorded at existing owners, and saved facts replay with native registries cleared.
-See the [completed results](agent_docs/PERFORMANCE_REPAIR_RESULTS_2026-09-12.md#september-13-completed-sensory-and-ai-event-consumption-unit)
-and [field map](agent_docs/AI_EVENT_FIELD_MAP_2026-09-13.md). Final C: imports remain
-3.370s; startup has not been solved by this native activity repair. Remaining
-measured work is sensory refresh (~0.29s) and discovery (~0.26s excluding GC),
-with paths (~0.08s) inside discovery and inventory enumeration (~0.004s). These
-are nested diagnostic spans. Broader light/scaling work and admission capture
-remain separate; rendering and GC work stay paused. Two preexisting retired
-catalog/server tests remain outside the passing selection, documented in results.
-
-**Current unit, September 12 — performance repair implementation:** the user
-approved executing the reviewed repair plan after the whole-source audit and
-plain timing baseline. The startup/media/query pass is checkpointed as `13f412d`
-and `18a2163`. Compact ordinary Tile costs and removal of the mandatory duplicate
-condition-effect prediction catalog are checkpointed as `0a2140c`. The current
-loading unit establishes the WSL uv setup and removes only the unread stored
-action parent, preserving the explicit event-parent arguments, in `0fb609a`.
-Thirty selected
-lifecycle, movement interruption, history and session checks pass on WSL Python
-3.13.12, and the game boots through its one-frame headless check. The field
-deletion has no demonstrated import-speed gain. Feature/VFX work remains paused.
-
-- [Fix plan](agent_docs/PERFORMANCE_FIX_PLAN_2026-09-12.md): first repair ordinary
-  startup/import and media ownership; then native query/AI work; then measured
-  capture/root-compilation work. Terrain representation and content identity are
-  separately bounded decisions, not seven compulsory redesigns before gameplay
-  can resume. Preserve complete subjective lineages, independent playback and
-  recorded-event sufficiency throughout.
-- [Current baseline](agent_docs/PERFORMANCE_BASELINE_2026-09-12.md): twelve
-  successful serial runs, three per workload. Native imports 4.648s, encounter
-  setup 0.471s, eight human turns plus native AI 3.889s. Saved public playback
-  imports 3.989s, actor media 2.363s; 244 four-corner view renders total 0.689s.
-  A separate 4,096-tile rectangle takes 1.642s to construct. These are medians
-  for different stages/workloads, not additive claims or guaranteed savings.
-- [Whole-codebase audit](agent_docs/audits/CODEBASE_MACHINERY_AUDIT_2026-09-12.md)
-  records the critical design/work failure, source coverage and concrete owners.
-  It remains evidence, not authority to revive retired server code or preserve
-  old validation. Existing tests do not justify unnecessary runtime work.
-
-**Repair checkpoints:** [results and remaining costs](agent_docs/PERFORMANCE_REPAIR_RESULTS_2026-09-12.md).
-The latest ordinary 4,096-tile build is **0.164s versus 1.412s** at the previous
-checkpoint; encounter setup is **0.215s versus 0.424s**. Untouched movement modes
-store their authored integers; actual edits acquire the existing modifier owner.
-Area-condition removal, independent modes, authored/effective values and owned
-graph disposal remain. The condition prediction catalog is removed while actual
-providers, authored dependencies and lifecycle metadata remain.
-
-Native active work measured 3.565s in the latest original-workload medians, versus
-3.308s at the prior checkpoint and 3.889s initially. The full native process
-measured 9.265s versus the previous 8.952s. The results record preserves this
-difference and the alternating checkpoint/current investigation; setup savings
-do not establish faster turn execution. The last saved-playback measurement
-remains 3.493s versus 8.404s; rendering was not rerun for this native-only unit.
-Public reduction/passive records are separated from native adapters, and the
-internal AI outcome/exposure serialization bridge is removed. Existing AI
-observation memory stays. Those native import measurements used the old mounted
-environment; the latest controlled WSL comparison is recorded above.
-
-**Validated media/capture checkpoint:** the two-actor request now loads 72 initial
-pose rows and 136 total with its movement (127.5 MiB), down from 1,008 rows and
-945 MiB. The same session map receives the next complete head's typed clip/loadout
-requests; world rasters decode on demand. First-use world loading is included in
-the measured render costs. Movement/reaction/equipment/condition/lifecycle checks
-pass; six existing raised-terrain pixel failures remain expected failures.
-The world-diff guard reduces public projection from 44ms to 13ms in the native
-workload. Batch-local source indexing lowers the largest paired capture from
-1.799s to 1.500s, with the same typed outputs and sensory-time admissions.
-
-**Latest native validation:** 186 terrain cases and six native AI cases pass;
-eight current metadata/provider/True Seeing cases also pass. The results record
-identifies corrected fixture inputs, unchanged broader type errors and the
-retired import blocking one older metadata test. Independent anti-slop/anti-OOP
-reviews approved the concrete ownership and catalog changes.
-
-**Open performance work:** eager native imports and repeated private actor
-admission folding as history grows remain substantial. The expensive ordinary
-Tile graphs have been removed; batch-local indexing did not fix the actor-history
-fold. A further read-only study records exact acquisition-time/sparse-root
-requirements before selecting a persistent capture owner. Apply the existing
-plan's separate ownership/design review to these costs;
-do not replace source ordering with root-completion order, add import caches or
-reopen gameplay/VFX work on the strength of this bounded checkpoint.
-
-**Plan reviews completed:** anti-slop and anti-OOP reviews changed priority to
-follow measured import/media/native-controller costs; required source-order
-admission capture independently of root completion order; retained AI memory on
-continued moves; and bounded media/capture ownership. The baseline documents
-native outcome variation rather than pretending equal event counts prove equal
-behavior. Root ran timings serially; reviewers performed source/document work.
-
-**Current boundary:** implementation and focused correctness checks are now
-authorized. Timing remains serial and adds no source fingerprints, frame hashes,
-asset audits or video exports. Native behavior, subjective grant rules, complete
-lineages and independent historical playback remain the acceptance boundary.
-
-**Completed unit, September 12 — invisibility, stealth and truesight:** extend the
-paired subjective recordings through the existing native concealment rules.
-Test allied and opposing factions, from both the concealed/casting actor and
-the perceiver, with four camera corners for each viewpoint. The actual True
-Seeing spell already exists; add only its missing potion through the existing
-consumable action/charge and condition-effect paths.
-
-1. Preserve the established distinctions: Hide's bright-light validation checks
-   visible enemies; allies do not veto it. Native contact filtering has no allied
-   invisibility exemption. Truesight bypasses invisibility but does not bypass a
-   successful Hidden Stealth DC. The controlled actor remains drawable from its
-   own recorded state. These are source findings, not new rules for this unit.
-2. Reuse TrueSeeingEffect's current 120-foot/ten-round behavior for the new
-   potion. Preserve ordinary bonus-action cost, finite charge consumption and
-   authenticated content ancestry. Its current unparented sensory notification
-   has been reproduced during a real spell cast; attach that notification to
-   the supplied condition lineage so discovery belongs to the same action head.
-   Potion replay must retain the existing charge/stack/destruction after-values
-   and update only the controlled owner's inventory; consumption is not a new
-   animation cue or an inferred removal based on the action name. True Seeing's
-   self target must also be available through actual action discovery, consistent
-   with its existing self-or-allies filter and validator.
-3. Reuse Studio's existing invisibility alpha/color, exclusive group and fade
-   durations. Hidden and True Seeing have no invented body tint or opacity.
-   Verify witnessed disappearance, reacquisition/reveal, and paused historical
-   playback against actual grants and native after-values. Connect only shared
-   action-body or delivery primitives necessary for these real histories;
-   inspect the original recipes before deciding what needs implementation.
-   Preserve a witnessed cast when its optional terminal coordinate is withheld.
-   Stage a revealing action's newly authorized participants from its received
-   contact, following NeuroClient's complete-action staging; do not reuse stale
-   remembered positions or change movement's per-step visibility timing.
-4. Build a finite data matrix: ordinary/true-seeing-spell/true-seeing-potion
-   observers against Invisibility; allied/enemy Hide eligibility; successful and
-   unsuccessful Stealth with and without truesight; combined Hidden+Invisible;
-   and actual revealing actions/removal. Use real discovered actions and turns.
-   Persist both histories from one native generation. Do not add a new Search
-   mechanic simply because that action is absent.
-5. Check native effect, cost, charge and contact results first, then public-byte
-   reduction and complete-lineage playback. Preserve old saved inputs, capture
-   the new paired cases, replay them with native production disabled and inspect
-   their videos. Record precise source/replay evidence and remaining limits.
-
-**Reviews:** the anti-slop reviewer checks current native faction/concealment
-rules, effect/cost/charge ownership and the matrix's actual outcomes. The
-anti-OOP reviewer checks original Studio recipes, shared binding/sampling,
-causal contact timing and import direction. Reviewers study source independently
-and review concrete changes; agreement does not replace native evidence.
-
-**Reviewable result:** [28 concealment clips](http://127.0.0.1:8767/runs/20260912T013031Z-811447/index.html)
-cover 14 experiments from the caster/hidden actor and the perceiver, with four
-camera corners per clip. Their 3,482 frames span 384 public history heads. The
-matrix includes allied/enemy Hide eligibility, successful/unsuccessful Stealth,
-ordinary and true-seeing observers, spell and potion delivery, an actual doorway,
-combined Hidden+Invisible, revealing attacks/casts and ten-round expiry.
-
-A fresh process replayed the saved public inputs with native production and
-bootstrap disabled. All 28 MP4s, public inputs and separate native diagnostic
-files are byte-identical to capture. Initial states, lineages, heads, latest
-states, sampled frames and checks also match exactly. The event cursor and
-entity population remain zero, content remains uninstalled and no dice rolls
-are registered. All 102 earlier saved inputs are unchanged. The replay report
-and 14 inspected four-corner images are in the gallery's `inspection` directory.
-Both capture runs and replay share the same source fingerprint.
-
-The paused expiry case holds 24 identical frames at historical cursor20 while
-latest has reached cursor277. Ordinary invisibility removes the other actor;
-truesight retains its authored translucent body; successful Hide removes contact
-without tinting the controlled actor. Revealing attacks stage the actual newly
-disclosed position and final appearance. The sole selected media gap is the
-original drink strip on four potion-view cards. Its asset is absent from the
-reference checkout, and the generic body-action media track is not yet connected
-to loading/sampling/drawing. Keeping that track in JSON does not implement its
-playback. This VFX work is deferred at the user's request; the authored Taunt
-drinking gesture, slot hiding, condition timing and finite consumption already
-work through shared owners.
-
-The 14-case native/public matrix, 18 body/movement/condition/recovery checks,
-15 projection/consumption/passive-replay checks and five independent native
-potion/consumption checks pass. These groups overlap and are not additive.
-Production game/review modules and the changed replay tests pass Pyright.
-The original importer verifies all 327 outputs. Anti-slop and anti-OOP reviews
-approve the bounded implementation and original Studio/action-staging contracts.
-The broad `tests/game` run passed 747 tests, retained six existing terrain
-expectations, and reported two failures. It had loaded the condition drawer
-before its final correction: the completed-disappearance case then passed in
-the fresh 18-test group and the final two-case rerun. That rerun retained only
-the existing startup-budget failure: the application exited successfully in
-8.23 seconds against eight (8.94 seconds in the broad run). Prior checkpoints
-below document the same budget issue. No timing threshold or terrain expectation
-was relaxed. Logs and a validation summary are preserved under the gallery's
-`inspection/validation` directory. This concealment unit is complete; the
-startup budget and prior terrain limitations remain separate outstanding work.
-
-**Startup profiling, September 12:** the user's requested measurement reproduced
-the unchanged eight-second smoke gate at 8.897–9.000s, with successful settlement.
-This is the older map diagnostic's whole process, not encounter startup. A
-representative 8.973s run spent 3.897s importing, 2.457s producing the native
-world/door intervals, 0.948s validating the asset catalog, 0.439s decoding assets
-and 0.348s drawing twelve frames. Reduction took less than a millisecond.
-[The profile and source findings](agent_docs/STARTUP_PROFILE_2026-09-12.md)
-record the remaining overhead, repeated root-path resolution and native
-tile-cost construction. No implementation or timing threshold was changed;
-the budget remains outstanding.
-
-**Completed visibility unit, September 11:** after the validated `12ae1eb` replay
-checkpoint, the user requested extensive entering/leaving-sight and doorway
-experiments, recorded from both entities' subjective viewpoints. Capture each
-native experiment once, retain each observer's actual received history, and
-render all four camera corners for every viewpoint. Observer identity and camera
-angle are different dimensions. Opposite viewpoints must share native event
-identities rather than independently rerunning the scenario.
-
-**Implementation sequence:**
-
-1. Review the existing Step identity/endpoint grants and original projection
-   against complete-lineage playback. Preserve state discovery when hidden
-   geometry is withheld, timed loss/reacquisition of contact, and multiple
-   disclosed portions of one movement. Keep one causal root/history head.
-2. Connect the outgoing projection from recorded facts: own sensory data,
-   admitted actor state/visual loadouts, observed/remembered world facts and
-   required causal version metadata. Keep objective diagnostics and private
-   inventory local. Preserve the original disclosure rules and Studio timing.
-3. Extend recording to all participant viewpoints from the same native capture.
-   Pair the clips by experiment and observer, with four corners per clip and
-   independent subjective playback. Review export must retain the selected
-   observer's saved input and the experiment link. Preserve prior recordings.
-4. Exercise a data matrix: entering and leaving open sight; a brief doorway
-   glimpse during one walk; leave/reenter and multiple glimpses; walking an
-   observer into/out of a view across the door; swapped participants/directions;
-   an actual open/closed-door control; current gear/HP upon reacquisition; and
-   paused historical playback while latest has advanced past the visible span.
-   Both perspectives belong to every experiment, including future additions.
-5. Validate native perception against recorded projection and rendered frames,
-   replay saved inputs with native production unavailable, inspect the videos,
-   and update this plan before returning to broader gameplay capabilities.
-
-**Design review:** the anti-OOP reviewer owns the check for existing timeline/
-version metadata, shared binding primitives and import direction. The anti-slop
-reviewer checks actual native visibility/after-values, outgoing projection and
-the finite experiment matrix. Review concrete proposals before shared-contract
-edits, then review the resulting native histories and clips. This unit connects
-existing game rules; VFX authoring and reinstating the old server are outside it.
-
-**Implemented behavior:** the capture gate is removed and the
-outgoing player projection is connected to live encounter playback, the finite
-cast regression, and gallery replay. Each public node preserves causal identity
-and ordering; its optional payload contains only the permitted fact. Private
-native recordings remain available locally. The renderer consumes public actor
-loadouts, own sensory deltas and observed/remembered world values. It receives no
-objective rows or foreign inventory. Complete movement heads now support first
-contact, contact loss and separate visible portions without connecting hidden
-geometry. Both views use the original authored step duration independently.
-
-**Reviewable result:** [30 visibility clips](http://127.0.0.1:8767/runs/20260911T212148Z-a25e65/index.html)
-cover 15 experiments from both participants, with all four corners in each clip.
-They contain 2,255 frames and 65 public playback heads, with no reported gaps.
-Native assertions verify each experiment's actual acquisition/removal pattern;
-this includes two separately visible spans inside one complete Move. The
-closed-door observer receives an idle sequence when nothing is perceived.
-
-A fresh process replayed every saved public input with native generation and
-bootstrap disabled. All 30 videos, public inputs and separate native diagnostic
-files are byte-identical to their captures. Initial states, heads, latest states
-and sampled frames match exactly. Older trace serialization omits three newly
-optional null content-attribution fields; the report preserves that raw
-difference and its explicit normalization. The final private capture correction
-for unselected doors occurred during replay; public rendering source was stable.
-The run's `inspection/replay-verification.json` records this provenance instead
-of claiming an unchanged whole checkout.
-
-[Six paired lethal-reaction/displacement clips](http://127.0.0.1:8767/qa-player-boundary/runs/20260911T212720Z-acfe0a/index.html)
-also pass using the final capture code. The controlled mover retains its walking
-corpse offset, jump reactions stay grounded, and forced movement settles at the
-actual reached cell. The spectator's permitted origin-only observation is tested
-separately from the controlled mover's authorized attempted edge. No native
-mechanic changed to make these views agree.
-
-All 72 prior saved inputs remain unchanged and project, serialize, reduce and
-bind through the public boundary. That compatibility check is not a new visual
-approval of all 72 older clips. The eight projection regressions cover disclosure,
-world memory, a changed second door with/without a selected fixture, and unnamed
-wall-torch initialization. Native perception and original Studio data remain
-their existing owners. Anti-slop and anti-OOP reviewers approved these boundaries.
-
-**Final validation:** the broad `tests/game` run passed 684 tests, with two
-existing terrain expectations, 11 failures and 16 fixture errors. That process
-had imported the reaction code before its final historical-contact correction;
-ten failures were that already-corrected path. Sixteen errors came from the
-terrain fixture still passing native records directly to the public binder.
-After migrating that caller, all 27 reported failures/errors were rerun together
-against final source: 22 passed, four retained terrain expectations, and the
-single older startup timing failure remained. The diagnostic door/light app
-exited successfully in 9.06 seconds against its eight-second budget. Earlier
-checkpoint evidence below records the same timing failure at 8.596 seconds;
-the threshold and functional expectations were not changed. This result is
-not an all-green full-suite claim. All functional failures introduced by this
-integration are resolved, and six existing terrain expectations remain.
-
-The later-added door/torch projection tests pass in their full eight-case group.
-The 17-case native visibility/public-wire group, seven gallery tests, 57-case
-attack/movement/placement group, six live encounter checks and nine finite
-cast/equipment/volley checks also pass. These overlap the broad run and each
-other; their counts are not additive. Production presentation/review modules
-and changed caller tests pass Pyright. The current visibility unit is complete;
-the startup budget and prior terrain limits remain documented separately.
-
-**Event-recording correction, September 11 — validated replay checkpoint:** at
-`f6a0a1a`, gallery playback used original Python objects and `--review` reran
-native scenarios. The `12ae1eb` checkpoint decodes saved concrete events and
-replays them without native generation, records active-weapon after-values,
-and admits later actors from their recorded history. Native initial sensory
-facts replace the live snapshot handoff. Version 2 stores initialization events
-and complete lineages; the ordinary reducer derives the starting state from
-those events. The live encounter uses the same initialization path.
-The [source audit](agent_docs/ANIMATION_COMPOSITION_AUDIT.md#event-recording-contract-correction--september-11)
-preserves the original failures and attribution. That checkpoint still needed
-the player projection connected above; a local archive containing objective
-diagnostics is not that payload. Documentation and status questions accompany
-this active work rather than ending it.
+**Completed September 23 unit — seven additional AoE XYZ deliveries.**
+Burning Hands, Gust of Wind, Thunderwave, Shatter, Color Spray, Sleep arrival
+mist and Ice Knife burst now use the shared registered-surface path. The author
+supplied the missing Color Spray banks and corrected Shatter's duplicated view.
+Native policy is recorded into public spell facts; clocks and mechanics remain
+unchanged. Whole-origin components preserve blend order; historical supports
+clip below-floor particles; Color Spray retains dynamic hand alignment through
+an explicit baked-point delta. Gust preserves its existing maintained clock.
+[Implementation, reviews and validation](agent_docs/AOE_XYZ_BATCH_2026-09-23.md).
+[26 paired four-camera clips](http://127.0.0.1:8767/runs/20260923T183603Z-0c1ae2/index.html)
+pass with zero presentation gaps. The relevant suite and late-tail checks pass;
+Pygame/native changed-file typing is clean. These are review captures, not a
+claim of new human visual approval.
+
+**Queued handoff, not part of the completed AoE batch:** the Godot author has
+also delivered Darkvision / See Invisibility / True Seeing revision
+`sensory-four-camera-v5` at
+`/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/sensory-spells-review/production-handoff/HANDOFF.md`.
+Use `media-four-camera.json` camera banks when that integration is scheduled;
+this note records receipt, not production integration or acceptance.
+
+**Completed September 23 unit — six healing/support spells.** Aid, Lesser
+Restoration, Greater Restoration, Heal, Mass Cure Wounds and Mass Heal use
+explicit Studio recipes and all four delivered camera banks. Aid uses the
+author's application/quiet-hold crossfade and phase-preserving removal fade.
+Discovered native scenarios expose real targets, HP caps, condition removal,
+movement and unaffected bystanders through saved public lineages. Fixed Aid's
+obsolete target-count hook and condition-stat replay, including repeated casts;
+recipient media now avoids inappropriate terrain-area projection.
+[Bounded implementation and review evidence](agent_docs/HEALING_HANDOFF_INTEGRATION_2026-09-23.md).
+[14 paired four-camera clips](http://127.0.0.1:8767/runs/20260923T202705Z-702275/index.html)
+pass with zero presentation gaps. 152 distinct focused tests pass and scoped
+typing is clean. Captures were inspected, pending human visual review. The
+queued sensory handoff remains separate from this completed request.
+
+**Completed September 23 unit — Fireball connected propagation and Globe XYZ.**
+The user approved Fireball's bounded connected spread through open doorways
+(policy C) and requested production backend/rendering integration of the Godot
+handoff. This supersedes the earlier read-only area study and Globe-art deferral.
+Only Fireball changes its propagation policy. Globe now discloses its visible
+presence through ordinary sensory events and attributes suppression to actual
+spell events; replay uses saved public observations. Paired color/XYZ media
+feeds the existing painter, with finite wall occlusion and spherical protection.
+See [implementation and validation](agent_docs/FIREBALL_GLOBE_XYZ_IMPLEMENTATION_2026-09-23.md).
+Current validation covers native damage/Ashen, ordinary and protected Ice Knife
+lineages, cold replay, four-camera coordinates and bounded media decoding.
+The [20 paired four-camera clips](http://127.0.0.1:8767/runs/20260923T160308Z-1dfea8/index.html)
+pass with zero presentation gaps; 218 selected tests pass and scoped typing is
+clean. A measured Ashen sensory cascade was also fixed using existing valid
+observer fields, preserving per-event observations (protected native Fireball
+2259→343 ms in the documented diagnostic). Both reviewers approved. Additional
+The next seven-effect XYZ batch is now integrated; its installation does not
+authorize changing other spells' native propagation rules. See the current
+batch record below.
+
+**Fireball flicker follow-up:** user playback review exposed smoke/fire material
+order reversing in the new per-pixel depth partition. The shared compositor now
+keeps authored components ordered within common external depth bands. The export
+and playback clock are unchanged; the before/after trace contains all 48 impact
+frames in order. The six real source comparisons match exactly, 95 selected
+tests pass, typing is clean, and both reviewers approved. See the follow-up in
+the implementation record above for the defect and updated replay evidence.
+All [20 corrected paired clips](http://127.0.0.1:8767/runs/20260923T175550Z-17c120/index.html)
+pass with zero presentation gaps, replaying the same saved inputs.
+
+
+**Completed September 23 unit — Sanctuary and interrupted actions.** The user
+requested real handler fixes and cancellation presentation that distinguishes
+an unpaid attempt from an action already paid for. Native Sanctuary now gates
+harmful selected-target spells, respects beneficial/area semantics, and retains
+its existing attack gate. The shared cost owner records actual expenditure;
+public replay retains cancellation phase and outcome without private amounts.
+Counterspell's separate reaction roots retain their original trigger links and
+reduce in order while sharing the existing playback head. Original NeuroStudio
+body recipes and passive interruption rules drive attempts; no fabricated hits.
+See [scope, reviews and verification](agent_docs/SANCTUARY_INTERRUPTION_2026-09-23.md).
+The user requested longer readable direct-cast preparation and Counterspell
+VFX. The follow-up now integrates four-camera success/failure bursts, source-hand
+energy and neutral projectile dispersal, keeping the native cutoff separate from
+the visual tail. The
+[updated 20 paired four-camera clips](http://127.0.0.1:8767/runs/20260923T104902Z-be3b63/index.html)
+replay the same saved inputs; all checks pass with no gaps. Counterspell art is
+integrated **for user review**, not claimed visually approved. Ordinary approved
+spell targets and trajectories are unchanged. Direct suppression currently bursts
+at the casting actor; formation-specific cloud suppression remains a separate
+candidate with the Godot author. Details, reviewers and tests are in the record.
+Globe already has tested native rules; its art and Dispel Magic remain outside
+this follow-up.
+
+**September 23 read-only area/geometry study:** the user asked which other AoEs
+need Fireball's spatial rendering treatment and whether XYZ data is necessary.
+The [native inventory and rendering-data findings](agent_docs/AOE_PROPAGATION_REVIEW_2026-09-23.md)
+separate ground coverage, spatial volume composition, native propagation and
+subjective protection facts. The study also reproduces an Ice Knife/Globe gap;
+the existing passing Globe tests do not cover that secondary burst. No native
+rules or production rendering changes are included in this study.
+
+**September 23 environment-content batch implemented:** all 21 agreed freestanding
+props now have authored HP, placement, channel blocking, destruction/debris and
+reviewed media bindings through the existing systems. No per-object behavior
+classes or renderer branches were introduced. The
+[implementation record](agent_docs/ENVIRONMENT_CONTENT_IMPLEMENTATION_2026-09-23.md)
+contains both design reviews, the physical profiles and validation: 110 selected
+tests pass, scoped typing is clean, and all
+[42 paired four-camera captures](http://127.0.0.1:8767/runs/20260923T145511Z-6d4722/index.html)
+pass with no presentation gaps. Clips use real attacks, destruction and movement
+from saved subjective events. The three optional subjects, mounts, windows and
+full building assembly remain outside this batch.
+
+**Environment destruction timing follow-up:** the user approved the remaining
+appearance and identified early disclosure behind still-intact break frames.
+The [shared clearance timing correction](agent_docs/DESTRUCTION_VISIBILITY_TIMING_2026-09-23.md)
+adds an authored bank frame for historical geometry/sensory admission, preserving
+impact timing and immediate native resolution. Six opaque props have inspected
+markers. [Twelve updated paired clips](http://127.0.0.1:8767/runs/20260923T151946Z-aef733/index.html)
+replay the same saved inputs and pass their checks. Unmarked banks, barrel
+release and device cleanup retain their existing timing. The record distinguishes
+this fix from the archived event-schema fixture failures found in wider checks.
+
+**Sanctuary follow-up integrated.** The user-requested yin-yang presentation now
+uses the existing native ward and shared condition renderer, with explicit passive
+cast/condition data and a genuine source-owned apply/hold/clear export.
+[Four paired-observer clips](http://127.0.0.1:8767/runs/20260922T123011Z-44b2f6/index.html) show failed/pass attacker saves, real blood,
+movement, hostile-action removal and a maintained ward across its full loop.
+Native ten-turn expiry remains tested. See the
+[implementation and known native limits](agent_docs/SANCTUARY_INTEGRATION_2026-09-22.md).
+The final 33 selected gameplay tests, changed-module typing and saved-input capture
+checks pass. No native rules or renderer code changed. This small review stays
+separate from the focused fourteen-spell/barrel page below.
+
+**Current feedback handoff — latest fourteen spells and barrels only.**
+The user narrowed review after the 181-clip collection proved too broad and
+identified missing blood in its humanoid spell scenarios. The fixture now composes
+the existing blood-response handler; all 18 injury experiments were recaptured
+as 36 clips with real saved blood releases and persistent floor residue.
+[Open the focused 90-clip gallery](http://127.0.0.1:8767/runs/20260922T113258Z-latest-spells-and-barrels/index.html): 62 clips for the latest fourteen
+spells and 28 existing barrel clips. The earlier spell batch is excluded.
+See the [focused handoff](agent_docs/SPELL14_AND_BARRELS_FEEDBACK_2026-09-22.md)
+for scope, evidence and known visual limits. The correction passes 43 focused tests
+and changed-module typing. Saved input, trace and original capture identities remain
+exportable. No engine or renderer change was needed for this fixture correction.
+
+All fourteen accepted outstanding presentations are integrated through shared
+capabilities and authored data; the
+[implementation record](agent_docs/SPELL14_INTEGRATION_2026-09-22.md) records
+native state changes and their checks. Full suites passed 1,476 engine / 2,120
+game tests before the later fixture corrections. The previous
+[181-clip handoff](agent_docs/SPELLS_AND_BARRELS_REVIEW_2026-09-22.md) is historical.
+**Barrel source-coverage corrections remain queued**; Wet body media is unbound,
+burning-surface artwork is outside this unit, and upcast Fog uses wide review
+framing. Do not mistake earlier liquid completion notes for closure of those
+later coverage findings. Current work is ready for the user's visual feedback.
+
+**Liquid-media delivery integrated.** All six materials × three approved
+irregular variants now use four-camera floor/air exports and raw air footpoints.
+Native geometry survives saved subjective replay; authored rupture starts the
+spill, and settling continues independently of later actions. The
+[28 paired gameplay clips](http://127.0.0.1:8767/runs/20260922T075227Z-718226/index.html)
+pass their checks. See the [production result, tests and limits](agent_docs/LIQUID_MEDIA_INTEGRATION_RESULT_2026-09-22.md).
+The whole 3×3 appearance supersedes the quarter-tile proposal; the unapproved L
+experiment is excluded. The existing Wet condition has no body presentation
+recipe and remains a reported gap; its native state and the water pool work.
+
+**Complete Godot asset intake received.** The user requested all prepared/accepted
+media not yet in production, using the illusion/transformation and historical
+ten-spell handoffs as starting points. The
+[reconciled intake](agent_docs/GODOT_BACKLOG_INTAKE_2026-09-22.md) links the full
+Godot delivery: 14 accepted outstanding spell presentations, their exact exports,
+readiness limits and existing production evidence. The old ten-spell batch is
+already installed. Sanctuary was excluded as a prototype at intake; the newer
+user-authorized integration above supersedes that classification. Enhance Ability
+remains concept-only. No new spell was installed during intake. The user's subsequent
+instruction now authorizes the entire fourteen-presentation implementation
+above; use this current inventory rather than stale pending labels or finite
+browser-preview behavior.
+
+**Historical September 22 correction — surrounding barrel spills.** The user rejected the
+one-cell result below and approved up to 3×3 surrounding native footprints for
+**all six** liquid barrels. Follow the
+[area correction plan](agent_docs/LIQUID_BARREL_AREAS_2026-09-22.md), including
+real boundary/contact tests and wider dread-pool retreat behavior. A liquid
+spilling animation is explicitly **required and queued** with the Godot task;
+static appearing pools did not satisfy that final visual requirement. The
+production result above now closes the spilling/rounded-pool work described here.
+The further visual correction requires **authored material tiles with rounded
+pool outlines**, not repeated splats or square-looking fills. The procedural
+field experiment is withdrawn. The latest
+[topology handoff](</home/tommaso/.codex/worktrees/23a9/dnd_engine/output/environment-sprites/material-pools/HANDOFF.md>)
+records the user's reassignment of **both material tiles and animations to Godot**;
+the environment-art task paused overlapping authoring. All six materials are in
+that request, with Grease reusing its accepted spell shader. Provisional static
+PNGs remain uninstalled; rounded pools, shared-phase persistent loops and spilling
+remain unfinished pending review and integration.
+Native surrounding coverage and connected dread-pool retreat are now verified:
+1,459 engine tests pass, focused public replay/render tests pass, and typing is
+clean. See the [area result and explicit visual limits](agent_docs/LIQUID_BARREL_AREAS_RESULT_2026-09-22.md).
+
+**Historical September 22 — first liquid barrels implemented.** The user expanded the destruction
+unit to poison, water, oil, grease, blood and dread blood contents. The
+[reviewed liquid-barrel plan](agent_docs/LIQUID_BARRELS_PLAN_2026-09-22.md) reuses
+native surfaces/residues and the same destruction lineage; one-cell spills
+survive their wreck. Ground contact and saved two-observer replay are acceptance
+requirements, now covered by native contact tests, saved public replay and
+[22 paired four-camera clips](http://127.0.0.1:8767/runs/20260921T231101Z-2f7c49/index.html).
+See the [implementation record and exact limits](agent_docs/LIQUID_BARRELS_RESULT_2026-09-22.md).
+Oil/water now publish native material observations; five materials draw through
+the shared liquid/residue sampler. **Grease artwork is explicitly deferred by the user** to the
+later accepted spell handoff. Persistent burning-surface artwork is also absent;
+its handoff need is queued, without expanding this into terrain combustion.
+
+**September 22 — shared destruction and first multi-cell prop unit implemented.**
+The user authorized the reviewed destruction unit and assigned missing art to
+task `01a0b501-8a27-7413-ba24-4a36e5b140d2`. The shared same-UUID transition and
+current-family migration are implemented. The full engine suite plus maintained
+item-registry checks passes 1,377 tests; the full game suite passes 1,954 tests;
+native/game typing is clean. Cold furniture initialization also passes its
+38-case focused regression and independent review.
+`ItemDestructionEvent` owns the transition; geometry, mechanism, light and spill
+events are its causal children. Physical breakage is distinct from terminal
+consumption/expiry. See the [live implementation record](agent_docs/DESTRUCTION_IMPLEMENTATION_2026-09-21.md)
+for actual tests and remaining work. Two-cell furniture, legal far-end contact,
+owned debris terrain and saved two-observer replay now work. Three chest pairs,
+crate, barrel, bed and table use accepted prop banks through the existing
+renderer; the [20-clip gallery](http://127.0.0.1:8767/runs/20260921T222920Z-12c92c/index.html)
+includes real chest contents and walking through wrecks. The potion has floor
+state but no installed ground sprite. The broader 117-subject interiors intake,
+mounts/supports and usable windows remain unfinished. New fixture destruction
+art was delivered separately as user-unapproved candidates, not installed media.
+
+**September 21 — complete interiors integration plan.**
+The user requests a reviewed plan covering **all** consolidated handoff assets,
+starting with native items and their visibility, walkability, placement, height
+and support data. The [complete integration plan](agent_docs/INTERIORS_INTEGRATION_PLAN_2026-09-21.md)
+replaces the earlier small-lodge delivery framing; its first room is a proving
+step, not the whole objective. Exact asset dispositions are recorded in the
+[coverage companion](agent_docs/INTERIORS_ASSET_COVERAGE_2026-09-21.md).
+Existing doors/traps remain, furniture and supported-object lifecycle use the
+current native owners, windows are gameplay openings, and replay remains event
+driven. Independent content, anti-slop and anti-OOP/ECS review belongs to the
+expanded plan, not merely its earlier revision.
+
+**Destruction now has a dedicated plan, at the user's request.** The
+[destruction lifecycle plan](agent_docs/DESTRUCTION_LIFECYCLE_PLAN_2026-09-21.md)
+and [native/media coverage ledger](agent_docs/DESTRUCTION_COVERAGE_2026-09-21.md)
+specify persistent intact → destroyed state on the **same item UUID**. This
+supersedes replacement-wreck identity in the older interiors proposal. Reuse
+Health, damage events and destruction hooks, while separating physical breakage
+from terminal consumption/expiry. Adoption covers all current doors, physical
+traps, devices and props plus selected delivered counterparts; methods, cleanup,
+subjective replay and real behavioral tests must migrate together. Missing
+bindings, native capabilities and genuinely missing art are separate gaps.
+Implementation now follows this plan; new asset exports are not visual approval.
+
+**First unit narrowed by the user:** carefully establish multi-cell furniture,
+usable windows and attacking/destruction before broad content intake. Existing
+trap/door item Health, damage and destruction hooks are reused under that
+same-identity plan. The
+plan's active core-first section defines one two-cell furniture object, a fixed
+barred C4 window/solid-wall comparison and two observers. Footprint-wide spatial
+updates, legal manual access and native aperture queries are the actual missing
+contracts. The destruction subplan expands current-family adoption rather than
+leaving doors/traps on a second lifecycle. Mounts, bulk content and houses follow;
+no window glass/shutter mechanics are implied. Existing door/trap destruction
+baseline rerun: 48 passed in 4.76 seconds. That historical baseline predates
+the implementation; current validation belongs to the implementation record.
+
+The user explicitly says **ignore the Z discussion for this plan**. Stacked
+floor design is in the separate task **3D / XYZ backend map design**
+(01a0c567-b928-7210-8f33-d9a8b099aae3), restored and resumed with the user's
+request to scan all affected rules/systems, starting with walking/pathfinding,
+light and senses. Its [existing proposal](agent_docs/MULTI_Z_MAP_PLAN_2026-09-21.md)
+is background for that separate task. Do not reintroduce its migration or
+sequence debate into interiors work. Preserve source upper-floor assemblies
+without claiming they are already playable. Existing control-spell work remains
+complete; the active destruction unit does not introduce stacked floors.
+
+**September 21 follow-up completed — native typing and Goblin slash.** All 266
+native typing errors and the warning are resolved with checker settings
+unchanged; native and graphics/review checks are clean. The engine suite passes
+1,117 tests, active progression passes 200, and the Goblin's saved four-camera
+opportunity attack now has its authored slash and zero media gaps. See the
+[repair result and validation limits](agent_docs/NATIVE_TYPING_AND_GOBLIN_CLEANUP_2026-09-21.md).
+The investigation also found a separate, unresolved
+[stats-read registry retention defect](agent_docs/STATS_SNAPSHOT_VALUE_RETENTION_2026-09-21.md);
+it is not dismissed as test noise. The completed graphics checkpoint below
+remains historical starting evidence, including its then-open typing/media gaps.
+
+**September 21 — control-spell integration completed.** The
+[reviewed implementation plan](agent_docs/CONTROL_SPELLS_IMPLEMENTATION_2026-09-21.md)
+now connects Charm, Blindness/Deafness, Command, Color Spray, Silence and Sleep
+through shared condition/spatial lifecycles and pose registration. Real overlap
+ownership, selected Color Spray aim and witnessed spatial removal were repaired.
+The corrected lethal opportunity experiment also records blood from its existing
+body-response handler. The [34-clip gallery](http://127.0.0.1:8767/runs/20260921T132229Z-53ba67/index.html)
+passes every replay check with zero media gaps, using both subjective views and
+four cameras. The [result and exact validation limits](agent_docs/CONTROL_SPELLS_RESULT_2026-09-21.md)
+record the full game run's three repaired failures and final 66-test passing
+slice, clean native/graphics typing, measured modular socket coverage and the
+remaining Color Spray duration rule discrepancy. No optimization or unrelated
+gameplay redesign was introduced by this unit.
+
+**September 21 — unified graphics cleanup implemented and reviewed.** The
+[reviewed execution plan](agent_docs/GRAPHICS_CLEANUP_EXECUTION_PLAN_2026-09-21.md)
+is completed within its stated scope. Native origin/range adoption, saved-record
+compatibility, explicit media intake, test collection repairs and authored
+downed/rest/recovery presentation are implemented. Local spell drafts use
+version 2 with explicit root/body/ground bases, actual-path insets and consistent
+image registration. Fire Bolt's approved mage placement remains intact; device
+emission uses the measured muzzle. All six terrain xfails have passing geometric
+tests, including preservation of a body on its own supporting floor.
+
+The [implementation result](agent_docs/GRAPHICS_CLEANUP_IMPLEMENTATION_2026-09-21.md)
+records exact validation and scope: 1,111 engine tests pass; the full game run's
+six failures were resolved and both affected modules pass all 13 tests, with
+280 final compositor tests passing. The 22,464 projectile samples are identical;
+the whole-clip isolation comparison also preserves approved output while
+separating intentional terrain changes. The
+[46-clip four-camera gallery](http://127.0.0.1:8767/runs/20260921T105556Z-cf9048/index.html)
+passes replay checks, with one preexisting goblin slash-overlay gap still
+disclosed. Both subjective views are retained where captured. Graphics/review
+typechecking is clean; the broader native check has 266 errors and one warning,
+proven identical before/after this cleanup. These are explicit remaining limits,
+not claims of a fully rendered spell catalog or a type-clean whole repository.
+
+The [system review](agent_docs/GRAPHICS_SYSTEM_REVIEW_2026-09-21.md) records the
+starting defects. The [preserved checkpoint chronology](agent_docs/RECOVERY_CHECKPOINT_CHRONOLOGY_THROUGH_2026-09-21.md)
+contains previous dated work and decisions; it is historical evidence rather than
+a competing current to-do list. Design commitments and earlier detailed
+checkpoints remain below. No new VFX-authoring or feature expansion is part of
+this cleanup.
 
 ### Validated checkpoint — recorded inputs drive the game presentation
 

@@ -25,13 +25,19 @@ from game.assets import SurfaceCache, load_catalog
 from game.choreography import BoundChoreography, bind_choreography
 from game.choreography_draw import ChoreographyMedia, load_choreography_media, load_motion_media
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
+from game.condition_media_lifetime import register_condition_lifetimes
+from game.spatial_media_lifetime import register_spatial_lifetimes
+from game.deposit_media import register_deposit_starts
+from game.motion_media import MotionMediaCue, bind_motion_media, choreography_motion_media
 from game.controls import ActionSelection, EndTurn, MenuState, draw_menu, draw_target_preview, handle_menu_event
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import sample_playback_frame
 from game.presentation import capture_interval, capture_lineage
 from game.player_facts import AttackFact, MovementFact, PlayerLineage, PlayerState, StepFact
 from game.player_projection import begin_projection, project_lineage
-from game.player_reduction import reduce_initialization, reduce_lineage, stage_lineage
+from game.player_reduction import reduce_initialization, reduce_lineage
+from game.presentation_group import (PresentationGroup, presentation_groups,
+    reduce_presentation_group, stage_presentation_group)
 from game.projection import Camera, ZOOM_LEVELS
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
 from game.session import (
@@ -39,6 +45,7 @@ from game.session import (
     end_player_turn, execute_player_action,
 )
 from game.visual_position import VisualPosition
+from game.body_history import retain_body_head
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,17 +123,19 @@ async def _run(
                  sum(actor.contact.grid[1] for actor in actors) / len(actors))
         camera = Camera(quadrant=quadrant, zoom=1.0, viewport=window_size).with_focus(focus)
         camera = camera.with_screen_pan((panel_rect.width / 2, -45))
-        pending: deque[PlayerLineage] = deque()
+        pending: deque[PresentationGroup] = deque()
         retained: list[PlayerLineage] = []
         frames: list[GameFrame] = []
         gaps: list[tuple[UUID, str]] = []
         active: PlayerLineage | None = None
+        active_group: PresentationGroup | None = None
         after = historical
         choreography: BoundChoreography | None = None
         motion: MotionTimeline | None = None
         choreography_media: ChoreographyMedia | None = None
         reaction_media: dict[UUID, ChoreographyMedia] = {}
         feedback: list[FeedbackTrack] = []
+        motion_media: list[MotionMediaCue] = []
         choices: AvailableActionsResult | None = None
         menu = MenuState()
         logs: deque[str] = deque(maxlen=20)
@@ -135,12 +144,17 @@ async def _run(
         running = True
         frame = issued = 0
         elapsed_ms = presentation_ms = 0.0
+        condition_lifetimes = register_condition_lifetimes({}, historical, data, absolute_start_ms=0)
+        spatial_lifetimes = register_spatial_lifetimes({}, historical, data, absolute_start_ms=0)
+        deposit_starts = register_deposit_starts({}, historical, data, absolute_start_ms=0)
+        body_history = retain_body_head((), historical, None, start_ms=0, facings=facings, positions=positions)
         clock = pygame.time.Clock()
         if capture_dir is not None:
             capture_dir.mkdir(parents=True, exist_ok=True)
 
         def receive(operation: Operation) -> None:
             nonlocal latest
+            received = []
             for root in operation.roots:
                 native = capture_lineage(root, observer_uuid=observer.uuid,
                                          known_actor_uuids=frozenset(latest.actors))
@@ -148,11 +162,12 @@ async def _run(
                 if lineage is None:
                     continue
                 latest = reduce_lineage(latest, lineage)
-                pending.append(lineage)
+                received.append(lineage)
                 retained.append(lineage)
                 classes = {row.event_uuid: row.event_class for row in native.objective_rows}
                 gaps.extend((identity, f"Unprojected state payload: {classes[identity]}")
                             for identity, _ in native.dispositions)
+            pending.extend(presentation_groups(tuple(received)))
 
         while running and (max_frames is None or frame < max_frames):
             delta = (clock.tick(60) / 1000 if frame_deltas is None
@@ -234,17 +249,21 @@ async def _run(
 
             started = False
             if active is None and pending and not paused:
-                active = pending.popleft()
-                after = reduce_lineage(historical, active)
+                active_group = pending.popleft()
+                active = active_group.primary
+                after = reduce_presentation_group(historical, active_group)
                 load_scene_media((
-                    *scene_actors(stage_lineage(historical, active), data, facings),
+                    *scene_actors(stage_presentation_group(historical, active_group), data, facings),
                     *scene_actors(after, data, facings),
                 ), data, body_rows=body_media)
                 choreography = None
                 choreography_media = None
                 contacts = {actor.contact.actor_uuid: actor.contact
                             for actor in scene_actors(historical, data, facings, positions)}
-                motion = bind_motion(historical, active, data, contacts=contacts)
+                activated_conditions = frozenset(owner for owner, lifetime in condition_lifetimes.items()
+                    if lifetime.activated_ms is not None and lifetime.activated_ms <= presentation_ms)
+                motion = bind_motion(historical, active, data, contacts=contacts,
+                                     activated_conditions=activated_conditions)
                 reaction_media = {}
                 if motion is not None:
                     reaction_media = load_motion_media(motion, data, body_rows=body_media)
@@ -258,10 +277,23 @@ async def _run(
                         for event in active.events
                     ):
                         gaps.append((active.root.uuid, "Movement reaction choreography is not bound"))
-                    choreography = bind_choreography(historical, active, data, facings=facings, contacts=contacts)
+                    choreography = bind_choreography(historical, active, data, facings=facings, contacts=contacts,
+                        activated_conditions=activated_conditions, reactions=active_group.reactions)
                     choreography_media = load_choreography_media(choreography, body_rows=body_media)
                     gaps.extend(choreography.gaps)
                     feedback.extend(choreography_feedback(choreography, data, presentation_ms, contacts=contacts))
+                condition_lifetimes = register_condition_lifetimes(condition_lifetimes, historical, data,
+                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
+                spatial_lifetimes = register_spatial_lifetimes(spatial_lifetimes, historical, data,
+                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
+                deposit_starts = register_deposit_starts(deposit_starts, historical, data,
+                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
+                if motion is not None:
+                    motion_media.extend(bind_motion_media(motion, data, presentation_ms))
+                elif choreography is not None:
+                    motion_media.extend(choreography_motion_media(choreography, data, presentation_ms))
+                body_history = retain_body_head(body_history, historical, after, start_ms=presentation_ms,
+                    facings=facings, positions=positions, choreography=choreography, motion=motion)
                 elapsed_ms = 0
                 started = True
                 clock.tick()
@@ -271,12 +303,14 @@ async def _run(
             camera = camera.with_screen_pan(((keys[pygame.K_a] - keys[pygame.K_d]) * 320 * delta,
                                              (keys[pygame.K_w] - keys[pygame.K_s]) * 320 * delta))
             feedback[:] = [track for track in feedback if presentation_ms < track.start_ms + track.duration_ms]
+            motion_media[:] = [cue for cue in motion_media if presentation_ms < cue.media.end_ms]
             playback = sample_playback_frame(
                 historical, after if active is not None else None, data, elapsed_ms, presentation_ms,
                 camera, facings, body_media, number_font, badge_font,
                 choreography=choreography, choreography_media=choreography_media,
-                motion=motion, reaction_media=reaction_media, feedback=feedback,
-                positions=positions, feedback_viewport=feedback_viewport,
+                motion=motion, reaction_media=reaction_media, feedback=feedback, condition_lifetimes=condition_lifetimes,
+                spatial_lifetimes=spatial_lifetimes, deposit_starts=deposit_starts,
+                positions=positions, feedback_viewport=feedback_viewport, motion_media=motion_media, body_history=body_history,
             )
             displayed, actors, commands = playback.displayed, playback.actors, playback.commands
             complete, shown_hp = playback.complete, playback.shown_hp
@@ -286,7 +320,7 @@ async def _run(
                        show_grid=show_grid, show_debug=show_debug, mouse_position=None,
                        objective_lines=tuple(f"[{identity}] {reason}" for identity, reason in gaps[-8:]),
                        extra_commands=commands,
-                       world_transitions=playback.world_transitions, residue_reveals=playback.residue_reveals,
+                       world_transitions=playback.world_transitions, residue_reveals=playback.residue_reveals, deposited_materials=playback.deposited_materials,
                        revisions=(latest.reducer_cursor, latest.reducer_cursor, historical.reducer_cursor))
             ready = waiting_for_player and active is None and not pending and not paused
             if ready:
@@ -324,8 +358,11 @@ async def _run(
                 pygame.image.save(screen, capture_dir / f"frame-{frame:05}.png")
             if active is not None and complete and not paused:
                 historical = after
-                logs.extend(_log_lines(active))
+                assert active_group is not None
+                for retained_root in active_group.lineages:
+                    logs.extend(_log_lines(retained_root))
                 active = None
+                active_group = None
                 choreography = None
                 motion = None
             frame += 1

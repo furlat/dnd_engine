@@ -29,6 +29,8 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.entity import Entity
+from dnd.blocks.base_item import BaseItem
+from dnd.core.item_types import ItemConcentrationSlot, ItemLocation
 from dnd.types.residue_fear import PaidEntryRetreat, ResidueFearOrigin
 from typing import Callable, Dict, Any, Optional, List, Literal, Set, Tuple, TypeVar
 from dnd.core.creature_types import DamageType
@@ -51,6 +53,8 @@ from dnd.blocks.skills import all_skills, skills_requiring_sight, skills_requiri
 from dnd.core.base_block import LightLevel
 from dnd.core.geometry import bresenham_line
 from dnd.core.gridmap import get_map
+from dnd.core.ground import ground_neighbors
+from dnd.types.world import OccupancyLayer
 from uuid import UUID
 from functools import partial
 from dnd.core.events import (
@@ -63,7 +67,6 @@ from dnd.core.events import (
     ReviveEvent,
     SavingThrowEvent,
     SpatialChangeEvent,
-    SpatialHandler,
     StepMovementEvent,
     Trigger,
     EventQueue,
@@ -631,6 +634,31 @@ class Deafened(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 
+
+def apply_shared_sensory_condition(
+    parent: BaseCondition,
+    target: Entity,
+    condition_type: type[Blinded] | type[Deafened],
+    event: Event,
+) -> Optional[Event]:
+    """Retain one effective sense denial while any owning source remains."""
+    existing = next((condition for condition in target.active_conditions_by_uuid.values()
+                     if isinstance(condition, condition_type)), None)
+    if existing is not None:
+        parent.add_shared_subcondition(existing)
+        return None
+    condition = condition_type(
+        source_entity_uuid=parent.source_entity_uuid,
+        target_entity_uuid=target.uuid,
+        parent_condition=parent.uuid,
+        tags=set(parent.tags),
+    )
+    applied = target.add_condition(condition, parent_event=event)
+    if applied is not None and not applied.canceled and applied.phase is EventPhase.COMPLETION:
+        parent.add_shared_subcondition(condition)
+    return applied
+
+
 def exhaustion_revive_processor(
     event: Event,
     source_entity_uuid: UUID,
@@ -932,8 +960,36 @@ class Disengaging(BaseCondition):
         return outs, [], [], [], effect_event
 
 
+def ground_has_residue(position: Tuple[int, int], residue_id: str) -> bool:
+    """Read current material from its existing tile-owned condition."""
+    tile = get_map().get_tile(*position)
+    return tile is not None and any(
+        condition.affects_occupancy_layer(OccupancyLayer.GROUND)
+        and (residue := condition.snapshot_tile_residue()) is not None
+        and residue.residue_id == residue_id
+        for condition in tile.active_conditions.values()
+    )
+
+
+def same_residue_ground(start: Tuple[int, int], end: Tuple[int, int], residue_id: str) -> bool:
+    """Query one connected material region without retaining a pool owner."""
+    if not ground_has_residue(start, residue_id) or not ground_has_residue(end, residue_id):
+        return False
+    pending = [start]
+    visited = {start}
+    while pending:
+        current = pending.pop()
+        if current == end:
+            return True
+        for neighbor in ground_neighbors(current) - visited:
+            visited.add(neighbor)
+            if ground_has_residue(neighbor, residue_id):
+                pending.append(neighbor)
+    return False
+
+
 def residue_fear_origin(
-    entry: SpatialChangeEvent, *, tile_uuid: UUID, condition_uuid: UUID,
+    entry: SpatialChangeEvent, *, tile_uuid: UUID, condition_uuid: UUID, residue_id: str,
 ) -> ResidueFearOrigin:
     """Derive one reverse step from the real entry, including jump or teleport."""
     previous = entry.old_position
@@ -956,7 +1012,7 @@ def residue_fear_origin(
     reverse_path = bresenham_line(entry.position, previous) if previous is not None else []
     retreat_position = reverse_path[1] if len(reverse_path) > 1 else None
     return ResidueFearOrigin(
-        tile_uuid=tile_uuid, condition_uuid=condition_uuid, position=entry.position,
+        tile_uuid=tile_uuid, condition_uuid=condition_uuid, residue_id=residue_id, position=entry.position,
         retreat_position=retreat_position, entry_event_uuid=entry.uuid,
     )
 
@@ -1007,13 +1063,21 @@ class Frightened(BaseCondition):
                 event_processor=self._on_residue_step,
             )
             target_entity.add_event_handler(direction)
-            exit_handler = SpatialHandler(
+            exit_handler = EventHandler(
                 name="Residue Fear Exit", source_entity_uuid=target_entity.uuid,
-                positions={self.residue_origin.position}, event_type=EventType.SPATIAL_ENTITY_LEFT,
+                trigger_conditions=[Trigger(event_type=EventType.SPATIAL_ENTITY_LEFT,
+                    event_phase=EventPhase.EFFECT, event_source_entity_uuid=target_entity.uuid)],
                 event_processor=self._on_residue_exit,
             )
-            EventQueue.add_spatial_handler(exit_handler)
-            return outs, [direction.uuid], [], [exit_handler.uuid], effect_event
+            target_entity.add_event_handler(exit_handler)
+            material_removed = EventHandler(
+                name="Residue Fear Material Removed", source_entity_uuid=target_entity.uuid,
+                trigger_conditions=[Trigger(event_type=EventType.SPATIAL_TILE_CHANGED,
+                    event_phase=EventPhase.EFFECT)],
+                event_processor=self._on_residue_removed,
+            )
+            target_entity.add_event_handler(material_removed)
+            return outs, [direction.uuid, exit_handler.uuid, material_removed.uuid], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
@@ -1049,12 +1113,11 @@ class Frightened(BaseCondition):
         origin: ResidueFearOrigin, source_entity_uuid: UUID,
         target_entity_uuid: Optional[UUID] = None, context: Optional[Dict[str, Any]] = None,
     ) -> Optional[AdvantageModifier]:
-        """Use the exact tile-owned source and current visual access, never its donor."""
+        """Use current material contact and visual access, never its donor."""
         target = Entity.get(source_entity_uuid)
-        tile = get_map().get_tile_by_uuid(origin.tile_uuid)
-        if (target is not None and tile is not None
-                and origin.condition_uuid in tile.active_conditions_by_uuid
-                and target.senses.visible.get(origin.position, False)):
+        if (target is not None and target.get_occupancy_layer() is OccupancyLayer.GROUND
+                and ground_has_residue(target.position, origin.residue_id)
+                and target.senses.visible.get(target.position, False)):
             return AdvantageModifier(name="Frightened", value=AdvantageStatus.DISADVANTAGE,
                 source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid)
         return None
@@ -1067,24 +1130,39 @@ class Frightened(BaseCondition):
         return PaidEntryRetreat(destination=self.residue_origin.retreat_position)
 
     def _on_residue_step(self, event: Event, _source_uuid: UUID) -> Event:
-        """While trapped by this fear, ordinary steps can follow the retained retreat."""
-        if (self.residue_origin is not None and isinstance(event, StepMovementEvent)
-                and self.residue_origin.retreat_position is not None
-                and event.to_position != self.residue_origin.retreat_position):
-            return event.cancel(status_message="Frightened: retreat toward the entry cell")
+        """Retain the original outward heading across internal pool cells."""
+        origin = self.residue_origin
+        if origin is not None and isinstance(event, StepMovementEvent) and origin.retreat_position is not None:
+            destination = (event.from_position[0] + origin.retreat_position[0] - origin.position[0],
+                           event.from_position[1] + origin.retreat_position[1] - origin.position[1])
+            if event.to_position != destination:
+                return event.cancel(status_message="Frightened: retreat toward the entry cell")
         return event
 
     def _on_residue_exit(self, event: Event, _source_uuid: UUID) -> Event:
-        """Remove only this pool's fear after a real exit in the retreat direction."""
+        """Internal material movement retains fear; an actual exit releases it."""
         origin = self.residue_origin
         if (origin is not None and self.target_entity_uuid is not None
                 and isinstance(event, SpatialChangeEvent)
-                and event.entity_uuid == self.target_entity_uuid
-                and event.old_position == origin.retreat_position
-                and event.old_position != event.position):
+                and event.entity_uuid == self.target_entity_uuid):
+            destination = event.old_position  # LEFT stores its arrival here.
+            if (destination is not None and event.occupancy_layer is OccupancyLayer.GROUND
+                    and same_residue_ground(event.position, destination, origin.residue_id)):
+                return event
             target = Entity.get(self.target_entity_uuid)
             if target is not None:
                 target.remove_condition_by_uuid(self.uuid, parent_event=event)
+        return event
+
+    def _on_residue_removed(self, event: Event, _source_uuid: UUID) -> Event:
+        """Removing the currently contacted material releases only this fear."""
+        origin = self.residue_origin
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+        if origin is None or target is None:
+            return event
+        if (isinstance(event, SpatialChangeEvent) and event.position == target.position
+                and not ground_has_residue(target.position, origin.residue_id)):
+            target.remove_condition_by_uuid(self.uuid, parent_event=event)
         return event
 
     @staticmethod
@@ -1651,6 +1729,7 @@ class ConcentrationSlot(BaseObject):
     """
     name: Optional[str] = "Concentration Slot"
     spell_name: str = ""
+    spell_id: Optional[str] = None
     linked_entries: List[Tuple[UUID, UUID]] = Field(default_factory=list)
 
 
@@ -1688,6 +1767,7 @@ class Concentrating(BaseCondition):
     )
 
     spell_name: str = ""
+    spell_id: Optional[str] = None
 
     concentration_slots: Dict[UUID, ConcentrationSlot] = Field(default_factory=dict)
 
@@ -1697,7 +1777,7 @@ class Concentrating(BaseCondition):
         super().model_post_init(__context)
 
         if self.spell_name and not self.concentration_slots:
-            self._active_slot_uuid = self.add_slot(self.spell_name)
+            self._active_slot_uuid = self.add_slot(self.spell_name, spell_id=self.spell_id)
 
     def _sync_spell_name(self) -> None:
         """Keep spell_name field in sync with slots (slots are source of truth)."""
@@ -1710,7 +1790,7 @@ class Concentrating(BaseCondition):
                 return slot_uuid
         return None
 
-    def add_slot(self, spell_name: str) -> UUID:
+    def add_slot(self, spell_name: str, *, spell_id: Optional[str] = None) -> UUID:
         """Add a new concentration slot for a spell. Returns the slot UUID."""
 
         existing = self.get_slot_by_spell_name(spell_name)
@@ -1723,6 +1803,7 @@ class Concentrating(BaseCondition):
         slot = ConcentrationSlot(
             source_entity_uuid=source_uuid,
             spell_name=spell_name,
+            spell_id=spell_id,
         )
         self.concentration_slots[slot.uuid] = slot
         self._active_slot_uuid = slot.uuid
@@ -1742,7 +1823,7 @@ class Concentrating(BaseCondition):
         if slot_uuid not in self.concentration_slots:
             return False
 
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not target:
             return False
 
@@ -1757,7 +1838,7 @@ class Concentrating(BaseCondition):
             Tuple[Optional[BaseBlock], BaseCondition, Event, bool]
         ] = []
         visited: Set[UUID] = {self.uuid}
-        for block_uuid, condition_uuid in slot.linked_entries:
+        for block_uuid, condition_uuid in tuple(slot.linked_entries):
             child = BaseCondition.get(condition_uuid)
             if not isinstance(child, BaseCondition) or not child.applied:
                 continue
@@ -1792,15 +1873,15 @@ class Concentrating(BaseCondition):
             if pair in self.linked_conditions:
                 self.linked_conditions.remove(pair)
 
-        slot.remove_from_register()
-        del self.concentration_slots[slot_uuid]
+        if self.concentration_slots.pop(slot_uuid, None) is not None:
+            slot.remove_from_register()
         self._sync_spell_name()
         return True
 
     def cleanup_if_no_effects(self, parent_event: Optional[Event] = None) -> None:
         """Remove Concentrating if it has no linked children (0-children bug fix)."""
         if not self.linked_conditions:
-            target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+            target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
             if target and "Concentrating" in target.active_conditions:
                 target.remove_condition("Concentrating", parent_event=parent_event)
 
@@ -1811,19 +1892,42 @@ class Concentrating(BaseCondition):
         if self._active_slot_uuid and self._active_slot_uuid in self.concentration_slots:
             self.concentration_slots[self._active_slot_uuid].linked_entries.append((target_block_uuid, condition_uuid))
 
+    def snapshot_concentration_slots(self) -> tuple[ItemConcentrationSlot, ...]:
+        return tuple(ItemConcentrationSlot(slot_uuid=slot.uuid, spell_id=slot.spell_id,
+            spell_name=slot.spell_name) for slot in self.concentration_slots.values() if slot.linked_entries)
+
+    def publish_owner_state(self, parent_event: Event) -> None:
+        owner = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+        if isinstance(owner, BaseItem) and owner.tile_uuid is not None:
+            owner.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
+
+    def unlink_condition(self, condition_uuid: UUID, *, parent_event: Event) -> None:
+        super().unlink_condition(condition_uuid, parent_event=parent_event)
+        for slot_uuid, slot in tuple(self.concentration_slots.items()):
+            slot.linked_entries = [link for link in slot.linked_entries if link[1] != condition_uuid]
+            if not slot.linked_entries:
+                slot.remove_from_register()
+                del self.concentration_slots[slot_uuid]
+        self._sync_spell_name()
+        self.publish_owner_state(parent_event)
+
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set")
 
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
+        target = BaseBlock.get(self.target_entity_uuid)
+        if not isinstance(target, (Entity, BaseItem)):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
         handler_uuids: List[UUID] = []
 
         existing = target.active_conditions.get("Concentrating")
         if existing and isinstance(existing, Concentrating):
-            max_slots = target.max_concentration_slots.normalized_score
+            max_slots = (target.max_concentration_slots.normalized_score
+                         if isinstance(target, Entity) else target.concentration_capacity)
+
+            if isinstance(target, BaseItem) and len(existing.concentration_slots) >= max_slots:
+                return [], [], [], [], declaration_event.cancel(status_message="Device concentration capacity is full")
 
             while len(existing.concentration_slots) >= max_slots:
                 oldest_uuid = next(iter(existing.concentration_slots))
@@ -1928,26 +2032,20 @@ class Concentrating(BaseCondition):
 
             return None
 
-        handler = EventHandler(
-            name=f"Concentration Check ({self.spell_name})",
-            source_entity_uuid=self.target_entity_uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=EventType.DAMAGE_APPLIED,
-                    event_phase=EventPhase.EFFECT,
-                    event_target_entity_uuid=self.target_entity_uuid
-                ),
-                Trigger(
-                    event_type=EventType.DEATH,
-                    event_phase=EventPhase.EFFECT,
-                    event_target_entity_uuid=self.target_entity_uuid
-                )
-            ],
-            event_processor=concentration_break_processor
-        )
-
-        target.add_event_handler(handler)
-        handler_uuids.append(handler.uuid)
+        if isinstance(target, Entity):
+            handler = EventHandler(
+                name=f"Concentration Check ({self.spell_name})",
+                source_entity_uuid=self.target_entity_uuid,
+                trigger_conditions=[
+                    Trigger(event_type=EventType.DAMAGE_APPLIED, event_phase=EventPhase.EFFECT,
+                            event_target_entity_uuid=self.target_entity_uuid),
+                    Trigger(event_type=EventType.DEATH, event_phase=EventPhase.EFFECT,
+                            event_target_entity_uuid=self.target_entity_uuid),
+                ],
+                event_processor=concentration_break_processor,
+            )
+            target.add_event_handler(handler)
+            handler_uuids.append(handler.uuid)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,

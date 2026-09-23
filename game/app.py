@@ -7,20 +7,24 @@ from typing import Mapping, Sequence, cast
 from uuid import UUID
 
 import pygame
+import numpy as np
 
 from dnd.core.events import WorldObjectState, WorldTileState
+from dnd.core.item_types import ItemIntegrity
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.types.materials import Material
 from dnd.types.world import CardinalDirection, LightLevel
 from dnd.types.world_placement import BoundaryStructureKind
 
 from game.area_media import BoundarySprite, compose_area
+from game.mechanism_projectile import sample_mechanism_projectile, mechanism_projectile_draw_command
 from game.draw_commands import DrawCommand
 from game.assets import AssetCatalog, SurfaceCache, flame_frame_index, prop_animation_frame
 from game.actor_facts import PresentationTarget
 from game.player_facts import PlayerObject, PlayerState
 from game.projection import (
     Camera,
+    HEIGHT_STEP_PIXELS,
     TILE_HEIGHT,
     TILE_WIDTH,
     camera_axis_vectors,
@@ -32,8 +36,17 @@ from game.projection import (
 )
 from game.water import WaterSupportInput, render_water_batch, water_source_origin
 from game.world_animation import WorldTransitionSample
-from game.surface_residue import geometric_residue_image, ground_residue_image, wall_residue_image
+from game.surface_residue import geometric_residue_image, ground_residue_image, liquid_surface_image, wall_residue_image
 from game.residue_media import ResidueRevealSample
+from game.device_art import DeviceEmission, DeviceFacing, device_bank, load_device_art, load_device_wrecks
+from game.device_draw import device_draw_command, device_wreck_draw_command, device_treatment
+from game.sustained_draw import sustained_draw_commands
+from game.spatial_field import field_cell, field_supports
+from game.fixture_depth import FixtureDepthSample, partition_world_depth, split_actor_fixtures, split_world_depth
+from game.volume_media import compose_volume
+from game.environment_art import load_environment_art, prop_state_key, sample_environment_frame
+from game.environment_animation import door_pose, trap_pose, remnant_bank
+from game.environment_draw import environment_command, environment_depth_sample
 
 
 WINDOW_SIZE = (1280, 720)
@@ -273,6 +286,50 @@ def _marked_wall_surface(
     return surface
 
 
+def _split_terrain_depths(commands: list[DrawCommand], depths: Mapping[tuple, np.ndarray],
+                         world_commands: Sequence[DrawCommand]) -> list[DrawCommand]:
+    """Floors and cliff faces span ground depth; centers cannot sort every pixel.
+
+    Partition only where another overlapping world picture crosses that plane.
+    Vertical billboards keep their existing contact depth, so foreground terrain
+    still hides their lower pixels while above-plane pixels remain visible.
+    """
+    peers = [(peer, peer.surface.get_rect(topleft=peer.destination))
+             for peer in world_commands if peer.key[0] == 100]
+    result = []
+    for command in commands:
+        depth = depths.get(command.key)
+        if depth is None:
+            result.append(command)
+            continue
+        bounds = command.surface.get_rect(topleft=command.destination)
+        overlapping = [(peer, rectangle, bounds.clip(rectangle)) for peer, rectangle in peers
+                       if bounds.colliderect(rectangle)]
+        if not overlapping:
+            result.append(command)
+            continue
+        # Uncovered terrain pixels keep their original painter position. A
+        # passing actor cannot reshuffle static cliff/floor seams around it.
+        coverage = np.zeros(command.surface.get_size(), dtype=bool)
+        local_depth = np.broadcast_to(depth, coverage.shape)
+        crosses_depth = False
+        for peer, rectangle, overlap in overlapping:
+            image = peer.surface.subsurface(overlap.move(-rectangle.left, -rectangle.top))
+            visible = (np.any(pygame.surfarray.array3d(image) != 0, axis=2)
+                       if peer.blend == pygame.BLEND_RGB_ADD else pygame.surfarray.array_alpha(image) != 0)
+            region = (slice(overlap.left - bounds.left, overlap.right - bounds.left),
+                      slice(overlap.top - bounds.top, overlap.bottom - bounds.top))
+            coverage[region] |= visible
+            crosses_depth |= bool(np.any(visible & (
+                (local_depth[region] > peer.key[1]) != (command.key > peer.key))))
+        if not crosses_depth:
+            result.append(command)
+            continue
+        result.extend(partition_world_depth(command, depth,
+            [peer.key[1] for peer, _, _ in overlapping], coverage=coverage))
+    return result
+
+
 def draw_frame(
     screen: pygame.Surface,
     target: PresentationTarget | PlayerState,
@@ -289,6 +346,7 @@ def draw_frame(
     extra_commands: Sequence[DrawCommand] = (),
     world_transitions: Sequence[WorldTransitionSample] = (),
     residue_reveals: Sequence[ResidueRevealSample] = (),
+    deposited_materials: frozenset[tuple[UUID, str]] = frozenset(),
     show_debug: bool = True,
     collect_evidence: bool = False,
 ) -> FrameEvidence | None:
@@ -301,8 +359,30 @@ def draw_frame(
     screen_rect = screen.get_rect()
     authored_treatment_id, authored_multiplier = _authored_treatment(catalog)
 
-    commands: list[DrawCommand] = list(extra_commands)
+    device_commands = {str(command.evidence[0]): command for command in extra_commands
+                       if command.evidence[6] in ("device", "device_wreck")}
+    commands: list[DrawCommand] = [command for command in extra_commands
+                                  if command.evidence[6] not in ("device", "device_wreck")]
+    for index, command in enumerate(commands):
+        if command.evidence[6] in ("deposit_floor", "deposit_air"):
+            position = cast(tuple[int, int], command.evidence[1])
+            disclosure = _disclosure(target, (position,))
+            if disclosure is not None:
+                state, level = disclosure
+                treatment_id, multiplier = _treatment(catalog, level)
+                commands[index] = command._replace(surface=device_treatment(command.surface, multiplier),
+                    evidence=(*command.evidence[:3], state, level.value if level is not None else None,
+                              treatment_id, *command.evidence[6:]))
     boundary_sprites: list[BoundarySprite] = []
+    fixture_depths: list[FixtureDepthSample] = []
+    terrain_depths: dict[tuple, np.ndarray] = {}
+    prop_transitions = {(sample.transition.identity, sample.transition.field): sample
+                        for sample in world_transitions}
+    destructions = {sample.transition.destruction.body_uuid: sample for sample in world_transitions
+                    if sample.transition.destruction is not None}
+    flashes = {sample.transition.identity: sample.transition.hit_flash.color for sample in world_transitions
+               if sample.transition.hit_flash is not None
+               and 0 <= sample.elapsed_ms < sample.transition.hit_flash.durationMs}
     expected_calculations: set[tuple[object, ...]] | None = set() if collect_evidence else None
     actual_calculations: set[tuple[object, ...]] | None = set() if collect_evidence else None
     water_rows: dict[
@@ -415,6 +495,11 @@ def draw_frame(
                          tile.elevation_steps, tuple(_support_evidence(target, support)
                                                     for support in (tile, *lower_supports))),
                     ))
+                    # Retain the cliff's existing order below its upper support;
+                    # its image cannot hide pixels above the terrain's ceiling.
+                    top_depth = ((destination[1] + np.arange(surface.height) + .5 - camera.pan[1])
+                                 / camera.zoom + tile.elevation_steps * HEIGHT_STEP_PIXELS)
+                    terrain_depths[commands[-1].key] = np.minimum(commands[-1].key[1], top_depth)[None, :]
         if lower_datum is not None:
             continue  # The complete flight, not a floating flat floor, shows this support.
         if tile.surface.base_material is Material.WATER:
@@ -511,6 +596,13 @@ def draw_frame(
             0,
             evidence,
         ))
+        if tile.elevation_steps > 0:
+            top_depth = ((destination[1] + np.arange(surface.height) + .5 - camera.pan[1])
+                         / camera.zoom + tile.elevation_steps * HEIGHT_STEP_PIXELS)
+            # A support cannot newly cover its own billboard's authored feet.
+            # The ceiling correction only moves terrain behind above-plane
+            # pixels; its existing front-to-back ownership remains below.
+            terrain_depths[commands[-1].key] = np.minimum(commands[-1].key[1], top_depth)[None, :]
 
     stair_assets = cast(Mapping[str, str], stair_profile["poses"])
     for lower, middle, upper, downhill in flights:
@@ -531,6 +623,11 @@ def draw_frame(
                  "structural", None, authored_treatment_id, "stairs",
                  tuple(_support_evidence(target, t) for t in (lower, middle, upper)), contacts),
             ))
+            # The whole-flight image retains its existing depth below the
+            # highest support. It cannot occlude a billboard above that plane.
+            top_depth = ((destination[1] + np.arange(surface.height) + .5 - camera.pan[1])
+                         / camera.zoom + upper.elevation_steps * HEIGHT_STEP_PIXELS)
+            terrain_depths[commands[-1].key] = np.minimum(commands[-1].key[1], top_depth)[None, :]
 
     water_pixel_count = 0
     water_chunk_count = 0
@@ -655,6 +752,111 @@ def draw_frame(
     frame_bindings = cast(Mapping[str, str], catalog.bindings["stone_door_frame"])
     closed_bindings = cast(Mapping[str, str], catalog.bindings["wood_door_closed"])
     open_bindings = cast(Mapping[str, str], catalog.bindings["wood_door_open"])
+    environment = load_environment_art()
+    environment_objects: set[UUID] = set()
+    for identity, obj in target.objects.items():
+        door = environment.doors.get(obj.item.item_id)
+        trap = environment.traps.get(obj.item.item_id)
+        prop = environment.props.get(obj.item.item_id)
+        wreck = environment.wrecks.get(obj.item.item_id)
+        destroyed = obj.item.integrity is ItemIntegrity.DESTROYED or wreck is not None
+        if door is None and trap is None and prop is None and wreck is None:
+            continue
+        # Older saved generic-door packets retain their original binary binding.
+        if door is not None and not destroyed and obj.item.door_swing is None:
+            continue
+        environment_objects.add(identity)
+        current_contact = identity in senses.objects
+        position = obj.placement.position
+        base_height = obj.placement.base_height_steps
+        direction = obj.placement.boundary_direction or obj.placement.orientation or CardinalDirection.EAST
+        boundary_pose = camera_pose(direction.value, camera.quadrant)
+        physical_boundary = boundary_pose if obj.placement.boundary_direction is not None else None
+        disclosure = _disclosure(target, (position,))
+        if disclosure is None:
+            multiplier = authored_multiplier
+        else:
+            _, level = disclosure
+            _, multiplier = _treatment(catalog, level)
+        source_door = door if door is not None else environment.doors.get(wreck.source_item_id) if wreck else None
+        # Workshop pose_offset maps source row to physical edge. Rendering a
+        # known native edge needs its inverse; the frame stays on that edge.
+        pose = ("e", "s", "w", "n")[(("e", "s", "w", "n").index(boundary_pose)
+            - (source_door.pose_offset if source_door is not None else 0)) % 4]
+        if source_door is not None and source_door.frame_resource_by_pose:
+            frame_id = source_door.frame_resource_by_pose[boundary_pose]
+            prepared = _static_blit(cache, frame_id, camera,
+                project_screen(position, camera, elevation_steps=base_height), multiplier, screen)
+            if prepared is not None:
+                frame_image, destination = prepared
+                frame_command = DrawCommand(painter_key(position, elevation_steps=base_height,
+                    quadrant=camera.quadrant, role="frame", identity=identity,
+                    boundary_poses=(boundary_pose,)), frame_image, destination, 0,
+                    (identity, position, frame_id, "current", None, "authored", "door_frame", base_height))
+                commands.append(frame_command)
+                boundary_sprites.append(BoundarySprite((obj.placement,), frame_image, destination, frame_command.key))
+        if not current_contact:
+            if door is not None and not destroyed and not door.frame_resource_by_pose:
+                assert obj.item.door_swing is not None
+                bank = door.openings[obj.item.door_swing.value]
+                if bank.frame_path is not None:
+                    command = environment_command(bank, 0, identity=identity, position=position,
+                        elevation=base_height, pose=pose, boundary_pose=physical_boundary,
+                        camera=camera, multiplier=multiplier, role="door_frame", frame_only=True)
+                    depth = environment_depth_sample(command, len(commands), bank, pose, 0, camera, position=position)
+                    commands.append(command)
+                    if depth is not None:
+                        fixture_depths.append(depth)
+                    boundary_sprites.append(BoundarySprite((obj.placement,), command.surface, command.destination, command.key))
+            continue
+        flash = flashes.get(identity)
+        transition = destructions.get(identity)
+        contact = transition.transition.destruction if transition is not None else None
+        if transition is not None and contact is not None and contact.bank_id is not None:
+            # The break starts at impact even while its previous physical shape
+            # and visibility are retained until the authored clearance frame.
+            bank = environment.banks[contact.bank_id]
+            frame = sample_environment_frame(bank, transition.elapsed_ms)
+            flash = flashes.get(transition.transition.identity)
+            role = "environment_wreck"
+        elif door is not None and not destroyed:
+            assert obj.item.door_swing is not None and obj.item.is_open is not None
+            bank, frame = door_pose(door, obj.item.door_swing.value, obj.item.is_open,
+                prop_transitions.get((identity, "is_open")))
+            role = "environment_door"
+        elif trap is not None and not destroyed:
+            mechanism = next(((key, effect) for key, effect in senses.spatial_effects.items()
+                              if effect.anchor_item_uuid == identity), None)
+            if mechanism is None:
+                raise ValueError(f"Disclosed trap hardware has no received mechanism: {obj.item.item_id}")
+            key, effect = mechanism
+            assert effect.trap_state is not None
+            bank, frame = trap_pose(trap, effect.trap_state.value,
+                prop_transitions.get((key, "activation")))
+            role = "environment_trap"
+        elif prop is not None and not destroyed:
+            state_key = prop_state_key(prop, obj.item.is_open)
+            if state_key is None or state_key not in prop.intact:
+                raise ValueError(f"Missing authored environment prop state: {obj.item.item_id}, {state_key}")
+            bank, frame = prop.intact[state_key], 0
+            role = "environment_prop"
+        else:
+            bank = remnant_bank(environment, obj.item.item_id, obj.item.remnant_state,
+                                outcome=obj.item.destruction_outcome)
+            if bank is None:
+                raise ValueError(f"Missing authored environment remnant entry: {obj.item.item_id}")
+            frame = bank.frame_count - 1
+            role = "environment_wreck"
+        command = environment_command(bank, frame, identity=identity, position=position,
+            elevation=base_height, pose=pose, boundary_pose=physical_boundary,
+            camera=camera, multiplier=multiplier, flash=flash, role=role)
+        depth = environment_depth_sample(command, len(commands), bank, pose, frame, camera,
+            position=position)
+        commands.append(command)
+        if depth is not None:
+            fixture_depths.append(depth)
+        if physical_boundary is not None:
+            boundary_sprites.append(BoundarySprite((obj.placement,), command.surface, command.destination, command.key))
     wall_rows: dict[
         tuple[tuple[int, int], Material],
         list[
@@ -670,6 +872,8 @@ def draw_frame(
         ],
     ] = {}
     for object_uuid, world_object in sorted(target.objects.items(), key=lambda row: str(row[0])):
+        if object_uuid in environment_objects:
+            continue
         structure = world_object.item.boundary_structure
         direction = world_object.placement.boundary_direction
         if structure is None or direction is None:
@@ -890,12 +1094,16 @@ def draw_frame(
             ))
             boundary_sprites.append(BoundarySprite((world_object.placement,), prepared[0], destination, commands[-1].key))
     animated_fixtures = 0
+    displayed_devices: dict[UUID, tuple[DeviceEmission, int]] = {}
     flame_index: int | None = None
-    prop_transitions = {(sample.transition.identity, sample.transition.field): sample
-                        for sample in world_transitions}
     for fixture_uuid, fixture in target.objects.items():
+        if fixture_uuid in environment_objects:
+            continue
         binding = catalog.props.get(fixture.item.item_id)
-        if binding is None or fixture_uuid not in senses.objects:
+        device_art = load_device_art().get(fixture.item.item_id)
+        wreck_art = (device_art if fixture.item.integrity is ItemIntegrity.DESTROYED
+                     else load_device_wrecks().get(fixture.item.item_id))
+        if (binding is None and device_art is None and wreck_art is None) or fixture_uuid not in senses.objects:
             continue
         fixture_state = fixture.item
         position = fixture.placement.position
@@ -903,6 +1111,39 @@ def draw_frame(
         if disclosure is not None:
             state, level = disclosure
             treatment_id, multiplier = _treatment(catalog, level)
+            if wreck_art is not None:
+                transition = destructions.get(fixture_uuid)
+                command = device_commands.get(str(fixture_uuid))
+                if transition is not None:
+                    contact = transition.transition.destruction
+                    assert contact is not None
+                    command = device_wreck_draw_command(str(fixture_uuid), contact.position,
+                        contact.elevation_steps, contact.facing, wreck_art, camera,
+                        elapsed_ms=transition.elapsed_ms, pitch_degrees=contact.pitch_degrees)
+                elif command is None:
+                    wreck_facing = wreck_art.rows[wreck_art.rows.index(
+                        fixture.placement.orientation.value.upper() if fixture.placement.orientation else "E")]
+                    command = device_wreck_draw_command(str(fixture_uuid), position,
+                        fixture.placement.base_height_steps, wreck_facing, wreck_art, camera)
+                flash = flashes.get(transition.transition.identity) if transition is not None else None
+                commands.append(command._replace(surface=device_treatment(command.surface, multiplier, flash)))
+                continue
+            if device_art is not None:
+                command = device_commands.get(str(fixture_uuid))
+                if command is None:
+                    facing = device_art.rows[device_art.rows.index(
+                        fixture.placement.orientation.value.upper() if fixture.placement.orientation else "E")]
+                    emitter = DeviceEmission(str(fixture_uuid), position, fixture.placement.base_height_steps,
+                                             facing, device_art, device_bank(device_art))
+                    command = device_draw_command(emitter, 0, camera)
+                else:
+                    emitter = DeviceEmission(str(fixture_uuid), position, fixture.placement.base_height_steps,
+                        cast(DeviceFacing, command.evidence[8]), device_art, device_bank(device_art))
+                displayed_devices[fixture_uuid] = emitter, cast(int, command.evidence[9])
+                image = device_treatment(command.surface, multiplier, flashes.get(fixture_uuid))
+                commands.append(command._replace(surface=image))
+                continue
+            assert binding is not None
             pose = camera_pose((fixture.placement.orientation or CardinalDirection.EAST).value, camera.quadrant)
             body_by_pose = binding.body_by_pose
             if binding.active_body_by_pose is not None and (
@@ -933,6 +1174,9 @@ def draw_frame(
             )
             if prepared_body is not None:
                 body, destination = prepared_body
+                flash = flashes.get(fixture_uuid)
+                if flash is not None:
+                    body = device_treatment(body, (1, 1, 1), flash)
                 commands.append(DrawCommand(
                     painter_key(
                         position,
@@ -977,6 +1221,8 @@ def draw_frame(
                     ))
                     animated_fixtures += 1
 
+    commands.extend(sustained_draw_commands(target, catalog, cache, camera, presentation_time, displayed_devices))
+
     surface_cells: dict[tuple[str, int], set[tuple[int, int]]] = {}
     for position, tile in target.tiles.items():
         for residue in tile.residues:
@@ -994,15 +1240,35 @@ def draw_frame(
         contact = project_screen(position, camera, elevation_steps=tile.elevation_steps)
         pose = camera_pose(CardinalDirection.EAST.value, camera.quadrant)
         for residue in tile.residues:
+            covered = tuple(row for row in residue.contributions if row.deposit_source is not None
+                and (row.deposit_source.deposit_uuid, residue.residue_id) in deposited_materials)
+            if covered:
+                amount = residue.amount - sum(row.amount for row in covered)
+                if amount <= 0:
+                    continue
+                residue = residue.model_copy(update={"amount": amount,
+                    "contributions": tuple(row for row in residue.contributions if row not in covered)})
             particle_asset = catalog.residue_particles.get(residue.residue_id)
+            liquid = catalog.liquid_surfaces.get(residue.residue_id)
             if residue.contributions and particle_asset is not None:
                 surface = geometric_residue_image(cache.surface_residues, particle_asset, position,
-                    residue, camera, multiplier, residue_reveals)
+                    residue, camera, multiplier, residue_reveals,
+                    pool=liquid.ellipse if liquid is not None else None)
                 destination = round(contact[0] - surface.width / 2), round(contact[1] - surface.height / 2)
                 if _visible_rect(surface, destination, screen):
                     commands.append(DrawCommand(painter_key(position, elevation_steps=tile.elevation_steps,
                         quadrant=camera.quadrant, role="ground_residue", identity=residue.condition_uuid),
                         surface, destination, 0, (residue.condition_uuid, position, particle_asset.assetId,
+                        state, level.value if level is not None else None, treatment_id, "ground_residue")))
+                continue
+            if liquid is not None:
+                surface = liquid_surface_image(cache.surface_residues, liquid, position, camera,
+                    multiplier, amount=residue.amount, max_amount=residue.max_amount)
+                destination = round(contact[0] - surface.width / 2), round(contact[1] - surface.height / 2)
+                if _visible_rect(surface, destination, screen):
+                    commands.append(DrawCommand(painter_key(position, elevation_steps=tile.elevation_steps,
+                        quadrant=camera.quadrant, role="ground_residue", identity=residue.condition_uuid),
+                        surface, destination, 0, (residue.condition_uuid, position, liquid.asset.assetId,
                         state, level.value if level is not None else None, treatment_id, "ground_residue")))
                 continue
             style = catalog.residue_surfaces.get(residue.residue_id)
@@ -1031,13 +1297,56 @@ def draw_frame(
                  level.value if level is not None else None, treatment_id, "ground_residue")))
 
     for identity, effect in senses.spatial_effects.items():
+        if effect.deposit_source is not None and (effect.deposit_source.deposit_uuid,
+                effect.content_ref.content_id) in deposited_materials:
+            continue
+        liquid = catalog.liquid_surfaces.get(effect.content_ref.content_id)
+        if liquid is not None:
+            for position in effect.positions:
+                tile = target.tiles.get(position)
+                disclosure = _disclosure(target, (position,))
+                if tile is None or disclosure is None:
+                    continue
+                state, level = disclosure
+                treatment_id, multiplier = _treatment(catalog, level)
+                surface = liquid_surface_image(cache.surface_residues, liquid, position, camera, multiplier)
+                contact = project_screen(position, camera, elevation_steps=tile.elevation_steps)
+                destination = round(contact[0] - surface.width / 2), round(contact[1] - surface.height / 2)
+                if _visible_rect(surface, destination, screen):
+                    commands.append(DrawCommand(painter_key(position, elevation_steps=tile.elevation_steps,
+                        quadrant=camera.quadrant, role="ground_effect", identity=identity), surface,
+                        destination, 0, (identity, position, liquid.asset.assetId, state,
+                        level.value if level is not None else None, treatment_id, "spatial_effect", 0,
+                        tile.elevation_steps)))
+            continue
+        if effect.anchor_item_uuid in environment_objects:
+            continue
         animation = catalog.spatial_effects.get(effect.content_ref.content_id)
         if animation is None:
             continue
-        pose = camera_pose(CardinalDirection.EAST.value, camera.quadrant)
-        asset_id, frame = prop_animation_frame(animation, pose, effect.trap_state.value,
-            prop_transitions.get((identity, "trap_state")))
-        for position in effect.positions:
+        if animation.placement in ("area", "anchor") and effect.anchor_position is None:
+            continue
+        direction = {(1, 0): CardinalDirection.EAST, (-1, 0): CardinalDirection.WEST,
+                     (0, 1): CardinalDirection.NORTH, (0, -1): CardinalDirection.SOUTH}.get(
+                         effect.direction or (1, 0), CardinalDirection.EAST)
+        pose = camera_pose(direction.value, camera.quadrant)
+        asset_id, frame = prop_animation_frame(animation, pose,
+            str(effect.pressed).lower() if effect.pressed is not None else
+            effect.trap_state.value if effect.trap_state is not None else None,
+            prop_transitions.get((identity, "activation")) or prop_transitions.get((identity, "pressed"))
+            or prop_transitions.get((identity, "trap_state")) or prop_transitions.get((identity, "creation")))
+        positions = ((effect.anchor_position,) if animation.placement == "anchor"
+                     and effect.anchor_position is not None else effect.positions)
+        if animation.placement == "area" and animation.footprint_tiles is not None:
+            assert effect.anchor_position is not None
+            origin = (effect.anchor_position[0] + animation.origin_offset[0],
+                      effect.anchor_position[1] + animation.origin_offset[1])
+            spec = catalog.resources[asset_id]
+            positions = field_supports(cache.scaled(asset_id, camera.zoom).size,
+                (spec.pivot[0] * spec.scale * camera.zoom, spec.pivot[1] * spec.scale * camera.zoom),
+                origin, animation.footprint_tiles, frozenset(effect.positions), frozenset(senses.visible),
+                camera.quadrant, camera.zoom)
+        for position in positions:
             tile = target.tiles.get(position)
             disclosure = _disclosure(target, (position,))
             if tile is None or disclosure is None:
@@ -1045,13 +1354,37 @@ def draw_frame(
             state, level = disclosure
             treatment_id, multiplier = _treatment(catalog, level)
             base_height = tile.elevation_steps
-            contact = project_screen(position, camera, elevation_steps=base_height)
-            prepared = _static_blit(cache, asset_id, camera, contact, multiplier, screen)
+            draw_position: tuple[float, float] = position
+            if animation.placement == "anchor":
+                dx, dy = effect.direction or (1, 0)
+                forward, right = animation.origin_offset
+                draw_position = (position[0] + forward * dx - right * dy,
+                                 position[1] + forward * dy + right * dx)
+            contact = project_screen(draw_position, camera, elevation_steps=base_height)
+            if animation.placement == "area":
+                assert effect.anchor_position is not None
+                field_origin = (effect.anchor_position[0] + animation.origin_offset[0],
+                                effect.anchor_position[1] + animation.origin_offset[1])
+                spec = catalog.resources[asset_id]
+                pivot = tuple(value * spec.scale * camera.zoom for value in spec.pivot)
+                piece, offset = field_cell(cache.treated(asset_id, camera.zoom, multiplier),
+                    (pivot[0], pivot[1]), (position[0] - field_origin[0],
+                    position[1] - field_origin[1]), camera.quadrant, camera.zoom)
+                origin = project_screen(field_origin, camera, elevation_steps=base_height)
+                destination = (round(origin[0] - pivot[0] + offset[0]), round(origin[1] - pivot[1] + offset[1]))
+                prepared = (piece, destination) if _visible_rect(piece, destination, screen) else None
+            else:
+                prepared = _static_blit(cache, asset_id, camera, contact, multiplier, screen)
             if prepared is None:
                 continue
             surface, destination = prepared
-            commands.append(DrawCommand(painter_key(position, elevation_steps=base_height, quadrant=camera.quadrant,
-                role="ground_effect", identity=(str(identity), str(position))), surface, destination, 0,
+            if animation.actor_depth is not None:
+                fixture_depths.append(FixtureDepthSample(len(commands),
+                    catalog.resources[animation.actor_depth.asset_id].path, animation.actor_depth,
+                    pose, frame, cache.scaled(asset_id, camera.zoom).get_size(),
+                    cache.alpha_bounds(asset_id, camera.zoom), catalog.resources[asset_id].scale))
+            commands.append(DrawCommand(painter_key(draw_position, elevation_steps=base_height, quadrant=camera.quadrant,
+                role="object" if animation.depth == "world" else "ground_effect", identity=(str(identity), str(position))), surface, destination, 0,
                 (identity, position, asset_id, state, level.value if level is not None else None,
                  treatment_id, "spatial_effect", frame, base_height)))
             for residue in tile.residues:
@@ -1069,8 +1402,23 @@ def draw_frame(
                     (identity, position, overlay_id, state, level.value if level is not None else None,
                      treatment_id, "residue_overlay", frame, base_height)))
 
+    for transition in world_transitions:
+        cue = transition.transition.projectile
+        if cue is None:
+            continue
+        sample = sample_mechanism_projectile(cue, transition.elapsed_ms, camera)
+        if sample is not None and (round(sample.grid[0]), round(sample.grid[1])) in senses.visible:
+            commands.append(mechanism_projectile_draw_command(cue, sample,
+                cache.scaled(sample.asset_id, camera.zoom), catalog.resources[sample.asset_id], camera))
+
+    commands = split_actor_fixtures(commands, fixture_depths)
+    commands = _split_terrain_depths(commands, terrain_depths, extra_commands)
     composed = []
     for command in commands:
+        if command.volume is not None:
+            image, depth = compose_volume(command.surface, command.volume, camera)
+            composed.append(command._replace(surface=image, volume=None, world_depth=depth))
+            continue
         if command.area is None:
             composed.append(command)
             continue
@@ -1080,14 +1428,14 @@ def draw_frame(
         composed.extend(DrawCommand(contact.key, contact.image, contact.destination,
             command.blend, (*command.evidence[:6], "wall_contact", *command.evidence[7:]))
             for contact in wall_contacts)
-    commands = composed
+    commands = split_world_depth(composed)
     commands.sort(key=lambda row: row[0])
     expected_draws = tuple(command[4] for command in commands) if collect_evidence else ()
     actual_draws: list[tuple[object, ...]] | None = [] if collect_evidence else None
-    for _, surface, destination, special_flags, evidence, _ in commands:
-        screen.blit(surface, destination, special_flags=special_flags)
+    for command in commands:
+        screen.blit(command.surface, command.destination, special_flags=command.blend)
         if actual_draws is not None:
-            actual_draws.append(evidence)
+            actual_draws.append(command.evidence)
         static_draws += 1
 
     grid_tiles = tuple(target.tiles.values()) if show_grid else ()

@@ -6,7 +6,11 @@ The full native/catalog imports belong to this developer command, not playback.
 
 import argparse
 import json
+import os
 from pathlib import Path
+
+# This command owns stdout as JSON, including imports that initialize Pygame.
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 
 from dnd.content_system.spell_catalog_composition import SPELL_CATALOG_COMPOSITION_ROWS
 from dnd.core.events import EventType

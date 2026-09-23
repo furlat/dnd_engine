@@ -1,0 +1,326 @@
+{
+  "schema": "dnd.movementPresentation",
+  "version": 1,
+  "referenceSpeedFeet": 30,
+  "actionPlaybackRates": {
+    "condition.spell.haste": 1.25
+  },
+  "walkMedia": [
+    {
+      "id": "dash.back",
+      "role": "trail",
+      "assetId": "pending.dash_retreat.back",
+      "attachment": "ground",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.dashing"
+      ],
+      "unlessConditions": [
+        "condition.spell.haste",
+        "condition.spell.expeditious_retreat"
+      ],
+      "viewFacing": "SE",
+      "depth": "behind_body",
+      "contactFrame": 0,
+      "emitIntervalMs": 180,
+      "fitToMotion": false,
+      "alpha": 0.5
+    },
+    {
+      "id": "dash.front",
+      "role": "trail",
+      "assetId": "pending.dash_retreat.front",
+      "attachment": "ground",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.dashing"
+      ],
+      "unlessConditions": [
+        "condition.spell.haste",
+        "condition.spell.expeditious_retreat"
+      ],
+      "viewFacing": "SE",
+      "depth": "front_body",
+      "contactFrame": 0,
+      "emitIntervalMs": 180,
+      "fitToMotion": false,
+      "alpha": 0.5
+    },
+    {
+      "id": "retreat-dash.back",
+      "role": "trail",
+      "assetId": "pending.dash_retreat.back",
+      "attachment": "ground",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.dashing",
+        "condition.spell.expeditious_retreat"
+      ],
+      "unlessConditions": [
+        "condition.spell.haste"
+      ],
+      "viewFacing": "SE",
+      "depth": "behind_body",
+      "contactFrame": 0,
+      "emitIntervalMs": 180,
+      "fitToMotion": false,
+      "alpha": 1
+    },
+    {
+      "id": "retreat-dash.front",
+      "role": "trail",
+      "assetId": "pending.dash_retreat.front",
+      "attachment": "ground",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.dashing",
+        "condition.spell.expeditious_retreat"
+      ],
+      "unlessConditions": [
+        "condition.spell.haste"
+      ],
+      "viewFacing": "SE",
+      "depth": "front_body",
+      "contactFrame": 0,
+      "emitIntervalMs": 180,
+      "fitToMotion": false,
+      "alpha": 1
+    },
+    {
+      "id": "haste-dash.back",
+      "role": "trail",
+      "assetId": "pending.dash_haste.back",
+      "attachment": "ground",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.dashing",
+        "condition.spell.haste"
+      ],
+      "unlessConditions": [],
+      "viewFacing": "SE",
+      "depth": "behind_body",
+      "contactFrame": 0,
+      "emitIntervalMs": 180,
+      "fitToMotion": false,
+      "alpha": 1
+    },
+    {
+      "id": "haste-dash.front",
+      "role": "trail",
+      "assetId": "pending.dash_haste.front",
+      "attachment": "ground",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.dashing",
+        "condition.spell.haste"
+      ],
+      "unlessConditions": [],
+      "viewFacing": "SE",
+      "depth": "front_body",
+      "contactFrame": 0,
+      "emitIntervalMs": 180,
+      "fitToMotion": false,
+      "alpha": 1
+    }
+  ],
+  "jumpMedia": [
+    {
+      "id": "takeoff.back",
+      "role": "takeoff",
+      "assetId": "pending.takeoff.back",
+      "attachment": "ground",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.spell.jump"
+      ],
+      "unlessConditions": [],
+      "viewFacing": "SE",
+      "depth": "behind_body",
+      "contactFrame": 40,
+      "emitIntervalMs": null,
+      "fitToMotion": false,
+      "alpha": 1
+    },
+    {
+      "id": "takeoff.front",
+      "role": "takeoff",
+      "assetId": "pending.takeoff.front",
+      "attachment": "ground",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.spell.jump"
+      ],
+      "unlessConditions": [],
+      "viewFacing": "SE",
+      "depth": "front_body",
+      "contactFrame": 40,
+      "emitIntervalMs": null,
+      "fitToMotion": false,
+      "alpha": 1
+    },
+    {
+      "id": "flight.back",
+      "role": "source_vfx",
+      "assetId": "pending.flight.back",
+      "attachment": "body",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.spell.jump"
+      ],
+      "unlessConditions": [],
+      "viewFacing": "SE",
+      "depth": "behind_body",
+      "contactFrame": 0,
+      "emitIntervalMs": null,
+      "fitToMotion": true,
+      "alpha": 1
+    },
+    {
+      "id": "flight.front",
+      "role": "source_vfx",
+      "assetId": "pending.flight.front",
+      "attachment": "body",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.spell.jump"
+      ],
+      "unlessConditions": [],
+      "viewFacing": "SE",
+      "depth": "front_body",
+      "contactFrame": 0,
+      "emitIntervalMs": null,
+      "fitToMotion": true,
+      "alpha": 1
+    },
+    {
+      "id": "landing.back",
+      "role": "landing",
+      "assetId": "pending.takeoff.back",
+      "attachment": "ground",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.spell.jump"
+      ],
+      "unlessConditions": [],
+      "viewFacing": "SE",
+      "depth": "behind_body",
+      "contactFrame": 40,
+      "emitIntervalMs": null,
+      "fitToMotion": false,
+      "alpha": 1
+    },
+    {
+      "id": "landing.front",
+      "role": "landing",
+      "assetId": "pending.takeoff.front",
+      "attachment": "ground",
+      "tint": 16777215,
+      "tint2": null,
+      "startFrame": 0,
+      "fps": 144,
+      "loop": false,
+      "reversed": false,
+      "scale": 0.5,
+      "offsetX": 0,
+      "offsetY": 0,
+      "whenConditions": [
+        "condition.spell.jump"
+      ],
+      "unlessConditions": [],
+      "viewFacing": "SE",
+      "depth": "front_body",
+      "contactFrame": 40,
+      "emitIntervalMs": null,
+      "fitToMotion": false,
+      "alpha": 1
+    }
+  ]
+}

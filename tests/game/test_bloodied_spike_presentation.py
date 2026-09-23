@@ -174,13 +174,18 @@ def test_full_saved_story_keeps_one_bloodied_tile_through_lowering_and_occupied_
         (TrapState.ACTIVATED, hit), (TrapState.ACTIVATED, 0), (TrapState.DEACTIVATED, 0),
         (TrapState.DEACTIVATED, 0), (TrapState.DEACTIVATED, 0), (TrapState.DEACTIVATED, 0),
         (TrapState.ACTIVATED, hit), (TrapState.ACTIVATED, 0)]
-    assert len(releases) == 3 and all(row.release_id == "body.blood" for row in releases)
+    # Poison-coated spikes deliver separate physical and poison injuries. Both
+    # now use the approved all-damage-types body response.
+    injury_packets = 2 if payload == "poison-damage" else 1
+    assert len(releases) == 3 * injury_packets
+    assert all(row.release_id == "body.blood" for row in releases)
     assert EventQueue.event_cursor() == 0 and not Entity.get_all_entities()
 
 
 @pytest.mark.parametrize("role", ("walker", "operator"))
 def test_bloodied_spike_pixels_follow_contact_and_existing_deployment_frames(history, rendering, role):
     captured, payload = history
+    injury_packets = 2 if payload == "poison-damage" else 1
     screen, _, _, data, _, _ = rendering
     before, root = selected(captured, role, MovementFact)
     motion = bind_motion(before, root, data)
@@ -198,7 +203,7 @@ def test_bloodied_spike_pixels_follow_contact_and_existing_deployment_frames(his
         assert impact.displayed.tiles[position].residues == expected
         residue, = expected
         contribution, = residue.contributions
-        assert residue.amount == contribution.amount == 1
+        assert residue.amount == contribution.amount == injury_packets
     for quadrant in range(4):
         camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus((5, 3))
         rows, _ = draw_world(pending.displayed, camera, (), rendering)
@@ -231,9 +236,9 @@ def test_bloodied_spike_pixels_follow_contact_and_existing_deployment_frames(his
             assert residue.condition_uuid == prior.condition_uuid
             assert residue.residue_id == prior.residue_id == "residue.blood"
             assert residue.max_amount == prior.max_amount
-            assert residue.amount == prior.amount + occurrence
+            assert residue.amount == min(prior.max_amount, prior.amount + occurrence * injury_packets)
             assert contribution.ellipses == previous_contribution.ellipses
-            assert contribution.amount == previous_contribution.amount + occurrence
+            assert contribution.amount == min(prior.max_amount, previous_contribution.amount + occurrence * injury_packets)
             assert pending.displayed.tiles[position].residues == (prior,)
         for quadrant in range(4):
             camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus((5, 3))

@@ -293,10 +293,13 @@ def test_canonical_goblin_marker_and_cast_history_survive_turns_and_runtime_rese
         incoming = next(event for event in second_lineage.events if isinstance(event, TakeDamageEvent))
         death = next(event for event in second_lineage.events if isinstance(event, DeathEvent))
         life = next(event for event in second_lineage.events if isinstance(event, LifeStateChangeEvent))
-        spatial = next(event for event in second_lineage.events if isinstance(event, SpatialChangeEvent))
+        spatial = next(event for event in second_lineage.events
+                       if isinstance(event, SpatialChangeEvent)
+                       and event.parent_lineage == death.lineage_uuid)
         senses = next(
             event for event in second_lineage.events
             if isinstance(event, SensoryUpdateEvent) and event.observer_uuid == seed.observer_uuid
+            and event.parent_lineage == spatial.lineage_uuid
         )
         assert death.parent_lineage == incoming.lineage_uuid
         assert life.parent_lineage == spatial.parent_lineage == death.lineage_uuid

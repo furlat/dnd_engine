@@ -7,7 +7,7 @@ direct-ownership condition model.
 """
 
 import pytest
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from dnd.actions import (
     Move,
@@ -18,13 +18,14 @@ from dnd.actions import (
 from dnd.actions_functional import get_available_actions, setup_standard_actions
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.conditions import Hidden
+from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.base_actions import BaseAction, Cost
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.base_tiles import dark_floor_factory
 from dnd.core.condition_types import ConditionAgencyDenial
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import EventPhase, EventQueue, EventType, TakeDamageEvent
+from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, TakeDamageEvent, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.modifiers import (
@@ -354,6 +355,34 @@ def test_continual_flame_object_owns_light_lifecycle() -> None:
     assert BaseBlock.get(flame.uuid) is None
     assert condition not in get_map().get_spatial_conditions()
     assert _tile((3, 7)).resolved_light_level is LightLevel.DARKNESS
+
+
+def test_vetoed_continual_flame_removes_its_uncommitted_anchor() -> None:
+    """A real condition-application veto returns cancellation without leaked light."""
+    _dark_arena(8, 5)
+    caster = create_spell_regression_actor("Flame Cleric", (2, 2), "heroes", spell_slots={2: 1})
+    Entity.update_all_entities_senses(max_distance=40)
+    anchors: list[UUID] = []
+
+    def veto_flame(event: Event, _source_uuid: UUID) -> Event:
+        if isinstance(event, ConditionApplicationEvent) and isinstance(event.condition, ContinualFlameCondition):
+            anchors.append(event.condition.anchor_uuid)
+            return event.cancel("Continual Flame application vetoed")
+        return event
+
+    caster.add_event_handler(EventHandler(
+        name="Veto new flame", source_entity_uuid=caster.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.CONDITION_APPLICATION,
+                                    event_phase=EventPhase.DECLARATION)],
+        event_processor=veto_flame,
+    ))
+    result = ContinualFlame(source_entity_uuid=caster.uuid, end_position=(3, 2), cast_at_level=2).apply()
+
+    assert result is not None and result.canceled
+    assert anchors and all(BaseBlock.get(identity) is None for identity in anchors)
+    assert not get_map().get_objects_at((3, 2))
+    assert not get_map().get_spatial_conditions()
+    assert _tile((3, 2)).resolved_light_level is LightLevel.DARKNESS
 
 
 def _command_reaction_probe(target: Entity) -> BaseAction:

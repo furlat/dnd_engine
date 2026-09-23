@@ -63,7 +63,7 @@ class IceKnife(SpellAction):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if caster is None or target is None:
             return declaration_event.cancel(status_message="Caster or target not found")
-        if caster.senses.get_feet_distance(target.position) > self.effective_range:
+        if self.get_target_distance(target.position) > self.effective_range:
             return declaration_event.cancel(status_message="Target out of range")
         return validate_line_of_sight(declaration_event, self.source_entity_uuid)
 
@@ -113,16 +113,20 @@ class IceKnife(SpellAction):
         recipients = [entity for identity in sorted(shape.affected_entity_uuids, key=target_resolution_sort_key)
                       if (entity := Entity.get(identity)) is not None and entity.is_active]
         burst = SpellEvent(name="Ice Knife burst", spell_id="ice_knife", effect_id=ICE_KNIFE_BURST,
+            use_register=False,
             parent_event=parent.uuid, phase=EventPhase.EFFECT,
-            source_entity_uuid=caster.uuid, source_entity_name=caster.name, source_position=caster.position,
+            source_entity_uuid=caster.uuid, source_entity_name=caster.name, source_position=parent.source_position,
+            effect_source_position=parent.effect_source_position,
             behavior_id=parent.behavior_id, provided_by_id=parent.provided_by_id, origin_root_id=parent.origin_root_id,
             spell_level=self.spell_level, cast_at_level=self.cast_at_level, spell_school=self.spell_school,
             verbal=False, costs=[], aoe_position=center, aoe_shape_type="sphere", aoe_radius_ft=5,
             area_geometry=snapshot_aoe_presentation_geometry(shape, caster.position),
+            area_propagation=shape.propagation,
             resolved_area_positions=tuple(sorted(shape.affected_positions)),
             declared_target_entity_uuids=[entity.uuid for entity in recipients], total_targets=len(recipients),
             damage_types=[DamageType.COLD],
         )
+        burst = burst.post(use_register=True)
         if burst.canceled:
             return
         cold = Damage(source_entity_uuid=caster.uuid, damage_type=DamageType.COLD,
@@ -131,14 +135,17 @@ class IceKnife(SpellAction):
         total = 0
         for index, recipient in enumerate(recipients):
             application = SpellEvent(name="Ice Knife burst", spell_id="ice_knife", effect_id=ICE_KNIFE_BURST,
+                use_register=False,
                 parent_event=burst.uuid, phase=EventPhase.EFFECT,
-                source_entity_uuid=caster.uuid, source_entity_name=caster.name, source_position=caster.position,
+                source_entity_uuid=caster.uuid, source_entity_name=caster.name, source_position=parent.source_position,
+                effect_source_position=parent.effect_source_position,
                 target_entity_uuid=recipient.uuid, target_entity_name=recipient.name,
                 behavior_id=parent.behavior_id, provided_by_id=parent.provided_by_id, origin_root_id=parent.origin_root_id,
                 spell_level=self.spell_level, cast_at_level=self.cast_at_level, spell_school=self.spell_school,
                 verbal=False, costs=[], damage_types=[DamageType.COLD], application_index=index,
                 application_id=uuid5(burst.lineage_uuid, f"target-application:{index}"),
             )
+            application = application.post(use_register=True)
             if application.canceled:
                 continue
             dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)

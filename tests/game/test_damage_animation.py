@@ -59,14 +59,14 @@ def test_actual_damage_keeps_packet_and_normalized_life_facts_while_seeking(
     assert early.body is None and early.vitals is None and not early.complete
     contact = sample_damage(cue, cue.timing.start_ms)
     assert contact.body is not None and contact.body.frame == 0
-    assert contact.body.clip == ("Die" if life is LifeState.DEAD else "TakeDamage")
+    assert contact.body.clip == ("TakeDamage" if life is LifeState.ALIVE else "Die")
     assert contact.body.facing == "NW"
     committed = sample_damage(cue, cue.timing.hp_ms)
     assert committed.vitals is not None
     assert (committed.vitals.hp, committed.vitals.life_state) == (expected.normal_hp, life)
     complete = sample_damage(cue, cue.timing.end_ms)
     assert complete.complete and complete.vitals is not None and complete.vitals.flash is None
-    if life is LifeState.DEAD:
+    if life is not LifeState.ALIVE:
         assert complete.body is not None and complete.body.clip == "Die"
         assert complete.body.frame == body_clip(data, prior, "Die").frames - 1
         assert sample_damage(cue, cue.timing.end_ms + 5000).body == complete.body

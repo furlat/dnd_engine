@@ -65,8 +65,6 @@ def bind_damage(before: PlayerState, lineage: PlayerLineage, data: AnimationData
 
     changes = [(event.uuid, event.fact) for event in lineage.events if isinstance(event.fact, LifeFact)
                and not event.canceled and event.fact.entity_uuid == actor.uuid and owned_effect(event)]
-    if len(changes) > 1:
-        return None
     target = actor_contact(before, actor, data) if contact is None else contact
     if target.actor_uuid != str(actor.uuid):
         raise ValueError("damage contact belongs to a different recipient")
@@ -74,9 +72,9 @@ def bind_damage(before: PlayerState, lineage: PlayerLineage, data: AnimationData
     packet = packets[0]
     if packet.damage_type is None or packet.applied_damage is None or packet.resulting_normal_hp is None:
         raise ValueError("applied damage requires its native after-values")
-    life = changes[0][1].new_state if changes else actor.life_state
+    life = changes[-1][1].new_state if changes else actor.life_state
     # Entering DYING can normalize the packet's intermediate negative HP.
-    hp = changes[0][1].normal_hit_points if changes else packet.resulting_normal_hp
+    hp = changes[-1][1].normal_hit_points if changes else packet.resulting_normal_hp
     damage = resolve_damage(data, packet.damage_type.value)
     timing = compile_damage(data, target, damage, start_ms, life)
     return DamageCue(root_node.uuid, target, timing, damage, packet.applied_damage, hp, life,
@@ -95,10 +93,11 @@ def sample_damage(cue: DamageCue, elapsed_ms: float) -> DamageSample:
     life = cue.resulting_life_state if committed else cue.contact.life_state
     complete = elapsed_ms >= timing.end_ms
     body = None
-    if not complete or life is LifeState.DEAD:
+    if not complete or life is not LifeState.ALIVE:
         body = sample_damage_body(cue.data, cue.contact, elapsed_ms,
             start_ms=timing.start_ms, end_ms=timing.end_ms,
-            death_start_ms=timing.start_ms if life is LifeState.DEAD else None)
+            death_start_ms=timing.start_ms if life is LifeState.DEAD else None,
+            resulting_life_state=life, life_start_ms=timing.hp_ms, life_body=timing.life_body)
     flash = cue.damage.hitFlash
     color = ((flash.palette or flash.color) if flash.enabled and not complete
              and timing.flash_ms <= elapsed_ms < timing.flash_ms + flash.durationMs else None)

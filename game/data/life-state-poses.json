@@ -1,0 +1,12 @@
+{
+  "dying": {
+    "bodyPose": "Die",
+    "applicationBody": {"bodyClip": "Die", "bodyPlaybackSpeed": 1, "reversed": false},
+    "removalBody": {"bodyClip": "Die", "bodyPlaybackSpeed": 1, "reversed": true}
+  },
+  "stable": {
+    "bodyPose": "Die",
+    "applicationBody": {"bodyClip": "Die", "bodyPlaybackSpeed": 1, "reversed": false},
+    "removalBody": {"bodyClip": "Die", "bodyPlaybackSpeed": 1, "reversed": true}
+  }
+}

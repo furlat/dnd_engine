@@ -509,7 +509,7 @@ def create_protection_handler(
 ) -> ProtectionReactionHandler:
     """Create an EventHandler for Protection fighting style."""
     return ProtectionReactionHandler(
-        **({} if handler_uuid is None else {"uuid": handler_uuid}),
+        uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Protection",
         semantic_key="feature.fighter.protection",
         content_kind=RuntimeBehaviorKind.REACTION,
@@ -1251,7 +1251,7 @@ def create_extra_attack_resource_handler(
 ) -> EventHandler:
     """Create an EventHandler that manages extra_attacks resource for Fighter."""
     return EventHandler(
-        **({} if handler_uuid is None else {"uuid": handler_uuid}),
+        uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Extra Attack Resource",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
@@ -1584,7 +1584,7 @@ def create_indomitable_handler(
 ) -> EventHandler:
     """Create EventHandler for Indomitable."""
     return EventHandler(
-        **({} if handler_uuid is None else {"uuid": handler_uuid}),
+        uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Indomitable",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
@@ -1761,7 +1761,7 @@ def create_survivor_handler(
 ) -> EventHandler:
     """Create EventHandler for Survivor turn start healing."""
     return EventHandler(
-        **({} if handler_uuid is None else {"uuid": handler_uuid}),
+        uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Survivor",
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[

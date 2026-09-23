@@ -5,11 +5,12 @@ from uuid import UUID
 
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.condition_types import ConditionCategory
+from dnd.core.creature_types import Size
 from dnd.core.equipment_types import WeaponSet
 from dnd.core.item_types import ItemPresentationState
 from dnd.core.life_types import LifeState
 from dnd.core.events import WorldTileState
-from dnd.types.actor import ConditionState, EntityStatsState
+from dnd.types.actor import ConditionState, EntityStatsState, TemporaryHitPointsGrant
 from dnd.types.world import OccupancyLayer
 
 
@@ -54,3 +55,6 @@ class ActorState:
     healing_blocked: bool = False
     damage_affinities: tuple[tuple[str, str], ...] = ()
     occupancy_layer: OccupancyLayer | None = None
+    temporary_hp_grant: TemporaryHitPointsGrant | None = None
+    resolved_size: Size | None = None
+    structural_base_size: Size | None = None

@@ -736,7 +736,7 @@ def test_eb_13_009_environment_use_actions_are_stateful_and_spatial() -> None:
 
 
 def test_eb_13_010_breakable_items_destroy_and_spill_nested_inventory() -> None:
-    """EB-13-010: destroying a container unregisters it and spills contents."""
+    """EB-13-010: destroying a persistent container keeps its identity and spills contents."""
     reset_item_state()
     chest = build_storage_chest("Breakable Chest", include_loot_all_action=False)
     chest.is_targetable = True
@@ -754,8 +754,9 @@ def test_eb_13_010_breakable_items_destroy_and_spill_nested_inventory() -> None:
     damage = chest.receive_damage(99, DamageType.BLUDGEONING, uuid4())
 
     assert damage > 0
-    assert BaseBlock.get(chest.uuid) is None
-    assert get_map().get_object_position(chest.uuid) is None
+    assert BaseBlock.get(chest.uuid) is chest
+    assert not chest.is_active and chest.get_use_actions(uuid4()) == []
+    assert get_map().get_object_position(chest.uuid) == (2, 1)
     assert BaseBlock.get(gem.uuid) is gem
     assert get_map().get_object_position(gem.uuid) == (2, 1)
     assert gem.owner_uuid is None

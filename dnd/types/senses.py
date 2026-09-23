@@ -10,7 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.types.world import LightLevel
 from dnd.core.content.identities import ContentRef
+from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.traps import TrapState
+from dnd.types.material_deposits import MaterialDepositSource
 
 
 class SensesType(str, Enum):
@@ -52,7 +54,7 @@ class PerceivedContact(BaseModel):
 
 
 class PerceivedSpatialEffect(BaseModel):
-    """Last observed fixture state and only its discovered footprint cells."""
+    """Last observed spatial effect and only its discovered footprint cells."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -60,7 +62,17 @@ class PerceivedSpatialEffect(BaseModel):
     name: str
     description: str
     positions: tuple[tuple[int, int], ...]
-    trap_state: TrapState
+    trap_state: TrapState | None = None
+    pressed: bool | None = None
+    direction: tuple[int, int] | None = None
+    anchor_item_uuid: UUID | None = None
+    sustainer_item_uuid: UUID | None = None
+    concentration_slot_uuid: UUID | None = None
+    anchor_position: tuple[int, int] | None = None
+    anchor_elevation_steps: int | None = None
+    area_geometry: AoEPresentationGeometry | None = None
+    deposit_source: MaterialDepositSource | None = None
+    visible_volume_positions: tuple[tuple[int, int], ...] = ()
 
 
 class SensesView(Protocol):

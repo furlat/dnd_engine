@@ -12,6 +12,7 @@ from typing import Any, Literal, Optional, List, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
+from pydantic_core import PydanticUndefined
 
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_actions import (
@@ -33,6 +34,7 @@ from dnd.core.base_actions import (
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.core.content.runtime import bind_runtime_action_before_admission
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
 from dnd.core.values import ModifiableValue
 from dnd.core.dice import AttackOutcome
@@ -48,6 +50,8 @@ from dnd.core.modifiers import (
 )
 from dnd.core.aoe import AoEShape, Sphere, Cone, Line, Cube, Cylinder
 from dnd.core.gridmap import get_map
+from dnd.core.presentation_geometry import LinePresentationGeometry
+from dnd.types.senses import PerceivedSpatialEffect
 from dnd.blocks.equipment import Weapon as WeaponItem, Shield as ShieldItem
 
 from dnd.entity import Entity
@@ -57,7 +61,7 @@ from dnd.actions import (
     SpellEvent,
     entity_action_economy_cost_applier,
     entity_action_economy_cost_evaluator,
-    resolve_paid_entry_retreats,
+    commit_forced_movement,
 )
 from dnd.conditions import Blinded, Deafened, Stunned, NoReactions, Concentrating, ConcentrationActionMarker, Restrained
 from dnd.residues import ASHEN_RESIDUE, deposit_area_residue
@@ -146,7 +150,7 @@ class FireBolt(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)")
 
@@ -315,7 +319,7 @@ class RayOfFrost(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)")
 
@@ -431,7 +435,7 @@ class SacredFlame(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)")
 
@@ -603,7 +607,7 @@ class MagicMissile(SpellAction):
                     status_message=f"{target_entity.name} not in line of sight"
                 )
 
-            distance = source_entity.senses.get_feet_distance(target_entity.position)
+            distance = self.get_target_distance(target_entity.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
@@ -739,7 +743,7 @@ class ScorchingRay(SpellAction):
                     status_message=f"{target_entity.name} not in line of sight"
                 )
 
-            distance = source_entity.senses.get_feet_distance(target_entity.position)
+            distance = self.get_target_distance(target_entity.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
@@ -856,7 +860,8 @@ class Fireball(SpellAction):
             self.aoe_shape = Sphere(
                 source_entity_uuid=self.source_entity_uuid,
                 target=self.end_position or (0, 0),
-                radius_feet=20
+                radius_feet=20,
+                propagation="connected",
             )
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
@@ -904,7 +909,7 @@ class Fireball(SpellAction):
                 status_message=f"Target position {target_pos} not in line of sight"
             )
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -1040,6 +1045,11 @@ class BurningHands(SpellAction):
     valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for burning hands.")
 
     base_damage_dice: int = Field(default=3, description="Base number of damage dice rolled by burning hands.")
+
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        if self.effective_target_type is TargetType.POSITION_AOE:
+            return self._resolve_area_targets()
+        return super()._resolve_execution_targets()
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1307,6 +1317,11 @@ class Thunderwave(SpellAction):
     base_damage_dice: int = Field(default=2, description="Base number of damage dice rolled by thunderwave.")
     push_distance_feet: int = Field(default=10, description="Distance in feet that thunderwave attempts to push failed-save targets.")
 
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        if self.effective_target_type is TargetType.POSITION_AOE:
+            return self._resolve_area_targets()
+        return super()._resolve_execution_targets()
+
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         if self.aoe_shape is None:
@@ -1374,6 +1389,7 @@ class Thunderwave(SpellAction):
         blocked_by: Optional[str] = None
 
         current_pos = start
+        actual_distance_feet = 0
         for _ in range(distance_tiles):
             next_pos = (current_pos[0] + direction[0], current_pos[1] + direction[1])
 
@@ -1392,9 +1408,7 @@ class Thunderwave(SpellAction):
 
             last_valid_pos = next_pos
             current_pos = next_pos
-
-        actual_distance = abs(last_valid_pos[0] - start[0]) + abs(last_valid_pos[1] - start[1])
-        actual_distance_feet = actual_distance * 5
+            actual_distance_feet += 5
 
         return (last_valid_pos, actual_distance_feet, was_blocked, blocked_by)
 
@@ -1498,18 +1512,8 @@ class Thunderwave(SpellAction):
 
                 forced_event = forced_event.phase_to(EventPhase.EXECUTION)
                 forced_event = forced_event.phase_to(EventPhase.EFFECT)
-                entry_cursor = EventQueue.event_cursor()
-                if not forced_event.canceled:
-                    Entity.update_entity_position(
-                        target,
-                        end_pos,
-                        parent_event=forced_event.uuid,
-                    )
-                forced_event.phase_to(
-                    EventPhase.COMPLETION,
-                    end_position=target.position,
-                )
-                resolve_paid_entry_retreats(target, since_cursor=entry_cursor, parent_event=effect_event)
+                forced_event = commit_forced_movement(target, forced_event, parent_event=effect_event)
+                push_distance_actual = forced_event.actual_distance
                 push_applied = True
 
         save_text = " (saved for half)" if success else ""
@@ -1557,6 +1561,11 @@ class Shatter(SpellAction):
                 radius_feet=10
             )
 
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        if self.effective_target_type is TargetType.POSITION_AOE:
+            return self._resolve_area_targets()
+        return super()._resolve_execution_targets()
+
     def get_damage_dice_count(self) -> int:
         """3d8 base + 1d8 per level above 2nd."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
@@ -1592,7 +1601,7 @@ class Shatter(SpellAction):
                 status_message=f"Target position {target_pos} not in line of sight"
             )
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -1723,7 +1732,7 @@ class CircleOfDeath(SpellAction):
                 status_message=f"Target position {target_pos} not in line of sight"
             )
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -2061,7 +2070,7 @@ class Sunburst(SpellAction):
         if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
             return declaration_event.cancel(status_message=f"Position {target_pos} not in LOS")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(status_message=f"Out of range ({distance}ft)")
 
@@ -2221,10 +2230,10 @@ class ShockingGrasp(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
-        if distance > 5:
+        distance = self.get_target_distance(target_entity.position)
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of melee range ({distance}ft > 5ft)"
+                status_message=f"Target out of melee range ({distance}ft > {self.effective_range}ft)"
             )
 
         return los_event.phase_to(
@@ -2504,7 +2513,7 @@ class GuidingBolt(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -2659,7 +2668,7 @@ class EldritchBlast(SpellAction):
                     status_message=f"{target_entity.name} not in line of sight"
                 )
 
-            distance = source_entity.senses.get_feet_distance(target_entity.position)
+            distance = self.get_target_distance(target_entity.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
@@ -2758,7 +2767,7 @@ class GustOfWindZone(AreaCondition):
     anchor_kind: SpatialEffectAnchorKind = Field(
         default=SpatialEffectAnchorKind.ENTITY,
     )
-    anchor_uuid: UUID
+    anchor_uuid: UUID = Field(default=PydanticUndefined, validate_default=True)
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
@@ -2780,9 +2789,30 @@ class GustOfWindZone(AreaCondition):
     zone_width_feet: int = Field(default=10)
     adds_difficult_terrain: bool = Field(default=True, description="Whether gust of wind zone makes affected tiles difficult terrain.")
 
-    hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL)
+    hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.NON_SOURCE)
     spell_dc: int = Field(default=10, description="Spell save DC used by gust of wind zone saving throws.")
     _pushes_in_flight: Set[UUID] = PrivateAttr(default_factory=set)
+
+    def get_spatial_observation(
+        self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
+        discovered: bool = False,
+    ) -> Optional[PerceivedSpatialEffect]:
+        """Retain observed wind cells and its origin only when established."""
+        if not discovered and not self.is_hazard_perceived_by(observer_uuid):
+            return None
+        observer = Entity.get(observer_uuid)
+        previous = observer.senses.spatial_effects.get(self.uuid) if observer is not None else None
+        origin_known = (self.position in positions or
+                        (previous is not None and previous.anchor_position == self.position))
+        geometry = (LinePresentationGeometry(
+            origin=self.position, direction=self.zone_direction,
+            length_feet=self.zone_radius_feet, width_feet=self.zone_width_feet,
+        ) if origin_known and self.zone_direction is not None else None)
+        return PerceivedSpatialEffect(
+            content_ref=self.content_ref, name=self.name, description=self.description,
+            positions=tuple(sorted(positions)),
+            anchor_position=self.position if origin_known else None, area_geometry=geometry,
+        )
 
     def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
         """Compute line from caster in the chosen direction."""
@@ -2797,7 +2827,7 @@ class GustOfWindZone(AreaCondition):
             source_entity_uuid=self.source_entity_uuid,
             target=target,
             length_feet=self.zone_radius_feet,
-            width_feet=10
+            width_feet=self.zone_width_feet
         )
         line.compute_objective(caster_pos=self.position)
         return set(line.affected_positions)
@@ -2932,6 +2962,8 @@ class GustOfWindZone(AreaCondition):
 def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
                       source_uuid: UUID, parent_event: Event) -> None:
     """STR save or pushed 15ft away from caster."""
+    if entity.uuid == source_uuid:
+        return
     save_request = entity.create_saving_throw_request(
         target_entity_uuid=entity.uuid,
         ability_name="strength",
@@ -2953,14 +2985,15 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
 
     grid = get_map()
     current_pos = entity_pos
+    push_dist = 0
     for _ in range(3):
         next_pos = (current_pos[0] + push_dx, current_pos[1] + push_dy)
         if not grid.can_transition(current_pos, next_pos, entity.uuid):
             break
         current_pos = next_pos
+        push_dist += 5
 
     if current_pos != entity_pos:
-        push_dist = (abs(current_pos[0] - entity_pos[0]) + abs(current_pos[1] - entity_pos[1])) * 5
         forced_event = ForcedMovementEvent(
             source_entity_uuid=source_uuid,
             target_entity_uuid=entity.uuid,
@@ -2983,17 +3016,7 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
         if not forced_event.canceled:
             forced_event = forced_event.phase_to(EventPhase.EFFECT)
         if not forced_event.canceled:
-            entry_cursor = EventQueue.event_cursor()
-            Entity.update_entity_position(
-                entity,
-                current_pos,
-                parent_event=forced_event.uuid,
-            )
-            forced_event.phase_to(
-                EventPhase.COMPLETION,
-                end_position=entity.position,
-            )
-            resolve_paid_entry_retreats(entity, since_cursor=entry_cursor, parent_event=parent_event)
+            commit_forced_movement(entity, forced_event, parent_event=parent_event)
 
 
 class GustOfWind(SpellAction):
@@ -3002,6 +3025,7 @@ class GustOfWind(SpellAction):
     A line of strong wind 60ft long and 10ft wide blasts from you.
     STR save or pushed 15ft away. Difficult terrain toward caster.
     """
+    harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Gust of Wind", description="Display name for the gust of wind spell.")
     description: str = Field(default="60ft line of wind, STR save or pushed 15ft, difficult terrain", description="Rules-facing summary for the gust of wind spell.")
     spell_level: int = Field(default=2, description="Spell slot level required to cast gust of wind; cantrips use 0.")
@@ -3013,6 +3037,11 @@ class GustOfWind(SpellAction):
 
     include_self: bool = Field(default=False, description="Whether gust of wind can include the caster among valid targets.")
     valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for gust of wind.")
+
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        if self.effective_target_type is TargetType.POSITION_AOE:
+            return self._resolve_area_targets()
+        return super()._resolve_execution_targets()
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -3071,8 +3100,7 @@ class GustOfWind(SpellAction):
 
         dx = target_pos[0] - caster.position[0]
         dy = target_pos[1] - caster.position[1]
-        length = max(abs(dx), abs(dy), 1)
-        direction = (round(dx / length), round(dy / length))
+        direction = (dx, dy)
 
         zone = GustOfWindZone(
             source_entity_uuid=caster.uuid,
@@ -3632,6 +3660,7 @@ class PrismaticSpray(SpellAction):
 
     Duration: Instantaneous
     """
+    harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Prismatic Spray", description="Display name for the prismatic spray spell.")
     description: str = Field(default="60ft cone, random color effect per target", description="Rules-facing summary for the prismatic spray spell.")
     spell_level: int = Field(default=7, description="Spell slot level required to cast prismatic spray; cantrips use 0.")
@@ -3840,6 +3869,10 @@ class TrueStrike(SpellAction):
                 costs=[],
                 template=False
             )
+            bind_runtime_action_before_admission(
+                attack, current_binding=attack.behavior_binding,
+                runtime_owner_uuid=caster.uuid,
+            )
             attack_result = attack.apply(parent_event=execution_event)
         finally:
 
@@ -4015,7 +4048,8 @@ class LightEffect(BaseCondition):
             position=target.position,
             bright_radius_feet=20,
             dim_radius_feet=20,
-            anchor_uuid=target.uuid
+            anchor_uuid=target.uuid,
+            parent_event=declaration_event.uuid,
         )
 
         effect_event = declaration_event.phase_to(
@@ -4027,7 +4061,7 @@ class LightEffect(BaseCondition):
     def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
         if self.light_source_uuid:
             grid = get_map()
-            grid.remove_light_source(self.light_source_uuid)
+            grid.remove_light_source(self.light_source_uuid, parent_event=event.uuid if event is not None else None)
             self.light_source_uuid = None
         return super()._remove(event)
 
@@ -4160,7 +4194,7 @@ class ContinualFlameCondition(SpatialCondition):
     anchor_kind: SpatialEffectAnchorKind = Field(
         default=SpatialEffectAnchorKind.WORLD_OBJECT,
     )
-    anchor_uuid: UUID
+    anchor_uuid: UUID = Field(default=PydanticUndefined, validate_default=True)
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
@@ -4277,7 +4311,6 @@ class ContinualFlame(SpellAction):
         activation = condition.activate(parent_event=effect_event)
         if activation is None or activation.canceled or not condition.applied:
             flame.destroy(parent_event=effect_event)
-            flame.remove_from_register()
             return execution_event.cancel(
                 status_message="Continual Flame could not be installed",
             )
@@ -4339,7 +4372,7 @@ class CureWounds(SpellAction):
             return declaration_event.cancel(status_message="Caster or target not found")
 
         if target.uuid != caster.uuid:
-            distance = caster.senses.get_feet_distance(target.position)
+            distance = self.get_target_distance(target.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
@@ -4409,7 +4442,7 @@ class HealingWord(SpellAction):
             return declaration_event.cancel(status_message="Caster or target not found")
 
         if target.uuid != caster.uuid:
-            distance = caster.senses.get_feet_distance(target.position)
+            distance = self.get_target_distance(target.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
@@ -4485,7 +4518,7 @@ class PrayerOfHealing(SpellAction):
                 return declaration_event.cancel(
                     status_message=f"{target.name} not in line of sight"
                 )
-            distance = caster.senses.get_feet_distance(target.position)
+            distance = self.get_target_distance(target.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target.name} out of range"
@@ -4568,7 +4601,7 @@ class MassHealingWord(SpellAction):
                 return declaration_event.cancel(
                     status_message=f"{target.name} not in line of sight"
                 )
-            distance = caster.senses.get_feet_distance(target.position)
+            distance = self.get_target_distance(target.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target.name} out of range"
@@ -4654,7 +4687,7 @@ class MassCureWounds(SpellAction):
         if not target_pos:
             return declaration_event.cancel(status_message="No target position")
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Position out of range ({distance}ft > {self.effective_range}ft)"
@@ -4721,7 +4754,7 @@ class HealSpell(SpellAction):
             return declaration_event.cancel(status_message="Caster or target not found")
 
         if target.uuid != caster.uuid:
-            distance = caster.senses.get_feet_distance(target.position)
+            distance = self.get_target_distance(target.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"
@@ -4804,7 +4837,7 @@ class MassHeal(SpellAction):
                 return declaration_event.cancel(
                     status_message=f"{target.name} not in line of sight"
                 )
-            distance = caster.senses.get_feet_distance(target.position)
+            distance = self.get_target_distance(target.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target.name} out of range"
@@ -4997,6 +5030,7 @@ class DivineWord(SpellAction):
     - 21-30 HP: Blinded, Deafened, and Stunned for 1 hour
     - 20 or fewer HP: Killed outright
     """
+    harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Divine Word", description="Display name for the divine word spell.")
     description: str = Field(default="HP-threshold effects: deafen/blind/stun/kill", description="Rules-facing summary for the divine word spell.")
     spell_level: int = Field(default=7, description="Spell slot level required to cast divine word; cantrips use 0.")

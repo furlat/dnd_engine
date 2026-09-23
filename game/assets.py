@@ -8,10 +8,12 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Literal, Mapping, cast
 
-from game.animation_types import ParticleMediaAsset, PropAnimation
+from game.asset_types import AssetSpec as AssetSpec, image_resources
+from game.animation_types import ParticleMediaAsset, PropAnimation, TetherAnimation
 from game.residue_media import region_media_assets
 from game.world_animation import WorldTransitionSample, prop_animation
-from game.surface_residue import ResidueSurfaceCache, ResidueSurfaceStyle, WallFace
+from game.surface_residue import LiquidSurfaceStyle, ResidueSurfaceCache, ResidueSurfaceStyle, WallFace
+from dnd.types.residues import ResidueEllipse
 
 import numpy as np
 import pygame
@@ -20,17 +22,6 @@ import pygame
 PACKAGE_ROOT = Path(__file__).resolve().parent
 ASSET_ROOT = PACKAGE_ROOT / "assets"
 DATA_ROOT = PACKAGE_ROOT / "data"
-
-
-@dataclass(frozen=True, slots=True)
-class AssetSpec:
-    """One local image resource used by the pygame presentation."""
-
-    asset_id: str
-    path: Path
-    native_size: tuple[int, int]
-    pivot: tuple[float, float]
-    scale: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,19 +52,43 @@ class AssetCatalog:
     water: Mapping[str, object]
     props: Mapping[str, PropBinding]
     spatial_effects: Mapping[str, PropAnimation]
+    spatial_tethers: Mapping[str, TetherAnimation]
     spatial_residue_overlays: Mapping[tuple[str, str], Mapping[str, tuple[str, ...]]]
     residue_particles: Mapping[str, ParticleMediaAsset]
     residue_ground: Mapping[str, Mapping[str, str]]
     residue_surfaces: Mapping[str, ResidueSurfaceStyle]
     residue_wall_faces: Mapping[str, Mapping[str, tuple[WallFace, ...]]]
+    liquid_surfaces: Mapping[str, LiquidSurfaceStyle]
 
 
-def prop_animation_frame(animation: PropAnimation, pose: str, state: str,
+def prop_animation_frame(animation: PropAnimation, pose: str, state: str | None,
                          transition: WorldTransitionSample | None = None) -> tuple[str, int]:
     """Sample the same finite picture sequence for props and ground devices."""
-    frame = animation.state_frames[state]
-    if transition is not None and transition.transition.current == state:
-        start = animation.state_frames[transition.transition.previous]
+    frame = animation.default_frame if state is None else animation.state_frames[state]
+    if transition is not None:
+        change = transition.transition
+        if transition.elapsed_ms < 0 and change.previous is not None:
+            frame = animation.state_frames[change.previous]
+            return animation.frames_by_pose[pose][frame], frame
+        sequence = ()
+        if change.field == "activation":
+            sequence = animation.activation_frames
+        elif change.current == state:
+            sequence = animation.transition_frames.get(f"{change.previous}:{change.current}", ())
+        if sequence:
+            index = min(len(sequence) - 1, int(max(0, transition.elapsed_ms) * animation.fps / 1000))
+            frame = sequence[index]
+            return animation.frames_by_pose[pose][frame], frame
+        if change.field == "activation":
+            return animation.frames_by_pose[pose][frame], frame
+    if transition is not None and (transition.transition.field == "creation" or transition.transition.current == state):
+        if transition.transition.field == "creation":
+            start = animation.creation_start_frame
+        else:
+            assert transition.transition.previous is not None
+            start = animation.state_frames[transition.transition.previous]
+        if start is None:
+            return animation.frames_by_pose[pose][frame], frame
         advance = int(max(0, transition.elapsed_ms) * animation.fps / 1000)
         frame = start + min(abs(frame - start), advance) * (1 if frame >= start else -1)
     return animation.frames_by_pose[pose][frame], frame
@@ -86,16 +101,7 @@ def catalog_from_documents(
     raw_resources = cast(dict, assets["resources"])
     animations = cast(dict, assets["animations"])
     flame = cast(dict, animations["torch.flame"])
-    resources = {
-        asset_id: AssetSpec(
-            asset_id=asset_id,
-            path=ASSET_ROOT / raw["path"],
-            native_size=(raw["native_size"][0], raw["native_size"][1]),
-            pivot=(float(raw["pivot"][0]), float(raw["pivot"][1])),
-            scale=float(raw["scale"]),
-        )
-        for asset_id, raw in raw_resources.items()
-    }
+    resources = image_resources(raw_resources, ASSET_ROOT)
     props = {}
     for item_id, row in cast(dict, bindings["props"]).items():
         loop = animations[row["lit_animation"]] if row["lit_animation"] is not None else None
@@ -121,6 +127,12 @@ def catalog_from_documents(
         props=MappingProxyType(props),
         spatial_effects=MappingProxyType({identity: prop_animation(row)
             for identity, row in cast(dict, bindings.get("spatial_effects", {})).items()}),
+        spatial_tethers=MappingProxyType({identity: TetherAnimation(
+            MappingProxyType({facing: tuple(frames) for facing, frames in row["tether"]["frames_by_facing"].items()}),
+            MappingProxyType({facing: ((points[0][0], points[0][1]), (points[1][0], points[1][1]))
+                              for facing, points in row["tether"]["endpoints_by_facing"].items()}),
+            row["tether"]["fps"],
+        ) for identity, row in cast(dict, bindings.get("spatial_effects", {})).items() if "tether" in row}),
         spatial_residue_overlays=MappingProxyType({
             (identity, residue): MappingProxyType({pose: tuple(frames) for pose, frames in poses.items()})
             for identity, row in cast(dict, bindings.get("spatial_effects", {})).items()
@@ -134,6 +146,10 @@ def catalog_from_documents(
             for identity, row in cast(dict, bindings.get("residue_surfaces", {})).items()}),
         residue_wall_faces=MappingProxyType({identity: face_profiles[profile]
             for identity, profile in wall_faces.get("assets", {}).items()}),
+        liquid_surfaces=MappingProxyType({identity: LiquidSurfaceStyle(
+            asset=region_media_assets()[row["asset_id"]],
+            ellipse=ResidueEllipse.model_validate(row["ellipse"]), opacity=row["opacity"],
+        ) for identity, row in cast(dict, bindings.get("liquid_surfaces", {})).items()}),
     )
 
 

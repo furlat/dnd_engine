@@ -1,0 +1,83 @@
+{
+  "schema": "dnd.spellStudioDrafts",
+  "version": 2,
+  "spells": [
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.true_strike",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 14401923,
+        "secondary": 15851436,
+        "tertiary": 16773322
+      },
+      "cast": {
+        "enabled": false,
+        "actionClip": "Attack6",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "unchanged"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "childAttack": {
+        "poses": [
+          {
+            "rigId": "neuroclient.modular",
+            "weaponCategory": "Melee3",
+            "clip": "Attack6",
+            "layers": [
+              {
+                "id": "true-strike.weapon-charge",
+                "slot": "weaponGlow",
+                "enabled": true,
+                "hidden": false,
+                "category": "Melee3",
+                "colors": {
+                  "source": "override",
+                  "primary": 14401923,
+                  "secondary": 15851436,
+                  "tertiary": 16773322,
+                  "mode": "multiTint"
+                },
+                "sourceSheet": "/support-spells/true_strike/Melee3-Attack6-charge.png"
+              }
+            ]
+          },
+          {
+            "rigId": "neuroclient.modular",
+            "weaponCategory": "Ranged1",
+            "clip": "Attack3",
+            "layers": [
+              {
+                "id": "true-strike.weapon-charge",
+                "slot": "weaponGlow",
+                "enabled": true,
+                "hidden": false,
+                "category": "Ranged1",
+                "colors": {
+                  "source": "override",
+                  "primary": 14401923,
+                  "secondary": 15851436,
+                  "tertiary": 16773322,
+                  "mode": "multiTint"
+                },
+                "sourceSheet": "/support-spells/true_strike/Ranged1-Attack3-charge.png"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

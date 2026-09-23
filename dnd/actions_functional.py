@@ -31,6 +31,7 @@ from dnd.conditions import (
 )
 from dnd.blocks.base_item import UsableItem
 from dnd.core.base_block import BaseBlock
+from dnd.core.gridmap import get_map
 
 STANDARD_ENTITY_HANDLER_NAMES = {
     "HasAttacked Tracker",
@@ -658,6 +659,10 @@ def execute_use_action(
     item = BaseBlock.get(item_uuid)
     if not isinstance(item, UsableItem):
         raise ValueError("Item does not support use actions")
+
+    grid = get_map()
+    if grid.get_object_placement(item_uuid) is not None and grid.manual_object_contact(entity.uuid, item_uuid) is None:
+        raise ValueError("Item is out of reach")
 
     clean_name = action_name.split("__item_")[0] if "__item_" in action_name else action_name
 

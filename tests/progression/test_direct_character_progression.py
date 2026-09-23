@@ -291,6 +291,7 @@ def test_hydration_rebuilds_receipts_silently_from_semantic_levels() -> None:
     loaded = _entity()
     loaded.applied_class_levels = semantic_levels
 
+    cursor = EventQueue.event_cursor()
     hydrate_class_progression(loaded)
 
     assert loaded.applied_class_levels == semantic_levels
@@ -300,7 +301,7 @@ def test_hydration_rebuilds_receipts_silently_from_semantic_levels() -> None:
     assert loaded.character_grant_receipt(semantic_levels[1].step_id).step_id == (
         semantic_levels[1].step_id
     )
-    assert EventQueue.event_cursor() == 0
+    assert EventQueue.event_cursor() == cursor
 
 
 def test_existing_monster_can_receive_and_remove_an_ordinary_class_level() -> None:
@@ -517,6 +518,7 @@ def test_hydration_rebuilds_origin_before_class_owners_without_events() -> None:
     loaded.applied_origin_state = origin_state
     loaded.applied_class_levels = (_post_birth_fighter_one(),)
 
+    cursor = EventQueue.event_cursor()
     hydrate_class_progression(loaded)
 
     assert loaded.applied_origin_state == origin_state
@@ -526,4 +528,4 @@ def test_hydration_rebuilds_origin_before_class_owners_without_events() -> None:
     assert loaded.character_grant_receipt("origin.character").step_id == (
         "origin.character"
     )
-    assert EventQueue.event_cursor() == 0
+    assert EventQueue.event_cursor() == cursor

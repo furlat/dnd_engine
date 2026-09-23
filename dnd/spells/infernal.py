@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import partial
 from types import MappingProxyType
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import Field
 
@@ -241,7 +241,7 @@ def create_hellish_rebuke_reaction_handler(
 ) -> HellishRebukeReactionHandler:
     """Create one Hellish Rebuke handler shared by its casting sources."""
     return HellishRebukeReactionHandler(
-        **({} if handler_uuid is None else {"uuid": handler_uuid}),
+        uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Hellish Rebuke",
         semantic_key="reaction.spell.hellish_rebuke",
         content_kind=RuntimeBehaviorKind.REACTION,

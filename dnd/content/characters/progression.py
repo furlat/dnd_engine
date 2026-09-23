@@ -1,7 +1,7 @@
 """Direct aggregate class progression over the three authored class owners."""
 
 from datetime import UTC, datetime
-from typing import cast
+from typing import TypedDict, cast
 from uuid import UUID, uuid5
 
 from dnd.content.characters.barbarian_grants import (
@@ -153,11 +153,22 @@ def _has_active_child(entity: Entity, level: AppliedClassLevel) -> bool:
     return False
 
 
+class _ChangedLevelFacts(TypedDict, total=False):
+    """The existing authored identity fields published by a level change."""
+
+    changed_feature_ids: tuple[str, ...]
+    changed_action_ids: tuple[str, ...]
+    changed_handler_ids: tuple[str, ...]
+    changed_resource_ids: tuple[str, ...]
+    changed_spell_source_ids: tuple[str, ...]
+    changed_spell_ids: tuple[str, ...]
+
+
 def _changed_facts(
     entity: Entity,
     level: AppliedClassLevel,
     receipt: CharacterGrantReceipt,
-) -> dict[str, tuple[str, ...]]:
+) -> _ChangedLevelFacts:
     if level.class_id is CharacterClass.FIGHTER:
         fighter_receipt = cast(FighterGrantReceipt, receipt)
         action_uuids = fighter_receipt.action_uuids
@@ -182,13 +193,14 @@ def _changed_facts(
             *sorcerer_receipt.resource_recovery_contributions,
         )
         spell_sources = ("class.sorcerer.spellcasting",)
+    # These receipts name direct class grants with authored semantic keys.
     action_ids = tuple(
-        action.semantic_key
+        cast(str, action.semantic_key)
         for action in entity.registered_actions
         if action.uuid in action_uuids
     )
     handler_ids = tuple(
-        entity.event_handlers[handler_uuid].semantic_key
+        cast(str, entity.event_handlers[handler_uuid].semantic_key)
         for handler_uuid in handler_uuids
         if handler_uuid in entity.event_handlers
     )
@@ -220,7 +232,7 @@ def _added_event(
     *,
     phase: EventPhase,
     previous_levels: tuple[AppliedClassLevel, ...],
-    changed: dict[str, tuple[str, ...]] | None = None,
+    changed: _ChangedLevelFacts | None = None,
 ) -> EntityLevelAddedEvent:
     resulting = (*previous_levels, level)
     return EntityLevelAddedEvent(
@@ -239,7 +251,7 @@ def _added_event(
         applied_class_levels=resulting,
         prepared_spell_selections=entity.prepared_spell_selections,
         feature_toggle_selections=entity.feature_toggle_selections,
-        **(changed or {}),
+        **(changed or _ChangedLevelFacts()),
     )
 
 
@@ -249,7 +261,7 @@ def _removed_event(
     *,
     phase: EventPhase,
     previous_levels: tuple[AppliedClassLevel, ...],
-    changed: dict[str, tuple[str, ...]] | None = None,
+    changed: _ChangedLevelFacts | None = None,
 ) -> EntityLevelRemovedEvent:
     resulting = previous_levels[:-1]
     return EntityLevelRemovedEvent(
@@ -268,7 +280,7 @@ def _removed_event(
         applied_class_levels=resulting,
         prepared_spell_selections=entity.prepared_spell_selections,
         feature_toggle_selections=entity.feature_toggle_selections,
-        **(changed or {}),
+        **(changed or _ChangedLevelFacts()),
     )
 
 

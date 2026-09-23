@@ -1,6 +1,9 @@
 """Recorded actor values shared by native producers and event consumers."""
 
 from uuid import UUID
+from typing import Literal
+
+from dnd.core.creature_types import DamageType, Size
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
@@ -36,6 +39,18 @@ class ConditionState(BaseModel):
     agency_denial: ConditionAgencyDenial
     outcome_protections: tuple[OutcomeProtection, ...]
     applied_source_event_cursor: int | None = None
+    duplicate_count: int | None = Field(default=None, ge=0)
+    size_change: Literal["enlarge", "reduce"] | None = None
+    energy_type: DamageType | None = None
+
+
+class TemporaryHitPointsGrant(BaseModel):
+    """Identity of the accepted temporary-HP pool, without its private donor."""
+
+    model_config = ConfigDict(frozen=True)
+
+    instance_uuid: UUID
+    source_id: str | None = None
 
 
 class EntityStatsState(BaseModel):
@@ -46,6 +61,8 @@ class EntityStatsState(BaseModel):
     normal_hp: int
     maximum_hp: int
     temporary_hp: int
+    temporary_hp_grant: TemporaryHitPointsGrant | None = None
     armor_class: int
     healing_blocked: bool
     damage_affinities: tuple[tuple[str, str], ...]
+    resolved_size: Size | None = None

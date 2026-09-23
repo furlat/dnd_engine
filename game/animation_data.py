@@ -7,6 +7,7 @@ from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Literal, Mapping, Sequence
 from uuid import UUID
+from game.device_art import load_device_art, load_device_wrecks
 
 from pydantic import Field, JsonValue, TypeAdapter
 
@@ -17,16 +18,20 @@ from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationState
 from dnd.items.authored_variant_inventory import AUTHORED_ITEM_VARIANT_CATEGORIES
 from game.residue_media import region_media_assets
 from game.animation_types import (
-    ActionMediaAssetFile, ParticleMediaAssetFile, AnimationData, AttackProfileFile, AttackRecipe, AuthoredProjectileAsset, AuthoredRecord, BodyActionBinding, BodyActionRecipe,
+    ActionMediaAssetFile, ParticleMediaAssetFile, AnimationData, AttackProfileFile, AttackRecipe, AuthoredProjectileAsset, AuthoredRecord, BodyActionBinding, BodyActionRecipe, BloodResponse,
     BodyClip, BodyRig, BoltStyle, DamageContext, DartStyle,
     DeathContext, DeathSaveContext, EquipmentTransitionContext, FloatingFeedbackStyle, ForcedMovementContext,
     ForcedMovementProfile, FrozenMap, HealingContext, Identifier, LifecycleFeedback, LifeStateContext,
     MovementMediaTrack, MovementReactionContext, ProjectileStorage, RigLayer, RigTables, ShoveRecipe, StudioDraftFile, StudioSpellDraft,
-    VoluntaryMovementContext, Point,
+    VoluntaryMovementContext, MovementPresentation, Point, PoseSockets, SpatialMediaBinding, DepositMediaBinding, FacingMap,
+    InterruptionPresentation,
 )
 from game.condition_types import load_condition_recipes
+from game.condition_media import load_condition_media
+from game.authoring_conversion import explicit_attachments
 from game.player_facts import PlayerActor, VisualItem
 from game.world_animation import prop_animation
+from game.portal_art import load_portal_art
 
 
 DATA_ROOT = Path(__file__).resolve().parent / "data" / "neuroclient"
@@ -75,15 +80,16 @@ def resolve_actor_layers(
 
     Equipment slots are the engine values retained by EntityCreatedEvent.
     Media availability remains the preloader's responsibility. Fixed rigs use
-    their single-category slots; their baked gear is independent of equipment.
+    their single-category baked slots; attack recipes select the transient slash.
     """
     rig = data.rigs[rig_id]
     if rig_id != data.root_rig:
-        if any(len(rig.slot_categories[slot]) != 1 for slot in rig.slot_order):
+        appearance_slots = tuple(slot for slot in rig.slot_order if slot != "slash")
+        if any(len(rig.slot_categories[slot]) != 1 for slot in appearance_slots):
             raise ValueError(f"fixed actor rig requires one category per slot: {rig_id}")
         return tuple(
             RigLayer(slot, rig.slot_categories[slot][0], alpha=0.5 if slot == "shadow" else 1)
-            for slot in rig.slot_order
+            for slot in appearance_slots
         )
 
     if appearance.presentation_kind != "layered":
@@ -143,6 +149,8 @@ class _Bindings(AuthoredRecord):
     spells: FrozenMap[ContentRef]
     root_rig: Identifier
     root_body_anchor: Point | None = None
+    root_rest_pose_anchors: FrozenMap[FacingMap[Point]] = Field(default_factory=dict)
+    root_pose_sockets_file: str | None = None
     root_creature_content_refs: tuple[Identifier, ...] = ()
     resources: FrozenMap[str]
     relocations: tuple[Identifier, ...] = ()
@@ -152,6 +160,7 @@ class _ResourceBindings(AuthoredRecord):
     resources: FrozenMap[str]
     spells: FrozenMap[ContentRef] = Field(default_factory=dict)
     projectileStorage: FrozenMap[ProjectileStorage] = Field(default_factory=dict)
+    actionDeliveries: FrozenMap[str] = Field(default_factory=dict)
 
 
 class _ContextFile(AuthoredRecord):
@@ -192,7 +201,9 @@ def _local_resources(bindings: Mapping[str, str], data_root: Path) -> dict[str, 
     return {url: repository_root / relative for url, relative in bindings.items()}
 
 
-def _root_body_rig(rig: RigTables, resources: Mapping[str, Path], body_anchor: Point | None) -> BodyRig:
+def _root_body_rig(rig: RigTables, resources: Mapping[str, Path], body_anchor: Point | None,
+                   rest_pose_anchors: Mapping[str, FacingMap[Point]],
+                   pose_sockets: PoseSockets) -> BodyRig:
     clips: dict[str, dict[str, str]] = {}
     categories = {category for values in rig.SLOT_CATEGORIES.values() for category in values}
     for url in resources:
@@ -204,6 +215,8 @@ def _root_body_rig(rig: RigTables, resources: Mapping[str, Path], body_anchor: P
         cell_width=rig.CELL_W, cell_height=rig.CELL_H,
         origin_y_from_ground=rig.RIG_ORIGIN_Y_FROM_GROUND,
         body_anchor=body_anchor,
+        rest_pose_anchors=rest_pose_anchors,
+        pose_sockets=pose_sockets,
         facing_rows=rig.FACING_ROW, slot_order=rig.SLOT_RENDER_ORDER,
         slot_categories=rig.SLOT_CATEGORIES,
         clips={name: BodyClip(source_clip=name, frames=rig.SHEET_COLS, fps=rig.ANIM_FPS, sheets=sheets)
@@ -221,7 +234,7 @@ def _additional_rigs(paths: tuple[Path, ...], data_root: Path,
         if set(local) & set(resources):
             raise ValueError("body rig resource identity already bound")
         referenced = {url for clip in binding.rig.clips.values() for url in clip.sheets.values()}
-        if referenced != set(local):
+        if referenced - set(resources) != set(local):
             raise ValueError("body rig clip resources and local bindings differ")
         rigs[binding.rig_id] = binding.rig
         for identity in binding.creature_content_refs:
@@ -274,7 +287,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
             if identity in shove_recipes:
                 raise ValueError(f"ambiguous authored shove identity: {identity}")
             shove_recipes[identity] = shove
-        if isinstance(kinds, list) and any(kind in kinds for kind in ("action", "item_action")):
+        if isinstance(kinds, list) and any(kind in kinds for kind in ("action", "item_action", "counterspell")):
             body_action = BodyActionRecipe.model_validate_json(json.dumps(row))
             identity = body_action.definitionRef.content_id
             if identity in body_action_recipes:
@@ -286,9 +299,9 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     # The imported environment rows have no actor track. This
     # local authored revision uses the same Studio action schema and is shared
     # by the explicit object-action aliases below.
-    interaction_recipe = BodyActionRecipe.model_validate_json(
-        _read(data_root / "object-interaction-recipe.json"))
-    body_action_recipes[interaction_recipe.definitionRef.content_id] = interaction_recipe
+    for filename in ("object-interaction-recipe.json", "object-attack-recipe.json"):
+        interaction_recipe = BodyActionRecipe.model_validate_json(_read(data_root / filename))
+        body_action_recipes[interaction_recipe.definitionRef.content_id] = interaction_recipe
     body_action_bindings = TypeAdapter(FrozenMap[BodyActionBinding]).validate_json(
         _read(data_root / "action-recipe-bindings.json"))
     for binding in body_action_bindings.values():
@@ -301,6 +314,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     bolt_style = BoltStyle.model_validate_json(json.dumps(geometry_styles["bolt"]))
 
     drafts_by_ref: dict[ContentRef, StudioSpellDraft] = {}
+    draft_versions: dict[ContentRef, int] = {}
     identities: set[str] = set()
     for draft in drafts_file.spells:
         ref = draft.definitionRef
@@ -309,32 +323,42 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         if ref in drafts_by_ref or ref.identity_key in identities:
             raise ValueError(f"duplicate spell draft definitionRef: {ref.identity_key}")
         drafts_by_ref[ref] = draft
+        draft_versions[ref] = drafts_file.version
         identities.add(ref.identity_key)
     if authored_bundles is None:
-        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells")
+        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells")
                                  if (data_root.parent / name).is_dir())
     bundle_resources: dict[str, Path] = {}
     projectile_storage: dict[str, ProjectileStorage] = {}
     spell_bindings = dict(bindings.spells)
     overridden: set[ContentRef] = set()
     effect_drafts: dict[str, StudioSpellDraft] = {}
+    effect_versions: dict[str, int] = {}
+    action_deliveries: dict[str, str] = {}
     for bundle in authored_bundles:
         resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
+        action_deliveries.update(resource_bindings.actionDeliveries)
         for identity, ref in resource_bindings.spells.items():
             if identity in spell_bindings and spell_bindings[identity] != ref:
                 raise ValueError(f"authored spell binding disagrees with existing definitionRef: {identity}")
             spell_bindings[identity] = ref
-        overrides = StudioDraftFile.model_validate_json(_read(bundle / "spell-studio-drafts.json"))
-        if set(effect_drafts) & set(overrides.effectDrafts):
-            raise ValueError("duplicate authored child-effect identity")
-        effect_drafts.update(overrides.effectDrafts)
-        for draft in overrides.spells:
-            if draft.definitionRef not in spell_bindings.values():
-                raise ValueError(f"authored bundle has no exact spell binding: {draft.definitionRef.identity_key}")
-            if draft.definitionRef in overridden:
-                raise ValueError(f"duplicate authored spell override: {draft.definitionRef.identity_key}")
-            overridden.add(draft.definitionRef)
-            drafts_by_ref[draft.definitionRef] = draft
+        draft_paths = (bundle / "spell-studio-drafts.json", *sorted(bundle.glob("*-draft.json")))
+        for draft_path in draft_paths:
+            if not draft_path.exists():
+                continue  # Media-only bundles have no spell program.
+            overrides = StudioDraftFile.model_validate_json(_read(draft_path))
+            if set(effect_drafts) & set(overrides.effectDrafts):
+                raise ValueError("duplicate authored child-effect identity")
+            effect_drafts.update(overrides.effectDrafts)
+            effect_versions.update({identity: overrides.version for identity in overrides.effectDrafts})
+            for draft in overrides.spells:
+                if draft.definitionRef not in spell_bindings.values():
+                    raise ValueError(f"authored bundle has no exact spell binding: {draft.definitionRef.identity_key}")
+                if draft.definitionRef in overridden:
+                    raise ValueError(f"duplicate authored spell override: {draft.definitionRef.identity_key}")
+                overridden.add(draft.definitionRef)
+                drafts_by_ref[draft.definitionRef] = draft
+                draft_versions[draft.definitionRef] = overrides.version
         assets += TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
             _read(bundle / "projectile-assets.json")
         )
@@ -358,6 +382,8 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         if draft.definitionRef not in drafts_by_ref or effect_id in drafts:
             raise ValueError(f"effect draft must reference its existing owning spell: {effect_id}")
         drafts[effect_id] = draft
+    for action_id, spell_id in action_deliveries.items():
+        drafts[action_id] = drafts[spell_id]
 
     projectile_assets: dict[str, AuthoredProjectileAsset] = {}
     facing_order = rig.AUTHORED_PROJECTILE_ROW_ORDER
@@ -375,6 +401,11 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
                 raise ValueError(f"projectile phase exceeds sheet columns: {asset.assetId}")
         projectile_assets[asset.assetId] = asset
 
+    for identity, draft in drafts.items():
+        version = effect_versions.get(identity, draft_versions[draft.definitionRef])
+        if version != 2:
+            drafts[identity] = explicit_attachments(draft, projectile_assets)
+
     try:
         vital = _object(contexts["vital_effect"], "vital_effect")
         feedback = _object(contexts["floating_feedback"], "floating_feedback")
@@ -382,7 +413,10 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         damage_context = DamageContext.model_validate_json(json.dumps(vital["damage"]))
         healing_context = HealingContext.model_validate_json(json.dumps(vital["healing"]))
         death_save_context = DeathSaveContext.model_validate_json(json.dumps(lifecycle["deathSave"]))
-        life_state_context = LifeStateContext.model_validate_json(json.dumps(lifecycle["lifeState"]))
+        life_state_context = LifeStateContext.model_validate_json(json.dumps({
+            **_object(lifecycle["lifeState"], "lifeState"),
+            "bodyPoses": json.loads(_read(DATA_ROOT.parent / "life-state-poses.json")),
+        }))
         death_context = DeathContext.model_validate_json(json.dumps(vital["death"]))
         equipment_context = EquipmentTransitionContext.model_validate_json(json.dumps(contexts["equipment_transition"]))
         movement_context = VoluntaryMovementContext.model_validate_json(json.dumps(contexts["voluntary_movement"]))
@@ -398,7 +432,11 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     if set(resources) & set(bundle_resources):
         raise ValueError("authored bundle resource identity already bound")
     resources.update(bundle_resources)
-    rigs = {bindings.root_rig: _root_body_rig(rig, resources, bindings.root_body_anchor)}
+    pose_sockets = (TypeAdapter(PoseSockets).validate_json(
+        _read(data_root / bindings.root_pose_sockets_file))
+        if bindings.root_pose_sockets_file is not None else MappingProxyType({}))
+    rigs = {bindings.root_rig: _root_body_rig(rig, resources, bindings.root_body_anchor,
+                                          bindings.root_rest_pose_anchors, pose_sockets)}
     creature_rigs = {identity: bindings.root_rig for identity in bindings.root_creature_content_refs}
     _additional_rigs(rig_files, data_root, rigs, resources, creature_rigs)
     world_bindings = json.loads(_read(DATA_ROOT.parent / "world_bindings.json"))
@@ -406,13 +444,25 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         for identity, row in world_bindings["props"].items() if "transition" in row}
     world_animations.update({identity: prop_animation(row)
         for identity, row in world_bindings["spatial_effects"].items()})
+    movement_media = MovementPresentation.model_validate_json(_read(DATA_ROOT.parent / "movement-media.json"))
+    movement_context = movement_context.model_copy(update={
+        "walkMedia": movement_media.walkMedia, "jumpMedia": movement_media.jumpMedia})
     return AnimationData(
+        interruptions=InterruptionPresentation.model_validate_json(_read(DATA_ROOT.parent / "interruptions.json")),
+        devices=load_device_art(),
+        device_wrecks=load_device_wrecks(),
         drafts=MappingProxyType(drafts),
         attack_recipes=MappingProxyType(attack_recipes),
         shove_recipes=MappingProxyType(shove_recipes),
         body_action_recipes=MappingProxyType(body_action_recipes),
         body_action_bindings=body_action_bindings,
-        condition_recipes=load_condition_recipes(source_root / "src/render/data/animation/conditionPresentation.json"),
+        condition_recipes=load_condition_recipes(
+            source_root / "src/render/data/animation/conditionPresentation.json",
+            overrides=DATA_ROOT.parent / "condition-overrides.json",
+            local=DATA_ROOT.parent / "condition-recipes.json",
+        ),
+        condition_media=load_condition_media(DATA_ROOT.parent / "condition-media.json",
+            DATA_ROOT.parent / "assets.json", DATA_ROOT.parent.parent / "assets"),
         projectile_assets=MappingProxyType(projectile_assets),
         projectile_storage=MappingProxyType(projectile_storage),
         media_root=data_root.parent.parent.parent,
@@ -441,6 +491,12 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         )),
         context_source_json=context_source,
         world_animations=MappingProxyType(world_animations),
+        spatial_media=MappingProxyType({identity: SpatialMediaBinding.model_validate({**row,
+            "layers": tuple({**layer, "offsetCells": tuple(layer.get("offsetCells", (0, 0)))}
+                            for layer in row["layers"])})
+            for identity, row in world_bindings.get("spatial_media", {}).items()}),
+        deposit_media=MappingProxyType(TypeAdapter(dict[str, DepositMediaBinding]).validate_json(
+            json.dumps(world_bindings.get("deposit_media", {})))),
         action_media_assets=MappingProxyType({asset.assetId: asset for asset in (
             *ActionMediaAssetFile.model_validate_json(_read(data_root / "body-release-assets.json")).assets,
             *ParticleMediaAssetFile.model_validate_json(_read(data_root / "body-release-particles.json")).assets,
@@ -448,4 +504,10 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         body_release_media=MappingProxyType(TypeAdapter(dict[str, tuple[MovementMediaTrack, ...]]).validate_json(
             _read(data_root / "body-release-bindings.json"))),
         relocation_actions=frozenset(bindings.relocations),
+        portals=load_portal_art(),
+        action_playback_rates=movement_media.actionPlaybackRates,
+        action_deliveries=MappingProxyType(action_deliveries),
+        movement_reference_speed_feet=movement_media.referenceSpeedFeet,
+        blood_responses=MappingProxyType(TypeAdapter(dict[str, BloodResponse | None]).validate_json(
+            _read(DATA_ROOT.parent / "blood-responses.json"))),
     )

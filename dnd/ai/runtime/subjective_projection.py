@@ -650,7 +650,6 @@ __all__ = [
     "clear_subjective_projection_fact_cache",
     "condition_semantic_key",
     "damage_affinities",
-    "directional_blocks",
     "entity_health_details",
     "json_safe_state_value",
     "observers_that_see",

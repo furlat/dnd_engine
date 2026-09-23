@@ -1,7 +1,6 @@
 from uuid import UUID, uuid4
 from pydantic import (
     BaseModel,
-    ConfigDict,
     Field,
     SerializerFunctionWrapHandler,
     computed_field,
@@ -40,9 +39,10 @@ from dnd.core.content.identities import validate_namespaced_id
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 from dnd.types.actor import ConditionState, EntityStatsState, OutcomeProtection as OutcomeProtection
 from dnd.types.world import OccupancyLayer
+from dnd.types.traps import TrapState
 from dnd.types.residues import TileResidueState
 from dnd.types.residues import ObjectResidueState
-from dnd.core.item_types import ItemPresentationState
+from dnd.core.item_types import ItemConcentrationSlot, ItemPresentationState
 from dnd.types.residue_fear import PaidEntryRetreat
 
 
@@ -209,6 +209,15 @@ class ConditionApplicationEvent(Event):
         )
 
 
+class ConditionStateChangedEvent(Event):
+    """Committed values of an existing condition, without reapplying its rules."""
+
+    event_type: EventType = EventType.CONDITION_STATE_CHANGED
+    condition_state: ConditionState
+    resulting_stats: EntityStatsState
+    behavior_id: str | None = None
+
+
 class ConditionRemovalEvent(Event):
     """Event payload for a condition removal lifecycle."""
 
@@ -244,7 +253,7 @@ class ConditionRemovalEvent(Event):
     def generate_combat_log(self) -> Optional[CombatLogEntry]:
         """Generate combat log for condition removal."""
         cond = self.condition
-        condition_name = cond.name or "Unknown"
+        condition_name = cond.get_display_name()
 
         if cond.condition_category == ConditionCategory.INTERNAL:
             return None
@@ -278,6 +287,8 @@ class ConditionRemovalEvent(Event):
 class BaseCondition(BaseObject):
     """Base state package for modifiers, handlers, subconditions, and cleanup."""
 
+    requires_intact_item: bool = True
+
     def snapshot_tile_residue(self) -> Optional[TileResidueState]:
         """Return passive residue membership for a condition that owns it."""
         return None
@@ -288,6 +299,21 @@ class BaseCondition(BaseObject):
 
     def on_membership_changed(self, event: Event) -> None:
         """Publish dependent state after the owner commits add/remove indexes."""
+
+    def on_owner_placement_committed(self, event: Event) -> None:
+        """Settle owned consequences after the object's placement commits."""
+
+    def snapshot_concentration_slots(self) -> tuple[ItemConcentrationSlot, ...]:
+        """Return public capacity use for a condition that sustains spells."""
+        return ()
+
+    def snapshot_mechanism_state(self) -> Optional[TrapState]:
+        """Return current native mode for physical hardware represented by this owner."""
+        return None
+
+    def unlink_condition(self, condition_uuid: UUID, *, parent_event: Event) -> None:
+        """Forget one committed child removal from this condition's links."""
+        self.linked_conditions = [link for link in self.linked_conditions if link[1] != condition_uuid]
 
     def get_paid_entry_retreat(self, *, since_cursor: int) -> Optional[PaidEntryRetreat]:
         """Return a compelled entry retreat owned by this active condition."""
@@ -356,9 +382,13 @@ class BaseCondition(BaseObject):
             effect_tags=effect_tags,
         )
 
+    def get_display_name(self) -> str:
+        """Public status label, independent of the runtime membership key."""
+        return self.name or "Condition"
+
     def format_application_log(self, target_name: str) -> str:
         """Return condition-owned compact presentation for application."""
-        return f"{{cyan:{target_name}}} gains **{self.name or 'Unknown'}**"
+        return f"{{cyan:{target_name}}} gains **{self.get_display_name()}**"
 
     def is_active_spatial_condition(self) -> bool:
         """Return whether this condition is an active independent map owner."""
@@ -456,6 +486,10 @@ class BaseCondition(BaseObject):
     parent_condition: Optional[UUID] = Field(
         default=None,
         description="Same-block parent condition UUID, if this is a subcondition."
+    )
+    additional_parent_conditions: Set[UUID] = Field(
+        default_factory=set,
+        description="Additional same-block owners sharing this effective condition.",
     )
     sub_conditions: List[UUID] = Field(
         default_factory=list,
@@ -623,7 +657,7 @@ class BaseCondition(BaseObject):
     def snapshot_state(self) -> ConditionState:
         """Record the current semantics without retaining an executable condition."""
         return ConditionState(
-            condition_uuid=self.uuid, name=self.name or "Condition",
+            condition_uuid=self.uuid, name=self.get_display_name(),
             category=self.condition_category, semantic_key=self.get_semantic_key(),
             tags=tuple(sorted(self.tags, key=lambda tag: tag.value)),
             removal_triggers=tuple(sorted(self.removal_triggers, key=lambda trigger: trigger.value)),
@@ -742,6 +776,50 @@ class BaseCondition(BaseObject):
             raise RuntimeError("condition duration owner identity is inconsistent")
         self.duration.remove_from_register()
 
+    def add_shared_subcondition(self, child: "BaseCondition") -> None:
+        """Share one effective condition through the existing child ownership graph.
+
+        A child without a primary parent retains its independent lifetime;
+        borrowing it must not make a later parent removal destroy it.
+        """
+        if child.parent_condition != self.uuid:
+            child.additional_parent_conditions.add(self.uuid)
+        if child.uuid not in self.sub_conditions:
+            self.sub_conditions.append(child.uuid)
+
+    def has_surviving_parent(self, removing: Set[UUID]) -> bool:
+        """Whether a shared child survives this accepted removal graph."""
+        if not self.additional_parent_conditions:
+            return False
+        return self.parent_condition is None or bool(
+            ({self.parent_condition} | self.additional_parent_conditions) - removing
+        )
+
+    def _release_condition_links(self) -> None:
+        """Detach accepted ownership links without changing a surviving child."""
+        parents = set(self.additional_parent_conditions)
+        if self.parent_condition is not None:
+            parents.add(self.parent_condition)
+        for parent_uuid in parents:
+            parent = BaseCondition.get(parent_uuid)
+            if isinstance(parent, BaseCondition) and self.uuid in parent.sub_conditions:
+                parent.sub_conditions.remove(self.uuid)
+        self.additional_parent_conditions.clear()
+        for child_uuid in list(self.sub_conditions):
+            child = BaseCondition.get(child_uuid)
+            if not isinstance(child, BaseCondition):
+                continue
+            if child.parent_condition == self.uuid:
+                if child.additional_parent_conditions:
+                    successor = min(child.additional_parent_conditions, key=str)
+                    child.additional_parent_conditions.remove(successor)
+                    child.parent_condition = successor
+                else:
+                    child.parent_condition = None
+            else:
+                child.additional_parent_conditions.discard(self.uuid)
+        self.sub_conditions.clear()
+
     def discard_uncommitted_runtime_state(self) -> None:
         """Release provisional mechanics without publishing removal events."""
         self._release_owned_runtime_state()
@@ -754,6 +832,7 @@ class BaseCondition(BaseObject):
         finally:
             self.applied = False
         self.modifers_uuids.clear()
+        self._release_condition_links()
         self.remove_from_register()
 
     def _post_removal_stats(self) -> Dict[str, Any]:
@@ -1007,12 +1086,7 @@ class BaseCondition(BaseObject):
         self.remove_event_handlers()
         self.remove_spatial_handlers()
 
-        if self.parent_condition:
-            parent = BaseCondition.get(self.parent_condition)
-            if parent is not None and isinstance(parent, BaseCondition):
-                if self.uuid in parent.sub_conditions:
-                    parent.sub_conditions.remove(self.uuid)
-
+        self._release_condition_links()
         self.applied = False
         return removed_event or removal_effect
 

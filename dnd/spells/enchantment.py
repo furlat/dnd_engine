@@ -54,6 +54,7 @@ class CharmPerson(SpellAction):
     Upcasting increases the target count, and targets that are fighting the
     caster receive advantage on the save.
     """
+    harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Charm Person", description="Spell name.")
     description: str = Field(
         default="WIS save or charmed. Advantage if fighting.",
@@ -116,7 +117,7 @@ class CharmPerson(SpellAction):
                 status_message=f"Charm Person only affects humanoids, not {target_entity.creature_type.value}"
             )
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -374,7 +375,7 @@ class HoldPerson(SpellAction):
                 status_message=f"Hold Person only affects humanoids, not {target_entity.creature_type.value}"
             )
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -598,7 +599,7 @@ class HoldMonster(SpellAction):
                 status_message=f"Hold Monster has no effect on undead"
             )
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -678,7 +679,7 @@ class PowerWordKill(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -778,7 +779,7 @@ class TestBless(SpellAction):
                     status_message=f"{target_entity.name} not in line of sight"
                 )
 
-            distance = source_entity.senses.get_feet_distance(target_entity.position)
+            distance = self.get_target_distance(target_entity.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target_entity.name} out of range ({distance}ft > {self.effective_range}ft)"
@@ -951,6 +952,7 @@ class Sleep(SpellAction):
         if not caster:
             return []
 
+        self.aoe_shape.target = self.end_position
         self.aoe_shape.compute_objective(caster.position)
 
         candidates: List[Tuple[int, UUID]] = []
@@ -1001,6 +1003,12 @@ class Sleep(SpellAction):
         self._selected_hp_pool_targets = targets
         return list(targets)
 
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        """Record the same area used by the HP-pool selection for replay."""
+        targets = self.get_all_targets()
+        positions = tuple(sorted(self.aoe_shape.affected_positions)) if self.aoe_shape is not None else None
+        return targets, positions
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate the area origin has line of sight and range."""
         caster = Entity.get(self.source_entity_uuid)
@@ -1016,7 +1024,7 @@ class Sleep(SpellAction):
                 status_message=f"Target position {target_pos} not in line of sight"
             )
 
-        distance = caster.senses.get_feet_distance(target_pos)
+        distance = self.get_target_distance(target_pos)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -1145,6 +1153,7 @@ class PowerWordStunEffect(BaseCondition):
 
 class PowerWordStun(SpellAction):
     """Stun a target whose current hit points are at or below the threshold."""
+    harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
     name: str = Field(default="Power Word Stun", description="Spell name.")
     description: str = Field(
         default="If target has <=150 HP, it is stunned. CON save each turn to end.",
@@ -1171,7 +1180,7 @@ class PowerWordStun(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"

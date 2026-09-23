@@ -45,7 +45,7 @@ from dnd.entity import Entity
 from dnd.actions import Dash, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
 from dnd.spells.spell_utils import validate_line_of_sight
 from dnd.core.base_actions import Cost, BaseAction, ActionCategory, ActionEvent
-from dnd.conditions import Blinded, Deafened, Frightened, Concentrating, ConcentrationActionMarker
+from dnd.conditions import Blinded, Deafened, Frightened, Concentrating, ConcentrationActionMarker, apply_shared_sensory_condition
 from dnd.creature_transforms import apply_unconscious_transform
 from dnd.spells.enchantment import BaneEffect, BlessEffect
 from dnd.spells.content_metadata import srd_action_identity
@@ -113,7 +113,9 @@ class FalseLife(SpellAction):
             status_message=f"Rolled 1d4+{self.get_temp_hp_bonus()} = {temp_hp_roll.total} temporary HP"
         )
 
-        caster.health.add_temporary_hit_points(temp_hp_roll.total, caster.uuid, parent_event=effect_event.uuid)
+        caster.health.add_temporary_hit_points(
+            temp_hp_roll.total, caster.uuid, parent_event=effect_event.uuid, source_id="spell.false_life",
+        )
 
         return effect_event.with_updates(
             temp_hp_gained=temp_hp_roll.total,
@@ -296,7 +298,7 @@ class ChillTouch(SpellAction):
         if not source or not target:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        distance = source.senses.get_feet_distance(target.position)
+        distance = self.get_target_distance(target.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -456,7 +458,7 @@ class Blight(SpellAction):
                 status_message="Blight has no effect on constructs"
             )
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -572,24 +574,11 @@ class BlindnessDeafnessEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        if self.effect_type == "blinded":
-            effect = Blinded(
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid,
-                parent_condition=self.uuid,
-                tags={ConditionTag.MAGICAL}
-            )
-        else:
-            effect = Deafened(
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid,
-                parent_condition=self.uuid,
-                tags={ConditionTag.MAGICAL}
-            )
-
-        sub_event = target.add_condition(effect, parent_event=declaration_event)
-        if sub_event and sub_event.phase == EventPhase.COMPLETION:
-            sub_condition_uuids.append(effect.uuid)
+        apply_shared_sensory_condition(
+            self, target, Blinded if self.effect_type == "blinded" else Deafened,
+            declaration_event,
+        )
+        sub_condition_uuids.extend(self.sub_conditions)
 
         if self.caster_uuid:
             handler = self._create_repeat_save_handler()
@@ -673,6 +662,14 @@ class BlindnessDeafness(SpellAction):
     valid_target_filter: str = Field(default="enemies", description="Action discovery target filter.")
     effect_type: str = Field(default="blinded", description="Effect choice: blinded or deafened.")
 
+    def _create_declaration_event(
+        self, parent_event: Optional[Event] = None, use_register: bool = True,
+    ) -> Optional[Event]:
+        event = super()._create_declaration_event(parent_event, use_register)
+        if isinstance(event, SpellEvent):
+            event.effect_id = f"control.{self.effect_type}"
+        return event
+
     def get_num_projectiles(self) -> int:
         """Return the number of targets allowed by the slot level."""
         return 1 + self.get_upcast_bonus()
@@ -740,7 +737,7 @@ class BlindnessDeafness(SpellAction):
             if contact is None or not contact.visual:
                 return declaration_event.cancel(status_message=f"{target.name} not in line of sight")
 
-            distance = source.senses.get_feet_distance(target.position)
+            distance = self.get_target_distance(target.position)
             if distance > self.effective_range:
                 return declaration_event.cancel(
                     status_message=f"{target.name} out of range ({distance}ft > {self.effective_range}ft)"
@@ -1676,7 +1673,7 @@ class FingerOfDeath(SpellAction):
         if not source_entity or not target_entity:
             return declaration_event.cancel(status_message="Source or target entity not found")
 
-        distance = source_entity.senses.get_feet_distance(target_entity.position)
+        distance = self.get_target_distance(target_entity.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
@@ -1789,10 +1786,10 @@ class InflictWounds(SpellAction):
         if not source or not target:
             return declaration_event.cancel(status_message="Source or target not found")
 
-        distance = source.senses.get_feet_distance(target.position)
-        if distance > 5:
+        distance = self.get_target_distance(target.position)
+        if distance > self.effective_range:
             return declaration_event.cancel(
-                status_message=f"Target out of melee range ({distance}ft > 5ft)"
+                status_message=f"Target out of melee range ({distance}ft > {self.effective_range}ft)"
             )
 
         return los_event.phase_to(
@@ -2390,7 +2387,7 @@ class BestowCurse(SpellAction):
         if target.uuid != caster.uuid and (contact is None or not contact.visual):
             return declaration_event.cancel(status_message="Target not in line of sight")
 
-        distance = caster.senses.get_feet_distance(target.position)
+        distance = self.get_target_distance(target.position)
         if distance > self.effective_range:
             return declaration_event.cancel(
                 status_message=f"Out of range ({distance}ft > {self.effective_range}ft)"

@@ -1,5 +1,10 @@
 # Directed body releases and persistent floor material
 
+Current qualification update: [spell body releases](SPELL_BODY_RELEASE_2026-09-20.md)
+supersedes the physical-only filter described below. All positive normal-HP
+injuries can release the configured creature material; a positive physical
+component still selects its original pattern when present.
+
 Implemented on `codex/recovery-design` against the independently reviewed
 [plan](BODY_RELEASE_IMPLEMENTATION_PLAN_2026-09-20.md). Final [gameplay gallery](http://127.0.0.1:8767/runs/20260919T230628Z-0a2658/index.html): **40/40 clips passed**,
 3,503 synchronized four-camera frames, replayed from saved public inputs.

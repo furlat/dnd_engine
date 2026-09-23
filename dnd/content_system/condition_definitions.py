@@ -26,6 +26,7 @@ import dnd.monsters.skeleton_abilities as skeleton_abilities
 import dnd.monsters.traits as monster_traits
 import dnd.spells.abjuration as abjuration
 import dnd.spells.conjuration as conjuration
+import dnd.spatial.jaws as jaws
 import dnd.spells.divination as divination
 import dnd.spells.enchantment as enchantment
 import dnd.spells.evocation as evocation
@@ -293,6 +294,7 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(conjuration.SpiritGuardiansSlowed, ContentDefinitionKind.CONDITION, "condition.spell.spirit_guardians.slowed"),
     _srd(conjuration.SpiritGuardiansZone, ContentDefinitionKind.CONDITION, "condition.spell.spirit_guardians.zone"),
     _srd(conjuration.StinkingCloudZone, ContentDefinitionKind.CONDITION, "condition.spell.stinking_cloud.zone"),
+    _original(jaws.JawRestrained, ContentDefinitionKind.CONDITION, "condition.environment.jaw_restrained"),
     _srd(conjuration.WebRestrained, ContentDefinitionKind.CONDITION, "condition.spell.web.restrained"),
     _srd(conjuration.WebZone, ContentDefinitionKind.CONDITION, "condition.spell.web.zone"),
     _srd(divination.GuidanceEffect, ContentDefinitionKind.CONDITION, "condition.spell.guidance"),
@@ -367,6 +369,7 @@ _GRANTED_ACTION_TYPES_BY_CONDITION: Mapping[
     aegis_spark.AegisTrainingFeature: (aegis_spark.AegisSpark,),
     monster_traits.RampageAvailable: (monster_traits.NaturalAttack,),
     conjuration.WebRestrained: (conjuration.EscapeWebAction,),
+    jaws.JawRestrained: (jaws.ForceJawOpen, jaws.SlipFreeOfJaw),
     transmutation.ExpeditiousRetreatEffect: (transmutation.BonusDash,),
 })
 

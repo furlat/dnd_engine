@@ -1,0 +1,19 @@
+{
+  "schema": "dnd.conditionPresentationOverrides",
+  "version": 1,
+  "conditions": {
+    "condition.spell.sleep": {
+      "bodyPose": "Die",
+      "applicationBody": {
+        "bodyClip": "Die",
+        "bodyPlaybackSpeed": 1.5,
+        "reversed": false
+      },
+      "removalBody": {
+        "bodyClip": "Die",
+        "bodyPlaybackSpeed": 1.5,
+        "reversed": true
+      }
+    }
+  }
+}

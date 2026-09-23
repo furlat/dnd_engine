@@ -1,7 +1,8 @@
 """Frozen world contacts determine time; camera projection only changes view.
 
-These are the bounded G5 reference-stage contracts. They do not establish
-terrain, wall, door or raised-map painter occlusion.
+These retain the original imported Studio recipe's G5 numeric references.
+Production attachment pixels are covered in test_shared_spell_targets.py.
+They do not establish terrain, wall, door or raised-map painter occlusion.
 """
 
 from dataclasses import replace
@@ -23,7 +24,9 @@ from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
 
 @pytest.fixture(scope="module")
 def data() -> AnimationData:
-    return load_animation_data()
+    # This fixture owns the historic canvas/inset contract. Local spell
+    # authoring now uses explicit hand sockets and rig-specific torso points.
+    return load_animation_data(authored_bundles=())
 
 
 def reference_cast(
@@ -88,8 +91,8 @@ def test_authored_attachment_follows_actor_scale_without_resizing_the_projectile
             applications=(replace(source.applications[0], target=replace(source.applications[0].target, visual_scale=scale)),),
         ),
     )
-    # The original 128px asset is centered in its canvas and bottom-anchored.
-    # Its canvas center stays 64px above the draw endpoint at effect scale 1.
+    # The converted recipe directly registers the visible center. Its root
+    # padding and -64px lift scale with the body, independently of effect size.
     factor = data.rig.TILE_W / TILE_WIDTH
     endpoints: tuple[tuple[Literal["prepare", "impact"], ActorContact], ...] = (
         ("prepare", source.caster), ("impact", source.applications[0].target),
@@ -99,9 +102,9 @@ def test_authored_attachment_follows_actor_scale_without_resizing_the_projectile
         scaled_view = project_projectile(scaled, phase_sample(scaled, phase), quadrant)
         x, y = project_world(contact.grid, elevation_steps=2, quadrant=quadrant)
         ground = x * factor, y * factor
-        assert (scaled_view.point[0] - ground[0], scaled_view.point[1] - 64 - ground[1]) == pytest.approx((
+        assert (scaled_view.point[0] - ground[0], scaled_view.point[1] - ground[1]) == pytest.approx((
             (unit_view.point[0] - ground[0]) * scale,
-            (unit_view.point[1] - 64 - ground[1]) * scale,
+            (unit_view.point[1] - ground[1]) * scale,
         ))
     assert scaled.recipe == unit.recipe
 
@@ -196,7 +199,7 @@ def test_projected_contact_overlap_does_not_finish_travel_early(data: AnimationD
         expected_ground = project_world(source.caster.grid)
         factor = TILE_WIDTH / data.rig.TILE_W
         assert view.point == pytest.approx((expected_ground[0] / factor,
-                                           expected_ground[1] / factor + 52.5))
+                                           expected_ground[1] / factor + (41 - 64) * .5))
         elapsed = travel.start_ms + (travel.end_ms - travel.start_ms) * progress
         assert "impact" not in {anchor.name for anchor in crossed_anchors(
             timeline, travel.start_ms, elapsed,
@@ -216,7 +219,7 @@ def test_support_lift_and_art_padding_stay_vertical_in_every_view(
     # endpoints isolate support lift and the scaled canvas attachment.
     document = data.drafts["spell.fire_bolt"].model_dump(mode="json", exclude_unset=True)
     document["projectile"]["sourceAnchor"]["axisPx"] = 0
-    document["projectile"]["targetAnchor"]["forwardPx"] = 0
+    document["projectile"]["targetAnchor"]["axisPx"] = 0
     document["projectile"].pop("sourceAnchorsByFacing", None)
     draft = StudioSpellDraft.model_validate_json(json.dumps(document))
     selected = replace(data, drafts=MappingProxyType({**data.drafts, "spell.fire_bolt": draft}))
@@ -232,8 +235,7 @@ def test_support_lift_and_art_padding_stay_vertical_in_every_view(
                                quadrant=quadrant)
         assert view.point == pytest.approx((
             ground[0] / factor,
-            ground[1] / factor + data.rig.RIG_ORIGIN_Y_FROM_GROUND * contact.visual_scale
-            + 64 * (1 - contact.visual_scale),
+            ground[1] / factor + (data.rig.RIG_ORIGIN_Y_FROM_GROUND - 64) * contact.visual_scale,
         ))
 
 
@@ -241,9 +243,9 @@ def test_camera_uses_its_authored_local_anchor_without_retiming(data: AnimationD
     document = data.drafts["spell.fire_bolt"].model_dump(mode="json", exclude_unset=True)
     source_anchor = document["projectile"]["sourceAnchor"]
     source_anchor["axisPx"] = 0
-    document["projectile"]["targetAnchor"]["forwardPx"] = 0
+    document["projectile"]["targetAnchor"]["axisPx"] = 0
     document["projectile"]["sourceAnchorsByFacing"] = {
-        "S": {**source_anchor, "forwardPx": 10, "sidePx": 4, "liftY": -6},
+        "S": {**source_anchor, "forwardPx": 10, "sidePx": 4, "liftY": source_anchor["liftY"] - 6},
     }
     draft = StudioSpellDraft.model_validate_json(json.dumps(document))
     selected = replace(data, drafts=MappingProxyType({**data.drafts, "spell.fire_bolt": draft}))
@@ -255,7 +257,7 @@ def test_camera_uses_its_authored_local_anchor_without_retiming(data: AnimationD
         view = project_projectile(timeline, effect, quadrant)
         ground = project_world(timeline.source.caster.grid, quadrant=quadrant)
         assert view.point == pytest.approx((ground[0] / factor + offset[0],
-                                           ground[1] / factor + 52.5 + offset[1]))
+                                           ground[1] / factor + (41 - 64) * .5 + offset[1]))
     assert timeline.anchors == anchors
     assert phase_sample(timeline, "prepare") == effect
 

@@ -7,18 +7,21 @@ retains its materialized defaults; local recipes own their authored values.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated, Literal, Mapping, TypeVar
 
 from pydantic import (
     AfterValidator, BaseModel, ConfigDict, Field, JsonValue, PlainSerializer,
-    model_validator,
+    field_serializer, model_validator,
 )
 
 from dnd.core.content.identities import ContentRef
-from game.condition_types import ConditionRecipe
+from game.condition_types import ConditionBodyAnimation, ConditionRecipe
+from game.condition_media import ConditionLayerMedia
+from game.device_art import DeviceArt
+from game.portal_art import PortalArt
 
 T = TypeVar("T")
 FrozenMap = Annotated[
@@ -94,6 +97,21 @@ class StudioEquipment(AuthoredRecord):
     kind: Literal["unchanged", "hidden", "melee", "ranged"]
 
 
+class ChildAttackPose(AuthoredRecord):
+    """Literal actor layers fitted to one existing rig/weapon/attack pose."""
+
+    rigId: Identifier
+    weaponCategory: Identifier
+    clip: Identifier
+    layers: Annotated[tuple[StudioActorLayer, ...], Field(min_length=1)]
+
+
+class ChildAttackPresentation(AuthoredRecord):
+    """The actual child weapon attack owns this spell's body and delivery."""
+
+    poses: Annotated[tuple[ChildAttackPose, ...], Field(min_length=1)]
+
+
 class StudioRecovery(AuthoredRecord):
     enabled: bool
     bodyClip: Literal["Taunt", "Special1", "Rolling"]
@@ -112,6 +130,7 @@ class StudioCast(AuthoredRecord):
     slash: StudioActorLayer | None = None
     recovery: StudioRecovery
     holdReleaseForVolley: bool = False
+    sourceSockets: SourceSockets | None = None
 
     @model_validator(mode="after")
     def validate_layer_slots(self) -> StudioCast:
@@ -141,8 +160,11 @@ class StudioProjectilePhase(AuthoredRecord):
     startFrame: BodyFrame | None = None
     fps: Positive | None = None
     durationMs: Positive | None = None
+    fitDuration: bool = False
     overlapRelease: bool = False
     scale: Positive | None = None
+    fineRotation: Literal["none", "isometricHybrid"] | None = None
+    viewFacing: Facing8 | None = None
     timeMap: tuple[MediaTimePoint, ...] = ()
     overlapContactMs: NonNegative = 0
 
@@ -218,12 +240,16 @@ class ProjectileOrientation(AuthoredRecord):
 
 
 class TargetAnchor(AuthoredRecord):
-    basis: Literal["tileCenter", "body"]
+    basis: Literal["tileCenter", "rigRoot", "body"]
     liftY: float
     forwardPx: float
+    axisPx: float = 0
 
 
-class SourceAnchor(TargetAnchor):
+class SourceAnchor(AuthoredRecord):
+    basis: Literal["tileCenter", "rigRoot", "body"]
+    liftY: float
+    forwardPx: float
     sidePx: float
     axisPx: float
 
@@ -359,6 +385,48 @@ class StudioDamage(AuthoredRecord):
     death: DamageDeath | None = None
 
 
+class StudioMediaTrack(AuthoredRecord):
+    """Finite authored media on the cast clock, independent of travel geometry."""
+
+    id: Identifier
+    assetId: Identifier
+    assetPhase: Literal["cast", "travel", "impact"] = "impact"
+    attachment: Literal["source_hand", "source_ground", "target_body", "target_ground", "area_ground",
+                        "departure_ground", "arrival_ground"]
+    startOffsetMs: float = 0
+    fps: Positive | None = None
+    durationMs: Positive | None = None
+    loop: bool = False
+    scale: Positive = 1
+    scaleWithActor: bool = False
+    alpha: Annotated[float, Field(ge=0, le=1)] = 1
+    depth: Literal["world", "ground", "behind_body", "front_body"] = "world"
+    orientation: Literal["authored", "target_vector"] = "authored"
+    # Fixed-world orbit banks use an authored camera basis. Omission retains
+    # facing-driven media such as directed projectiles and sprays.
+    viewFacing: Facing8 | None = None
+    onMiss: Literal["play", "omit"] = "play"
+    worldOffsetsByFacing: FacingMap[Point] | None = None
+    timeMap: tuple[MediaTimePoint, ...] = ()
+    timeMapsByFacing: FacingMap[tuple[MediaTimePoint, ...]] | None = None
+    bodyOffsetsByFacing: FacingMap[tuple[Point, ...]] | None = None
+    # Source pixels from whole-effect origin to the baked attachment point.
+    emissionPointByFacing: FacingMap[Point] | None = None
+
+
+class StudioContact(AuthoredRecord):
+    """Presentation arrival; outcomes still come solely from native events."""
+
+    delayMs: NonNegative = 0
+    speedTilesPerSecond: Positive | None = None
+    cellsByFacing: FacingMap[FrozenMap[NonNegative]] | None = None
+
+    @field_serializer("cellsByFacing")
+    def serialize_cell_contacts(self, value: Mapping[Facing8, Mapping[str, float]] | None
+                                ) -> dict[Facing8, dict[str, float]] | None:
+        return None if value is None else {facing: dict(cells) for facing, cells in value.items()}
+
+
 class StudioSpellDraft(AuthoredRecord):
     definitionRef: ContentRef
     elementColors: ElementColors
@@ -367,19 +435,22 @@ class StudioSpellDraft(AuthoredRecord):
     area: StudioArea | None = None
     damage: StudioDamage | None = None
     condition: StudioCondition | None = None
+    media: tuple[StudioMediaTrack, ...] = ()
+    contact: StudioContact | None = None
+    childAttack: ChildAttackPresentation | None = None
 
 
 class StudioDraftFile(AuthoredRecord):
     schema_: Literal["neuroclient.spellStudioDrafts", "dnd.spellStudioDrafts"] = Field(alias="schema")
-    version: Literal[1, 6]
+    version: Literal[1, 2, 6]
     spells: tuple[StudioSpellDraft, ...]
     effectDrafts: FrozenMap[StudioSpellDraft] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def format_version(self) -> StudioDraftFile:
-        expected = 6 if self.schema_ == "neuroclient.spellStudioDrafts" else 1
-        if self.version != expected:
-            raise ValueError(f"{self.schema_} requires version {expected}")
+        supported = (6,) if self.schema_ == "neuroclient.spellStudioDrafts" else (1, 2)
+        if self.version not in supported:
+            raise ValueError(f"{self.schema_} requires version {supported}")
         return self
 
 
@@ -462,12 +533,52 @@ class ProjectileFrameLayer(AuthoredRecord):
 
     pattern: str | None = None
     pages: FacingMap[tuple[ProjectilePage, ...]] | None = None
+    partsByFacing: FacingMap[tuple[tuple[ProjectileFramePart, ...], ...]] | None = None
+    # Camera-readable media can share one sequence without eight copied banks.
+    parts: tuple[tuple[ProjectileFramePart, ...], ...] | None = None
     blendMode: Literal["normal", "add"]
     gain: Annotated[float, Field(ge=0, le=1)] = 1
 
 
+class PackedFootpoint(AuthoredRecord):
+    """Aligned raw RGBA: big-endian uint16 X in RG and Y in BA, in local cells."""
+
+    file: Identifier
+    bounds: tuple[float, float]
+
+
+class ProjectileFramePart(AuthoredRecord):
+    """Lossless sparse packing in an asset's unchanged logical canvas."""
+
+    file: Identifier
+    rect: tuple[int, int, int, int]
+    offset: tuple[int, int]
+    footpoint: PackedFootpoint | None = None
+
+
 class ProjectileFrameStorage(AuthoredRecord):
-    layers: tuple[ProjectileFrameLayer, ...]
+    layers: tuple[ProjectileFrameLayer, ...] = ()
+    surfaceFrames: PackedSurfaceFrames | None = None
+
+
+class PackedSurfaceFrames(AuthoredRecord):
+    """Matched RGBA/XYZ/ownership packets; frame selection leaves source timing authored."""
+
+    pattern: str | None = None
+    frameIndices: tuple[int, ...]
+    bounds: tuple[float, float]
+    verticalScale: Positive
+    blendModes: tuple[Literal["normal", "add"], ...] = ()
+    componentsByFacing: FacingMap[tuple[PackedSurfaceComponent, ...]] | None = None
+    positionScale: Positive = 1
+
+
+class PackedSurfaceComponent(AuthoredRecord):
+    """One ordered source component, registered to the whole effect origin."""
+
+    pattern: str
+    pivot: tuple[float, float]
+    blendMode: Literal["normal", "add"]
 
 
 class ProjectileStorage(AuthoredRecord):
@@ -499,6 +610,9 @@ class BodyClip(AuthoredRecord):
     sheets: FrozenMap[str]
 
 
+PoseSockets = FrozenMap[FrozenMap[FacingMap[tuple[Point, ...]]]]
+
+
 class BodyRig(AuthoredRecord):
     """Passive body layout/capabilities, shared by timing and pixel sampling."""
 
@@ -506,10 +620,22 @@ class BodyRig(AuthoredRecord):
     cell_height: Annotated[int, Field(ge=1)]
     origin_y_from_ground: float
     body_anchor: Point | None = None
+    rest_pose_anchors: FrozenMap[FacingMap[Point]] = Field(default_factory=dict)
+    # Socket / semantic clip / viewed facing / sampled frame, in full-cell pixels.
+    pose_sockets: PoseSockets = Field(default_factory=dict)
     facing_rows: FacingMap[int]
     slot_order: tuple[str, ...]
     slot_categories: FrozenMap[tuple[str, ...]]
     clips: FrozenMap[BodyClip]
+
+    @field_serializer("rest_pose_anchors")
+    def serialize_rest_pose_anchors(self, value: Mapping[str, Mapping[Facing8, Point]]) -> dict[str, dict[Facing8, Point]]:
+        return {pose: dict(points) for pose, points in value.items()}
+
+    @field_serializer("pose_sockets")
+    def serialize_pose_sockets(self, value: PoseSockets) -> dict[str, dict[str, dict[Facing8, tuple[Point, ...]]]]:
+        return {socket: {clip: dict(rows) for clip, rows in clips.items()}
+                for socket, clips in value.items()}
 
     @model_validator(mode="after")
     def validate_layout(self) -> BodyRig:
@@ -529,6 +655,12 @@ class BodyRig(AuthoredRecord):
         for clip in self.clips.values():
             if not clip.sheets or not set(clip.sheets) <= categories:
                 raise ValueError("body clip sheets must use declared rig categories")
+        for clips in self.pose_sockets.values():
+            for name, rows in clips.items():
+                if name not in self.clips or set(rows) != facings:
+                    raise ValueError("pose sockets require an existing clip and all eight facings")
+                if any(len(points) != self.clips[name].frames for points in rows.values()):
+                    raise ValueError("pose sockets require one point per body frame")
         return self
 
 
@@ -584,13 +716,22 @@ class MovementMediaTrack(AuthoredRecord):
     attachment: Literal["body", "ground"]
     tint: Color
     tint2: Color | None
+    spellTintStrength: Annotated[float, Field(ge=0, le=1)] = 0
     startFrame: Annotated[int, Field(ge=0, le=120)]
-    fps: Annotated[float, Field(ge=1, le=120)]
+    fps: Positive
     loop: bool
     reversed: bool
     scale: Annotated[float, Field(ge=0.1, le=8)]
     offsetX: Annotated[float, Field(ge=-512, le=512)]
     offsetY: Annotated[float, Field(ge=-512, le=512)]
+    whenConditions: tuple[Identifier, ...] = ()
+    unlessConditions: tuple[Identifier, ...] = ()
+    viewFacing: Facing8 | None = None
+    depth: Literal["ground", "behind_body", "front_body"] = "ground"
+    contactFrame: NonNegative = 0
+    emitIntervalMs: Positive | None = None
+    fitToMotion: bool = False
+    alpha: Annotated[float, Field(ge=0, le=1)] = 1
 
 
 class ActionMediaAsset(AuthoredRecord):
@@ -660,6 +801,36 @@ class ReleaseFamily(AuthoredRecord):
     durationScale: Positive
 
 
+class BloodVapor(AuthoredRecord):
+    color: Color
+    every: Annotated[int, Field(ge=1)] = 7
+    count: Annotated[int, Field(ge=1)] = 4
+    life: Positive
+    interval: Positive = .2
+    startFraction: NonNegative = .65
+    rise: NonNegative = .23
+    opacity: Annotated[float, Field(ge=0, le=1)] = .58
+
+
+class BloodResponse(AuthoredRecord):
+    """Finite blood-only styling; deposition geometry remains native state."""
+
+    shape: Literal["spray", "ragged", "bead", "frozen"] = "spray"
+    durationScale: Positive = 1
+    delayScale: Positive = 1
+    gravityScale: Positive = 1
+    sizeScale: Positive = 1
+    tailScale: Positive = 1
+    heavyEvery: Annotated[int, Field(ge=0)] = 0
+    heavyScale: Positive = 1
+    colors: tuple[Color, Color]
+    detail: Literal["none", "acid", "fire", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"] = "none"
+    meltBase: NonNegative = 0
+    meltSize: NonNegative = 0
+    surfaceSeconds: NonNegative = 0
+    vapor: BloodVapor | None = None
+
+
 class RegionParticleStyle(AuthoredRecord):
     """Normalized landing detail; native regions own its world placement."""
 
@@ -723,10 +894,23 @@ class DeathSaveContext(AuthoredRecord):
     criticalFailure: LifecycleFeedback
 
 
+class LifeStateBodyPose(AuthoredRecord):
+    bodyPose: Identifier
+    applicationBody: ConditionBodyAnimation | None = None
+    removalBody: ConditionBodyAnimation | None = None
+
+
+LifeBodyPoses = Annotated[
+    Mapping[Literal["dying", "stable"], LifeStateBodyPose], AfterValidator(MappingProxyType),
+    PlainSerializer(dict, return_type=dict),
+]
+
+
 class LifeStateContext(AuthoredRecord):
     dying: LifecycleFeedback
     stable: LifecycleFeedback
     revived: LifecycleFeedback
+    bodyPoses: LifeBodyPoses = Field(default_factory=lambda: MappingProxyType({}))
 
 
 class MovementReactionContext(AuthoredRecord):
@@ -787,6 +971,15 @@ class VoluntaryMovementContext(AuthoredRecord):
         if self.jumpMinDurationMs > self.jumpMaxDurationMs:
             raise ValueError("jumpMinDurationMs must not exceed jumpMaxDurationMs")
         return self
+
+
+class MovementPresentation(AuthoredRecord):
+    schema_: Literal["dnd.movementPresentation"] = Field(alias="schema")
+    version: Literal[1]
+    referenceSpeedFeet: Positive
+    actionPlaybackRates: FrozenMap[Positive]
+    walkMedia: tuple[MovementMediaTrack, ...]
+    jumpMedia: tuple[MovementMediaTrack, ...]
 
 
 class FloatingFeedbackStyle(AuthoredRecord):
@@ -894,6 +1087,12 @@ class ActionFeedback(AuthoredRecord):
     color: Color
 
 
+class CounterspellFeedback(AuthoredRecord):
+    automatic_success: ActionFeedback
+    check_success: ActionFeedback
+    check_failure: ActionFeedback
+
+
 class AttackRecipe(AuthoredRecord):
     """Existing contentActionPresentationRecipes attack rows, without defaults."""
 
@@ -911,6 +1110,29 @@ class AttackRecipe(AuthoredRecord):
     actionFeedback: JsonValue
 
 
+class InterruptionRule(AuthoredRecord):
+    phases: tuple[Literal["declaration", "execution"], ...]
+    actionEconomySpent: bool
+    anticipationFraction: float = Field(gt=0, lt=1)
+    travelFraction: float | None = Field(default=None, gt=0, lt=1)
+    nonProjectileBodyFraction: float | None = Field(default=None, gt=0, lt=1)
+
+
+class ReactionMedia(AuthoredRecord):
+    successByCamera: tuple[Identifier, Identifier, Identifier, Identifier]
+    failureByCamera: tuple[Identifier, Identifier, Identifier, Identifier]
+    dissipationMask: Identifier
+    durationMs: Positive
+    scale: Positive = 1
+    castLayers: tuple[StudioActorLayer, ...] = ()
+
+
+class InterruptionPresentation(AuthoredRecord):
+    outcomes: tuple[str, ...]
+    rules: tuple[InterruptionRule, ...]
+    reactions: FrozenMap[ReactionMedia] = Field(default_factory=dict)
+
+
 class ContentActionRecipe(AuthoredRecord):
     """Original content-action row shared by actor gestures and Shove."""
 
@@ -922,7 +1144,7 @@ class ContentActionRecipe(AuthoredRecord):
     actor: ActionActor
     anchors: tuple[ActionFrameAnchor, ...]
     attackFeedback: JsonValue
-    counterspellFeedback: JsonValue
+    counterspellFeedback: CounterspellFeedback | None
     variants: tuple[JsonValue, ...]
     projectile: JsonValue
     actionFeedback: ActionFeedback | None
@@ -935,7 +1157,39 @@ BodyActionRecipe = ContentActionRecipe
 class BodyActionBinding(AuthoredRecord):
     source_recipe: Identifier
     action_feedback: ActionFeedback | None
-    interaction_target: Literal["source_item"] | None = None
+    interaction_target: Literal["source_item", "target_item"] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MechanismProjectileArt:
+    """Registered directional media and release socket of a placed mechanism."""
+
+    frames_by_pose: Mapping[str, tuple[str, ...]]
+    tip_offsets_by_pose: Mapping[str, tuple[tuple[float, float], ...]]
+    muzzle_offsets_by_pose: Mapping[str, tuple[float, float]]
+    muzzle_height_steps: float
+    speed_tiles_per_second: float
+
+
+@dataclass(frozen=True, slots=True)
+class SaveHop:
+    """An authored body reaction to one exact successful saving throw."""
+
+    effect_id: str
+    body_clip: str
+    duration_ms: float
+    height_px: float
+
+
+@dataclass(frozen=True, slots=True)
+class PropDepth:
+    """A registered RG-packed horizontal-depth atlas, independent of gameplay."""
+
+    asset_id: str
+    cell: tuple[int, int]
+    rows_by_pose: Mapping[str, int]
+    depth_range: tuple[float, float]
+    pixels_per_unit_by_pose: Mapping[str, float]
 
 
 @dataclass(frozen=True, slots=True)
@@ -945,16 +1199,81 @@ class PropAnimation:
     frames_by_pose: Mapping[str, tuple[str, ...]]
     fps: int
     state_frames: Mapping[str, int]
+    default_frame: int = 0
+    placement: Literal["cell", "area", "anchor"] = "cell"
+    origin_offset: tuple[float, float] = (0, 0)
+    creation_start_frame: int | None = None
+    footprint_tiles: tuple[int, int] | None = None
+    activation_frames: tuple[int, ...] = ()
+    contact_frame: int | None = None
+    transition_frames: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
+    projectile: MechanismProjectileArt | None = None
+    depth: Literal["ground", "world"] = "ground"
+    successful_save_hop: SaveHop | None = None
+    actor_depth: PropDepth | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TetherAnimation:
+    """Authored cable media registered by its two endpoint pixels."""
+
+    frames_by_facing: Mapping[Facing8, tuple[str, ...]]
+    endpoints_by_facing: Mapping[Facing8, tuple[tuple[float, float], tuple[float, float]]]
+    fps: float
+
+
+class SpatialMediaLayer(AuthoredRecord):
+    """One registered layer around the received area's occupants."""
+    assetId: Identifier
+    applicationAssetId: Identifier | None = None
+    side: Literal["center", "rear", "front"] = "center"
+    removalAssetId: Identifier | None = None
+    suppressionAssetId: Identifier | None = None
+    composition: Literal["legacy", "floor", "volume", "clump"] = "legacy"
+    offsetCells: tuple[float, float] = (0, 0)
+    delayMs: NonNegative = 0
+
+
+class SpatialMediaBinding(AuthoredRecord):
+    """A maintained window in existing finite media; native observation owns existence."""
+
+    layers: Annotated[tuple[SpatialMediaLayer, ...], Field(min_length=1)]
+    assetPhase: Literal["cast", "travel", "impact"] = "impact"
+    holdStartFrame: Annotated[int, Field(ge=0)]
+    holdFrames: Annotated[int, Field(ge=1)]
+    fps: Positive
+    scale: Positive
+    removalFadeMs: NonNegative = 0
+    removalEasing: Literal["linear", "smoothstep"] = "linear"
+    referenceRadiusFeet: Positive | None = None
+    surfaceHeightScale: Positive = 1
+    suppressionDirection: Point | None = None
+    movementSpeedCellsPerSecond: Positive | None = None
+    contactMedia: Annotated[
+        Mapping[Literal["ground_entry", "damage"], StudioMediaTrack],
+        AfterValidator(MappingProxyType), PlainSerializer(dict, return_type=dict),
+    ] = Field(default_factory=lambda: MappingProxyType({}))
+
+
+class DepositMediaBinding(AuthoredRecord):
+    """Authored material shapes registered to a physical deposition footprint."""
+
+    radiusCells: Annotated[int, Field(ge=0)]
+    variants: Annotated[tuple[SpatialMediaBinding, ...], Field(min_length=1)]
 
 
 @dataclass(frozen=True, slots=True)
 class AnimationData:
+    interruptions: InterruptionPresentation
+    devices: Mapping[str, DeviceArt]
+    device_wrecks: Mapping[str, DeviceArt]
     drafts: Mapping[str, StudioSpellDraft]
     attack_recipes: Mapping[str, AttackRecipe]
     shove_recipes: Mapping[str, ShoveRecipe]
     body_action_recipes: Mapping[str, BodyActionRecipe]
     body_action_bindings: Mapping[str, BodyActionBinding]
     condition_recipes: Mapping[str, ConditionRecipe]
+    condition_media: Mapping[str, ConditionLayerMedia]
     projectile_assets: Mapping[str, AuthoredProjectileAsset]
     projectile_storage: Mapping[str, ProjectileStorage]
     media_root: Path
@@ -982,6 +1301,13 @@ class AnimationData:
     # Unused action contexts remain exact source JSON until their family is ported.
     context_source_json: str
     world_animations: Mapping[str, PropAnimation]
+    spatial_media: Mapping[str, SpatialMediaBinding]
     action_media_assets: Mapping[str, ActionMediaAsset | ParticleMediaAsset]
     body_release_media: Mapping[str, tuple[MovementMediaTrack, ...]]
     relocation_actions: frozenset[str] = frozenset()
+    portals: Mapping[str, PortalArt] = field(default_factory=dict)
+    blood_responses: Mapping[str, BloodResponse | None] = field(default_factory=dict)
+    action_playback_rates: Mapping[str, float] = field(default_factory=dict)
+    action_deliveries: Mapping[str, str] = field(default_factory=dict)
+    movement_reference_speed_feet: float = 30
+    deposit_media: Mapping[str, DepositMediaBinding] = field(default_factory=dict)

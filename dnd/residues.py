@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from dnd.conditions import Frightened, residue_fear_origin
+from dnd.conditions import Frightened, residue_fear_origin, same_residue_ground
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_tiles import Tile
@@ -21,6 +21,7 @@ from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.entity import Entity
 from dnd.types.abilities import AbilityName
 from dnd.types.residues import ObjectResidueState, ResidueContribution, ResidueEllipse, TileResidueState
+from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.world import CardinalDirection, OccupancyLayer, WorldEdgeChannel
 
 
@@ -60,6 +61,11 @@ CORROSIVE_RESIDUE = ResidueProfile(
     "residue.corrosive_demonic_blood", "Corrosive Demonic Blood",
     "Corrosive demonic blood coats the ground, dealing 1d4 acid damage on entry.",
     ResidueDamage(1, 4, DamageType.ACID),
+)
+POISON_RESIDUE = ResidueProfile(
+    "residue.poison", "Poison Pool",
+    "Poison coats the ground, dealing 1d4 poison damage on entry.",
+    ResidueDamage(1, 4, DamageType.POISON),
 )
 DREAD_RESIDUE = ResidueProfile(
     "residue.dread_blood", "Dread Blood",
@@ -158,6 +164,9 @@ class TileResidueCondition(BaseCondition):
         )
 
     def _frighten_entrant(self, entity: Entity, payload: ResidueFear, entry: SpatialChangeEvent) -> None:
+        if (entry.old_position is not None and entry.previous_occupancy_layer is OccupancyLayer.GROUND
+                and same_residue_ground(entry.old_position, entry.position, self.profile.residue_id)):
+            return
         request = SavingThrowEvent(
             source_entity_uuid=self.source_entity_uuid, target_entity_uuid=entity.uuid,
             source_entity_name=self.name, target_entity_name=entity.name,
@@ -180,18 +189,23 @@ class TileResidueCondition(BaseCondition):
             ),
             residue_origin=residue_fear_origin(
                 entry, tile_uuid=self.source_entity_uuid, condition_uuid=self.uuid,
+                residue_id=self.profile.residue_id,
             ),
         )
-        result = entity.add_condition(fear, check_save_throw=False, parent_event=entry)
-        if result is not None and not result.canceled and fear.applied:
-            self.add_linked_condition(entity.uuid, fear.uuid)
+        # The actor remains afraid while contacting this connected material,
+        # rather than being a child of the first tile's particular membership.
+        entity.add_condition(fear, check_save_throw=False, parent_event=entry)
 
 
 def deposit_residue(
     tile: Tile, profile: ResidueProfile, *, parent_event: Event | None = None,
     ellipses: tuple[ResidueEllipse, ...] = (),
+    amount: int = 1,
+    deposit_source: MaterialDepositSource | None = None,
 ) -> TileResidueState | None:
     """Accumulate the authored amount within one existing native membership."""
+    if amount < 1:
+        raise ValueError("Deposited residue amount must be positive")
     existing = tile.active_conditions.get(profile.name)
     if existing is not None:
         state = existing.snapshot_tile_residue()
@@ -199,15 +213,18 @@ def deposit_residue(
             raise ValueError(f"Residue name collides with another condition: {profile.name}")
         if state.amount < profile.max_amount:
             condition = cast(TileResidueCondition, existing)
-            condition.amount = state.amount + 1
-            if ellipses:
-                matching = next((i for i, row in enumerate(condition.contributions) if row.ellipses == ellipses), None)
+            added = min(amount, profile.max_amount - state.amount)
+            condition.amount = state.amount + added
+            if ellipses or deposit_source is not None:
+                matching = next((i for i, row in enumerate(condition.contributions)
+                    if row.ellipses == ellipses and row.deposit_source == deposit_source), None)
                 if matching is None:
-                    condition.contributions += (ResidueContribution(ellipses=ellipses),)
+                    condition.contributions += (ResidueContribution(
+                        ellipses=ellipses, amount=added, deposit_source=deposit_source),)
                 else:
                     rows = list(condition.contributions)
                     row = rows[matching]
-                    rows[matching] = ResidueContribution(ellipses=row.ellipses, amount=row.amount + 1)
+                    rows[matching] = row.model_copy(update={"amount": row.amount + added})
                     condition.contributions = tuple(rows)
             get_map().publish_tile_state_changed(tile.position, source_entity_uuid=tile.uuid,
                 parent_event=parent_event.uuid if parent_event is not None else None)
@@ -215,7 +232,9 @@ def deposit_residue(
         return state
     condition = TileResidueCondition(
         name=profile.name, description=profile.description, profile=profile,
-        contributions=(ResidueContribution(ellipses=ellipses),) if ellipses else (),
+        amount=min(amount, profile.max_amount),
+        contributions=(ResidueContribution(ellipses=ellipses, amount=min(amount, profile.max_amount),
+            deposit_source=deposit_source),) if ellipses or deposit_source is not None else (),
         source_entity_uuid=tile.uuid, target_entity_uuid=tile.uuid,
         hazard_filter=HazardFilter.ALL if profile.entry_damage is not None or profile.entry_fear is not None else None,
     )
@@ -227,6 +246,8 @@ def deposit_residue(
 
 class ObjectResidueCondition(BaseCondition):
     """Inert material on an object's contacted faces, using ordinary membership."""
+
+    requires_intact_item: bool = False
 
     profile: ResidueProfile
     faces: tuple[CardinalDirection, ...]
