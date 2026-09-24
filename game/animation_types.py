@@ -18,6 +18,7 @@ from pydantic import (
 )
 
 from dnd.core.content.identities import ContentRef
+from dnd.core.condition_types import ConditionTag
 from game.condition_types import ConditionBodyAnimation, ConditionRecipe
 from game.condition_media import ConditionLayerMedia
 from game.device_art import DeviceArt
@@ -408,6 +409,7 @@ class StudioMediaTrack(AuthoredRecord):
     # facing-driven media such as directed projectiles and sprays.
     viewFacing: Facing8 | None = None
     onMiss: Literal["play", "omit"] = "play"
+    requireRemovedConditionTag: ConditionTag | None = None
     worldOffsetsByFacing: FacingMap[Point] | None = None
     timeMap: tuple[MediaTimePoint, ...] = ()
     timeMapsByFacing: FacingMap[tuple[MediaTimePoint, ...]] | None = None

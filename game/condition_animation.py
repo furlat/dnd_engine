@@ -17,7 +17,7 @@ from game.animation import (ActorContact, BodySample, BodyTransition, NumberSamp
                             compile_body_transition, sample_body_transition)
 from game.animation_types import AnimationData, FloatingFeedbackStyle, StudioCondition
 from game.condition_types import (Activity, ConditionBodyColor, ConditionLabel, ConditionRecipe, ConditionTransition,
-                                  ConditionBodyDistortion, ConditionLiveCopies)
+                                  ConditionBodyDistortion, ConditionLiveCopies, ConditionBodyRamp, ConditionTransitionEffect)
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer, supported_layer
 from game.actor_facts import ConditionFact
 from game.player_facts import ConditionChangeFact, PlayerNode
@@ -48,6 +48,25 @@ class ConditionAppearance:
     distortion: ConditionBodyDistortion | None = None
     distortion_strength: float = 1.
     time_ms: float = 0.
+    body_ramp: ConditionBodyRamp | None = None
+    ramp_strength: float = 1.
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionResponseCue:
+    """One finite response to one received condition-owned fact."""
+
+    event_uuid: UUID
+    owner_uuid: UUID
+    actor_uuid: UUID
+    behavior_id: str
+    trigger: str
+    start_ms: float
+    effects: tuple[ConditionTransitionEffect, ...]
+
+    @property
+    def end_ms(self) -> float:
+        return self.start_ms + max((effect.startOffsetMs + effect.durationMs for effect in self.effects), default=0.)
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +147,7 @@ def resolve_condition_appearance(
     selected: list[str] = []
     alpha, body, pose, label = 1.0, None, None, None
     scale = 1.
-    copies, distortion = None, None
+    copies, distortion, ramp = None, None, None
     layers: list[ResolvedConditionLayer] = []
     for recipe in ordered:
         composition = recipe.composition
@@ -155,6 +174,8 @@ def resolve_condition_appearance(
                     tuple((index, 1., 1.) for index in range(count)))
         if distortion is None and persistent.bodyDistortion is not None:
             distortion = persistent.bodyDistortion
+        if ramp is None and persistent.bodyRamp is not None:
+            ramp = persistent.bodyRamp
         alpha *= persistent.alphaMultiplier
         if body is None and persistent.bodyColor is not None:
             body = persistent.bodyColor
@@ -165,11 +186,13 @@ def resolve_condition_appearance(
         layers.extend(ResolvedConditionLayer(layer, media[layer.assetId], owners[recipe.definitionRef.identity_key])
                       for layer in persistent.layers if supported_layer(layer, media)
                       and (layer.whenEnergyType is None or member is not None and member.state is not None
-                           and layer.whenEnergyType is member.state.energy_type))
+                           and layer.whenEnergyType is member.state.energy_type)
+                      and (layer.whenAbility is None or member is not None and member.state is not None
+                           and layer.whenAbility == member.state.enhanced_ability))
         unsupported.extend(persistent_limitations(recipe, media))
     selected_layers = tuple(sorted(layers, key=lambda value: (-value.layer.priority, value.layer.id)))
     return ConditionAppearance(alpha, body, tuple(selected), tuple(dict.fromkeys(unsupported)), pose, label,
-                               selected_layers, scale=scale, live_copies=copies, distortion=distortion)
+                               selected_layers, scale=scale, live_copies=copies, distortion=distortion, body_ramp=ramp)
 
 
 def condition_contact(contact: ActorContact, appearance: ConditionAppearance | None) -> ActorContact:

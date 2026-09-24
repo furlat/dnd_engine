@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_valid
 
 from dnd.core.content.identities import ContentRef
 from dnd.core.creature_types import DamageType
+from dnd.types.abilities import AbilityName
 
 
 Color = Annotated[int, Field(ge=0, le=0xFFFFFF)]
@@ -96,6 +97,7 @@ class ConditionLayer(_Record):
     drawOrder: Literal["behind_body", "in_front_of_body"] = "in_front_of_body"
     lifeStates: tuple[LifeStage, ...] = ("alive", "dying", "stable", "dead")
     whenEnergyType: DamageType | None = None
+    whenAbility: AbilityName | None = None
 
 
 class ConditionTransitionEffect(_Record):
@@ -202,6 +204,21 @@ class ConditionLiveCopies(_Record):
     removalEffects: tuple[ConditionTransitionEffect, ...] = ()
 
 
+class ConditionBodyRamp(_Record):
+    """Palette-only material over the current body and equipment pixels."""
+
+    colors: Annotated[tuple[Color, ...], Field(min_length=1)]
+    mapping: Literal["maximum_rgb"] = "maximum_rgb"
+    gain: Annotated[float, Field(gt=0)] = 1.
+    applicationMs: Duration = 0.
+    removalMs: Duration = 0.
+
+
+class ConditionResponse(_Record):
+    trigger: Literal["consumed", "healed"]
+    effects: tuple[ConditionTransitionEffect, ...]
+
+
 class ConditionPersistent(_Record):
     alphaMultiplier: Alpha
     bodyColor: ConditionBodyColor | None
@@ -211,6 +228,7 @@ class ConditionPersistent(_Record):
     bodyScale: ConditionBodyScale | None = None
     liveCopies: ConditionLiveCopies | None = None
     bodyDistortion: ConditionBodyDistortion | None = None
+    bodyRamp: ConditionBodyRamp | None = None
     equipmentModifiers: tuple[ConditionEquipmentModifier, ...]
     appearanceLayers: tuple[ConditionAppearanceLayer, ...]
     layers: tuple[ConditionLayer, ...]
@@ -242,6 +260,7 @@ class ConditionRecipe(_Record):
     application: ConditionTransition
     removal: ConditionTransition
     activation: ConditionActivation | None = None
+    responses: tuple[ConditionResponse, ...] = ()
     reactionCastBinding: Name | None = None
     interceptionEffectsByDirection: Mapping[
         Literal["N", "NE", "E", "SE", "S", "SW", "W", "NW"], tuple[ConditionTransitionEffect, ...]
@@ -261,9 +280,9 @@ class ConditionRecipe(_Record):
                     or persistent.alphaMultiplier != 1 or persistent.bodyColor is not None
                     or persistent.bodyPose is not None or persistent.label is not None
                     or persistent.bodyScale is not None or persistent.liveCopies is not None
-                    or persistent.bodyDistortion is not None
+                    or persistent.bodyDistortion is not None or persistent.bodyRamp is not None
                     or persistent.equipmentModifiers or persistent.appearanceLayers or persistent.layers
-                    or self.application.effects or self.removal.effects or self.activation is not None
+                    or self.application.effects or self.removal.effects or self.activation is not None or self.responses
                     or self.reactionCastBinding is not None
                     or self.interceptionEffectsByDirection
                     or self.application.bodyAnimation is not None or self.removal.bodyAnimation is not None):

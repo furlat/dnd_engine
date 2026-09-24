@@ -27,6 +27,16 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**Active September 24 unit — accepted support-condition batch.** Integrate Death
+Ward, Stoneskin, Protection from Poison, six Enhance Ability presentations,
+Regenerate, Remove Curse and Freedom of Movement through the current typed
+presentation contract. The Godot author is completing actual four-camera loops
+and finite condition media. The [implementation plan](agent_docs/SUPPORT_CONDITIONS_BATCH_2026-09-24.md)
+records the bounded passive-fact/lifecycle extensions, native acceptance cases
+and independent reviews. Keep working on this batch while the separately
+requested historical Git-art cleanup runs in isolated staging. Asset-size
+analysis belongs to the new Luna task; it does not replace spell integration.
+
 **Completed September 24 unit — reviewed rendering cleanup and private asset migration.**
 Required U0–U8/A1–A3 work is implemented and independently reviewed; optional
 resizing remains unneeded. Current public JSON has explicit composition,
