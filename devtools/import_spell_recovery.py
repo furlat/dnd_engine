@@ -9,6 +9,7 @@ from pathlib import Path
 import shutil
 
 from devtools.import_spell_color_revision import import_revision
+from devtools.media_delivery import owns_selected_media
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -52,6 +53,8 @@ def import_bundle(vfx_root: Path, neuroclient_app: Path, color_revision: Path, *
     for name in POINTS:
         source = manifests[name]
         identity = f"recovered.{name}.dense.v1"
+        if not owns_selected_media(bindings["projectileStorage"], identity, MEDIA.as_posix()):
+            continue
         phases = {key: {field: value[field] for field in ("start", "frames", "fps", "loop")}
                   for key, value in source["phases"].items()}
         storage = {}
@@ -76,6 +79,8 @@ def import_bundle(vfx_root: Path, neuroclient_app: Path, color_revision: Path, *
     for key in ("travel", "impact"):
         raw = fire[key]
         identity = fire["assetId"] + ".travel" if key == "travel" else fire["assetId"]
+        if not owns_selected_media(bindings["projectileStorage"], identity, MEDIA.as_posix()):
+            continue
         phase = {"start": 0, "frames": raw["frames"], "fps": raw["fps"], "loop": raw["loop"]}
         record = existing_assets[identity]
         record.update(frame={"width": raw["cell"], "height": raw["cell"], "rows": 8, "cols": raw["frames"]},

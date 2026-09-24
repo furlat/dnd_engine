@@ -1,0 +1,1337 @@
+[
+  {
+    "case": "equipment-melee-to-ranged",
+    "captured_at": "2026-09-11T17:30:55.106855+00:00",
+    "event": {
+      "wire_type": "dnd.actions.AttackEvent",
+      "name": "Attack_MELEE_MAIN",
+      "uuid": "abbc913c-75e3-4c3a-a90e-82acf51b109c",
+      "source_entity_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+      "source_entity_name": "Shield Fighter",
+      "target_entity_uuid": "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+      "target_entity_name": "Near target",
+      "context": null,
+      "use_register": false,
+      "lineage_uuid": "77a7c27f-0cd0-44e0-bda4-6da1383ce53d",
+      "timestamp": "2026-09-11T17:34:54.960023Z",
+      "event_type": "attack",
+      "phase": "completion",
+      "modified": true,
+      "canceled": false,
+      "canceled_from_phase": null,
+      "parent_event": null,
+      "turn_execution_id": "159dd954-2881-445c-98b1-401b21f14668",
+      "status_message": "Attack completed",
+      "outcome_code": null,
+      "outcome_source_entity_uuid": null,
+      "is_first": true,
+      "is_last": true,
+      "lineage_children_events": [
+        "b3e3ddb9-a810-4aaa-9488-fb2a8f6c963c",
+        "96223e39-0e68-4b1d-bbfe-59014696b281",
+        "dfc73390-708f-436d-810b-d744d33c0aec",
+        "a8ae6cd9-454b-4257-9f32-6b3f09c923d4",
+        "7570fd73-cc73-4a48-bd43-dc4edc3044e2",
+        "6cd8bc65-7e39-4c4b-933d-bf1319e1273e",
+        "545e677c-efe3-4fcb-b7c0-f02de6fa5a48",
+        "8887dfe4-2b6d-4f0d-a0f9-f2b80b4216ad",
+        "77a62610-70e1-4ea7-a9ee-1236b6dc609b",
+        "b6d6a4c7-74c0-40f2-8f93-996f8d549cad",
+        "6a2edaf5-b204-4f63-8198-0e10e5d2269d",
+        "29bcd78c-3059-4753-b661-0aa983f0c9c2",
+        "cc8d03f8-4a24-4559-9e21-38b718561efb",
+        "7adc7cb9-fdb0-4516-9347-75f75f22b0b4",
+        "c9c7b3ee-7ece-472a-a1d7-cb5c13a654dc",
+        "7c78c8d8-cf70-4a38-9dfd-87952ec2e2c7",
+        "47474214-d5c4-461c-a2ba-00d0443c019a",
+        "d8455ff1-801e-40ea-8659-17b5a58a8d19"
+      ],
+      "children_events": [
+        "b3e3ddb9-a810-4aaa-9488-fb2a8f6c963c",
+        "96223e39-0e68-4b1d-bbfe-59014696b281",
+        "dfc73390-708f-436d-810b-d744d33c0aec",
+        "a8ae6cd9-454b-4257-9f32-6b3f09c923d4",
+        "7570fd73-cc73-4a48-bd43-dc4edc3044e2",
+        "6cd8bc65-7e39-4c4b-933d-bf1319e1273e",
+        "545e677c-efe3-4fcb-b7c0-f02de6fa5a48",
+        "8887dfe4-2b6d-4f0d-a0f9-f2b80b4216ad",
+        "77a62610-70e1-4ea7-a9ee-1236b6dc609b",
+        "b6d6a4c7-74c0-40f2-8f93-996f8d549cad",
+        "6a2edaf5-b204-4f63-8198-0e10e5d2269d",
+        "29bcd78c-3059-4753-b661-0aa983f0c9c2",
+        "cc8d03f8-4a24-4559-9e21-38b718561efb",
+        "7adc7cb9-fdb0-4516-9347-75f75f22b0b4",
+        "c9c7b3ee-7ece-472a-a1d7-cb5c13a654dc",
+        "7c78c8d8-cf70-4a38-9dfd-87952ec2e2c7",
+        "47474214-d5c4-461c-a2ba-00d0443c019a",
+        "d8455ff1-801e-40ea-8659-17b5a58a8d19"
+      ],
+      "parent_lineage": null,
+      "children_lineages": [
+        "ed7ed26a-f577-4f8e-a206-af775323465f",
+        "7353ff37-fa2c-4235-8205-8511b2a473e3",
+        "f96ed78c-335e-4c4e-8f87-4d04ed273723",
+        "341bcb68-cad2-454b-8247-208a39466387",
+        "51775a17-9e64-4956-9a49-4778436423e9"
+      ],
+      "behavior_id": "action.attack",
+      "provided_by_id": "action.attack",
+      "origin_root_id": null,
+      "costs": [
+        {
+          "name": "Attack Cost",
+          "cost_type": "actions",
+          "cost": 1,
+          "resource_name": null,
+          "resource_cost": 0
+        }
+      ],
+      "source_item_uuid": "1f5e20f7-9e7b-419d-8277-68a5de48fd5d",
+      "source_item_presentation": {
+        "item_uuid": "1f5e20f7-9e7b-419d-8277-68a5de48fd5d",
+        "item_id": "weapon.longsword",
+        "name": "Longsword",
+        "description": "A versatile one-handed sword.",
+        "item_kind": "weapon",
+        "rarity": "common",
+        "weight": 0.0,
+        "value": 0,
+        "tags": [
+          "martial",
+          "melee",
+          "weapon"
+        ],
+        "is_pickable": true,
+        "is_equippable": true,
+        "is_usable": false,
+        "is_targetable": false,
+        "stack_id": null,
+        "visual_item_name": "Longsword",
+        "visual_variant_id": null,
+        "equipped_visual_policy": "visible",
+        "damage_dice": "1d8",
+        "damage_type": "Slashing",
+        "weapon_properties": [
+          "Versatile",
+          "Martial"
+        ],
+        "armor_type": null,
+        "armor_ac": null,
+        "shield_ac_bonus": null,
+        "charges": null,
+        "max_charges": null,
+        "stack_count": 1,
+        "max_stack": 1,
+        "is_consumable": false,
+        "map_char": "\u2020",
+        "include_in_senses_objects": true,
+        "include_in_adjacent_senses_objects": false,
+        "include_in_available_object_actions": true,
+        "current_hit_points": null,
+        "maximum_hit_points": null,
+        "boundary_structure": null,
+        "linked_spatial_condition_uuid": null,
+        "is_open": null,
+        "blocks_movement": false,
+        "blocks_optics": false,
+        "blocks_propagation": false,
+        "is_lit": null,
+        "very_bright_radius_feet": null,
+        "bright_radius_feet": null,
+        "dim_radius_feet": null
+      },
+      "item_charge_cost": 0,
+      "item_charge_action_lineage_uuid": null,
+      "presentation_kind": "default",
+      "declared_target_entity_uuids": [],
+      "application_index": null,
+      "application_id": null,
+      "description": "",
+      "total_targets": 0,
+      "total_damage": 13,
+      "aoe_position": null,
+      "weapon_slot": "MELEE_MAIN",
+      "range": {
+        "type": "Reach",
+        "normal": 5,
+        "long": null
+      },
+      "is_long_range": false,
+      "is_threatened": false,
+      "attack_bonus": null,
+      "ac": null,
+      "dice_roll": {
+        "roll_uuid": "9d215ed8-4859-49b8-8082-23aecdddaa7a",
+        "dice_uuid": "1428a69e-74d1-4756-8a56-b75efb6e5088",
+        "die_size": 20,
+        "effective_dice_count": 1,
+        "random_faces_rolled": 1,
+        "roll_type": "Attack",
+        "results": [
+          13
+        ],
+        "total": 20,
+        "bonus": 7,
+        "advantage_status": "None",
+        "critical_status": "None",
+        "auto_hit_status": "None",
+        "source_entity_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+        "target_entity_uuid": "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+        "attack_outcome": null
+      },
+      "attack_outcome": "Hit",
+      "damages": null,
+      "damage_rolls": [
+        {
+          "roll_uuid": "8be6e13c-da62-430b-89a1-7591b0a2e823",
+          "dice_uuid": "b266c7d0-9cb7-4157-b608-589adac11232",
+          "die_size": 8,
+          "effective_dice_count": 1,
+          "random_faces_rolled": 1,
+          "roll_type": "Damage",
+          "results": [
+            7
+          ],
+          "total": 13,
+          "bonus": 6,
+          "advantage_status": "None",
+          "critical_status": "None",
+          "auto_hit_status": "None",
+          "source_entity_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "target_entity_uuid": null,
+          "attack_outcome": "Hit"
+        }
+      ],
+      "weapon_name": "Longsword",
+      "override_ability": null,
+      "damage_types": [
+        "Slashing"
+      ],
+      "combat_log": {
+        "entry_type": "attack",
+        "source_name": "Shield Fighter",
+        "source_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+        "target_name": "Near target",
+        "target_uuid": "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+        "compact": "{cyan:Shield Fighter} {green:hits} {yellow:Near target} for {red:13} damage",
+        "verbose": "{cyan:Shield Fighter} \u2192 {yellow:Near target} (Longsword)\n  Attack: d20({cyan:13}) +7 = 20 vs AC 10 \u2192 {green:HIT}\n  Damage: 1d8({red:7}) +6 = {bold red:13} Slashing",
+        "detailed": "{cyan:Shield Fighter} \u2192 {yellow:Near target} (Longsword)\n  Attack: d20({cyan:13}) +7 [Prof +2, Character Total-Level Proficiency +1, Strength Ability +4] = 20 vs AC 10 [Unarmored Armor Class +10] \u2192 {green:HIT}\n  Damage: 1d8({red:7}) +6 [Strength Ability +4] = {bold red:13} Slashing",
+        "data": {
+          "attacker_name": "Shield Fighter",
+          "attacker_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "target_name": "Near target",
+          "target_uuid": "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+          "weapon_name": "Longsword",
+          "weapon_slot": "MELEE_MAIN",
+          "attack_roll": {
+            "dice_str": "d20",
+            "results": [
+              13
+            ],
+            "bonus": 7,
+            "total": 20,
+            "all_d20_rolls": [
+              13
+            ],
+            "d20_used": 13,
+            "advantage_status": "none"
+          },
+          "attack_breakdown": [
+            {
+              "name": "Prof",
+              "value": 2,
+              "source": "self"
+            },
+            {
+              "name": "Character Total-Level Proficiency",
+              "value": 1,
+              "source": "self"
+            },
+            {
+              "name": "Strength Ability",
+              "value": 4,
+              "source": "self"
+            }
+          ],
+          "target_ac": 10,
+          "ac_breakdown": [
+            {
+              "name": "Unarmored Armor Class",
+              "value": 10,
+              "source": "self"
+            }
+          ],
+          "outcome": "hit",
+          "is_hit": true,
+          "is_crit": false,
+          "damage_rolls": [
+            {
+              "dice_str": "1d8",
+              "dice_results": [
+                7
+              ],
+              "bonus": 6,
+              "total": 13,
+              "damage_type": "Slashing",
+              "bonus_breakdown": [
+                {
+                  "name": "Strength Ability",
+                  "value": 4,
+                  "source": "self"
+                }
+              ]
+            }
+          ],
+          "total_damage": 13,
+          "target_hp": 67,
+          "advantage_breakdown": [],
+          "is_opportunity_attack": false,
+          "is_long_range": false,
+          "is_threatened": false
+        },
+        "success": true,
+        "sub_entries": [
+          {
+            "entry_type": "damage_taken",
+            "source_name": "terrain",
+            "source_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+            "target_name": "Near target",
+            "target_uuid": "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+            "compact": "{yellow:Near target} takes {red:13} slashing",
+            "verbose": "{yellow:Near target} takes {red:13} slashing",
+            "detailed": "{yellow:Near target} takes {red:13} slashing\n  Rolls: [7]",
+            "data": {
+              "target_name": "Near target",
+              "damage": 13,
+              "damage_type": "slashing",
+              "source_name": "terrain"
+            },
+            "success": true,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          }
+        ],
+        "perceiver_uuids": [],
+        "revealed_entity_uuids": []
+      },
+      "identified_entity_observer_uuids": {
+        "3722ce13-28d3-4d1f-aa26-28a9c551e56d": [
+          "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+          "4099c36c-3a5f-4d44-bf3c-d31e1278cedb"
+        ],
+        "c9ec67be-e912-4029-a86f-5472c0fbbc36": [
+          "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+          "4099c36c-3a5f-4d44-bf3c-d31e1278cedb"
+        ]
+      },
+      "located_entity_observer_uuids": {
+        "3722ce13-28d3-4d1f-aa26-28a9c551e56d": [
+          "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+          "4099c36c-3a5f-4d44-bf3c-d31e1278cedb"
+        ],
+        "c9ec67be-e912-4029-a86f-5472c0fbbc36": [
+          "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+          "4099c36c-3a5f-4d44-bf3c-d31e1278cedb"
+        ]
+      },
+      "located_position_observer_uuids": {},
+      "effective_handler_presentations": []
+    }
+  },
+  {
+    "case": "equipment-melee-to-ranged",
+    "captured_at": "2026-09-11T17:30:55.106855+00:00",
+    "event": {
+      "wire_type": "dnd.actions.AttackEvent",
+      "name": "Extra Attack (Longbow)",
+      "uuid": "4eebb4e2-d4b0-47b3-b68d-f37835579dbd",
+      "source_entity_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+      "source_entity_name": "Shield Fighter",
+      "target_entity_uuid": "4099c36c-3a5f-4d44-bf3c-d31e1278cedb",
+      "target_entity_name": "Far target",
+      "context": null,
+      "use_register": false,
+      "lineage_uuid": "2203fe8b-98b0-4f8e-9dd4-5ceb3938f3e7",
+      "timestamp": "2026-09-11T17:34:54.976724Z",
+      "event_type": "attack",
+      "phase": "completion",
+      "modified": true,
+      "canceled": false,
+      "canceled_from_phase": null,
+      "parent_event": null,
+      "turn_execution_id": "159dd954-2881-445c-98b1-401b21f14668",
+      "status_message": "Attack completed",
+      "outcome_code": null,
+      "outcome_source_entity_uuid": null,
+      "is_first": true,
+      "is_last": true,
+      "lineage_children_events": [
+        "e027c007-c7f0-4ba3-bc20-519dc1d6b995",
+        "1a08091a-d939-4bfe-939e-9c1c72f2c38a",
+        "35de012d-e7d9-4842-a8e9-b90f186833b9",
+        "ec6bc8ff-22e0-40eb-895e-767e337516c3",
+        "2bfc5864-9727-4642-b01f-40c5a9cad77b",
+        "c4f5f7da-7cc0-4c5f-9060-7fd11655bab7",
+        "b63ecac5-30e0-4504-854c-d1a452008c95",
+        "8c75d869-73e7-4f02-af72-15070e628284",
+        "700e34cf-3312-46e0-b748-326d1ea7108d",
+        "ec86bdd3-d9cb-4847-ad28-81230dd084b0"
+      ],
+      "children_events": [
+        "e027c007-c7f0-4ba3-bc20-519dc1d6b995",
+        "1a08091a-d939-4bfe-939e-9c1c72f2c38a",
+        "35de012d-e7d9-4842-a8e9-b90f186833b9",
+        "ec6bc8ff-22e0-40eb-895e-767e337516c3",
+        "2bfc5864-9727-4642-b01f-40c5a9cad77b",
+        "c4f5f7da-7cc0-4c5f-9060-7fd11655bab7",
+        "b63ecac5-30e0-4504-854c-d1a452008c95",
+        "8c75d869-73e7-4f02-af72-15070e628284",
+        "700e34cf-3312-46e0-b748-326d1ea7108d",
+        "ec86bdd3-d9cb-4847-ad28-81230dd084b0"
+      ],
+      "parent_lineage": null,
+      "children_lineages": [
+        "3f5a6d77-4afe-4fd1-82dd-8ca993eaa55c",
+        "c4c6ef7d-2547-4e05-84d6-e28cba515b6e",
+        "61de6784-4fab-481b-ad2d-7d9a7f51306e"
+      ],
+      "behavior_id": "action.feature.extra_attack",
+      "provided_by_id": "class_feature.extra_attack",
+      "origin_root_id": "class.fighter",
+      "costs": [
+        {
+          "name": "Extra Attack",
+          "cost_type": "actions",
+          "cost": 0,
+          "resource_name": "extra_attacks",
+          "resource_cost": 1
+        }
+      ],
+      "source_item_uuid": "6ea3f25c-6b25-42e3-a343-4ab7458416bc",
+      "source_item_presentation": {
+        "item_uuid": "6ea3f25c-6b25-42e3-a343-4ab7458416bc",
+        "item_id": "weapon.longbow",
+        "name": "Longbow",
+        "description": "A tall bow capable of long-range shots.",
+        "item_kind": "weapon",
+        "rarity": "common",
+        "weight": 0.0,
+        "value": 0,
+        "tags": [
+          "heavy",
+          "martial",
+          "ranged",
+          "weapon"
+        ],
+        "is_pickable": true,
+        "is_equippable": true,
+        "is_usable": false,
+        "is_targetable": false,
+        "stack_id": null,
+        "visual_item_name": "Longbow",
+        "visual_variant_id": null,
+        "equipped_visual_policy": "visible",
+        "damage_dice": "1d8",
+        "damage_type": "Piercing",
+        "weapon_properties": [
+          "Ranged",
+          "Two-Handed",
+          "Heavy",
+          "Martial"
+        ],
+        "armor_type": null,
+        "armor_ac": null,
+        "shield_ac_bonus": null,
+        "charges": null,
+        "max_charges": null,
+        "stack_count": 1,
+        "max_stack": 1,
+        "is_consumable": false,
+        "map_char": "\u2020",
+        "include_in_senses_objects": true,
+        "include_in_adjacent_senses_objects": false,
+        "include_in_available_object_actions": true,
+        "current_hit_points": null,
+        "maximum_hit_points": null,
+        "boundary_structure": null,
+        "linked_spatial_condition_uuid": null,
+        "is_open": null,
+        "blocks_movement": false,
+        "blocks_optics": false,
+        "blocks_propagation": false,
+        "is_lit": null,
+        "very_bright_radius_feet": null,
+        "bright_radius_feet": null,
+        "dim_radius_feet": null
+      },
+      "item_charge_cost": 0,
+      "item_charge_action_lineage_uuid": null,
+      "presentation_kind": "default",
+      "declared_target_entity_uuids": [],
+      "application_index": null,
+      "application_id": null,
+      "description": "",
+      "total_targets": 0,
+      "total_damage": 3,
+      "aoe_position": null,
+      "weapon_slot": "RANGED_MAIN",
+      "range": {
+        "type": "Range",
+        "normal": 150,
+        "long": 600
+      },
+      "is_long_range": false,
+      "is_threatened": true,
+      "attack_bonus": null,
+      "ac": null,
+      "dice_roll": {
+        "roll_uuid": "9e6827dd-39fd-418b-a72e-1cc0260e27d1",
+        "dice_uuid": "0da5ab5e-f7df-4698-b707-6c1366d8ab58",
+        "die_size": 20,
+        "effective_dice_count": 1,
+        "random_faces_rolled": 2,
+        "roll_type": "Attack",
+        "results": [
+          13,
+          14
+        ],
+        "total": 18,
+        "bonus": 5,
+        "advantage_status": "Disadvantage",
+        "critical_status": "None",
+        "auto_hit_status": "None",
+        "source_entity_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+        "target_entity_uuid": "4099c36c-3a5f-4d44-bf3c-d31e1278cedb",
+        "attack_outcome": null
+      },
+      "attack_outcome": "Hit",
+      "damages": null,
+      "damage_rolls": [
+        {
+          "roll_uuid": "0e5a7b26-c806-4c99-b72d-850fe75af899",
+          "dice_uuid": "2e76253e-149a-46a0-89aa-3227d4d44738",
+          "die_size": 8,
+          "effective_dice_count": 1,
+          "random_faces_rolled": 1,
+          "roll_type": "Damage",
+          "results": [
+            1
+          ],
+          "total": 3,
+          "bonus": 2,
+          "advantage_status": "None",
+          "critical_status": "None",
+          "auto_hit_status": "None",
+          "source_entity_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "target_entity_uuid": null,
+          "attack_outcome": "Hit"
+        }
+      ],
+      "weapon_name": "Longbow",
+      "override_ability": null,
+      "damage_types": [
+        "Piercing"
+      ],
+      "combat_log": {
+        "entry_type": "attack",
+        "source_name": "Shield Fighter",
+        "source_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+        "target_name": "Far target",
+        "target_uuid": "4099c36c-3a5f-4d44-bf3c-d31e1278cedb",
+        "compact": "{cyan:Shield Fighter} {green:hits} {yellow:Far target} for {red:3} damage",
+        "verbose": "{cyan:Shield Fighter} \u2192 {yellow:Far target} (Longbow) {red:DIS}\n  Attack: DIS d20(13,14\u2192{red:13}) +5 = 18 vs AC 10 \u2192 {green:HIT}\n  Damage: 1d8({red:1}) +2 = {bold red:3} Piercing",
+        "detailed": "{cyan:Shield Fighter} \u2192 {yellow:Far target} (Longbow) {red:DIS}\n  Attack: DIS d20(13,14\u2192{red:13}) +5 [Prof +2, Character Total-Level Proficiency +1, Dexterity Ability +2] = 18 vs AC 10 [Unarmored Armor Class +10] \u2192 {green:HIT}\n  Damage: 1d8({red:1}) +2 [Dexterity Ability +2] = {bold red:3} Piercing",
+        "data": {
+          "attacker_name": "Shield Fighter",
+          "attacker_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "target_name": "Far target",
+          "target_uuid": "4099c36c-3a5f-4d44-bf3c-d31e1278cedb",
+          "weapon_name": "Longbow",
+          "weapon_slot": "RANGED_MAIN",
+          "attack_roll": {
+            "dice_str": "d20",
+            "results": [
+              13,
+              14
+            ],
+            "bonus": 5,
+            "total": 18,
+            "all_d20_rolls": [
+              13,
+              14
+            ],
+            "d20_used": 13,
+            "advantage_status": "disadvantage"
+          },
+          "attack_breakdown": [
+            {
+              "name": "Prof",
+              "value": 2,
+              "source": "self"
+            },
+            {
+              "name": "Character Total-Level Proficiency",
+              "value": 1,
+              "source": "self"
+            },
+            {
+              "name": "Dexterity Ability",
+              "value": 2,
+              "source": "self"
+            }
+          ],
+          "target_ac": 10,
+          "ac_breakdown": [
+            {
+              "name": "Unarmored Armor Class",
+              "value": 10,
+              "source": "self"
+            }
+          ],
+          "outcome": "hit",
+          "is_hit": true,
+          "is_crit": false,
+          "damage_rolls": [
+            {
+              "dice_str": "1d8",
+              "dice_results": [
+                1
+              ],
+              "bonus": 2,
+              "total": 3,
+              "damage_type": "Piercing",
+              "bonus_breakdown": [
+                {
+                  "name": "Dexterity Ability",
+                  "value": 2,
+                  "source": "self"
+                }
+              ]
+            }
+          ],
+          "total_damage": 3,
+          "target_hp": 77,
+          "advantage_breakdown": [
+            {
+              "name": "Threatened (Ranged)",
+              "value": -1,
+              "source": "self"
+            }
+          ],
+          "is_opportunity_attack": false,
+          "is_long_range": false,
+          "is_threatened": true
+        },
+        "success": true,
+        "sub_entries": [
+          {
+            "entry_type": "damage_taken",
+            "source_name": "terrain",
+            "source_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+            "target_name": "Far target",
+            "target_uuid": "4099c36c-3a5f-4d44-bf3c-d31e1278cedb",
+            "compact": "{yellow:Far target} takes {red:3} piercing",
+            "verbose": "{yellow:Far target} takes {red:3} piercing",
+            "detailed": "{yellow:Far target} takes {red:3} piercing\n  Rolls: [1]",
+            "data": {
+              "target_name": "Far target",
+              "damage": 3,
+              "damage_type": "piercing",
+              "source_name": "terrain"
+            },
+            "success": true,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          }
+        ],
+        "perceiver_uuids": [],
+        "revealed_entity_uuids": []
+      },
+      "identified_entity_observer_uuids": {
+        "3722ce13-28d3-4d1f-aa26-28a9c551e56d": [
+          "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+          "4099c36c-3a5f-4d44-bf3c-d31e1278cedb"
+        ],
+        "4099c36c-3a5f-4d44-bf3c-d31e1278cedb": [
+          "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+          "4099c36c-3a5f-4d44-bf3c-d31e1278cedb"
+        ]
+      },
+      "located_entity_observer_uuids": {
+        "3722ce13-28d3-4d1f-aa26-28a9c551e56d": [
+          "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+          "4099c36c-3a5f-4d44-bf3c-d31e1278cedb"
+        ],
+        "4099c36c-3a5f-4d44-bf3c-d31e1278cedb": [
+          "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
+          "c9ec67be-e912-4029-a86f-5472c0fbbc36",
+          "4099c36c-3a5f-4d44-bf3c-d31e1278cedb"
+        ]
+      },
+      "located_position_observer_uuids": {},
+      "effective_handler_presentations": []
+    }
+  },
+  {
+    "case": "walk-killed",
+    "captured_at": "2026-09-11T17:49:04.097054+00:00",
+    "event": {
+      "wire_type": "dnd.actions.AttackEvent",
+      "name": "Opportunity Attack",
+      "uuid": "76006c7b-7e9e-435d-8c49-7f1d85cd4409",
+      "source_entity_uuid": "5148a323-3a79-4588-8b0c-a45708b04744",
+      "source_entity_name": "Sword wielder",
+      "target_entity_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
+      "target_entity_name": "Mover",
+      "context": null,
+      "use_register": false,
+      "lineage_uuid": "920985fb-ebbb-4e05-9721-dab50daa318b",
+      "timestamp": "2026-09-11T17:49:48.580835Z",
+      "event_type": "attack",
+      "phase": "completion",
+      "modified": true,
+      "canceled": false,
+      "canceled_from_phase": null,
+      "parent_event": "4364ac6a-d0a7-4cd2-b3df-158bbf332f1b",
+      "turn_execution_id": "3fb7e03a-c38d-471b-b6bc-8f3d1335f3e5",
+      "status_message": "Attack completed",
+      "outcome_code": null,
+      "outcome_source_entity_uuid": null,
+      "is_first": true,
+      "is_last": true,
+      "lineage_children_events": [
+        "f550bf20-e465-443b-a1fb-1c58e08bd719",
+        "111c20cd-5131-40f7-a43c-0fbd59375301",
+        "29ca806b-35ea-4463-9061-b3a96722d50a",
+        "c97c4e00-e3c4-4efa-88ef-44be9406e01b",
+        "0ff941ec-7315-4d5f-8f8a-37bd811f639f",
+        "83c94c1c-b37d-4184-b395-e2bb7a0f8b57",
+        "cdcf9d4d-2539-4f94-9388-d861c3fa602c",
+        "bc8733a9-ad32-47ba-9573-cf2fd67cc682",
+        "f2b61ba9-bbb4-467a-8cf4-a65588c0dece",
+        "06f388a4-55ba-44da-96d2-76ef13bfe28f",
+        "3eeeb25a-c795-494f-bd9c-4d06e2875028",
+        "a4189bca-7e33-4b18-9763-b8a33eb8f0d6",
+        "b0e9204a-d087-47b5-9be8-885f5ebd6f3a",
+        "33b82462-e7a3-4597-810a-2026a132c2a0",
+        "a3ef0bd4-8da7-4796-9c7d-c2bf7a8f87ee",
+        "9396391d-a1e4-4931-a2ed-5dc0d0c2578b",
+        "ce8340ba-d682-4aff-9809-43e7572ac1f3",
+        "bb5e7847-d7dc-4078-a48d-8c00b95a6a72"
+      ],
+      "children_events": [
+        "f550bf20-e465-443b-a1fb-1c58e08bd719",
+        "111c20cd-5131-40f7-a43c-0fbd59375301",
+        "29ca806b-35ea-4463-9061-b3a96722d50a",
+        "c97c4e00-e3c4-4efa-88ef-44be9406e01b",
+        "0ff941ec-7315-4d5f-8f8a-37bd811f639f",
+        "83c94c1c-b37d-4184-b395-e2bb7a0f8b57",
+        "cdcf9d4d-2539-4f94-9388-d861c3fa602c",
+        "bc8733a9-ad32-47ba-9573-cf2fd67cc682",
+        "f2b61ba9-bbb4-467a-8cf4-a65588c0dece",
+        "06f388a4-55ba-44da-96d2-76ef13bfe28f",
+        "3eeeb25a-c795-494f-bd9c-4d06e2875028",
+        "a4189bca-7e33-4b18-9763-b8a33eb8f0d6",
+        "b0e9204a-d087-47b5-9be8-885f5ebd6f3a",
+        "33b82462-e7a3-4597-810a-2026a132c2a0",
+        "a3ef0bd4-8da7-4796-9c7d-c2bf7a8f87ee",
+        "9396391d-a1e4-4931-a2ed-5dc0d0c2578b",
+        "ce8340ba-d682-4aff-9809-43e7572ac1f3",
+        "bb5e7847-d7dc-4078-a48d-8c00b95a6a72"
+      ],
+      "parent_lineage": "828962fc-7e57-45f2-bc8a-6fc3e213782e",
+      "children_lineages": [
+        "0537251c-ccf5-4c08-a079-35f2d45ce0d3",
+        "88a52f0c-4dcb-49df-b279-15d05901f59f",
+        "d3fe08f9-ae13-4884-b128-1da7db0c0701",
+        "d47d1968-af20-4382-bf21-c4fbf3d354ef",
+        "c69234ba-2d50-4a22-8b22-5f61358a3172"
+      ],
+      "behavior_id": "reaction.opportunity_attack",
+      "provided_by_id": "reaction.opportunity_attack",
+      "origin_root_id": null,
+      "costs": [
+        {
+          "name": "Opportunity Attack Cost",
+          "cost_type": "reactions",
+          "cost": 1,
+          "resource_name": null,
+          "resource_cost": 0
+        }
+      ],
+      "source_item_uuid": "5bf06dfe-7fb9-441b-b265-1478336af124",
+      "source_item_presentation": {
+        "item_uuid": "5bf06dfe-7fb9-441b-b265-1478336af124",
+        "item_id": "weapon.longsword",
+        "name": "Longsword",
+        "description": "A versatile one-handed sword.",
+        "item_kind": "weapon",
+        "rarity": "common",
+        "weight": 0.0,
+        "value": 0,
+        "tags": [
+          "martial",
+          "melee",
+          "weapon"
+        ],
+        "is_pickable": true,
+        "is_equippable": true,
+        "is_usable": false,
+        "is_targetable": false,
+        "stack_id": null,
+        "visual_item_name": "Longsword",
+        "visual_variant_id": null,
+        "equipped_visual_policy": "visible",
+        "damage_dice": "1d8",
+        "damage_type": "Slashing",
+        "weapon_properties": [
+          "Versatile",
+          "Martial"
+        ],
+        "armor_type": null,
+        "armor_ac": null,
+        "shield_ac_bonus": null,
+        "charges": null,
+        "max_charges": null,
+        "stack_count": 1,
+        "max_stack": 1,
+        "is_consumable": false,
+        "map_char": "\u2020",
+        "include_in_senses_objects": true,
+        "include_in_adjacent_senses_objects": false,
+        "include_in_available_object_actions": true,
+        "current_hit_points": null,
+        "maximum_hit_points": null,
+        "boundary_structure": null,
+        "linked_spatial_condition_uuid": null,
+        "is_open": null,
+        "blocks_movement": false,
+        "blocks_optics": false,
+        "blocks_propagation": false,
+        "is_lit": null,
+        "very_bright_radius_feet": null,
+        "bright_radius_feet": null,
+        "dim_radius_feet": null
+      },
+      "item_charge_cost": 0,
+      "item_charge_action_lineage_uuid": null,
+      "presentation_kind": "default",
+      "declared_target_entity_uuids": [],
+      "application_index": null,
+      "application_id": null,
+      "description": "",
+      "total_targets": 0,
+      "total_damage": 11,
+      "aoe_position": null,
+      "weapon_slot": "MELEE_MAIN",
+      "range": {
+        "type": "Reach",
+        "normal": 5,
+        "long": null
+      },
+      "is_long_range": false,
+      "is_threatened": false,
+      "attack_bonus": null,
+      "ac": null,
+      "dice_roll": {
+        "roll_uuid": "e78835f3-91d0-4166-8027-80de269a69f5",
+        "dice_uuid": "a1ff4311-97c3-41a6-adb3-414d05a37d82",
+        "die_size": 20,
+        "effective_dice_count": 1,
+        "random_faces_rolled": 1,
+        "roll_type": "Attack",
+        "results": [
+          20
+        ],
+        "total": 20,
+        "bonus": 0,
+        "advantage_status": "None",
+        "critical_status": "None",
+        "auto_hit_status": "None",
+        "source_entity_uuid": "5148a323-3a79-4588-8b0c-a45708b04744",
+        "target_entity_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
+        "attack_outcome": null
+      },
+      "attack_outcome": "Crit",
+      "damages": null,
+      "damage_rolls": [
+        {
+          "roll_uuid": "00abf3bc-a840-4468-a517-ef2e1b469267",
+          "dice_uuid": "0504c0a0-b586-4b61-9ab1-1768732be248",
+          "die_size": 8,
+          "effective_dice_count": 2,
+          "random_faces_rolled": 2,
+          "roll_type": "Damage",
+          "results": [
+            5,
+            6
+          ],
+          "total": 11,
+          "bonus": 0,
+          "advantage_status": "None",
+          "critical_status": "None",
+          "auto_hit_status": "None",
+          "source_entity_uuid": "5148a323-3a79-4588-8b0c-a45708b04744",
+          "target_entity_uuid": null,
+          "attack_outcome": "Crit"
+        }
+      ],
+      "weapon_name": "Longsword",
+      "override_ability": null,
+      "damage_types": [
+        "Slashing"
+      ],
+      "combat_log": {
+        "entry_type": "attack",
+        "source_name": "Sword wielder",
+        "source_uuid": "5148a323-3a79-4588-8b0c-a45708b04744",
+        "target_name": "Mover",
+        "target_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
+        "compact": "{cyan:Sword wielder} {bold yellow:CRITS} {yellow:Mover} for {bold red:11} damage!",
+        "verbose": "{cyan:Sword wielder} \u2192 {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 \u2192 {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
+        "detailed": "{cyan:Sword wielder} \u2192 {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 [Unarmored Armor Class +10] \u2192 {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
+        "data": {
+          "attacker_name": "Sword wielder",
+          "attacker_uuid": "5148a323-3a79-4588-8b0c-a45708b04744",
+          "target_name": "Mover",
+          "target_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
+          "weapon_name": "Longsword",
+          "weapon_slot": "MELEE_MAIN",
+          "attack_roll": {
+            "dice_str": "d20",
+            "results": [
+              20
+            ],
+            "bonus": 0,
+            "total": 20,
+            "all_d20_rolls": [
+              20
+            ],
+            "d20_used": 20,
+            "advantage_status": "none"
+          },
+          "attack_breakdown": [],
+          "target_ac": 10,
+          "ac_breakdown": [
+            {
+              "name": "Unarmored Armor Class",
+              "value": 10,
+              "source": "self"
+            }
+          ],
+          "outcome": "crit",
+          "is_hit": true,
+          "is_crit": true,
+          "damage_rolls": [
+            {
+              "dice_str": "2d8",
+              "dice_results": [
+                5,
+                6
+              ],
+              "bonus": 0,
+              "total": 11,
+              "damage_type": "Slashing",
+              "bonus_breakdown": []
+            }
+          ],
+          "total_damage": 11,
+          "target_hp": -7,
+          "advantage_breakdown": [],
+          "is_opportunity_attack": true,
+          "is_long_range": false,
+          "is_threatened": false
+        },
+        "success": true,
+        "sub_entries": [
+          {
+            "entry_type": "damage_taken",
+            "source_name": "terrain",
+            "source_uuid": "5148a323-3a79-4588-8b0c-a45708b04744",
+            "target_name": "Mover",
+            "target_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
+            "compact": "{yellow:Mover} takes {red:11} slashing",
+            "verbose": "{yellow:Mover} takes {red:11} slashing",
+            "detailed": "{yellow:Mover} takes {red:11} slashing\n  Rolls: Unknown position",
+            "data": {
+              "target_name": "Mover",
+              "damage": 11,
+              "damage_type": "slashing",
+              "source_name": "terrain"
+            },
+            "success": true,
+            "sub_entries": [
+              {
+                "entry_type": "death",
+                "source_name": "Mover",
+                "source_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
+                "target_name": null,
+                "target_uuid": null,
+                "compact": "\u2620 {bold red:Mover} has been defeated!",
+                "verbose": "\u2620 {bold red:Mover} has been defeated!",
+                "detailed": "\u2620 {bold red:Mover} has been defeated!\n  Dropped to -7 HP\n  Killed by: {cyan:Sword wielder}",
+                "data": {
+                  "entity_name": "Mover",
+                  "final_hp": -7
+                },
+                "success": true,
+                "sub_entries": [],
+                "perceiver_uuids": [],
+                "revealed_entity_uuids": []
+              }
+            ],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          {
+            "entry_type": "saving_throw",
+            "source_name": "Sword wielder",
+            "source_uuid": "5148a323-3a79-4588-8b0c-a45708b04744",
+            "target_name": "Mover",
+            "target_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
+            "compact": "{cyan:Mover} {green:succeeds} {yellow:CON} save (DC 10)",
+            "verbose": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 \u2192 {green:succeeds}",
+            "detailed": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 \u2192 {green:succeeds}",
+            "data": {
+              "entity_name": "Mover",
+              "entity_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
+              "ability": "constitution",
+              "dc": 10,
+              "roll": {
+                "dice_str": "d20",
+                "results": [
+                  17
+                ],
+                "bonus": 0,
+                "total": 17,
+                "all_d20_rolls": [
+                  17
+                ],
+                "d20_used": 17,
+                "advantage_status": "none"
+              },
+              "bonus_breakdown": [],
+              "advantage_breakdown": [],
+              "success": true,
+              "source_name": "Sword wielder"
+            },
+            "success": true,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          }
+        ],
+        "perceiver_uuids": [],
+        "revealed_entity_uuids": []
+      },
+      "identified_entity_observer_uuids": {
+        "5148a323-3a79-4588-8b0c-a45708b04744": [
+          "6694daa9-892c-4c36-9930-0ea65c56b1f1",
+          "5148a323-3a79-4588-8b0c-a45708b04744"
+        ],
+        "6694daa9-892c-4c36-9930-0ea65c56b1f1": [
+          "6694daa9-892c-4c36-9930-0ea65c56b1f1",
+          "5148a323-3a79-4588-8b0c-a45708b04744"
+        ]
+      },
+      "located_entity_observer_uuids": {
+        "5148a323-3a79-4588-8b0c-a45708b04744": [
+          "5148a323-3a79-4588-8b0c-a45708b04744"
+        ],
+        "6694daa9-892c-4c36-9930-0ea65c56b1f1": [
+          "6694daa9-892c-4c36-9930-0ea65c56b1f1"
+        ]
+      },
+      "located_position_observer_uuids": {},
+      "effective_handler_presentations": []
+    }
+  },
+  {
+    "case": "jump-killed",
+    "captured_at": "2026-09-11T17:49:04.097054+00:00",
+    "event": {
+      "wire_type": "dnd.actions.JumpEvent",
+      "name": "Jump",
+      "uuid": "9451bcf6-7b19-443a-9807-352dd207be21",
+      "source_entity_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
+      "source_entity_name": "Mover",
+      "target_entity_uuid": null,
+      "target_entity_name": null,
+      "context": null,
+      "use_register": false,
+      "lineage_uuid": "8fc5f3cd-b628-4130-8c6e-3ceac8108b9b",
+      "timestamp": "2026-09-11T17:50:38.636545Z",
+      "event_type": "movement",
+      "phase": "completion",
+      "modified": true,
+      "canceled": false,
+      "canceled_from_phase": null,
+      "parent_event": null,
+      "turn_execution_id": "f6dc6631-422c-49da-892a-9fd422e28f68",
+      "status_message": "Partial jump, stopped at (3, 3)",
+      "outcome_code": null,
+      "outcome_source_entity_uuid": null,
+      "is_first": true,
+      "is_last": true,
+      "lineage_children_events": [
+        "7a6ab9bb-1d3e-4911-a47b-996e8564aa8e",
+        "9395fa6f-8b64-41f2-99ab-1cacb42f59e3"
+      ],
+      "children_events": [
+        "7a6ab9bb-1d3e-4911-a47b-996e8564aa8e",
+        "9395fa6f-8b64-41f2-99ab-1cacb42f59e3"
+      ],
+      "parent_lineage": null,
+      "children_lineages": [
+        "8bbafeb3-63c7-43f2-84d5-abbb035039ab"
+      ],
+      "behavior_id": "action.jump",
+      "provided_by_id": "action.jump",
+      "origin_root_id": null,
+      "costs": [
+        {
+          "name": "Jump Cost",
+          "cost_type": "bonus_actions",
+          "cost": 1,
+          "resource_name": null,
+          "resource_cost": 0
+        },
+        {
+          "name": "Jump Movement Cost",
+          "cost_type": "movement",
+          "cost": 5,
+          "resource_name": null,
+          "resource_cost": 0
+        }
+      ],
+      "source_item_uuid": null,
+      "source_item_presentation": null,
+      "item_charge_cost": 0,
+      "item_charge_action_lineage_uuid": null,
+      "presentation_kind": "default",
+      "declared_target_entity_uuids": [],
+      "application_index": null,
+      "application_id": null,
+      "description": "",
+      "total_targets": 0,
+      "total_damage": 0,
+      "aoe_position": null,
+      "start_position": [
+        3,
+        3
+      ],
+      "end_position": [
+        3,
+        3
+      ],
+      "requested_end_position": [
+        2,
+        3
+      ],
+      "objective_end_position": [
+        3,
+        3
+      ],
+      "start_elevation_feet": 0,
+      "requested_end_elevation_feet": 0,
+      "end_elevation_feet": 0,
+      "jump_distance": 0,
+      "path": [
+        [
+          3,
+          3
+        ]
+      ],
+      "trajectory": "direct_arc",
+      "combat_log": {
+        "entry_type": "movement",
+        "source_name": "Mover",
+        "source_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
+        "target_name": null,
+        "target_uuid": null,
+        "compact": "{cyan:Mover} moves outside current perception",
+        "verbose": "{cyan:Mover} moves outside current perception",
+        "detailed": "{cyan:Mover} moves outside current perception",
+        "data": {
+          "entity_name": "Mover",
+          "entity_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
+          "movement_type": "jump",
+          "type": "movement",
+          "observation_complete": false,
+          "observed_path_segments": [],
+          "observed_distance_feet": 0.0
+        },
+        "success": true,
+        "sub_entries": [
+          {
+            "entry_type": "attack",
+            "source_name": "Sword wielder",
+            "source_uuid": "fe456f5d-f628-4389-bd7e-f7c1953a1f95",
+            "target_name": "Mover",
+            "target_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
+            "compact": "{cyan:Sword wielder} {bold yellow:CRITS} {yellow:Mover} for {bold red:11} damage!",
+            "verbose": "{cyan:Sword wielder} \u2192 {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 \u2192 {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
+            "detailed": "{cyan:Sword wielder} \u2192 {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 [Unarmored Armor Class +10] \u2192 {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
+            "data": {
+              "attacker_name": "Sword wielder",
+              "attacker_uuid": "fe456f5d-f628-4389-bd7e-f7c1953a1f95",
+              "target_name": "Mover",
+              "target_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
+              "weapon_name": "Longsword",
+              "weapon_slot": "MELEE_MAIN",
+              "attack_roll": {
+                "dice_str": "d20",
+                "results": [
+                  20
+                ],
+                "bonus": 0,
+                "total": 20,
+                "all_d20_rolls": [
+                  20
+                ],
+                "d20_used": 20,
+                "advantage_status": "none"
+              },
+              "attack_breakdown": [],
+              "target_ac": 10,
+              "ac_breakdown": [
+                {
+                  "name": "Unarmored Armor Class",
+                  "value": 10,
+                  "source": "self"
+                }
+              ],
+              "outcome": "crit",
+              "is_hit": true,
+              "is_crit": true,
+              "damage_rolls": [
+                {
+                  "dice_str": "2d8",
+                  "dice_results": [
+                    5,
+                    6
+                  ],
+                  "bonus": 0,
+                  "total": 11,
+                  "damage_type": "Slashing",
+                  "bonus_breakdown": []
+                }
+              ],
+              "total_damage": 11,
+              "target_hp": -7,
+              "advantage_breakdown": [],
+              "is_opportunity_attack": true,
+              "is_long_range": false,
+              "is_threatened": false
+            },
+            "success": true,
+            "sub_entries": [
+              {
+                "entry_type": "damage_taken",
+                "source_name": "terrain",
+                "source_uuid": "fe456f5d-f628-4389-bd7e-f7c1953a1f95",
+                "target_name": "Mover",
+                "target_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
+                "compact": "{yellow:Mover} takes {red:11} slashing",
+                "verbose": "{yellow:Mover} takes {red:11} slashing",
+                "detailed": "{yellow:Mover} takes {red:11} slashing\n  Rolls: Unknown position",
+                "data": {
+                  "target_name": "Mover",
+                  "damage": 11,
+                  "damage_type": "slashing",
+                  "source_name": "terrain"
+                },
+                "success": true,
+                "sub_entries": [
+                  {
+                    "entry_type": "death",
+                    "source_name": "Mover",
+                    "source_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
+                    "target_name": null,
+                    "target_uuid": null,
+                    "compact": "\u2620 {bold red:Mover} has been defeated!",
+                    "verbose": "\u2620 {bold red:Mover} has been defeated!",
+                    "detailed": "\u2620 {bold red:Mover} has been defeated!\n  Dropped to -7 HP\n  Killed by: {cyan:Sword wielder}",
+                    "data": {
+                      "entity_name": "Mover",
+                      "final_hp": -7
+                    },
+                    "success": true,
+                    "sub_entries": [],
+                    "perceiver_uuids": [],
+                    "revealed_entity_uuids": []
+                  }
+                ],
+                "perceiver_uuids": [],
+                "revealed_entity_uuids": []
+              },
+              {
+                "entry_type": "saving_throw",
+                "source_name": "Sword wielder",
+                "source_uuid": "fe456f5d-f628-4389-bd7e-f7c1953a1f95",
+                "target_name": "Mover",
+                "target_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
+                "compact": "{cyan:Mover} {green:succeeds} {yellow:CON} save (DC 10)",
+                "verbose": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 \u2192 {green:succeeds}",
+                "detailed": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 \u2192 {green:succeeds}",
+                "data": {
+                  "entity_name": "Mover",
+                  "entity_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
+                  "ability": "constitution",
+                  "dc": 10,
+                  "roll": {
+                    "dice_str": "d20",
+                    "results": [
+                      17
+                    ],
+                    "bonus": 0,
+                    "total": 17,
+                    "all_d20_rolls": [
+                      17
+                    ],
+                    "d20_used": 17,
+                    "advantage_status": "none"
+                  },
+                  "bonus_breakdown": [],
+                  "advantage_breakdown": [],
+                  "success": true,
+                  "source_name": "Sword wielder"
+                },
+                "success": true,
+                "sub_entries": [],
+                "perceiver_uuids": [],
+                "revealed_entity_uuids": []
+              }
+            ],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          }
+        ],
+        "perceiver_uuids": [],
+        "revealed_entity_uuids": []
+      },
+      "identified_entity_observer_uuids": {
+        "f358de18-b855-4631-b96c-4ffb4b109ef1": [
+          "fe456f5d-f628-4389-bd7e-f7c1953a1f95",
+          "f358de18-b855-4631-b96c-4ffb4b109ef1"
+        ]
+      },
+      "located_entity_observer_uuids": {
+        "f358de18-b855-4631-b96c-4ffb4b109ef1": [
+          "f358de18-b855-4631-b96c-4ffb4b109ef1"
+        ]
+      },
+      "located_position_observer_uuids": {},
+      "effective_handler_presentations": []
+    }
+  }
+]

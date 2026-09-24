@@ -1,5 +1,6 @@
 """Pygame pixels for the original per-slot Pixi condition body filter."""
 
+from pathlib import Path
 from typing import Mapping, Sequence, cast
 
 import numpy as np
@@ -26,12 +27,16 @@ CONDITION_BODY_SLOTS = frozenset((
 def load_condition_layers(layers: Sequence[ResolvedConditionLayer],
                           rows: dict[tuple[str, str, str, int], pygame.Surface]) -> None:
     """Preload selected attachments into the existing session's immutable rows."""
+    pages: dict[Path, pygame.Surface] = {}
     for resolved in layers:
         layer = resolved.layer
         for facing, spec in resolved.media.images_by_facing.items():
             key = ("condition", layer.assetId, facing, 0)
             if key not in rows:
-                rows[key] = pygame.image.load(spec.path).convert_alpha()
+                page = pages.get(spec.path)
+                if page is None:
+                    page = pages[spec.path] = pygame.image.load(spec.path).convert_alpha()
+                rows[key] = page if spec.rect is None else page.subsurface(spec.rect)
 
 
 def compose_condition_layers(body: pygame.Surface, destination: tuple[int, int],

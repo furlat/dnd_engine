@@ -2,20 +2,85 @@
 
 from dataclasses import dataclass
 from functools import lru_cache
-import json
 from pathlib import Path
 from types import MappingProxyType
-from typing import Literal, Mapping
+from typing import Annotated, Literal, Mapping
+
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, PositiveFloat, PositiveInt, NonNegativeInt, model_validator
 
 DeviceFacing = Literal["E", "SE", "S", "SW", "W", "NW", "N", "NE"]
+
+
+class _DeviceSource(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+
+class DevicePitchSource(_DeviceSource):
+    pitchDegrees: FiniteFloat
+    sheets: Annotated[tuple[str, ...], Field(min_length=4, max_length=4)]
+    muzzlePixels: Annotated[
+        tuple[tuple[tuple[tuple[FiniteFloat, FiniteFloat], ...], ...], ...],
+        Field(min_length=4, max_length=4)]
+    forwardScreen: Annotated[tuple[tuple[tuple[FiniteFloat, FiniteFloat], ...], ...],
+                             Field(min_length=4, max_length=4)]
+    muzzleHeightStepsByRow: tuple[FiniteFloat, ...]
+
+
+class DeviceDestructionPitchSource(_DeviceSource):
+    pitchDegrees: FiniteFloat
+    sheets: Annotated[tuple[str, ...], Field(min_length=4, max_length=4)]
+
+
+class DeviceDestructionSource(_DeviceSource):
+    fps: PositiveFloat
+    frameCount: PositiveInt
+    pitchBanks: Annotated[tuple[DeviceDestructionPitchSource, ...], Field(min_length=1)]
+    wreckItemId: str
+    wreckSheets: Annotated[tuple[str, ...], Field(min_length=4, max_length=4)]
+
+
+class DeviceArtSource(_DeviceSource):
+    cell: tuple[PositiveInt, PositiveInt]
+    anchor: tuple[FiniteFloat, FiniteFloat]
+    rows: Annotated[tuple[DeviceFacing, ...], Field(min_length=1)]
+    fps: PositiveFloat
+    releaseFrame: NonNegativeInt
+    frameCount: PositiveInt
+    scale: PositiveFloat
+    operatorRecipe: str
+    launchPitchDegrees: FiniteFloat
+    controlDistanceFraction: Annotated[float, Field(gt=0, le=1)]
+    pitchBanks: Annotated[tuple[DevicePitchSource, ...], Field(min_length=1)]
+    destruction: DeviceDestructionSource | None = None
+
+    @model_validator(mode="after")
+    def frame_contacts(self) -> "DeviceArtSource":
+        if self.releaseFrame >= self.frameCount:
+            raise ValueError("releaseFrame must index the device frames")
+        for bank in self.pitchBanks:
+            if len(bank.muzzleHeightStepsByRow) != len(self.rows):
+                raise ValueError("muzzle heights must match facing rows")
+            for camera, vectors in zip(bank.muzzlePixels, bank.forwardScreen):
+                if len(camera) != len(self.rows) or len(vectors) != len(self.rows):
+                    raise ValueError("muzzle and forward contacts must match facing rows")
+                if any(len(frames) != self.frameCount for frames in camera):
+                    raise ValueError("muzzle contacts must match the device frames")
+        return self
+
+
+class DeviceDocument(_DeviceSource):
+    schema_name: Literal["dnd.spellDevices"] = Field(alias="schema")
+    version: Literal[1]
+    bindings: dict[str, str]
+    devices: dict[str, DeviceArtSource]
 
 
 @dataclass(frozen=True, slots=True)
 class DevicePitch:
     degrees: float
     sheets: tuple[Path, ...]
-    muzzle_pixels: tuple
-    forward_screen: tuple
+    muzzle_pixels: tuple[tuple[tuple[tuple[float, float], ...], ...], ...]
+    forward_screen: tuple[tuple[tuple[float, float], ...], ...]
     muzzle_heights: tuple[float, ...]
 
 
@@ -61,27 +126,23 @@ class DeviceEmission:
 def load_device_art() -> Mapping[str, DeviceArt]:
     """Read the small explicit catalog once; raster loading stays demand-driven."""
     root = Path(__file__).resolve().parent
-    document = json.loads((root / "data/spell_devices.json").read_text())
+    document = DeviceDocument.model_validate_json((root / "data/spell_devices.json").read_text())
     bodies = {}
-    for identity, row in document["devices"].items():
-        broken = row.get("destruction")
+    for identity, row in document.devices.items():
+        broken = row.destruction
         destruction = None if broken is None else DeviceDestruction(
-            broken["fps"], broken["frameCount"],
-            MappingProxyType({bank["pitchDegrees"]: tuple(root / "assets" / path for path in bank["sheets"])
-                              for bank in broken["pitchBanks"]}),
-            broken["wreckItemId"], tuple(root / "assets" / path for path in broken["wreckSheets"]),
+            broken.fps, broken.frameCount,
+            MappingProxyType({bank.pitchDegrees: tuple(root / "assets" / path for path in bank.sheets)
+                              for bank in broken.pitchBanks}),
+            broken.wreckItemId, tuple(root / "assets" / path for path in broken.wreckSheets),
         )
-        banks = tuple(DevicePitch(
-            bank["pitchDegrees"], tuple(root / "assets" / path for path in bank["sheets"]),
-            tuple(tuple(tuple(tuple(point) for point in frames) for frames in rows)
-                  for rows in bank["muzzlePixels"]),
-            tuple(tuple(tuple(point) for point in rows) for rows in bank["forwardScreen"]),
-            tuple(bank["muzzleHeightStepsByRow"]),
-        ) for bank in row["pitchBanks"])
-        bodies[identity] = DeviceArt(identity, tuple(row["cell"]), tuple(row["anchor"]),
-            tuple(row["rows"]), row["fps"], row["releaseFrame"], row["frameCount"], row["scale"],
-            row["operatorRecipe"], row["launchPitchDegrees"], row["controlDistanceFraction"], banks, destruction)
-    return MappingProxyType({item: bodies[body] for item, body in document["bindings"].items()})
+        banks = tuple(DevicePitch(bank.pitchDegrees,
+            tuple(root / "assets" / path for path in bank.sheets), bank.muzzlePixels,
+            bank.forwardScreen, bank.muzzleHeightStepsByRow) for bank in row.pitchBanks)
+        bodies[identity] = DeviceArt(identity, row.cell, row.anchor, row.rows, row.fps,
+            row.releaseFrame, row.frameCount, row.scale, row.operatorRecipe, row.launchPitchDegrees,
+            row.controlDistanceFraction, banks, destruction)
+    return MappingProxyType({item: bodies[body] for item, body in document.bindings.items()})
 
 
 @lru_cache(maxsize=1)

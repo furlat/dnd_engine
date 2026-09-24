@@ -179,8 +179,8 @@ def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySam
                 owners[body.actor_uuid] = rank
         commands.extend((index, command) for command in drawn)
     result = [command for index, command in commands
-              if command[4][6] not in ("actor", "actor_shadow", "body_copy", "body_contour")
-              or owners[str(command[4][0])][2] == index]
+              if command.role not in ("actor", "actor_shadow", "body_copy", "body_contour")
+              or owners[command.owner][2] == index]
     # The shared frame draws condition feedback from retained FloatingText
     # tracks, whose launch contact survives the actor leaving sight.
     return (*result, *(command for cue, elapsed in sample.stationary_media

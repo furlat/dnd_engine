@@ -82,3 +82,8 @@ def test_all_feedback_avoids_bodies_and_each_other_at_screen_edges(
         assert command[1] is original[1]
         assert (command[0], command[3], command[4]) == (original[0], original[3], original[4])
     assert arrange_feedback_commands((*bodies, *feedback), bounds, viewport) == commands
+
+    without_diagnostics = tuple(row._replace(evidence=()) for row in (*bodies, *feedback))
+    assert actor_screen_bounds(without_diagnostics) == bounds
+    assert arrange_feedback_commands(without_diagnostics, bounds, viewport) == tuple(
+        row._replace(evidence=()) for row in commands)

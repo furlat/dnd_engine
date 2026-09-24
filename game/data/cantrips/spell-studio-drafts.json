@@ -1,6 +1,6 @@
 {
   "schema": "dnd.spellStudioDrafts",
-  "version": 2,
+  "version": 3,
   "spells": [
     {
       "definitionRef": {
@@ -119,17 +119,20 @@
         },
         "prepare": {
           "enabled": false,
-          "assetPhase": "cast"
+          "assetPhase": "cast",
+          "composition": "billboard"
         },
         "travel": {
           "enabled": true,
           "assetPhase": "travel",
-          "fps": 144
+          "fps": 144,
+          "composition": "billboard"
         },
         "impact": {
           "enabled": true,
           "assetPhase": "impact",
-          "fps": 144
+          "fps": 144,
+          "composition": "billboard"
         },
         "trajectory": {
           "type": "straight",
@@ -721,7 +724,8 @@
           "attachment": "target_ground",
           "startOffsetMs": -303.57142857142856,
           "scale": 0.5,
-          "depth": "behind_body"
+          "depth": "behind_body",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -729,7 +733,8 @@
           "attachment": "target_ground",
           "startOffsetMs": -303.57142857142856,
           "scale": 0.5,
-          "depth": "front_body"
+          "depth": "front_body",
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -1848,7 +1853,8 @@
               }
             ]
           },
-          "onMiss": "omit"
+          "onMiss": "omit",
+          "composition": "billboard"
         },
         {
           "id": "hand-back",
@@ -1858,7 +1864,8 @@
           "durationMs": 433.33333333333337,
           "scale": 0.18,
           "alpha": 0.8,
-          "depth": "front_body"
+          "depth": "front_body",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -2365,7 +2372,8 @@
               }
             ]
           },
-          "onMiss": "omit"
+          "onMiss": "omit",
+          "composition": "billboard"
         },
         {
           "id": "hand-front",
@@ -2375,7 +2383,8 @@
           "durationMs": 433.33333333333337,
           "scale": 0.18,
           "alpha": 0.8,
-          "depth": "front_body"
+          "depth": "front_body",
+          "composition": "billboard"
         }
       ],
       "contact": {

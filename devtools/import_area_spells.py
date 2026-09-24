@@ -7,6 +7,8 @@ import shutil
 
 import pygame
 
+from devtools.media_delivery import owns_selected_media
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DIRECTIONS = ("E", "SE", "S", "SW", "W", "NW", "N", "NE")
@@ -97,60 +99,63 @@ def import_bundle(source: Path, *, repo: Path = ROOT) -> None:
     storage = bindings.setdefault("projectileStorage", {})
     media = repo / "game/assets/area_spells"
 
-    burning_root = source / "burning-hands-review"
-    burning = json.loads((burning_root / "manifest.json").read_text())
-    identity = "area.burning_hands.v9"
-    pages = {}
-    for direction in DIRECTIONS:
-        pages[direction] = []
-        for page in burning["directions"][direction]["pages"]:
-            relative = Path("game/assets/area_spells/burning_hands") / page["file"]
-            (repo / relative).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(burning_root / page["file"], repo / relative)
-            pages[direction].append({key: page[key] for key in ("firstFrame", "frameCount", "columns")} | {"file": relative.as_posix()})
-    assets[identity] = _asset(identity, size=(burning["cell"], burning["cell"]),
-        frames=burning["frames"], fps=burning["fps"], palette=burning["palette"],
-        pivots={direction: burning["directions"][direction]["pivot"] for direction in DIRECTIONS})
-    storage[identity] = {"phases": {"impact": {"layers": [{"pages": pages, "blendMode": "normal"}]}}}
+    if owns_selected_media(storage, "area.burning_hands.v9", "game/assets/area_spells"):
+        burning_root = source / "burning-hands-review"
+        burning = json.loads((burning_root / "manifest.json").read_text())
+        identity = "area.burning_hands.v9"
+        pages = {}
+        for direction in DIRECTIONS:
+            pages[direction] = []
+            for page in burning["directions"][direction]["pages"]:
+                relative = Path("game/assets/area_spells/burning_hands") / page["file"]
+                (repo / relative).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(burning_root / page["file"], repo / relative)
+                pages[direction].append({key: page[key] for key in ("firstFrame", "frameCount", "columns")} | {"file": relative.as_posix()})
+        assets[identity] = _asset(identity, size=(burning["cell"], burning["cell"]),
+            frames=burning["frames"], fps=burning["fps"], palette=burning["palette"],
+            pivots={direction: burning["directions"][direction]["pivot"] for direction in DIRECTIONS})
+        storage[identity] = {"phases": {"impact": {"layers": [{"pages": pages, "blendMode": "normal"}]}}}
 
     thunder_root = source / "aoe-crest-review"
-    thunder = json.loads((thunder_root / "manifest.json").read_text())
-    crest = thunder["spells"]["thunderwave"]
-    bounds = json.loads((thunder_root / "frame-bounds.json").read_text())
-    for distance in range(3):
-        for lateral in range(-1, 2):
-            for depth in ("back", "front"):
-                identity = f"area.thunderwave.v10.{distance}.{lateral}.{depth}"
-                parts = {}
-                for bank in ("SE", "SW", "NW", "NE"):
-                    cell = "_".join(map(str, cube_cell(bank, distance, lateral)))
-                    row = crest["directions"][bank]
-                    parts[bank] = _pack_slices(thunder_root, row["cells"][cell]["phases"][depth], bounds,
-                        media / "thunderwave" / bank / cell / depth, repo, row["frames"])
-                assets[identity] = _asset(identity, size=(thunder["cell"], thunder["cell"]),
-                    frames=crest["directions"]["SE"]["frames"], fps=thunder["captureFps"],
-                    pivots={direction: thunder["pivot"] for direction in DIRECTIONS}, palette=crest["palette"])
-                storage[identity] = {"phases": {"impact": {"layers": [{
-                    "partsByFacing": {direction: parts[CUBE_BANKS[direction]] for direction in DIRECTIONS},
-                    "blendMode": "normal"}]}}}
+    if "area.thunderwave.surface" not in assets:
+        thunder = json.loads((thunder_root / "manifest.json").read_text())
+        crest = thunder["spells"]["thunderwave"]
+        bounds = json.loads((thunder_root / "frame-bounds.json").read_text())
+        for distance in range(3):
+            for lateral in range(-1, 2):
+                for depth in ("back", "front"):
+                    identity = f"area.thunderwave.v10.{distance}.{lateral}.{depth}"
+                    parts = {}
+                    for bank in ("SE", "SW", "NW", "NE"):
+                        cell = "_".join(map(str, cube_cell(bank, distance, lateral)))
+                        row = crest["directions"][bank]
+                        parts[bank] = _pack_slices(thunder_root, row["cells"][cell]["phases"][depth], bounds,
+                            media / "thunderwave" / bank / cell / depth, repo, row["frames"])
+                    assets[identity] = _asset(identity, size=(thunder["cell"], thunder["cell"]),
+                        frames=crest["directions"]["SE"]["frames"], fps=thunder["captureFps"],
+                        pivots={direction: thunder["pivot"] for direction in DIRECTIONS}, palette=crest["palette"])
+                    storage[identity] = {"phases": {"impact": {"layers": [{
+                        "partsByFacing": {direction: parts[CUBE_BANKS[direction]] for direction in DIRECTIONS},
+                        "blendMode": "normal"}]}}}
 
     gust_root = source / "gust-wave-review"
-    gust = json.loads((gust_root / "whole-manifest.json").read_text())
-    identity = "area.gust_of_wind.v4"
-    parts = {}
-    for direction in DIRECTIONS:
-        row = gust["directions"][direction]
-        files = []
-        for page in row["pages"]:
-            relative = Path("game/assets/area_spells/gust_of_wind") / page
-            (repo / relative).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(gust_root / "whole-sheets" / page, repo / relative)
-            files.append(relative.as_posix())
-        parts[direction] = [[{"file": files[p], "rect": [x, y, w, h], "offset": [cx, cy]}
-            for p, x, y, w, h, cx, cy in frame] for frame in row["frames"]]
-    assets[identity] = _asset(identity, size=(1536, 1024), frames=gust["frames"], fps=gust["fps"],
-        pivots={direction: gust["directions"][direction]["pivot"] for direction in DIRECTIONS}, palette=gust["palette"])
-    storage[identity] = {"phases": {"impact": {"layers": [{"partsByFacing": parts, "blendMode": "normal"}]}}}
+    if owns_selected_media(storage, "area.gust_of_wind.v4", "game/assets/area_spells"):
+        gust = json.loads((gust_root / "whole-manifest.json").read_text())
+        identity = "area.gust_of_wind.v4"
+        parts = {}
+        for direction in DIRECTIONS:
+            row = gust["directions"][direction]
+            files = []
+            for page in row["pages"]:
+                relative = Path("game/assets/area_spells/gust_of_wind") / page
+                (repo / relative).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(gust_root / "whole-sheets" / page, repo / relative)
+                files.append(relative.as_posix())
+            parts[direction] = [[{"file": files[p], "rect": [x, y, w, h], "offset": [cx, cy]}
+                for p, x, y, w, h, cx, cy in frame] for frame in row["frames"]]
+        assets[identity] = _asset(identity, size=(1536, 1024), frames=gust["frames"], fps=gust["fps"],
+            pivots={direction: gust["directions"][direction]["pivot"] for direction in DIRECTIONS}, palette=gust["palette"])
+        storage[identity] = {"phases": {"impact": {"layers": [{"partsByFacing": parts, "blendMode": "normal"}]}}}
 
     for spell, original in (
         ("burning_hands", thunder_root / "actors/burning_hands/hand-glow.png"),

@@ -2,12 +2,13 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 import pygame
 import numpy as np
 
 from game.device_art import DeviceArt, DeviceEmission, DeviceFacing
-from game.draw_commands import DrawCommand
+from game.draw_commands import DevicePose, DrawCommand
 from game.projection import Camera, painter_key, project_screen
 
 
@@ -69,7 +70,7 @@ def device_wreck_draw_command(identity: str, position: tuple[float, float], elev
 
 def _body_draw_command(identity: str, position: tuple[float, float], elevation: float,
                         facing: DeviceFacing, art: DeviceArt, sheet: Path, frame: int, camera: Camera,
-                        role: str, pitch: float | None,
+                        role: Literal["device", "device_wreck"], pitch: float | None,
                         multiplier: tuple[float, float, float] | None) -> DrawCommand:
     width, height = art.cell
     row = art.rows.index(facing)
@@ -82,4 +83,5 @@ def _body_draw_command(identity: str, position: tuple[float, float], elevation: 
         painter_key(position, elevation_steps=elevation, quadrant=camera.quadrant, role="object", identity=identity),
         image, (round(point[0] - art.anchor[0] * scale), round(point[1] - art.anchor[1] * scale)), 0,
         (identity, position, art.identity, "current", None, "authored", role, elevation, facing, frame, pitch),
+        role=role, owner=identity, device_pose=DevicePose(facing, frame),
     )

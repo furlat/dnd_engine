@@ -12,14 +12,14 @@ from game.animation_data import load_animation_data
 from game.animation_draw import animation_draw_commands, load_animation_media
 from dnd.types.world import CardinalDirection
 from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementKind
-from game.area_media import AreaLayer, AreaMedia, BoundarySprite, compose_area, mask_ground_area
+from game.area_media import AreaLayer, AreaMedia, BoundarySprite, boundary_segment, compose_area
 from game.draw_commands import DrawCommand
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.combat import bind_cast
 from game.environment_art import load_environment_art
 from game.environment_draw import environment_command
-from game.projection import Camera, camera_pose, painter_key, project_screen
+from game.projection import Camera, camera_pose, inverse_rotate_position, painter_key, project_screen
 from tests.game.player_helpers import player_inputs
 from tests.game.spell_handoff_scenarios import spell_handoff_history
 
@@ -73,10 +73,49 @@ def boundary_silhouette(state, catalog, cache, camera, *, close_doors=False):
     return silhouette
 
 
+def boundary_sample_sides(commands, state, camera):
+    """Classify the exported owners against this fixture's straight boundary.
+
+    The old ground-shadow oracle treated all screen overlap as behind a wall.
+    Here the retained XYZ sample decides its side; the artwork supplies coverage.
+    No expected pixels are obtained by calling the production compositor.
+    """
+    segments = [boundary_segment(obj.placement) for obj in state.objects.values()]
+    first, last = segments[0]
+    axis = 0 if first[0] == last[0] else 1
+    plane = first[axis]
+    assert all(a[axis] == b[axis] == plane for a, b in segments)
+    low = min(min(a[1-axis], b[1-axis]) for a, b in segments)
+    high = max(max(a[1-axis], b[1-axis]) for a, b in segments)
+    origin = inverse_rotate_position((0., 0.), camera.quadrant)
+    ax = np.subtract(inverse_rotate_position((1., 0.), camera.quadrant), origin)
+    az = np.subtract(inverse_rotate_position((0., 1.), camera.quadrant), origin)
+    ray = ax + az
+    behind = np.zeros(camera.viewport, dtype=bool)
+    other = np.zeros(camera.viewport, dtype=bool)
+    for row in commands:
+        volume = row.volume
+        assert volume is not None, "This is the registered XYZ path, not planar area masking"
+        xyz = volume.positions
+        x = xyz[:, :, 0] * ax[0] + xyz[:, :, 2] * az[0] + volume.center[0]
+        y = xyz[:, :, 0] * ax[1] + xyz[:, :, 2] * az[1] + volume.center[1]
+        component, along = (x, y) if axis == 0 else (y, x)
+        to_plane = (plane - component) / ray[axis]
+        intersection = along + to_plane * ray[1-axis]
+        far = (to_plane > 1e-5) & (intersection >= low) & (intersection <= high)
+        owned = (volume.ownership != 0) & (pygame.surfarray.array_alpha(row.surface) > 0)
+        rect = row.surface.get_rect(topleft=row.destination).clip(pygame.Rect((0, 0), camera.viewport))
+        source = rect.move(-row.destination[0], -row.destination[1])
+        for mask, selected in ((behind, far), (other, ~far)):
+            mask[rect.left:rect.right, rect.top:rect.bottom] |= (
+                owned & selected)[source.left:source.right, source.top:source.bottom]
+    return behind, other
+
+
 @pytest.mark.parametrize("quadrant", range(4))
 @pytest.mark.parametrize("height", (0, 2))
 @pytest.mark.parametrize("blend", (0, pygame.BLEND_RGB_ADD))
-def test_area_cannot_overwrite_any_part_of_foreground_wall_or_door(rendering, scene, quadrant, height, blend):
+def test_xyz_area_behind_registered_wall_or_door_is_occluded(rendering, scene, quadrant, height, blend):
     screen, data, catalog, cache = rendering
     environment, state, cast = scene
     north = environment == "wall-north"
@@ -86,7 +125,7 @@ def test_area_cannot_overwrite_any_part_of_foreground_wall_or_door(rendering, sc
     across = 6 if positive_camera else 9
     center = (6, across) if north else (across, 6)
     state = replace(state, objects={identity: replace(obj, placement=
-        obj.placement.model_copy(update={"base_height_steps": height, "top_height_steps": height + 1}))
+        obj.placement.model_copy(update={"base_height_steps": height, "top_height_steps": height + obj.placement.top_height_steps - obj.placement.base_height_steps}))
         for identity, obj in state.objects.items()})
     source = replace(cast.timeline.source, applications=(), ground_target=GroundContact(center, height))
     timeline = compile_cast(data, "spell.fireball", source)
@@ -117,7 +156,10 @@ def test_area_cannot_overwrite_any_part_of_foreground_wall_or_door(rendering, sc
 
     bare, composed = pixels(()), pixels(commands)
     changed = np.any(composed != bare, axis=2)
-    assert np.count_nonzero(changed & opaque) == 0, "Area fire/smoke painted over solid foreground pixels"
+    behind, front = boundary_sample_sides(commands, state, camera)
+    protected = opaque & behind & ~front
+    assert np.any(protected), "Exercise exported samples behind the registered boundary"
+    assert not np.any(changed & protected), "Far-side samples painted over an opaque wall/door cap"
     assert np.count_nonzero(changed & ~opaque) > 0, "Exposed fire must remain visible"
     if environment == "open-door":
         opening = (pygame.surfarray.array_alpha(closed_leaf) == 255) & ~opaque
@@ -126,7 +168,7 @@ def test_area_cannot_overwrite_any_part_of_foreground_wall_or_door(rendering, sc
 
 @pytest.mark.parametrize("quadrant", range(4))
 @pytest.mark.parametrize("blend", (0, pygame.BLEND_RGB_ADD))
-def test_area_reaches_exposed_rear_wall_face_without_reopening_space_beyond_it(rendering, scene, quadrant, blend):
+def test_xyz_area_preserves_camera_side_wall_contact(rendering, scene, quadrant, blend):
     screen, data, catalog, cache = rendering
     environment, state, cast = scene
     north = environment == "wall-north"
@@ -138,7 +180,6 @@ def test_area_reaches_exposed_rear_wall_face_without_reopening_space_beyond_it(r
     appearances = {source.caster.actor_uuid: cast.appearances[source.caster.actor_uuid]}
     boundaries = tuple(obj.placement for obj in state.objects.values() if obj.item.is_open is not True)
     media = load_animation_media(timeline, appearances, area_boundaries=boundaries)
-    raw_media = replace(media, area=None)
     camera = Camera(quadrant=quadrant, zoom=.5, viewport=screen.get_size()).with_focus(center)
     assert timeline.ground_delivery is not None
     sample = sample_cast(timeline, timeline.ground_delivery.travel_end_ms + 200)
@@ -147,28 +188,14 @@ def test_area_reaches_exposed_rear_wall_face_without_reopening_space_beyond_it(r
         return tuple(row for row in animation_draw_commands(timeline, sample, selected, camera)
                      if row[4][6] == "projectile" and row[4][8] == "impact" and row.blend == blend)
 
-    commands, raw_commands = impacts(media), impacts(raw_media)
+    commands = impacts(media)
     silhouette = boundary_silhouette(state, catalog, cache, camera)
     opaque = pygame.surfarray.array_alpha(silhouette) == 255
 
-    def effect_pixels(rows):
-        result = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
-        for row in rows:
-            result.blit(row.surface, row.destination, special_flags=row.blend)
-        return np.max(pygame.surfarray.array3d(result), axis=2) > 0
-
-    raw = effect_pixels(raw_commands)
-    # Ground shadow is correct for empty space behind the wall, but its pixels
-    # cannot stand in for the elevated surface which physically receives fire.
-    from_ground = []
-    assert media.area is not None
-    for row in raw_commands:
-        from_ground.append(row._replace(surface=mask_ground_area(row.surface, row.destination,
-            center, 0, camera, media.area)))
-    blocked = raw & ~effect_pixels(from_ground)
-    receiving = blocked & opaque
+    behind, front = boundary_sample_sides(commands, state, camera)
+    receiving = opaque & front
     if environment != "open-door":
-        assert np.count_nonzero(receiving) > 0, "Exercise fire previously clipped off an exposed face"
+        assert np.any(receiving), "Exercise actual fire samples on the camera side of the exposed face"
 
     def composed(rows):
         draw_frame(screen, state, catalog, cache, camera, 0, show_grid=False,
@@ -178,8 +205,8 @@ def test_area_reaches_exposed_rear_wall_face_without_reopening_space_beyond_it(r
     changed = np.any(composed(commands) != composed(()), axis=2)
     if environment != "open-door":
         assert np.count_nonzero(changed & receiving) > 0, "Fire must actually touch the exposed wall face"
-    empty = pygame.surfarray.array_alpha(silhouette) == 0
-    assert not np.any(changed & blocked & empty), "Receiving wall pixels do not reopen space beyond the wall"
+    assert not np.any(changed & opaque & behind & ~front), "Contact cannot uncover far-side wall pixels"
+    assert np.any(changed & ~opaque), "Exposed fire above/beside the finite wall remains visible"
 
 
 @pytest.mark.parametrize("quadrant", range(4))

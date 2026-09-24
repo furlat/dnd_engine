@@ -31,11 +31,17 @@ class RegisteredMediaSample:
     vertical_scale: float = 1
 
 
+def _nearest_indices(source_size: int, output_size: int) -> np.ndarray:
+    """Match SDL's 16-bit fixed-point center sampling, including its ties."""
+    step = (source_size << 16) // output_size
+    return (np.arange(output_size, dtype=np.int64) * step + step // 2) >> 16
+
+
 def registered_media_samples(data: AnimationData, asset_id: str,
                            phase: Literal["cast", "travel", "impact"], frame: int,
                            facing: Facing8, *, scale: float, anchor: tuple[float, float],
                            rows: Mapping[tuple[str, int], pygame.Surface],
-                           alpha: float = 1.0, rotation: float = 0.0,
+                           alpha: float = 1.0, rotation: float = 0.0, zoom: float = 1.0,
                            ) -> tuple[RegisteredMediaSample, ...]:
     """Scale is the final pixel factor; rotation is clockwise screen radians.
 
@@ -83,11 +89,13 @@ def registered_media_samples(data: AnimationData, asset_id: str,
             if rotation:
                 raise ValueError("registered XYZ media uses authored camera banks, not residual screen rotation")
             # Use original sample identities, not reconstructed screen height.
-            ix = np.arange(image.width) * layer.image.width // image.width
-            iy = np.arange(image.height) * layer.image.height // image.height
+            ix = _nearest_indices(layer.image.width, image.width)
+            iy = _nearest_indices(layer.image.height, image.height)
             raw = layer.positions.coordinates[ix[:, None], iy[None, :]]
             low, high = layer.positions.bounds
-            positions = (low + raw.astype(np.float32) * ((high - low) / 65535)) * layer.positions.position_scale
+            physical_scale = scale / (zoom * layer.positions.reference_pixel_scale)
+            positions = (low + raw.astype(np.float32) * ((high - low) / 65535)) * (
+                layer.positions.position_scale * physical_scale)
             ownership = layer.positions.ownership[ix[:, None], iy[None, :]]
             positions.setflags(write=False)
             ownership.setflags(write=False)

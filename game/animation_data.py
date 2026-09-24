@@ -28,7 +28,7 @@ from game.animation_types import (
 )
 from game.condition_types import load_condition_recipes
 from game.condition_media import load_condition_media
-from game.authoring_conversion import explicit_attachments
+from game.authoring_conversion import explicit_attachments, explicit_composition, explicit_spatial_composition, validate_composition
 from game.player_facts import PlayerActor, VisualItem
 from game.world_animation import prop_animation
 from game.portal_art import load_portal_art
@@ -403,8 +403,10 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
 
     for identity, draft in drafts.items():
         version = effect_versions.get(identity, draft_versions[draft.definitionRef])
-        if version != 2:
-            drafts[identity] = explicit_attachments(draft, projectile_assets)
+        if version not in (2, 3):
+            draft = explicit_attachments(draft, projectile_assets)
+        drafts[identity] = explicit_composition(draft, projectile_storage) if version != 3 else draft
+        validate_composition(drafts[identity], projectile_storage)
 
     try:
         vital = _object(contexts["vital_effect"], "vital_effect")
@@ -491,9 +493,9 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         )),
         context_source_json=context_source,
         world_animations=MappingProxyType(world_animations),
-        spatial_media=MappingProxyType({identity: SpatialMediaBinding.model_validate({**row,
+        spatial_media=MappingProxyType({identity: explicit_spatial_composition(SpatialMediaBinding.model_validate({**row,
             "layers": tuple({**layer, "offsetCells": tuple(layer.get("offsetCells", (0, 0)))}
-                            for layer in row["layers"])})
+                            for layer in row["layers"])}), projectile_storage)
             for identity, row in world_bindings.get("spatial_media", {}).items()}),
         deposit_media=MappingProxyType(TypeAdapter(dict[str, DepositMediaBinding]).validate_json(
             json.dumps(world_bindings.get("deposit_media", {})))),

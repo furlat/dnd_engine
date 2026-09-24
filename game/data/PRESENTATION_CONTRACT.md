@@ -1,10 +1,11 @@
 # Presentation authoring contract
 
-The active local spell bundles use `schema: "dnd.spellStudioDrafts"`, `version: 2`.
+The active local spell bundles use `schema: "dnd.spellStudioDrafts"`, `version: 3`.
 They extend NeuroStudio's records. The unchanged imported reference retains
 `neuroclient.spellStudioDrafts`, version 6. `StudioDraftFile` accepts that original
-format and local versions 1 and 2. At authoring load, supported v6/v1 attachments
-are converted once into explicit placement records; the sampler has one executor.
+format and local versions 1, 2 and 3. At authoring load, supported v6/v1
+attachments and pre-v3 composition are converted once into explicit records;
+the sampler has one executor.
 A future TS adapter needs these documented extensions, not the original v6
 validator unchanged. This revision does not change recorded gameplay events.
 
@@ -200,8 +201,9 @@ non-body target `forwardPx` becomes `axisPx`. Uniform scalar canvas compensation
 is folded into actor lift and a center image pivot. Already directional pivots
 remain direct registrations. Unsupported phase-dependent/horizontal/socket
 compensation needs explicit authoring rather than a second runtime mode. This
-conversion leaves the imported source file intact. New local v2 records need no
-legacy compensation or runtime version branch.
+conversion leaves the imported source file intact. Local v2/v3 records need no legacy attachment compensation or runtime version
+branch. V3 also authors its composition explicitly; v1/v2 infer that selection
+once at intake from their retained storage contract.
 
 `targetLocal.approachOffsetTiles` is a temporary sorting/contact-depth choice for
 an already local effect. It does not mean the native actor moved or the effect
@@ -317,9 +319,10 @@ loader selects resting clips before playback, including intermediate condition
 poses in an action lineage. A TS adapter must reproduce these two explicit local
 extensions rather than silently discard them.
 
-`condition-recipes.json` is an explicit additional version-12
-`neuroclient.conditionPresentationRecipes` document for local content identities
-absent from the imported source. Duplicate identities are rejected. It does not
+`condition-recipes.json` uses `dnd.conditionPresentationRecipes`, version 1,
+for local extensions and content identities absent from the imported source.
+The original `neuroclient.conditionPresentationRecipes`, version 12, stays
+readable and unchanged. Duplicate identities are rejected. It does not
 infer a recipe from a related mechanical condition. Web's source-owned
 `condition.spell.web.restrained` selects its two persistent layers; generic
 Restrained or standing inside a Web does not select them. Repeated instances
@@ -1060,7 +1063,12 @@ composition only, not native spell rules, event reduction or playback clocks.
 
 `ProjectileFrameStorage.surfaceFrames` is an alternate storage encoding within
 existing projectile sampling, not a new recipe executor. `frameIndices` maps
-phase-local frames onto source sample IDs, `pattern` selects direction/file,
+phase-local frames onto source sample IDs. Either `pattern` selects a loose
+direction/file, `archive: {file, memberPattern}` selects that same packet inside a
+ZIP container, or `componentsByFacing` selects ordered per-facing components.
+These address alternatives are exclusive; the container changes neither time
+nor decoded packet bytes. `coordinateBasis: "camera_local_xyz"` is explicit.
+
 `bounds` decodes all three uint16 axes, `verticalScale` converts source height to
 host height steps, and `blendModes` retains component order. Binary packets use
 an eight-byte little-endian width/height/signed-pivot-offset header followed, per
@@ -1106,8 +1114,15 @@ horizontal orientations; neither field claims arbitrary 3D contact normals.
 
 Connected Fireball rendering uses continuous visibility around observed wall
 corners within the original radius, plus disclosed solid support outlines.
-Finite structure height controls camera occlusion. It does not stencil color
-into native square cells or rerun gameplay eligibility. Other spell propagation
+Camera occlusion uses the submitted wall/door billboards, including their cap,
+alpha edges and holes, together with received finite boundary depth. Adjacent
+collinear sprites share their connected finite edge extent, so overlapping caps
+do not open cracks at cell seams. Far-side samples are hidden; contact, near-side
+samples and samples outside the artwork remain. This is a visual billboard
+model, not a reconstructed thick wall or an increase in native wall height.
+Calls without registered scene artwork retain the finite native-plane fallback;
+center-solid camera occlusion retains its existing received bounds. It does not
+stencil color into native square cells or rerun gameplay eligibility. Other spell propagation
 policies remain unchanged. Undisclosed obstacles/map holes do not become render
 geometry; backend targeting remains authoritative for them.
 
@@ -1115,12 +1130,14 @@ geometry; backend targeting remains authoritative for them.
 ### Seven-source component and attachment extension
 
 `surfaceFrames.componentsByFacing` carries ordered component records with a
-relative file `pattern`, native ground `pivot` and `blendMode`. A packet's signed
+relative file `pattern` or `archive: {file, memberPattern}`, native ground `pivot`
+and `blendMode`. A packet's signed
 crop offset gets `round(pivot)-pivot` exactly once before registration. This
 supports Thunderwave's 18 components without adding its cell positions twice.
 The older single-file multi-component `pattern` remains valid for Fireball.
-`positionScale` is a source display correction shared with the recipe's pixel
-scale (Color Spray); camera zoom never changes physical coordinates.
+`positionScale` is the source's authored coordinate calibration.
+`referencePixelScale` records the unzoomed pixel scale at which that calibration
+matches the picture. Camera zoom never changes physical coordinates.
 
 `projectile.<phase>.viewFacing` supplies a fixed world view basis for radial
 impacts independently of the incoming projectile. Media tracks already use the
@@ -1154,3 +1171,149 @@ crossfade. The finite application retains its original clock. Unwitnessed or
 reacquired memberships go straight to the quiet loop; removal advances the same
 loop phase while applying the existing finite alpha fade. No native timing or
 healing amount is inferred from these presentation fields.
+
+
+## Portable execution details (September 24)
+
+The values in `tests/game/fixtures/presentation-values.json` accompany this
+contract. They describe ordinary JSON inputs and numeric/sample expectations;
+`test_presentation_contract.py` checks them through existing Python consumers.
+They are useful inputs for a future TS adapter, not a second runtime, image
+baseline framework or generated schema. Python dataclasses, paths, surfaces and
+compiled timelines stay outside the interchange data.
+
+### Composition and source addressing
+
+Current local v3 projectile phases and `StudioMediaTrack` select `composition`:
+
+| Value | Meaning |
+| --- | --- |
+| `billboard` | Existing registered image with its selected attachment and painter placement; planar area ownership may still clip it. A source carrying XYZ does not implicitly enable volume composition. |
+| `xyz_volume` | Paired registered color/XYZ/ownership, then shared propagation, support and world-depth composition. Projectile use is currently impact-only. Cast media requires authored orientation and map scale. |
+
+Maintained spatial layers additionally select `floor`, `line_floor`, `xy_volume`
+or `clump`. `floor` uses the admitted planar footprint; `line_floor` uses the
+received line geometry; `xy_volume` uses the raw per-pixel world-cell owner;
+`clump` places the existing authored support clumps. Their existing lifecycle
+stays in the spatial binding. Maintained `xyz_volume` currently consumes the
+received line geometry; it does not add arbitrary maintained volume shapes.
+Old `volume` becomes `xy_volume` and `legacy`
+resolves once during intake. Active local bindings use explicit modes. A filename,
+resource prefix, optional diagnostic tuple or presence of binary data never
+selects a new gameplay effect.
+
+A color phase has exactly one nonempty source: a pattern, pages, common sparse
+parts, or facing-specific sparse parts. A phase selects either color layers or
+surface packets. Each surface component selects one loose pattern or archive.
+Storage preserves logical asset IDs and source phase indices; sharing physical
+payloads does not share pivots, bounds, scale, alpha or clock settings.
+
+`PackedFootpoint.coordinateBasis` is `world_xy`: RG and BA contain big-endian
+uint16 values for X and Y offsets in grid cells, relative to the effect origin.
+Its alpha byte is numeric data. Color and footpoint pages use the same `rect`;
+neither premultiplication nor color treatment may touch the numeric page.
+`PackedSurfaceFrames.coordinateBasis` is `camera_local_xyz`: X/Z are camera-bank
+local grid vectors and Y is source height before `verticalScale`. The source
+convention is declared in data, not guessed from image dimensions.
+
+### Transform and sample arithmetic
+
+- World X/Y positions are grid cells (five game feet per cell). Host unzoomed
+  projection is `screenX = 64*(viewX-viewY)` and
+  `screenY = 32*(viewX+viewY)-64*heightSteps`. Camera rotation is around
+  `(31.5,31.5)`; displacement vectors rotate without that translation. Apply zoom
+  and screen pan after projection. Positive source/image Y points down the raster;
+  positive physical height points up.
+- The reference rig has `TILE_W = 64`; host tiles are 128 pixels wide. Thus an
+  authored media scale of `.5` gives `.5*128/64 = 1` unzoomed output pixel per
+  source pixel. Actual raster scale additionally multiplies camera zoom and,
+  only for records opting in, actor scale. Physical coordinates never change
+  with camera zoom. `referencePixelScale` records the source's calibrated
+  unzoomed pixel factor, independently of the current recipe size. The present
+  deliveries use 1, except Color Spray's existing `0.8888888895833333` correction.
+  Its existing `positionScale` correction is retained too. These defaults
+  preserve the approved calibration; changing recipe size now changes the
+  paired geometry by the same factor as its picture.
+- For uint16 value `u`, decode `low + u*(high-low)/65535`. XYZ then multiplies
+  `positionScale * finalPixelScale / (cameraZoom * referencePixelScale)`;
+  source Y additionally multiplies `verticalScale` when placed
+  in the world. X/Z inverse-rotate from the selected camera bank, then add the
+  recorded effect origin. Shared attachment displacement applies to both color
+  and geometry; it does not relocate native propagation origin.
+- Packet storage starts with little-endian `uint16 width, uint16 height,
+  int16 offsetX, int16 offsetY`; then each component stores row-major RGBA8,
+  big-endian XYZ uint16 triples, and uint8 ownership. Logical coordinate access is
+  `[x,y,channel]`; file scan order is rows before columns. Source ownership zero
+  is unknown, not a valid world point.
+- A component's signed packet offset is relative to its source pivot. The loader
+  adds `round(sourcePivot)-sourcePivot+assetPivot` once. This preserves a shared
+  logical canvas across sparse/packed storage; it does not add a world-cell
+  offset again.
+- For unrotated source part offset `o`, size `n`, pivot `p`, anchor `a` and final
+  scale `s`, each raster axis uses `left=round(a+(o-p)*s)` and
+  `right=round(a+(o+n-p)*s)`. Size is `right-left`; nonpositive parts are omitted.
+  Adjacent parts therefore share the same rounded edge. `round` uses nearest
+  integer with ties to even, including negatives. JavaScript `Math.round` alone
+  does **not** reproduce this rule.
+- Nearest scaling follows the installed Pygame-ce/SDL integer center sampler:
+  `step=floor(sourceSize*65536/outputSize)` and
+  `sourceIndex=floor((floor(step/2)+outputIndex*step)/65536)`. Its fixed-point
+  truncation matters at ties: 2→3 selects `[0,0,1]`, while 4→2 selects `[1,3]`.
+  Color, raw XY, XYZ and ownership retain the same indices. This is the
+  [SDL 2.32.10 nearest scaler](https://github.com/libsdl-org/SDL/blob/release-2.32.10/src/video/SDL_stretch.c#L831)
+  used by the current adapter; a TS port must implement the same sample rule.
+  The uint16 decode uses float32 arithmetic in the current adapter; comparisons should allow its
+  finite precision, not silently replace it with a different sample.
+- Color-only residual rotation is clockwise radians. Rotate the pivot-to-part
+  center by that angle, rotate the raster, then round the destination relative
+  to the rotated raster center. XYZ uses authored camera banks and rejects
+  residual screen rotation. Porting the color raster rotator requires pixel
+  comparison where exact Pygame edge coverage matters; the JSON fixtures do not
+  claim that every graphics library rasterizes rotation identically.
+
+Support clipping uses only received supports. A compatible observed slope edge
+interpolates toward its observed neighbor; an unknown support remains unknown.
+Raised surfaces, caps and protection spheres are independent constraints.
+Cleared additive samples must clear RGB as well as alpha. Normal and additive
+components retain source order inside common world-depth bands. This painter
+representation is not a general solution for two translucent volumes that
+interpenetrate at each pixel; a source carries its owned sample, not a full
+volumetric ray or hidden fragments.
+
+### Clocks, source frames and lifecycle joins
+
+Times are milliseconds; FPS is source frames per second. A uniform source sample
+uses `floor(elapsedMs*fps/1000 + 1e-10)`, modulo the frame count for a loop or
+clamped to the last frame otherwise. Callers own the active interval and do not
+ask that sampler to invent pre-start behavior. Track FPS overrides phase FPS,
+which overrides asset FPS. The existing traveling projectile's separate FPS
+contract is retained as described above.
+
+A `timeMap` linearly interpolates source-frame position between successive
+elapsed-millisecond keys and floors it with `1e-9` boundary tolerance. Frames
+are clamped to the source range. Facing-specific time maps override the common
+map for that bank; they change source sampling, not contact or engine time.
+Duration is explicit `durationMs`, otherwise the common map's final elapsed key,
+otherwise `frameCount*1000/fps`. Source `frameIndices` apply after phase-local
+sampling. Camera-facing selection advances two entries per quarter turn in the
+authored eight-direction order; it never changes the compiled timeline.
+
+Finite recipe media starts at release plus `startOffsetMs`. Both direct and
+projectile casts join its end with body/delivery completion before recovery.
+A negative absolute start is rejected. Independent contact tails retain their
+existing nonblocking lifetime; maintained condition/spatial media remains tied
+to recorded membership and removal. A loop flag controls frame repetition,
+not endless action ownership. Condition sustain/removal phase behavior is
+unchanged. Complete lineages reduce independently from this presentation clock.
+
+Stationary contact cues receive an already resolved world position and height.
+Their producer owns attachment resolution, including body height for Shield's
+interception response; the stationary sampler does not reinterpret that authored
+attachment as a ground socket. Unsupported sampling transforms remain explicit.
+
+Coverage reports enumerate the initialized bindings, including conditions,
+objects, devices, portals, spatial and deposit media. A bound portal cue counts
+as a portal presentation. Selected binding, actual causal coverage, supported
+executor fields, passing replay checks and human visual approval remain separate
+claims. No report scans media to discover gameplay or turns an absent cue into
+an automatic missing-animation diagnosis.

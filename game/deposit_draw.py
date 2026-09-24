@@ -85,5 +85,6 @@ def deposit_draw_commands(state: PlayerState, deposits: tuple[ObservedMaterialDe
                         "current" if position in senses.visible else "memory", None, "authored", kind,
                         height, binding.assetPhase, frame, deposit.material_id)
                     result.append(DrawCommand(key, piece, (destination[0]+crop[0], destination[1]+crop[1]),
-                                              sample.blend, evidence, world_depth=world_depth))
+                                              sample.blend, evidence, world_depth=world_depth,
+                                              role=kind, owner=str(source.deposit_uuid), cell=position))
     return tuple(result)

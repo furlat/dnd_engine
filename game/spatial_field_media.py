@@ -39,7 +39,7 @@ def field_media_commands(state: PlayerState, data: AnimationData, identity: UUID
     for position in positions:
         cell = receiving[position]
         tile = state.tiles.get(cell)
-        if layer.composition == "volume":
+        if layer.composition == "xy_volume":
             height = tile.elevation_steps if tile is not None else anchor_elevation_steps
             if height is not None:
                 supported[position] = height
@@ -49,7 +49,7 @@ def field_media_commands(state: PlayerState, data: AnimationData, identity: UUID
         return ()
     origin = spatial_origin(geometry)
     radius_scale = (geometry.radius_feet / binding.referenceRadiusFeet
-        if layer.composition == "volume" and isinstance(geometry, SpherePresentationGeometry)
+        if layer.composition == "xy_volume" and isinstance(geometry, SpherePresentationGeometry)
         and binding.referenceRadiusFeet is not None else 1.)
     source = origin[0] + layer.offsetCells[0] * radius_scale, origin[1] + layer.offsetCells[1] * radius_scale
     displayed_source = source[0] + translation[0], source[1] + translation[1]
@@ -78,7 +78,7 @@ def field_media_commands(state: PlayerState, data: AnimationData, identity: UUID
         points = sample.footpoints
         if points is not None and radius_scale != 1.:
             points = points * radius_scale
-        if layer.composition == "volume" and points is None:
+        if layer.composition == "xy_volume" and points is None:
             raise ValueError(f"Volume media requires authored world footpoints: {asset_id}")
         cells = None if points is None else np.floor(points + np.array(source) + .5).astype(np.int32)
         image_alpha = pygame.surfarray.array_alpha(image) if cells is not None else None

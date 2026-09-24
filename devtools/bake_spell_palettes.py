@@ -20,8 +20,15 @@ DEFAULT_DRAFTS = tuple(REPO / "game/data" / bundle / "spell-studio-drafts.json"
                        for bundle in ("codexfx", "spell_recovery", "ice_spells"))
 
 
-def bake_palettes(data: AnimationData, drafts: StudioDraftFile, *, output_root: Path | None = None) -> tuple[Path, ...]:
-    """Use the same authored palette treatment as playback, on isolated layers."""
+def bake_palettes(data: AnimationData, drafts: StudioDraftFile, *, output_root: Path | None = None,
+                  source_root: Path | None = None) -> tuple[Path, ...]:
+    """Bake isolated layers from explicit original art, preserving current authoring.
+
+    A trimmed runtime installation need not contain these uncolored originals.
+    The optional source root uses the same relative paths as the preserved art
+    archive; outputs keep their declared production addresses.
+    """
+    source_root = source_root or data.media_root
     outputs = []
     for recipe in (*drafts.spells, *drafts.effectDrafts.values()):
         cast = recipe.cast
@@ -33,8 +40,9 @@ def bake_palettes(data: AnimationData, drafts: StudioDraftFile, *, output_root: 
             if layer.sourceSheet is None:
                 raise ValueError(f"casting palette needs an authored output sheet: {recipe.definitionRef.content_id}/{layer.id}")
             original = data.resources[f"/spritesheets/{layer.category}/{cast.actionClip}.png"]
-            source = pygame.image.load(original).convert_alpha()
-            noise = (pygame.image.load(data.resources[layer.palette.noiseSheet]).convert_alpha()
+            source = pygame.image.load(source_root / original.relative_to(data.media_root)).convert_alpha()
+            noise = (pygame.image.load(source_root / data.resources[layer.palette.noiseSheet].relative_to(
+                data.media_root)).convert_alpha()
                      if layer.palette.noiseSheet is not None else None)
             colored = recolor_palette(source, layer.palette, noise=noise)
             destination = data.resources[layer.sourceSheet]
@@ -50,6 +58,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--draft-file", type=Path, action="append", default=[],
                         help="Bake only these authored bundles; defaults to the selected local bundles.")
+    parser.add_argument("--source-root", type=Path,
+                        help="Original-art archive root containing game/assets; defaults to this checkout.")
+    parser.add_argument("--output-root", type=Path,
+                        help="Write declared relative output paths below this directory instead of the checkout.")
     args = parser.parse_args()
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -59,8 +71,8 @@ def main() -> None:
         data = load_animation_data()
         for path in args.draft_file or DEFAULT_DRAFTS:
             drafts = StudioDraftFile.model_validate_json(path.read_text())
-            for output in bake_palettes(data, drafts):
-                print(output.relative_to(REPO))
+            for output in bake_palettes(data, drafts, source_root=args.source_root, output_root=args.output_root):
+                print(output)
     finally:
         pygame.quit()
 

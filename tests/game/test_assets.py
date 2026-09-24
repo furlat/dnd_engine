@@ -30,7 +30,43 @@ def test_catalog_loads_the_exact_finite_visual_set(surface_cache: SurfaceCache) 
     catalog = surface_cache.catalog
     assert len(catalog.flame_frames) == 16
     assert catalog.flame_fps == 10
-    assert all(surface_cache.canonical(key).get_size() == spec.native_size for key, spec in catalog.resources.items())
+    # Decode the finite set selected by world bindings. The catalog also keeps
+    # historical aliases whose superseded artwork remains in the source archive.
+    selected = set(catalog.flame_frames)
+    selected.update(catalog.water[key] for key in ("mask", "ripple", "normal"))
+    for material in ("earth", "wood", "stone"):
+        selected.update(catalog.bindings["terrain"][material].values())
+    for table in ("stone_wall_straight", "stone_wall_corner", "wood_wall_straight",
+                  "wood_wall_corner", "stone_door_frame", "wood_door_closed", "wood_door_open"):
+        selected.update(catalog.bindings[table].values())
+    for shape in ("straight", "corner"):
+        selected.update(catalog.bindings["terrain_cliff"][shape].values())
+    selected.update(catalog.bindings["terrain_stairs"]["poses"].values())
+    animations = list(catalog.spatial_effects.values())
+    for prop in catalog.props.values():
+        selected.update(prop.body_by_pose.values())
+        selected.update((prop.active_body_by_pose or {}).values())
+        if prop.lit_animation is not None:
+            selected.update(prop.lit_animation.frames)
+        if prop.transition is not None:
+            animations.append(prop.transition)
+    for animation in animations:
+        selected.update(key for frames in animation.frames_by_pose.values() for key in frames)
+        if animation.projectile is not None:
+            selected.update(key for frames in animation.projectile.frames_by_pose.values() for key in frames)
+        if animation.actor_depth is not None:
+            selected.add(animation.actor_depth.asset_id)
+    for tether in catalog.spatial_tethers.values():
+        selected.update(key for frames in tether.frames_by_facing.values() for key in frames)
+    for overlay in catalog.spatial_residue_overlays.values():
+        selected.update(key for frames in overlay.values() for key in frames)
+    for style in catalog.residue_surfaces.values():
+        selected.update((style.floor_atlas, style.wall_atlas))
+    for residue, poses in catalog.residue_ground.items():
+        if residue not in catalog.liquid_surfaces and residue not in catalog.residue_surfaces:
+            selected.update(poses.values())
+    for key in selected:
+        assert surface_cache.canonical(key).get_size() == catalog.resources[key].native_size, key
     assert catalog.bindings["terrain"] == {
         "earth": {pose: f"terrain.earth.{pose}" for pose in "ensw"},
         "wood": {pose: f"terrain.wood.{pose}" for pose in "ensw"},

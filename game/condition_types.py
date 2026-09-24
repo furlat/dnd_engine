@@ -272,9 +272,16 @@ class ConditionRecipe(_Record):
 
 
 class ConditionFile(_Record):
-    schema_id: Literal["neuroclient.conditionPresentationRecipes"] = Field(alias="schema")
-    version: Literal[12]
+    schema_id: Literal["neuroclient.conditionPresentationRecipes", "dnd.conditionPresentationRecipes"] = Field(alias="schema")
+    version: Literal[12, 1]
     recipes: tuple[ConditionRecipe, ...]
+
+    @model_validator(mode="after")
+    def format_version(self) -> "ConditionFile":
+        expected = 12 if self.schema_id == "neuroclient.conditionPresentationRecipes" else 1
+        if self.version != expected:
+            raise ValueError(f"{self.schema_id} requires version {expected}")
+        return self
 
 
 class ConditionBodyPresentation(_Record):

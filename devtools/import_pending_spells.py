@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 import shutil
 
+from devtools.media_delivery import owns_selected_media
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MEDIA = Path("game/assets/pending_spells")
@@ -36,6 +38,8 @@ def import_bundle(source: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
     def layer(root: Path, group: str, name: str, depth: str, *, cell, pivot,
               frames: int, fps: float, directions, palette, loop: bool, pages) -> None:
         identity = f"pending.{name}.{depth}"
+        if not owns_selected_media(storage, identity, MEDIA.as_posix()):
+            return
         anchor = {"x": pivot[0] / cell[0], "y": pivot[1] / cell[1]}
         assets[identity] = {
             "assetId": identity, "displayName": name.replace("_", " ").title() + " · " + depth,

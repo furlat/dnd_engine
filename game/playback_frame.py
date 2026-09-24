@@ -145,7 +145,7 @@ def sample_playback_frame(
     extra = (*extra, *(body_trail_draw_command(trail, data, body_media, camera)
         for trail in sample_body_trails(body_history, body_frame, condition_appearances, data, presentation_ms)))
     # The caller retains each FloatingText track independently of this head.
-    extra = tuple(command for command in extra if command[4][6] != "floating_number")
+    extra = tuple(command for command in extra if command.role != "floating_number")
     overlays = tuple(command for track in feedback
                      for number in (sample_feedback(track, presentation_ms),) if number is not None
                      for command in number_draw_commands(data, (number,),
@@ -161,8 +161,8 @@ def sample_playback_frame(
         badge_font=badge_font))
     # Reuse historical visual facings for objects as well as actors. A completed
     # shot keeps its last body pose without inventing a native firing state.
-    devices = {str(command.evidence[0]): command for command in extra
-               if command.evidence[6] in ("device", "device_wreck")}
+    devices = {command.owner: command for command in extra
+               if command.role in ("device", "device_wreck")}
     if group_sample is not None:
         for clip in group_sample.clips:
             if isinstance(clip.node.bound, BoundCast):

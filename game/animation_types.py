@@ -14,7 +14,7 @@ from typing import Annotated, Literal, Mapping, TypeVar
 
 from pydantic import (
     AfterValidator, BaseModel, ConfigDict, Field, JsonValue, PlainSerializer,
-    field_serializer, model_validator,
+    field_serializer, field_validator, model_validator,
 )
 
 from dnd.core.content.identities import ContentRef
@@ -167,6 +167,7 @@ class StudioProjectilePhase(AuthoredRecord):
     viewFacing: Facing8 | None = None
     timeMap: tuple[MediaTimePoint, ...] = ()
     overlapContactMs: NonNegative = 0
+    composition: Literal["billboard", "xyz_volume"] = "billboard"
 
 
 class TargetLocalDelivery(AuthoredRecord):
@@ -390,6 +391,7 @@ class StudioMediaTrack(AuthoredRecord):
 
     id: Identifier
     assetId: Identifier
+    composition: Literal["billboard", "xyz_volume"] = "billboard"
     assetPhase: Literal["cast", "travel", "impact"] = "impact"
     attachment: Literal["source_hand", "source_ground", "target_body", "target_ground", "area_ground",
                         "departure_ground", "arrival_ground"]
@@ -442,13 +444,13 @@ class StudioSpellDraft(AuthoredRecord):
 
 class StudioDraftFile(AuthoredRecord):
     schema_: Literal["neuroclient.spellStudioDrafts", "dnd.spellStudioDrafts"] = Field(alias="schema")
-    version: Literal[1, 2, 6]
+    version: Literal[1, 2, 3, 6]
     spells: tuple[StudioSpellDraft, ...]
     effectDrafts: FrozenMap[StudioSpellDraft] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def format_version(self) -> StudioDraftFile:
-        supported = (6,) if self.schema_ == "neuroclient.spellStudioDrafts" else (1, 2)
+        supported = (6,) if self.schema_ == "neuroclient.spellStudioDrafts" else (1, 2, 3)
         if self.version not in supported:
             raise ValueError(f"{self.schema_} requires version {supported}")
         return self
@@ -539,12 +541,30 @@ class ProjectileFrameLayer(AuthoredRecord):
     blendMode: Literal["normal", "add"]
     gain: Annotated[float, Field(ge=0, le=1)] = 1
 
+    @model_validator(mode="after")
+    def one_source(self) -> ProjectileFrameLayer:
+        sources = (self.pattern, self.pages, self.parts, self.partsByFacing)
+        if sum(value is not None for value in sources) != 1 or not any(sources):
+            raise ValueError("frame layer requires exactly one nonempty source")
+        if self.pages is not None and any(not pages for pages in self.pages.values()):
+            raise ValueError("each selected page bank must contain pages")
+        if self.partsByFacing is not None and any(not frames for frames in self.partsByFacing.values()):
+            raise ValueError("each selected part bank must contain frame records")
+        return self
+
 
 class PackedFootpoint(AuthoredRecord):
     """Aligned raw RGBA: big-endian uint16 X in RG and Y in BA, in local cells."""
 
     file: Identifier
     bounds: tuple[float, float]
+    coordinateBasis: Literal["world_xy"] = "world_xy"
+
+    @model_validator(mode="after")
+    def ordered_bounds(self) -> PackedFootpoint:
+        if self.bounds[0] >= self.bounds[1]:
+            raise ValueError("footpoint bounds must increase")
+        return self
 
 
 class ProjectileFramePart(AuthoredRecord):
@@ -560,25 +580,61 @@ class ProjectileFrameStorage(AuthoredRecord):
     layers: tuple[ProjectileFrameLayer, ...] = ()
     surfaceFrames: PackedSurfaceFrames | None = None
 
+    @model_validator(mode="after")
+    def one_source(self) -> ProjectileFrameStorage:
+        if bool(self.layers) == (self.surfaceFrames is not None):
+            raise ValueError("phase storage requires layers or surfaceFrames, exclusively")
+        return self
+
+
+class SurfaceArchive(AuthoredRecord):
+    """Standard ZIP member address; the member retains the authored packet bytes."""
+
+    file: Identifier
+    memberPattern: Identifier
+
 
 class PackedSurfaceFrames(AuthoredRecord):
     """Matched RGBA/XYZ/ownership packets; frame selection leaves source timing authored."""
 
-    pattern: str | None = None
-    frameIndices: tuple[int, ...]
+    pattern: Identifier | None = None
+    archive: SurfaceArchive | None = None
+    frameIndices: Annotated[tuple[Annotated[int, Field(ge=0)], ...], Field(min_length=1)]
     bounds: tuple[float, float]
     verticalScale: Positive
     blendModes: tuple[Literal["normal", "add"], ...] = ()
     componentsByFacing: FacingMap[tuple[PackedSurfaceComponent, ...]] | None = None
     positionScale: Positive = 1
+    referencePixelScale: Positive = 1
+    coordinateBasis: Literal["camera_local_xyz"] = "camera_local_xyz"
+
+    @model_validator(mode="after")
+    def packet_source(self) -> PackedSurfaceFrames:
+        if sum(value is not None for value in (self.pattern, self.archive, self.componentsByFacing)) != 1:
+            raise ValueError("surface frames require one pattern, archive or component source")
+        if self.bounds[0] >= self.bounds[1]:
+            raise ValueError("surface bounds must increase")
+        if self.componentsByFacing is not None:
+            if not self.componentsByFacing or any(not bank for bank in self.componentsByFacing.values()):
+                raise ValueError("surface component banks must be nonempty")
+        elif not self.blendModes:
+            raise ValueError("single surface source requires its ordered blend modes")
+        return self
 
 
 class PackedSurfaceComponent(AuthoredRecord):
     """One ordered source component, registered to the whole effect origin."""
 
-    pattern: str
+    pattern: Identifier | None = None
+    archive: SurfaceArchive | None = None
     pivot: tuple[float, float]
     blendMode: Literal["normal", "add"]
+
+    @model_validator(mode="after")
+    def one_source(self) -> PackedSurfaceComponent:
+        if (self.pattern is None) == (self.archive is None):
+            raise ValueError("surface component requires one pattern or archive")
+        return self
 
 
 class ProjectileStorage(AuthoredRecord):
@@ -1229,7 +1285,12 @@ class SpatialMediaLayer(AuthoredRecord):
     side: Literal["center", "rear", "front"] = "center"
     removalAssetId: Identifier | None = None
     suppressionAssetId: Identifier | None = None
-    composition: Literal["legacy", "floor", "volume", "clump"] = "legacy"
+    composition: Literal["billboard", "line_floor", "floor", "xy_volume", "xyz_volume", "clump", "legacy", "volume"] = "legacy"
+    @field_validator("composition", mode="before")
+    @classmethod
+    def previous_volume_name(cls, value: str) -> str:
+        return "xy_volume" if value == "volume" else value
+
     offsetCells: tuple[float, float] = (0, 0)
     delayMs: NonNegative = 0
 

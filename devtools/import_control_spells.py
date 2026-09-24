@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 import shutil
 
+from devtools.media_delivery import owns_selected_media
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MEDIA = Path("game/assets/control_spells")
@@ -71,6 +73,8 @@ def import_bundle(source: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
 
         for depth in ("back", "front"):
             identity = f"control.{name}.{depth}"
+            if not owns_selected_media(storage, identity, MEDIA.as_posix()):
+                continue
             assets[identity] = {
                 "assetId": identity, "displayName": identity, "kind": "projectile",
                 "sheet": f"/control-spells/{name}/{depth}.png",

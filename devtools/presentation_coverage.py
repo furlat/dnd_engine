@@ -16,6 +16,7 @@ from dnd.content_system.spell_catalog_composition import SPELL_CATALOG_COMPOSITI
 from dnd.core.events import EventType
 from game.animation_data import load_animation_data
 from game.event_record import EVENT_MODELS
+from game.environment_art import load_environment_art
 from game.presentation_coverage import presentation_inventory
 
 
@@ -28,7 +29,8 @@ def main() -> None:
         "event_categories": [category.value for category in EventType],
         "retained_models": sorted(EVENT_MODELS),
         "presentation": presentation_inventory(load_animation_data(rig_files=tuple(args.rig)), spell_ids=(
-            row.declaration.ref.content_id for row in SPELL_CATALOG_COMPOSITION_ROWS)),
+            row.declaration.ref.content_id for row in SPELL_CATALOG_COMPOSITION_ROWS),
+            environment=load_environment_art()),
     }
     print(json.dumps(report, indent=2))
 

@@ -1,6 +1,6 @@
 {
   "schema": "dnd.spellStudioDrafts",
-  "version": 2,
+  "version": 3,
   "spells": [
     {
       "definitionRef": {
@@ -53,7 +53,8 @@
           "fps": 144,
           "durationMs": 3000,
           "scale": 0.5,
-          "depth": "behind_body"
+          "depth": "behind_body",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -63,7 +64,8 @@
           "fps": 144,
           "durationMs": 3000,
           "scale": 0.5,
-          "depth": "front_body"
+          "depth": "front_body",
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -126,7 +128,8 @@
           "fps": 144,
           "durationMs": 3000,
           "scale": 0.5,
-          "depth": "behind_body"
+          "depth": "behind_body",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -136,7 +139,8 @@
           "fps": 144,
           "durationMs": 3000,
           "scale": 0.5,
-          "depth": "front_body"
+          "depth": "front_body",
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -199,7 +203,8 @@
           "fps": 144,
           "durationMs": 3000,
           "scale": 0.5,
-          "depth": "behind_body"
+          "depth": "behind_body",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -209,7 +214,8 @@
           "fps": 144,
           "durationMs": 3000,
           "scale": 0.5,
-          "depth": "front_body"
+          "depth": "front_body",
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -272,7 +278,8 @@
           "fps": 144,
           "durationMs": 2000,
           "scale": 0.5,
-          "depth": "behind_body"
+          "depth": "behind_body",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -282,7 +289,8 @@
           "fps": 144,
           "durationMs": 2000,
           "scale": 0.5,
-          "depth": "front_body"
+          "depth": "front_body",
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -345,7 +353,8 @@
           "fps": 144,
           "durationMs": 2000,
           "scale": 0.5,
-          "depth": "behind_body"
+          "depth": "behind_body",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -355,7 +364,8 @@
           "fps": 144,
           "durationMs": 2000,
           "scale": 0.5,
-          "depth": "front_body"
+          "depth": "front_body",
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -418,7 +428,8 @@
           "fps": 144,
           "durationMs": 4000,
           "scale": 0.5,
-          "depth": "behind_body"
+          "depth": "behind_body",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -428,7 +439,8 @@
           "fps": 144,
           "durationMs": 4000,
           "scale": 0.5,
-          "depth": "front_body"
+          "depth": "front_body",
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -491,7 +503,8 @@
           "fps": 144,
           "durationMs": 2000,
           "scale": 0.5,
-          "depth": "behind_body"
+          "depth": "behind_body",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -501,7 +514,8 @@
           "fps": 144,
           "durationMs": 2000,
           "scale": 0.5,
-          "depth": "front_body"
+          "depth": "front_body",
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -564,7 +578,8 @@
           "fps": 144,
           "durationMs": 1000,
           "scale": 0.5,
-          "depth": "behind_body"
+          "depth": "behind_body",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -574,7 +589,8 @@
           "fps": 144,
           "durationMs": 1000,
           "scale": 0.5,
-          "depth": "front_body"
+          "depth": "front_body",
+          "composition": "billboard"
         }
       ],
       "contact": {

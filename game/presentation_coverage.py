@@ -14,6 +14,8 @@ from game.animation_types import AnimationData
 from game.body_action import ACCEPTED_SOURCE_STRIP_RECIPES, body_action_limitations, body_cast_limitations
 from game.choreography import BoundChoreography, FACT_PRESENTATION, MotionTimeline
 from game.condition_animation import persistent_limitations, transition_limitations
+from game.environment_art import EnvironmentArt
+from game.stationary_media import stationary_media_limitations
 from game.player_facts import (
     ActionFact, AttackFact, ConditionChangeFact, PlayerFact, PlayerLineage,
     ShoveFact, SpellFact,
@@ -29,7 +31,8 @@ def _row(family: str, identity: str, owner: str, representation: str,
             "binding": binding, "details": list(details)}
 
 
-def presentation_inventory(data: AnimationData, *, spell_ids: Iterable[str] = ()) -> list[dict[str, Any]]:
+def presentation_inventory(data: AnimationData, *, spell_ids: Iterable[str] = (),
+                           environment: EnvironmentArt | None = None) -> list[dict[str, Any]]:
     """Enumerate selected metadata. Optional catalog IDs come from the caller.
 
     A selected binding is not a guarantee that media exist or every possible
@@ -97,6 +100,22 @@ def presentation_inventory(data: AnimationData, *, spell_ids: Iterable[str] = ()
                          "binding_selected" if rig in data.rigs else "missing_binding", binding=rig))
     rows.extend(_row("world", identity, "world_animation", "received property transition", "binding_selected",
                      binding=identity) for identity in sorted(data.world_animations))
+    for family, bindings in (("device", data.devices), ("device_wreck", data.device_wrecks),
+                             ("portal", data.portals), ("condition_media", data.condition_media),
+                             ("spatial_media", data.spatial_media), ("deposit_media", data.deposit_media)):
+        rows.extend(_row(family, identity, family, "authored media binding", "binding_selected", binding=identity)
+                    for identity in sorted(bindings))
+    for identity, binding in data.spatial_media.items():
+        for trigger, track in binding.contactMedia.items():
+            limitations = stationary_media_limitations(track)
+            rows.append(_row("contact_media", f"{identity}/{trigger}", "stationary_media", "finite contact",
+                "partial" if limitations else "binding_selected", binding=track.assetId, details=limitations))
+    if environment is not None:
+        for family, bindings in (("environment_bank", environment.banks), ("door", environment.doors),
+                                 ("trap", environment.traps), ("prop", environment.props),
+                                 ("environment_wreck", environment.wrecks)):
+            rows.extend(_row(family, identity, "environment_animation", "observed object state",
+                             "binding_selected", binding=identity) for identity in sorted(bindings))
     return rows
 
 
@@ -123,7 +142,7 @@ def lineage_coverage(lineage: PlayerLineage, *, group: BoundChoreography | None 
                             (value.equipment, "equipment"), (value.shoves, "shove"),
                             (value.forced_movement, "forced_movement"), (value.damage, "damage"),
                             (value.body_actions, "body_action"), (value.body_hops, "body_hop"),
-                            (value.movements, "movement")):
+                            (value.movements, "movement"), (value.portals, "portal")):
             for cue in cues:
                 owners[cue.event_uuid] = owner
         for cue in value.healing:

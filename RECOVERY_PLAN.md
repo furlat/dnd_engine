@@ -4,7 +4,7 @@ The [user complaint record](agent_docs/USER_COMPLAINTS.md) preserves the user's
 corrections and required contracts, including record-once event replay. Read it
 alongside this plan; a bounded implementation status does not relax those contracts.
 
-Updated 2026-09-22, retaining the user's correction: **develop the game, not a
+Updated 2026-09-24, retaining the user's correction: **develop the game, not a
 sequence of spell demonstrations.** Working branch: **codex/recovery-design**,
 based on **codex/july-reconstruction at 16a6bfe**. The human committed the
 validated recovery implementation as **58b0946** (`visio nextraction working`).
@@ -26,6 +26,68 @@ is now imported through the original Studio schema, independently of gameplay.
 ## Active work — playable encounter through shared capabilities
 
 ### Current position — read this before the checkpoint details
+
+**Completed September 24 unit — reviewed rendering cleanup and private asset migration.**
+Required U0–U8/A1–A3 work is implemented and independently reviewed; optional
+resizing remains unneeded. Current public JSON has explicit composition,
+registration and storage semantics; draw metadata is typed, importers preserve
+selected authoring, and saved subjective lineages remain the playback input.
+Fresh packed-only validation closed all 79 broad-run failure/error cases:
+333 affected tests pass, whole-game/native-event typing is clean, and 26 retained
+four-camera observer clips pass. The source archive preserves all 62,769 files;
+the separate private production release contains 24,783 files / 15.066 GB.
+[ASSETS.md](ASSETS.md) is the short operating guide, linked from `AGENTS.md`.
+[Implementation, exact validation scope and release evidence](agent_docs/CLEANUP_IMPLEMENTATION_STATUS_2026-09-24.md).
+Do not redo the inventory or resume new content as part of this completed unit.
+Private remote publication and historical Git removal remain separate; current
+media untracking does not erase earlier commits.
+
+**Completed September 24 unit — detailed cleanup implementation plan.** The
+[implementation plan](agent_docs/RENDERING_ASSET_CLEANUP_IMPLEMENTATION_PLAN_2026-09-24.md)
+turns the reviews below into 14 ordered units with code owners, concrete changes,
+dependencies, commit boundaries, focused validation and final acceptance. Two
+independent anti-slop and anti-OOP/ECS reviewers approved it after a correction
+round and complete reread; asset/setup review also passed revalidation. Rendering
+ownership and replay fixes are primary. Private setup/packing is a parallel track;
+historical Git scrubbing remains secondary and deferred. Implementation is completed as recorded above;
+do not restart the inventory or add new spell content under this unit. The plan retains current
+approved visuals and separates mechanical migrations from the intentional cap
+fix. It also includes the discovered ordinary-installer full-read cost and the
+packet-cache registration requirement before physical payload sharing.
+
+**Completed September 24 unit — complete production asset inventory.** Three
+local specialists and the private-assets task reconciled all 62,769 installed
+files, with zero unresolved decisions or missing packing owners. Keep 57,218
+physical references; 5,551 files are archive-only for current production.
+At that inventory checkpoint, excluding those and sharing exact retained payloads reduced the measured encoded
+content from 26.661 GB to 14.919 GB (44.04%), before new compression or cell
+compaction. These are historical pre-implementation estimates; the implementation
+status above records the corrected Gust selection and actual packed release.
+The [complete inventory and reviewed packing choices](agent_docs/PRODUCTION_ASSET_INVENTORY_2026-09-24.md)
+records exact frame/state subsets, real fixed-size candidates, shared/dynamic
+scaling, and missing supported modular content. Anti-slop and anti-OOP cross-review
+passed. Offline evidence is in `.runtime/asset-inventory-20260924/`; durable
+specialist reports are in `agent_docs/audits/`. No production code or media was
+changed during that inventory. The subsequently authorized implementation is
+recorded above; no broad downsample or compression estimate is assumed.
+
+**Completed September 23–24 unit — rendering architecture audit; feature work paused.**
+The user requested a thorough multi-agent anti-slop / anti-OOP review of XYZ
+rendering, event causality, object/asset metadata and typed authoring portability.
+Three independent reviews and cross-review of the consolidated plan are complete.
+The audit changed documentation only. It proposed repairing current
+public destruction JSON replay and separate retained-native-archive decoding,
+then importer ownership, explicit geometry/typed authoring and support reporting.
+The broad selected game run finished with 2,052 passed, 206 failed and 7 setup
+errors; the report classifies every failure group rather than waiving them as
+preexisting. Whole-game typing is clean. See
+[findings, reviewed cleanup sequence and exact validation scope](agent_docs/RENDERING_ARCHITECTURE_REVIEW_2026-09-23.md).
+The private licensed-assets repository/install workflow is a separate project
+task, `01a0d026-c987-7ea1-b474-4a352d1f9b41`; its migration is not part of this review.
+At that audit checkpoint production packaging was reasoning-only: preserve the source archive,
+identify every runtime-required frame and no excess, then assess lossless sharing,
+packing and compression. The completed dependency inventory above supplies those
+inputs; source preservation and an explicit packing adapter remain necessary.
 
 **Completed September 23 unit — seven additional AoE XYZ deliveries.**
 Burning Hands, Gust of Wind, Thunderwave, Shatter, Color Spray, Sleep arrival

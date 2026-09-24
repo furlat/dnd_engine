@@ -1619,13 +1619,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/SE/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/SE/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -1663,13 +1663,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/S/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/S/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -1707,13 +1707,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/SW/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/SW/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -1751,13 +1751,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/W/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/W/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -1795,13 +1795,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/NW/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/NW/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -1839,13 +1839,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/N/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/N/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -1883,13 +1883,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/NE/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/back/NE/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -1940,13 +1940,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/E/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/E/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -1984,13 +1984,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/SE/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/SE/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -2028,13 +2028,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/S/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/S/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -2072,13 +2072,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/SW/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/SW/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -2116,13 +2116,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/W/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/W/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -2160,13 +2160,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/NW/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/NW/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -2204,13 +2204,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/N/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/N/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -2248,13 +2248,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/NE/05.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 320,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/prayer_of_healing/front/NE/06.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/06.png",
                     "firstFrame": 384,
                     "frameCount": 48,
                     "columns": 8
@@ -2299,7 +2299,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/E/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2325,13 +2325,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/SE/03.png",
+                    "file": "game/assets/support_spells/guidance/back/NW/03.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/SE/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2357,13 +2357,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/S/03.png",
+                    "file": "game/assets/support_spells/guidance/back/N/03.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/S/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2389,13 +2389,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/SW/03.png",
+                    "file": "game/assets/support_spells/guidance/back/NE/03.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/SW/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2421,13 +2421,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/W/03.png",
+                    "file": "game/assets/support_spells/guidance/back/E/03.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/W/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2459,7 +2459,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/NW/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2491,7 +2491,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/N/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2523,7 +2523,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/back/NE/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2568,7 +2568,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/E/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2594,13 +2594,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/SE/03.png",
+                    "file": "game/assets/support_spells/guidance/front/NW/03.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/SE/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2626,13 +2626,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/S/03.png",
+                    "file": "game/assets/support_spells/guidance/front/N/03.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/S/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2658,13 +2658,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/SW/03.png",
+                    "file": "game/assets/support_spells/guidance/front/NE/03.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/SW/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2690,13 +2690,13 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/W/03.png",
+                    "file": "game/assets/support_spells/guidance/front/E/03.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/W/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2728,7 +2728,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/NW/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2760,7 +2760,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/N/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -2792,7 +2792,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/guidance/front/NE/04.png",
+                    "file": "game/assets/ice_spells/sheets/ray_of_frost/impact/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -3511,7 +3511,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/shield_of_faith/back/S/08.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 512,
                     "frameCount": 64,
                     "columns": 8
@@ -4028,7 +4028,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/shield_of_faith/front/SW/08.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 512,
                     "frameCount": 64,
                     "columns": 8
@@ -4084,7 +4084,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/shield_of_faith/front/W/08.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 512,
                     "frameCount": 64,
                     "columns": 8
@@ -4196,7 +4196,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/shield_of_faith/front/N/08.png",
+                    "file": "game/assets/support_spells/prayer_of_healing/back/E/05.png",
                     "firstFrame": 512,
                     "frameCount": 64,
                     "columns": 8
@@ -4279,19 +4279,19 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/E/01.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/E/02.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/E/03.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
@@ -4305,31 +4305,31 @@
                 ],
                 "SE": [
                   {
-                    "file": "game/assets/support_spells/light/back/SE/00.png",
+                    "file": "game/assets/support_spells/light/back/S/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/SE/01.png",
+                    "file": "game/assets/support_spells/light/back/S/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/SE/02.png",
+                    "file": "game/assets/support_spells/light/back/S/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/SE/03.png",
+                    "file": "game/assets/support_spells/light/back/S/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/SE/04.png",
+                    "file": "game/assets/support_spells/light/back/S/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4343,19 +4343,19 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/S/01.png",
+                    "file": "game/assets/support_spells/light/back/S/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/S/02.png",
+                    "file": "game/assets/support_spells/light/back/S/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/S/03.png",
+                    "file": "game/assets/support_spells/light/back/S/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
@@ -4369,31 +4369,31 @@
                 ],
                 "SW": [
                   {
-                    "file": "game/assets/support_spells/light/back/SW/00.png",
+                    "file": "game/assets/support_spells/light/back/S/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/SW/01.png",
+                    "file": "game/assets/support_spells/light/back/S/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/SW/02.png",
+                    "file": "game/assets/support_spells/light/back/S/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/SW/03.png",
+                    "file": "game/assets/support_spells/light/back/S/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/SW/04.png",
+                    "file": "game/assets/support_spells/light/back/S/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4401,31 +4401,31 @@
                 ],
                 "W": [
                   {
-                    "file": "game/assets/support_spells/light/back/W/00.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/W/01.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/W/02.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/W/03.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/W/04.png",
+                    "file": "game/assets/support_spells/light/back/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4433,31 +4433,31 @@
                 ],
                 "NW": [
                   {
-                    "file": "game/assets/support_spells/light/back/NW/00.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/NW/01.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/NW/02.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/NW/03.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/NW/04.png",
+                    "file": "game/assets/support_spells/light/back/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4465,31 +4465,31 @@
                 ],
                 "N": [
                   {
-                    "file": "game/assets/support_spells/light/back/N/00.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/N/01.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/N/02.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/N/03.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/N/04.png",
+                    "file": "game/assets/support_spells/light/back/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4497,31 +4497,31 @@
                 ],
                 "NE": [
                   {
-                    "file": "game/assets/support_spells/light/back/NE/00.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/NE/01.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/NE/02.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/NE/03.png",
+                    "file": "game/assets/support_spells/light/back/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/back/NE/04.png",
+                    "file": "game/assets/support_spells/light/back/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4548,19 +4548,19 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/E/01.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/E/02.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/E/03.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
@@ -4574,31 +4574,31 @@
                 ],
                 "SE": [
                   {
-                    "file": "game/assets/support_spells/light/front/SE/00.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/SE/01.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/SE/02.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/SE/03.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/SE/04.png",
+                    "file": "game/assets/support_spells/light/front/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4606,31 +4606,31 @@
                 ],
                 "S": [
                   {
-                    "file": "game/assets/support_spells/light/front/S/00.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/S/01.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/S/02.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/S/03.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/S/04.png",
+                    "file": "game/assets/support_spells/light/front/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4638,31 +4638,31 @@
                 ],
                 "SW": [
                   {
-                    "file": "game/assets/support_spells/light/front/SW/00.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/SW/01.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/SW/02.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/SW/03.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/SW/04.png",
+                    "file": "game/assets/support_spells/light/front/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4670,31 +4670,31 @@
                 ],
                 "W": [
                   {
-                    "file": "game/assets/support_spells/light/front/W/00.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/W/01.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/W/02.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/W/03.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/W/04.png",
+                    "file": "game/assets/support_spells/light/front/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4702,31 +4702,31 @@
                 ],
                 "NW": [
                   {
-                    "file": "game/assets/support_spells/light/front/NW/00.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/NW/01.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/NW/02.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/NW/03.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/NW/04.png",
+                    "file": "game/assets/support_spells/light/front/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4734,31 +4734,31 @@
                 ],
                 "N": [
                   {
-                    "file": "game/assets/support_spells/light/front/N/00.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/N/01.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/N/02.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/N/03.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/N/04.png",
+                    "file": "game/assets/support_spells/light/front/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4766,31 +4766,31 @@
                 ],
                 "NE": [
                   {
-                    "file": "game/assets/support_spells/light/front/NE/00.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/NE/01.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 64,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/NE/02.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 128,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/NE/03.png",
+                    "file": "game/assets/support_spells/light/front/E/00.png",
                     "firstFrame": 192,
                     "frameCount": 64,
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/light/front/NE/04.png",
+                    "file": "game/assets/support_spells/light/front/E/04.png",
                     "firstFrame": 256,
                     "frameCount": 32,
                     "columns": 8
@@ -4823,7 +4823,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/back/E/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -4843,7 +4843,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/back/SE/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -4863,7 +4863,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/back/S/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -4883,7 +4883,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/back/SW/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -4903,7 +4903,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/back/W/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -4923,7 +4923,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/back/NW/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -4943,7 +4943,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/back/N/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -4963,7 +4963,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/back/NE/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -4996,7 +4996,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/front/E/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -5016,7 +5016,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/front/SE/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -5036,7 +5036,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/front/S/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -5056,7 +5056,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/front/SW/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -5076,7 +5076,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/front/W/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -5096,7 +5096,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/front/NW/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -5116,7 +5116,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/front/N/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8
@@ -5136,7 +5136,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/support_spells/thaumaturgy/front/NE/02.png",
+                    "file": "game/assets/ice_spells/sheets/chill_touch/impact/E/11.png",
                     "firstFrame": 128,
                     "frameCount": 16,
                     "columns": 8

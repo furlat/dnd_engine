@@ -6,12 +6,14 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 from types import MappingProxyType
-from typing import Literal, Mapping, cast
+from typing import Annotated, Literal, Mapping
 
-from game.asset_types import AssetSpec as AssetSpec, image_resources
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, PositiveFloat, PositiveInt, JsonValue
+
+from game.asset_types import AssetSpec as AssetSpec, ImageResourceSource, image_resources
 from game.animation_types import ParticleMediaAsset, PropAnimation, TetherAnimation
 from game.residue_media import region_media_assets
-from game.world_animation import WorldTransitionSample, prop_animation
+from game.world_animation import PropAnimationSource, WorldTransitionSample, prop_animation
 from game.surface_residue import LiquidSurfaceStyle, ResidueSurfaceCache, ResidueSurfaceStyle, WallFace
 from dnd.types.residues import ResidueEllipse
 
@@ -22,6 +24,132 @@ import pygame
 PACKAGE_ROOT = Path(__file__).resolve().parent
 ASSET_ROOT = PACKAGE_ROOT / "assets"
 DATA_ROOT = PACKAGE_ROOT / "data"
+
+
+class _WorldSource(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+
+class ImageAnimationSource(_WorldSource):
+    frames: Annotated[tuple[str, ...], Field(min_length=1)]
+    fps: PositiveInt
+
+
+class WaterSource(_WorldSource):
+    mask: str
+    ripple: str
+    normal: str
+    shallowColor: tuple[FiniteFloat, FiniteFloat, FiniteFloat, FiniteFloat]
+    deepColor: tuple[FiniteFloat, FiniteFloat, FiniteFloat, FiniteFloat]
+    tint: tuple[FiniteFloat, FiniteFloat, FiniteFloat, FiniteFloat]
+    depthBlendStrength: FiniteFloat
+    uvScale: PositiveFloat
+    detailPan: tuple[FiniteFloat, FiniteFloat]
+    detailInfluence: FiniteFloat
+    ripplePan: tuple[FiniteFloat, FiniteFloat]
+    rippleTilingMultiplier: PositiveFloat
+    rippleAmount: FiniteFloat
+    uvWobbleAmount: FiniteFloat
+    normalPanA: tuple[FiniteFloat, FiniteFloat]
+    normalPanB: tuple[FiniteFloat, FiniteFloat]
+    normalTilingMultiplier: PositiveFloat
+    normalScale: FiniteFloat
+    sheenStrength: FiniteFloat
+    sheenSharpness: PositiveFloat
+    overallAlpha: Annotated[float, Field(ge=0, le=1)]
+    alphaDepthStrength: FiniteFloat
+    alphaCutoff: Annotated[float, Field(ge=0, le=1)]
+    premultiplyOutput: bool
+    blend: Literal["one_one_minus_src_alpha"]
+
+
+class AssetDocument(_WorldSource):
+    schema_version: Literal[1]
+    resources: dict[str, ImageResourceSource]
+    animations: dict[str, ImageAnimationSource]
+    water: WaterSource
+
+
+class PropBindingSource(_WorldSource):
+    body_by_pose: dict[str, str]
+    lit_animation: str | None
+    state_field: Literal["is_open", "is_engaged"] | None = None
+    active_body_by_pose: dict[str, str] | None = None
+    transition: PropAnimationSource | None = None
+
+
+class TerrainCliffSource(_WorldSource):
+    role: Literal["cliff"]
+    rise_steps: PositiveInt
+    bed_material: str
+    upper_support_offset: tuple[int, int]
+    straight: dict[str, str]
+    corner: dict[str, str]
+    corner_faces: dict[str, tuple[Literal["east", "south", "west", "north"], Literal["east", "south", "west", "north"]]]
+
+
+class TerrainStairSource(_WorldSource):
+    role: Literal["stairs"]
+    rise_steps: PositiveInt
+    support_offsets: tuple[tuple[int, int, int], ...]
+    poses: dict[str, str]
+    contacts_px: dict[str, tuple[tuple[FiniteFloat, FiniteFloat], ...]]
+
+
+class TreatmentSource(_WorldSource):
+    id: str
+    rgb: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+
+
+class ResidueSurfaceSource(_WorldSource):
+    floor_atlas: str
+    wall_atlas: str
+    floor_opacity: Annotated[float, Field(ge=0, le=1)]
+    wall_opacity: Annotated[float, Field(ge=0, le=1)]
+
+
+class WallFaceSource(_WorldSource):
+    origin: tuple[FiniteFloat, FiniteFloat]
+    across: tuple[FiniteFloat, FiniteFloat]
+    down: tuple[FiniteFloat, FiniteFloat]
+    reverse: bool = False
+
+
+class WallFacesSource(_WorldSource):
+    profiles: dict[str, dict[str, tuple[WallFaceSource, ...]]] = Field(default_factory=dict)
+    assets: dict[str, str] = Field(default_factory=dict)
+
+
+class LiquidSurfaceSource(_WorldSource):
+    asset_id: str
+    ellipse: ResidueEllipse
+    opacity: Annotated[float, Field(ge=0, le=1)]
+
+
+class WorldBindingsSource(_WorldSource):
+    schema_version: Literal[1]
+    terrain: dict[str, dict[str, str] | str]
+    terrain_cliff: TerrainCliffSource
+    terrain_stairs: TerrainStairSource
+    stone_wall_straight: dict[str, str]
+    stone_wall_corner: dict[str, str]
+    wood_wall_straight: dict[str, str]
+    wood_wall_corner: dict[str, str]
+    stone_door_frame: dict[str, str]
+    wood_door_closed: dict[str, str]
+    wood_door_open: dict[str, str]
+    props: dict[str, PropBindingSource]
+    treatments: dict[str, TreatmentSource]
+    spatial_effects: dict[str, PropAnimationSource] = Field(default_factory=dict)
+    residue_wall_faces: WallFacesSource = Field(default_factory=WallFacesSource)
+    residue_particles: dict[str, str] = Field(default_factory=dict)
+    residue_ground: dict[str, dict[str, str]] = Field(default_factory=dict)
+    residue_surfaces: dict[str, ResidueSurfaceSource] = Field(default_factory=dict)
+    liquid_surfaces: dict[str, LiquidSurfaceSource] = Field(default_factory=dict)
+    # These two sections are decoded into SpatialMediaBinding/DepositMediaBinding
+    # by animation_data. They are not consumed a second time by this catalog.
+    spatial_media: dict[str, JsonValue] = Field(default_factory=dict)
+    deposit_media: dict[str, JsonValue] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,58 +226,56 @@ def catalog_from_documents(
     assets: dict[str, object], bindings: dict[str, object]
 ) -> AssetCatalog:
     """Assemble the checked-in catalog values without filesystem validation."""
-    raw_resources = cast(dict, assets["resources"])
-    animations = cast(dict, assets["animations"])
-    flame = cast(dict, animations["torch.flame"])
-    resources = image_resources(raw_resources, ASSET_ROOT)
+    source = AssetDocument.model_validate(assets)
+    world = WorldBindingsSource.model_validate(bindings)
+    flame = source.animations["torch.flame"]
+    resources = image_resources(source.resources, ASSET_ROOT)
     props = {}
-    for item_id, row in cast(dict, bindings["props"]).items():
-        loop = animations[row["lit_animation"]] if row["lit_animation"] is not None else None
+    for item_id, row in world.props.items():
+        loop = source.animations[row.lit_animation] if row.lit_animation is not None else None
         props[item_id] = PropBinding(
-            body_by_pose=MappingProxyType(row["body_by_pose"]),
-            lit_animation=None if loop is None else LitAnimation(tuple(loop["frames"]), loop["fps"]),
-            state_field=row.get("state_field"),
-            active_body_by_pose=(MappingProxyType(row["active_body_by_pose"])
-                                 if "active_body_by_pose" in row else None),
-            transition=prop_animation(row["transition"]) if "transition" in row else None,
+            body_by_pose=MappingProxyType(row.body_by_pose),
+            lit_animation=None if loop is None else LitAnimation(loop.frames, loop.fps),
+            state_field=row.state_field,
+            active_body_by_pose=(MappingProxyType(row.active_body_by_pose)
+                                 if row.active_body_by_pose is not None else None),
+            transition=prop_animation(row.transition) if row.transition is not None else None,
         )
-    wall_faces = cast(dict, bindings.get("residue_wall_faces", {}))
     face_profiles = {identity: MappingProxyType({pose: tuple(
-        WallFace(tuple(face["origin"]), tuple(face["across"]), tuple(face["down"]), face.get("reverse", False))
+        WallFace(face.origin, face.across, face.down, face.reverse)
         for face in faces) for pose, faces in poses.items()})
-        for identity, poses in wall_faces.get("profiles", {}).items()}
+        for identity, poses in world.residue_wall_faces.profiles.items()}
     return AssetCatalog(
         resources=MappingProxyType(resources),
         bindings=MappingProxyType(bindings),
-        flame_frames=tuple(flame["frames"]),
-        flame_fps=flame["fps"],
-        water=MappingProxyType(cast(dict, assets["water"])),
+        flame_frames=flame.frames,
+        flame_fps=flame.fps,
+        # Existing material consumers use JSON vector arrays; retain that public shape.
+        water=MappingProxyType(source.water.model_dump(mode="json")),
         props=MappingProxyType(props),
         spatial_effects=MappingProxyType({identity: prop_animation(row)
-            for identity, row in cast(dict, bindings.get("spatial_effects", {})).items()}),
+            for identity, row in world.spatial_effects.items()}),
         spatial_tethers=MappingProxyType({identity: TetherAnimation(
-            MappingProxyType({facing: tuple(frames) for facing, frames in row["tether"]["frames_by_facing"].items()}),
-            MappingProxyType({facing: ((points[0][0], points[0][1]), (points[1][0], points[1][1]))
-                              for facing, points in row["tether"]["endpoints_by_facing"].items()}),
-            row["tether"]["fps"],
-        ) for identity, row in cast(dict, bindings.get("spatial_effects", {})).items() if "tether" in row}),
+            MappingProxyType(row.tether.frames_by_facing), MappingProxyType(row.tether.endpoints_by_facing),
+            row.tether.fps,
+        ) for identity, row in world.spatial_effects.items() if row.tether is not None}),
         spatial_residue_overlays=MappingProxyType({
-            (identity, residue): MappingProxyType({pose: tuple(frames) for pose, frames in poses.items()})
-            for identity, row in cast(dict, bindings.get("spatial_effects", {})).items()
-            for residue, poses in row.get("residue_overlays", {}).items()
+            (identity, residue): MappingProxyType(poses)
+            for identity, row in world.spatial_effects.items()
+            for residue, poses in row.residue_overlays.items()
         }),
         residue_particles=MappingProxyType({identity: region_media_assets()[asset]
-            for identity, asset in cast(dict, bindings.get("residue_particles", {})).items()}),
+            for identity, asset in world.residue_particles.items()}),
         residue_ground=MappingProxyType({identity: MappingProxyType(poses)
-            for identity, poses in cast(dict, bindings.get("residue_ground", {})).items()}),
-        residue_surfaces=MappingProxyType({identity: ResidueSurfaceStyle(**row)
-            for identity, row in cast(dict, bindings.get("residue_surfaces", {})).items()}),
+            for identity, poses in world.residue_ground.items()}),
+        residue_surfaces=MappingProxyType({identity: ResidueSurfaceStyle(
+            row.floor_atlas, row.wall_atlas, row.floor_opacity, row.wall_opacity)
+            for identity, row in world.residue_surfaces.items()}),
         residue_wall_faces=MappingProxyType({identity: face_profiles[profile]
-            for identity, profile in wall_faces.get("assets", {}).items()}),
+            for identity, profile in world.residue_wall_faces.assets.items()}),
         liquid_surfaces=MappingProxyType({identity: LiquidSurfaceStyle(
-            asset=region_media_assets()[row["asset_id"]],
-            ellipse=ResidueEllipse.model_validate(row["ellipse"]), opacity=row["opacity"],
-        ) for identity, row in cast(dict, bindings.get("liquid_surfaces", {})).items()}),
+            asset=region_media_assets()[row.asset_id], ellipse=row.ellipse, opacity=row.opacity,
+        ) for identity, row in world.liquid_surfaces.items()}),
     )
 
 
@@ -170,6 +296,7 @@ class SurfaceCache:
         self.catalog = catalog
         self.surface_residues = ResidueSurfaceCache()
         self._canonical: dict[str, pygame.Surface] = {}
+        self._source_pages: dict[Path, pygame.Surface] = {}
         self._scaled: dict[tuple[str, float], pygame.Surface] = {}
         self._treated: dict[tuple[str, float, tuple[float, float, float]], pygame.Surface] = {}
         self._alpha_bounds: dict[tuple[str, float], tuple[int, int, int, int]] = {}
@@ -189,7 +316,11 @@ class SurfaceCache:
             return cached
         spec = self.catalog.resources[asset_id]
         try:
-            surface = pygame.image.load(spec.path).convert_alpha()
+            page = self._source_pages.get(spec.path)
+            if page is None:
+                page = pygame.image.load(spec.path).convert_alpha()
+                self._source_pages[spec.path] = page
+            surface = page if spec.rect is None else page.subsurface(spec.rect)
         except pygame.error as exc:
             raise ValueError(f"cannot decode asset {asset_id}: {exc}") from exc
         self._canonical[asset_id] = surface

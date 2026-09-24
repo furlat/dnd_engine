@@ -9,7 +9,8 @@ from dnd.actions import SpellEvent
 from dnd.blocks.base_item import ItemLocationStateEvent
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.conditions import Blinded
-from dnd.core.base_object import PASSIVE_EVENT_REPLAY
+from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
+from dnd.core.dice import DiceRoll
 from dnd.core.creature_types import DamageType
 from dnd.core.events import EventPhase, EventQueue, SensoryUpdateEvent, SpatialChangeEvent, TakeDamageEvent
 from dnd.entity import Entity, EntityConfig
@@ -17,7 +18,7 @@ from dnd.game import Game
 from dnd.items.environment import CloseDirectionalDoorAction, OpenDirectionalDoorAction
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from game.player_facts import DamageFact, EquipmentFact, MovementFact, SensoryFact, SpellFact, StepFact
+from game.player_facts import DamageFact, EquipmentFact, MovementFact, ObjectDestroyedFact, SensoryFact, SpellFact, StepFact
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.player_projection import project_sequence
@@ -27,6 +28,7 @@ from game.replay import ObserverCapture, RecordedSequence, capture_history
 from tests.game.visibility_scenarios import visibility_history
 from tests.game.concealment_scenarios import concealment_history
 from tests.game.scenarios import movement_with_paralysis
+from tests.game.prop_destruction_scenarios import prop_destruction_history
 
 
 def _saved_public(native: RecordedSequence):
@@ -38,6 +40,28 @@ def _saved_public(native: RecordedSequence):
     before, roots = decode_player_sequence(payload)
     assert EventQueue.event_cursor() == 0
     return payload, before, roots
+
+
+def test_fresh_destruction_public_bytes_retain_strict_placement_and_world_updates() -> None:
+    history = prop_destruction_history(item_id="environment.blocker.crate")
+    rolls = dict(DiceRoll._registry)
+    for native in history.views.values():
+        expected = project_sequence(native)
+        payload = encode_player_sequence(expected)
+        reset_engine_runtime()
+        state, roots = decode_player_sequence(payload)
+        assert roots == expected.lineages
+        destruction = [node.fact for root in roots for node in root.events
+                       if isinstance(node.fact, ObjectDestroyedFact)]
+        assert len(destruction) == 1
+        destroyed = destruction[0]
+        assert destroyed.placement == next(node.fact.placement for root in expected.lineages
+            for node in root.events if isinstance(node.fact, ObjectDestroyedFact))
+        for root in roots:
+            state = reduce_lineage(state, root)
+        assert state.objects[destroyed.object_uuid].placement.position == destroyed.placement.position
+        assert EventQueue.event_cursor() == 0 and BaseObject._registry == {}
+        assert DiceRoll._registry == rolls
 
 
 def test_witnessed_invisibility_keeps_cast_when_terminal_coordinate_is_withheld() -> None:

@@ -15,7 +15,7 @@ import pygame
 from dnd.types.world_placement import WorldObjectPlacement
 from dnd.core.events import WorldTileState
 from dnd.core.world_edges import SlopeAxis, progressive_elevation_transition
-from game.area_media import AreaSolid, boundary_segment
+from game.area_media import AreaSolid, BoundarySprite, boundary_segment
 from game.projection import Camera, inverse_rotate_position, project_world
 
 
@@ -150,7 +150,67 @@ def _visibility_origins(center, radius, segments):
     return tuple(found)
 
 
-def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
+def _visual_boundary_coverage(keep: np.ndarray, depth: np.ndarray, x: np.ndarray, z: np.ndarray,
+                              destination: tuple[int, int], boundaries: tuple[BoundarySprite, ...],
+                              vx: float, vz: float) -> None:
+    """Occlude samples behind finite registered boundary billboards.
+
+    The picture owns the visual cap/holes, while the received segment owns its
+    world depth. A foreground sample may overlap that picture without being
+    hidden. This is a billboard registration, not a reconstructed wall volume.
+    """
+    # Adjacent sprites overlap across their cell seam. Their visible cap must
+    # share the connected finite edge, rather than reopen one-pixel cracks when
+    # a camera ray crosses the neighboring cell's part of that same edge.
+    edges: dict[tuple[int, float, float, float | None], list[tuple[float, float]]] = {}
+    for boundary in boundaries:
+        for wall in boundary.placements:
+            first, last = boundary_segment(wall)
+            axis = 0 if first[0] == last[0] else 1
+            key = axis, first[axis], wall.base_height_steps, wall.top_height_steps
+            low, high = sorted((first[1-axis], last[1-axis]))
+            edges.setdefault(key, []).append((low, high))
+    for key, intervals in edges.items():
+        merged: list[tuple[float, float]] = []
+        for low, high in sorted(intervals):
+            if merged and low <= merged[-1][1]:
+                merged[-1] = merged[-1][0], max(merged[-1][1], high)
+            else:
+                merged.append((low, high))
+        edges[key] = merged
+    picture = pygame.Rect(destination, keep.shape)
+    for boundary in boundaries:
+        overlap = picture.clip(boundary.image.get_rect(topleft=boundary.destination))
+        if not overlap:
+            continue
+        local = overlap.move(-destination[0], -destination[1])
+        wall_local = overlap.move(-boundary.destination[0], -boundary.destination[1])
+        opacity = pygame.surfarray.array_alpha(boundary.image.subsurface(wall_local))
+        selection = np.s_[local.left:local.right, local.top:local.bottom]
+        px, pz = x[selection], z[selection]
+        behind = np.zeros(opacity.shape, dtype=bool)
+        for wall in boundary.placements:
+            first, last = boundary_segment(wall)
+            axis = 0 if first[0] == last[0] else 1
+            own_low, own_high = sorted((first[1-axis], last[1-axis]))
+            low, high = next((low, high) for low, high in edges[
+                axis, first[axis], wall.base_height_steps, wall.top_height_steps]
+                if low <= own_low and high >= own_high)
+            component, other, direction, cross_direction = ((px, pz, vx, vz)
+                if axis == 0 else (pz, px, vz, vx))
+            crossing_time = (first[axis] - component) / direction
+            along = other + crossing_time * cross_direction
+            behind |= (crossing_time > 1e-5) & (along >= low) & (along <= high)
+        keep[selection] &= ~(behind & (opacity == 255))
+        # Translucent edge pixels still composite normally over the sample.
+        # Put that contribution behind the boundary instead of flattening alpha.
+        depth[selection] = np.where(behind & (opacity > 0),
+            np.minimum(depth[selection], np.nextafter(boundary.key[1], -np.inf)), depth[selection])
+
+
+def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera, *,
+                   destination: tuple[int, int] = (0, 0),
+                   visual_boundaries: tuple[BoundarySprite, ...] | None = None,
                    ) -> tuple[pygame.Surface, np.ndarray]:
     """Return masked color plus ground depths for the shared painter splitter."""
     local = volume.positions
@@ -188,7 +248,8 @@ def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
         keep &= admitted
     # The host projection has direction (1,1,1) in view-grid/height units.
     vx, vz = axis_x[0] + axis_z[0], axis_x[1] + axis_z[1]
-    for axis, plane, low, high, bottom, top in barriers:
+    occluders = _barriers(volume.boundaries if visual_boundaries is None else (), volume.solids)
+    for axis, plane, low, high, bottom, top in occluders:
         if top is None:
             continue
         component, other, direction, cross_direction = (x, z, vx, vz) if axis == 0 else (z, x, vz, vx)
@@ -198,6 +259,8 @@ def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
                   & (height + t >= bottom) & (height + t <= top))
     center_depth = project_world(volume.center, quadrant=camera.quadrant)[1]
     depth = center_depth + 32 * (local[:, :, 0] + local[:, :, 2] + dx + dz)
+    if visual_boundaries is not None:
+        _visual_boundary_coverage(keep, depth, x, z, destination, visual_boundaries, vx, vz)
     for sphere in volume.exclusions:
         dx, dz = x - sphere.center[0], z - sphere.center[1]
         dy = (height - sphere.elevation) / sphere.vertical_scale
@@ -212,7 +275,7 @@ def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
         extent = sphere.radius * sqrt(2) * 32
         depth = np.where(owned & intersects & (axial > 0), np.maximum(depth, shell_depth + extent + .01), depth)
         depth = np.where(owned & intersects & (axial < 0), np.minimum(depth, shell_depth - extent - .01), depth)
-    if barriers or volume.exclusions or volume.supports or volume.admitted is not None:
+    if barriers or occluders or visual_boundaries or volume.exclusions or volume.supports or volume.admitted is not None:
         keep &= owned  # Unresolved pixels cannot bypass active spatial clipping.
     else:
         keep |= ~owned  # Raw reference artwork retains its original coverage.

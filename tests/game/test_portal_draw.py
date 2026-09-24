@@ -64,6 +64,11 @@ def test_falling_body_clips_at_ground_without_erasing_upper_body_or_mutating_cac
     cached_pixels = {key: pygame.image.tobytes(surface, "RGBA") for key, surface in media.items()}
     clipped = clip_portal_bodies(commands, camera, sampled.portals, sampled.hidden_actors)
     body, = (command for command in clipped if command.evidence[6] == "actor")
+    without_diagnostics = clip_portal_bodies(tuple(command._replace(evidence=()) for command in commands),
+        camera, sampled.portals, sampled.hidden_actors)
+    assert [(row.role, row.owner, row.destination, pygame.image.tobytes(row.surface, "RGBA"))
+            for row in without_diagnostics] == [
+        (row.role, row.owner, row.destination, pygame.image.tobytes(row.surface, "RGBA")) for row in clipped]
     assert not any(command.evidence[6] == "actor_shadow" for command in clipped)
     before = pygame.surfarray.array_alpha(source.surface)
     after = pygame.surfarray.array_alpha(body.surface)

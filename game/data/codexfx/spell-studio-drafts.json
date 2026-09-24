@@ -1,6 +1,6 @@
 {
   "schema": "dnd.spellStudioDrafts",
-  "version": 2,
+  "version": 3,
   "spells": [
     {
       "definitionRef": {
@@ -53,17 +53,20 @@
         },
         "prepare": {
           "enabled": false,
-          "assetPhase": "cast"
+          "assetPhase": "cast",
+          "composition": "billboard"
         },
         "travel": {
           "enabled": true,
           "assetPhase": "travel",
-          "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1"
+          "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+          "composition": "billboard"
         },
         "impact": {
           "enabled": true,
           "assetPhase": "impact",
-          "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1"
+          "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+          "composition": "billboard"
         },
         "trajectory": {
           "type": "bezier",

@@ -7,6 +7,8 @@ import shutil
 
 from PIL import Image
 
+from devtools.media_delivery import owns_selected_media
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DIRECTIONS = ("E", "SE", "S", "SW", "W", "NW", "N", "NE")
@@ -103,6 +105,8 @@ def import_bundle(source: Path, *, repo: Path = ROOT, field_asset: str | None = 
             continue
         phase = "travel" if name == projectile.get("asset") else "impact"
         identity = f"{spell}.projectile.v1" if phase == "travel" else f"{spell}.area.v1"
+        if not owns_selected_media(bindings.get("projectileStorage", {}), identity, media.as_posix()):
+            continue
         # Repack the source's cropped rectangles into the existing fixed-cell
         # page format. All views keep one common canvas crop and their measured
         # pivot; frames and native timing are unchanged, including empty tails.

@@ -73,10 +73,10 @@ def import_bundle(source: Path, *, repo: Path = ROOT) -> None:
                     resources["resources"][image_id] = {
                         "path": copy(file).relative_to("game/assets").as_posix(),
                         "native_size": [pose["cell"], pose["cell"]],
-                        "pivot": pose["pivot"], "scale": 1,
+                        "pivot": pose["pivot"], "scale": resources["resources"].get(image_id, {}).get("scale", 1),
                     }
-                conditions["layers"][identity] = {"category": name, "animation": "static",
-                                                  "images_by_facing": images}
+                conditions["layers"].setdefault(identity, {}).update(
+                    category=name, animation="static", images_by_facing=images)
     for sheet in WEAPON_CHARGE_SHEETS:
         bindings["resources"][f"/support-spells/true_strike/{sheet}"] = copy(f"weapon-charge/{sheet}").as_posix()
     _write(folder / "bindings.json", bindings)

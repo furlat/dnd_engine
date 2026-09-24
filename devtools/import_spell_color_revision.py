@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import shutil
 
+from devtools.media_delivery import owns_selected_media
+
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISED_ASSETS = {
@@ -29,9 +31,11 @@ def import_revision(source: Path, *, repo: Path = ROOT) -> int:
         copied += 1
     assets_path = repo / "game/data/spell_recovery/projectile-assets.json"
     assets = json.loads(assets_path.read_text())
+    bindings = json.loads((assets_path.parent / "bindings.json").read_text())
     for asset in assets:
         spell = REVISED_ASSETS.get(asset["assetId"])
-        if spell is not None:
+        if spell is not None and owns_selected_media(
+                bindings.get("projectileStorage", {}), asset["assetId"], "game/assets/spell_recovery"):
             asset["palettePreview"]["colors"] = [r*65536+g*256+b for r,g,b in palette[spell]["revised"]]
     assets_path.write_text(json.dumps(assets,indent=2)+"\n")
     return copied

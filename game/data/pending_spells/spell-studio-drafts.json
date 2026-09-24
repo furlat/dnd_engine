@@ -1,6 +1,6 @@
 {
   "schema": "dnd.spellStudioDrafts",
-  "version": 2,
+  "version": 3,
   "spells": [
     {
       "definitionRef": {
@@ -70,7 +70,8 @@
           "scale": 0.5,
           "depth": "behind_body",
           "viewFacing": "SE",
-          "onMiss": "omit"
+          "onMiss": "omit",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -81,7 +82,8 @@
           "scale": 0.5,
           "depth": "front_body",
           "viewFacing": "SE",
-          "onMiss": "omit"
+          "onMiss": "omit",
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -183,7 +185,8 @@
           "scale": 0.5,
           "depth": "behind_body",
           "viewFacing": "SE",
-          "onMiss": "play"
+          "onMiss": "play",
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -194,7 +197,8 @@
           "scale": 0.5,
           "depth": "front_body",
           "viewFacing": "SE",
-          "onMiss": "play"
+          "onMiss": "play",
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -296,7 +300,8 @@
           "scale": 0.5,
           "depth": "behind_body",
           "viewFacing": "SE",
-          "onMiss": "play"
+          "onMiss": "play",
+          "composition": "xyz_volume"
         },
         {
           "id": "front",
@@ -307,7 +312,8 @@
           "scale": 0.5,
           "depth": "front_body",
           "viewFacing": "SE",
-          "onMiss": "play"
+          "onMiss": "play",
+          "composition": "xyz_volume"
         }
       ],
       "contact": {
@@ -408,7 +414,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "behind_body",
-          "viewFacing": "SE"
+          "viewFacing": "SE",
+          "composition": "billboard"
         },
         {
           "id": "departure-front",
@@ -418,7 +425,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "front_body",
-          "viewFacing": "SE"
+          "viewFacing": "SE",
+          "composition": "billboard"
         },
         {
           "id": "arrival-back",
@@ -428,7 +436,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "behind_body",
-          "viewFacing": "SE"
+          "viewFacing": "SE",
+          "composition": "billboard"
         },
         {
           "id": "arrival-front",
@@ -438,7 +447,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "front_body",
-          "viewFacing": "SE"
+          "viewFacing": "SE",
+          "composition": "billboard"
         }
       ]
     },

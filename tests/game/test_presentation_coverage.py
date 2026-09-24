@@ -15,6 +15,9 @@ import pytest
 
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, bind_motion
+from game.environment_art import load_environment_art
+from game.condition_types import ConditionFile
+from tests.game.portal_scenarios import portal_history
 from game.player_facts import ActionFact
 from game.player_reduction import reduce_lineage
 from game.presentation_coverage import lineage_coverage, missing_observed_bindings, presentation_inventory
@@ -123,3 +126,38 @@ def test_missing_selected_action_reports_gap_without_inventing_a_cue(data):
                for issue in row["issues"])
     # The real child state still reduces when the actor presentation is missing.
     assert group.after == reduce_lineage(before, lineage)
+
+
+def test_inventory_includes_initialized_environment_and_state_media(data):
+    environment = load_environment_art()
+    rows = presentation_inventory(data, environment=environment)
+    ids = {(row["family"], row["identity"]) for row in rows}
+    for family, selected in (("device", data.devices), ("portal", data.portals),
+                             ("spatial_media", data.spatial_media), ("deposit_media", data.deposit_media),
+                             ("environment_bank", environment.banks), ("door", environment.doors),
+                             ("trap", environment.traps), ("prop", environment.props)):
+        assert {(family, key) for key in selected} <= ids
+    json.dumps(rows)
+
+
+def test_real_portal_crossing_reports_its_bound_cue(data):
+    state, lineages = player_history(portal_history(program="bare-walk"), role="traveler")
+    found = []
+    for lineage in lineages:
+        motion = bind_motion(state, lineage, data)
+        group = None if motion is not None else bind_choreography(state, lineage, data)
+        found.extend(row for row in lineage_coverage(lineage, group=group, motion=motion)
+                     if row["owner"] == "portal" and row["observed"] == "bound")
+        state = reduce_lineage(state, lineage)
+    assert found
+
+
+def test_condition_source_id_distinguishes_local_extensions_without_losing_fields():
+    for path, schema, version in (
+        (Path("game/data/condition-recipes.json"), "dnd.conditionPresentationRecipes", 1),
+        (Path("game/data/neuroclient/source/src/render/data/animation/conditionPresentation.json"),
+         "neuroclient.conditionPresentationRecipes", 12),
+    ):
+        value = ConditionFile.model_validate_json(path.read_text())
+        assert (value.schema_id, value.version) == (schema, version)
+        assert value.model_dump(mode="json", by_alias=True, exclude_unset=True) == json.loads(path.read_text())

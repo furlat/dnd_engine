@@ -194,7 +194,7 @@
       "scale": 1
     },
     "spikes.blood.e.0": {
-      "path": "environment/spikes-blood/e-0.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -203,10 +203,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.blood.e.1": {
-      "path": "environment/spikes-blood/e-1.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -215,10 +221,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.blood.e.2": {
-      "path": "environment/spikes-blood/e-2.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -227,10 +239,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.blood.e.3": {
-      "path": "environment/spikes-blood/e-3.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -239,10 +257,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.blood.e.4": {
-      "path": "environment/spikes-blood/e-4.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -251,10 +275,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.blood.e.5": {
-      "path": "environment/spikes-blood/e-5.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -263,10 +293,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.blood.e.6": {
-      "path": "environment/spikes-blood/e-6.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -275,10 +311,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.blood.n.0": {
-      "path": "environment/spikes-blood/n-0.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -287,10 +329,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.blood.n.1": {
-      "path": "environment/spikes-blood/n-1.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -299,10 +347,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.blood.n.2": {
-      "path": "environment/spikes-blood/n-2.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -311,10 +365,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.blood.n.3": {
-      "path": "environment/spikes-blood/n-3.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -323,10 +383,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.blood.n.4": {
-      "path": "environment/spikes-blood/n-4.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -335,10 +401,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.blood.n.5": {
-      "path": "environment/spikes-blood/n-5.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -347,10 +419,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.blood.n.6": {
-      "path": "environment/spikes-blood/n-6.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -359,10 +437,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.blood.s.0": {
-      "path": "environment/spikes-blood/s-0.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -371,10 +455,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.blood.s.1": {
-      "path": "environment/spikes-blood/s-1.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -383,10 +473,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.blood.s.2": {
-      "path": "environment/spikes-blood/s-2.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -395,10 +491,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.blood.s.3": {
-      "path": "environment/spikes-blood/s-3.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -407,10 +509,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.blood.s.4": {
-      "path": "environment/spikes-blood/s-4.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -419,10 +527,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.blood.s.5": {
-      "path": "environment/spikes-blood/s-5.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -431,10 +545,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.blood.s.6": {
-      "path": "environment/spikes-blood/s-6.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -443,10 +563,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.blood.w.0": {
-      "path": "environment/spikes-blood/w-0.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -455,10 +581,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.blood.w.1": {
-      "path": "environment/spikes-blood/w-1.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -467,10 +599,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.blood.w.2": {
-      "path": "environment/spikes-blood/w-2.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -479,10 +617,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.blood.w.3": {
-      "path": "environment/spikes-blood/w-3.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -491,10 +635,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "spikes.blood.w.4": {
-      "path": "environment/spikes-blood/w-4.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -503,10 +653,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "spikes.blood.w.5": {
-      "path": "environment/spikes-blood/w-5.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -515,10 +671,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "spikes.blood.w.6": {
-      "path": "environment/spikes-blood/w-6.png",
+      "path": "packed/environment/spikes-blood/256x256-000.png",
       "native_size": [
         256,
         256
@@ -527,7 +689,13 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "terrain.cliff.e": {
       "path": "environment/ground-g12-e.png",
@@ -1214,7 +1382,7 @@
       "scale": 2.0
     },
     "lever.e.0": {
-      "path": "environment/lever/e-0.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1223,10 +1391,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "lever.e.1": {
-      "path": "environment/lever/e-1.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1235,10 +1409,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "lever.e.2": {
-      "path": "environment/lever/e-2.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1247,10 +1427,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "lever.e.3": {
-      "path": "environment/lever/e-3.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1259,10 +1445,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "lever.e.4": {
-      "path": "environment/lever/e-4.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1271,10 +1463,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "lever.e.5": {
-      "path": "environment/lever/e-5.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1283,10 +1481,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "lever.e.6": {
-      "path": "environment/lever/e-6.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1295,10 +1499,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "lever.n.0": {
-      "path": "environment/lever/n-0.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1307,10 +1517,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "lever.n.1": {
-      "path": "environment/lever/n-1.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1319,10 +1535,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "lever.n.2": {
-      "path": "environment/lever/n-2.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1331,10 +1553,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "lever.n.3": {
-      "path": "environment/lever/n-3.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1343,10 +1571,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "lever.n.4": {
-      "path": "environment/lever/n-4.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1355,10 +1589,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "lever.n.5": {
-      "path": "environment/lever/n-5.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1367,10 +1607,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "lever.n.6": {
-      "path": "environment/lever/n-6.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1379,10 +1625,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "lever.s.0": {
-      "path": "environment/lever/s-0.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1391,10 +1643,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "lever.s.1": {
-      "path": "environment/lever/s-1.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1403,10 +1661,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "lever.s.2": {
-      "path": "environment/lever/s-2.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1415,10 +1679,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "lever.s.3": {
-      "path": "environment/lever/s-3.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1427,10 +1697,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "lever.s.4": {
-      "path": "environment/lever/s-4.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1439,10 +1715,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "lever.s.5": {
-      "path": "environment/lever/s-5.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1451,10 +1733,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "lever.s.6": {
-      "path": "environment/lever/s-6.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1463,10 +1751,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "lever.w.0": {
-      "path": "environment/lever/w-0.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1475,10 +1769,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "lever.w.1": {
-      "path": "environment/lever/w-1.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1487,10 +1787,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "lever.w.2": {
-      "path": "environment/lever/w-2.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1499,10 +1805,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "lever.w.3": {
-      "path": "environment/lever/w-3.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1511,10 +1823,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "lever.w.4": {
-      "path": "environment/lever/w-4.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1523,10 +1841,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "lever.w.5": {
-      "path": "environment/lever/w-5.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1535,10 +1859,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "lever.w.6": {
-      "path": "environment/lever/w-6.png",
+      "path": "packed/environment/lever/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1547,10 +1877,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "spikes.e.0": {
-      "path": "environment/spikes/e-0.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1559,10 +1895,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.e.1": {
-      "path": "environment/spikes/e-1.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1571,10 +1913,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.e.2": {
-      "path": "environment/spikes/e-2.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1583,10 +1931,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.e.3": {
-      "path": "environment/spikes/e-3.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1595,10 +1949,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.e.4": {
-      "path": "environment/spikes/e-4.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1607,10 +1967,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.e.5": {
-      "path": "environment/spikes/e-5.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1619,10 +1985,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.e.6": {
-      "path": "environment/spikes/e-6.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1631,10 +2003,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.n.0": {
-      "path": "environment/spikes/n-0.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1643,10 +2021,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.n.1": {
-      "path": "environment/spikes/n-1.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1655,10 +2039,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.n.2": {
-      "path": "environment/spikes/n-2.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1667,10 +2057,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.n.3": {
-      "path": "environment/spikes/n-3.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1679,10 +2075,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.n.4": {
-      "path": "environment/spikes/n-4.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1691,10 +2093,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.n.5": {
-      "path": "environment/spikes/n-5.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1703,10 +2111,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.n.6": {
-      "path": "environment/spikes/n-6.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1715,10 +2129,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.s.0": {
-      "path": "environment/spikes/s-0.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1727,10 +2147,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.s.1": {
-      "path": "environment/spikes/s-1.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1739,10 +2165,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.s.2": {
-      "path": "environment/spikes/s-2.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1751,10 +2183,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.s.3": {
-      "path": "environment/spikes/s-3.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1763,10 +2201,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.s.4": {
-      "path": "environment/spikes/s-4.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1775,10 +2219,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.s.5": {
-      "path": "environment/spikes/s-5.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1787,10 +2237,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.s.6": {
-      "path": "environment/spikes/s-6.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1799,10 +2255,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.w.0": {
-      "path": "environment/spikes/w-0.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1811,10 +2273,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.w.1": {
-      "path": "environment/spikes/w-1.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1823,10 +2291,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.w.2": {
-      "path": "environment/spikes/w-2.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1835,10 +2309,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.w.3": {
-      "path": "environment/spikes/w-3.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1847,10 +2327,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "spikes.w.4": {
-      "path": "environment/spikes/w-4.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1859,10 +2345,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "spikes.w.5": {
-      "path": "environment/spikes/w-5.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1871,10 +2363,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "spikes.w.6": {
-      "path": "environment/spikes/w-6.png",
+      "path": "packed/environment/spikes/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1883,10 +2381,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "spikes.coated.e.0": {
-      "path": "environment/spikes-coated/e-0.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1895,10 +2399,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.coated.e.1": {
-      "path": "environment/spikes-coated/e-1.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1907,10 +2417,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.coated.e.2": {
-      "path": "environment/spikes-coated/e-2.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1919,10 +2435,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.coated.e.3": {
-      "path": "environment/spikes-coated/e-3.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1931,10 +2453,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.coated.e.4": {
-      "path": "environment/spikes-coated/e-4.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1943,10 +2471,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.coated.e.5": {
-      "path": "environment/spikes-coated/e-5.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1955,10 +2489,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.coated.e.6": {
-      "path": "environment/spikes-coated/e-6.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1967,10 +2507,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.coated.n.0": {
-      "path": "environment/spikes-coated/n-0.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1979,10 +2525,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "spikes.coated.n.1": {
-      "path": "environment/spikes-coated/n-1.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -1991,10 +2543,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.coated.n.2": {
-      "path": "environment/spikes-coated/n-2.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2003,10 +2561,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.coated.n.3": {
-      "path": "environment/spikes-coated/n-3.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2015,10 +2579,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.coated.n.4": {
-      "path": "environment/spikes-coated/n-4.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2027,10 +2597,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.coated.n.5": {
-      "path": "environment/spikes-coated/n-5.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2039,10 +2615,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.coated.n.6": {
-      "path": "environment/spikes-coated/n-6.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2051,10 +2633,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.coated.s.0": {
-      "path": "environment/spikes-coated/s-0.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2063,10 +2651,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.coated.s.1": {
-      "path": "environment/spikes-coated/s-1.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2075,10 +2669,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "spikes.coated.s.2": {
-      "path": "environment/spikes-coated/s-2.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2087,10 +2687,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.coated.s.3": {
-      "path": "environment/spikes-coated/s-3.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2099,10 +2705,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.coated.s.4": {
-      "path": "environment/spikes-coated/s-4.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2111,10 +2723,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.coated.s.5": {
-      "path": "environment/spikes-coated/s-5.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2123,10 +2741,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.coated.s.6": {
-      "path": "environment/spikes-coated/s-6.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2135,10 +2759,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.coated.w.0": {
-      "path": "environment/spikes-coated/w-0.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2147,10 +2777,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.coated.w.1": {
-      "path": "environment/spikes-coated/w-1.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2159,10 +2795,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.coated.w.2": {
-      "path": "environment/spikes-coated/w-2.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2171,10 +2813,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "spikes.coated.w.3": {
-      "path": "environment/spikes-coated/w-3.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2183,10 +2831,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "spikes.coated.w.4": {
-      "path": "environment/spikes-coated/w-4.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2195,10 +2849,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "spikes.coated.w.5": {
-      "path": "environment/spikes-coated/w-5.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2207,10 +2867,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "spikes.coated.w.6": {
-      "path": "environment/spikes-coated/w-6.png",
+      "path": "packed/environment/spikes-coated/256x256-000.png",
       "native_size": [
         256,
         256
@@ -2219,7 +2885,13 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "chest.closed.e": {
       "path": "environment/chest-a1-e.png",
@@ -12518,7 +13190,7 @@
       "scale": 1
     },
     "trap-workshop.plate.e.0": {
-      "path": "environment/trap-workshop/plate/e-0.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12527,10 +13199,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.e.1": {
-      "path": "environment/trap-workshop/plate/e-1.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12539,10 +13217,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.e.2": {
-      "path": "environment/trap-workshop/plate/e-2.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12551,10 +13235,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.e.3": {
-      "path": "environment/trap-workshop/plate/e-3.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12563,10 +13253,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.e.4": {
-      "path": "environment/trap-workshop/plate/e-4.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12575,10 +13271,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.e.5": {
-      "path": "environment/trap-workshop/plate/e-5.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12587,10 +13289,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.e.6": {
-      "path": "environment/trap-workshop/plate/e-6.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12599,10 +13307,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.e.7": {
-      "path": "environment/trap-workshop/plate/e-7.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12611,10 +13325,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.e.8": {
-      "path": "environment/trap-workshop/plate/e-8.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12623,10 +13343,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.e.9": {
-      "path": "environment/trap-workshop/plate/e-9.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12635,10 +13361,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.e.10": {
-      "path": "environment/trap-workshop/plate/e-10.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12647,10 +13379,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.e.11": {
-      "path": "environment/trap-workshop/plate/e-11.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12659,10 +13397,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.0": {
-      "path": "environment/trap-workshop/plate/s-0.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12671,10 +13415,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.1": {
-      "path": "environment/trap-workshop/plate/s-1.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12683,10 +13433,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.2": {
-      "path": "environment/trap-workshop/plate/s-2.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12695,10 +13451,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.3": {
-      "path": "environment/trap-workshop/plate/s-3.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12707,10 +13469,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.4": {
-      "path": "environment/trap-workshop/plate/s-4.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12719,10 +13487,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.5": {
-      "path": "environment/trap-workshop/plate/s-5.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12731,10 +13505,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.6": {
-      "path": "environment/trap-workshop/plate/s-6.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12743,10 +13523,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.7": {
-      "path": "environment/trap-workshop/plate/s-7.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12755,10 +13541,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.8": {
-      "path": "environment/trap-workshop/plate/s-8.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12767,10 +13559,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.9": {
-      "path": "environment/trap-workshop/plate/s-9.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12779,10 +13577,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.10": {
-      "path": "environment/trap-workshop/plate/s-10.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12791,10 +13595,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.s.11": {
-      "path": "environment/trap-workshop/plate/s-11.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12803,10 +13613,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.0": {
-      "path": "environment/trap-workshop/plate/w-0.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12815,10 +13631,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.1": {
-      "path": "environment/trap-workshop/plate/w-1.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12827,10 +13649,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.2": {
-      "path": "environment/trap-workshop/plate/w-2.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12839,10 +13667,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.3": {
-      "path": "environment/trap-workshop/plate/w-3.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12851,10 +13685,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.4": {
-      "path": "environment/trap-workshop/plate/w-4.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12863,10 +13703,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.5": {
-      "path": "environment/trap-workshop/plate/w-5.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12875,10 +13721,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.6": {
-      "path": "environment/trap-workshop/plate/w-6.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12887,10 +13739,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.7": {
-      "path": "environment/trap-workshop/plate/w-7.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12899,10 +13757,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.8": {
-      "path": "environment/trap-workshop/plate/w-8.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12911,10 +13775,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.9": {
-      "path": "environment/trap-workshop/plate/w-9.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12923,10 +13793,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.10": {
-      "path": "environment/trap-workshop/plate/w-10.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12935,10 +13811,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.w.11": {
-      "path": "environment/trap-workshop/plate/w-11.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12947,10 +13829,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.0": {
-      "path": "environment/trap-workshop/plate/n-0.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12959,10 +13847,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.1": {
-      "path": "environment/trap-workshop/plate/n-1.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12971,10 +13865,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.2": {
-      "path": "environment/trap-workshop/plate/n-2.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12983,10 +13883,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.3": {
-      "path": "environment/trap-workshop/plate/n-3.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -12995,10 +13901,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.4": {
-      "path": "environment/trap-workshop/plate/n-4.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13007,10 +13919,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.5": {
-      "path": "environment/trap-workshop/plate/n-5.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13019,10 +13937,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.6": {
-      "path": "environment/trap-workshop/plate/n-6.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13031,10 +13955,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.7": {
-      "path": "environment/trap-workshop/plate/n-7.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13043,10 +13973,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.8": {
-      "path": "environment/trap-workshop/plate/n-8.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13055,10 +13991,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.9": {
-      "path": "environment/trap-workshop/plate/n-9.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13067,10 +14009,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.10": {
-      "path": "environment/trap-workshop/plate/n-10.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13079,10 +14027,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.plate.n.11": {
-      "path": "environment/trap-workshop/plate/n-11.png",
+      "path": "packed/environment/trap-workshop/plate/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13091,10 +14045,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.0": {
-      "path": "environment/trap-workshop/darts/e-0.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13103,10 +14063,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.1": {
-      "path": "environment/trap-workshop/darts/e-1.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13115,10 +14081,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.2": {
-      "path": "environment/trap-workshop/darts/e-2.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13127,10 +14099,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.3": {
-      "path": "environment/trap-workshop/darts/e-3.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13139,10 +14117,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.4": {
-      "path": "environment/trap-workshop/darts/e-4.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13151,10 +14135,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.5": {
-      "path": "environment/trap-workshop/darts/e-5.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13163,10 +14153,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.6": {
-      "path": "environment/trap-workshop/darts/e-6.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13175,10 +14171,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.7": {
-      "path": "environment/trap-workshop/darts/e-7.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13187,10 +14189,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.8": {
-      "path": "environment/trap-workshop/darts/e-8.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13199,10 +14207,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.9": {
-      "path": "environment/trap-workshop/darts/e-9.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13211,10 +14225,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.10": {
-      "path": "environment/trap-workshop/darts/e-10.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13223,10 +14243,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.e.11": {
-      "path": "environment/trap-workshop/darts/e-11.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13235,10 +14261,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.0": {
-      "path": "environment/trap-workshop/darts/s-0.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13247,10 +14279,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.1": {
-      "path": "environment/trap-workshop/darts/s-1.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13259,10 +14297,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.2": {
-      "path": "environment/trap-workshop/darts/s-2.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13271,10 +14315,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.3": {
-      "path": "environment/trap-workshop/darts/s-3.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13283,10 +14333,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.4": {
-      "path": "environment/trap-workshop/darts/s-4.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13295,10 +14351,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.5": {
-      "path": "environment/trap-workshop/darts/s-5.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13307,10 +14369,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.6": {
-      "path": "environment/trap-workshop/darts/s-6.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13319,10 +14387,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.7": {
-      "path": "environment/trap-workshop/darts/s-7.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13331,10 +14405,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.8": {
-      "path": "environment/trap-workshop/darts/s-8.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13343,10 +14423,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.9": {
-      "path": "environment/trap-workshop/darts/s-9.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13355,10 +14441,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.10": {
-      "path": "environment/trap-workshop/darts/s-10.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13367,10 +14459,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.s.11": {
-      "path": "environment/trap-workshop/darts/s-11.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13379,10 +14477,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.0": {
-      "path": "environment/trap-workshop/darts/w-0.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13391,10 +14495,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.1": {
-      "path": "environment/trap-workshop/darts/w-1.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13403,10 +14513,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.2": {
-      "path": "environment/trap-workshop/darts/w-2.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13415,10 +14531,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.3": {
-      "path": "environment/trap-workshop/darts/w-3.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13427,10 +14549,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.4": {
-      "path": "environment/trap-workshop/darts/w-4.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13439,10 +14567,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.5": {
-      "path": "environment/trap-workshop/darts/w-5.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13451,10 +14585,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.6": {
-      "path": "environment/trap-workshop/darts/w-6.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13463,10 +14603,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.7": {
-      "path": "environment/trap-workshop/darts/w-7.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13475,10 +14621,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.8": {
-      "path": "environment/trap-workshop/darts/w-8.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13487,10 +14639,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.9": {
-      "path": "environment/trap-workshop/darts/w-9.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13499,10 +14657,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.10": {
-      "path": "environment/trap-workshop/darts/w-10.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13511,10 +14675,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.w.11": {
-      "path": "environment/trap-workshop/darts/w-11.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13523,10 +14693,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.0": {
-      "path": "environment/trap-workshop/darts/n-0.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13535,10 +14711,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.1": {
-      "path": "environment/trap-workshop/darts/n-1.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13547,10 +14729,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.2": {
-      "path": "environment/trap-workshop/darts/n-2.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13559,10 +14747,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.3": {
-      "path": "environment/trap-workshop/darts/n-3.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13571,10 +14765,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.4": {
-      "path": "environment/trap-workshop/darts/n-4.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13583,10 +14783,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.5": {
-      "path": "environment/trap-workshop/darts/n-5.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13595,10 +14801,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.6": {
-      "path": "environment/trap-workshop/darts/n-6.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13607,10 +14819,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.7": {
-      "path": "environment/trap-workshop/darts/n-7.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13619,10 +14837,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.8": {
-      "path": "environment/trap-workshop/darts/n-8.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13631,10 +14855,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.9": {
-      "path": "environment/trap-workshop/darts/n-9.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13643,10 +14873,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.10": {
-      "path": "environment/trap-workshop/darts/n-10.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13655,10 +14891,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.darts.n.11": {
-      "path": "environment/trap-workshop/darts/n-11.png",
+      "path": "packed/environment/trap-workshop/darts/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13667,10 +14909,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.0": {
-      "path": "environment/trap-workshop/blade/e-0.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13679,10 +14927,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.1": {
-      "path": "environment/trap-workshop/blade/e-1.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13691,10 +14945,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.2": {
-      "path": "environment/trap-workshop/blade/e-2.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13703,10 +14963,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.3": {
-      "path": "environment/trap-workshop/blade/e-3.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13715,10 +14981,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.4": {
-      "path": "environment/trap-workshop/blade/e-4.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13727,10 +14999,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.5": {
-      "path": "environment/trap-workshop/blade/e-5.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13739,10 +15017,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.6": {
-      "path": "environment/trap-workshop/blade/e-6.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13751,10 +15035,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.7": {
-      "path": "environment/trap-workshop/blade/e-7.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13763,10 +15053,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.8": {
-      "path": "environment/trap-workshop/blade/e-8.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13775,10 +15071,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.9": {
-      "path": "environment/trap-workshop/blade/e-9.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13787,10 +15089,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.10": {
-      "path": "environment/trap-workshop/blade/e-10.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13799,10 +15107,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.e.11": {
-      "path": "environment/trap-workshop/blade/e-11.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13811,10 +15125,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.0": {
-      "path": "environment/trap-workshop/blade/s-0.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13823,10 +15143,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.1": {
-      "path": "environment/trap-workshop/blade/s-1.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13835,10 +15161,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.2": {
-      "path": "environment/trap-workshop/blade/s-2.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13847,10 +15179,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.3": {
-      "path": "environment/trap-workshop/blade/s-3.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13859,10 +15197,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.4": {
-      "path": "environment/trap-workshop/blade/s-4.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13871,10 +15215,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.5": {
-      "path": "environment/trap-workshop/blade/s-5.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13883,10 +15233,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.6": {
-      "path": "environment/trap-workshop/blade/s-6.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13895,10 +15251,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.7": {
-      "path": "environment/trap-workshop/blade/s-7.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13907,10 +15269,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.8": {
-      "path": "environment/trap-workshop/blade/s-8.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13919,10 +15287,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.9": {
-      "path": "environment/trap-workshop/blade/s-9.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13931,10 +15305,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.10": {
-      "path": "environment/trap-workshop/blade/s-10.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13943,10 +15323,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.s.11": {
-      "path": "environment/trap-workshop/blade/s-11.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13955,10 +15341,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.0": {
-      "path": "environment/trap-workshop/blade/w-0.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13967,10 +15359,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.1": {
-      "path": "environment/trap-workshop/blade/w-1.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13979,10 +15377,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.2": {
-      "path": "environment/trap-workshop/blade/w-2.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -13991,10 +15395,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.3": {
-      "path": "environment/trap-workshop/blade/w-3.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14003,10 +15413,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.4": {
-      "path": "environment/trap-workshop/blade/w-4.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14015,10 +15431,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.5": {
-      "path": "environment/trap-workshop/blade/w-5.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14027,10 +15449,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.6": {
-      "path": "environment/trap-workshop/blade/w-6.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14039,10 +15467,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.7": {
-      "path": "environment/trap-workshop/blade/w-7.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14051,10 +15485,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.8": {
-      "path": "environment/trap-workshop/blade/w-8.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14063,10 +15503,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.9": {
-      "path": "environment/trap-workshop/blade/w-9.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14075,10 +15521,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.10": {
-      "path": "environment/trap-workshop/blade/w-10.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14087,10 +15539,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.w.11": {
-      "path": "environment/trap-workshop/blade/w-11.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14099,10 +15557,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.0": {
-      "path": "environment/trap-workshop/blade/n-0.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14111,10 +15575,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.1": {
-      "path": "environment/trap-workshop/blade/n-1.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14123,10 +15593,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.2": {
-      "path": "environment/trap-workshop/blade/n-2.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14135,10 +15611,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.3": {
-      "path": "environment/trap-workshop/blade/n-3.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14147,10 +15629,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.4": {
-      "path": "environment/trap-workshop/blade/n-4.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14159,10 +15647,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.5": {
-      "path": "environment/trap-workshop/blade/n-5.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14171,10 +15665,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.6": {
-      "path": "environment/trap-workshop/blade/n-6.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14183,10 +15683,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.7": {
-      "path": "environment/trap-workshop/blade/n-7.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14195,10 +15701,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.8": {
-      "path": "environment/trap-workshop/blade/n-8.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14207,10 +15719,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.9": {
-      "path": "environment/trap-workshop/blade/n-9.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14219,10 +15737,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.10": {
-      "path": "environment/trap-workshop/blade/n-10.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14231,10 +15755,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.n.11": {
-      "path": "environment/trap-workshop/blade/n-11.png",
+      "path": "packed/environment/trap-workshop/blade/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14243,10 +15773,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.0": {
-      "path": "environment/trap-workshop/crusher/e-0.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14255,10 +15791,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.1": {
-      "path": "environment/trap-workshop/crusher/e-1.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14267,10 +15809,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.2": {
-      "path": "environment/trap-workshop/crusher/e-2.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14279,10 +15827,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.3": {
-      "path": "environment/trap-workshop/crusher/e-3.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14291,10 +15845,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.4": {
-      "path": "environment/trap-workshop/crusher/e-4.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14303,10 +15863,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.5": {
-      "path": "environment/trap-workshop/crusher/e-5.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14315,10 +15881,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.6": {
-      "path": "environment/trap-workshop/crusher/e-6.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14327,10 +15899,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.7": {
-      "path": "environment/trap-workshop/crusher/e-7.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14339,10 +15917,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.8": {
-      "path": "environment/trap-workshop/crusher/e-8.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14351,10 +15935,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.9": {
-      "path": "environment/trap-workshop/crusher/e-9.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14363,10 +15953,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.10": {
-      "path": "environment/trap-workshop/crusher/e-10.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14375,10 +15971,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.e.11": {
-      "path": "environment/trap-workshop/crusher/e-11.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14387,10 +15989,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.0": {
-      "path": "environment/trap-workshop/crusher/s-0.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14399,10 +16007,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.1": {
-      "path": "environment/trap-workshop/crusher/s-1.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14411,10 +16025,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.2": {
-      "path": "environment/trap-workshop/crusher/s-2.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14423,10 +16043,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.3": {
-      "path": "environment/trap-workshop/crusher/s-3.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14435,10 +16061,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.4": {
-      "path": "environment/trap-workshop/crusher/s-4.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14447,10 +16079,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.5": {
-      "path": "environment/trap-workshop/crusher/s-5.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14459,10 +16097,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.6": {
-      "path": "environment/trap-workshop/crusher/s-6.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14471,10 +16115,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.7": {
-      "path": "environment/trap-workshop/crusher/s-7.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14483,10 +16133,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.8": {
-      "path": "environment/trap-workshop/crusher/s-8.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14495,10 +16151,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.9": {
-      "path": "environment/trap-workshop/crusher/s-9.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14507,10 +16169,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.10": {
-      "path": "environment/trap-workshop/crusher/s-10.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14519,10 +16187,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.s.11": {
-      "path": "environment/trap-workshop/crusher/s-11.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14531,10 +16205,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.0": {
-      "path": "environment/trap-workshop/crusher/w-0.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14543,10 +16223,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.1": {
-      "path": "environment/trap-workshop/crusher/w-1.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14555,10 +16241,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.2": {
-      "path": "environment/trap-workshop/crusher/w-2.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14567,10 +16259,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.3": {
-      "path": "environment/trap-workshop/crusher/w-3.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14579,10 +16277,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.4": {
-      "path": "environment/trap-workshop/crusher/w-4.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14591,10 +16295,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.5": {
-      "path": "environment/trap-workshop/crusher/w-5.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14603,10 +16313,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.6": {
-      "path": "environment/trap-workshop/crusher/w-6.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14615,10 +16331,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.7": {
-      "path": "environment/trap-workshop/crusher/w-7.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14627,10 +16349,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.8": {
-      "path": "environment/trap-workshop/crusher/w-8.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14639,10 +16367,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.9": {
-      "path": "environment/trap-workshop/crusher/w-9.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14651,10 +16385,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.10": {
-      "path": "environment/trap-workshop/crusher/w-10.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14663,10 +16403,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.w.11": {
-      "path": "environment/trap-workshop/crusher/w-11.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14675,10 +16421,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.0": {
-      "path": "environment/trap-workshop/crusher/n-0.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14687,10 +16439,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.1": {
-      "path": "environment/trap-workshop/crusher/n-1.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14699,10 +16457,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.2": {
-      "path": "environment/trap-workshop/crusher/n-2.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14711,10 +16475,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.3": {
-      "path": "environment/trap-workshop/crusher/n-3.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14723,10 +16493,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.4": {
-      "path": "environment/trap-workshop/crusher/n-4.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14735,10 +16511,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.5": {
-      "path": "environment/trap-workshop/crusher/n-5.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14747,10 +16529,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.6": {
-      "path": "environment/trap-workshop/crusher/n-6.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14759,10 +16547,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.7": {
-      "path": "environment/trap-workshop/crusher/n-7.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14771,10 +16565,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.8": {
-      "path": "environment/trap-workshop/crusher/n-8.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14783,10 +16583,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.9": {
-      "path": "environment/trap-workshop/crusher/n-9.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14795,10 +16601,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.10": {
-      "path": "environment/trap-workshop/crusher/n-10.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14807,10 +16619,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.crusher.n.11": {
-      "path": "environment/trap-workshop/crusher/n-11.png",
+      "path": "packed/environment/trap-workshop/crusher/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14819,10 +16637,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.e.0": {
-      "path": "environment/trap-workshop/dart-projectile/e-0.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14831,10 +16655,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.e.1": {
-      "path": "environment/trap-workshop/dart-projectile/e-1.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14843,10 +16673,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.e.2": {
-      "path": "environment/trap-workshop/dart-projectile/e-2.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14855,10 +16691,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.e.3": {
-      "path": "environment/trap-workshop/dart-projectile/e-3.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14867,10 +16709,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.e.4": {
-      "path": "environment/trap-workshop/dart-projectile/e-4.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14879,10 +16727,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.e.5": {
-      "path": "environment/trap-workshop/dart-projectile/e-5.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14891,10 +16745,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.e.6": {
-      "path": "environment/trap-workshop/dart-projectile/e-6.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14903,10 +16763,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.e.7": {
-      "path": "environment/trap-workshop/dart-projectile/e-7.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14915,10 +16781,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.s.0": {
-      "path": "environment/trap-workshop/dart-projectile/s-0.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14927,10 +16799,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.s.1": {
-      "path": "environment/trap-workshop/dart-projectile/s-1.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14939,10 +16817,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.s.2": {
-      "path": "environment/trap-workshop/dart-projectile/s-2.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14951,10 +16835,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.s.3": {
-      "path": "environment/trap-workshop/dart-projectile/s-3.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14963,10 +16853,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.s.4": {
-      "path": "environment/trap-workshop/dart-projectile/s-4.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14975,10 +16871,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.s.5": {
-      "path": "environment/trap-workshop/dart-projectile/s-5.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14987,10 +16889,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.s.6": {
-      "path": "environment/trap-workshop/dart-projectile/s-6.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -14999,10 +16907,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.s.7": {
-      "path": "environment/trap-workshop/dart-projectile/s-7.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15011,10 +16925,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.w.0": {
-      "path": "environment/trap-workshop/dart-projectile/w-0.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15023,10 +16943,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.w.1": {
-      "path": "environment/trap-workshop/dart-projectile/w-1.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15035,10 +16961,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.w.2": {
-      "path": "environment/trap-workshop/dart-projectile/w-2.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15047,10 +16979,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.w.3": {
-      "path": "environment/trap-workshop/dart-projectile/w-3.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15059,10 +16997,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.w.4": {
-      "path": "environment/trap-workshop/dart-projectile/w-4.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15071,10 +17015,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.w.5": {
-      "path": "environment/trap-workshop/dart-projectile/w-5.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15083,10 +17033,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.w.6": {
-      "path": "environment/trap-workshop/dart-projectile/w-6.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15095,10 +17051,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.w.7": {
-      "path": "environment/trap-workshop/dart-projectile/w-7.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15107,10 +17069,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.n.0": {
-      "path": "environment/trap-workshop/dart-projectile/n-0.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15119,10 +17087,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.n.1": {
-      "path": "environment/trap-workshop/dart-projectile/n-1.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15131,10 +17105,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.n.2": {
-      "path": "environment/trap-workshop/dart-projectile/n-2.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15143,10 +17123,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.n.3": {
-      "path": "environment/trap-workshop/dart-projectile/n-3.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15155,10 +17141,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.n.4": {
-      "path": "environment/trap-workshop/dart-projectile/n-4.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15167,10 +17159,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.n.5": {
-      "path": "environment/trap-workshop/dart-projectile/n-5.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15179,10 +17177,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.n.6": {
-      "path": "environment/trap-workshop/dart-projectile/n-6.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15191,10 +17195,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.dart-projectile.n.7": {
-      "path": "environment/trap-workshop/dart-projectile/n-7.png",
+      "path": "packed/environment/trap-workshop/dart-projectile/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15203,10 +17213,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.0": {
-      "path": "environment/trap-workshop/jaw/e-0.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15215,10 +17231,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.1": {
-      "path": "environment/trap-workshop/jaw/e-1.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15227,10 +17249,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.2": {
-      "path": "environment/trap-workshop/jaw/e-2.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15239,10 +17267,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.3": {
-      "path": "environment/trap-workshop/jaw/e-3.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15251,10 +17285,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.4": {
-      "path": "environment/trap-workshop/jaw/e-4.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15263,10 +17303,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.5": {
-      "path": "environment/trap-workshop/jaw/e-5.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15275,10 +17321,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.6": {
-      "path": "environment/trap-workshop/jaw/e-6.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15287,10 +17339,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.7": {
-      "path": "environment/trap-workshop/jaw/e-7.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15299,10 +17357,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.8": {
-      "path": "environment/trap-workshop/jaw/e-8.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15311,10 +17375,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.9": {
-      "path": "environment/trap-workshop/jaw/e-9.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15323,10 +17393,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.10": {
-      "path": "environment/trap-workshop/jaw/e-10.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15335,10 +17411,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.e.11": {
-      "path": "environment/trap-workshop/jaw/e-11.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15347,10 +17429,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.0": {
-      "path": "environment/trap-workshop/jaw/s-0.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15359,10 +17447,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.1": {
-      "path": "environment/trap-workshop/jaw/s-1.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15371,10 +17465,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.2": {
-      "path": "environment/trap-workshop/jaw/s-2.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15383,10 +17483,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.3": {
-      "path": "environment/trap-workshop/jaw/s-3.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15395,10 +17501,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.4": {
-      "path": "environment/trap-workshop/jaw/s-4.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15407,10 +17519,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.5": {
-      "path": "environment/trap-workshop/jaw/s-5.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15419,10 +17537,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.6": {
-      "path": "environment/trap-workshop/jaw/s-6.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15431,10 +17555,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.7": {
-      "path": "environment/trap-workshop/jaw/s-7.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15443,10 +17573,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.8": {
-      "path": "environment/trap-workshop/jaw/s-8.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15455,10 +17591,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.9": {
-      "path": "environment/trap-workshop/jaw/s-9.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15467,10 +17609,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.10": {
-      "path": "environment/trap-workshop/jaw/s-10.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15479,10 +17627,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.s.11": {
-      "path": "environment/trap-workshop/jaw/s-11.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15491,10 +17645,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.0": {
-      "path": "environment/trap-workshop/jaw/w-0.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15503,10 +17663,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.1": {
-      "path": "environment/trap-workshop/jaw/w-1.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15515,10 +17681,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.2": {
-      "path": "environment/trap-workshop/jaw/w-2.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15527,10 +17699,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.3": {
-      "path": "environment/trap-workshop/jaw/w-3.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15539,10 +17717,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.4": {
-      "path": "environment/trap-workshop/jaw/w-4.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15551,10 +17735,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.5": {
-      "path": "environment/trap-workshop/jaw/w-5.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15563,10 +17753,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.6": {
-      "path": "environment/trap-workshop/jaw/w-6.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15575,10 +17771,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.7": {
-      "path": "environment/trap-workshop/jaw/w-7.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15587,10 +17789,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.8": {
-      "path": "environment/trap-workshop/jaw/w-8.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15599,10 +17807,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.9": {
-      "path": "environment/trap-workshop/jaw/w-9.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15611,10 +17825,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.10": {
-      "path": "environment/trap-workshop/jaw/w-10.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15623,10 +17843,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.w.11": {
-      "path": "environment/trap-workshop/jaw/w-11.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15635,10 +17861,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.0": {
-      "path": "environment/trap-workshop/jaw/n-0.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15647,10 +17879,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.1": {
-      "path": "environment/trap-workshop/jaw/n-1.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15659,10 +17897,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.2": {
-      "path": "environment/trap-workshop/jaw/n-2.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15671,10 +17915,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.3": {
-      "path": "environment/trap-workshop/jaw/n-3.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15683,10 +17933,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.4": {
-      "path": "environment/trap-workshop/jaw/n-4.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15695,10 +17951,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.5": {
-      "path": "environment/trap-workshop/jaw/n-5.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15707,10 +17969,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.6": {
-      "path": "environment/trap-workshop/jaw/n-6.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15719,10 +17987,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.7": {
-      "path": "environment/trap-workshop/jaw/n-7.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15731,10 +18005,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.8": {
-      "path": "environment/trap-workshop/jaw/n-8.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15743,10 +18023,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.9": {
-      "path": "environment/trap-workshop/jaw/n-9.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15755,10 +18041,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.10": {
-      "path": "environment/trap-workshop/jaw/n-10.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15767,10 +18059,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.jaw.n.11": {
-      "path": "environment/trap-workshop/jaw/n-11.png",
+      "path": "packed/environment/trap-workshop/jaw/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15779,10 +18077,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.0": {
-      "path": "environment/trap-workshop/vent/e-0.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15791,10 +18095,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.1": {
-      "path": "environment/trap-workshop/vent/e-1.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15803,10 +18113,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.2": {
-      "path": "environment/trap-workshop/vent/e-2.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15815,10 +18131,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.3": {
-      "path": "environment/trap-workshop/vent/e-3.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15827,10 +18149,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.4": {
-      "path": "environment/trap-workshop/vent/e-4.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15839,10 +18167,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.5": {
-      "path": "environment/trap-workshop/vent/e-5.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15851,10 +18185,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.6": {
-      "path": "environment/trap-workshop/vent/e-6.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15863,10 +18203,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.7": {
-      "path": "environment/trap-workshop/vent/e-7.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15875,10 +18221,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.8": {
-      "path": "environment/trap-workshop/vent/e-8.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15887,10 +18239,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.9": {
-      "path": "environment/trap-workshop/vent/e-9.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15899,10 +18257,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.10": {
-      "path": "environment/trap-workshop/vent/e-10.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15911,10 +18275,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.e.11": {
-      "path": "environment/trap-workshop/vent/e-11.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15923,10 +18293,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.0": {
-      "path": "environment/trap-workshop/vent/s-0.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15935,10 +18311,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.1": {
-      "path": "environment/trap-workshop/vent/s-1.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15947,10 +18329,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.2": {
-      "path": "environment/trap-workshop/vent/s-2.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15959,10 +18347,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.3": {
-      "path": "environment/trap-workshop/vent/s-3.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15971,10 +18365,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.4": {
-      "path": "environment/trap-workshop/vent/s-4.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15983,10 +18383,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.5": {
-      "path": "environment/trap-workshop/vent/s-5.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -15995,10 +18401,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.6": {
-      "path": "environment/trap-workshop/vent/s-6.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16007,10 +18419,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.7": {
-      "path": "environment/trap-workshop/vent/s-7.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16019,10 +18437,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.8": {
-      "path": "environment/trap-workshop/vent/s-8.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16031,10 +18455,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.9": {
-      "path": "environment/trap-workshop/vent/s-9.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16043,10 +18473,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.10": {
-      "path": "environment/trap-workshop/vent/s-10.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16055,10 +18491,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.s.11": {
-      "path": "environment/trap-workshop/vent/s-11.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16067,10 +18509,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.0": {
-      "path": "environment/trap-workshop/vent/w-0.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16079,10 +18527,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.1": {
-      "path": "environment/trap-workshop/vent/w-1.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16091,10 +18545,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.2": {
-      "path": "environment/trap-workshop/vent/w-2.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16103,10 +18563,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.3": {
-      "path": "environment/trap-workshop/vent/w-3.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16115,10 +18581,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.4": {
-      "path": "environment/trap-workshop/vent/w-4.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16127,10 +18599,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.5": {
-      "path": "environment/trap-workshop/vent/w-5.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16139,10 +18617,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.6": {
-      "path": "environment/trap-workshop/vent/w-6.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16151,10 +18635,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.7": {
-      "path": "environment/trap-workshop/vent/w-7.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16163,10 +18653,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.8": {
-      "path": "environment/trap-workshop/vent/w-8.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16175,10 +18671,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.9": {
-      "path": "environment/trap-workshop/vent/w-9.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16187,10 +18689,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.10": {
-      "path": "environment/trap-workshop/vent/w-10.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16199,10 +18707,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.w.11": {
-      "path": "environment/trap-workshop/vent/w-11.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16211,10 +18725,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.0": {
-      "path": "environment/trap-workshop/vent/n-0.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16223,10 +18743,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.1": {
-      "path": "environment/trap-workshop/vent/n-1.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16235,10 +18761,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.2": {
-      "path": "environment/trap-workshop/vent/n-2.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16247,10 +18779,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.3": {
-      "path": "environment/trap-workshop/vent/n-3.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16259,10 +18797,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.4": {
-      "path": "environment/trap-workshop/vent/n-4.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16271,10 +18815,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.5": {
-      "path": "environment/trap-workshop/vent/n-5.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16283,10 +18833,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.6": {
-      "path": "environment/trap-workshop/vent/n-6.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16295,10 +18851,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.7": {
-      "path": "environment/trap-workshop/vent/n-7.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16307,10 +18869,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.8": {
-      "path": "environment/trap-workshop/vent/n-8.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16319,10 +18887,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.9": {
-      "path": "environment/trap-workshop/vent/n-9.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16331,10 +18905,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.10": {
-      "path": "environment/trap-workshop/vent/n-10.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16343,10 +18923,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.vent.n.11": {
-      "path": "environment/trap-workshop/vent/n-11.png",
+      "path": "packed/environment/trap-workshop/vent/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16355,10 +18941,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.0": {
-      "path": "environment/trap-workshop/tripwire/e-0.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16367,10 +18959,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.1": {
-      "path": "environment/trap-workshop/tripwire/e-1.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16379,10 +18977,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.2": {
-      "path": "environment/trap-workshop/tripwire/e-2.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16391,10 +18995,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.3": {
-      "path": "environment/trap-workshop/tripwire/e-3.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16403,10 +19013,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.4": {
-      "path": "environment/trap-workshop/tripwire/e-4.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16415,10 +19031,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.5": {
-      "path": "environment/trap-workshop/tripwire/e-5.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16427,10 +19049,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.6": {
-      "path": "environment/trap-workshop/tripwire/e-6.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16439,10 +19067,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.7": {
-      "path": "environment/trap-workshop/tripwire/e-7.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16451,10 +19085,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        0,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.8": {
-      "path": "environment/trap-workshop/tripwire/e-8.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16463,10 +19103,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.9": {
-      "path": "environment/trap-workshop/tripwire/e-9.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16475,10 +19121,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.10": {
-      "path": "environment/trap-workshop/tripwire/e-10.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16487,10 +19139,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.e.11": {
-      "path": "environment/trap-workshop/tripwire/e-11.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16499,10 +19157,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.0": {
-      "path": "environment/trap-workshop/tripwire/s-0.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16511,10 +19175,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.1": {
-      "path": "environment/trap-workshop/tripwire/s-1.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16523,10 +19193,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.2": {
-      "path": "environment/trap-workshop/tripwire/s-2.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16535,10 +19211,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.3": {
-      "path": "environment/trap-workshop/tripwire/s-3.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16547,10 +19229,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        256,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.4": {
-      "path": "environment/trap-workshop/tripwire/s-4.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16559,10 +19247,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.5": {
-      "path": "environment/trap-workshop/tripwire/s-5.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16571,10 +19265,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.6": {
-      "path": "environment/trap-workshop/tripwire/s-6.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16583,10 +19283,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.7": {
-      "path": "environment/trap-workshop/tripwire/s-7.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16595,10 +19301,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.8": {
-      "path": "environment/trap-workshop/tripwire/s-8.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16607,10 +19319,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.9": {
-      "path": "environment/trap-workshop/tripwire/s-9.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16619,10 +19337,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.10": {
-      "path": "environment/trap-workshop/tripwire/s-10.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16631,10 +19355,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.s.11": {
-      "path": "environment/trap-workshop/tripwire/s-11.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16643,10 +19373,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        512,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.0": {
-      "path": "environment/trap-workshop/tripwire/w-0.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16655,10 +19391,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.1": {
-      "path": "environment/trap-workshop/tripwire/w-1.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16667,10 +19409,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.2": {
-      "path": "environment/trap-workshop/tripwire/w-2.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16679,10 +19427,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.3": {
-      "path": "environment/trap-workshop/tripwire/w-3.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16691,10 +19445,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.4": {
-      "path": "environment/trap-workshop/tripwire/w-4.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16703,10 +19463,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.5": {
-      "path": "environment/trap-workshop/tripwire/w-5.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16715,10 +19481,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.6": {
-      "path": "environment/trap-workshop/tripwire/w-6.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16727,10 +19499,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.7": {
-      "path": "environment/trap-workshop/tripwire/w-7.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16739,10 +19517,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        768,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.8": {
-      "path": "environment/trap-workshop/tripwire/w-8.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16751,10 +19535,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.9": {
-      "path": "environment/trap-workshop/tripwire/w-9.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16763,10 +19553,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.10": {
-      "path": "environment/trap-workshop/tripwire/w-10.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16775,10 +19571,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.w.11": {
-      "path": "environment/trap-workshop/tripwire/w-11.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16787,10 +19589,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.0": {
-      "path": "environment/trap-workshop/tripwire/n-0.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16799,10 +19607,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.1": {
-      "path": "environment/trap-workshop/tripwire/n-1.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16811,10 +19625,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.2": {
-      "path": "environment/trap-workshop/tripwire/n-2.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16823,10 +19643,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.3": {
-      "path": "environment/trap-workshop/tripwire/n-3.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16835,10 +19661,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1024,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.4": {
-      "path": "environment/trap-workshop/tripwire/n-4.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16847,10 +19679,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        0,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.5": {
-      "path": "environment/trap-workshop/tripwire/n-5.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16859,10 +19697,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        256,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.6": {
-      "path": "environment/trap-workshop/tripwire/n-6.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16871,10 +19715,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        512,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.7": {
-      "path": "environment/trap-workshop/tripwire/n-7.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16883,10 +19733,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        768,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.8": {
-      "path": "environment/trap-workshop/tripwire/n-8.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16895,10 +19751,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1024,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.9": {
-      "path": "environment/trap-workshop/tripwire/n-9.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16907,10 +19769,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1280,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.10": {
-      "path": "environment/trap-workshop/tripwire/n-10.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16919,10 +19787,16 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1536,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.tripwire.n.11": {
-      "path": "environment/trap-workshop/tripwire/n-11.png",
+      "path": "packed/environment/trap-workshop/tripwire/256x256-000.png",
       "native_size": [
         256,
         256
@@ -16931,7 +19805,13 @@
         128,
         208
       ],
-      "scale": 1.0
+      "scale": 1.0,
+      "rect": [
+        1792,
+        1280,
+        256,
+        256
+      ]
     },
     "trap-workshop.blade.actor-depth": {
       "path": "environment/trap-workshop/blade/ground-depth-rg.png",

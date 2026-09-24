@@ -36,3 +36,31 @@ Tomb of the Serpent_Kings v4.pdf
 /data/mapeditor/maps/
 /.runtime/
 /to_archive
+
+# Licensed media and binary/XYZ companions are installed from the private art repo.
+/game/assets/
+# Art exports and rendered review output; authoring JSON under game/data stays public.
+/output/*
+!/output/fireball-propagation/
+/output/fireball-propagation/*
+!/output/fireball-propagation/native-wall-fixtures.json
+!/output/fireball-propagation/wall-policy-comparison.json
+/private-art/
+/neurodragon_art/
+
+# Art/source/review media must not be accidentally staged from another folder.
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.wav
+*.ogg
+*.flac
+*.mp4
+*.webm
+*.mov
+*.blend
+*.blend1
+*.psd
+*.aseprite

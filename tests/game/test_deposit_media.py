@@ -292,6 +292,12 @@ def test_real_door_constrained_water_media_stays_in_received_cells_and_replaces_
             assert evidence is not None and evidence.matches
             assert any(len(row) > 6 and row[6] == "deposit_floor" for row in evidence.actual_draws)
             assert not any(row[2] == "particles.region.water" for row in evidence.actual_draws)
+            pixels = pygame.image.tobytes(screen, "RGBA")
+            draw_frame(screen, state, catalog, cache, camera, 0,
+                show_grid=False, show_debug=False, mouse_position=None,
+                extra_commands=tuple(row._replace(evidence=()) for row in commands), deposited_materials=covered)
+            assert pygame.image.tobytes(screen, "RGBA") == pixels
+
 
 
 def test_historical_frame_uses_release_date_without_holding_later_gameplay(raster, data, water_history):

@@ -3,14 +3,16 @@
 from dataclasses import dataclass
 from math import hypot
 from types import MappingProxyType
-from typing import Literal, Mapping, Sequence
+from typing import Annotated, Literal, Mapping, Sequence
+
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, PositiveFloat, PositiveInt, NonNegativeInt, model_validator
 from uuid import UUID
 
 from dnd.types.world import CardinalDirection
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.core.presentation_geometry import CylinderPresentationGeometry, SpherePresentationGeometry
 from game.player_facts import PlayerState, WorldUpdate
-from game.animation_types import HitFlash, MechanismProjectileArt, PropAnimation, PropDepth, SaveHop, SurfaceReveal
+from game.animation_types import Facing8, HitFlash, MechanismProjectileArt, PropAnimation, PropDepth, SaveHop, SurfaceReveal
 from game.device_art import DeviceFacing
 from game.mechanism_projectile import MechanismProjectileCue
 from game.environment_art import load_environment_art
@@ -45,31 +47,96 @@ def surface_reveal_delay(update: WorldUpdate, before: PlayerState, reveal: Surfa
     return distance * 1000 / reveal.speedTilesPerSecond
 
 
-def prop_animation(row: dict) -> PropAnimation:
+class _PropSource(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+
+class MechanismProjectileSource(_PropSource):
+    frames_by_pose: dict[str, Annotated[tuple[str, ...], Field(min_length=1)]]
+    tip_offsets_by_pose: dict[str, tuple[tuple[FiniteFloat, FiniteFloat], ...]]
+    muzzle_offsets_by_pose: dict[str, tuple[FiniteFloat, FiniteFloat]]
+    muzzle_height_steps: FiniteFloat
+    speed_tiles_per_second: PositiveFloat
+
+    @model_validator(mode="after")
+    def registered_frames(self) -> "MechanismProjectileSource":
+        if set(self.frames_by_pose) != set(self.tip_offsets_by_pose) or set(self.frames_by_pose) != set(self.muzzle_offsets_by_pose):
+            raise ValueError("projectile contacts must cover its poses")
+        if any(len(frames) != len(self.tip_offsets_by_pose[pose]) for pose, frames in self.frames_by_pose.items()):
+            raise ValueError("projectile tips must cover its frames")
+        return self
+
+
+class SaveHopSource(_PropSource):
+    effect_id: str
+    body_clip: str
+    duration_ms: PositiveFloat
+    height_px: PositiveFloat
+
+
+class PropDepthSource(_PropSource):
+    asset_id: str
+    cell: tuple[PositiveInt, PositiveInt]
+    rows_by_pose: dict[str, NonNegativeInt]
+    depth_range: tuple[FiniteFloat, FiniteFloat]
+    pixels_per_unit_by_pose: dict[str, PositiveFloat]
+
+
+class TetherSource(_PropSource):
+    frames_by_facing: dict[Facing8, Annotated[tuple[str, ...], Field(min_length=1)]]
+    endpoints_by_facing: dict[Facing8, tuple[tuple[FiniteFloat, FiniteFloat], tuple[FiniteFloat, FiniteFloat]]]
+    fps: PositiveFloat
+
+
+class PropAnimationSource(_PropSource):
+    frames_by_pose: Annotated[dict[str, Annotated[tuple[str, ...], Field(min_length=1)]], Field(min_length=1)]
+    fps: PositiveInt
+    state_frames: dict[str, NonNegativeInt]
+    default_frame: NonNegativeInt = 0
+    placement: Literal["cell", "area", "anchor"] = "cell"
+    origin_offset: tuple[FiniteFloat, FiniteFloat] = (0, 0)
+    creation_start_frame: NonNegativeInt | None = None
+    footprint_tiles: tuple[PositiveInt, PositiveInt] | None = None
+    activation_frames: tuple[NonNegativeInt, ...] = ()
+    contact_frame: NonNegativeInt | None = None
+    transition_frames: dict[str, tuple[NonNegativeInt, ...]] = Field(default_factory=dict)
+    projectile: MechanismProjectileSource | None = None
+    depth: Literal["ground", "world"] = "ground"
+    successful_save_hop: SaveHopSource | None = None
+    actor_depth: PropDepthSource | None = None
+    # Adjacent world-catalog media share the authored object's source row.
+    tether: TetherSource | None = None
+    residue_overlays: dict[str, dict[str, tuple[str, ...]]] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def frame_markers(self) -> "PropAnimationSource":
+        markers = (self.default_frame, self.creation_start_frame, self.contact_frame,
+                   *self.state_frames.values(), *self.activation_frames,
+                   *(frame for frames in self.transition_frames.values() for frame in frames))
+        limit = min(map(len, self.frames_by_pose.values()))
+        if any(frame is not None and frame >= limit for frame in markers):
+            raise ValueError("prop frame markers must index each pose's frames")
+        return self
+
+
+def prop_animation(row: Mapping[str, object] | PropAnimationSource) -> PropAnimation:
     """Decode the same authored poses for timeline binding and raster drawing."""
-    projectile = row.get("projectile")
-    hop = row.get("successful_save_hop")
-    depth = row.get("actor_depth")
+    source = PropAnimationSource.model_validate(row)
+    projectile, hop, depth = source.projectile, source.successful_save_hop, source.actor_depth
     media = None if projectile is None else MechanismProjectileArt(
-        MappingProxyType({pose: tuple(frames) for pose, frames in projectile["frames_by_pose"].items()}),
-        MappingProxyType({pose: tuple(tuple(point) for point in points)
-                          for pose, points in projectile["tip_offsets_by_pose"].items()}),
-        MappingProxyType({pose: tuple(point) for pose, point in projectile["muzzle_offsets_by_pose"].items()}),
-        projectile["muzzle_height_steps"], projectile["speed_tiles_per_second"],
+        MappingProxyType(projectile.frames_by_pose), MappingProxyType(projectile.tip_offsets_by_pose),
+        MappingProxyType(projectile.muzzle_offsets_by_pose), projectile.muzzle_height_steps,
+        projectile.speed_tiles_per_second,
     )
-    return PropAnimation(MappingProxyType({pose: tuple(frames)
-        for pose, frames in row["frames_by_pose"].items()}), row["fps"], MappingProxyType(row["state_frames"]),
-        row.get("default_frame", 0), row.get("placement", "cell"),
-        tuple(row.get("origin_offset", (0, 0))), row.get("creation_start_frame"),
-        tuple(row["footprint_tiles"]) if "footprint_tiles" in row else None,
-        tuple(row.get("activation_frames", ())), row.get("contact_frame"),
-        MappingProxyType({key: tuple(frames)
-                         for key, frames in row.get("transition_frames", {}).items()}), media,
-        row.get("depth", "ground"), None if hop is None else SaveHop(
-            hop["effect_id"], hop["body_clip"], hop["duration_ms"], hop["height_px"]),
-        None if depth is None else PropDepth(depth["asset_id"], tuple(depth["cell"]),
-            MappingProxyType(depth["rows_by_pose"]), tuple(depth["depth_range"]),
-            MappingProxyType(depth["pixels_per_unit_by_pose"])))
+    return PropAnimation(MappingProxyType(source.frames_by_pose), source.fps,
+        MappingProxyType(source.state_frames), source.default_frame, source.placement,
+        source.origin_offset, source.creation_start_frame, source.footprint_tiles,
+        source.activation_frames, source.contact_frame, MappingProxyType(source.transition_frames),
+        media, source.depth, None if hop is None else SaveHop(
+            hop.effect_id, hop.body_clip, hop.duration_ms, hop.height_px),
+        None if depth is None else PropDepth(depth.asset_id, depth.cell,
+            MappingProxyType(depth.rows_by_pose), depth.depth_range,
+            MappingProxyType(depth.pixels_per_unit_by_pose)))
 
 
 @dataclass(frozen=True, slots=True)

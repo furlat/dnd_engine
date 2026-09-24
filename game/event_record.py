@@ -26,7 +26,7 @@ from dnd.core.content.runtime import EffectiveHandlerPresentation
 from dnd.core.events import (
     AttackD20RollResultEvent, D20Event, D20RollResultEvent, DamageAppliedEvent,
     DamageRollResultEvent, DeathEvent, DeathSaveEvent, EncounterEndEvent,
-    EncounterEvent, EncounterStartEvent, EntityCreatedEvent, Event,
+    EncounterEvent, EncounterStartEvent, EntityCreatedEvent, Event, EventPhase,
     ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
     ItemDestructionEvent, LifeStateChangeEvent, ReviveEvent, RoundEndEvent, RoundEvent, RoundStartEvent,
     SavingThrowD20RollResultEvent, SavingThrowEvent, SensoryUpdateEvent,
@@ -78,13 +78,21 @@ ADDITIVE_FIELDS = {
     StepMovementEvent: {"movement_mode", "from_layer", "to_layer", "resolved_speed_feet"},
 }
 
+# Retained pre-interruption completion archives did not record these declarations.
+# They suffice for completion replay, but cannot establish a cancellation receipt.
+LEGACY_COMPLETION_FIELDS = {
+    model: {"action_economy_spent"}
+    for model in EVENT_MODELS.values() if "action_economy_spent" in model.model_fields
+}
+LEGACY_COMPLETION_FIELDS[SpellEvent].update({"harmful", "harmful_target_entity_uuids", "target_type"})
+
 
 def encode_event(event: Event) -> dict[str, Any]:
     """Retain the concrete payload plus the facts native dumps exclude."""
     wire_type = f"{type(event).__module__}.{type(event).__qualname__}"
     if wire_type not in EVENT_MODELS:
         raise ValueError(f"event has no retained recording contract: {wire_type}")
-    return {
+    payload = {
         "wire_type": wire_type,
         **event.model_dump(mode="json", serialize_as_any=True, warnings="error"),
         "combat_log": LOG.dump_python(event.combat_log, mode="json", warnings="error"),
@@ -97,6 +105,9 @@ def encode_event(event: Event) -> dict[str, Any]:
         "effective_handler_presentations": HANDLERS.dump_python(
             event.effective_handler_presentations, mode="json", warnings="error"),
     }
+    for name in event._recorded_omissions - event.model_fields_set:
+        payload.pop(name, None)
+    return payload
 
 
 def decode_event(value: Any) -> Event:
@@ -108,10 +119,15 @@ def decode_event(value: Any) -> Event:
     if wire_type not in EVENT_MODELS:
         raise ValueError(f"unknown or missing recorded event wire_type: {wire_type}")
     model = EVENT_MODELS[wire_type]
+    legacy_fields = (LEGACY_COMPLETION_FIELDS.get(model, set())
+                     if payload.get("phase") == EventPhase.COMPLETION.value
+                     and payload.get("canceled") is False else set())
+    omitted = frozenset(legacy_fields - payload.keys())
     if model is SpellEvent:
         payload = recorded_area_policy(payload)
     required = {name for name, field in model.model_fields.items() if field.exclude is not True}
     required.difference_update(ADDITIVE_FIELDS.get(model, set()))
+    required.difference_update(legacy_fields)
     required.update(("combat_log", "identified_entity_observer_uuids",
                      "located_entity_observer_uuids", "located_position_observer_uuids",
                      "effective_handler_presentations"))
@@ -123,6 +139,7 @@ def decode_event(value: Any) -> Event:
         json.dumps(payload), context=PASSIVE_EVENT_REPLAY,
     )
     event._effective_handler_presentations = handlers
+    event._recorded_omissions = omitted
     return event
 
 

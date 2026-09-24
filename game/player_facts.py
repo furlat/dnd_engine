@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, BeforeValidator
-from game.recording_compat import upgrade_player_fact
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from game.recording_compat import upgrade_spell_fact
 
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.action_execution import MovementProvocationPolicy
@@ -117,6 +117,11 @@ class SpellFact:
     resolved_area_positions: tuple[tuple[int, int], ...] | None = None
     suppressions: tuple[SpellSuppression, ...] = ()
     area_propagation: Literal["line_of_effect", "connected"] = "line_of_effect"
+
+    @model_validator(mode="before")
+    @classmethod
+    def restore_recorded_area_policy(cls, value: object) -> object:
+        return upgrade_spell_fact(value)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -401,7 +406,6 @@ PlayerFact = Annotated[
     | ConditionChangeFact | SpatialFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
     | ObjectDamageFact | ObjectDestroyedFact | MechanismActivationFact | SavingThrowFact,
     Field(discriminator="kind"),
-    BeforeValidator(upgrade_player_fact),
 ]
 
 

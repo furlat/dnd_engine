@@ -17,6 +17,21 @@ from game.projection import Camera, project_screen
 from tests.game.test_projectile_media import display as display
 
 
+def test_partial_healing_delivery_preserves_previously_selected_layers(tmp_path):
+    source, repo = tmp_path / 'source', tmp_path / 'repo'
+    source.mkdir()
+    (source / 'media-four-camera.json').write_text('{}')
+    folder = repo / 'game/data/healing_spells'
+    folder.mkdir(parents=True)
+    assets = [{'assetId': 'healing.already_selected.back', 'retained': True}]
+    storage = {'healing.already_selected.back': {'phases': {'impact': {'layers': []}}}}
+    (folder / 'projectile-assets.json').write_text(json.dumps(assets))
+    (folder / 'bindings.json').write_text(json.dumps({'resources': {}, 'projectileStorage': storage}))
+    assert import_bundle(source, repo=repo) == ()
+    assert json.loads((folder / 'projectile-assets.json').read_text()) == assets
+    assert json.loads((folder / 'bindings.json').read_text())['projectileStorage'] == storage
+
+
 def test_sparse_import_preserves_camera_pixels_pivot_and_separate_recipe(tmp_path):
     source, repo = tmp_path / "source", tmp_path / "repo"
     source.mkdir()

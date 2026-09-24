@@ -7,11 +7,42 @@ from types import MappingProxyType
 from typing import Literal, Mapping
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat, PositiveFloat, model_validator
+
 from game.asset_types import AssetSpec, image_resources
 from game.condition_types import ConditionLayer
 
 
 ACTIVITIES = frozenset(("idle", "move", "jump", "forced_move", "attack", "cast", "act", "hit"))
+
+
+class ConditionMediaSource(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+    category: str
+    animation: str
+    images_by_facing: dict[Literal["N", "NE", "E", "SE", "S", "SW", "W", "NW"], str] = Field(default_factory=dict)
+    asset_id: str | None = None
+    application_asset_id: str | None = None
+    application_fade_ms: tuple[NonNegativeFloat, NonNegativeFloat] = (1500, 2000)
+    removal_fade_ms: NonNegativeFloat = 0
+    scale: PositiveFloat = .5
+    world_basis: Literal["N", "NE", "E", "SE", "S", "SW", "W", "NW"] | None = None
+    application_mode: Literal["crossfade", "sequence"] = "crossfade"
+    removal_mask_asset_id: str | None = None
+    sustain_start_ms: NonNegativeFloat = 0
+
+    @model_validator(mode="after")
+    def ordered_fade(self) -> "ConditionMediaSource":
+        if self.application_fade_ms[1] < self.application_fade_ms[0]:
+            raise ValueError("application fade end must follow its start")
+        return self
+
+
+class ConditionMediaDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    schema_name: Literal["dnd.conditionLayerMedia"] = Field(alias="schema")
+    version: Literal[1]
+    layers: dict[str, ConditionMediaSource]
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,16 +78,16 @@ class ResolvedConditionLayer:
 
 
 def load_condition_media(path: Path, resources_path: Path, root: Path) -> Mapping[str, ConditionLayerMedia]:
-    document = json.loads(path.read_text())
+    document = ConditionMediaDocument.model_validate_json(path.read_text())
     rows = json.loads(resources_path.read_text())["resources"]
-    selected = {asset for layer in document["layers"].values() for asset in layer.get("images_by_facing", {}).values()}
+    selected = {asset for layer in document.layers.values() for asset in layer.images_by_facing.values()}
     resources = image_resources({identity: rows[identity] for identity in selected}, root)
-    return MappingProxyType({identity: ConditionLayerMedia(row["category"], row["animation"],
-        MappingProxyType({facing: resources[asset] for facing, asset in row.get("images_by_facing", {}).items()}),
-        row.get("asset_id"), row.get("application_asset_id"), tuple(row.get("application_fade_ms", (1500, 2000))),
-        row.get("removal_fade_ms", 0), row.get("scale", .5), row.get("world_basis"),
-        row.get("application_mode", "crossfade"), row.get("removal_mask_asset_id"), row.get("sustain_start_ms", 0))
-        for identity, row in document["layers"].items()})
+    return MappingProxyType({identity: ConditionLayerMedia(row.category, row.animation,
+        MappingProxyType({facing: resources[asset] for facing, asset in row.images_by_facing.items()}),
+        row.asset_id, row.application_asset_id, row.application_fade_ms,
+        row.removal_fade_ms, row.scale, row.world_basis, row.application_mode,
+        row.removal_mask_asset_id, row.sustain_start_ms)
+        for identity, row in document.layers.items()})
 
 
 def supported_layer(layer: ConditionLayer, media: Mapping[str, ConditionLayerMedia]) -> bool:

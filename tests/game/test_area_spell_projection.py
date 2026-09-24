@@ -196,7 +196,10 @@ def _wall_memory_history():
             assert result is not None and not result.canceled
             return result.lineage_uuid
 
-        operations["cast"] = perform(caster, "spell.fireball", (5, 6))
+        # Full connected propagation can reach both sides through the open
+        # doorway. Put only the west contact cell inside the spell radius so
+        # this remains a real one-sided observation/memory scenario.
+        operations["cast"] = perform(caster, "spell.fireball", (2, 6))
         snapshot = wall.snapshot_item_state()
         assert snapshot is not None and snapshot.surface_residues[0].faces == (CardinalDirection.WEST,)
         operations["first-sight"] = perform(walker, "action.move", (6, 7))

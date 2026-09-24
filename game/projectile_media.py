@@ -12,16 +12,31 @@ import gzip
 from pathlib import Path
 import struct
 from typing import Literal, Mapping
+from zipfile import ZipFile
 
 import numpy as np
 import pygame
 
 from game.animation_types import (
-    AnimationData, AuthoredProjectileAsset, BlendMode, Facing8, ProjectileSprite,
+    AnimationData, AuthoredProjectileAsset, BlendMode, Facing8, ProjectileSprite, SurfaceArchive,
 )
 
 
-FrameKey = tuple[Path, tuple[int, int, int, int], int, float, BlendMode | Literal["raw"]]
+@dataclass(frozen=True, slots=True)
+class PacketKey:
+    path: Path
+    member: str | None
+    component: int
+    tint: int
+    alpha: float
+    blend: Literal["normal", "add"]
+    bounds: tuple[float, float]
+    vertical_scale: float
+    position_scale: float
+    reference_pixel_scale: float
+
+
+FrameKey = tuple[Path, tuple[int, int, int, int], int, float, BlendMode | Literal["raw"]] | PacketKey
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +48,7 @@ class SurfacePositions:
     bounds: tuple[float, float]
     vertical_scale: float
     position_scale: float = 1
+    reference_pixel_scale: float = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +71,7 @@ class ProjectileFrameCache:
     limit_bytes: int = 128 * 1024 * 1024
     frames: OrderedDict[FrameKey, CachedSource] = field(default_factory=OrderedDict)
     decoded_bytes: int = 0
+    archives: OrderedDict[Path, ZipFile] = field(default_factory=OrderedDict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,14 +168,25 @@ def _raw_part(cache: ProjectileFrameCache, path: Path,
 
 def _surface_packet(cache: ProjectileFrameCache, path: Path, blends: tuple[Literal["normal", "add"], ...],
                     visual: ProjectileSprite, bounds: tuple[float, float], vertical_scale: float,
-                    position_scale: float) -> tuple[CachedSource, ...]:
-    keys: tuple[FrameKey, ...] = tuple((path, (index, 0, 0, 0), visual.tint, visual.alpha, blend)
-                                     for index, blend in enumerate(blends))
+                    position_scale: float, member: str | None = None, reference_pixel_scale: float = 1) -> tuple[CachedSource, ...]:
+    keys: tuple[FrameKey, ...] = tuple(PacketKey(path, member, index, visual.tint, visual.alpha, blend,
+        bounds, vertical_scale, position_scale, reference_pixel_scale) for index, blend in enumerate(blends))
     if all(key in cache.frames for key in keys):
         for key in keys:
             cache.frames.move_to_end(key)
         return tuple(cache.frames[key] for key in keys)
-    payload = gzip.decompress(path.read_bytes())
+    if member is None:
+        encoded = path.read_bytes()
+    else:
+        archive = cache.archives.get(path)
+        if archive is None:
+            while len(cache.archives) >= 8:
+                _, expired = cache.archives.popitem(last=False)
+                expired.close()
+            archive = cache.archives[path] = ZipFile(path)
+        cache.archives.move_to_end(path)
+        encoded = archive.read(member)
+    payload = gzip.decompress(encoded)
     width, height, ox, oy = struct.unpack_from("<HHhh", payload)
     pixels, offset = width * height, 8
     sources = []
@@ -173,7 +201,7 @@ def _surface_packet(cache: ProjectileFrameCache, path: Path, blends: tuple[Liter
         xyz.setflags(write=False)
         owners.setflags(write=False)
         source = CachedSource(_prepare(image, visual.tint, visual.alpha, blend),
-            SurfacePositions(xyz, owners, bounds, vertical_scale, position_scale), (ox, oy))
+            SurfacePositions(xyz, owners, bounds, vertical_scale, position_scale, reference_pixel_scale), (ox, oy))
         prior = cache.frames.pop(key, None)
         if prior is not None:
             cache.decoded_bytes -= prior.nbytes
@@ -204,18 +232,23 @@ def projectile_frame_layers(
         if packet is not None:
             pivot = (asset.anchorsByFacing or {}).get(direction, asset.anchor)
             asset_pivot = pivot.x * asset.frame.width, pivot.y * asset.frame.height
-            files: list[tuple[str, tuple[Literal["normal", "add"], ...], tuple[float, float]]]
+            files: list[tuple[str | None, SurfaceArchive | None, tuple[Literal["normal", "add"], ...], tuple[float, float]]]
             if packet.componentsByFacing is not None:
-                files = [(part.pattern, (part.blendMode,), part.pivot)
+                files = [(part.pattern, part.archive, (part.blendMode,), part.pivot)
                          for part in packet.componentsByFacing[direction]]
             else:
-                assert packet.pattern is not None
-                files = [(packet.pattern, packet.blendModes, asset_pivot)]
+                files = [(packet.pattern, packet.archive, packet.blendModes, asset_pivot)]
             result = []
-            for pattern, blends, source_pivot in files:
-                path = data.media_root / pattern.format(direction=direction, frame=packet.frameIndices[frame])
+            for pattern, archive, blends, source_pivot in files:
+                member = None
+                if archive is not None:
+                    path = data.media_root / archive.file
+                    member = archive.memberPattern.format(direction=direction, frame=packet.frameIndices[frame])
+                else:
+                    assert pattern is not None
+                    path = data.media_root / pattern.format(direction=direction, frame=packet.frameIndices[frame])
                 sources = _surface_packet(cache, path, blends, visual, packet.bounds,
-                                          packet.verticalScale, packet.positionScale)
+                                          packet.verticalScale, packet.positionScale, member, packet.referencePixelScale)
                 for source, blend in zip(sources, blends):
                     offset = tuple(source.offset[i] + round(source_pivot[i]) - source_pivot[i]
                                    + asset_pivot[i] for i in range(2))

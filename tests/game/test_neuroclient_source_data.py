@@ -10,6 +10,7 @@ from pathlib import Path
 import pygame
 
 from dnd.content_system.spell_catalog_composition import SPELL_CATALOG_COMPOSITION_BY_ID
+from game.animation_data import load_animation_data
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -87,16 +88,9 @@ def test_missing_authored_values_use_the_original_generated_profile() -> None:
 
 
 def test_selected_root_and_fire_bolt_media_can_be_decoded_locally() -> None:
-    bindings = read_json(DATA / "bindings.json")
+    selected = load_animation_data()
     rig = read_json(DATA / "rig-tables.json")
-    assets = read_json(SOURCE / "public/studio/spell-projectile-assets.json")
-    drafts = read_json(DATA / "spell-studio-drafts.materialized.json")["spells"]
-    fire = next(row for row in drafts if row["definitionRef"]["content_id"] == "spell.fire_bolt")
-    by_id = {asset["assetId"]: asset for asset in assets}
-    sizes = {
-        url: pygame.image.load(ROOT / local_path).get_size()
-        for url, local_path in bindings["resources"].items()
-    }
+    fire = selected.drafts["spell.fire_bolt"]
     assert rig["AUTHORED_PROJECTILE_ROW_ORDER"] == sorted(rig["FACING_ROW"], key=rig["FACING_ROW"].get)
     assert "Magic2" in rig["SLOT_CATEGORIES"]["weaponGlow"]
     assert rig["CELL_H"] - rig["RIG_ORIGIN_Y_FROM_GROUND"] == 87
@@ -104,16 +98,28 @@ def test_selected_root_and_fire_bolt_media_can_be_decoded_locally() -> None:
     for category in ("NakedBody", "Head22", "Head15", "Chest14", "Legs1", "Belt2", "Shoes1", "Shadow", "Melee1", "Melee3",
                      "Legs7", "Shoes2", "Chest7", "Belt1", "Shield5", "Melee2", "Head2", "Head10", "Head13", "Ranged1"):
         for clip in ("Idle", "Attack1", "Attack2", "Attack3", "Attack4", "Attack5", "Attack6", "TakeDamage", "Die", "Taunt", "Special1", "Run", "Rolling"):
-            assert sizes[f"/spritesheets/{category}/{clip}.png"] == (
+            path = selected.resources[f"/spritesheets/{category}/{clip}.png"]
+            assert pygame.image.load(path).get_size() == (
                 rig["SHEET_COLS"] * rig["CELL_W"], len(rig["FACING_ROW"]) * rig["CELL_H"],
             )
-    assert sizes["/spritesheets/Magic2/Attack5.png"] == sizes["/spritesheets/NakedBody/Attack5.png"]
+    # The original uncolored Magic2 overlay is source-only; current Fire Bolt
+    # selects its authored palette sheet. Historical bindings need no media IO.
+    glow = fire.cast.weaponGlow
+    assert glow is not None and glow.enabled and not glow.hidden
+    assert glow.sourceSheet is not None
+    assert pygame.image.load(selected.resources[glow.sourceSheet]).get_size() == (
+        rig["SHEET_COLS"] * rig["CELL_W"], len(rig["FACING_ROW"]) * rig["CELL_H"],
+    )
 
-    projectile = fire["projectile"]
-    for track in (projectile["sprite"], projectile["prepare"], projectile["travel"], projectile["impact"]):
-        asset = by_id[track["assetId"]]
-        frame = asset["frame"]
-        assert sizes[asset["sheet"]] == (frame["cols"] * frame["width"], frame["rows"] * frame["height"])
-        assert asset["rowOrder"] == rig["AUTHORED_PROJECTILE_ROW_ORDER"]
-        for phase in asset["phases"].values():
-            assert 0 <= phase["start"] < phase["start"] + phase["frames"] <= frame["cols"]
+    projectile = fire.projectile
+    assert projectile.sprite is not None
+    for track in (projectile.sprite, projectile.prepare, projectile.travel, projectile.impact):
+        asset = selected.projectile_assets[track.assetId]
+        frame = asset.frame
+        assert pygame.image.load(selected.resources[asset.sheet]).get_size() == (
+            frame.cols * frame.width, frame.rows * frame.height,
+        )
+        assert list(asset.rowOrder) == rig["AUTHORED_PROJECTILE_ROW_ORDER"]
+        for phase in (asset.phases.cast, asset.phases.travel, asset.phases.impact):
+            assert phase is not None
+            assert 0 <= phase.start < phase.start + phase.frames <= frame.cols

@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 
 from devtools.import_spell_recovery import asset
+from devtools.media_delivery import owns_selected_media
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +32,8 @@ def import_bundle(source: Path, *, repo: Path = ROOT) -> None:
             phase = spell["phases"][phase_name]
             size = phase.get("cell", spell["cell"])
             identity = f"ice.v8.{name}.{phase_name}"
+            if not owns_selected_media(bindings["projectileStorage"], identity, MEDIA.as_posix()):
+                continue
             layers = [phase_name]
             if name == "ray_of_frost" and phase_name == "travel":
                 layers.append("travelIce")

@@ -129,7 +129,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/SE/01.png",
+                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/E/01.png",
                     "firstFrame": 64,
                     "frameCount": 22,
                     "columns": 8
@@ -143,7 +143,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/S/01.png",
+                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/E/01.png",
                     "firstFrame": 64,
                     "frameCount": 22,
                     "columns": 8
@@ -157,7 +157,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/SW/01.png",
+                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/E/01.png",
                     "firstFrame": 64,
                     "frameCount": 22,
                     "columns": 8
@@ -171,7 +171,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/W/01.png",
+                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/E/01.png",
                     "firstFrame": 64,
                     "frameCount": 22,
                     "columns": 8
@@ -185,7 +185,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/NW/01.png",
+                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/E/01.png",
                     "firstFrame": 64,
                     "frameCount": 22,
                     "columns": 8
@@ -199,7 +199,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/N/01.png",
+                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/E/01.png",
                     "firstFrame": 64,
                     "frameCount": 22,
                     "columns": 8
@@ -213,7 +213,7 @@
                     "columns": 8
                   },
                   {
-                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/NE/01.png",
+                    "file": "game/assets/cantrips/projectiles/cantrip.poison_spray.full/impact/E/01.png",
                     "firstFrame": 64,
                     "frameCount": 22,
                     "columns": 8
@@ -354,67 +354,67 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/E/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/E/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/E/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/E/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/E/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/E/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/E/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/E/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/E/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/E/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/E/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
@@ -428,7 +428,7 @@
                 ],
                 "SE": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -548,73 +548,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SE/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -622,7 +622,7 @@
                 ],
                 "S": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -742,73 +742,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/S/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -816,7 +816,7 @@
                 ],
                 "SW": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -936,73 +936,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/SW/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -1010,7 +1010,7 @@
                 ],
                 "W": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -1130,73 +1130,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/W/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -1204,7 +1204,7 @@
                 ],
                 "NW": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -1318,79 +1318,79 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/19.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 304,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NW/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -1398,7 +1398,7 @@
                 ],
                 "N": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -1518,73 +1518,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/N/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -1592,7 +1592,7 @@
                 ],
                 "NE": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -1712,73 +1712,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/back/NE/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -1799,7 +1799,7 @@
               "pages": {
                 "E": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -1919,73 +1919,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/E/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -1993,7 +1993,7 @@
                 ],
                 "SE": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -2113,73 +2113,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SE/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -2187,7 +2187,7 @@
                 ],
                 "S": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -2307,73 +2307,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/S/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -2381,7 +2381,7 @@
                 ],
                 "SW": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -2501,73 +2501,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/SW/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -2575,7 +2575,7 @@
                 ],
                 "W": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -2695,73 +2695,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/W/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -2769,7 +2769,7 @@
                 ],
                 "NW": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -2889,73 +2889,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NW/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -2963,7 +2963,7 @@
                 ],
                 "N": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -3083,73 +3083,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/N/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4
@@ -3157,7 +3157,7 @@
                 ],
                 "NE": [
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/00.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 0,
                     "frameCount": 16,
                     "columns": 4
@@ -3277,73 +3277,73 @@
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/20.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 320,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/21.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 336,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/22.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 352,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/23.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 368,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/24.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 384,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/25.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 400,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/26.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 416,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/27.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 432,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/28.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 448,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/29.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 464,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/30.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/00.png",
                     "firstFrame": 480,
                     "frameCount": 16,
                     "columns": 4
                   },
                   {
-                    "file": "game/assets/cantrips/sacred_flame/front/NE/31.png",
+                    "file": "game/assets/cantrips/sacred_flame/back/E/31.png",
                     "firstFrame": 496,
                     "frameCount": 8,
                     "columns": 4

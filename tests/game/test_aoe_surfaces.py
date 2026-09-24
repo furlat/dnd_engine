@@ -45,7 +45,7 @@ def test_component_pivots_scale_color_and_geometry_together(original_data, tmp_p
             + bytes(color)*4 + xyz*4 + bytes([1])*4))
         parts.append(PackedSurfaceComponent(pattern=f'{i}.gz', pivot=(1.25, 1.25), blendMode='normal'))
     packet = PackedSurfaceFrames(frameIndices=(0,), bounds=(-16., 16.), verticalScale=1.,
-        positionScale=.5, componentsByFacing={'E': tuple(parts)})
+        positionScale=.5, referencePixelScale=.5, componentsByFacing={'E': tuple(parts)})
     data = replace(data, projectile_storage={asset.assetId: ProjectileStorage(phases={
         'impact': ProjectileFrameStorage(surfaceFrames=packet)})})
     samples = registered_media_samples(data, asset.assetId, 'impact', 0, 'E',
@@ -53,6 +53,12 @@ def test_component_pivots_scale_color_and_geometry_together(original_data, tmp_p
     assert [s.image.get_at((0, 0)) for s in samples] == [(90, 40, 20, 128), (40, 90, 20, 128)]
     assert all(s.destination == (19, 19) and s.image.size == (1, 1) for s in samples)
     np.testing.assert_allclose(samples[0].positions[0, 0], [1, 2, 3], atol=.001)
+    # Doubling authored size scales world coordinates too; camera zoom does not.
+    for zoom in (1., .5):
+        enlarged = registered_media_samples(data, asset.assetId, 'impact', 0, 'E',
+            scale=zoom, zoom=zoom, anchor=(20, 20), rows={})
+        np.testing.assert_allclose(enlarged[0].positions[0, 0], [2, 4, 6], atol=.001)
+
 
 
 @pytest.mark.parametrize('height', [0, 3, -2])

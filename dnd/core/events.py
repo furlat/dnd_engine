@@ -409,6 +409,9 @@ class Event(BaseModel):
         EffectiveHandlerPresentation,
         ...,
     ] = PrivateAttr(default=())
+    # Passive archive admission may need current defaults without claiming they
+    # were recorded. The recording codec alone owns this omission metadata.
+    _recorded_omissions: frozenset[str] = PrivateAttr(default=frozenset())
     identified_entity_observer_uuids: Dict[str, Set[str]] = Field(
         default_factory=dict,
         exclude=True,

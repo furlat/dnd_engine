@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from uuid import uuid4
+from zipfile import ZipFile
 
 import pygame
 import numpy as np
@@ -12,6 +13,7 @@ from dnd.core.presentation_geometry import LinePresentationGeometry
 from game.animation import facing_for_delta, view_facing
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
+from game.maintained_media import maintained_media_frame
 from game.player_facts import SpellFact
 from game.player_reduction import reduce_lineage
 from game.projection import Camera, TILE_WIDTH, project_screen
@@ -46,6 +48,44 @@ def _picture(commands, camera=Camera()):
     return pygame.image.tobytes(image, "RGBA")
 
 
+def test_native_line_directions_keep_every_maintained_frame_in_the_release(rendering, captured):
+    data = rendering
+    state, roots = player_history(captured, role="caster")
+    state = reduce_lineage(state, next(root for root in roots if isinstance(root.root.fact, SpellFact)))
+    assert state.senses is not None
+    effect = next(iter(state.senses.spatial_effects.values()))
+    geometry = effect.area_geometry
+    assert isinstance(geometry, LinePresentationGeometry)
+    binding = data.spatial_media[effect.content_ref.content_id]
+    for layer in binding.layers:
+        frames = set()
+        for index in range(binding.holdFrames):
+            selected = maintained_media_frame(data, binding, layer,
+                (index + .25) * 1000 / binding.fps, None)
+            assert selected is not None
+            frames.add(selected)
+        assert frames == {(layer.assetId, binding.holdStartFrame + index)
+                          for index in range(binding.holdFrames)}
+        packet = data.projectile_storage[layer.assetId].phases[binding.assetPhase].surfaceFrames
+        assert packet is not None and packet.componentsByFacing is not None
+        for quadrant in range(4):
+            # Use the native line's direction, exactly as spatial_media_draw
+            # does; a world-fixed E/viewFacing assumption loses half the banks.
+            facing = view_facing(facing_for_delta(geometry.direction, data), quadrant, data)
+            for part in packet.componentsByFacing[facing]:
+                requested = {packet.frameIndices[frame] for _, frame in frames}
+                if part.archive is not None:
+                    with ZipFile(data.media_root / part.archive.file) as archive:
+                        expected = {part.archive.memberPattern.format(direction=facing, frame=frame)
+                                    for frame in requested}
+                        available = set(archive.namelist())
+                        assert expected <= available, (facing, sorted(expected - available))
+                else:
+                    assert part.pattern is not None
+                    assert all((data.media_root / part.pattern.format(direction=facing, frame=frame)).is_file()
+                               for frame in requested)
+
+
 @pytest.mark.parametrize("role", ("caster", "target"))
 def test_native_gust_intro_only_once_then_hold_until_observed_cleanup(rendering, captured, role):
     data = rendering
@@ -77,11 +117,11 @@ def test_native_gust_intro_only_once_then_hold_until_observed_cleanup(rendering,
         first = spatial_media_draw_commands(after, data, 0, camera, finished)
         assert first and {row.evidence[-1] for row in first} == {252}
         later = spatial_media_draw_commands(after, data, 375, camera)
-        assert _picture(spatial_media_draw_commands(after, data, 375, camera, lifetimes=records)) == _picture(later)
+        assert _picture(spatial_media_draw_commands(after, data, 375, camera, lifetimes=records), camera) == _picture(later, camera)
         assert {row.evidence[-1] for row in later} == {306}
-        assert _picture(first) != _picture(later)
-        assert _picture(spatial_media_draw_commands(after, data, 750, camera)) == _picture(first)
-        assert _picture(spatial_media_draw_commands(after, data, 0, camera)) == _picture(first)
+        assert _picture(first, camera) != _picture(later, camera)
+        assert _picture(spatial_media_draw_commands(after, data, 750, camera), camera) == _picture(first, camera)
+        assert _picture(spatial_media_draw_commands(after, data, 0, camera), camera) == _picture(first, camera)
     state = before
     for root in roots:
         state = reduce_lineage(state, root)
@@ -109,7 +149,8 @@ def test_missing_geometry_hidden_support_and_partial_cleanup_remain_private(rend
     visible = frozenset(position for position in state.senses.visible if position[0] < 7)
     partial = replace(state, senses=replace(state.senses, visible=visible))
     commands = spatial_media_draw_commands(partial, data, 0, camera)
-    assert commands and all(row.volume is not None and set(row.volume.admitted) <= visible for row in commands)
+    assert commands and all(row.volume is not None and row.volume.admitted is not None
+                            and set(row.volume.admitted) <= visible for row in commands)
     assert _picture(commands) != _picture(spatial_media_draw_commands(state, data, 0, camera))
     geometry = effect.area_geometry
     assert isinstance(geometry, LinePresentationGeometry)
@@ -143,7 +184,7 @@ def test_fully_disclosed_line_preserves_the_delivered_hold_silhouette(rendering,
         reference = pygame.Surface((640, 480))
         for sample in registered_media_samples(data, binding.layers[0].assetId, binding.assetPhase,
                 252, facing, scale=binding.scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom,
-                anchor=anchor, rows={}):
+                anchor=anchor, rows={}, zoom=camera.zoom):
             # Full disclosure preserves source color at every owned above-floor
             # sample on this flat map. Use XYZ receiving cells, not a flattened
             # screen-diamond stencil that would cut airborne wind incorrectly.

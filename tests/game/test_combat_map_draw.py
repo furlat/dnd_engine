@@ -1,6 +1,7 @@
 """Real map pixels compose retained casts with cliffs and boundary walls."""
 
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 from typing import Iterator, Mapping, cast
 
 import numpy as np
@@ -47,9 +48,7 @@ def scene() -> Iterator[MapScene]:
         lineage = next(scenario)
         assert isinstance(lineage, CompletedLineage)
         player, (lineage,) = player_inputs(initialization, (lineage,))
-        # This fixture also protects the original point-dart depth regression.
-        # The playable game selects the authored sprite bundle separately.
-        cast = bind_cast(player, lineage, load_animation_data(authored_bundles=()))
+        cast = bind_cast(player, lineage, load_animation_data())
         catalog = load_catalog()
         media = load_animation_media(cast.timeline, cast.appearances)
         try:
@@ -156,7 +155,13 @@ def test_point_dart_remains_visible_above_the_target_floor(scene: MapScene) -> N
     source = replace(scene.cast.timeline.source,
                      caster=replace(scene.cast.timeline.source.caster, grid=(16, 25)),
                      applications=(replace(scene.cast.timeline.source.applications[0], travel_apex_steps=1),))
-    timeline = compile_cast(scene.cast.timeline.data, "spell.magic_missile", source)
+    # Keep the geometry-dart regression explicit while the shared scene uses
+    # current production media, including its selected cast overlays.
+    original = load_animation_data(authored_bundles=()).drafts["spell.magic_missile"]
+    data = replace(scene.cast.timeline.data, drafts=MappingProxyType({
+        **scene.cast.timeline.data.drafts, "spell.magic_missile": original,
+    }))
+    timeline = compile_cast(data, "spell.magic_missile", source)
     media = load_animation_media(timeline, scene.cast.appearances)
     sample = sample_cast(timeline, timeline.applications[0].travel_end_ms - 0.25)
     camera = Camera(quadrant=0, zoom=1, viewport=scene.screen.get_size()).with_focus(

@@ -2,10 +2,70 @@
 
 from dataclasses import dataclass
 from functools import lru_cache
-import json
 from pathlib import Path
 from types import MappingProxyType
-from typing import Literal, Mapping
+from typing import Annotated, Literal, Mapping
+
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, PositiveFloat, PositiveInt, NonNegativeFloat, NonNegativeInt, model_validator
+
+
+class _PortalSource(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+
+class PortalBankSource(_PortalSource):
+    pages: Annotated[tuple[tuple[str, ...], ...], Field(min_length=4, max_length=4)]
+    cell: tuple[PositiveInt, PositiveInt]
+    columns: PositiveInt
+    framesPerPage: PositiveInt
+    pivot: tuple[FiniteFloat, FiniteFloat]
+    fps: PositiveFloat
+    openingFrames: NonNegativeInt
+    holdFrames: PositiveInt
+    closingFrames: PositiveInt
+
+    @model_validator(mode="after")
+    def frame_capacity(self) -> "PortalBankSource":
+        count = self.openingFrames + self.holdFrames + self.closingFrames
+        if any(len(pages) * self.framesPerPage < count for pages in self.pages):
+            raise ValueError("portal pages must contain the opening, hold and closing frames")
+        return self
+
+
+class PortalHatchSource(_PortalSource):
+    sheet: str
+    front: str
+    cell: tuple[PositiveInt, PositiveInt]
+    pivot: tuple[FiniteFloat, FiniteFloat]
+    opening: Annotated[tuple[NonNegativeInt, ...], Field(min_length=1)]
+    closing: Annotated[tuple[NonNegativeInt, ...], Field(min_length=1)]
+    fps: PositiveFloat
+
+
+class PortalApertureSource(_PortalSource):
+    shape: Literal["diamond", "ellipse"]
+    halfWidthPx: PositiveFloat
+    halfHeightPx: PositiveFloat
+
+
+class PortalArtSource(_PortalSource):
+    entrance: str
+    exit: str
+    hatch: PortalHatchSource | None = None
+    scale: PositiveFloat
+    fallDelayMs: NonNegativeFloat
+    fallMs: PositiveFloat
+    emergeMs: PositiveFloat
+    fallDepthPx: PositiveFloat
+    transitMs: NonNegativeFloat
+    exitHoldMs: NonNegativeFloat
+    entranceAperture: PortalApertureSource
+    exitAperture: PortalApertureSource
+
+
+class PortalDocument(_PortalSource):
+    banks: dict[str, PortalBankSource]
+    bindings: dict[str, PortalArtSource]
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,25 +118,21 @@ class PortalArt:
 @lru_cache(maxsize=1)
 def load_portal_art() -> Mapping[str, PortalArt]:
     root = Path(__file__).resolve().parent
-    document = json.loads((root / "data/portals.json").read_text())
-
-    def bank(row: dict) -> PortalBank:
-        return PortalBank(tuple(tuple(root / "assets" / page for page in pages) for pages in row["pages"]),
-            tuple(row["cell"]), row["columns"], row["framesPerPage"], tuple(row["pivot"]),
-            row["fps"], row["openingFrames"], row["holdFrames"], row["closingFrames"])
-
-    def aperture(row: dict) -> PortalAperture:
-        return PortalAperture(row["shape"], row["halfWidthPx"], row["halfHeightPx"])
-
-    banks = {key: bank(row) for key, row in document["banks"].items()}
+    document = PortalDocument.model_validate_json((root / "data/portals.json").read_text())
+    banks = {key: PortalBank(
+        tuple(tuple(root / "assets" / page for page in pages) for pages in row.pages),
+        row.cell, row.columns, row.framesPerPage, row.pivot, row.fps,
+        row.openingFrames, row.holdFrames, row.closingFrames)
+        for key, row in document.banks.items()}
     result = {}
-    for identity, row in document["bindings"].items():
-        h = row.get("hatch")
-        hatch = None if h is None else PortalHatch(root / "assets" / h["sheet"], root / "assets" / h["front"],
-            tuple(h["cell"]), tuple(h["pivot"]), tuple(h["opening"]), tuple(h["closing"]), h["fps"])
-        result[identity] = PortalArt(banks[row["entrance"]], banks[row["exit"]], hatch, row["scale"],
-            row["fallDelayMs"], row["fallMs"], row["emergeMs"], row["fallDepthPx"], row["transitMs"], row["exitHoldMs"],
-            aperture(row["entranceAperture"]), aperture(row["exitAperture"]))
+    for identity, row in document.bindings.items():
+        h = row.hatch
+        hatch = None if h is None else PortalHatch(root / "assets" / h.sheet, root / "assets" / h.front,
+            h.cell, h.pivot, h.opening, h.closing, h.fps)
+        result[identity] = PortalArt(banks[row.entrance], banks[row.exit], hatch, row.scale,
+            row.fallDelayMs, row.fallMs, row.emergeMs, row.fallDepthPx, row.transitMs, row.exitHoldMs,
+            PortalAperture(row.entranceAperture.shape, row.entranceAperture.halfWidthPx, row.entranceAperture.halfHeightPx),
+            PortalAperture(row.exitAperture.shape, row.exitAperture.halfWidthPx, row.exitAperture.halfHeightPx))
     return MappingProxyType(result)
 
 

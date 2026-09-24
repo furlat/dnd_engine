@@ -23,7 +23,10 @@ def import_bundle(source: Path, *, manifest: str = "media-four-camera.json", rep
     folder = repo / "game/data/healing_spells"
     binding_path = folder / "bindings.json"
     bindings = json.loads(binding_path.read_text()) if binding_path.exists() else {"resources": {}, "spells": {}}
-    assets, storage, copied = [], {}, set()
+    assets_path = folder / "projectile-assets.json"
+    assets = {row["assetId"]: row for row in json.loads(assets_path.read_text())} if assets_path.exists() else {}
+    storage = bindings.setdefault("projectileStorage", {})
+    copied, imported = set(), []
 
     def copy(relative: str) -> str:
         destination = MEDIA / relative
@@ -56,7 +59,7 @@ def import_bundle(source: Path, *, manifest: str = "media-four-camera.json", rep
                 # Intermediate body-facing rows are unused by these recipes.
                 views[DIRECTIONS[q * 2]] = parts
                 views[DIRECTIONS[q * 2 + 1]] = parts
-            assets.append({
+            assets[identity] = {
                 "assetId": identity, "displayName": identity, "kind": "projectile",
                 "sheet": f"/healing-spells/{name}/{side}.png",
                 "frame": {"width": cell, "height": cell, "rows": 8, "cols": count},
@@ -64,17 +67,18 @@ def import_bundle(source: Path, *, manifest: str = "media-four-camera.json", rep
                 "phases": {"impact": {"start": 0, "frames": count, "fps": fps, "loop": name == "aid_hold"}},
                 "anchor": {"x": pivot[0] / cell, "y": pivot[1] / cell}, "defaultScale": .5,
                 "palettePreview": {"colors": [int(color, 16) for color in row["palette"]]},
-            })
+            }
             storage[identity] = {"phases": {"impact": {"layers": [
                 {"partsByFacing": views, "blendMode": "normal"}]}}}
+            imported.append(identity)
         if name in SPELLS:
             bindings["resources"][f"/healing-spells/{name}/cast.png"] = copy(f"actors/{name}/Special1-glow.png")
 
     bindings["projectileStorage"] = storage
     folder.mkdir(parents=True, exist_ok=True)
     binding_path.write_text(json.dumps(bindings, separators=(",", ":")) + "\n")
-    (folder / "projectile-assets.json").write_text(json.dumps(assets, separators=(",", ":")) + "\n")
-    return tuple(storage)
+    assets_path.write_text(json.dumps(list(assets.values()), separators=(",", ":")) + "\n")
+    return tuple(imported)
 
 
 if __name__ == "__main__":

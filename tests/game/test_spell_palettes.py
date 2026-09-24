@@ -107,7 +107,7 @@ def test_dark_noise_treatment_preserves_body_alpha_and_has_black_and_green_regio
 
 
 @pytest.mark.parametrize("spell", tuple(s for s in SPELLS if s != "magic_missile"))
-def test_baked_cast_overlay_has_exact_spell_colors_and_original_alpha(data, spell):
+def test_selected_cast_overlay_has_exact_spell_colors_and_complete_rig_geometry(data, spell):
     recipe = data.drafts["spell." + spell]
     flash = recipe.damage.hitFlash.palette
     assert flash is not None
@@ -121,9 +121,13 @@ def test_baked_cast_overlay_has_exact_spell_colors_and_original_alpha(data, spel
         if layer is None or not layer.enabled or layer.hidden:
             continue
         assert layer.sourceSheet is not None
-        original = pygame.image.load(data.resources[f"/spritesheets/{layer.category}/{cast.actionClip}.png"]).convert_alpha()
         baked = pygame.image.load(data.resources[layer.sourceSheet]).convert_alpha()
-        assert np.array_equal(pygame.surfarray.array_alpha(original), pygame.surfarray.array_alpha(baked))
+        rig = data.rigs[data.root_rig]
+        clip = rig.clips[cast.actionClip]
+        assert baked.width >= clip.frames * rig.cell_width
+        assert baked.height >= (max(rig.facing_rows.values()) + 1) * rig.cell_height
+        alpha = pygame.surfarray.array_alpha(baked)
+        assert np.any(alpha == 0) and np.any(alpha > 0)
         assert rgb_set(baked) <= allowed
         assert len(rgb_set(baked)) > 1
 

@@ -13,7 +13,7 @@ def recorded_area_policy(payload: dict[str, Any]) -> dict[str, Any]:
         payload.get("behavior_id", ""), "line_of_effect")}
 
 
-def upgrade_player_fact(value: Any) -> Any:
-    if isinstance(value, dict) and value.get("kind") == "spell":
+def upgrade_spell_fact(value: object) -> object:
+    if isinstance(value, dict):
         return recorded_area_policy(value)
     return value

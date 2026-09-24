@@ -1,6 +1,6 @@
 {
   "schema": "dnd.spellStudioDrafts",
-  "version": 2,
+  "version": 3,
   "spells": [
     {
       "definitionRef": {
@@ -106,7 +106,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "behind_body",
-          "scaleWithActor": true
+          "scaleWithActor": true,
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -117,7 +118,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "front_body",
-          "scaleWithActor": true
+          "scaleWithActor": true,
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -181,7 +183,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "behind_body",
-          "scaleWithActor": true
+          "scaleWithActor": true,
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -192,7 +195,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "front_body",
-          "scaleWithActor": true
+          "scaleWithActor": true,
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -256,7 +260,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "behind_body",
-          "scaleWithActor": true
+          "scaleWithActor": true,
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -267,7 +272,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "front_body",
-          "scaleWithActor": true
+          "scaleWithActor": true,
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -331,7 +337,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "behind_body",
-          "scaleWithActor": true
+          "scaleWithActor": true,
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -342,7 +349,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "front_body",
-          "scaleWithActor": true
+          "scaleWithActor": true,
+          "composition": "billboard"
         }
       ],
       "contact": {
@@ -406,7 +414,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "behind_body",
-          "scaleWithActor": true
+          "scaleWithActor": true,
+          "composition": "billboard"
         },
         {
           "id": "front",
@@ -417,7 +426,8 @@
           "fps": 144,
           "scale": 0.5,
           "depth": "front_body",
-          "scaleWithActor": true
+          "scaleWithActor": true,
+          "composition": "billboard"
         }
       ],
       "contact": {

@@ -18,13 +18,14 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pillow",
     "pytest",
     "pyright",
 ]
 
 [tool.pyright]
 include = ["ai", "dnd", "game", "server"]
-exclude = ["**/__pycache__", ".venv", "game_logs", "to_archive"]
+exclude = ["**/__pycache__", ".venv", "game_logs", "to_archive", "game/assets", ".runtime", "output"]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
 reportMissingImports = true

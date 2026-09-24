@@ -1,15 +1,21 @@
 """Recorded bytes reproduce native histories through the same presentation."""
 
+import gzip
 import json
+from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
 from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
-from dnd.actions import AttackEvent
+from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent
+from dnd.spells.abjuration import CounterspellReactionEvent
+from dnd.core.base_actions import ActionEvent
 from dnd.core.dice import DiceRoll
 from dnd.core.events import DamageAppliedEvent, EventPhase, EventQueue, StepMovementEvent, TakeDamageEvent
 from dnd.core.creature_types import DamageType
 from dnd.core.life_types import LifeState
+from dnd.core.equipment_types import WeaponSlot
 from dnd.entity import Entity
 from dnd.runtime_reset import reset_engine_runtime
 from devtools.animation_review.cases import load_cases
@@ -19,11 +25,114 @@ from game.choreography import bind_choreography, sample_choreography
 from game.motion import bind_motion, sample_motion
 from game.presentation import capture_lineage, reduce_lineage
 from game.replay import RecordedSequence, capture_history, decode_sequence, encode_sequence
+from game.event_record import decode_event, encode_event
 from game.player_facts import StepFact
 from game.player_reduction import reduce_lineage as reduce_player_lineage
 from tests.game.player_helpers import player_inputs
 from tests.game.scenarios import _healing_encounter
 from tests.game.persistent_spell_scenarios import persistent_spell_history
+
+
+ACTION_RECEIPT_MODELS = (
+    (ActionEvent, {}),
+    (AttackEvent, {"weapon_slot": WeaponSlot.MELEE_MAIN}),
+    (SpellEvent, {}),
+    (MovementEvent, {"start_position": (1, 1), "end_position": (2, 1)}),
+    (JumpEvent, {"start_position": (1, 1), "end_position": (2, 1)}),
+    (ShoveEvent, {}),
+    (CounterspellReactionEvent, {"triggered_event_uuid": uuid4(), "triggered_lineage_uuid": uuid4(),
+        "incoming_spell_name": "Fire Bolt", "incoming_spell_level": 0,
+        "counterspell_slot_level": 3, "automatic": True, "succeeded": True}),
+)
+
+
+@pytest.mark.parametrize("row", json.loads((Path(__file__).parent / "fixtures/legacy-completed-actions.json").read_text()),
+                         ids=lambda row: row["case"] + ":" + row["event"]["behavior_id"])
+def test_original_completed_attack_and_jump_rows_preserve_absent_receipt(row):
+    reset_engine_runtime()
+    original = row["event"]
+    assert original["phase"] == "completion" and original["canceled"] is False
+    assert "action_economy_spent" not in original
+    restored = decode_event(original)
+    encoded = encode_event(restored)
+    assert "action_economy_spent" not in encoded
+    assert decode_event(encoded) == restored
+    for key in ("uuid", "lineage_uuid", "parent_event", "parent_lineage", "phase", "canceled",
+                "source_entity_uuid", "target_entity_uuid", "behavior_id", "costs", "status_message"):
+        assert encoded[key] == original[key]
+    assert EventQueue.event_cursor() == 0 and BaseObject._registry == {}
+
+
+@pytest.mark.parametrize("family", ("device", "door", "web"))
+def test_retained_completion_archives_preserve_absent_receipts_on_native_round_trip(family):
+    reset_engine_runtime()
+    rolls = dict(DiceRoll._registry)
+    path = Path(__file__).parent / f"fixtures/legacy-{family}-destruction.json.gz"
+    original = gzip.decompress(path.read_bytes())
+    restored = RecordedSequence.model_validate_json(original, context=PASSIVE_EVENT_REPLAY)
+    blob = encode_sequence(restored.initialization, restored.lineages)
+    again = RecordedSequence.model_validate_json(blob, context=PASSIVE_EVENT_REPLAY)
+    assert again == restored
+
+    # Check bytes at the actual native boundary, not default-valued model fields.
+    expected = json.loads(original)
+    actual = json.loads(blob)
+    pending = [(expected, actual)]
+    checked = 0
+    while pending:
+        old, new = pending.pop()
+        if isinstance(old, dict):
+            fields = ({"action_economy_spent", "harmful", "harmful_target_entity_uuids", "target_type"}
+                      if old.get("wire_type") == "dnd.actions.SpellEvent"
+                      else {"action_economy_spent"}
+                      if old.get("wire_type") in {"dnd.core.base_actions.ActionEvent", "dnd.actions.MovementEvent"}
+                      else set())
+            for name in fields:
+                assert name not in old and name not in new
+            checked += bool(fields)
+            pending.extend((value, new[key]) for key, value in old.items())
+        elif isinstance(old, list):
+            assert len(old) == len(new)
+            pending.extend(zip(old, new, strict=True))
+    assert checked > 0
+    assert decode_sequence(original) == decode_sequence(blob)
+    player, roots = player_inputs(again.initialization, again.lineages)
+    for root in roots:
+        player = reduce_player_lineage(player, root)
+    assert all(node.cancellation is None for root in roots for node in root.events if not node.canceled)
+    assert EventQueue.event_cursor() == 0 and BaseObject._registry == {}
+    assert DiceRoll._registry == rolls
+
+
+@pytest.mark.parametrize("model,extra", ACTION_RECEIPT_MODELS)
+@pytest.mark.parametrize("spent", (None, False, True), ids=("live-default", "explicit-false", "explicit-true"))
+def test_current_recorded_action_receipts_remain_explicit(model, extra, spent):
+    reset_engine_runtime()
+    values = dict(source_entity_uuid=uuid4(), phase=EventPhase.COMPLETION, use_register=False)
+    if spent is not None:
+        values["action_economy_spent"] = spent
+    event = model(**values, **extra)
+    payload = encode_event(event)
+    assert payload["action_economy_spent"] is (False if spent is None else spent)
+    assert encode_event(decode_event(payload)) == payload
+    if spent is None:
+        # All registered actions share the same additive receipt contract.
+        # Missing archive evidence stays absent; the live default above does not.
+        del payload["action_economy_spent"]
+        assert "action_economy_spent" not in encode_event(decode_event(payload))
+    assert EventQueue.event_cursor() == 0 and BaseObject._registry == {}
+
+
+@pytest.mark.parametrize("model,extra", ACTION_RECEIPT_MODELS)
+def test_legacy_missing_payment_cancellation_is_not_admitted_as_an_unpaid_action(model, extra):
+    reset_engine_runtime()
+    event = model(source_entity_uuid=uuid4(), phase=EventPhase.CANCEL,
+                  canceled=True, use_register=False, **extra)
+    payload = encode_event(event)
+    del payload["action_economy_spent"]
+    with pytest.raises(ValueError, match="incomplete recorded.*action_economy_spent"):
+        decode_event(payload)
+    assert EventQueue.event_cursor() == 0 and BaseObject._registry == {}
 
 
 def test_second_hit_on_dying_actor_replays_native_zero_hp_from_saved_events() -> None:

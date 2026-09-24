@@ -29,7 +29,10 @@ def test_selected_support_reimport_preserves_media_registration_and_authored_own
     (folder / "projectile-assets.json").write_text('[{"assetId":"other","keep":true}]')
     (repo / "game/data/assets.json").write_text('{"schema_version":1,"resources":{"other":{"keep":true}}}')
     (repo / "game/data/condition-media.json").write_text(
-        '{"schema":"dnd.conditionLayerMedia","version":1,"layers":{"other":{"keep":true}}}')
+        json.dumps({"schema": "dnd.conditionLayerMedia", "version": 1, "layers": {
+            "other": {"keep": True}, "support.guidance.front": {
+                "category": "guidance", "animation": "static", "scale": .37,
+                "world_basis": "SE", "removal_fade_ms": 765, "sustain_start_ms": 123}}}))
     directions = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"]
     copied: dict[str, bytes] = {}
 
@@ -98,6 +101,9 @@ def test_selected_support_reimport_preserves_media_registration_and_authored_own
     assert layers["other"] == {"keep": True}
     assert layers["support.guidance.front"]["images_by_facing"] == {
         facing: f"support.guidance.front.{facing}" for facing in directions}
+    assert {key: layers['support.guidance.front'][key] for key in
+            ('scale', 'world_basis', 'removal_fade_ms', 'sustain_start_ms')} == {
+                'scale': .37, 'world_basis': 'SE', 'removal_fade_ms': 765, 'sustain_start_ms': 123}
 
 
 def test_support_recipes_retain_full_export_clock_ground_registration_and_no_damage():

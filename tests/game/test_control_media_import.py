@@ -3,6 +3,7 @@
 from dataclasses import replace
 import json
 from pathlib import Path
+import shutil
 
 import pygame
 import pytest
@@ -162,6 +163,28 @@ def test_import_keeps_authored_owners_and_exact_phase_pixels(source: Path, tmp_p
             assert tuple(image.image.get_at((0, 0))) == (31 + row, 101, 191, 164)
     finally:
         pygame.quit()
+
+
+def test_control_reimport_preserves_selected_color_spray_surface_delivery(source: Path, tmp_path: Path):
+    repo = tmp_path / 'repo'
+    folder = repo / 'game/data/control_spells'
+    current = Path(__file__).resolve().parents[2] / 'game/data/control_spells'
+    folder.mkdir(parents=True)
+    for name in ('bindings.json', 'projectile-assets.json'):
+        shutil.copyfile(current / name, folder / name)
+    before_storage = json.loads((folder / 'bindings.json').read_text())['projectileStorage']
+    before_assets = {row['assetId']: row for row in json.loads((folder / 'projectile-assets.json').read_text())}
+    shutil.rmtree(source / 'colors')  # This superseded raster delivery is not needed.
+
+    imported = import_bundle(source, repo=repo)
+
+    after_storage = json.loads((folder / 'bindings.json').read_text())['projectileStorage']
+    after_assets = {row['assetId']: row for row in json.loads((folder / 'projectile-assets.json').read_text())}
+    for side in ('back', 'front'):
+        identity = 'control.color_spray.' + side
+        assert identity not in imported
+        assert after_storage[identity] == before_storage[identity]
+        assert after_assets[identity] == before_assets[identity]
 
 
 @pytest.fixture(scope="module")

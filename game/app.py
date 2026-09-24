@@ -38,7 +38,7 @@ from game.water import WaterSupportInput, render_water_batch, water_source_origi
 from game.world_animation import WorldTransitionSample
 from game.surface_residue import geometric_residue_image, ground_residue_image, liquid_surface_image, wall_residue_image
 from game.residue_media import ResidueRevealSample
-from game.device_art import DeviceEmission, DeviceFacing, device_bank, load_device_art, load_device_wrecks
+from game.device_art import DeviceEmission, device_bank, load_device_art, load_device_wrecks
 from game.device_draw import device_draw_command, device_wreck_draw_command, device_treatment
 from game.sustained_draw import sustained_draw_commands
 from game.spatial_field import field_cell, field_supports
@@ -359,20 +359,21 @@ def draw_frame(
     screen_rect = screen.get_rect()
     authored_treatment_id, authored_multiplier = _authored_treatment(catalog)
 
-    device_commands = {str(command.evidence[0]): command for command in extra_commands
-                       if command.evidence[6] in ("device", "device_wreck")}
+    device_commands = {command.owner: command for command in extra_commands
+                       if command.role in ("device", "device_wreck")}
     commands: list[DrawCommand] = [command for command in extra_commands
-                                  if command.evidence[6] not in ("device", "device_wreck")]
+                                  if command.role not in ("device", "device_wreck")]
     for index, command in enumerate(commands):
-        if command.evidence[6] in ("deposit_floor", "deposit_air"):
-            position = cast(tuple[int, int], command.evidence[1])
+        if command.role in ("deposit_floor", "deposit_air"):
+            position = command.cell
+            assert position is not None
             disclosure = _disclosure(target, (position,))
             if disclosure is not None:
                 state, level = disclosure
                 treatment_id, multiplier = _treatment(catalog, level)
                 commands[index] = command._replace(surface=device_treatment(command.surface, multiplier),
                     evidence=(*command.evidence[:3], state, level.value if level is not None else None,
-                              treatment_id, *command.evidence[6:]))
+                              treatment_id, *command.evidence[6:]) if command.evidence else ())
     boundary_sprites: list[BoundarySprite] = []
     fixture_depths: list[FixtureDepthSample] = []
     terrain_depths: dict[tuple, np.ndarray] = {}
@@ -799,7 +800,7 @@ def draw_frame(
             if door is not None and not destroyed and not door.frame_resource_by_pose:
                 assert obj.item.door_swing is not None
                 bank = door.openings[obj.item.door_swing.value]
-                if bank.frame_path is not None:
+                if bank.frame_path is not None or bank.frame_regions_by_pose:
                     command = environment_command(bank, 0, identity=identity, position=position,
                         elevation=base_height, pose=pose, boundary_pose=physical_boundary,
                         camera=camera, multiplier=multiplier, role="door_frame", frame_only=True)
@@ -1137,9 +1138,11 @@ def draw_frame(
                                              facing, device_art, device_bank(device_art))
                     command = device_draw_command(emitter, 0, camera)
                 else:
+                    assert command.device_pose is not None
                     emitter = DeviceEmission(str(fixture_uuid), position, fixture.placement.base_height_steps,
-                        cast(DeviceFacing, command.evidence[8]), device_art, device_bank(device_art))
-                displayed_devices[fixture_uuid] = emitter, cast(int, command.evidence[9])
+                        command.device_pose.facing, device_art, device_bank(device_art))
+                assert command.device_pose is not None
+                displayed_devices[fixture_uuid] = emitter, command.device_pose.frame
                 image = device_treatment(command.surface, multiplier, flashes.get(fixture_uuid))
                 commands.append(command._replace(surface=image))
                 continue
@@ -1413,10 +1416,12 @@ def draw_frame(
 
     commands = split_actor_fixtures(commands, fixture_depths)
     commands = _split_terrain_depths(commands, terrain_depths, extra_commands)
+    registered_boundaries = tuple(boundary_sprites)
     composed = []
     for command in commands:
         if command.volume is not None:
-            image, depth = compose_volume(command.surface, command.volume, camera)
+            image, depth = compose_volume(command.surface, command.volume, camera,
+                destination=command.destination, visual_boundaries=registered_boundaries)
             composed.append(command._replace(surface=image, volume=None, world_depth=depth))
             continue
         if command.area is None:

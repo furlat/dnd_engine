@@ -1019,6 +1019,17 @@ def _media_segment_frame(at: float, start: float, end: float, first: float, last
     return max(0, min(frames-1, floor(first + progress*(last-first) + 1e-9)))
 
 
+def finite_media_end(data: AnimationData, tracks: tuple[StudioMediaTrack, ...], release_ms: float) -> float:
+    """Finite recipe media joins delivery before recovery; retained contact tails do not."""
+    end = release_ms
+    for track in tracks:
+        start = release_ms + track.startOffsetMs
+        if start < -1e-7:
+            raise ValueError(f"media starts before its cast: {track.id}")
+        end = max(end, start + media_track_duration(data, track))
+    return end
+
+
 def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
                            source: CastInput) -> CastTimeline:
     """Use the same body, application and damage clocks for non-travel media."""
@@ -1060,11 +1071,7 @@ def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
         if timing is not None:
             anchors.extend((Anchor("effect", timing.start_ms, identity), Anchor("vitals", timing.hp_ms, identity)))
         complete = max(complete, timing.end_ms if timing else arrival)
-    for track in recipe.media:
-        start = release + track.startOffsetMs
-        if start < -1e-7:
-            raise ValueError(f"media starts before its cast: {track.id}")
-        complete = max(complete, start + media_track_duration(data, track))
+    complete = max(complete, finite_media_end(data, recipe.media, release))
     ground = (GroundDeliveryTimeline(source.ground_target, facing, _iso(source.caster.grid, data),
               _iso(source.ground_target.grid, data), release, contact, 0, ())
               if source.ground_target is not None else None)
@@ -1350,7 +1357,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
             delivery_end = max(delivery_end, *(phase.end_ms for phase in application.projectile_intervals))
     if emitter is not None:
         body_end = max(body_end, release + (emitter.art.frame_count - emitter.art.release_frame) * 1000 / emitter.art.fps)
-    recovery_start = max(body_end, delivery_end)
+    recovery_start = max(body_end, delivery_end, finite_media_end(data, recipe.media, release))
     complete = recovery_start
     if cast.recovery.enabled:
         complete += body_duration(body_clip(data, source.caster, cast.recovery.bodyClip), cast.recovery.bodyPlaybackSpeed)

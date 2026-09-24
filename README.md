@@ -20,6 +20,8 @@ uv run --no-sync python -m game
 
 Repeat the `export` in each new shell. Run installation once, then use
 `uv run --no-sync` for the prepared environment.
+Art is installed separately; follow [private art setup](PRIVATE_ART.md) before
+starting a fresh checkout.
 Use the same prefix for tests, for example
 `uv run --no-sync python -m pytest -q tests/game/test_session.py`.
 Keep the checkout on WSL's Linux filesystem for fast imports: Python 3.13 with

@@ -14,7 +14,7 @@ from game.asset_types import AssetSpec
 from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media
 from game.condition_animation import resolve_condition_appearance
-from game.condition_draw import compose_condition_layers
+from game.condition_draw import compose_condition_layers, load_condition_layers
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer
 from game.playback_frame import sample_playback_frame
 from game.player_facts import ActionFact, SpellFact
@@ -165,3 +165,35 @@ def test_source_membership_deduplicates_wraps_and_other_restraints_do_not_select
     selective = resolve_condition_appearance((web,), {web.behavior_id: limited}, data.condition_media)
     assert len(selective.layers) == 2 and not selective.unsupported
     assert all(layer.layer.activeDuring == ("idle",) for layer in selective.layers)
+
+
+def test_packed_condition_attachments_crop_one_shared_page_before_composition(rendering, tmp_path, monkeypatch):
+    data, _ = rendering
+    behind, front = data.condition_recipes["condition.spell.web.restrained"].persistent.layers
+    path = tmp_path / "attachments.png"
+    page = pygame.Surface((16, 8), pygame.SRCALPHA)
+    page.fill("green", (1, 1, 7, 3))
+    page.fill("blue", (10, 4, 2, 2))
+    pygame.image.save(page, path)
+    layers = (
+        ResolvedConditionLayer(behind, ConditionLayerMedia("Web", "static", {
+            "E": AssetSpec("back", path, (7, 3), (5, 2), 1, rect=(1, 1, 7, 3))})),
+        ResolvedConditionLayer(front, ConditionLayerMedia("Web", "static", {
+            "E": AssetSpec("front", path, (2, 2), (1, 1), 1, rect=(10, 4, 2, 2))})),
+    )
+    load, reads = pygame.image.load, []
+    def tracked(source):
+        reads.append(source)
+        return load(source)
+    monkeypatch.setattr(pygame.image, "load", tracked)
+    rows = {}
+    load_condition_layers(layers, rows)
+    load_condition_layers(layers, rows)
+    assert reads == [path]
+    body = pygame.Surface((4, 4), pygame.SRCALPHA)
+    body.fill("red")
+    image, point = compose_condition_layers(body, (8, 6), (10, 10), "E", 1, 1, layers, rows)
+    assert point == (5, 6)
+    assert image.get_at((1, 2))[:3] == (0, 255, 0)
+    assert image.get_at((3, 2))[:3] == (255, 0, 0)
+    assert image.get_at((4, 3))[:3] == (0, 0, 255)

@@ -10,6 +10,24 @@ from game.projection import Camera, TILE_WIDTH, painter_key, project_screen, rot
 from game.registered_media import registered_media_blits
 
 
+def stationary_media_limitations(track: StudioMediaTrack) -> tuple[str, ...]:
+    """Check transforms still owned by this sampler, after attachment resolution.
+
+    The producer supplies the immutable contact and height, including body
+    attachment heights for condition reactions. Attachment is no longer a
+    sampling decision here.
+    """
+    unsupported = []
+    if track.composition != "billboard":
+        unsupported.append("world contact media supports billboard composition")
+    if track.scaleWithActor or track.orientation != "authored":
+        unsupported.append("world contact media has a fixed authored size and orientation")
+    if any(value is not None for value in (track.worldOffsetsByFacing,
+            track.bodyOffsetsByFacing, track.emissionPointByFacing)):
+        unsupported.append("world contact media uses its received contact without socket offsets")
+    return tuple(unsupported)
+
+
 @dataclass(frozen=True, slots=True)
 class StationaryMediaCue:
     event_uuid: UUID
@@ -20,6 +38,10 @@ class StationaryMediaCue:
     start_ms: float
     data: AnimationData
     depth_offset_cells: float = 0
+
+    def __post_init__(self) -> None:
+        if limitations := stationary_media_limitations(self.track):
+            raise ValueError(f"{self.track.id}: {'; '.join(limitations)}")
 
     @property
     def end_ms(self) -> float:

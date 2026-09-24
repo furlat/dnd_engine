@@ -169,8 +169,8 @@ def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera:
                 key = (*key[:3], key[3] + (-1 if track.depth == "behind_body" else 1), key[4])
             for layer in registered_media_samples(data, track.assetId,
                     track.assetPhase, frame, viewed, scale=factor, anchor=anchor, rows=rows,
-                    alpha=track.alpha, rotation=rotation):
-                if layer.positions is not None:
+                    alpha=track.alpha, rotation=rotation, zoom=camera.zoom):
+                if track.composition == "xyz_volume":
                     commands.append(DrawCommand(key, layer.image, layer.destination, layer.blend,
                         (source.root_event_uuid, grid, asset.assetId, "current", None, "authored",
                          "cast_media", height, track.id, frame),

@@ -78,7 +78,7 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
         start = lifetime.applied_ms if lifetime is not None else None
         removed = lifetime.removed_ms if lifetime is not None else None
         for layer_index, layer in enumerate(binding.layers):
-            if layer.composition == "legacy":
+            if layer.composition not in ("floor", "xy_volume", "clump"):
                 continue
             alpha = maintained_media_alpha(binding, layer, presentation_ms, removed)
             if alpha <= 0:
@@ -88,7 +88,7 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
                 asset_id, frame = selected
                 admitted = (tuple(position for position in effect.positions
                     if position in visible or position in effect.visible_volume_positions)
-                    if layer.composition == "volume" else effect.positions)
+                    if layer.composition == "xy_volume" else effect.positions)
                 commands.extend(field_media_commands(state, data, identity, geometry, admitted,
                     binding, layer, layer_index, asset_id, frame, camera, alpha, translation,
                     anchor_elevation_steps=effect.anchor_elevation_steps))
@@ -108,7 +108,7 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
         anchor = project_screen(origin, camera, elevation_steps=height)
         observed = frozenset(effect.positions)
         for layer_index, layer in enumerate(binding.layers):
-            if layer.composition != "legacy":
+            if layer.composition in ("floor", "xy_volume", "clump"):
                 continue
             alpha = maintained_media_alpha(binding, layer, presentation_ms, removed)
             if alpha <= 0:
@@ -118,10 +118,12 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
                 continue
             asset_id, frame = selected
             parts = registered_media_samples(data, asset_id, binding.assetPhase, frame, facing,
-                scale=binding.scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom, anchor=anchor, rows={}, alpha=alpha)
+                scale=binding.scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom, anchor=anchor, rows={}, alpha=alpha, zoom=camera.zoom)
             for index, part in enumerate(parts):
                 image, destination, blend = part.image, part.destination, part.blend
-                if part.positions is not None and isinstance(geometry, LinePresentationGeometry):
+                if layer.composition == "xyz_volume":
+                    assert isinstance(geometry, LinePresentationGeometry)
+                    assert part.positions is not None
                     assert part.ownership is not None
                     admitted = line_owned_supports(tuple(state.tiles), origin, geometry.direction,
                         geometry.length_feet // 5, geometry.width_feet // 5, observed, visible)
@@ -145,6 +147,8 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
                         (str(identity), origin, asset_id, "current", None, "authored", "spatial_media", height,
                          binding.assetPhase, frame)))
                     continue
+                if layer.composition != "line_floor":
+                    raise ValueError(f"line fields require line_floor or xyz_volume composition: {asset_id}")
                 pivot = anchor[0] - destination[0], anchor[1] - destination[1]
                 supports = line_field_supports(image.size, pivot, origin, geometry.direction,
                     geometry.length_feet // 5, geometry.width_feet // 5, observed, visible,

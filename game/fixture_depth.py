@@ -27,6 +27,7 @@ class FixtureDepthSample:
     crop: tuple[int, int, int, int]
     asset_scale: float
     depth_origin_offset_px: float = 0
+    source_rect: tuple[int, int, int, int] | None = None
 
 
 @lru_cache(maxsize=4)
@@ -36,9 +37,10 @@ def _atlas(path: Path) -> pygame.Surface:
 
 @lru_cache(maxsize=192)
 def _depth_cell(path: Path, cell: tuple[int, int], row: int, frame: int,
-                size: tuple[int, int]) -> np.ndarray:
+                size: tuple[int, int], source_rect: tuple[int, int, int, int] | None = None) -> np.ndarray:
     width, height = cell
-    image = _atlas(path).subsurface((frame * width, row * height, width, height))
+    rect = source_rect if source_rect is not None else (frame * width, row * height, width, height)
+    image = _atlas(path).subsurface(rect)
     values = pygame.surfarray.array3d(pygame.transform.scale(image, size)).astype(np.uint16)
     encoded = values[:, :, 0] + values[:, :, 1] * 256
     encoded.setflags(write=False)
@@ -153,7 +155,7 @@ their ordering too. This is local image composition, not a new depth buffer.
             continue
         registration = fixture.registration
         encoded = _depth_cell(fixture.atlas, registration.cell,
-            registration.rows_by_pose[fixture.pose], fixture.frame, fixture.full_size)
+            registration.rows_by_pose[fixture.pose], fixture.frame, fixture.full_size, fixture.source_rect)
         x, y, width, height = fixture.crop
         encoded = encoded[x:x + width, y:y + height]
         low, high = registration.depth_range

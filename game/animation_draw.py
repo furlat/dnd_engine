@@ -675,6 +675,7 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
             image, destination, 0,
             (contact.actor_uuid, contact.grid, contact.rig_id, "current", None, "authored",
              role, height, body.clip, body.frame),
+            role=role, owner=contact.actor_uuid,
         ))
     if condition is not None and condition.live_copies is not None:
         copies = condition.live_copies
@@ -692,7 +693,8 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
             commands.append(AnimationDrawCommand(painter_key(location, elevation_steps=height,
                 quadrant=camera.quadrant, role="actor", identity=(contact.actor_uuid, "copy", str(slot))),
                 image, destination, 0, (contact.actor_uuid, location, contact.rig_id, "current", None, "authored",
-                                       "body_copy", height, body.clip, body.frame, slot)))
+                                       "body_copy", height, body.clip, body.frame, slot),
+                role="body_copy", owner=contact.actor_uuid))
     if condition is not None and condition.distortion is not None:
         recipe = condition.distortion
         for index, contour in enumerate(recipe.contours):
@@ -709,7 +711,8 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
             commands.append(AnimationDrawCommand(painter_key(location, elevation_steps=height,
                 quadrant=camera.quadrant, role="actor", identity=(contact.actor_uuid, "contour", str(index))),
                 image, destination, 0, (contact.actor_uuid, location, contact.rig_id, "current", None, "authored",
-                                       "body_contour", height, body.clip, body.frame, index)))
+                                       "body_contour", height, body.clip, body.frame, index),
+                role="body_contour", owner=contact.actor_uuid))
     return tuple(commands)
 
 
@@ -728,7 +731,8 @@ def body_trail_draw_command(trail: BodyTrailPose, data: AnimationData, body_rows
     return AnimationDrawCommand(painter_key(actor.contact.grid, elevation_steps=height,
         quadrant=camera.quadrant, role="actor", identity=(body.actor_uuid, "trail", str(trail.age_ms))),
         image, destination, 0, (body.actor_uuid, actor.contact.grid, actor.contact.rig_id, "current", None,
-                               "authored", "body_trail", height, body.clip, body.frame, trail.age_ms))
+                               "authored", "body_trail", height, body.clip, body.frame, trail.age_ms),
+        role="body_trail", owner=body.actor_uuid)
 
 
 def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
@@ -758,9 +762,10 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
         match reference_effect:
             case ProjectileSample():
                 effect = project_projectile(timeline, reference_effect, camera.quadrant)
-                storage = data.projectile_storage.get(effect.asset_id)
                 phase_name = "cast" if effect.phase == "prepare" else effect.phase
-                if storage is not None and storage.phases[phase_name].surfaceFrames is not None:
+                authored_phase = {"prepare": projectile.prepare, "travel": projectile.travel,
+                                  "impact": projectile.impact}[effect.phase]
+                if authored_phase.composition == "xyz_volume":
                     assert source.ground_target is not None
                     asset = data.projectile_assets[effect.asset_id]
                     position, height = source.ground_target.grid, source.ground_target.elevation_steps
@@ -768,7 +773,7 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
                     for layer_index, layer in enumerate(registered_media_samples(data, effect.asset_id,
                             phase_name, effect.column, asset.rowOrder[effect.row],
                             scale=projectile_phase_scale(projectile, effect.phase) * TILE_WIDTH / data.rig.TILE_W * camera.zoom,
-                            anchor=anchor, rows=media.projectile_rows, alpha=effect.opacity)):
+                            anchor=anchor, rows=media.projectile_rows, alpha=effect.opacity, zoom=camera.zoom)):
                         assert layer.positions is not None and layer.ownership is not None
                         commands.append(AnimationDrawCommand(painter_key(position, elevation_steps=height,
                             quadrant=camera.quadrant, role="projectile",
@@ -833,6 +838,7 @@ def number_draw_commands(data: AnimationData, numbers: tuple[NumberSample, ...],
             (210, *key[1:]), image, destination, 0,
             (contact.actor_uuid, contact.grid, number.label, "current", None, "authored",
              "floating_number", height, number.value, number.progress, number.application_id),
+            role="floating_number", owner=contact.actor_uuid,
         ))
     return tuple(commands)
 
@@ -841,13 +847,13 @@ def actor_screen_bounds(commands: Sequence[AnimationDrawCommand]) -> dict[str, p
     """Visible body pixels, excluding shadows and the atlas's empty padding."""
     bounds: dict[str, pygame.Rect] = {}
     for command in commands:
-        image, position, evidence = command.surface, command.destination, command.evidence
-        if evidence[6] != "actor" or image.get_alpha() == 0:
+        image, position = command.surface, command.destination
+        if command.role != "actor" or image.get_alpha() == 0:
             continue
         rect = image.get_bounding_rect(min_alpha=1).move(position)
         if rect.width == 0 or rect.height == 0:
             continue
-        identity = str(evidence[0])
+        identity = command.owner
         bounds[identity] = bounds[identity].union(rect) if identity in bounds else rect
     return bounds
 
@@ -886,12 +892,12 @@ def arrange_feedback_commands(commands: Sequence[AnimationDrawCommand],
     occupied = list(actor_bounds.values())
     arranged: list[AnimationDrawCommand] = []
     for command in commands:
-        image, position, evidence = command.surface, command.destination, command.evidence
-        if evidence[6] != "floating_number":
+        image, position = command.surface, command.destination
+        if command.role != "floating_number":
             arranged.append(command)
             continue
         rect = place_feedback_rect(image.get_rect(topleft=position),
-                                   actor_bounds.get(str(evidence[0])), occupied, viewport)
+                                   actor_bounds.get(command.owner), occupied, viewport)
         occupied.append(rect)
         # The trace's screen_xy comes from this actual draw position. Retained
         # world contact, application identity and progress remain unchanged.

@@ -11,11 +11,11 @@ import pytest
 from dnd.types.world import CardinalDirection
 from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementKind
 from game.animation_types import PackedSurfaceFrames, ProjectileFrameStorage, ProjectileStorage
-from game.area_media import AreaSolid
+from game.area_media import AreaSolid, BoundarySprite
 from game.draw_commands import DrawCommand
 from game.fixture_depth import partition_world_depth, split_world_depth
 from game.projectile_media import ProjectileFrameCache, frame_cache_usage, projectile_frame_layers
-from game.projection import Camera, rotate_position
+from game.projection import Camera, inverse_rotate_position, project_screen, rotate_position
 from game.volume_media import ExcludedSphere, SurfaceVolume, compose_volume
 from tests.game.test_projectile_media import display as display, original_data as original_data, sample_data
 
@@ -70,6 +70,81 @@ def test_camera_wall_occlusion_uses_sample_height_not_ground_silhouette():
     # Both lie on the reachable side; only the low sample is hidden by the wall.
     assert [image.get_at((x, 0)).a for x in range(2)] == [0, 255]
 
+
+
+@pytest.mark.parametrize("quadrant", range(4))
+@pytest.mark.parametrize("sample,covered", [
+    ((.25, 2., 0.), True),       # ray passes above native top=2, through the art cap
+    ((.5, 2.25, .25), False),   # contact with that cap
+    ((.75, 2.5, .5), False),    # same screen pixel, on the camera side
+    ((.25, 3., 0.), False),     # above the registered art itself
+])
+def test_registered_cap_owns_only_far_side_samples(quadrant, sample, covered):
+    center = inverse_rotate_position((32., 32.), quadrant)
+    direction = (CardinalDirection.EAST, CardinalDirection.SOUTH,
+                 CardinalDirection.WEST, CardinalDirection.NORTH)[quadrant]
+    boundary = wall(tuple(round(value) for value in center), direction)
+    camera = Camera(quadrant=quadrant, zoom=1).with_focus(center)
+    cap_point = inverse_rotate_position((32.5, 32.25), quadrant)
+    cap_at = tuple(round(value) for value in project_screen(cap_point, camera, elevation_steps=2.25))
+    art = pygame.Surface((1, 1), pygame.SRCALPHA); art.fill((20, 60, 100, 255))
+    picture = BoundarySprite((boundary,), art, cap_at, (100, 2064., 0., 0, ('wall',)))
+    point = inverse_rotate_position((32 + sample[0], 32 + sample[2]), quadrant)
+    destination = tuple(round(value) for value in project_screen(point, camera, elevation_steps=sample[1]))
+    image = pygame.Surface((1, 1), pygame.SRCALPHA); image.fill((100, 50, 25, 255))
+    volume = SurfaceVolume(center, 0, 4, np.array([[sample]], dtype=np.float32),
+                           np.ones((1, 1), dtype=np.uint8), 1)
+    result, _ = compose_volume(image, volume, camera,
+                               destination=destination, visual_boundaries=(picture,))
+    assert bool(result.get_at((0, 0)).a) is not covered
+    if covered:
+        assert result.get_at((0, 0)) == (0, 0, 0, 0), "Additive RGB must be hidden too"
+    assert boundary.top_height_steps == 2, "Art registration cannot raise the native wall"
+
+
+@pytest.mark.parametrize("alpha", (0, 128, 255))
+def test_registered_door_holes_and_edges_preserve_normal_compositing(alpha):
+    image = pygame.Surface((1, 1), pygame.SRCALPHA); image.fill((100, 50, 25, 255))
+    door = pygame.Surface((1, 1), pygame.SRCALPHA); door.fill((20, 60, 100, alpha))
+    key = (100, 16., 0., 0, ('door',))
+    boundary = BoundarySprite((wall((0, 0), CardinalDirection.EAST),), door, (0, 0), key)
+    volume = SurfaceVolume((0, 0), 0, 4, np.array([[[.25, 2., 0.]]]), np.ones((1, 1)), 1)
+    result, depth = compose_volume(image, volume, Camera(), visual_boundaries=(boundary,))
+    effect = DrawCommand(key, result, (0, 0), 0, (), world_depth=depth)
+    leaf = DrawCommand(key, door, (0, 0), 0, ())
+    actual = pygame.Surface((1, 1)); actual.fill((0, 0, 0))
+    for row in sorted(split_world_depth([effect, leaf]), key=lambda row: row.key):
+        actual.blit(row.surface, row.destination)
+    expected = pygame.Surface((1, 1)); expected.fill((0, 0, 0))
+    expected.blit(image, (0, 0)); expected.blit(door, (0, 0))
+    assert actual.get_at((0, 0)) == expected.get_at((0, 0))
+
+
+def test_boundary_corner_segments_are_finite_and_openings_are_not_inferred_solid():
+    art = pygame.Surface((3, 1), pygame.SRCALPHA); art.fill((20, 60, 100, 255))
+    corner = BoundarySprite((wall((0, 0), CardinalDirection.EAST),
+                             wall((0, 0), CardinalDirection.NORTH)), art, (0, 0),
+                            (100, 16., 0., 0, ('corner',)))
+    image = pygame.Surface((3, 1), pygame.SRCALPHA); image.fill((100, 50, 25, 255))
+    # Behind the east arm, behind the north arm, outside both finite segments.
+    xyz = np.array([[[.25, 2., 0.]], [[0., 2., .25]], [[.25, 2., 2.]]])
+    result, _ = compose_volume(image, SurfaceVolume((0, 0), 0, 4, xyz,
+        np.ones((3, 1)), 1), Camera(), visual_boundaries=(corner,))
+    assert [result.get_at((i, 0)).a for i in range(3)] == [0, 0, 255]
+
+
+@pytest.mark.parametrize("neighbor_row,hidden", ((1, True), (2, False)))
+def test_neighboring_cap_sprites_share_only_connected_edge_coverage(neighbor_row, hidden):
+    art = pygame.Surface((1, 1), pygame.SRCALPHA); art.fill((20, 60, 100, 255))
+    key = (100, 16., 0., 0, ('wall',))
+    boundary = BoundarySprite((wall((0, 0), CardinalDirection.EAST),), art, (0, 0), key)
+    neighbor = BoundarySprite((wall((0, neighbor_row), CardinalDirection.EAST),), art, (1, 0), key)
+    image = pygame.Surface((1, 1), pygame.SRCALPHA); image.fill((100, 50, 25, 255))
+    # This cap pixel is drawn by one sprite, but its ray crosses the adjoining
+    # edge segment at z=.55. An actual gap must not inherit that segment.
+    volume = SurfaceVolume((0, 0), 0, 4, np.array([[[.25, 2., .3]]]), np.ones((1, 1)), 1)
+    result, _ = compose_volume(image, volume, Camera(), visual_boundaries=(boundary, neighbor))
+    assert bool(result.get_at((0, 0)).a) is not hidden
 
 def test_depth_partition_does_not_duplicate_additive_rgb():
     surface = pygame.Surface((2, 1), pygame.SRCALPHA)

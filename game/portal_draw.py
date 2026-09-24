@@ -114,7 +114,7 @@ def clip_portal_bodies(commands: tuple[DrawCommand, ...], camera: Camera,
         if cue.arrival is not None and cue.arrival_ms <= elapsed < cue.settled_ms}
     result = []
     for command in commands:
-        role, identity = command.evidence[6], str(command.evidence[0])
+        role, identity = command.role, command.owner
         if role not in ("actor", "actor_shadow", "body_copy", "body_contour", "body_trail"):
             result.append(command)
             continue

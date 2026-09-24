@@ -23,7 +23,7 @@ from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media
-from game.device_art import DeviceEmission, load_device_art
+from game.device_art import DeviceEmission, device_bank, load_device_art
 from game.device_draw import device_draw_command, device_wreck_draw_command
 from game.event_record import decode_event, encode_event
 from game.playback_frame import sample_playback_frame
@@ -115,7 +115,13 @@ def test_native_destruction_settles_same_device_body_after_contact_without_retai
             assert evidence is not None and evidence.matches
             devices = [row for row in evidence.actual_draws if len(row) > 6 and row[6] in ("device", "device_wreck")]
             tethers = [row for row in evidence.actual_draws if len(row) > 6 and row[6] == "sustained_tether"]
-            return frame, devices, tethers, pygame.image.tobytes(screen, "RGBA")
+            pixels = pygame.image.tobytes(screen, "RGBA")
+            draw_frame(screen, frame.displayed, catalog, cache, camera, 3,
+                show_grid=False, show_debug=False, mouse_position=None,
+                extra_commands=tuple(row._replace(evidence=()) for row in frame.commands),
+                world_transitions=frame.world_transitions)
+            assert pygame.image.tobytes(screen, "RGBA") == pixels
+            return frame, devices, tethers, pixels
 
         winding, devices, tethers, wind_pixels = render(destruction.start_ms - .001)
         assert winding.displayed.objects[replacement].item.integrity is ItemIntegrity.INTACT
@@ -137,25 +143,27 @@ def test_native_destruction_settles_same_device_body_after_contact_without_retai
 
 
 @pytest.mark.parametrize("identity", ("environment.fireball_cannon", "environment.arcane_machine_gun"))
-def test_delivered_break_frames_match_idle_and_wreck_for_all_cameras_pitches_and_aims(raster, identity):
+def test_selected_break_frames_match_idle_and_wreck_for_all_cameras_and_aims(raster, identity):
     art = load_device_art()[identity]
     assert art.destruction is not None
+    # Historical pitch metadata remains available, but the authored launch
+    # pitch selects the production body and its matching break sequence.
+    bank = device_bank(art)
     for quadrant in range(4):
         camera = Camera(quadrant=quadrant, zoom=.5).with_focus((5, 7), elevation_steps=2)
-        for bank in art.banks:
-            for facing in art.rows:
-                emitter = DeviceEmission("device", (5, 7), 2, facing, art, bank)
-                live = device_draw_command(emitter, 0, camera)
-                first = device_wreck_draw_command("wreck", (5, 7), 2, facing, art, camera,
-                    elapsed_ms=0, pitch_degrees=bank.degrees)
-                final = device_wreck_draw_command("wreck", (5, 7), 2, facing, art, camera,
-                    elapsed_ms=7 * 1000 / 12 + .001, pitch_degrees=bank.degrees)
-                wreck = device_wreck_draw_command("wreck", (5, 7), 2, facing, art, camera)
-                assert live.destination == first.destination == final.destination == wreck.destination
-                support = project_screen((5, 7), camera, elevation_steps=2)
-                assert wreck.destination == tuple(round(support[i] - art.anchor[i] * art.scale * camera.zoom) for i in range(2))
-                assert pygame.image.tobytes(live.surface, "RGBA") == pygame.image.tobytes(first.surface, "RGBA")
-                assert pygame.image.tobytes(final.surface, "RGBA") == pygame.image.tobytes(wreck.surface, "RGBA")
+        for facing in art.rows:
+            emitter = DeviceEmission("device", (5, 7), 2, facing, art, bank)
+            live = device_draw_command(emitter, 0, camera)
+            first = device_wreck_draw_command("wreck", (5, 7), 2, facing, art, camera,
+                elapsed_ms=0, pitch_degrees=bank.degrees)
+            final = device_wreck_draw_command("wreck", (5, 7), 2, facing, art, camera,
+                elapsed_ms=7 * 1000 / 12 + .001, pitch_degrees=bank.degrees)
+            wreck = device_wreck_draw_command("wreck", (5, 7), 2, facing, art, camera)
+            assert live.destination == first.destination == final.destination == wreck.destination
+            support = project_screen((5, 7), camera, elevation_steps=2)
+            assert wreck.destination == tuple(round(support[i] - art.anchor[i] * art.scale * camera.zoom) for i in range(2))
+            assert pygame.image.tobytes(live.surface, "RGBA") == pygame.image.tobytes(first.surface, "RGBA")
+            assert pygame.image.tobytes(final.surface, "RGBA") == pygame.image.tobytes(wreck.surface, "RGBA")
 
 
 def test_unknown_replacement_is_redacted_and_legacy_destruction_never_invents_one(legacy_recorded):

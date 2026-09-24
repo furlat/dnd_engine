@@ -103,7 +103,14 @@ def test_loader_preserves_materialized_and_disabled_authoring_fields(data: Anima
     assert data.death_context.bodyClip == "Die"
     assert data.number_style.anchorLiftPx == 50
     assert "equipment_transition" in json.loads(data.context_source_json)["contexts"]
-    assert all(path.is_absolute() and path.is_file() for path in data.resources.values())
+    # Reference metadata stays lossless even when unselected source overlays
+    # live only in the private archive. Selected media is decoded separately.
+    bindings = json.loads((DATA_ROOT / "bindings.json").read_text())["resources"]
+    repository_root = DATA_ROOT.parent.parent.parent
+    assert {url: data.resources[url] for url in bindings} == {
+        url: repository_root / relative for url, relative in bindings.items()
+    }
+    assert all(path.is_absolute() for path in data.resources.values())
     with pytest.raises(TypeError):
         data.resources["/unexpected.png"] = Path("unexpected.png")
 

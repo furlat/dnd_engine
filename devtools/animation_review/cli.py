@@ -33,8 +33,9 @@ def write_json(path: Path, value: object) -> None:
 def source_identity() -> dict:
     def git(*args: str) -> str:
         return subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
+    # Provenance must not walk the installed art tree before every capture.
     return {"branch": git("branch", "--show-current"), "commit": git("rev-parse", "HEAD"),
-            "dirty": bool(git("status", "--porcelain"))}
+            "dirty": None}
 
 
 def public_input(recorded: RecordedInput) -> RecordedInput:

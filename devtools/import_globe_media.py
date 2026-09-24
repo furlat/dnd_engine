@@ -16,7 +16,9 @@ def import_bundle(source: Path, repo: Path = ROOT) -> None:
     folder.mkdir(parents=True, exist_ok=True)
     bindings_path = folder / "bindings.json"
     bindings = json.loads(bindings_path.read_text()) if bindings_path.exists() else {"resources": {}, "spells": {}}
-    storage, assets, copied = {}, [], set()
+    assets_path = folder / "projectile-assets.json"
+    assets = {row["assetId"]: row for row in json.loads(assets_path.read_text())} if assets_path.exists() else {}
+    storage, copied = bindings.setdefault("projectileStorage", {}), set()
     for name, first, count, loop in (("apply", 0, 96, False), ("hold", 96, 576, True),
                                      ("response", 41, 278, False)):
         for side in ("back", "front"):
@@ -40,15 +42,15 @@ def import_bundle(source: Path, repo: Path = ROOT) -> None:
                 views[DIRECTIONS[q * 2 + 1]] = parts
             storage[asset_id] = {"phases": {"impact": {"layers": [
                 {"partsByFacing": views, "blendMode": "normal"}]}}}
-            assets.append({"assetId": asset_id, "displayName": asset_id, "kind": "projectile",
+            assets[asset_id] = {"assetId": asset_id, "displayName": asset_id, "kind": "projectile",
                 "sheet": f"/globe/{name}/{side}", "frame": {"width": 448, "height": 448, "rows": 8, "cols": count},
                 "fps": 144, "rowOrder": list(DIRECTIONS),
                 "phases": {"impact": {"start": 0, "frames": count, "fps": 144, "loop": loop}},
                 "anchor": {"x": .5, "y": .5}, "defaultScale": .5,
-                "palettePreview": {"colors": [0xffe49c, 0xd29b38, 0x6c451a]}})
+                "palettePreview": {"colors": [0xffe49c, 0xd29b38, 0x6c451a]}}
     bindings["projectileStorage"] = storage
     bindings_path.write_text(json.dumps(bindings, separators=(",", ":")) + "\n")
-    (folder / "projectile-assets.json").write_text(json.dumps(assets, separators=(",", ":")) + "\n")
+    assets_path.write_text(json.dumps(list(assets.values()), separators=(",", ":")) + "\n")
 
 
 if __name__ == "__main__":

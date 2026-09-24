@@ -1,6 +1,6 @@
 {
-  "schema": "neuroclient.conditionPresentationRecipes",
-  "version": 12,
+  "schema": "dnd.conditionPresentationRecipes",
+  "version": 1,
   "recipes": [
     {
       "definitionRef": {

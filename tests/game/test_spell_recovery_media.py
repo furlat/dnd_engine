@@ -53,8 +53,23 @@ def test_selected_cast_reaches_dense_phase_frames_and_layered_fireball(imported_
         for direction in ("E", "NW"):
             for frame in (0, interval.phase.frames - 1):
                 layers = projectile_frame_layers(data, interval.asset, phase, frame, direction, sprite, {}, cache=cache)
-                assert [layer.image.get_size() for layer in layers] == (
-                    [(1536, 1536), (1536, 1536)] if spell == "fireball" and phase == "impact" else [(256, 256)])
+                for layer in layers:
+                    if layer.positions is None:
+                        assert layer.image.get_size() == (interval.asset.frame.width, interval.asset.frame.height)
+                        continue
+                    # Cropped packets retain their position in the authored
+                    # canvas, and color/XYZ/ownership must remain one raster.
+                    width, height = layer.image.get_size()
+                    assert 0 < width <= interval.asset.frame.width
+                    assert 0 < height <= interval.asset.frame.height
+                    assert 0 <= layer.offset[0] <= interval.asset.frame.width - width
+                    assert 0 <= layer.offset[1] <= interval.asset.frame.height - height
+                    assert layer.positions.coordinates.shape == (width, height, 3)
+                    assert layer.positions.ownership.shape == (width, height)
+                if spell == "fireball" and phase == "impact":
+                    assert all(layer.positions is not None for layer in layers)
+                    assert layers[0].offset == layers[1].offset
+                    assert layers[0].image.get_size() == layers[1].image.get_size()
                 assert [layer.blend for layer in layers] == (
                     [0, pygame.BLEND_RGB_ADD] if spell == "fireball" and phase == "impact" else [pygame.BLEND_RGB_ADD])
                 assert frame_cache_usage(cache).decoded_bytes <= cache.limit_bytes
