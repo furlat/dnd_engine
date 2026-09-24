@@ -821,6 +821,342 @@
       "removal_fade_ms": 667,
       "scale": 0.5,
       "world_basis": "E"
+    },
+    "support.death_ward.back": {
+      "category": "death_ward",
+      "animation": "loop",
+      "asset_id": "support.ward_hold_sustain.back",
+      "application_asset_id": "support.ward_cast_application.back",
+      "application_fade_ms": [
+        1400,
+        2000
+      ],
+      "sustain_start_ms": 1400,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.death_ward.front": {
+      "category": "death_ward",
+      "animation": "loop",
+      "asset_id": "support.ward_hold_sustain.front",
+      "application_asset_id": "support.ward_cast_application.front",
+      "application_fade_ms": [
+        1400,
+        2000
+      ],
+      "sustain_start_ms": 1400,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.ward_trigger_consumption.back": {
+      "category": "ward_trigger_consumption",
+      "animation": "once",
+      "asset_id": "support.ward_trigger_consumption.back",
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.ward_trigger_consumption.front": {
+      "category": "ward_trigger_consumption",
+      "animation": "once",
+      "asset_id": "support.ward_trigger_consumption.front",
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.stoneskin.back": {
+      "category": "stoneskin",
+      "animation": "loop",
+      "asset_id": "support.stone_hold_sustain.back",
+      "application_asset_id": "support.stone_cast_application.back",
+      "application_fade_ms": [
+        600,
+        1100
+      ],
+      "sustain_start_ms": 600,
+      "removal_fade_ms": 700,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.stoneskin.front": {
+      "category": "stoneskin",
+      "animation": "loop",
+      "asset_id": "support.stone_hold_sustain.front",
+      "application_asset_id": "support.stone_cast_application.front",
+      "application_fade_ms": [
+        600,
+        1100
+      ],
+      "sustain_start_ms": 600,
+      "removal_fade_ms": 700,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.protection_from_poison.back": {
+      "category": "protection_from_poison",
+      "animation": "loop",
+      "asset_id": "support.protection_from_poison_sustain.back",
+      "application_asset_id": "support.protection_from_poison_application.back",
+      "application_fade_ms": [
+        2400,
+        2900
+      ],
+      "sustain_start_ms": 2400,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.protection_from_poison.front": {
+      "category": "protection_from_poison",
+      "animation": "loop",
+      "asset_id": "support.protection_from_poison_sustain.front",
+      "application_asset_id": "support.protection_from_poison_application.front",
+      "application_fade_ms": [
+        2400,
+        2900
+      ],
+      "sustain_start_ms": 2400,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_bull.back": {
+      "category": "enhance_bull",
+      "animation": "loop",
+      "asset_id": "support.enhance_bull_sustain.back",
+      "application_asset_id": "support.enhance_bull_application.back",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_bull.front": {
+      "category": "enhance_bull",
+      "animation": "loop",
+      "asset_id": "support.enhance_bull_sustain.front",
+      "application_asset_id": "support.enhance_bull_application.front",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_bear.back": {
+      "category": "enhance_bear",
+      "animation": "loop",
+      "asset_id": "support.enhance_bear_sustain.back",
+      "application_asset_id": "support.enhance_bear_application.back",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_bear.front": {
+      "category": "enhance_bear",
+      "animation": "loop",
+      "asset_id": "support.enhance_bear_sustain.front",
+      "application_asset_id": "support.enhance_bear_application.front",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_cat.back": {
+      "category": "enhance_cat",
+      "animation": "loop",
+      "asset_id": "support.enhance_cat_sustain.back",
+      "application_asset_id": "support.enhance_cat_application.back",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_cat.front": {
+      "category": "enhance_cat",
+      "animation": "loop",
+      "asset_id": "support.enhance_cat_sustain.front",
+      "application_asset_id": "support.enhance_cat_application.front",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_fox.back": {
+      "category": "enhance_fox",
+      "animation": "loop",
+      "asset_id": "support.enhance_fox_sustain.back",
+      "application_asset_id": "support.enhance_fox_application.back",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_fox.front": {
+      "category": "enhance_fox",
+      "animation": "loop",
+      "asset_id": "support.enhance_fox_sustain.front",
+      "application_asset_id": "support.enhance_fox_application.front",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_owl.back": {
+      "category": "enhance_owl",
+      "animation": "loop",
+      "asset_id": "support.enhance_owl_sustain.back",
+      "application_asset_id": "support.enhance_owl_application.back",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_owl.front": {
+      "category": "enhance_owl",
+      "animation": "loop",
+      "asset_id": "support.enhance_owl_sustain.front",
+      "application_asset_id": "support.enhance_owl_application.front",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_eagle.back": {
+      "category": "enhance_eagle",
+      "animation": "loop",
+      "asset_id": "support.enhance_eagle_sustain.back",
+      "application_asset_id": "support.enhance_eagle_application.back",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.enhance_eagle.front": {
+      "category": "enhance_eagle",
+      "animation": "loop",
+      "asset_id": "support.enhance_eagle_sustain.front",
+      "application_asset_id": "support.enhance_eagle_application.front",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.regenerate.back": {
+      "category": "regenerate",
+      "animation": "loop",
+      "asset_id": "support.regenerate_sustain.back",
+      "application_asset_id": "support.regenerate_application.back",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.regenerate.front": {
+      "category": "regenerate",
+      "animation": "loop",
+      "asset_id": "support.regenerate_sustain.front",
+      "application_asset_id": "support.regenerate_application.front",
+      "application_fade_ms": [
+        1600,
+        2000
+      ],
+      "sustain_start_ms": 1600,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.regenerate_healing_event.back": {
+      "category": "regenerate_healing_event",
+      "animation": "once",
+      "asset_id": "support.regenerate_healing_event.back",
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.regenerate_healing_event.front": {
+      "category": "regenerate_healing_event",
+      "animation": "once",
+      "asset_id": "support.regenerate_healing_event.front",
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.freedom_of_movement.back": {
+      "category": "freedom_of_movement",
+      "animation": "loop",
+      "asset_id": "support.freedom_of_movement_sustain.back",
+      "application_asset_id": "support.freedom_of_movement_application.back",
+      "application_fade_ms": [
+        2500,
+        3000
+      ],
+      "sustain_start_ms": 2500,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
+    },
+    "support.freedom_of_movement.front": {
+      "category": "freedom_of_movement",
+      "animation": "loop",
+      "asset_id": "support.freedom_of_movement_sustain.front",
+      "application_asset_id": "support.freedom_of_movement_application.front",
+      "application_fade_ms": [
+        2500,
+        3000
+      ],
+      "sustain_start_ms": 2500,
+      "removal_fade_ms": 450,
+      "scale": 0.5,
+      "world_basis": "E"
     }
   }
 }

@@ -7,7 +7,7 @@ original priority/exclusive-group rules without acquiring mechanical ownership.
 from dataclasses import dataclass, replace
 from math import isfinite
 from types import MappingProxyType
-from typing import Mapping
+from typing import Literal, Mapping
 from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
@@ -60,13 +60,24 @@ class ConditionResponseCue:
     owner_uuid: UUID
     actor_uuid: UUID
     behavior_id: str
-    trigger: str
+    trigger: Literal["consumed", "healed"]
     start_ms: float
     effects: tuple[ConditionTransitionEffect, ...]
 
     @property
     def end_ms(self) -> float:
         return self.start_ms + max((effect.startOffsetMs + effect.durationMs for effect in self.effects), default=0.)
+
+
+def bind_condition_response(event_uuid: UUID, actor_uuid: UUID, member: ConditionFact,
+                            trigger: Literal["consumed", "healed"], start_ms: float,
+                            recipes: Mapping[str, ConditionRecipe]) -> ConditionResponseCue | None:
+    recipe = recipes.get(member.behavior_id or "")
+    if recipe is None:
+        return None
+    effects = tuple(effect for response in recipe.responses if response.trigger == trigger for effect in response.effects)
+    return (ConditionResponseCue(event_uuid, member.condition_uuid, actor_uuid,
+        recipe.definitionRef.content_id, trigger, start_ms, effects) if effects else None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +116,9 @@ def persistent_limitations(recipe: ConditionRecipe,
         *(f"Condition equipment modifier unsupported: {identity}/{modifier.id}"
           for modifier in persistent.equipmentModifiers),
         *(f"Condition rig layer unsupported: {identity}/{layer.id}" for layer in persistent.appearanceLayers),
+        *(f"Condition response strip unsupported: {identity}/{effect.id}"
+          for response in recipe.responses for effect in response.effects
+          if effect.assetId not in media or media[effect.assetId].asset_id is None),
     )
 
 
@@ -288,13 +302,15 @@ def compile_condition(
     # An executed activation already owns its finite tail. Removal effects are
     # cancellation media only in that case, as in the shared lifetime sampler.
     media_duration = max((effect.startOffsetMs + effect.durationMs for effect in transition.effects), default=0) if (
-        changed and (applied or not media_activated)) else 0
+        changed and (applied or not media_activated and not change.consumed)) else 0
+    ramp_duration = (recipe.persistent.bodyRamp.applicationMs if applied else recipe.persistent.bodyRamp.removalMs
+                     ) if changed and recipe.persistent.bodyRamp is not None else 0.
     unsupported = tuple(dict.fromkeys((
         *old_appearance.unsupported, *new_appearance.unsupported,
         *transition_limitations(recipe.definitionRef.content_id, transition, media),
     )))
     return ConditionTimeline(
-        event.uuid, change.target_entity_uuid, start, start + max(alpha_duration, media_duration),
+        event.uuid, change.target_entity_uuid, start, start + max(alpha_duration, media_duration, ramp_duration),
         before, after, old_appearance, new_appearance,
         ("+" if applied else "−") + fact.name if feedback else None,
         transition.feedbackColor, badge_style, unsupported,

@@ -29,6 +29,7 @@ class ConditionFact:
     resulting_stats: EntityStatsState | None = None
     resulting_tile: WorldTileState | None = None
     resulting_item: ItemPresentationState | None = None
+    consumed: bool = False
 
 
 @dataclass(frozen=True, slots=True)

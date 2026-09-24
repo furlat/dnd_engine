@@ -31,9 +31,9 @@ def test_chill_smoke_does_not_hit_until_the_authored_hand_contacts(data):
     assert contact.vitals[0].flash is not None
     assert sample_cast(timeline,775).vitals[0].flash is None
     effect, = contact.projectiles
-    assert isinstance(effect,ProjectileSample) and effect.column == 236
+    assert isinstance(effect,ProjectileSample) and effect.column == 52
     early, = sample_cast(timeline,1000*5/12).projectiles
-    assert isinstance(early,ProjectileSample) and early.column == 206
+    assert isinstance(early,ProjectileSample) and early.column == 45
     assert not any(effect.phase=="travel" for effect in before.projectiles)
     frames = [sample_cast(timeline,t).projectiles[0].column for t in (0,200,416.67,625,900,1800)]
     assert frames == sorted(set(frames))

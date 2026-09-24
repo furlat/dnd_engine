@@ -45,6 +45,7 @@ from dnd.core.world_edges import (
 )
 from dnd.types.world import CardinalDirection, OccupancyLayer, WorldEdgeChannel
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
+from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.spatial_effects import (
     SpatialEffectLayer,
     SpatialEffectOccupancyPolicy,
@@ -80,6 +81,9 @@ class SpatialConditionOwner(Protocol):
 
     @property
     def hazard_filter(self) -> Optional[HazardFilter]: ...
+
+    @property
+    def spatial_suppressions(self) -> Tuple[SpellSuppression, ...]: ...
 
     def is_hazardous_for(
         self, entity_uuid: Optional[UUID] = None, *,

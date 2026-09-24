@@ -70,6 +70,7 @@ ADDITIVE_FIELDS = {
     ShoveEvent: {"resolved_area_positions"},
     DamageAppliedEvent: {"body_release", "critical_hit", "impact_direction"},
     TakeDamageEvent: {"intercepted_by_condition_uuid"},
+    HealEvent: {"source_condition_uuid"},
     EntityCreatedEvent: {"healing_blocked", "occupancy_layer", "temporary_hit_points_grant"},
     SensoryUpdateEvent: {"hazardous_cells_changed", "spatial_effects_changed", "spatial_effects_removed"},
     SpatialChangeEvent: {"tile_state", "tile_present", "object_state", "previous_occupancy_layer", "occupancy_layer"},

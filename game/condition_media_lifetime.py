@@ -11,7 +11,8 @@ from uuid import UUID
 from dnd.core.events import EventType
 from game.animation_types import AnimationData
 from game.choreography import BoundChoreography, MotionTimeline
-from game.condition_animation import ConditionAppearance, ConditionTimeline, LiveCopyAppearance, resolve_condition_appearance
+from game.condition_animation import (ConditionAppearance, ConditionTimeline, LiveCopyAppearance,
+    ConditionResponseCue, resolve_condition_appearance)
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer, supported_layer
 from game.condition_types import ConditionLayer, ConditionRecipe, ConditionTransitionEffect, ConditionLiveCopies
 from game.player_facts import ConditionChangeFact, PlayerActor, PlayerLineage, PlayerState, TemporaryHitPointsFact
@@ -29,6 +30,8 @@ class ConditionMediaLifetime:
     activated_ms: float | None = None
     initial_copy_count: int = 0
     copy_updates: tuple[tuple[float, int], ...] = ()
+    responses: tuple[ConditionResponseCue, ...] = ()
+    consumed_ms: float | None = None
 
 
 def extra_media_members(actor: PlayerActor) -> tuple[tuple[UUID, str], ...]:
@@ -49,6 +52,7 @@ def _media_assets(recipe: ConditionRecipe, data: AnimationData) -> tuple[str, ..
     copies = recipe.persistent.liveCopies
     tracks = (*recipe.persistent.layers, *recipe.application.effects, *recipe.removal.effects,
               *(recipe.activation.effects if recipe.activation is not None else ()),
+              *(effect for response in recipe.responses for effect in response.effects),
               *( (*copies.layers, *copies.applicationEffects, *copies.removalEffects) if copies else ()))
     return tuple(dict.fromkeys(track.assetId for track in tracks
         if (media := data.condition_media.get(track.assetId)) is not None and media.asset_id is not None))
@@ -61,7 +65,8 @@ def _members(actor: PlayerActor, data: AnimationData) -> dict[UUID, str]:
     return {owner: identity for owner, identity in members.items()
             if (recipe := data.condition_recipes.get(identity)) is not None
             and (_media_assets(recipe, data) or recipe.persistent.liveCopies is not None
-                 or recipe.persistent.bodyDistortion is not None or recipe.persistent.bodyScale is not None)}
+                 or recipe.persistent.bodyDistortion is not None or recipe.persistent.bodyScale is not None
+                 or recipe.persistent.bodyRamp is not None)}
 
 
 def _effective_assets(recipe: ConditionRecipe, data: AnimationData,
@@ -131,13 +136,15 @@ def register_condition_lifetimes(
                          for asset in lifetime.removed_layers),
                        max((effect.startOffsetMs + effect.durationMs for effect in recipe.removal.effects), default=0.),
                        recipe.removal.durationMs if recipe.persistent.bodyDistortion else 0.,
+                       recipe.persistent.bodyRamp.removalMs if recipe.persistent.bodyRamp else 0.,
                        max(recipe.persistent.liveCopies.dissipateMs,
                            max((effect.startOffsetMs + effect.durationMs
                                for effect in recipe.persistent.liveCopies.removalEffects), default=0.))
                            if recipe.persistent.liveCopies else 0.))
-        if (owner in current or lifetime.removed_ms is None
+        responses = tuple(cue for cue in lifetime.responses if cue.end_ms > absolute_start_ms)
+        if (owner in current or lifetime.removed_ms is None or responses
                 or absolute_start_ms < lifetime.removed_ms + fade_ms):
-            result[owner] = lifetime
+            result[owner] = replace(lifetime, responses=responses)
     for owner, (actor_id, identity) in current.items():
         member = next((row for row in before.actors[actor_id].conditions if row.condition_uuid == owner), None)
         count = member.state.duplicate_count if member is not None and member.state is not None else None
@@ -194,7 +201,27 @@ def register_condition_lifetimes(
             if count != previous_count:
                 result[member.condition_uuid] = replace(lifetime,
                     copy_updates=(*lifetime.copy_updates, (absolute_start_ms + at, count)))
+    responses = (_motion_responses(motion) if motion is not None else
+                 _group_responses(choreography) if choreography is not None else ())
+    for cue in responses:
+        absolute = replace(cue, start_ms=absolute_start_ms + cue.start_ms)
+        lifetime = result.get(cue.owner_uuid) or ConditionMediaLifetime(
+            cue.actor_uuid, cue.owner_uuid, cue.behavior_id, removed_ms=absolute.start_ms)
+        if any(previous.event_uuid == cue.event_uuid for previous in lifetime.responses):
+            continue
+        result[cue.owner_uuid] = replace(lifetime, responses=(*lifetime.responses, absolute),
+            consumed_ms=absolute.start_ms if cue.trigger == "consumed" else lifetime.consumed_ms)
     return result
+
+
+def _group_responses(group: BoundChoreography, offset: float = 0) -> tuple[ConditionResponseCue, ...]:
+    return (*(replace(cue, start_ms=offset + cue.start_ms) for cue in group.condition_responses),
+            *(row for cue in group.movements for row in _motion_responses(cue.timeline, offset + cue.start_ms)))
+
+
+def _motion_responses(motion: MotionTimeline, offset: float = 0) -> tuple[ConditionResponseCue, ...]:
+    return tuple(row for reaction in motion.reactions
+                 for row in _group_responses(reaction.choreography, offset + reaction.start_ms))
 
 
 def _group_conditions(group: BoundChoreography, offset: float = 0) -> tuple[tuple[float, ConditionTimeline], ...]:
@@ -251,6 +278,8 @@ def sample_condition_lifetimes(
         for layer in appearance.layers:
             lifetime = records.get(layer.owner_uuid) if layer.owner_uuid is not None else None
             start = lifetime.applied_ms if lifetime is not None else None
+            if lifetime is not None and lifetime.consumed_ms is not None and absolute_ms >= lifetime.consumed_ms:
+                continue
             if lifetime is not None and lifetime.activated_ms is not None and absolute_ms >= lifetime.activated_ms:
                 continue
             layers.append(replace(layer, age_ms=max(0., absolute_ms - start) if start is not None else absolute_ms,
@@ -260,6 +289,11 @@ def sample_condition_lifetimes(
         for lifetime in records.values():
             end = lifetime.removed_ms
             if str(lifetime.actor_uuid) != actor_id:
+                continue
+            for cue in lifetime.responses:
+                if cue.start_ms <= absolute_ms < cue.end_ms:
+                    layers.extend(_transition_layers(cue.effects, lifetime, absolute_ms - cue.start_ms, data))
+            if lifetime.consumed_ms is not None and absolute_ms >= lifetime.consumed_ms:
                 continue
             recipe = data.condition_recipes[lifetime.behavior_id]
             active = end is None or absolute_ms < end
@@ -294,10 +328,22 @@ def sample_condition_lifetimes(
         copies = appearance.live_copies
         distortion = appearance.distortion
         distortion_strength = 1.
+        ramp, ramp_strength = appearance.body_ramp, 1.
         for lifetime in records.values():
             authored = data.condition_recipes[lifetime.behavior_id]
             if str(lifetime.actor_uuid) != actor_id:
                 continue
+            material = authored.persistent.bodyRamp
+            if material is not None:
+                if (ramp == material and lifetime.applied_ms is not None
+                        and (lifetime.removed_ms is None or absolute_ms < lifetime.removed_ms)):
+                    ramp_strength = (min(1., max(0., (absolute_ms - lifetime.applied_ms) / material.applicationMs))
+                                     if material.applicationMs else 1.)
+                if (ramp is None and lifetime.behavior_id not in appearance.matched_behavior_ids
+                        and lifetime.removed_ms is not None
+                        and lifetime.removed_ms <= absolute_ms < lifetime.removed_ms + material.removalMs):
+                    ramp = material
+                    ramp_strength = 1 - (absolute_ms - lifetime.removed_ms) / material.removalMs
             if authored.persistent.bodyDistortion is not None:
                 if (distortion is not None and lifetime.applied_ms is not None
                         and (lifetime.removed_ms is None or absolute_ms < lifetime.removed_ms)):
@@ -318,7 +364,8 @@ def sample_condition_lifetimes(
             if sampled.slots:
                 copies = sampled
         result[actor_id] = replace(appearance, layers=tuple(layers), live_copies=copies, time_ms=absolute_ms,
-                                  distortion=distortion, distortion_strength=distortion_strength)
+                                  distortion=distortion, distortion_strength=distortion_strength,
+                                  body_ramp=ramp, ramp_strength=ramp_strength)
     return result
 
 

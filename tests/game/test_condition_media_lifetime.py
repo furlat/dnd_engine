@@ -133,7 +133,10 @@ def test_real_temporary_hp_replacement_ends_only_old_grant(data, replacement):
     else:
         assert caster.temporary_hp_grant is not None
         assert caster.temporary_hp > 0 and caster.temporary_hp_grant.source_id is None
-        assert not layers
+        enhanced = next(member for member in caster.conditions
+                        if member.behavior_id == "condition.spell.enhance_ability")
+        assert len(layers) == 2 and {layer.owner_uuid for layer in layers} == {enhanced.condition_uuid}
+        assert all(layer.owner_uuid != first for layer in layers)
 
 
 def active_bless(data):

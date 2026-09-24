@@ -10,7 +10,7 @@
       "rows": 8,
       "cols": 86
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -24,14 +24,14 @@
     "phases": {
       "travel": {
         "start": 0,
-        "frames": 58,
-        "fps": 144,
+        "frames": 13,
+        "fps": 32,
         "loop": false
       },
       "impact": {
         "start": 0,
-        "frames": 86,
-        "fps": 144,
+        "frames": 20,
+        "fps": 32,
         "loop": false
       }
     },
@@ -114,7 +114,7 @@
       "rows": 8,
       "cols": 504
     },
-    "fps": 24,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -128,8 +128,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 504,
-        "fps": 168,
+        "frames": 96,
+        "fps": 32,
         "loop": false
       }
     },
@@ -212,7 +212,7 @@
       "rows": 8,
       "cols": 504
     },
-    "fps": 24,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -226,8 +226,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 504,
-        "fps": 168,
+        "frames": 96,
+        "fps": 32,
         "loop": false
       }
     },
@@ -310,7 +310,7 @@
       "rows": 8,
       "cols": 252
     },
-    "fps": 24,
+    "fps": 32,
     "rowOrder": [
       "E",
       "N",
@@ -324,8 +324,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 252,
-        "fps": 144,
+        "frames": 56,
+        "fps": 32,
         "loop": false
       }
     },
@@ -408,7 +408,7 @@
       "rows": 8,
       "cols": 252
     },
-    "fps": 24,
+    "fps": 32,
     "rowOrder": [
       "E",
       "N",
@@ -422,8 +422,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 252,
-        "fps": 144,
+        "frames": 56,
+        "fps": 32,
         "loop": false
       }
     },

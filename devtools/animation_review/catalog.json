@@ -10226,5 +10226,718 @@
       "self_target": true
     },
     "framing": "actors"
+  },
+  {
+    "id": "support-conditions-death-ward-clear",
+    "title": "Death Ward \u00b7 movement and ordinary removal",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "death_ward"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-death-ward-lethal",
+    "title": "Death Ward \u00b7 lethal prevention, then second hit",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "death_ward",
+      "mode": "lethal"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-death-ward-instant",
+    "title": "Death Ward \u00b7 instant-death prevention",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "death_ward",
+      "mode": "instant"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-death-ward-self",
+    "title": "Death Ward \u00b7 self cast",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "death_ward",
+      "self_target": true
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-stoneskin",
+    "title": "Stoneskin \u00b7 body material, movement, concentration end",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "stoneskin"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-stoneskin-self",
+    "title": "Stoneskin \u00b7 self cast and clear",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "stoneskin",
+      "self_target": true
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-poison",
+    "title": "Protection from Poison \u00b7 cleanse and movement",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "protection_from_poison"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-poison-clean",
+    "title": "Protection from Poison \u00b7 clean recipient",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "protection_from_poison",
+      "mode": "clean"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-regenerate",
+    "title": "Regenerate \u00b7 real repeated healing and final tick",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "regenerate"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-regenerate-full",
+    "title": "Regenerate \u00b7 full HP without healing pulses",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "regenerate",
+      "mode": "full_hp"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-remove-curse",
+    "title": "Remove Curse \u00b7 actual curse removal",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "remove_curse"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-remove-curse-clean",
+    "title": "Remove Curse \u00b7 clean target, no false cleanse",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "remove_curse",
+      "mode": "clean"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-freedom",
+    "title": "Freedom of Movement \u00b7 touch, movement and clear",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "freedom_of_movement"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-freedom-self",
+    "title": "Freedom of Movement \u00b7 self cast",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "freedom_of_movement",
+      "self_target": true
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-enhance-bull",
+    "title": "Enhance Ability \u00b7 Bull",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "enhance_ability",
+      "ability": "strength"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-enhance-bear",
+    "title": "Enhance Ability \u00b7 Bear",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "enhance_ability",
+      "ability": "constitution"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-enhance-cat",
+    "title": "Enhance Ability \u00b7 Cat",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "enhance_ability",
+      "ability": "dexterity"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-enhance-fox",
+    "title": "Enhance Ability \u00b7 Fox",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "enhance_ability",
+      "ability": "intelligence"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-enhance-owl",
+    "title": "Enhance Ability \u00b7 Owl",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "enhance_ability",
+      "ability": "wisdom"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "support-conditions-enhance-eagle",
+    "title": "Enhance Ability \u00b7 Eagle",
+    "tags": [
+      "support-conditions",
+      "gameplay",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Registered native spell and actual condition events, recorded once from caster and recipient. Four camera views use the same saved subjective lineage.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "enhance_ability",
+      "ability": "charisma"
+    },
+    "pause_duration_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "cloud-loop-fog-cloud",
+    "title": "Fog Cloud \u00b7 maintained loop and crossing",
+    "tags": [
+      "cloud-loops-32fps",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast, entry and exit with concentration retained; presentation continues over at least two short loop boundaries without inventing game turns.",
+    "tail_duration_ms": 18000,
+    "scenario": {
+      "kind": "persistent-spell",
+      "program": "fog_cloud",
+      "retain_field": true
+    }
+  },
+  {
+    "id": "cloud-loop-darkness",
+    "title": "Darkness \u00b7 maintained loop and crossing",
+    "tags": [
+      "cloud-loops-32fps",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast, entry and exit with concentration retained; presentation continues over at least two short loop boundaries without inventing game turns.",
+    "tail_duration_ms": 18000,
+    "scenario": {
+      "kind": "persistent-spell",
+      "program": "darkness",
+      "retain_field": true
+    }
+  },
+  {
+    "id": "cloud-loop-stinking-cloud",
+    "title": "Stinking Cloud \u00b7 maintained loop and crossing",
+    "tags": [
+      "cloud-loops-32fps",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast, entry and exit with concentration retained; presentation continues over at least two short loop boundaries without inventing game turns.",
+    "tail_duration_ms": 18000,
+    "scenario": {
+      "kind": "persistent-spell",
+      "program": "stinking_cloud",
+      "retain_field": true
+    }
+  },
+  {
+    "id": "cloud-loop-cloudkill",
+    "title": "Cloudkill \u00b7 maintained loop and crossing",
+    "tags": [
+      "cloud-loops-32fps",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast, entry and exit with concentration retained; presentation continues over at least two short loop boundaries without inventing game turns.",
+    "tail_duration_ms": 18000,
+    "scenario": {
+      "kind": "persistent-spell",
+      "program": "cloudkill",
+      "retain_field": true
+    }
+  },
+  {
+    "id": "cloud-loop-incendiary-cloud",
+    "title": "Incendiary Cloud \u00b7 maintained loop and crossing",
+    "tags": [
+      "cloud-loops-32fps",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast, entry and exit with concentration retained; presentation continues over at least two short loop boundaries without inventing game turns.",
+    "tail_duration_ms": 18000,
+    "scenario": {
+      "kind": "persistent-spell",
+      "program": "incendiary_cloud",
+      "retain_field": true
+    }
+  },
+  {
+    "id": "cloud-loop-insect-plague",
+    "title": "Insect Plague \u00b7 maintained loop and crossing",
+    "tags": [
+      "cloud-loops-32fps",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast, entry and exit with concentration retained; presentation continues over at least two short loop boundaries without inventing game turns.",
+    "tail_duration_ms": 18000,
+    "scenario": {
+      "kind": "persistent-spell",
+      "program": "insect_plague",
+      "retain_field": true
+    }
+  },
+  {
+    "id": "cloud-boundary-cloudkill",
+    "title": "Cloudkill \u00b7 real map-edge wall",
+    "tags": [
+      "cloud-boundary-review",
+      "wall-interaction",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast, movement and retained concentration. The wall is a real backend boundary; cosmetic overhang does not change affected cells.",
+    "scenario": {
+      "kind": "persistent-spell",
+      "program": "cloudkill",
+      "environment": "edge-wall",
+      "retain_field": true
+    },
+    "tail_duration_ms": 12000
+  },
+  {
+    "id": "cloud-boundary-fog-cloud",
+    "title": "Fog Cloud \u00b7 maintained beside a wall",
+    "tags": [
+      "cloud-boundary-review",
+      "wall-interaction",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast, movement and retained concentration. The wall is a real backend boundary; cosmetic overhang does not change affected cells.",
+    "scenario": {
+      "kind": "persistent-spell",
+      "program": "fog_cloud",
+      "environment": "wall",
+      "retain_field": true
+    },
+    "tail_duration_ms": 12000
+  },
+  {
+    "id": "cloud-boundary-incendiary-cloud",
+    "title": "Incendiary Cloud \u00b7 maintained beside a wall",
+    "tags": [
+      "cloud-boundary-review",
+      "wall-interaction",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast, movement and retained concentration. The wall is a real backend boundary; cosmetic overhang does not change affected cells.",
+    "scenario": {
+      "kind": "persistent-spell",
+      "program": "incendiary_cloud",
+      "environment": "wall",
+      "retain_field": true
+    },
+    "tail_duration_ms": 12000
+  },
+  {
+    "id": "cloud-boundary-darkness",
+    "title": "Darkness \u00b7 maintained beside a wall",
+    "tags": [
+      "cloud-boundary-review",
+      "wall-interaction",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast, movement and retained concentration. The wall is a real backend boundary; cosmetic overhang does not change affected cells.",
+    "scenario": {
+      "kind": "persistent-spell",
+      "program": "darkness",
+      "environment": "wall",
+      "retain_field": true
+    },
+    "tail_duration_ms": 12000
+  },
+  {
+    "id": "globe-fireball-north",
+    "title": "Globe \u00b7 Fireball north overlap",
+    "tags": [
+      "cloud-boundary-review",
+      "globe",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real Globe and Fireball casts from an outside caster. Native suppression decides affected recipients; the registered explosion is clipped against the received protection sphere.",
+    "scenario": {
+      "kind": "globe",
+      "impact_offset": [
+        0,
+        3
+      ]
+    },
+    "framing": "actors"
+  },
+  {
+    "id": "globe-fireball-south",
+    "title": "Globe \u00b7 Fireball south overlap",
+    "tags": [
+      "cloud-boundary-review",
+      "globe",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real Globe and Fireball casts from an outside caster. Native suppression decides affected recipients; the registered explosion is clipped against the received protection sphere.",
+    "scenario": {
+      "kind": "globe",
+      "impact_offset": [
+        0,
+        -3
+      ]
+    },
+    "framing": "actors"
+  },
+  {
+    "id": "globe-fireball-diagonal",
+    "title": "Globe \u00b7 Fireball diagonal overlap",
+    "tags": [
+      "cloud-boundary-review",
+      "globe",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real Globe and Fireball casts from an outside caster. Native suppression decides affected recipients; the registered explosion is clipped against the received protection sphere.",
+    "scenario": {
+      "kind": "globe",
+      "impact_offset": [
+        2,
+        2
+      ]
+    },
+    "framing": "actors"
+  },
+  {
+    "id": "globe-fireball-wall-opening",
+    "title": "Fireball \u00b7 wall opening and Globe",
+    "tags": [
+      "cloud-boundary-review",
+      "wall-interaction",
+      "globe",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real Fireball propagation around boundary walls and an active Globe. The opening is a deliberate gap between wall sections. All views replay native subjective events.",
+    "scenario": {
+      "kind": "globe",
+      "walls": "door",
+      "protection": true
+    },
+    "framing": "actors"
+  },
+  {
+    "id": "cloud-globe-fog-cloud",
+    "title": "Fog Cloud \u00b7 Globe overlap",
+    "tags": [
+      "cloud-boundary-review",
+      "globe",
+      "cloud-loops-32fps",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real casts with both fields retained. Outside caster; native Globe protection excludes lower-level spell occupancy from its protected cells.",
+    "scenario": {
+      "kind": "globe",
+      "spell": "fog_cloud",
+      "protection": true,
+      "retain_field": true,
+      "impact_offset": [
+        1,
+        0
+      ]
+    },
+    "framing": "actors",
+    "tail_duration_ms": 7000
+  },
+  {
+    "id": "cloud-globe-darkness",
+    "title": "Darkness \u00b7 Globe overlap",
+    "tags": [
+      "cloud-boundary-review",
+      "globe",
+      "cloud-loops-32fps",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real casts with both fields retained. Outside caster; native Globe protection excludes lower-level spell occupancy from its protected cells.",
+    "scenario": {
+      "kind": "globe",
+      "spell": "darkness",
+      "protection": true,
+      "retain_field": true,
+      "impact_offset": [
+        1,
+        0
+      ]
+    },
+    "framing": "actors",
+    "tail_duration_ms": 7000
+  },
+  {
+    "id": "cloud-globe-cloudkill",
+    "title": "Cloudkill \u00b7 Globe overlap",
+    "tags": [
+      "cloud-boundary-review",
+      "globe",
+      "cloud-loops-32fps",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real casts with both fields retained. Outside caster; native Globe protection excludes lower-level spell occupancy from its protected cells.",
+    "scenario": {
+      "kind": "globe",
+      "spell": "cloudkill",
+      "protection": true,
+      "retain_field": true,
+      "impact_offset": [
+        1,
+        0
+      ]
+    },
+    "framing": "actors",
+    "tail_duration_ms": 7000
+  },
+  {
+    "id": "cloud-globe-incendiary-cloud",
+    "title": "Incendiary Cloud \u00b7 Globe overlap",
+    "tags": [
+      "cloud-boundary-review",
+      "globe",
+      "cloud-loops-32fps",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real casts with both fields retained. Level 8 cloud exceeds the ordinary Globe protection threshold.",
+    "scenario": {
+      "kind": "globe",
+      "spell": "incendiary_cloud",
+      "protection": true,
+      "retain_field": true,
+      "impact_offset": [
+        1,
+        0
+      ]
+    },
+    "framing": "actors",
+    "tail_duration_ms": 7000
   }
 ]

@@ -891,7 +891,7 @@ class BaseBlock(BaseModel):
         condition.remove_from_register()
 
     def remove_condition(self, condition_name: str, expire: bool = False,
-                         parent_event: Optional[Event] = None) -> bool:
+                         parent_event: Optional[Event] = None, *, consumed: bool = False) -> bool:
         """Remove a condition with full cross-block tree traversal.
 
         Handles sub-conditions (same block), linked_conditions (other blocks),
@@ -901,6 +901,7 @@ class BaseBlock(BaseModel):
             condition_name: Name of the condition to remove.
             expire: Whether this is an expiration removal.
             parent_event: Parent event for event-chain tracking.
+            consumed: Whether the root condition was spent, excluding linked cleanup.
         """
         if not self.allow_events_conditions:
             return False
@@ -912,6 +913,7 @@ class BaseBlock(BaseModel):
             condition,
             expire=expire,
             parent_event=parent_event,
+            consumed=consumed,
         )
 
     def remove_condition_by_uuid(self, condition_uuid: UUID,
@@ -935,7 +937,7 @@ class BaseBlock(BaseModel):
         return False
 
     def _remove_condition_tree(self, condition: BaseCondition, expire: bool = False,
-                               parent_event: Optional[Event] = None) -> bool:
+                               parent_event: Optional[Event] = None, *, consumed: bool = False) -> bool:
         """Remove one complete owned condition graph atomically.
 
         Every removal phase is accepted before mechanics change. The prepared
@@ -958,6 +960,7 @@ class BaseBlock(BaseModel):
             parent_event=parent_event,
             prepared=prepared,
             visited=set(),
+            consumed=consumed,
         )
         if canceled is not None:
             BaseBlock._cancel_prepared_condition_removals(
@@ -1051,6 +1054,7 @@ class BaseBlock(BaseModel):
             Tuple[Optional['BaseBlock'], BaseCondition, Event, bool]
         ],
         visited: Set[UUID],
+        consumed: bool = False,
     ) -> Optional[Event]:
         """Accept one graph's removal phases without mutating mechanics."""
         if condition.uuid in visited:
@@ -1061,6 +1065,7 @@ class BaseBlock(BaseModel):
             condition._declare_removal_event(
                 expired=expire,
                 parent_event=parent_event,
+                consumed=consumed,
             ),
         )
         if declaration.canceled:

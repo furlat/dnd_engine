@@ -687,7 +687,7 @@
             "assetId": "pending.bless.back",
             "category": "bless",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -712,7 +712,7 @@
             "assetId": "pending.bless.front",
             "category": "bless",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -817,7 +817,7 @@
             "assetId": "pending.bane.back",
             "category": "bane",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -842,7 +842,7 @@
             "assetId": "pending.bane.front",
             "category": "bane",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -918,7 +918,7 @@
             "assetId": "pending.false_life.back",
             "category": "false_life",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -943,7 +943,7 @@
             "assetId": "pending.false_life.front",
             "category": "false_life",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -1034,7 +1034,7 @@
             "assetId": "pending.jump.back",
             "category": "jump",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -1059,7 +1059,7 @@
             "assetId": "pending.jump.front",
             "category": "jump",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -1162,7 +1162,7 @@
             "assetId": "pending.retreat.back",
             "category": "retreat",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "ground",
             "activeDuring": [
               "idle",
@@ -1185,7 +1185,7 @@
             "assetId": "pending.retreat.front",
             "category": "retreat",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "ground",
             "activeDuring": [
               "idle",
@@ -1313,7 +1313,7 @@
             "assetId": "pending.haste.back",
             "category": "haste",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -1338,7 +1338,7 @@
             "assetId": "pending.haste.front",
             "category": "haste",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -1363,7 +1363,7 @@
             "assetId": "pending.haste_feet.back",
             "category": "haste_feet",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "ground",
             "activeDuring": [
               "idle",
@@ -1386,7 +1386,7 @@
             "assetId": "pending.haste_feet.front",
             "category": "haste_feet",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "ground",
             "activeDuring": [
               "idle",
@@ -1531,7 +1531,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -1563,7 +1563,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -1886,7 +1886,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -1920,7 +1920,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -2226,7 +2226,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -2260,7 +2260,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -2454,7 +2454,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -2486,7 +2486,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -2717,7 +2717,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -2749,7 +2749,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -2980,7 +2980,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -3012,7 +3012,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -3257,7 +3257,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -3289,7 +3289,7 @@
               "dying",
               "stable"
             ],
-            "fps": 144,
+            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -4881,7 +4881,7 @@
             "assetId": "healing.aid.back",
             "category": "aid",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -4906,7 +4906,7 @@
             "assetId": "healing.aid.front",
             "category": "aid",
             "animation": "loop",
-            "fps": 144,
+            "fps": 32,
             "attachment": "body",
             "activeDuring": [
               "idle",
@@ -4938,6 +4938,1133 @@
         "durationMs": 200,
         "feedbackEnabled": true,
         "feedbackColor": 7590360,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.death_ward",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Death Ward",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.death_ward",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.spell.death_ward"
+      },
+      "composition": {
+        "group": "body",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "support.death_ward.back",
+            "assetId": "support.death_ward.back",
+            "category": "death_ward",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "support.death_ward.front",
+            "assetId": "support.death_ward.front",
+            "category": "death_ward",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 450,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "responses": [
+        {
+          "trigger": "consumed",
+          "effects": [
+            {
+              "id": "support.ward_trigger_consumption.back",
+              "assetId": "support.ward_trigger_consumption.back",
+              "category": "ward_trigger_consumption",
+              "animation": "once",
+              "attachment": "body",
+              "priority": 31,
+              "colors": {
+                "primary": 16777215,
+                "secondary": 16777215,
+                "tertiary": 16777215
+              },
+              "durationMs": 2000,
+              "drawOrder": "behind_body"
+            },
+            {
+              "id": "support.ward_trigger_consumption.front",
+              "assetId": "support.ward_trigger_consumption.front",
+              "category": "ward_trigger_consumption",
+              "animation": "once",
+              "attachment": "body",
+              "priority": 31,
+              "colors": {
+                "primary": 16777215,
+                "secondary": 16777215,
+                "tertiary": 16777215
+              },
+              "durationMs": 2000,
+              "drawOrder": "in_front_of_body"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.stoneskin",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Stoneskin",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.stoneskin",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.spell.stoneskin"
+      },
+      "composition": {
+        "group": "body",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "support.stoneskin.back",
+            "assetId": "support.stoneskin.back",
+            "category": "stoneskin",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "support.stoneskin.front",
+            "assetId": "support.stoneskin.front",
+            "category": "stoneskin",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          }
+        ],
+        "bodyRamp": {
+          "colors": [
+            4470572,
+            6639673,
+            8809030,
+            10584917,
+            12163947
+          ],
+          "mapping": "maximum_rgb",
+          "gain": 1.35,
+          "applicationMs": 800,
+          "removalMs": 700
+        }
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 700,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.protection_from_poison",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Protection from Poison",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.protection_from_poison",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=poison-cleanse; effect=condition.protection_from_poison; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.spell.protection_from_poison"
+      },
+      "composition": {
+        "group": "body",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "support.protection_from_poison.back",
+            "assetId": "support.protection_from_poison.back",
+            "category": "protection_from_poison",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "support.protection_from_poison.front",
+            "assetId": "support.protection_from_poison.front",
+            "category": "protection_from_poison",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 450,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.enhance_ability",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Enhance Ability",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.enhance_ability",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=strength; effect=condition.enhance_ability.strength; disposition=beneficial; target=selected_target; gates=configuration:ability=strength"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.enhance_ability",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=dexterity; effect=condition.enhance_ability.dexterity; disposition=beneficial; target=selected_target; gates=configuration:ability=dexterity"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.enhance_ability",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=constitution; effect=condition.enhance_ability.constitution; disposition=beneficial; target=selected_target; gates=configuration:ability=constitution"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.enhance_ability",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=intelligence; effect=condition.enhance_ability.intelligence; disposition=beneficial; target=selected_target; gates=configuration:ability=intelligence"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.enhance_ability",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=wisdom; effect=condition.enhance_ability.wisdom; disposition=beneficial; target=selected_target; gates=configuration:ability=wisdom"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.enhance_ability",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=charisma; effect=condition.enhance_ability.charisma; disposition=beneficial; target=selected_target; gates=configuration:ability=charisma"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.spell.enhance_ability"
+      },
+      "composition": {
+        "group": "body",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "support.enhance_bull.back",
+            "assetId": "support.enhance_bull.back",
+            "category": "enhance_bull",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body",
+            "whenAbility": "strength"
+          },
+          {
+            "id": "support.enhance_bull.front",
+            "assetId": "support.enhance_bull.front",
+            "category": "enhance_bull",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "whenAbility": "strength"
+          },
+          {
+            "id": "support.enhance_bear.back",
+            "assetId": "support.enhance_bear.back",
+            "category": "enhance_bear",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body",
+            "whenAbility": "constitution"
+          },
+          {
+            "id": "support.enhance_bear.front",
+            "assetId": "support.enhance_bear.front",
+            "category": "enhance_bear",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "whenAbility": "constitution"
+          },
+          {
+            "id": "support.enhance_cat.back",
+            "assetId": "support.enhance_cat.back",
+            "category": "enhance_cat",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body",
+            "whenAbility": "dexterity"
+          },
+          {
+            "id": "support.enhance_cat.front",
+            "assetId": "support.enhance_cat.front",
+            "category": "enhance_cat",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "whenAbility": "dexterity"
+          },
+          {
+            "id": "support.enhance_fox.back",
+            "assetId": "support.enhance_fox.back",
+            "category": "enhance_fox",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body",
+            "whenAbility": "intelligence"
+          },
+          {
+            "id": "support.enhance_fox.front",
+            "assetId": "support.enhance_fox.front",
+            "category": "enhance_fox",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "whenAbility": "intelligence"
+          },
+          {
+            "id": "support.enhance_owl.back",
+            "assetId": "support.enhance_owl.back",
+            "category": "enhance_owl",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body",
+            "whenAbility": "wisdom"
+          },
+          {
+            "id": "support.enhance_owl.front",
+            "assetId": "support.enhance_owl.front",
+            "category": "enhance_owl",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "whenAbility": "wisdom"
+          },
+          {
+            "id": "support.enhance_eagle.back",
+            "assetId": "support.enhance_eagle.back",
+            "category": "enhance_eagle",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body",
+            "whenAbility": "charisma"
+          },
+          {
+            "id": "support.enhance_eagle.front",
+            "assetId": "support.enhance_eagle.front",
+            "category": "enhance_eagle",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "whenAbility": "charisma"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 450,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.regenerate",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Regenerating",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.regenerate",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.spell.regenerate"
+      },
+      "composition": {
+        "group": "body",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "support.regenerate.back",
+            "assetId": "support.regenerate.back",
+            "category": "regenerate",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "support.regenerate.front",
+            "assetId": "support.regenerate.front",
+            "category": "regenerate",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 450,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "responses": [
+        {
+          "trigger": "healed",
+          "effects": [
+            {
+              "id": "support.regenerate_healing_event.back",
+              "assetId": "support.regenerate_healing_event.back",
+              "category": "regenerate_healing_event",
+              "animation": "once",
+              "attachment": "body",
+              "priority": 31,
+              "colors": {
+                "primary": 16777215,
+                "secondary": 16777215,
+                "tertiary": 16777215
+              },
+              "durationMs": 1500,
+              "drawOrder": "behind_body"
+            },
+            {
+              "id": "support.regenerate_healing_event.front",
+              "assetId": "support.regenerate_healing_event.front",
+              "category": "regenerate_healing_event",
+              "animation": "once",
+              "attachment": "body",
+              "priority": 31,
+              "colors": {
+                "primary": 16777215,
+                "secondary": 16777215,
+                "tertiary": 16777215
+              },
+              "durationMs": 1500,
+              "drawOrder": "in_front_of_body"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.freedom_of_movement",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Freedom of Movement",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.freedom_of_movement",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": [
+          {
+            "actionRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "action",
+              "content_id": "action.spell.freedom_of_movement.escape",
+              "content_version": 1,
+              "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+            },
+            "evidenceStatus": "verified_catalog_dependency",
+            "notes": "Registered while this condition is the active provider."
+          }
+        ]
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.spell.freedom_of_movement"
+      },
+      "composition": {
+        "group": "body",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "support.freedom_of_movement.back",
+            "assetId": "support.freedom_of_movement.back",
+            "category": "freedom_of_movement",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "support.freedom_of_movement.front",
+            "assetId": "support.freedom_of_movement.front",
+            "category": "freedom_of_movement",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 450,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
         "effects": []
       }
     }

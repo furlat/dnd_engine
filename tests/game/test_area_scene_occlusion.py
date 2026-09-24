@@ -11,6 +11,7 @@ from game.animation import GroundContact, compile_cast, sample_cast
 from game.animation_data import load_animation_data
 from game.animation_draw import animation_draw_commands, load_animation_media
 from dnd.types.world import CardinalDirection
+from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementKind
 from game.area_media import AreaLayer, AreaMedia, BoundarySprite, boundary_segment, compose_area
 from game.draw_commands import DrawCommand
@@ -20,6 +21,7 @@ from game.combat import bind_cast
 from game.environment_art import load_environment_art
 from game.environment_draw import environment_command
 from game.projection import Camera, camera_pose, inverse_rotate_position, painter_key, project_screen
+from game.spatial_field_media import field_media_commands
 from tests.game.player_helpers import player_inputs
 from tests.game.spell_handoff_scenarios import spell_handoff_history
 
@@ -110,6 +112,56 @@ def boundary_sample_sides(commands, state, camera):
             mask[rect.left:rect.right, rect.top:rect.bottom] |= (
                 owned & selected)[source.left:source.right, source.top:source.bottom]
     return behind, other
+
+
+@pytest.mark.parametrize("quadrant", range(4))
+@pytest.mark.parametrize("near", (False, True))
+def test_maintained_cloud_respects_actual_wall_and_door_picture(rendering, scene, quadrant, near):
+    """Real packed cloud pixels pass through the final scene compositor."""
+    screen, data, catalog, cache = rendering
+    environment, state, _ = scene
+    north = environment == "wall-north"
+    positive_camera = quadrant in ((0, 3) if north else (0, 1))
+    across = 9 if positive_camera == near else 6
+    center = (6, across) if north else (across, 6)
+    # This compositor contract deliberately supplies observed flat supports on
+    # both sides. The native fixture's caster only sees one side of a closed wall.
+    tile = next(iter(state.tiles.values()))
+    tiles = {(x, y): tile.model_copy(update={"position": (x, y), "elevation_steps": 0})
+             for x in range(15) for y in range(15)}
+    light = next(iter(state.senses.effective_light_levels.values()))
+    state = replace(state, tiles=tiles, senses=replace(state.senses, visible=frozenset(tiles),
+        effective_light_levels={position: light for position in tiles}))
+    camera = Camera(quadrant=quadrant, zoom=.5, viewport=screen.get_size()).with_focus(center)
+    binding = data.spatial_media["spatial_effect.spell.cloudkill"]
+    layer, = binding.layers
+    geometry = SpherePresentationGeometry(center=center, radius_feet=20)
+    positions = tuple(p for p in state.tiles if (p[0]-center[0])**2+(p[1]-center[1])**2 <= 16)
+    area = AreaMedia(tuple(obj.placement for obj in state.objects.values() if obj.item.is_open is not True),
+                     (), tuple(state.tiles.values()))
+    commands = field_media_commands(state, data, uuid4(), geometry, positions,
+        binding, layer, 0, layer.assetId, 24, camera, 1., anchor_elevation_steps=0, area=area)
+    assert commands
+    silhouette = boundary_silhouette(state, catalog, cache, camera)
+    opaque = pygame.surfarray.array_alpha(silhouette) == 255
+    behind, front = boundary_sample_sides(commands, state, camera)
+
+    def pixels(extra):
+        draw_frame(screen, state, catalog, cache, camera, 0, show_grid=False,
+                   show_debug=False, mouse_position=None, extra_commands=extra)
+        return pygame.surfarray.array3d(screen)
+
+    changed = np.any(pixels(commands) != pixels(()), axis=2)
+    protected = opaque & behind & ~front
+    if not near:
+        assert np.any(protected), "Exercise cloud samples behind actual opaque boundary pixels"
+    assert not np.any(changed & protected), "Cloud painted through foreground wall/door"
+    assert np.any(changed & ~opaque), "Cloud remains visible outside the boundary silhouette"
+    if near and environment != "open-door":
+        assert np.any(changed & opaque & front), "Camera-side cloud can overlap the wall face"
+    if environment == "open-door" and not near:
+        closed = pygame.surfarray.array_alpha(boundary_silhouette(state, catalog, cache, camera, close_doors=True))
+        assert np.any(changed & (closed == 255) & ~opaque), "Cloud remains visible through the open doorway"
 
 
 @pytest.mark.parametrize("quadrant", range(4))

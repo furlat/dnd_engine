@@ -122,7 +122,11 @@ def production_data():
 def test_actual_ice_knife_late_tail_cannot_shine_through_the_floor(production_data, quadrant):
     below_seen = False
     supports = tuple(support((x, z)) for x in range(-8, 9) for z in range(-8, 9))
-    for frame in (180, 288, 360, 420):
+    asset = production_data.projectile_assets['ice.v8.ice_knife.impact']
+    phase = asset.phases.impact
+    assert phase is not None
+    for seconds in (1.25, 2., 2.5, 35 / 12):
+        frame = int(seconds * (phase.fps or asset.fps))
         for sample in registered_media_samples(production_data, 'ice.v8.ice_knife.impact', 'impact', frame,
                 ('SE', 'SW', 'NW', 'NE')[quadrant], scale=1, anchor=(0, 0), rows={}):
             assert sample.positions is not None and sample.ownership is not None

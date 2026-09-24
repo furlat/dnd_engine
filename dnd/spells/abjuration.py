@@ -2052,7 +2052,7 @@ class DeathWardEffect(BaseCondition):
                 if not entity:
                     return None
                 if "Death Ward" in entity.active_conditions:
-                    entity.remove_condition("Death Ward", parent_event=event)
+                    entity.remove_condition("Death Ward", parent_event=event, consumed=True)
                 return event.cancel(
                     status_message=f"Death Ward! {entity.name} is protected from instant death"
                 )
@@ -2069,7 +2069,7 @@ class DeathWardEffect(BaseCondition):
             if event.normal_hit_point_damage_cap is not None:
                 damage_cap = min(damage_cap, event.normal_hit_point_damage_cap)
             if "Death Ward" in entity.active_conditions:
-                entity.remove_condition("Death Ward", parent_event=event)
+                entity.remove_condition("Death Ward", parent_event=event, consumed=True)
             return event.with_updates(
                 normal_hit_point_damage_cap=damage_cap,
                 status_message=f"Death Ward! {entity.name} survives with 1 HP",

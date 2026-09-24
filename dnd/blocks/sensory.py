@@ -876,8 +876,12 @@ class SpatialSensesSystem:
         surfaces = set().union(*volumes.values()) if volumes else set()
         if not positions and not surfaces:
             for identity, previous in tuple(senses.spatial_effects.items()):
-                if previous.visible_volume_positions:
-                    senses.spatial_effects[identity] = previous.model_copy(update={"visible_volume_positions": ()})
+                if previous.visible_volume_positions or any(row.positions for row in previous.suppressions):
+                    senses.spatial_effects[identity] = previous.model_copy(update={
+                        "visible_volume_positions": (),
+                        "suppressions": tuple(row.model_copy(update={"positions": tuple(
+                            position for position in row.positions if position in visible)})
+                                              for row in previous.suppressions)})
             return
         grid = get_map()
         has_hazards = grid.has_any_hazards()
@@ -901,6 +905,28 @@ class SpatialSensesSystem:
                     "positions": tuple(sorted(set(observation.positions) | volume_positions)),
                     "visible_volume_positions": tuple(sorted(volume_positions)),
                 })
+        # Resolve references after all candidates: a first observation must not
+        # depend on whether the provider or its affected field was visited first.
+        known = {**senses.spatial_effects, **observations}
+        for identity, observation in observations.items():
+            previous = senses.spatial_effects.get(identity)
+            retained_suppressions = ({row.provider_uuid: row for row in previous.suppressions}
+                if previous is not None and previous.area_geometry == observation.area_geometry else {})
+            suppressions = []
+            for outcome in candidates[identity][0].spatial_suppressions:
+                retained = retained_suppressions.get(outcome.provider_uuid)
+                provider = known.get(outcome.provider_uuid)
+                if retained is None:
+                    if provider is None or provider.area_geometry is None:
+                        continue
+                    retained = outcome.model_copy(update={
+                        "provider_content_ref": provider.content_ref,
+                        "area_geometry": provider.area_geometry,
+                        "anchor_elevation_steps": provider.anchor_elevation_steps})
+                # Only currently admitted geometry is added, never hidden ground.
+                admitted = set(outcome.positions) & (visible | volumes.get(identity, frozenset()))
+                suppressions.append(retained.model_copy(update={"positions": tuple(sorted(admitted))}))
+            observations[identity] = observation.model_copy(update={"suppressions": tuple(suppressions)})
         for identity, previous in tuple(senses.spatial_effects.items()):
             # Inspect only newly seen/changed visible cells. Hidden parts retain
             # their last observation, even when the objective owner was removed.
@@ -911,7 +937,10 @@ class SpatialSensesSystem:
             if retained:
                 senses.spatial_effects[identity] = (observed or previous).model_copy(
                     update={"positions": tuple(sorted(retained)),
-                            "visible_volume_positions": observed.visible_volume_positions if observed is not None else ()},
+                            "visible_volume_positions": observed.visible_volume_positions if observed is not None else (),
+                            "suppressions": observed.suppressions if observed is not None else tuple(
+                                row.model_copy(update={"positions": tuple(position for position in row.positions
+                                    if position in visible)}) for row in previous.suppressions)},
                 )
             else:
                 senses.spatial_effects.pop(identity)
@@ -938,7 +967,10 @@ class SpatialSensesSystem:
         result = {}
         for identity, condition in owners.items():
             observed: Set[Tuple[int, int]] = set()
-            for position in candidates & grid.get_spatial_condition_positions(identity):
+            geometry_positions = grid.get_spatial_condition_positions(identity)
+            for suppression in condition.spatial_suppressions:
+                geometry_positions = geometry_positions | set(suppression.positions)
+            for position in candidates & geometry_positions:
                 route = supercover_line(origin, position)
                 entry = next((index for index, cell in enumerate(route)
                               if condition.get_optical_obscurement_at(cell) is not None), None)
@@ -959,6 +991,20 @@ class SpatialSensesSystem:
                     observed.add(position)
             if observed:
                 result[identity] = frozenset(observed)
+        # A currently observed cloud/protection intersection also exposes the
+        # known protection's surface, not the floor or occupants beneath it.
+        # Stored suppression alone cannot renew an absent or hidden provider:
+        # the cloud route above already proved wall/light/range visibility, and
+        # the authoritative provider must still occupy the intersecting cells.
+        for identity, condition in owners.items():
+            observed = result.get(identity, frozenset())
+            for suppression in condition.spatial_suppressions:
+                provider = suppression.provider_uuid
+                if provider not in senses.spatial_effects or grid.get_spatial_condition(provider) is None:
+                    continue
+                surface = observed & set(suppression.positions) & grid.get_spatial_condition_positions(provider)
+                if surface:
+                    result[provider] = result.get(provider, frozenset()) | surface
         return result
 
     @staticmethod

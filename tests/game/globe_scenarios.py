@@ -24,6 +24,7 @@ from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.abjuration import GlobeOfInvulnerability
+from dnd.spells.conjuration import Cloudkill, Darkness, FogCloud, IncendiaryCloud
 from dnd.spells.evocation import Fireball, FireBolt
 from dnd.spells.ice_knife import IceKnife
 from dnd.types.world import CardinalDirection
@@ -31,10 +32,11 @@ from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
-def globe_history(*, spell: Literal["fireball", "fire_bolt", "ice_knife"] = "fireball",
+def globe_history(*, spell: Literal["fireball", "fire_bolt", "ice_knife", "fog_cloud", "darkness", "cloudkill", "incendiary_cloud"] = "fireball",
                   protection: bool = True, source_inside: bool = False,
                   impact_offset: tuple[int, int] = (3, 0),
-                  walls: Literal["none", "wall", "door", "l-wall", "corridor"] = "none") -> CapturedHistory:
+                  walls: Literal["none", "wall", "door", "l-wall", "corridor"] = "none",
+                  retain_field: bool = False) -> CapturedHistory:
     prior_random = random.getstate()
     reset_engine_runtime()
     battlefield = "battlefield.open_floor_bright"
@@ -64,13 +66,16 @@ def globe_history(*, spell: Literal["fireball", "fire_bolt", "ice_knife"] = "fir
             for position, direction in edges:
                 build_directional_wall().place_on_grid(position, boundary_direction=direction)
         actors = {}
-        spell_type = {"fireball": Fireball, "fire_bolt": FireBolt, "ice_knife": IceKnife}[spell]
+        spell_type = {"fireball": Fireball, "fire_bolt": FireBolt, "ice_knife": IceKnife,
+            "fog_cloud": FogCloud, "darkness": Darkness, "cloudkill": Cloudkill,
+            "incendiary_cloud": IncendiaryCloud}[spell]
+        targets_area = spell not in ("fire_bolt", "ice_knife")
         for role, position in positions.items():
             actor = Entity.create(uuid4(), role.title(), config=EntityConfig(
                 position=position, faction="enemies" if role == "caster" else "heroes",
                 ability_scores=AbilityScoresConfig(intelligence=AbilityConfig(ability_score=18),
                     constitution=AbilityConfig(ability_score=20)),
-                action_economy=ActionEconomyConfig(spell_slots={1: 2, 3: 2, 6: 1}),
+                action_economy=ActionEconomyConfig(spell_slots={level: 2 for level in range(1, 9)}),
                 spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
                 health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=12, hit_dice_count=20, mode="maximums")]),
                 appearance=AppearanceConfig(body_category="NakedBody", has_beard=False,
@@ -116,14 +121,14 @@ def globe_history(*, spell: Literal["fireball", "fire_bolt", "ice_knife"] = "fir
             assert result is not None and not result.canceled
         target = actors["outside"] if spell == "ice_knife" else actors["target"]
         hp = target.get_hp()
-        result = command("caster", "spell." + spell, position=impact if spell == "fireball" else None,
-                         target_uuid=target.uuid if spell != "fireball" else None)
+        result = command("caster", "spell." + spell, position=impact if targets_area else None,
+                         target_uuid=None if targets_area else target.uuid)
         assert isinstance(result, SpellEvent)
         if protection and not source_inside and spell == "fire_bolt":
             assert result.canceled and result.suppressions and target.get_hp() == hp
         else:
             assert not result.canceled, result.status_message
-        if protection and "Concentrating" in actors["owner"].active_conditions:
+        if protection and not retain_field and "Concentrating" in actors["owner"].active_conditions:
             result = command("owner", "action.drop_concentration")
             assert result is not None and not result.canceled
         captured = capture_history(before, (), observers=tuple(

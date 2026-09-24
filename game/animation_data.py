@@ -326,7 +326,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         draft_versions[ref] = drafts_file.version
         identities.add(ref.identity_key)
     if authored_bundles is None:
-        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells")
+        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions")
                                  if (data_root.parent / name).is_dir())
     bundle_resources: dict[str, Path] = {}
     projectile_storage: dict[str, ProjectileStorage] = {}

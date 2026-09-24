@@ -29,7 +29,8 @@ from game.condition_animation import ConditionAppearance, condition_body_pose, c
 from game.condition_types import ConditionLiveCopies
 from game.body_effects import distort_body, ghost_body
 from game.body_pose_types import BodyTrailPose
-from game.condition_draw import CONDITION_BODY_SLOTS, compose_condition_layers, condition_body_color
+from game.condition_draw import (CONDITION_BODY_SLOTS, compose_condition_layers, condition_body_color,
+    condition_body_ramp, blend_body_ramp)
 from game.projectile_media import projectile_frame_layers
 from game.media_coverage import covered_media
 from game.cast_media import cast_media_draw_commands, preload_cast_media, cast_surface_volume
@@ -408,12 +409,21 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
         layers.pop("weapon", None)
     overlays = {layer.slot: layer for layer in body.cast_layers}
     row = rig.facing_rows[body.facing]
+    ramped = (_ramp_image(body, contact, appearance, body_rows, data, condition)
+              if flash is None and only_shadow is not True and condition is not None
+              and condition.body_ramp is not None and condition.ramp_strength > 0 else None)
+    material_drawn = False
     for slot in rig.slot_order:
         if slot in body.hidden_slots:
             continue
         if only_shadow is not None and (slot == "shadow") != only_shadow:
             continue
         if treatment is not None and slot == "shadow":
+            continue
+        if ramped is not None and slot in CONDITION_BODY_SLOTS:
+            if not material_drawn:
+                result.blit(ramped, (0, 0))
+                material_drawn = True
             continue
         overlay = overlays.get(slot)
         layer = layers.get(slot)
@@ -452,6 +462,34 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
         result = _body_image(body, contact, appearance, body_rows, data, None, only_shadow=True)
         result.blit(colored, (0, 0))
     return result
+
+
+def _ramp_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLayer, ...],
+                body_rows: BodyRows, data: AnimationData, condition: ConditionAppearance) -> pygame.Surface:
+    """Cache one composed material row, not a row for every equipment layer."""
+    ramp = condition.body_ramp
+    assert ramp is not None
+    rig = body_rig(data, contact)
+    material_layers = tuple(layer for layer in appearance if layer.slot in CONDITION_BODY_SLOTS)
+    material_body = replace(body, cast_layers=tuple(layer for layer in body.cast_layers if layer.slot in CONDITION_BODY_SLOTS))
+    plain_condition = replace(condition, body_ramp=None)
+    key = ("condition-ramp", data.media_root, contact.rig_id, body.clip, body.facing, material_layers,
+           body.hide_weapon, body.hidden_slots, material_body.cast_layers, condition.body_color,
+           ramp.colors, ramp.mapping, ramp.gain)
+    row = cached_palette(key)
+    if row is None:
+        frames = body_clip(data, contact, body.clip).frames
+        source = pygame.Surface((rig.cell_width * frames, rig.cell_height), pygame.SRCALPHA)
+        for frame in range(frames):
+            source.blit(_body_image(replace(material_body, frame=frame), contact, material_layers,
+                body_rows, data, None, only_shadow=False, condition=plain_condition), (frame * rig.cell_width, 0))
+        row = retain_palette(key, condition_body_ramp(source, ramp))
+    mapped = row.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
+    if condition.ramp_strength >= 1.:
+        return mapped
+    original = _body_image(material_body, contact, material_layers, body_rows, data, None,
+        only_shadow=False, condition=plain_condition)
+    return blend_body_ramp(original, mapped, condition.ramp_strength)
 
 
 def _reference_screen(point: tuple[float, float], camera: Camera, data: AnimationData) -> tuple[float, float]:

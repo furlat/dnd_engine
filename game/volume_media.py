@@ -130,6 +130,13 @@ def _visible_from(origin, x, z, segments):
     return clear
 
 
+def unobstructed_volume_points(origin: tuple[float, float], x: np.ndarray, z: np.ndarray,
+                              elevation: float, boundaries: tuple[WorldObjectPlacement, ...],
+                              solids: tuple[AreaSolid, ...]) -> np.ndarray:
+    """Short support-plane rays through received physical barriers."""
+    return _visible_from(origin, x, z, _segments(_barriers(boundaries, solids), elevation))
+
+
 @lru_cache(maxsize=32)
 def _visibility_origins(center, radius, segments):
     """Continuous corner visibility within the authored radius, not a cell stencil."""

@@ -6,7 +6,7 @@ from typing import Mapping, Sequence, cast
 import numpy as np
 import pygame
 
-from game.condition_types import Activity, ConditionBodyColor
+from game.condition_types import Activity, ConditionBodyColor, ConditionBodyRamp
 from dnd.core.life_types import LifeState
 from game.condition_media import ResolvedConditionLayer
 from game.condition_sampling import sample_condition_media
@@ -98,6 +98,33 @@ def compose_condition_layers(body: pygame.Surface, destination: tuple[int, int],
     for image, point in (*behind, (body, destination), *front):
         result.blit(image, (point[0] - bounds.x, point[1] - bounds.y))
     return result, bounds.topleft
+
+
+def condition_body_ramp(surface: pygame.Surface, ramp: ConditionBodyRamp) -> pygame.Surface:
+    """Map immutable row RGB once; source alpha remains byte-for-byte intact."""
+    result = surface.copy()
+    rgb = pygame.surfarray.array3d(surface)
+    value = np.minimum(1., rgb.max(axis=2).astype(np.float32) * (ramp.gain / 255.))
+    colors = np.array([((color >> 16) & 255, (color >> 8) & 255, color & 255)
+                       for color in ramp.colors], dtype=np.uint8)
+    indices = np.minimum(len(colors) - 1, (value * len(colors)).astype(int))
+    pixels = pygame.surfarray.pixels3d(result)
+    pixels[:] = colors[indices]
+    del pixels
+    return result
+
+
+def blend_body_ramp(original: pygame.Surface, mapped: pygame.Surface, strength: float) -> pygame.Surface:
+    if strength >= 1.:
+        return mapped
+    if strength <= 0.:
+        return original
+    result = original.copy()
+    rgb = pygame.surfarray.array3d(original).astype(np.float32)
+    pixels = pygame.surfarray.pixels3d(result)
+    pixels[:] = np.rint(rgb + (pygame.surfarray.array3d(mapped).astype(np.float32) - rgb) * strength).astype(np.uint8)
+    del pixels
+    return result
 
 
 def condition_body_color(surface: pygame.Surface, color: ConditionBodyColor) -> pygame.Surface:

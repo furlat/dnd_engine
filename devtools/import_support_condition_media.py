@@ -40,6 +40,8 @@ def import_group(source: Path, group: str, *, repo: Path = ROOT) -> tuple[str, .
         return destination.as_posix()
 
     for name, row in manifest["phases"].items():
+        if row["fps"] > 32:
+            raise ValueError(f"{name}: repack the private source at 32 FPS before production import")
         if set(row["cameras"]) != {"0", "1", "2", "3"}:
             raise ValueError(f"{name}: all four native camera banks are required")
         width, height = row["canvas"]

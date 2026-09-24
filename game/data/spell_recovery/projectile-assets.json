@@ -10,7 +10,7 @@
       "rows": 8,
       "cols": 127
     },
-    "fps": 24,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -30,8 +30,8 @@
       },
       "impact": {
         "start": 12,
-        "frames": 115,
-        "fps": 144,
+        "frames": 26,
+        "fps": 32,
         "loop": false
       }
     },
@@ -59,7 +59,7 @@
       "rows": 8,
       "cols": 83
     },
-    "fps": 24,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -85,8 +85,8 @@
       },
       "impact": {
         "start": 20,
-        "frames": 63,
-        "fps": 144,
+        "frames": 14,
+        "fps": 32,
         "loop": false
       }
     },
@@ -114,7 +114,7 @@
       "rows": 8,
       "cols": 332
     },
-    "fps": 24,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -128,20 +128,20 @@
     "phases": {
       "travel": {
         "start": 0,
-        "frames": 144,
-        "fps": 144,
+        "frames": 32,
+        "fps": 32,
         "loop": true
       },
       "impact": {
         "start": 144,
-        "frames": 116,
-        "fps": 144,
+        "frames": 26,
+        "fps": 32,
         "loop": false
       },
       "cast": {
         "start": 260,
-        "frames": 72,
-        "fps": 144,
+        "frames": 16,
+        "fps": 32,
         "loop": false
       }
     },
@@ -252,9 +252,9 @@
       "width": 1536,
       "height": 1536,
       "rows": 8,
-      "cols": 48
+      "cols": 64
     },
-    "fps": 24,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -268,8 +268,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 48,
-        "fps": 24,
+        "frames": 64,
+        "fps": 32,
         "loop": false
       }
     },
@@ -367,7 +367,7 @@
       "rows": 8,
       "cols": 288
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -381,8 +381,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 288,
-        "fps": 144,
+        "frames": 64,
+        "fps": 32,
         "loop": false
       }
     },
@@ -450,7 +450,7 @@
       "rows": 8,
       "cols": 144
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -464,8 +464,8 @@
     "phases": {
       "travel": {
         "start": 0,
-        "frames": 144,
-        "fps": 144,
+        "frames": 32,
+        "fps": 32,
         "loop": false
       }
     },

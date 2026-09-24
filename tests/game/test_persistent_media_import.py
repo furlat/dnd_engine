@@ -1,8 +1,12 @@
 """Delivered camera registration and phase windows survive storage import."""
 
 from dataclasses import replace
+import gzip
 import json
+import struct
+from zipfile import ZipFile
 
+import numpy as np
 import pygame
 import pytest
 
@@ -141,8 +145,12 @@ def volume_source(rendering, tmp_path):
     return manifest, colors
 
 
-def test_volume_import_preserves_raw_coordinate_alpha_byte_and_camera_basis(rendering, tmp_path, volume_source):
+@pytest.mark.parametrize('fps', (32, 144))
+def test_volume_import_preserves_raw_coordinate_alpha_byte_and_camera_basis(rendering, tmp_path, volume_source, fps):
     manifest, colors = volume_source
+    document = json.loads(manifest.read_text())
+    document['fps'] = fps
+    manifest.write_text(json.dumps(document))
     repo = tmp_path / 'repo'
     import_volume(manifest, repo=repo)
     folder = repo / 'game/data/persistent_spells'
@@ -167,6 +175,7 @@ def test_volume_import_preserves_raw_coordinate_alpha_byte_and_camera_basis(rend
         for phase, empty in (('apply', 0), ('hold', 1)):
             window = assets[f'persistent.fixture.{phase}'].phases.impact
             assert window is not None and window.frames == 2
+            assert window.fps == assets[f'persistent.fixture.{phase}'].fps == fps
             assert not registered_media_samples(data, f'persistent.fixture.{phase}', 'impact', empty,
                 view_facing('E', quadrant, data), scale=1, anchor=(100, 100), rows={})
 
@@ -189,6 +198,125 @@ def test_volume_import_rejects_incomplete_delivery_before_writing(tmp_path, volu
         document['hold'] = [4, 4]
     else:
         document['views']['0']['position']['rects'][1]['offset'][0] += 1
+    manifest.write_text(json.dumps(document))
+    repo = tmp_path / 'repo'
+    with pytest.raises(ValueError):
+        import_volume(manifest, repo=repo)
+    assert not repo.exists()
+
+
+@pytest.fixture
+def surface_volume_source(volume_source):
+    original, colors = volume_source
+    document = json.loads(original.read_text())
+    views = {}
+    for label, old_view in document['views'].items():
+        index = 3 - int(label)
+        relative = f'camera-{label}.zip'
+        # Native sample indices need not coincide with local phase indices.
+        with ZipFile(original.parent / relative, 'w') as archive:
+            for frame, offset, color, xyz, owner in (
+                (7, (0, 0), (0, 0, 0, 0), (0, 0, 0), 0),
+                (11, (-2, -3), colors[index], (32768, 40959, 0), 1),
+                (13, (3, -4), (30, 60, 90, 128), (65535, 49151, 32768), 1),
+                (17, (0, 0), (0, 0, 0, 0), (0, 0, 0), 0),
+            ):
+                payload = (struct.pack('<HHhh', 2, 2, *offset) + bytes(color) * 4
+                    + struct.pack('>HHH', *xyz) * 4 + bytes([owner]) * 4)
+                archive.writestr(f'{frame:03d}.bin.gz', gzip.compress(payload))
+        views[label] = {key: document[key] for key in
+            ('complete', 'spell', 'fps', 'apply', 'hold', 'canvasSize', 'pivot')}
+        views[label].update(cameraProjection=old_view['camera'], surfaceFrames={
+            'archive': {'file': relative, 'memberPattern': '{frame:03d}.bin.gz'},
+            'frameIndices': [7, 11, 13, 17], 'bounds': [-4, 4],
+            'verticalScale': 1.224744871391589, 'positionScale': 1,
+            'referencePixelScale': 1, 'coordinateBasis': 'camera_local_xyz',
+            'blendModes': ['normal']})
+    path = original.parent / 'surface-manifest.json'
+    path.write_text(json.dumps({'complete': True, 'spell': 'fixture', 'fps': 144,
+        'sourceManifest': original.name, 'views': views}))
+    return path, colors
+
+
+@pytest.mark.parametrize('fps', (32, 144))
+def test_surface_volume_import_preserves_registered_rgba_xyz_and_phase_indices(
+    rendering, tmp_path, surface_volume_source, fps,
+):
+    manifest, colors = surface_volume_source
+    delivery = json.loads(manifest.read_text())
+    original = manifest.parent / delivery['sourceManifest']
+    document = json.loads(original.read_text())
+    delivery['fps'] = document['fps'] = fps
+    for view in delivery['views'].values():
+        view['fps'] = fps
+    manifest.write_text(json.dumps(delivery))
+    original.write_text(json.dumps(document))
+    repo = tmp_path / 'repo'
+    folder = repo / 'game/data/persistent_spells'
+    folder.mkdir(parents=True)
+    authored = folder / 'spell-studio-drafts.json'
+    authored.write_text('Keep independently authored behavior unchanged.\n')
+    (folder / 'bindings.json').write_text(json.dumps({'resources': {'unrelated': 'retained'},
+        'projectileStorage': {'unrelated': {'retained': True}}}))
+    import_volume(manifest, repo=repo)
+    assert authored.read_text() == 'Keep independently authored behavior unchanged.\n'
+    bindings = json.loads((folder / 'bindings.json').read_text())
+    assert bindings['resources'] == {'unrelated': 'retained'}
+    assert bindings['projectileStorage'].pop('unrelated') == {'retained': True}
+    assets = {row['assetId']: AuthoredProjectileAsset.model_validate_json(json.dumps(row))
+              for row in json.loads((folder / 'projectile-assets.json').read_text())}
+    storage = {key: ProjectileStorage.model_validate_json(json.dumps(value))
+               for key, value in bindings['projectileStorage'].items()}
+    data = replace(rendering, media_root=repo, projectile_assets=assets, projectile_storage=storage)
+    for quadrant, color in enumerate(colors):
+        facing = view_facing('E', quadrant, data)
+        for phase, frame, expected_color, destination, coordinates in (
+            ('apply', 1, color, (98, 97), (-4+32768*8/65535, -4+40959*8/65535, -4)),
+            ('hold', 0, (30, 60, 90, 128), (103, 96), (4, -4+49151*8/65535, -4+32768*8/65535)),
+        ):
+            identity = f'persistent.fixture.{phase}'
+            result, = registered_media_samples(data, identity, 'impact', frame, facing,
+                scale=1, anchor=(100, 100), rows={})
+            assert result.destination == destination
+            assert pygame.image.tobytes(result.image, 'RGBA') == bytes(expected_color) * 4
+            assert result.positions is not None and result.ownership is not None
+            np.testing.assert_allclose(result.positions, np.tile(coordinates, (2, 2, 1)), atol=3e-7)
+            np.testing.assert_array_equal(result.ownership, np.ones((2, 2)))
+            assert result.vertical_scale == 1.224744871391589
+            assert result.footpoints is None
+            window = assets[identity].phases.impact
+            assert window is not None and window.frames == 2 and window.fps == fps
+            assert window.loop == (phase == 'hold')
+        for phase, frame in (('apply', 0), ('hold', 1)):
+            result, = registered_media_samples(data, f'persistent.fixture.{phase}', 'impact', frame,
+                facing, scale=1, anchor=(100, 100), rows={})
+            assert not pygame.surfarray.array_alpha(result.image).any()
+    installed = tuple((repo / 'game/assets').rglob('*.*'))
+    assert len(installed) == 4, 'Install the paired archives only, not retired color/XZ pages'
+    for path in installed:
+        assert path.read_bytes() == (manifest.parent / path.name).read_bytes()
+
+
+@pytest.mark.parametrize('partial', ('incomplete', 'q0_only', 'short_view', 'different_clock',
+                                   'different_pivot', 'different_encoding'))
+def test_surface_volume_import_rejects_mismatched_delivery_before_writing(
+    tmp_path, surface_volume_source, partial,
+):
+    manifest, _ = surface_volume_source
+    document = json.loads(manifest.read_text())
+    view = document['views']['0']
+    if partial == 'incomplete':
+        view['complete'] = False
+    elif partial == 'q0_only':
+        document['views'] = {'0': view}
+    elif partial == 'short_view':
+        view['surfaceFrames']['frameIndices'].pop()
+    elif partial == 'different_clock':
+        view['fps'] = 32
+    elif partial == 'different_pivot':
+        view['pivot'][0] += 1
+    else:
+        view['surfaceFrames']['bounds'] = [-8, 8]
     manifest.write_text(json.dumps(document))
     repo = tmp_path / 'repo'
     with pytest.raises(ValueError):

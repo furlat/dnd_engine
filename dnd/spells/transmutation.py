@@ -1423,7 +1423,10 @@ class EnhanceAbilityEffect(BaseCondition):
     """
     name: str = Field(default="Enhance Ability", description="Condition name.")
     description: str = Field(default="Advantage on one ability's checks", description="Rules-facing condition summary.")
-    ability_type: str = Field(default="strength", description="Ability key enhanced by the condition.")
+    ability_type: AbilityName = Field(default="strength", description="Ability key enhanced by the condition.")
+
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={"enhanced_ability": self.ability_type})
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
@@ -1432,8 +1435,7 @@ class EnhanceAbilityEffect(BaseCondition):
 
         outs: List[Tuple[UUID, UUID]] = []
 
-        ability_name = type_cast(AbilityName, self.ability_type)
-        ability = target.ability_scores.get_ability(ability_name)
+        ability = target.ability_scores.get_ability(self.ability_type)
         mod_uuid = ability.ability_score.self_static.add_advantage_modifier(
             AdvantageModifier(
                 name=f"Enhance Ability ({self.ability_type.title()})",
@@ -1481,7 +1483,15 @@ class EnhanceAbility(SpellAction):
     )
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
-    enhance_ability_type: str = Field(default="strength", description="Ability key selected for enhancement.")
+    enhance_ability_type: AbilityName = Field(default="strength", description="Ability key selected for enhancement.")
+
+    def _create_declaration_event(
+        self, parent_event: Optional[Event] = None, use_register: bool = True,
+    ) -> Optional[Event]:
+        event = super()._create_declaration_event(parent_event, use_register)
+        if isinstance(event, SpellEvent):
+            event.effect_id = f"support.enhance_ability.{self.enhance_ability_type}"
+        return event
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -2127,6 +2137,7 @@ class RegeneratingEffect(BaseCondition):
         target.receive_healing(
             1, self.source_entity_uuid,
             source_description="Regenerate: 1 HP",
+            source_condition_uuid=self.uuid,
             parent_event=event.uuid
         )
 

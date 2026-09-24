@@ -21,7 +21,7 @@ def data():
 
 
 def shield(side):
-    layer = ConditionLayer(id=side, assetId="shell", category="shield", animation="loop", fps=144.,
+    layer = ConditionLayer(id=side, assetId="shell", category="shield", animation="loop", fps=32.,
         attachment="body", activeDuring=("idle",), priority=0,
         colors=ConditionColors(primary=0xFFFFFF, secondary=0xFFFFFF, tertiary=0xFFFFFF),
         drawOrder="behind_body" if side == "back" else "in_front_of_body")
@@ -34,8 +34,8 @@ def shield(side):
 @pytest.mark.parametrize("side", ("back", "front"))
 def test_exact_formation_seam_and_clear_do_not_restart_current_hold(data, side):
     resolved = shield(side)
-    for age, phase, frame in ((0., "apply", 0), (999., "apply", 143),
-                              (1000., "hold", 0), (1250., "hold", 36), (13500., "hold", 0)):
+    for age, phase, frame in ((0., "apply", 0), (999., "apply", 31),
+                              (1000., "hold", 0), (1250., "hold", 8), (13500., "hold", 0)):
         sample, = sample_condition_media(data, replace(resolved, age_ms=age))
         assert sample.asset_id == f"persistent.shield.{side}.{phase}"
         assert sample.frame == frame and sample.alpha == 1. and sample.removal_mask is None
@@ -43,10 +43,10 @@ def test_exact_formation_seam_and_clear_do_not_restart_current_hold(data, side):
         continued, = sample_condition_media(data, replace(resolved, age_ms=4000 + age, removal_age_ms=age))
         ordinary, = sample_condition_media(data, replace(resolved, age_ms=4000 + age))
         assert (continued.asset_id, continued.frame, continued.alpha) == (ordinary.asset_id, ordinary.frame, ordinary.alpha)
-        assert continued.removal_mask == (f"persistent.shield.{side}.clear_mask", int(age * .144))
-    assert not sample_condition_media(data, replace(resolved, age_ms=5000., removal_age_ms=87 * 1000 / 144))
+        assert continued.removal_mask == (f"persistent.shield.{side}.clear_mask", int(age * .032))
+    assert not sample_condition_media(data, replace(resolved, age_ms=5000., removal_age_ms=20 * 1000 / 32))
     cold, = sample_condition_media(data, replace(resolved, age_ms=1250., application=False))
-    assert cold.asset_id.endswith(".hold") and cold.frame == 180
+    assert cold.asset_id.endswith(".hold") and cold.frame == 40
 
 
 @pytest.mark.parametrize("quadrant", range(4))

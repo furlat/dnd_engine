@@ -66,10 +66,10 @@ def test_real_silence_application_sustain_and_continuing_removal_fade(rendering,
             return spatial_media_draw_commands(state, data, at, camera, lifetimes=records)
         first = sample(active, applied + 500)
         assert first and all(".application." in row.evidence[2] for row in first)
-        assert {row.evidence[-1] for row in first} == {72}
+        assert {row.evidence[-1] for row in first} == {16}  # 500 ms at 32 FPS
         hold = sample(active, applied + 2000)
         assert hold and all(".sustain." in row.evidence[2] for row in hold)
-        assert {row.evidence[-1] for row in hold} == {72}
+        assert {row.evidence[-1] for row in hold} == {16}
         assert _picture(sample(active, applied + 6000)) == _picture(hold)
         # Whole rear/front surfaces surround occupants and retain their tall art.
         center_depth = painter_key(geometry.center, elevation_steps=0, quadrant=quadrant,
@@ -109,7 +109,12 @@ def test_cold_acquisition_and_lost_origin_do_not_replay_or_guess_a_sphere(render
     assert not spatial_media_draw_commands(empty, data, 4200, camera, lifetimes=records)
     hidden = replace(state, senses=replace(state.senses,
         visible=frozenset(state.senses.visible) - {geometry.center}))
-    assert not spatial_media_draw_commands(hidden, data, 4200, camera, lifetimes=records)
+    # Seeing the observed sphere does not require seeing its center floor tile.
+    assert _picture(spatial_media_draw_commands(hidden, data, 4200, camera, lifetimes=records)) == _picture(cold)
+    unobserved = replace(state, senses=replace(state.senses,
+        visible=frozenset(state.senses.visible) - set(effect.positions),
+        spatial_effects={identity: effect.model_copy(update={"visible_volume_positions": ()})}))
+    assert not spatial_media_draw_commands(unobserved, data, 4200, camera, lifetimes=records)
     absent = replace(state, senses=replace(state.senses, spatial_effects={}))
     assert not spatial_media_draw_commands(absent, data, 4200, camera, lifetimes=records)
     lost = register_spatial_lifetimes(records, absent, data, absolute_start_ms=4400)

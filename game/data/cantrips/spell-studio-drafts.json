@@ -125,13 +125,13 @@
         "travel": {
           "enabled": true,
           "assetPhase": "travel",
-          "fps": 144,
+          "fps": 32,
           "composition": "billboard"
         },
         "impact": {
           "enabled": true,
           "assetPhase": "impact",
-          "fps": 144,
+          "fps": 32,
           "composition": "billboard"
         },
         "trajectory": {
@@ -140,7 +140,7 @@
         },
         "speedPxPerSecond": 1000,
         "minimumTravelDurationMs": 400,
-        "fps": 144,
+        "fps": 32,
         "scale": 0.5,
         "depthMode": "world",
         "orientation": {

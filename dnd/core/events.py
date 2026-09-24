@@ -5390,6 +5390,7 @@ class HealEvent(Event):
     """Healing-application event for HP restoration and blocking."""
 
     name: str = Field(default="Heal", description="Human-readable healing event label.")
+    source_condition_uuid: Optional[UUID] = Field(default=None, description="Exact condition instance that produced this healing, when applicable.")
     event_type: EventType = Field(default=EventType.HEAL, description="Event category for healing application.")
     total_healing: int = Field(default=0, description="Requested healing amount before HP caps.")
     actual_healing: int = Field(default=0, description="HP actually restored after caps and blockers.")

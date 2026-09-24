@@ -680,6 +680,7 @@ def _condition_fact(event: Event) -> ConditionFact | None:
         behavior_id=event.behavior_id, resulting_max_hp=event.resulting_max_hp,
         resulting_ac=event.resulting_ac, resulting_tile=event.resulting_tile,
         resulting_item=event.resulting_item,
+        consumed=isinstance(event, ConditionRemovalEvent) and event.consumed,
     )
 
 
@@ -806,13 +807,16 @@ def _capture_lineage(
         if event.phase is EventPhase.CANCEL:
             # Cancellation keeps raw parent/child version references; it does
             # not run completion's stable-lineage normalization. Resolve those
-            # existing references without changing the retained event facts.
+            # existing references on the retained header as well as traversing
+            # them, so cold consumers receive the same complete causal graph.
             children = []
             for identity in dict.fromkeys(event.lineage_children_events + event.children_events):
                 child = EventQueue.get_event_by_uuid(identity)
                 if child is None:
                     raise ValueError("canceled lineage is missing a required child")
                 children.append(latest[child.lineage_uuid])
+            event = event.model_copy(update={"children_lineages": list(dict.fromkeys(
+                child.lineage_uuid for child in children))})
         else:
             children = event.get_children_events()
             if set(event.children_lineages) != {child.lineage_uuid for child in children}:
@@ -825,7 +829,7 @@ def _capture_lineage(
     if not indexed or root.uuid not in {event.uuid for _, event in indexed}:
         raise ValueError("lineage root is absent from the current EventQueue")
     retained = tuple(
-        _retained_event(event, observer_uuid)
+        _retained_event(nodes[event.lineage_uuid], observer_uuid)
         for _, event in indexed
         if event.uuid == nodes[event.lineage_uuid].uuid
     )

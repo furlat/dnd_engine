@@ -191,13 +191,13 @@ def test_aid_application_crossfade_has_its_own_hold_origin_and_quiet_reacquisiti
     application, hold = samples
     assert application.asset_id == media.application_asset_id and application.alpha == pytest.approx(.5)
     assert hold.asset_id == media.asset_id and hold.alpha == pytest.approx(.5)
-    assert hold.frame in (10, 11)  # midpoint of the author's 22-frame overlap
-    period = data.projectile_assets[hold.asset_id].phases.impact.frames * 1000 / 144
+    assert hold.frame == 2  # midpoint of the unchanged 152.78 ms overlap at 32 FPS
+    period = 4000  # The authored hold still takes four seconds to wrap.
     first, = sample_condition_media(data, replace(layer, age_ms=end + 1, application=True))
     later, = sample_condition_media(data, replace(layer, age_ms=end + 1 + period, application=True))
     assert first == later
     quiet, = sample_condition_media(data, replace(layer, age_ms=1000, application=False))
-    assert quiet.asset_id == media.asset_id and quiet.frame == 144 and quiet.alpha == 1
+    assert quiet.asset_id == media.asset_id and quiet.frame == 32 and quiet.alpha == 1
 
 
 def test_repeated_aid_uses_completion_stats_after_replacing_old_modifiers():

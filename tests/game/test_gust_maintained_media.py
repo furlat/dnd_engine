@@ -115,10 +115,10 @@ def test_native_gust_intro_only_once_then_hold_until_observed_cleanup(rendering,
         assert spatial_media_draw_commands(other, data, 0, camera, active)
         finished = sample_world_transitions(group.world_transitions, intro_end)
         first = spatial_media_draw_commands(after, data, 0, camera, finished)
-        assert first and {row.evidence[-1] for row in first} == {252}
+        assert first and {row.evidence[-1] for row in first} == {56}
         later = spatial_media_draw_commands(after, data, 375, camera)
         assert _picture(spatial_media_draw_commands(after, data, 375, camera, lifetimes=records), camera) == _picture(later, camera)
-        assert {row.evidence[-1] for row in later} == {306}
+        assert {row.evidence[-1] for row in later} == {68}
         assert _picture(first, camera) != _picture(later, camera)
         assert _picture(spatial_media_draw_commands(after, data, 750, camera), camera) == _picture(first, camera)
         assert _picture(spatial_media_draw_commands(after, data, 0, camera), camera) == _picture(first, camera)
@@ -183,7 +183,7 @@ def test_fully_disclosed_line_preserves_the_delivered_hold_silhouette(rendering,
         anchor = project_screen(geometry.origin, camera)
         reference = pygame.Surface((640, 480))
         for sample in registered_media_samples(data, binding.layers[0].assetId, binding.assetPhase,
-                252, facing, scale=binding.scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom,
+                binding.holdStartFrame, facing, scale=binding.scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom,
                 anchor=anchor, rows={}, zoom=camera.zoom):
             # Full disclosure preserves source color at every owned above-floor
             # sample on this flat map. Use XYZ receiving cells, not a flattened

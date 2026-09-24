@@ -961,6 +961,16 @@ been seen; it does not disclose tile contents. Ground/clump media still requires
 its ordinary known support. The export retains its documented nearest-surface
 ownership approximation at overlapping translucent pixels.
 
+For XY air volumes, the known outer map bounds are not a wall. An authored
+sample outside those bounds may borrow its nearest currently admitted edge
+cell's support height. Ownership is resolved in displayed world coordinates,
+including movement, while the original pixel position and per-pixel painter
+depth remain unchanged. Received propagation barriers still block the short
+edge-owner-to-sample segment at that support height. This cosmetic overhang
+creates no gameplay cells and grants no unknown in-bounds cells; floor/clump
+media keeps its existing support requirements. The inputs are the existing
+event-retained world bounds, effect membership and historical geometry.
+
 Optional `movementSpeedCellsPerSecond` gives presentation speed to an actual
 same-owner old/new intrinsic geometry transition. The binding uses existing
 lineage/sensory after-values and the existing historical action clock. It keeps
@@ -1195,8 +1205,8 @@ Maintained spatial layers additionally select `floor`, `line_floor`, `xy_volume`
 or `clump`. `floor` uses the admitted planar footprint; `line_floor` uses the
 received line geometry; `xy_volume` uses the raw per-pixel world-cell owner;
 `clump` places the existing authored support clumps. Their existing lifecycle
-stays in the spatial binding. Maintained `xyz_volume` currently consumes the
-received line geometry; it does not add arbitrary maintained volume shapes.
+stays in the spatial binding. Maintained `xyz_volume` consumes received line or
+sphere geometry, with the observed support/ownership rules described below.
 Old `volume` becomes `xy_volume` and `legacy`
 resolves once during intake. Active local bindings use explicit modes. A filename,
 resource prefix, optional diagnostic tuple or presence of binary data never
@@ -1317,3 +1327,87 @@ as a portal presentation. Selected binding, actual causal coverage, supported
 executor fields, passing replay checks and human visual approval remain separate
 claims. No report scans media to discover gameplay or turns an absent cue into
 an automatic missing-animation diagnosis.
+
+### Support conditions: choices, finite responses and body material
+
+`ConditionState.enhanced_ability` is an optional ability identity, parallel to
+the existing energy-type selection. `ConditionLayer.whenAbility` selects a
+matching authored layer; missing historical choice does not select a default.
+Enhance Ability records its configured choice on the same paid spell event as
+`effect_id = support.enhance_ability.<ability>`, consumed by existing
+`effectDrafts`. Its ordinary registration still defaults to Strength; this
+presentation binding does not introduce a six-choice action interface.
+
+`ConditionChangeFact.consumed` distinguishes consumption from ordinary removal.
+Only the condition actually consumed receives it, not descendants removed as
+linked cleanup. `HealFact.source_condition_uuid` identifies a producing condition
+for real periodic healing. Both are optional legacy-compatible facts retained
+through native archive and subjective public JSON. A canceled parent still
+retains its terminal child lineage edges; cancellation does not erase a
+completed reaction or condition removal.
+
+A recipe's `responses` contains `consumed` or `healed` triggers and existing
+`ConditionTransitionEffect` records. Consumption plays once at the removal
+contact and replaces the maintained/removal media. Healing plays once per
+positive, unblocked heal owned by that condition. Binding uses membership at
+the causal fact, so a final pulse survives later expiry in the same lineage.
+Responses are keyed by event and condition identity, follow the actor's current
+presented contact, and retain only unfinished tails. Their finite end extends
+existing choreography completion; maintained loops never hold up the queue.
+Neither path changes game time or manufactures an event.
+
+`StudioMediaTrack.requireRemovedConditionTag` optionally gates a target media
+track on actual completed, uncanceled removal with that tag in its cast lineage.
+Remove Curse uses `curse`. Multiple matching removals on one recipient produce
+one release; a clean recipient gets no release and no invisible media delay.
+
+`persistent.bodyRamp` contains colors, `mapping: maximum_rgb`, gain,
+`applicationMs` and `removalMs`. Stoneskin's five-band material maps
+`min(4, floor(clamp(max(R,G,B)/255 * 1.35, 0, 1) * 5))` to its authored palette.
+The current composed body/equipment row supplies the pixels; alpha, pose and
+equipment changes are preserved. Shadow and independent VFX are excluded.
+Hit flash keeps priority. The existing bounded palette cache stores immutable
+mapped rows, never keys by blend time.
+
+New support-condition billboard media is privately packed at 32 FPS. Source
+time selection uses `floor(k * 144 / 32)` and preserves phase duration, four
+camera banks, paired layers, canvas, pivot and crop offsets. Production ships
+only selected packed pages; 144 Hz originals remain in the private source
+archive. Casting-hand sheets retain their separate rig clock. The offline
+packer and importer own pixel storage and registration; authored JSON owns
+selection, lifecycle and timing. This billboard adapter does not resample
+position/XYZ banks or redefine an existing cloud's loop.
+
+### Maintained XYZ fields and observed protection surfaces
+
+The six spherical clouds use existing `xyz_volume` layers and packed
+RGBA/XYZ/ownership samples. Camera-local XYZ is transformed once. The full declared
+sphere lattice, clipped only to known map bounds, assigns each sample an owner;
+decorative air outside that lattice borrows its nearest geometric edge. Only
+then is that owner checked against the received observation. Missing interior
+or edge owners never reassign their pixels to a visible neighbour. This is the
+spherical counterpart of existing line-field fringe ownership, not a dilation of
+gameplay occupancy. The receiving cell supplies its observed support height.
+Ownership stays in the received after-geometry coordinates during movement;
+only the registered image, genuine XYZ and support lookup are translated. This
+prevents a map-clipped owner from drifting inward and becoming a temporary wall.
+Final composition uses the same registered wall
+silhouettes, finite geometry and `ExcludedSphere` cuts as transient XYZ spells.
+Source Y must survive packing, scaling and cropping alongside its matching color.
+
+Maintained effects retain `suppressions` from actual native footprint resolution.
+Each receipt identifies the provider and actual overlap. The subjective boundary
+adds only previously/currently disclosed provider geometry, content identity and
+height, and permits only observed overlap cells. This allows cloud samples above
+or outside the sphere without restoring suppressed gameplay cells. Missing cells
+alone never imply protection. Movement retains before/after exclusion geometry
+through the interpolation; additional owner cells come from the after receipt.
+Removing a provider does not retroactively recompute an existing native footprint.
+
+A currently observed cloud/protection intersection can expose an active, already
+known protection surface through `visible_volume_positions`. It does not expose
+the ground or occupants. Real walls, other obscurers, range/light limits, unknown
+providers and removed providers remain respected. A sphere shell is submitted
+when its footprint or surface is currently observed, using received anchor height;
+its center ground tile need not be visible. Remembered membership alone is
+insufficient. Actual geometric occlusion then determines which shell pixels show.

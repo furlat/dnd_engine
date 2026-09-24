@@ -27,15 +27,130 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
-**Active September 24 unit — accepted support-condition batch.** Integrate Death
+**Completed September 24 — selected spell media packed at 32 FPS.** The official
+248-record / 251-phase delivery is installed with unchanged gameplay, target
+anchors, release/contact timing and the approved cloud ownership renderer.
+Fireball's explosion now uses genuine dense-source 32 FPS samples; slower
+projectile phases and actor animation retain their clocks. Both independent
+reviews approve. The broad run passed 2,620 tests and exposed 12 failures; all
+were corrected and rechecked, with **498 tests passing after obsolete assets
+were removed**. All 28 four-camera, paired-observer saved-event clips pass with
+identical inputs. The [review gallery](http://127.0.0.1:8767/runs/20260924T131954Z-spell-fps32/index.html)
+covers walls, Globe, conditions, movement and cloud controls. The private local
+release `spell-fps32-20260924` contains **4,430 files / 2.669 GB**, saving 1.616 GB
+(37.7%) against the preceding installation. Originals and prior releases remain
+preserved; shared blood footpoint pages remain installed. No new renderer,
+schema, backend rule or runtime audit was introduced. Final visual approval
+remains with the user; the separate native cloud propagation question below
+remains unchanged. See the [integration record](agent_docs/SPELL_FPS32_INTEGRATION_2026-09-24.md)
+and [asset guide](ASSETS.md). This batch is finished; do not restart it or the
+earlier Git migration on continuation.
+
+**Completed September 24 — two-second clouds installed and replayed.**
+Five approved clouds now use fresh matched RGBA/XYZ packets with 64 formation
+and 64 hold frames at 32 FPS. Twenty stationary banks occupy 636 MB instead of
+1.963 GB; eight optional rolling banks are privately preserved and unbound.
+Insect Plague is unchanged. Both independent reviews approve; 276 focused tests
+pass, all 2,560 registered frames match approved colors/pivots, and the 12 prior
+ownership regressions still fail against the old stencil. No runtime Python,
+schema or gameplay changes were needed. All 24 saved-event clips pass; both
+observers and four cameras cover edges, walls, Globe, raised support and clear.
+The [new review](http://127.0.0.1:8767/runs/20260924T123138Z-two-second-clouds/index.html)
+links the previous approved baseline. Representative temporal frames were
+visually inspected; final visual approval remains with the user. The private
+release `cloud-two-second-20260924` reduces the complete installation to 4.285 GB.
+See the [bounded integration plan](agent_docs/CLOUD_TWO_SECOND_INTEGRATION_2026-09-24.md).
+The user accepted the latest ownership correction; this new asset work must
+retain its visible result at moving edges, real walls and observed Globes.
+
+**September 24 correction — moving edge and bottom notches repaired; cloud
+propagation decision pending.** Both reported artifacts came from the native-cell
+stencil. Full declared sphere/map geometry now assigns decorative fringe owners
+before subjective admission, in stable after-geometry coordinates during movement.
+Genuine XYZ and existing physical clipping remain unchanged. Both independent
+reviewers approve; 258 focused tests pass, including 12 regressions that fail the
+old path, and scoped typing is clean. The
+[18-clip review](http://127.0.0.1:8767/runs/20260924T112844Z-cloud-ownership-correction/index.html)
+replays identical saved inputs with both observers/four cameras. The reported
+moments and the full movement were visually inspected. The user accepted this
+correction before requesting the two-second asset integration above.
+
+**Separate observed wall issue:** the native maintained clouds still construct
+line-of-effect spheres, while the XYZ compositor defaults to connected propagation.
+Fog's higher cuts above an inset wall come from those 36 native cells, not actual
+XYZ/wall intersections. Do not bypass their recorded footprint or claim all wall
+silhouettes are clean. The user has been asked whether the existing full-propagation
+agreement also covers all six maintained clouds. Align the native/render contract
+after that decision and generate fresh inputs if gameplay changes; preserve old
+recordings. No gameplay rule or asset changed in the edge/fringe repair.
+
+**Completed September 24 correction — cloud XYZ and visible shield surfaces.** Human review
+found foreground wall leakage, tile-column holes around Globe, and loss of the
+authored Y samples during cloud packing. The original Y survives privately.
+All six clouds now use the existing packed SurfaceVolume contract, preserving
+approved RGBA, phases, timing and four-camera registration. Its wall-silhouette
+and spherical exclusion compositor fixes the prior protection-column cut. Static
+map-edge overhang and observed supports were checked; remaining ownership defects
+are corrected above. Actual native protection
+outcomes pass through cold subjective replay; only disclosed suppression cells
+permit samples above/outside a sphere. The separate shield defect is also fixed:
+a currently observed interaction surface can be rendered even when its center
+ground tile is hidden, without revealing ground/actors or unknown providers.
+Both anti-slop and ECS reviews approve. Rendering, native, import and ownership
+lanes pass; whole-game/touched-native typing is clean. The
+[18-clip review](http://127.0.0.1:8767/runs/20260924T105442Z-cloud-xyz-shield-fix/index.html)
+contains separate no-wall/wall cases and paired-observer Globe clips, four cameras
+each. Representative final pixels were inspected; human approval remains open.
+All art is preserved privately; `cloud-xyz-32fps-20260924` has 8,438 files / 5.613 GB.
+See the [correction record](agent_docs/CLOUD_LOOP_REDUCTION_2026-09-24.md).
+
+**Earlier September 24 correction — cloud artwork at the map edge.** The
+authored air fringe now overhangs known map bounds, owned by an observed edge
+of that effect. Real barriers, unknown in-bounds visibility and native occupancy
+remain intact. The shared renderer reuses retained bounds and existing geometry;
+no new backend cells or asset export. Anti-slop and anti-OOP/ECS implementation
+reviews approve; 108 focused tests and scoped typing pass. The regression fails
+against the earlier renderer and the before/after capture confirms the repair.
+The [30-clip wall/cloud/Globe review](http://127.0.0.1:8767/runs/20260924T101505Z-walls-globe-clouds/index.html)
+includes twelve new native scenarios plus saved boundary, raised-field and
+corridor inputs, all paired observers and four cameras. All replay checks pass.
+**New visual finding:** cloud exclusion around the Globe still follows tile
+ownership and looks jagged. The review labels that remaining limitation; it is
+not fixed or artistically approved by these passing checks. See the
+[implementation and review record](agent_docs/CLOUD_LOOP_REDUCTION_2026-09-24.md).
+
+**Completed September 24 follow-up — shorter 32 FPS cloud media.** The
+[reviewed bounded plan](agent_docs/CLOUD_LOOP_REDUCTION_2026-09-24.md) preserves
+native behavior and the existing XY volume compositor/importer. All six genuine
+periodic color/XZ banks are installed. Both independent implementation reviews
+approve the data-only cloud replacement; 59 focused tests and scoped typing
+pass. Source/installed paired pixels and four-camera registrations match.
+The [30-clip production review](http://127.0.0.1:8767/runs/20260924T093843Z-clouds-32fps/index.html)
+passes with zero reported gaps. The complete installed/private production release
+is now **10,116 files / 5.052 GB**, down from 25,011 files / 15.095 GB. Its private
+Git LFS tag is `cloud-loops-32fps-20260924` (`11ec352c`). All original sources,
+old releases and retired installed pages are preserved privately. The new
+support batch and these six clouds use 32 FPS; other existing media retains
+its authored rate. This closes the authorized batch, not a whole-library
+downsampling or new compression project. Main-branch code/data changes remain
+in the working tree; the asset record explicitly identifies that requirement.
+
+**Completed September 24 unit — accepted support-condition batch.** Integrated Death
 Ward, Stoneskin, Protection from Poison, six Enhance Ability presentations,
 Regenerate, Remove Curse and Freedom of Movement through the current typed
-presentation contract. The Godot author is completing actual four-camera loops
-and finite condition media. The [implementation plan](agent_docs/SUPPORT_CONDITIONS_BATCH_2026-09-24.md)
+presentation contract. All genuine four-camera loops and finite condition media
+are delivered and installed. The [implementation record](agent_docs/SUPPORT_CONDITIONS_BATCH_2026-09-24.md)
 records the bounded passive-fact/lifecycle extensions, native acceptance cases
-and independent reviews. Keep working on this batch while the separately
-requested historical Git-art cleanup runs in isolated staging. Asset-size
-analysis belongs to the new Luna task; it does not replace spell integration.
+and independent reviews. Git history cleanup is completed and published; original
+history is preserved outside the repo. The user resumed this batch with a firm
+production constraint: archive the 144 Hz sources, pack new media at 32 FPS
+without changing phase durations. Measured phase media dropped 113.178 MB to
+28.806 MB (74.55%); the complete private addition with hands is 29.103 MB.
+Final verification: 84 focused tests, clean whole-game/touched-native typing,
+both independent implementation reviews, and 40/40 paired four-camera clips
+with zero reported presentation gaps. No six-choice Enhance discovery UI was
+added; six explicitly configured variants replay correctly. The cloud follow-up
+above is separate from this completed support integration.
 
 **Completed September 24 unit — reviewed rendering cleanup and private asset migration.**
 Required U0–U8/A1–A3 work is implemented and independently reviewed; optional
@@ -1786,7 +1901,7 @@ NeuroClient source is `/home/tommaso/Dev/NeuroClient/app` at `d274f2d62ca9c1c5ed
 
 The two saved overrides are not the full authored population: generated baselines and exact overrides are merged by the existing owner. The current exported set contains Fire Bolt, Acid Splash and a generated-only Magic Missile case. Their imported records do not certify that every delivery/media capability is executable.
 
-The unmodified Fire Bolt reference retains Attack5/release frame 7, hidden main weapon, Magic2 glow and original colors; disabled Effect1; disabled Taunt recovery at speed 1; prepare at body frame 1; the existing `lelu_fire_strike_128_pixel_lab_fire24_px8` prepare/travel/impact sprite; travel at 180 reference pixels/second with 150ms minimum and 24 FPS; original source/target anchors; and damage delay 15ms with flash/number/death fields at frames 5/7/12. Those values are source data, not settings to redesign.
+The unmodified Fire Bolt reference retains Attack5/release frame 7, hidden main weapon, Magic2 glow and original colors; disabled Effect1; disabled Taunt recovery at speed 1; prepare at body frame 1; the existing `lelu_fire_strike_128_pixel_lab_fire24_px8` prepare/travel/impact sprite; travel at 180 reference pixels/second with 150ms minimum and 32 FPS; original source/target anchors; and damage delay 15ms with flash/number/death fields at frames 5/7/12. Those values are source data, not settings to redesign.
 
 **Recorded P1 evidence:** initial export/check reproduced 57 outputs. Five detached artifact tests and an earlier combined run including 49 existing asset tests passed; importer Pyright was clean. Missing/corrupt output, destination collision and a temporary Git checkout with `core.autocrlf=true` exercised failure/byte-preservation. Initial import contained 14 original JSON files (22,100 existing authored lines), generated bindings/provenance and 38 PNGs (5,215,146 bytes).
 

@@ -14,6 +14,7 @@ from tests.game.cantrip_scenarios import cantrip_history
 from tests.game.area_spell_scenarios import area_spell_history
 from tests.game.support_scenarios import support_history
 from tests.game.healing_batch_scenarios import healing_batch_history
+from tests.game.support_conditions_scenarios import support_condition_history
 from tests.game.pending_spell_scenarios import pending_spell_history
 from tests.game.persistent_spell_scenarios import persistent_spell_history
 from tests.game.interruption_scenarios import interruption_history
@@ -45,7 +46,7 @@ from tests.game.scenarios import (
 from devtools.animation_review.cases import (
     AreaSpellCase, CantripCase, AttackCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DeviceCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,
     MechanismCase, PortalCase, DoorCase, TrapHardwareCase, PropDestructionCase, LiquidBarrelCase, EnvironmentCase, EnvironmentControlCase, EquipmentCase, ForcedMovementCase, GroundContactCase, HealingCase, LifecycleCase, MovementCase,
-    ParalysisCase, ParalysisLifecycleCase, PendingSpellCase, PersistentSpellCase, GlobeCase, InterruptionCase, ControlSpellCase, ProjectileLifeCase, ReviewCase, SpellHandoffCase, SupportCase, HealingBatchCase, TrueStrikeCase, TeleportCase, TrapCase, VisibilityCase, WebCase,
+    ParalysisCase, ParalysisLifecycleCase, PendingSpellCase, PersistentSpellCase, GlobeCase, InterruptionCase, ControlSpellCase, ProjectileLifeCase, ReviewCase, SpellHandoffCase, SupportCase, HealingBatchCase, SupportConditionCase, TrueStrikeCase, TeleportCase, TrapCase, VisibilityCase, WebCase,
 )
 
 
@@ -54,7 +55,8 @@ def produce(case: ReviewCase) -> CapturedHistory:
     match case.scenario:
         case GlobeCase() as scenario:
             return globe_history(spell=scenario.spell, protection=scenario.protection,
-                source_inside=scenario.source_inside, impact_offset=scenario.impact_offset, walls=scenario.walls)
+                source_inside=scenario.source_inside, impact_offset=scenario.impact_offset, walls=scenario.walls,
+                retain_field=scenario.retain_field)
         case InterruptionCase() as scenario:
             return interruption_history(blocker=scenario.blocker, spell=scenario.spell, blocked=scenario.blocked)
         case PersistentSpellCase() as scenario:
@@ -62,7 +64,7 @@ def produce(case: ReviewCase) -> CapturedHistory:
                 saved=scenario.saved, jump=scenario.jump, shield_delivery=scenario.shield_delivery,
                 environment=scenario.environment, jump_across=scenario.jump_across, discovered=scenario.discovered,
                 cast_level=scenario.cast_level, ward_expiry=scenario.ward_expiry,
-                ward_retained=scenario.ward_retained)
+                ward_retained=scenario.ward_retained, retain_field=scenario.retain_field)
         case ControlSpellCase() as scenario:
             return control_spell_history(program=scenario.program, saved=scenario.saved,
                 remove_first=scenario.remove_first, repeat_source=scenario.repeat_source)
@@ -87,6 +89,9 @@ def produce(case: ReviewCase) -> CapturedHistory:
         case HealingBatchCase() as scenario:
             return healing_batch_history(program=scenario.program, self_target=scenario.self_target,
                 clean_target=scenario.clean_target)
+        case SupportConditionCase() as scenario:
+            return support_condition_history(program=scenario.program, self_target=scenario.self_target,
+                ability=scenario.ability, mode=scenario.mode)
         case TrueStrikeCase() as scenario:
             return true_strike_history(ranged=scenario.ranged, miss=scenario.miss)
         case CantripCase() as scenario:

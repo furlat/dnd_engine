@@ -147,4 +147,5 @@ def condition_fact(event: Event, *, source_index: int | None = None) -> Conditio
         state=state, resulting_stats=event.resulting_stats,
         resulting_tile=None if isinstance(event, ConditionStateChangedEvent) else event.resulting_tile,
         resulting_item=None if isinstance(event, ConditionStateChangedEvent) else event.resulting_item,
+        consumed=isinstance(event, ConditionRemovalEvent) and event.consumed,
     )

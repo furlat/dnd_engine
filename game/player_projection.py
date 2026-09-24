@@ -351,6 +351,10 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
         case HealEvent():
             return (None if target is None else HealFact(source_entity_uuid=source, target_entity_uuid=target,
                 actual_healing=event.actual_healing, was_blocked=event.was_blocked,
+                source_condition_uuid=event.source_condition_uuid if target in actors and any(
+                    member.condition_uuid == event.source_condition_uuid
+                    and member.category is not ConditionCategory.INTERNAL
+                    for member in actors[target].conditions) else None,
                 resulting_normal_hp=event.resulting_normal_hp, resulting_temporary_hp=event.resulting_temporary_hp))
         case TemporaryHitPointsChangedEvent():
             return (None if event.entity_uuid not in known or not _identified(event, event.entity_uuid, observer)
@@ -415,7 +419,8 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
             return TurnFact(event_type=event.event_type, entity_uuid=None, round_number=None)
         case _ if condition is not None:
             return (None if target is None or condition.category is ConditionCategory.INTERNAL else
-                ConditionChangeFact(target_entity_uuid=target, event_type=event.event_type, condition=condition))
+                ConditionChangeFact(target_entity_uuid=target, event_type=event.event_type, condition=condition,
+                    consumed=condition.consumed))
         case CounterspellReactionEvent():
             return (None if source is None or target is None else ActionFact(
                 source_entity_uuid=source, target_entity_uuid=target,

@@ -39,12 +39,12 @@ def test_sleep_uses_advancing_loop_and_arbitrary_phase_clear_without_restarting(
     assert len(half) == 2 and all(attachment == "face" and row.alpha == pytest.approx(.5)
                                   for attachment, row in half)
     long = samples(data, actor, appearance, record, 19435)
-    assert len(long) == 2 and all(row.frame == int(18435 * .144) % 576 for _, row in long)
+    assert len(long) == 2 and all(row.frame == int(18435 * .032) % 128 for _, row in long)
     cleared = replace(record, removed_ms=19435,
         removed_layers=tuple(layer.layer.assetId for layer in appearance.layers))
     tail = samples(data, actor, ConditionAppearance(), cleared, 19635)
     assert len(tail) == 2
-    assert all(row.frame == int(18635 * .144) % 576 and row.alpha == pytest.approx(.5) for _, row in tail)
+    assert all(row.frame == int(18635 * .032) % 128 and row.alpha == pytest.approx(.5) for _, row in tail)
     assert not samples(data, actor, ConditionAppearance(), cleared, 19835)
     assert samples(data, actor, appearance, record, 19435) == long
 
@@ -59,7 +59,7 @@ def test_senses_use_authored_intro_loop_and_finite_removal(data, identity, stem)
     cleared = replace(record, removed_ms=3600,
         removed_layers=tuple(layer.layer.assetId for layer in appearance.layers))
     tail = samples(data, actor, ConditionAppearance(), cleared, 3850)
-    assert len(tail) == 2 and all(f"{stem}.removal" in row.asset_id and row.frame == 36 for _, row in tail)
+    assert len(tail) == 2 and all(f"{stem}.removal" in row.asset_id and row.frame == 8 for _, row in tail)
     assert not samples(data, actor, ConditionAppearance(), cleared, 4300)
 
 
@@ -69,7 +69,7 @@ def test_command_executes_on_recorded_activation_then_never_returns_to_pending(d
     assert len(pending) == 2 and all("command.sustain" in row.asset_id for _, row in pending)
     activated = replace(record, activated_ms=5100)
     execution = samples(data, actor, appearance, activated, 5350)
-    assert len(execution) == 2 and all("command.execute" in row.asset_id and row.frame == 36
+    assert len(execution) == 2 and all("command.execute" in row.asset_id and row.frame == 8
                                      for _, row in execution)
     assert not samples(data, actor, appearance, activated, 7000)
     cleared = replace(activated, removed_ms=5400,
@@ -100,5 +100,5 @@ def test_clear_during_sleep_fade_never_brightens_the_clearing_particles(data):
     for at, opacity in ((1100, .5), (1150, .4375), (1200, .375), (1300, .25)):
         layers = samples(data, actor, ConditionAppearance(), cleared, at)
         assert len(layers) == 2
-        assert all(row.alpha == pytest.approx(opacity) and row.frame == int((at - 1000) * .144)
+        assert all(row.alpha == pytest.approx(opacity) and row.frame == int((at - 1000) * .032)
                    for _, row in layers)

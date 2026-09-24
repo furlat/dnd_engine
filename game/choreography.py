@@ -33,7 +33,8 @@ from game.portal_animation import (PortalTransferCue, bind_portal_transfer,
     portal_departure_contact, portal_arrival_contact, portal_actor_hidden)
 from game.combat import BoundCast, BoundEquipment, actor_contact, actor_is_visible, bind_cast, bind_equipment
 from game.condition_animation import (ConditionTimeline, ConditionSample, compile_condition, sample_condition,
-                                      bind_condition_body, sample_condition_body, resolve_condition_appearance)
+                                      bind_condition_body, sample_condition_body, resolve_condition_appearance,
+                                      ConditionResponseCue, bind_condition_response)
 from game.condition_reaction import bind_condition_interception_media, bind_condition_reaction_bodies
 from game.interruption import (ReactionMediaCue, bind_reaction_media, interruption_rule,
     interruption_ms, interrupt_body, interrupt_delivery, interrupt_sample)
@@ -135,6 +136,7 @@ class BoundChoreography:
     turn_starts: tuple[tuple[float, UUID], ...] = ()
     contact_media: tuple[StationaryMediaCue, ...] = ()
     reaction_media: tuple[ReactionMediaCue, ...] = ()
+    condition_responses: tuple[ConditionResponseCue, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,6 +244,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     recorded_transitions: list[WorldTransition] = []
     external_reactions: list[BodyActionCue] = []
     reaction_media: list[ReactionMediaCue] = []
+    condition_responses: dict[tuple[UUID, UUID], ConditionResponseCue] = {}
     world_events = {update.event_uuid: update for update in lineage.world_updates}
     spatial_contents = {identity: effect.content_ref.content_id
         for identity, effect in (before.senses.spatial_effects.items() if before.senses is not None else ())}
@@ -766,6 +769,13 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 state_nodes.append((state_time, replace(event, fact=timed_fact)))
         if event.uuid in facts and facts[event.uuid].category != ConditionCategory.INTERNAL:
             pending_conditions.append((reaction_condition_times.get(event.uuid, at), event, override))
+            if (isinstance(fact, ConditionChangeFact) and fact.event_type is EventType.CONDITION_REMOVAL
+                    and fact.consumed):
+                response = bind_condition_response(event.uuid, fact.target_entity_uuid, fact.condition,
+                    "consumed", reaction_condition_times.get(event.uuid, at), data.condition_recipes)
+                if response is not None:
+                    condition_responses[response.event_uuid, response.owner_uuid] = response
+                    end = max(end, response.end_ms)
         if isinstance(fact, TemporaryHitPointsFact):
             state_nodes.append((state_at_effect if state_at_effect is not None else at, event))
         if isinstance(fact, DamageFact) and fact.stage == "applied":
@@ -827,6 +837,16 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
         if isinstance(fact, HealFact) and not fact.was_blocked:
             healing.append(HealingCue(event, at))
             state_nodes.append((at, event))
+            if fact.actual_healing > 0 and fact.source_condition_uuid is not None:
+                prior = _before_event(before, lineage, event)
+                actor = prior.actors.get(fact.target_entity_uuid)
+                member = next((row for row in actor.conditions if row.condition_uuid == fact.source_condition_uuid), None) if actor else None
+                if member is not None:
+                    response = bind_condition_response(event.uuid, fact.target_entity_uuid, member,
+                        "healed", at, data.condition_recipes)
+                    if response is not None:
+                        condition_responses[response.event_uuid, response.owner_uuid] = response
+                        end = max(end, response.end_ms)
             context = data.healing_context
             if context.bodyClip != "none":
                 gaps.append((event.uuid, f"Healing bodyClip {context.bodyClip!r} is not bound"))
@@ -1010,6 +1030,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                           if owned_by(cue.event_uuid, event_uuid))
         child_ends.extend(cue.end_ms for cue in strips if owned_by(cue.event_uuid, event_uuid))
         child_ends.extend(cue.end_ms for cue in body_hops if owned_by(cue.event_uuid, event_uuid))
+        child_ends.extend(cue.end_ms for cue in condition_responses.values() if owned_by(cue.event_uuid, event_uuid))
         if not child_ends:
             continue
         if is_body:
@@ -1135,7 +1156,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                                  for cue in movements for change in cue.timeline.residue_reveals),
                              body_hops=tuple(body_hops), portals=tuple(portals), stationary_media=tuple(stationary),
                              turn_starts=tuple(turn_starts), contact_media=tuple(contact_media),
-                             reaction_media=tuple(reaction_media))
+                             reaction_media=tuple(reaction_media), condition_responses=tuple(condition_responses.values()))
 
 
 def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> ChoreographySample:

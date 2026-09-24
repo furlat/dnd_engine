@@ -98,11 +98,20 @@ def test_reimport_keeps_tuned_recipes_resources_and_selected_color_revision(tmp_
     assert json.loads((data / 'bindings.json').read_text()) == bindings_after
 
 
-def test_ice_page_reimport_keeps_authored_body_contact_and_child_burst(tmp_path):
+@pytest.mark.parametrize("selected_from_delivery", (False, True))
+def test_ice_page_reimport_keeps_authored_body_contact_and_child_burst(tmp_path, selected_from_delivery):
     repo, source = tmp_path / 'repo', tmp_path / 'source'
     data = copy_bundle(repo, 'ice_spells')
     copy_bundle(repo, 'spell_recovery')
     authored = (data / 'spell-studio-drafts.json').read_bytes()
+    bindings = json.loads((data / 'bindings.json').read_text())
+    if selected_from_delivery:
+        bindings['projectileStorage']['ice.v8.ice_knife.travel'] = {'phases': {'travel': {'layers': [
+            {'pattern': 'game/assets/ice_spells/previous/{direction}/{frame}.png', 'blendMode': 'normal'}]}}}
+        write_json(data / 'bindings.json', bindings)
+    travel_before = bindings['projectileStorage']['ice.v8.ice_knife.travel']
+    travel_asset_before = next(row for row in json.loads((data / 'projectile-assets.json').read_text())
+                              if row['assetId'] == 'ice.v8.ice_knife.travel')
     source.mkdir()
     (source / 'page.png').write_bytes(b'delivered page')
     (source / 'source-hand-noise.png').write_bytes(b'delivered noise')
@@ -120,10 +129,15 @@ def test_ice_page_reimport_keeps_authored_body_contact_and_child_burst(tmp_path)
 
     assert (data / 'spell-studio-drafts.json').read_bytes() == authored
     assert 'spell.ice_knife.burst' in json.loads(authored)['effectDrafts']
-    assert (repo / 'game/assets/ice_spells/page.png').read_bytes() == b'delivered page'
     asset = next(row for row in json.loads((data / 'projectile-assets.json').read_text())
                  if row['assetId'] == 'ice.v8.ice_knife.travel')
-    assert asset['anchorsByFacing']['E'] == {'x': 250 / 512, 'y': 200 / 512}
+    if selected_from_delivery:
+        assert (repo / 'game/assets/ice_spells/page.png').read_bytes() == b'delivered page'
+        assert asset['anchorsByFacing']['E'] == {'x': 250 / 512, 'y': 200 / 512}
+    else:
+        assert not (repo / 'game/assets/ice_spells/page.png').exists()
+        assert asset == travel_asset_before
+        assert json.loads((data / 'bindings.json').read_text())['projectileStorage']['ice.v8.ice_knife.travel'] == travel_before
     assert json.loads((data / 'bindings.json').read_text())['projectileStorage']['ice.v8.ice_knife.impact'] == selected
     assert next(row for row in json.loads((data / 'projectile-assets.json').read_text())
                 if row['assetId'] == 'ice.v8.ice_knife.impact') == selected_asset

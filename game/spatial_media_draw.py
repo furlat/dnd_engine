@@ -18,7 +18,7 @@ from game.player_facts import PlayerState
 from game.projection import Camera, TILE_WIDTH, painter_key, project_screen, rotate_position, inverse_rotate_position
 from game.registered_media import registered_media_samples
 from game.spatial_field import field_cell, line_field_supports, line_owned_supports
-from game.volume_media import SurfaceVolume
+from game.volume_media import ExcludedSphere, SurfaceVolume
 from game.spatial_media_lifetime import SpatialMediaLifetime
 from game.spatial_field_media import field_media_commands, spatial_origin
 from game.world_animation import WorldTransitionSample
@@ -61,6 +61,7 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
               and 0 <= sample.elapsed_ms < sample.transition.spatial_motion.duration_ms}
     for identity, effect in effects.items():
         translation = (0., 0.)
+        previous_suppressions = ()
         movement = moving.get(identity)
         if movement is not None:
             path = movement.transition.spatial_motion
@@ -69,6 +70,7 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
             remaining = 1 - movement.elapsed_ms / path.duration_ms
             translation = ((start_position[0] - end_position[0]) * remaining,
                            (start_position[1] - end_position[1]) * remaining)
+            previous_suppressions = path.before.suppressions
             effect = path.after
         binding = data.spatial_media.get(effect.content_ref.content_id)
         geometry = effect.area_geometry
@@ -77,8 +79,23 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
         lifetime = lifetimes.get(identity)
         start = lifetime.applied_ms if lifetime is not None else None
         removed = lifetime.removed_ms if lifetime is not None else None
+        resolved_protections = {row.provider_uuid: row for row in (*previous_suppressions, *effect.suppressions)}
+        protections = tuple(suppression for suppression in resolved_protections.values()
+            if suppression.provider_content_ref is not None
+            and suppression.provider_content_ref.content_id in data.spatial_media
+            and isinstance(suppression.area_geometry, SpherePresentationGeometry)
+            and suppression.anchor_elevation_steps is not None)
+        exclusions = tuple(ExcludedSphere(str(suppression.provider_uuid),
+            suppression.area_geometry.center, suppression.anchor_elevation_steps,
+            suppression.area_geometry.radius_feet / 5,
+            data.spatial_media[suppression.provider_content_ref.content_id].surfaceHeightScale)
+            for suppression in protections
+            if isinstance(suppression.area_geometry, SpherePresentationGeometry)
+            and suppression.anchor_elevation_steps is not None and suppression.provider_content_ref is not None)
         for layer_index, layer in enumerate(binding.layers):
-            if layer.composition not in ("floor", "xy_volume", "clump"):
+            field_layer = (layer.composition in ("floor", "xy_volume", "clump")
+                or layer.composition == "xyz_volume" and isinstance(geometry, SpherePresentationGeometry))
+            if not field_layer:
                 continue
             alpha = maintained_media_alpha(binding, layer, presentation_ms, removed)
             if alpha <= 0:
@@ -88,27 +105,42 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
                 asset_id, frame = selected
                 admitted = (tuple(position for position in effect.positions
                     if position in visible or position in effect.visible_volume_positions)
-                    if layer.composition == "xy_volume" else effect.positions)
+                    if layer.composition in ("xy_volume", "xyz_volume") else effect.positions)
+                if layer.composition == "xyz_volume":
+                    # These cells were withheld by an observed native protection,
+                    # not by missing visibility. Only the true sphere is removed;
+                    # the authored cloud above/outside it remains drawable.
+                    admitted = tuple(dict.fromkeys((*admitted,
+                        *(position for suppression in effect.suppressions
+                          if suppression in protections for position in suppression.positions))))
                 commands.extend(field_media_commands(state, data, identity, geometry, admitted,
                     binding, layer, layer_index, asset_id, frame, camera, alpha, translation,
-                    anchor_elevation_steps=effect.anchor_elevation_steps))
+                    anchor_elevation_steps=effect.anchor_elevation_steps, area=area, exclusions=exclusions))
         if not isinstance(geometry, (LinePresentationGeometry, SpherePresentationGeometry)):
             continue
         origin = geometry.origin if isinstance(geometry, LinePresentationGeometry) else geometry.center
         origin_tile = state.tiles.get(origin)
-        if origin_tile is None:
-            continue
-        # The shell depicts disclosed geometry, not hidden cell/actor state.
-        # Without a currently observed center there is no supported registration.
-        if isinstance(geometry, SpherePresentationGeometry) and (origin not in visible or not effect.positions):
-            continue
-        height = origin_tile.elevation_steps
+        if isinstance(geometry, SpherePresentationGeometry):
+            # Current surface observation is independent of sight of the center
+            # ground/occupants. Remembered geometry alone is not permission.
+            if not effect.visible_volume_positions and not visible.intersection(effect.positions):
+                continue
+            height = effect.anchor_elevation_steps
+            if height is None:
+                height = origin_tile.elevation_steps if origin_tile is not None else None
+            if height is None:
+                continue
+        else:
+            if origin_tile is None:
+                continue
+            height = origin_tile.elevation_steps
         facing = view_facing(facing_for_delta(geometry.direction, data) if isinstance(geometry, LinePresentationGeometry)
                              else "E", camera.quadrant, data)
         anchor = project_screen(origin, camera, elevation_steps=height)
         observed = frozenset(effect.positions)
         for layer_index, layer in enumerate(binding.layers):
-            if layer.composition in ("floor", "xy_volume", "clump"):
+            if (layer.composition in ("floor", "xy_volume", "clump")
+                    or layer.composition == "xyz_volume" and isinstance(geometry, SpherePresentationGeometry)):
                 continue
             alpha = maintained_media_alpha(binding, layer, presentation_ms, removed)
             if alpha <= 0:

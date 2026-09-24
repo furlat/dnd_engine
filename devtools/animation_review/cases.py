@@ -186,6 +186,16 @@ class HealingBatchCase(BaseModel):
     clean_target: bool = False
 
 
+class SupportConditionCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["support-condition"]
+    program: Literal["death_ward", "stoneskin", "protection_from_poison", "enhance_ability",
+                     "regenerate", "remove_curse", "freedom_of_movement"]
+    self_target: bool = False
+    ability: Literal["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"] = "strength"
+    mode: Literal["lifecycle", "lethal", "instant", "clean", "full_hp"] = "lifecycle"
+
+
 class TrueStrikeCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["true-strike"]
@@ -204,11 +214,12 @@ class InterruptionCase(BaseModel):
 class GlobeCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["globe"]
-    spell: Literal["fireball", "fire_bolt", "ice_knife"] = "fireball"
+    spell: Literal["fireball", "fire_bolt", "ice_knife", "fog_cloud", "darkness", "cloudkill", "incendiary_cloud"] = "fireball"
     protection: bool = True
     source_inside: bool = False
     impact_offset: tuple[int, int] = (3, 0)
     walls: Literal["none", "wall", "door", "l-wall", "corridor"] = "none"
+    retain_field: bool = False
 
 
 class PersistentSpellCase(BaseModel):
@@ -223,11 +234,12 @@ class PersistentSpellCase(BaseModel):
     saved: bool = True
     jump: bool = False
     jump_across: bool = False
-    environment: Literal["flat", "raised", "wall"] = "flat"
+    environment: Literal["flat", "raised", "wall", "edge-wall"] = "flat"
     discovered: bool = True
     cast_level: int | None = Field(default=None, ge=1, le=9)
     ward_expiry: bool = False
     ward_retained: bool = False
+    retain_field: bool = False
 
 
 class ControlSpellCase(BaseModel):
@@ -401,7 +413,7 @@ class ReviewCase(BaseModel):
     framing: Literal["scene", "actors"] = "scene"
     initial_facings: tuple[ReviewFacing, ...] = ()
     scenario: Annotated[AttackCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | SupportCase | HealingBatchCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
+                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)

@@ -6,7 +6,7 @@ from math import ceil, floor
 import numpy as np
 import pygame
 
-from dnd.core.geometry import line_positions
+from dnd.core.geometry import circle_positions, line_positions
 from game.projection import Camera, TILE_HEIGHT, TILE_WIDTH, inverse_plane, project_world
 
 
@@ -71,6 +71,41 @@ def line_owned_supports(candidates: tuple[tuple[int, int], ...], origin: tuple[i
     """The same disclosed ownership for raster supports and true XYZ samples."""
     return tuple(position for position in candidates if position in visible
         and _line_owner(origin, direction, length_tiles, width_tiles, position) in positions)
+
+
+@lru_cache(maxsize=64)
+def _sphere_owners(center: tuple[int, int], radius: int,
+                   bounds: tuple[int, int, int, int]) -> tuple[tuple[int, int], ...]:
+    x0, y0, x1, y1 = bounds
+    return tuple(sorted(position for position in circle_positions(center, radius)
+        if x0 <= position[0] <= x1 and y0 <= position[1] <= y1))
+
+
+@lru_cache(maxsize=2048)
+def _sphere_owner(center: tuple[int, int], radius: int, bounds: tuple[int, int, int, int],
+                  position: tuple[int, int]) -> tuple[int, int]:
+    owners = _sphere_owners(center, radius, bounds)
+    return min(owners, key=lambda point: (
+        (point[0] - position[0]) ** 2 + (point[1] - position[1]) ** 2, point))
+
+
+def sphere_field_owners(cells: np.ndarray, center: tuple[int, int], radius: int,
+                        bounds: tuple[int, int, int, int]) -> np.ndarray | None:
+    """Associate decorative air with the full declared sphere's edge.
+
+    As with line fields, ownership is independent of the observed subset.
+    Interior holes and undisclosed edges stay holes after permission lookup.
+    This changes neither the authored XYZ nor the native occupied positions.
+    """
+    if not _sphere_owners(center, radius, bounds):
+        return None
+    # The small source-cell lattice is stable over the animation. Decode its
+    # owners once per cell, rather than finding a nearest cell for every pixel.
+    x0, y0 = cells.min(axis=(0, 1))
+    x1, y1 = cells.max(axis=(0, 1))
+    lookup = np.array([[_sphere_owner(center, radius, bounds, (x, y))
+        for y in range(int(y0), int(y1) + 1)] for x in range(int(x0), int(x1) + 1)], dtype=np.int32)
+    return lookup[cells[:, :, 0] - x0, cells[:, :, 1] - y0]
 
 
 @lru_cache(maxsize=512)

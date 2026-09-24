@@ -100,12 +100,14 @@ def test_eldritch_overlapping_preparation_and_held_release_preserve_individual_h
     )))
     launches = [row.travel_start_ms for row in timeline.applications]
     assert launches == pytest.approx([timeline.release_ms + index * 160 for index in range(4)])
-    # Delivered preparation is a complete 72-frame/144-Hz strip, allowed to
+    # Delivered preparation is a complete half-second strip, allowed to
     # overlap release rather than getting shortened to the release boundary.
+    preparation = next(row for row in timeline.applications[0].projectile_intervals if row.name == "prepare")
     early = sample_cast(timeline, 333.333333 + .01)
     last_prepare = sample_cast(timeline, 833.333333 - .01)
-    assert [(row.phase, row.column) for row in early.projectiles] == [("prepare", 260)]
-    assert any(row.phase == "prepare" and row.column == 331 for row in last_prepare.projectiles)
+    assert [(row.phase, row.column) for row in early.projectiles] == [("prepare", preparation.phase.start)]
+    assert any(row.phase == "prepare" and row.column == preparation.phase.start + preparation.phase.frames - 1
+               for row in last_prepare.projectiles)
     assert not any(row.phase == "prepare" for row in sample_cast(timeline, 833.333334).projectiles)
     for time in (timeline.release_ms, 800, launches[-1]):
         assert sample_cast(timeline, time).bodies[0].frame == timeline.recipe.cast.releaseFrame

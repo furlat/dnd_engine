@@ -13,20 +13,25 @@ from dnd.core.gridmap import get_map
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.entity import Entity
-from dnd.spells.conjuration import Cloudkill, FogCloud
+from dnd.runtime_reset import reset_engine_runtime
+from dnd.scenarios.battlefield_catalog import build_battlefield
+from dnd.spells.abjuration import GlobeOfInvulnerability
+from dnd.spells.conjuration import Cloudkill, CloudkillZone, FogCloud
 from game.animation import view_facing
 from game.animation_data import load_animation_data
 from game.animation_types import ProjectileStorage, SpatialMediaBinding, SpatialMediaLayer
 from game.choreography import bind_choreography, sample_choreography
 from game.maintained_media import maintained_media_alpha, maintained_media_frame
 from game.player_reduction import decode_player_sequence, reduce_lineage
-from game.projection import Camera
+from game.projection import Camera, TILE_WIDTH
+from game.registered_media import registered_media_samples
+from game.volume_media import compose_volume
 from game.projection import HEIGHT_STEP_PIXELS, project_screen, project_world
 from game.spatial_media_draw import spatial_media_draw_commands
 from game.spatial_media_lifetime import register_spatial_lifetimes
 from game.world_animation import sample_world_transitions
 from tests.game.test_spell14_native_facts import actors, saved_views
-from tests.engine.test_spell_families import create_family_target
+from tests.engine.test_spell_families import create_family_caster, create_family_target
 
 
 @pytest.fixture(scope="module")
@@ -37,7 +42,8 @@ def rendering():
     pygame.quit()
 
 
-def test_saved_native_cloud_displacement_holds_received_membership_until_arrival(rendering):
+@pytest.mark.parametrize("production", (False, True))
+def test_saved_native_cloud_displacement_holds_received_membership_until_arrival(rendering, production):
     caster, witness = actors()
     start = EventQueue.event_cursor()
     cast = Cloudkill(source_entity_uuid=caster.uuid, end_position=(7, 4), template=False).apply()
@@ -51,13 +57,12 @@ def test_saved_native_cloud_displacement_holds_received_membership_until_arrival
         before = reduce_lineage(before, cast_root)
         assert before.senses is not None
         effect = before.senses.spatial_effects[zone.uuid]
-        # Small known media isolates the shared movement contract; source Cloudkill
-        # art is tested separately after its missing volume export is delivered.
+        # Keep a tiny geometry probe as well as the actual delivered Cloudkill bank.
         authored = SpatialMediaBinding(layers=(SpatialMediaLayer(
             assetId="liquid.water.s0.air.application", applicationAssetId="liquid.water.s0.air.application",
             composition="volume", offsetCells=(-4., 0.)),),
             holdStartFrame=0, holdFrames=68, fps=144., scale=1., movementSpeedCellsPerSecond=2.)
-        data = replace(rendering, spatial_media={effect.content_ref.content_id: authored})
+        data = rendering if production else replace(rendering, spatial_media={effect.content_ref.content_id: authored})
         group = bind_choreography(before, root, data)
         motion, = (change for change in group.world_transitions if change.spatial_motion is not None)
         assert motion.spatial_motion is not None
@@ -80,6 +85,54 @@ def test_saved_native_cloud_displacement_holds_received_membership_until_arrival
             assert commands, (quadrant, effect.positions, motion.spatial_motion.after.positions)
             assert {command.evidence[0] for command in commands} == {str(zone.uuid)}
     assert EventQueue.event_cursor() == 0
+
+
+def test_saved_cloud_leaving_globe_retains_known_sphere_through_visual_departure(rendering):
+    reset_engine_runtime()
+    build_battlefield("battlefield.open_floor_bright")
+    caster = create_family_caster(position=(1, 7), spell_slots={5: 1})
+    protector = create_family_caster("Globe owner", position=(7, 7), spell_slots={6: 1})
+    Entity.update_all_entities_senses(max_distance=120)
+    ward = GlobeOfInvulnerability(source_entity_uuid=protector.uuid, template=False).apply()
+    cast = Cloudkill(source_entity_uuid=caster.uuid, end_position=(12, 7), template=False).apply()
+    assert ward is not None and not ward.canceled and cast is not None and not cast.canceled
+    cloud = next(effect for effect in get_map().get_spatial_conditions() if isinstance(effect, CloudkillZone))
+    identity = cloud.uuid
+    cause, = cloud.spatial_suppressions
+    assert cause.positions
+    start = EventQueue.event_cursor()
+    caster.on_turn_start(round_number=2, turn_index=0)
+    assert cloud.position == (14, 7) and not cloud.spatial_suppressions
+    views = saved_views((caster, protector), start)
+    for payload in views.values():
+        state, heads = decode_player_sequence(payload)
+        head, = heads
+        group = bind_choreography(state, head, rendering)
+        transition, = (row for row in group.world_transitions if row.spatial_motion is not None)
+        path = transition.spatial_motion
+        assert path is not None and path.before.suppressions and not path.after.suppressions
+        for fraction in (0., .25, .75):
+            now = transition.start_ms + fraction * path.duration_ms
+            sample = sample_choreography(group, now)
+            for quadrant in range(4):
+                commands = spatial_media_draw_commands(sample.displayed, rendering, 2000.,
+                    Camera(quadrant=quadrant), sample_world_transitions(group.world_transitions, now))
+                cloud_commands = tuple(row for row in commands if row.evidence[0] == str(identity))
+                assert cloud_commands
+                for row in cloud_commands:
+                    assert row.volume is not None
+                    sphere, = row.volume.exclusions
+                    assert sphere.provider == str(cause.provider_uuid)
+                    assert sphere.center == (7, 7), "The observed Globe stays fixed as the cloud moves"
+                    assert row.volume.center == pytest.approx((12 + 2 * fraction, 7))
+        now = transition.start_ms + path.duration_ms
+        arrived = sample_choreography(group, now)
+        commands = spatial_media_draw_commands(arrived.displayed, rendering, 2000., Camera(),
+            sample_world_transitions(group.world_transitions, now))
+        cloud_commands = tuple(row for row in commands if row.evidence[0] == str(identity))
+        assert cloud_commands and all(row.volume is not None and not row.volume.exclusions
+                                      for row in cloud_commands)
+    assert EventQueue.event_cursor() == 0, "The comparison renders saved facts after native teardown"
 
 
 def test_cold_volume_uses_observed_elevation_without_disclosing_ground(rendering):
@@ -116,7 +169,8 @@ def test_cold_volume_uses_observed_elevation_without_disclosing_ground(rendering
 
 
 @pytest.mark.parametrize("delay_ms", (0., 7000.))
-def test_native_cloud_removal_fades_continuing_application_or_hold(rendering, delay_ms):
+@pytest.mark.parametrize("production", (False, True))
+def test_native_cloud_removal_fades_continuing_application_or_hold(rendering, delay_ms, production):
     caster, _ = actors()
     start = EventQueue.event_cursor()
     cast = Cloudkill(source_entity_uuid=caster.uuid, end_position=(7, 4), template=False).apply()
@@ -128,13 +182,32 @@ def test_native_cloud_removal_fades_continuing_application_or_hold(rendering, de
         applicationAssetId="liquid.water.s0.air.application", composition="volume")
     binding = SpatialMediaBinding(layers=(layer,), holdStartFrame=0, holdFrames=288,
         fps=144., scale=1., removalFadeMs=630., removalEasing="smoothstep")
-    data = replace(rendering, spatial_media={"spatial_effect.spell.cloudkill": binding})
+    if production:
+        binding = rendering.spatial_media["spatial_effect.spell.cloudkill"]
+        layer, = binding.layers
+        data = rendering
+        # The authored loop repeats; the event-owned field must not expire with it.
+        if delay_ms:
+            assert layer.applicationAssetId is not None
+            asset = data.projectile_assets[layer.applicationAssetId]
+            phase = asset.phases.impact
+            assert phase is not None
+            application_ms = phase.frames * 1000 / (phase.fps or asset.fps)
+            delay_ms = application_ms + 2 * binding.holdFrames * 1000 / binding.fps + 250.
+    else:
+        data = replace(rendering, spatial_media={"spatial_effect.spell.cloudkill": binding})
     records, clock = {}, 0.
     for head in heads:
         group = bind_choreography(state, head, data)
         records = register_spatial_lifetimes(records, state, data, absolute_start_ms=clock,
             lineage=head, choreography=group)
         state = reduce_lineage(state, head)
+        if production and state.senses is not None and state.senses.spatial_effects:
+            held, = records.values()
+            assert held.applied_ms is not None and held.removed_ms is None
+            later = register_spatial_lifetimes(records, state, data,
+                absolute_start_ms=clock + group.complete_ms + delay_ms)
+            assert later == records, "Media time alone must not create native removal"
         clock += group.complete_ms + delay_ms
     record, = records.values()
     assert record.applied_ms is not None and record.removed_ms is not None
@@ -235,3 +308,48 @@ def test_saved_fog_upcast_scales_pixels_registration_and_world_ownership_togethe
                 assert [(r.destination, pygame.image.tobytes(r.surface, "RGBA")) for r in commands] == [
                     (r.destination, pygame.image.tobytes(r.surface, "RGBA")) for r in baseline]
     assert EventQueue.event_cursor() == 0
+
+
+@pytest.mark.parametrize("quadrant", range(4))
+def test_saved_moving_cloud_keeps_complete_art_at_an_open_map_edge(rendering, quadrant):
+    """The native cloud travels to the edge; decorative air has no wall there."""
+    caster, _ = actors()
+    Entity.update_entity_position(caster, (4, 8))
+    Entity.update_all_entities_senses(max_distance=20)
+    start = EventQueue.event_cursor()
+    cast = Cloudkill(source_entity_uuid=caster.uuid, end_position=(10, 8), template=False).apply()
+    assert cast is not None and not cast.canceled
+    caster.on_turn_start(round_number=2, turn_index=0)
+    payload, = saved_views((caster,), start).values()
+    before, heads = decode_player_sequence(payload)
+    before = reduce_lineage(before, heads[0])
+    group = bind_choreography(before, heads[1], rendering)
+    transition, = (row for row in group.world_transitions if row.spatial_motion is not None)
+    path = transition.spatial_motion
+    assert path is not None and path.after.area_geometry is not None
+    geometry = path.after.area_geometry
+    assert isinstance(geometry, SpherePresentationGeometry) and geometry.center == (12, 8)
+    assert len(path.after.visible_volume_positions) == 43, "The entire map-clipped circle is observed"
+    binding = rendering.spatial_media[path.after.content_ref.content_id]
+    camera = Camera(quadrant=quadrant, viewport=(900, 700)).with_focus((11, 8))
+    for fraction in (0., .25, .5, .71875, .99, 1.):
+        age = transition.start_ms + fraction * path.duration_ms
+        sample = sample_choreography(group, age)
+        commands = spatial_media_draw_commands(sample.displayed, rendering, 0., camera,
+            sample_world_transitions(group.world_transitions, age))
+        actual = pygame.Surface(camera.viewport, pygame.SRCALPHA)
+        for row in commands:
+            assert row.volume is not None
+            pixels, _ = compose_volume(row.surface, row.volume, camera, destination=row.destination)
+            actual.blit(pixels, row.destination, special_flags=row.blend)
+        # Reference is the authored bank, simply translated along the actual
+        # saved movement. No stencil or game membership enters this oracle.
+        expected = pygame.Surface(camera.viewport, pygame.SRCALPHA)
+        center = (10 + 2 * fraction, 8)
+        for part in registered_media_samples(rendering, binding.layers[0].assetId,
+                binding.assetPhase, 0, view_facing("E", quadrant, rendering),
+                scale=binding.scale * TILE_WIDTH / rendering.rig.TILE_W * camera.zoom,
+                anchor=project_screen(center, camera), rows={}, zoom=camera.zoom):
+            expected.blit(part.image, part.destination, special_flags=part.blend)
+        assert pygame.image.tobytes(actual, "RGBA") == pygame.image.tobytes(expected, "RGBA"), fraction
+    assert EventQueue.event_cursor() == 0, "No live world is consulted by this replay"

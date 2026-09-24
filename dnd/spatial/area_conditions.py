@@ -977,13 +977,18 @@ class AreaCondition(SpatialCondition):
         positions = {
             position for position in computed if grid.has_tile(*position)
         }
+        return self._apply_spell_protection(positions)
+
+    def _apply_spell_protection(self, positions: Set[Tuple[int, int]]) -> Set[Tuple[int, int]]:
+        """Resolve once, retaining the cause beside the resulting native cells."""
         spell_level = self._protection_spell_level()
         origin = self.effect_origin
+        self.spatial_suppressions = ()
         if spell_level is not None and self.magical_origin and origin is not None and origin.source_position is not None:
-            positions -= SpellProtectionRegistry.get_excluded_positions(
-                origin.source_position,
-                spell_level,
-            )
+            self.spatial_suppressions = SpellProtectionRegistry.get_suppressions(
+                origin.source_position, spell_level, positions)
+            for suppression in self.spatial_suppressions:
+                positions.difference_update(suppression.positions)
         return positions
 
     def move_zone(
@@ -996,6 +1001,7 @@ class AreaCondition(SpatialCondition):
         if not self.is_active_spatial_condition() or position == self.position:
             return False
         previous_position = self.position
+        previous_suppressions = self.spatial_suppressions
         self.position = position
         try:
             grid = get_map()
@@ -1004,20 +1010,11 @@ class AreaCondition(SpatialCondition):
                 for cell in self._compute_affected_positions()
                 if grid.has_tile(*cell)
             }
-            spell_level = self._protection_spell_level()
-            origin = self.effect_origin
-            if (
-                spell_level is not None
-                and self.magical_origin
-                and origin is not None and origin.source_position is not None
-            ):
-                positions -= SpellProtectionRegistry.get_excluded_positions(
-                    origin.source_position,
-                    spell_level,
-                )
+            positions = self._apply_spell_protection(positions)
             return self.change_footprint(positions, parent_event=parent_event)
         except BaseException:
             self.position = previous_position
+            self.spatial_suppressions = previous_suppressions
             raise
 
     def _protection_spell_level(self) -> Optional[int]:

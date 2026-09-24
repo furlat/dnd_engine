@@ -27,11 +27,25 @@ def imported_media():
         pygame.quit()
 
 
+@pytest.mark.parametrize("spell", ("eldritch_blast", "ray_of_frost", "ice_knife", "poison_spray"))
+def test_repacked_projectiles_advance_on_the_32_fps_source_clock(imported_media, spell):
+    timeline = compile_cast(imported_media, "spell." + spell, CastInput(
+        "source-clock", ActorContact("caster", (0, 0), "E", .9), (
+            CastApplication("hit", ActorContact("target", (6, -4), "W", .9), False, None, None),)))
+    delivery, = cast_deliveries(timeline)
+    travel = next(interval for interval in delivery.projectile_intervals if interval.name == "travel")
+    assert travel.fps == 32
+    for elapsed, frame in ((0, 0), (125, 4), (250, 8)):
+        sample = sample_cast(timeline, travel.start_ms + elapsed)
+        effect, = (effect for effect in sample.projectiles if effect.phase == "travel")
+        assert effect.column - travel.phase.start == frame
+
+
 @pytest.mark.parametrize("spell,phase_counts", [
-    ("acid_splash", {"travel": (12, 24), "impact": (115, 144)}),
-    ("guiding_bolt", {"travel": (12, 24), "impact": (63, 144)}),
-    ("eldritch_blast", {"prepare": (72, 144), "travel": (144, 144), "impact": (116, 144)}),
-    ("fireball", {"travel": (12, 24), "impact": (48, 24)}),
+    ("acid_splash", {"travel": (12, 24), "impact": (26, 32)}),
+    ("guiding_bolt", {"travel": (12, 24), "impact": (14, 32)}),
+    ("eldritch_blast", {"prepare": (16, 32), "travel": (32, 32), "impact": (26, 32)}),
+    ("fireball", {"travel": (12, 24), "impact": (64, 32)}),
 ])
 def test_selected_cast_reaches_dense_phase_frames_and_layered_fireball(imported_media, spell, phase_counts):
     data = imported_media

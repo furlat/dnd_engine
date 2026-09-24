@@ -13,6 +13,7 @@ from dnd.core.content.identities import ContentRef
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.traps import TrapState
 from dnd.types.material_deposits import MaterialDepositSource
+from dnd.types.spell_suppression import SpellSuppression
 
 
 class SensesType(str, Enum):
@@ -73,6 +74,7 @@ class PerceivedSpatialEffect(BaseModel):
     area_geometry: AoEPresentationGeometry | None = None
     deposit_source: MaterialDepositSource | None = None
     visible_volume_positions: tuple[tuple[int, int], ...] = ()
+    suppressions: tuple[SpellSuppression, ...] = ()
 
 
 class SensesView(Protocol):

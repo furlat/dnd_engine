@@ -226,6 +226,7 @@ class HealFact:
     was_blocked: bool
     resulting_normal_hp: int | None
     resulting_temporary_hp: int | None
+    source_condition_uuid: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -269,6 +270,7 @@ class ConditionChangeFact:
     target_entity_uuid: UUID
     event_type: EventType
     condition: ConditionFact
+    consumed: bool = False
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

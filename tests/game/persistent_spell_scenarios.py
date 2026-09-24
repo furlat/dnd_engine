@@ -57,9 +57,10 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
         energy: Literal['Acid', 'Cold', 'Fire', 'Lightning', 'Thunder'] = 'Fire',
         saved: bool = True, jump: bool = False,
         shield_delivery: Literal['melee', 'ranged', 'missile'] = 'melee',
-        environment: Literal['flat', 'raised', 'wall'] = 'flat', jump_across: bool = False,
+        environment: Literal['flat', 'raised', 'wall', 'edge-wall'] = 'flat', jump_across: bool = False,
         discovered: bool = True, cast_level: int | None = None,
-        ward_expiry: bool = False, ward_retained: bool = False) -> CapturedHistory:
+        ward_expiry: bool = False, ward_retained: bool = False,
+        retain_field: bool = False) -> CapturedHistory:
     """Keep the same actors; cast, exercise the condition, then end real ownership."""
     random_state = random.getstate()
     reset_engine_runtime()
@@ -73,6 +74,9 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
     elif environment == 'wall':
         for y in range(6, 12):
             build_directional_wall().place_on_grid((11, y), boundary_direction=CardinalDirection.EAST)
+    elif environment == 'edge-wall':
+        for y in range(4, 14):
+            build_directional_wall().place_on_grid((14, y), boundary_direction=CardinalDirection.EAST)
     game = Game()
     try:
         positions = {'caster': (3, 6), 'target': (4, 6)}
@@ -217,7 +221,8 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
             perform(target, 'action.jump' if jump_across else 'action.move', position=positions['target'], fresh=True)
             if tired_grease_entry:
                 assert 'Prone' not in target.active_conditions
-            perform(caster, 'action.drop_concentration')
+            if not retain_field:
+                perform(caster, 'action.drop_concentration')
         elif program == 'shield':
             if shield_delivery == 'missile':
                 perform(target, 'spell.magic_missile', recipient=caster, dice=(3,) * 30)

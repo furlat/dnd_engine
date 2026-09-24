@@ -107,7 +107,11 @@ def test_production_six_spells_have_four_camera_ground_registration():
             for q in range(4):
                 parts = layer.partsByFacing[view_facing("E", q, data)]
                 assert len(parts) == asset.phases.impact.frames
-                assert all(f"q{q}" in str(part.file) for frame in parts for part in frame)
+                # Camera identity is tested with distinct pixels above. Packed
+                # production pages need not carry a camera number in their name.
+                decoded = projectile_frame_layers(data, asset, "impact", 16,
+                    view_facing("E", q, data), registered_material(asset.assetId, 1), {})
+                assert decoded and any(part.image.get_bounding_rect().width for part in decoded)
 
 
 def test_recipient_media_follows_actor_ground_height_and_uniform_scale():

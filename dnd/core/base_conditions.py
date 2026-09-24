@@ -37,6 +37,7 @@ from dnd.core.saving_throw_types import (
 )
 from dnd.core.content.identities import validate_namespaced_id
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
+from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.actor import ConditionState, EntityStatsState, OutcomeProtection as OutcomeProtection
 from dnd.types.world import OccupancyLayer
 from dnd.types.traps import TrapState
@@ -228,6 +229,7 @@ class ConditionRemovalEvent(Event):
         description="Primitive identity of the condition rule being removed.",
     )
     expired: bool = Field(default=False, description="Whether expiration caused this removal.")
+    consumed: bool = Field(default=False, description="Whether this exact condition was spent to produce its effect.")
     event_type: EventType = Field(default=EventType.CONDITION_REMOVAL, description="Condition removal event type.")
     source_entity_name: Optional[str] = Field(default=None, description="Display name of the source entity.")
     target_entity_name: Optional[str] = Field(default=None, description="Display name of the target entity.")
@@ -355,6 +357,7 @@ class BaseCondition(BaseObject):
         default=False,
         description="Whether removing this condition may reveal its target.",
     )
+    spatial_suppressions: Tuple[SpellSuppression, ...] = ()
 
     def saving_throw_context(
         self,
@@ -698,7 +701,8 @@ class BaseCondition(BaseObject):
             use_register=False,
         )
 
-    def _declare_removal_event(self, expired: bool = False, parent_event: Optional[Event] = None) -> Event:
+    def _declare_removal_event(self, expired: bool = False, parent_event: Optional[Event] = None,
+                               *, consumed: bool = False) -> Event:
         """Create the condition removal declaration event.
 
         Args:
@@ -717,6 +721,7 @@ class BaseCondition(BaseObject):
                 else None
             ),
             expired=expired,
+            consumed=consumed,
             source_entity_uuid=self.source_entity_uuid,
             target_entity_uuid=self.target_entity_uuid,
             phase=EventPhase.DECLARATION,
@@ -1163,6 +1168,16 @@ class SpellProtectionRegistry:
             if position in p.positions and source_position not in p.positions and spell_level <= p.max_blocked_level:
                 return True
         return False
+
+    @classmethod
+    def get_suppressions(cls, source_position: Tuple[int, int], spell_level: int,
+                         positions: Set[Tuple[int, int]]) -> Tuple[SpellSuppression, ...]:
+        """Retain the same protection decision and its actual footprint overlap."""
+        return tuple(SpellSuppression(provider_uuid=protection.uuid,
+                     positions=tuple(sorted(overlap)))
+            for protection in cls._protections
+            if source_position not in protection.positions and spell_level <= protection.max_blocked_level
+            if (overlap := positions & protection.positions))
 
     @classmethod
     def get_excluded_positions(cls, source_position: Tuple[int, int], spell_level: int) -> Set[Tuple[int, int]]:

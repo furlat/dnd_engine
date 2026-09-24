@@ -417,6 +417,12 @@ class StudioMediaTrack(AuthoredRecord):
     # Source pixels from whole-effect origin to the baked attachment point.
     emissionPointByFacing: FacingMap[Point] | None = None
 
+    @model_validator(mode="after")
+    def removal_gate_target(self) -> StudioMediaTrack:
+        if self.requireRemovedConditionTag is not None and not self.attachment.startswith("target_"):
+            raise ValueError("condition-removal media requires a target attachment")
+        return self
+
 
 class StudioContact(AuthoredRecord):
     """Presentation arrival; outcomes still come solely from native events."""

@@ -7,7 +7,7 @@ import pygame
 
 from game.animation import (
     ActorContact, BodySample, CastSample, CastTimeline, actor_point_offset, body_elevation_steps, body_rig,
-    facing_vector, media_track_duration, media_track_frame, view_facing, rest_pose_offset,
+    facing_vector, media_track_duration, media_track_frame, media_target_applies, view_facing, rest_pose_offset,
 )
 from game.animation_types import AnimationData, StudioMediaTrack
 from game.area_media import AreaLayer, AreaMedia
@@ -22,6 +22,9 @@ from game.projection import Camera, TILE_WIDTH, HEIGHT_STEP_PIXELS, painter_key,
 def preload_cast_media(timeline: CastTimeline) -> None:
     """Warm selected first pages only; the existing bounded cache owns decoding."""
     for track in timeline.recipe.media:
+        if track.requireRemovedConditionTag is not None and not any(
+                media_target_applies(track, application) for application in timeline.source.applications):
+            continue
         asset = timeline.data.projectile_assets[track.assetId]
         for quadrant in range(4):
             facing = view_facing(track.viewFacing or timeline.facing, quadrant, timeline.data)
@@ -153,6 +156,10 @@ def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera:
         asset = data.projectile_assets[track.assetId]
         contacts = targets if track.attachment.startswith("target_") else (source.caster,)
         for contact in contacts:
+            if track.requireRemovedConditionTag is not None and not any(
+                    application.target.actor_uuid == contact.actor_uuid and media_target_applies(track, application)
+                    for application in source.applications):
+                continue
             if track.onMiss == "omit" and any(application.target.actor_uuid == contact.actor_uuid
                     and application.hit is False for application in source.applications):
                 continue

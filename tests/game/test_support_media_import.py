@@ -106,13 +106,13 @@ def test_selected_support_reimport_preserves_media_registration_and_authored_own
                 'scale': .37, 'world_basis': 'SE', 'removal_fade_ms': 765, 'sustain_start_ms': 123}
 
 
-def test_support_recipes_retain_full_export_clock_ground_registration_and_no_damage():
+def test_support_recipes_retain_duration_ground_registration_and_no_damage():
     data = load_animation_data()
-    expected = {"cure_wounds": (432, 256, 72), "healing_word": (432, 256, 72),
-                "prayer_of_healing": (432, 384, 72), "guidance": (288, 256, 24),
-                "resistance": (288, 256, 24), "shield_of_faith": (576, 384, 96),
-                "light": (288, 256, 0), "thaumaturgy": (144, 256, 0)}
-    for name, (frames, cell, contact_frame) in expected.items():
+    expected = {"cure_wounds": (3000, 256, 500), "healing_word": (3000, 256, 500),
+                "prayer_of_healing": (3000, 384, 500), "guidance": (2000, 256, 1000 / 6),
+                "resistance": (2000, 256, 1000 / 6), "shield_of_faith": (4000, 384, 2000 / 3),
+                "light": (2000, 256, 0), "thaumaturgy": (1000, 256, 0)}
+    for name, (duration_ms, cell, contact_ms) in expected.items():
         recipe = data.drafts[f"spell.{name}"]
         assert recipe.damage is None and recipe.projectile is None and recipe.area is None
         assert recipe.contact is not None and recipe.contact.delayMs == 0
@@ -121,12 +121,13 @@ def test_support_recipes_retain_full_export_clock_ground_registration_and_no_dam
         assert recipe.cast.weaponGlow.sourceSheet in data.resources
         assert len(recipe.media) == 2
         for track, depth in zip(recipe.media, ("behind_body", "front_body"), strict=True):
-            assert track.depth == depth and track.scale == .5 and track.fps == 144
+            assert track.depth == depth and track.scale == .5 and track.fps == 32
             assert track.attachment == ("source_ground" if name == "thaumaturgy" else "target_ground")
-            assert track.startOffsetMs + contact_frame * 1000 / 144 == pytest.approx(0)
-            assert track.durationMs == frames * 1000 / 144
+            assert track.startOffsetMs + contact_ms == pytest.approx(0)
+            assert track.durationMs == duration_ms
             asset = data.projectile_assets[track.assetId]
-            assert asset.phases.impact is not None and asset.phases.impact.frames == frames
+            assert asset.phases.impact is not None
+            assert asset.phases.impact.frames * 1000 / track.fps == duration_ms
             assert (asset.frame.width, asset.frame.height) == (cell, cell)
             assert asset.anchor.x * cell == cell / 2
             assert asset.anchor.y * cell == pytest.approx(cell / 2 + 36.95041723)

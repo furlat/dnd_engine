@@ -3209,7 +3209,8 @@ class Entity(BaseBlock):
         source_entity_uuid: UUID,
         source_description: str = "",
         parent_event: Optional[UUID] = None,
-        spell_level: int = 0
+        spell_level: int = 0,
+        *, source_condition_uuid: Optional[UUID] = None,
     ) -> int:
         """Apply healing through the engine event lifecycle.
 
@@ -3223,6 +3224,7 @@ class Entity(BaseBlock):
             source_description: Human-readable source text for combat logs.
             parent_event: Optional parent event UUID for combat-log nesting.
             spell_level: Spell level used, or 0 for non-spell healing.
+            source_condition_uuid: Exact condition instance producing this heal.
 
         Returns:
             Actual HP restored after caps and blockers.
@@ -3233,6 +3235,7 @@ class Entity(BaseBlock):
             target_entity_uuid=self.uuid,
             target_entity_name=self.name,
             total_healing=amount,
+            source_condition_uuid=source_condition_uuid,
             source_description=source_description,
             parent_event=parent_event,
             spell_level=spell_level,

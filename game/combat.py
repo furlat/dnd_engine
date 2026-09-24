@@ -20,14 +20,14 @@ from game.animation import (
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, Facing8, RigLayer
 from game.player_facts import (
-    ActionFact, AttackFact, DamageFact, EquipmentFact, LifeFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SpellFact,
+    ActionFact, AttackFact, ConditionChangeFact, DamageFact, EquipmentFact, LifeFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SpellFact,
 )
 from game.player_reduction import reduce_lineage
 from game.device_art import DeviceEmission, device_bank
 from game.condition_animation import resolve_condition_appearance
 from game.animation_rates import action_playback_rate
 from game.area_media import AreaSolid
-from dnd.core.events import WorldTileState
+from dnd.core.events import EventType, WorldTileState
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,6 +206,11 @@ def bind_cast(
             travel_apex_steps=travel_apex_steps,
             hit=(application.attack_outcome in (AttackOutcome.HIT, AttackOutcome.CRIT)
                  if isinstance(application, SpellFact) and application.attack_outcome is not None else None),
+            removed_condition_tags=frozenset(tag for event in descendants if not event.canceled
+                and isinstance(event.fact, ConditionChangeFact)
+                and event.fact.target_entity_uuid == recipient.uuid
+                and event.fact.event_type is EventType.CONDITION_REMOVAL
+                and event.fact.condition.state is not None for tag in event.fact.condition.state.tags),
         ))
     if root_node.canceled and not application_roots and not area:
         # The declaration is real attempted allocation, even when no application

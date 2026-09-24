@@ -4,6 +4,7 @@ from uuid import UUID
 from typing import Literal
 
 from dnd.core.creature_types import DamageType, Size
+from dnd.types.abilities import AbilityName
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
@@ -42,6 +43,7 @@ class ConditionState(BaseModel):
     duplicate_count: int | None = Field(default=None, ge=0)
     size_change: Literal["enlarge", "reduce"] | None = None
     energy_type: DamageType | None = None
+    enhanced_ability: AbilityName | None = None
 
 
 class TemporaryHitPointsGrant(BaseModel):

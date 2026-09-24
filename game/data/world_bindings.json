@@ -3099,9 +3099,9 @@
   "spatial_media": {
     "spatial_effect.spell.gust_of_wind": {
       "assetPhase": "impact",
-      "holdStartFrame": 252,
-      "holdFrames": 108,
-      "fps": 144,
+      "holdStartFrame": 56,
+      "holdFrames": 24,
+      "fps": 32,
       "scale": 0.5,
       "layers": [
         {
@@ -3128,8 +3128,8 @@
       ],
       "assetPhase": "impact",
       "holdStartFrame": 0,
-      "holdFrames": 576,
-      "fps": 144,
+      "holdFrames": 128,
+      "fps": 32,
       "scale": 0.6111111115885417,
       "removalFadeMs": 600
     },
@@ -3148,15 +3148,15 @@
         }
       ],
       "holdStartFrame": 0,
-      "holdFrames": 288,
-      "fps": 144,
+      "holdFrames": 64,
+      "fps": 32,
       "scale": 0.5,
       "contactMedia": {
         "ground_entry": {
           "id": "grease.contact",
           "assetId": "persistent.grease_contact.contact",
           "attachment": "target_ground",
-          "fps": 144,
+          "fps": 32,
           "scale": 0.5,
           "viewFacing": "E",
           "depth": "ground"
@@ -3706,15 +3706,15 @@
         }
       ],
       "holdStartFrame": 0,
-      "holdFrames": 288,
-      "fps": 144,
+      "holdFrames": 64,
+      "fps": 32,
       "scale": 0.5,
       "contactMedia": {
         "damage": {
           "id": "spike_growth.contact",
           "assetId": "persistent.thorn_contact.contact",
           "attachment": "target_ground",
-          "fps": 144,
+          "fps": 32,
           "scale": 0.5,
           "viewFacing": "E",
           "depth": "front_body"
@@ -3726,12 +3726,12 @@
         {
           "assetId": "persistent.insect_plague.hold",
           "applicationAssetId": "persistent.insect_plague.apply",
-          "composition": "xy_volume"
+          "composition": "xyz_volume"
         }
       ],
       "holdStartFrame": 0,
-      "holdFrames": 1152,
-      "fps": 144,
+      "holdFrames": 192,
+      "fps": 32,
       "scale": 0.5,
       "removalFadeMs": 630,
       "removalEasing": "smoothstep",
@@ -3742,12 +3742,12 @@
         {
           "assetId": "persistent.cloudkill.hold",
           "applicationAssetId": "persistent.cloudkill.apply",
-          "composition": "xy_volume"
+          "composition": "xyz_volume"
         }
       ],
       "holdStartFrame": 0,
-      "holdFrames": 4032,
-      "fps": 144,
+      "holdFrames": 64,
+      "fps": 32,
       "scale": 0.5,
       "removalFadeMs": 630,
       "removalEasing": "smoothstep",
@@ -3759,12 +3759,12 @@
         {
           "assetId": "persistent.incendiary_cloud.hold",
           "applicationAssetId": "persistent.incendiary_cloud.apply",
-          "composition": "xy_volume"
+          "composition": "xyz_volume"
         }
       ],
       "holdStartFrame": 0,
-      "holdFrames": 2304,
-      "fps": 144,
+      "holdFrames": 64,
+      "fps": 32,
       "scale": 0.5,
       "removalFadeMs": 630,
       "removalEasing": "smoothstep",
@@ -3776,12 +3776,12 @@
         {
           "assetId": "persistent.fog_cloud.hold",
           "applicationAssetId": "persistent.fog_cloud.apply",
-          "composition": "xy_volume"
+          "composition": "xyz_volume"
         }
       ],
       "holdStartFrame": 0,
-      "holdFrames": 4032,
-      "fps": 144,
+      "holdFrames": 64,
+      "fps": 32,
       "scale": 0.5,
       "removalFadeMs": 630,
       "removalEasing": "smoothstep",
@@ -3792,12 +3792,12 @@
         {
           "assetId": "persistent.darkness.hold",
           "applicationAssetId": "persistent.darkness.apply",
-          "composition": "xy_volume"
+          "composition": "xyz_volume"
         }
       ],
       "holdStartFrame": 0,
-      "holdFrames": 4032,
-      "fps": 144,
+      "holdFrames": 64,
+      "fps": 32,
       "scale": 0.5,
       "removalFadeMs": 630,
       "removalEasing": "smoothstep",
@@ -3808,12 +3808,12 @@
         {
           "assetId": "persistent.stinking_cloud.hold",
           "applicationAssetId": "persistent.stinking_cloud.apply",
-          "composition": "xy_volume"
+          "composition": "xyz_volume"
         }
       ],
       "holdStartFrame": 0,
-      "holdFrames": 4032,
-      "fps": 144,
+      "holdFrames": 64,
+      "fps": 32,
       "scale": 0.5,
       "removalFadeMs": 630,
       "removalEasing": "smoothstep",
@@ -3838,8 +3838,8 @@
       ],
       "assetPhase": "impact",
       "holdStartFrame": 0,
-      "holdFrames": 576,
-      "fps": 144,
+      "holdFrames": 128,
+      "fps": 32,
       "scale": 0.5,
       "surfaceHeightScale": 1.224744871391589,
       "suppressionDirection": {
@@ -3990,8 +3990,8 @@
           ],
           "assetPhase": "impact",
           "holdStartFrame": 0,
-          "holdFrames": 288,
-          "fps": 144,
+          "holdFrames": 64,
+          "fps": 32,
           "scale": 1
         },
         {
@@ -4007,8 +4007,8 @@
           ],
           "assetPhase": "impact",
           "holdStartFrame": 0,
-          "holdFrames": 288,
-          "fps": 144,
+          "holdFrames": 64,
+          "fps": 32,
           "scale": 1
         },
         {
@@ -4024,8 +4024,8 @@
           ],
           "assetPhase": "impact",
           "holdStartFrame": 0,
-          "holdFrames": 288,
-          "fps": 144,
+          "holdFrames": 64,
+          "fps": 32,
           "scale": 1
         }
       ]

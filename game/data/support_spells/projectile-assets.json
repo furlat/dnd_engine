@@ -10,7 +10,7 @@
       "rows": 8,
       "cols": 432
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -24,8 +24,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 432,
-        "fps": 144,
+        "frames": 96,
+        "fps": 32,
         "loop": false
       }
     },
@@ -90,7 +90,7 @@
       "rows": 8,
       "cols": 432
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -104,8 +104,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 432,
-        "fps": 144,
+        "frames": 96,
+        "fps": 32,
         "loop": false
       }
     },
@@ -170,7 +170,7 @@
       "rows": 8,
       "cols": 432
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -184,8 +184,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 432,
-        "fps": 144,
+        "frames": 96,
+        "fps": 32,
         "loop": false
       }
     },
@@ -250,7 +250,7 @@
       "rows": 8,
       "cols": 432
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -264,8 +264,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 432,
-        "fps": 144,
+        "frames": 96,
+        "fps": 32,
         "loop": false
       }
     },
@@ -330,7 +330,7 @@
       "rows": 8,
       "cols": 432
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -344,8 +344,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 432,
-        "fps": 144,
+        "frames": 96,
+        "fps": 32,
         "loop": false
       }
     },
@@ -410,7 +410,7 @@
       "rows": 8,
       "cols": 432
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -424,8 +424,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 432,
-        "fps": 144,
+        "frames": 96,
+        "fps": 32,
         "loop": false
       }
     },
@@ -490,7 +490,7 @@
       "rows": 8,
       "cols": 288
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -504,8 +504,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 288,
-        "fps": 144,
+        "frames": 64,
+        "fps": 32,
         "loop": false
       }
     },
@@ -570,7 +570,7 @@
       "rows": 8,
       "cols": 288
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -584,8 +584,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 288,
-        "fps": 144,
+        "frames": 64,
+        "fps": 32,
         "loop": false
       }
     },
@@ -650,7 +650,7 @@
       "rows": 8,
       "cols": 288
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -664,8 +664,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 288,
-        "fps": 144,
+        "frames": 64,
+        "fps": 32,
         "loop": false
       }
     },
@@ -730,7 +730,7 @@
       "rows": 8,
       "cols": 288
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -744,8 +744,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 288,
-        "fps": 144,
+        "frames": 64,
+        "fps": 32,
         "loop": false
       }
     },
@@ -810,7 +810,7 @@
       "rows": 8,
       "cols": 576
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -824,8 +824,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 576,
-        "fps": 144,
+        "frames": 128,
+        "fps": 32,
         "loop": false
       }
     },
@@ -890,7 +890,7 @@
       "rows": 8,
       "cols": 576
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -904,8 +904,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 576,
-        "fps": 144,
+        "frames": 128,
+        "fps": 32,
         "loop": false
       }
     },
@@ -970,7 +970,7 @@
       "rows": 8,
       "cols": 288
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -984,8 +984,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 288,
-        "fps": 144,
+        "frames": 64,
+        "fps": 32,
         "loop": false
       }
     },
@@ -1050,7 +1050,7 @@
       "rows": 8,
       "cols": 288
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -1064,8 +1064,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 288,
-        "fps": 144,
+        "frames": 64,
+        "fps": 32,
         "loop": false
       }
     },
@@ -1130,7 +1130,7 @@
       "rows": 8,
       "cols": 144
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -1144,8 +1144,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 144,
-        "fps": 144,
+        "frames": 32,
+        "fps": 32,
         "loop": false
       }
     },
@@ -1210,7 +1210,7 @@
       "rows": 8,
       "cols": 144
     },
-    "fps": 144,
+    "fps": 32,
     "rowOrder": [
       "E",
       "SE",
@@ -1224,8 +1224,8 @@
     "phases": {
       "impact": {
         "start": 0,
-        "frames": 144,
-        "fps": 144,
+        "frames": 32,
+        "fps": 32,
         "loop": false
       }
     },

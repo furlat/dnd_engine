@@ -201,24 +201,47 @@ def import_shield_contacts(manifest_path: Path, *, repo: Path = ROOT) -> tuple[s
 def import_volume(manifest_path: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
     """Package declared color and raw world coordinates without changing either."""
     source = manifest_path.parent
-    manifest = json.loads(manifest_path.read_text())
-    if manifest.get("complete") is not True:
+    delivery = json.loads(manifest_path.read_text())
+    if delivery.get("complete") is not True:
         raise ValueError("Volume import requires a complete four-camera delivery")
+    surface_delivery = bool(delivery["views"]) and all(
+        "surfaceFrames" in view for view in delivery["views"].values())
+    # The XYZ companion declares its original manifest for unchanged palette,
+    # canvas and lifecycle metadata. Only its surface archives are installed.
+    manifest = (json.loads((source / delivery["sourceManifest"]).read_text())
+                if surface_delivery else delivery)
     windows = {phase: manifest[phase] for phase in ("apply", "hold")}
     if any(not 0 <= begin < end for begin, end in windows.values()):
         raise ValueError("Volume phase windows must be nonempty forward intervals")
     required_frames = max(end for _, end in windows.values())
+    projection = "cameraProjection" if surface_delivery else "camera"
     views = camera_rows({key: {**view, "groundBasis": {
-        "X": view["camera"]["basisX"], "Z": view["camera"]["basisZ"]}}
-        for key, view in manifest["views"].items()})
-    if manifest["positionEncoding"]["format"] != "RGBA8_RAW_XZ_UNORM16":
-        raise ValueError("Volume storage requires the declared raw X/Z encoding")
-    bounds = [manifest["positionEncoding"][key] for key in ("min", "max")]
-    for view in views.values():
-        if view["color"]["rects"] != view["position"]["rects"]:
-            raise ValueError("Volume color and raw coordinates must share registration")
-        if len(view["color"]["rects"]) < required_frames:
-            raise ValueError("Every volume camera must cover the complete declared phase windows")
+        "X": view[projection]["basisX"], "Z": view[projection]["basisZ"]}}
+        for key, view in delivery["views"].items()})
+    if surface_delivery:
+        reference = views["E"]["surfaceFrames"]
+        for view in views.values():
+            packet = view["surfaceFrames"]
+            if view.get("complete") is not True or any(
+                view[key] != manifest[key]
+                for key in ("spell", "fps", "apply", "hold", "canvasSize", "pivot")
+            ):
+                raise ValueError("Surface companions must retain the original camera clocks and registration")
+            if "archive" not in packet or packet["blendModes"] != ["normal"]:
+                raise ValueError("Cloud surface delivery requires one declared normal-blend archive per camera")
+            if {k: v for k, v in packet.items() if k != "archive"} != {
+                k: v for k, v in reference.items() if k != "archive"
+            } or len(packet["frameIndices"]) < required_frames:
+                raise ValueError("Every surface camera must share coordinate encoding and complete phase windows")
+    else:
+        if manifest["positionEncoding"]["format"] != "RGBA8_RAW_XZ_UNORM16":
+            raise ValueError("Volume storage requires the declared raw X/Z encoding")
+        bounds = [manifest["positionEncoding"][key] for key in ("min", "max")]
+        for view in views.values():
+            if view["color"]["rects"] != view["position"]["rects"]:
+                raise ValueError("Volume color and raw coordinates must share registration")
+            if len(view["color"]["rects"]) < required_frames:
+                raise ValueError("Every volume camera must cover the complete declared phase windows")
     name = manifest["spell"]
     folder = repo / "game/data/persistent_spells"
     bindings = read_document(folder / "bindings.json", {"resources": {}, "projectileStorage": {}})
@@ -240,14 +263,26 @@ def import_volume(manifest_path: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
     for phase in ("apply", "hold"):
         begin, end = windows[phase]
         identity = f"persistent.{name}.{phase}"
-        rows = {}
-        for facing, view in views.items():
-            rows[facing] = [[] if address is None else [{
-                "file": copy(view["color"]["pages"][address["page"]]),
-                "rect": address["source"],
-                "offset": [int(address["offset"][axis] + pivot[axis]) for axis in range(2)],
-                "footpoint": {"file": copy(view["position"]["pages"][address["page"]]), "bounds": bounds},
-            }] for address in view["color"]["rects"][begin:end]]
+        if surface_delivery:
+            packet = {key: value for key, value in views["E"]["surfaceFrames"].items()
+                      if key not in ("archive", "blendModes")}
+            packet["frameIndices"] = packet["frameIndices"][begin:end]
+            packet["componentsByFacing"] = {facing: [{
+                "archive": {**view["surfaceFrames"]["archive"],
+                    "file": copy(view["surfaceFrames"]["archive"]["file"])},
+                "pivot": view["pivot"], "blendMode": "normal",
+            }] for facing, view in views.items()}
+            phase_storage = {"surfaceFrames": packet}
+        else:
+            rows = {}
+            for facing, view in views.items():
+                rows[facing] = [[] if address is None else [{
+                    "file": copy(view["color"]["pages"][address["page"]]),
+                    "rect": address["source"],
+                    "offset": [int(address["offset"][axis] + pivot[axis]) for axis in range(2)],
+                    "footpoint": {"file": copy(view["position"]["pages"][address["page"]]), "bounds": bounds},
+                }] for address in view["color"]["rects"][begin:end]]
+            phase_storage = {"layers": [{"blendMode": "normal", "partsByFacing": rows}]}
         assets[identity] = {"assetId": identity, "displayName": identity, "kind": "projectile",
             "sheet": f"/persistent-spells/{name}/{phase}.png",
             "frame": {"width": width, "height": height, "rows": 8, "cols": end - begin},
@@ -256,8 +291,7 @@ def import_volume(manifest_path: Path, *, repo: Path = ROOT) -> tuple[str, ...]:
                 "fps": manifest["fps"], "loop": phase == "hold"}},
             "anchor": {"x": pivot[0] / width, "y": pivot[1] / height},
             "defaultScale": .5, "palettePreview": {"colors": [int(color, 16) for color in manifest["palette"]]}}
-        bindings["projectileStorage"][identity] = {"phases": {"impact": {"layers": [
-            {"blendMode": "normal", "partsByFacing": rows}]}}}
+        bindings["projectileStorage"][identity] = {"phases": {"impact": phase_storage}}
         imported.append(identity)
     folder.mkdir(parents=True, exist_ok=True)
     for filename, value in (("bindings.json", bindings), ("projectile-assets.json", list(assets.values()))):
