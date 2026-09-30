@@ -234,7 +234,7 @@ class PersistentSpellCase(BaseModel):
     saved: bool = True
     jump: bool = False
     jump_across: bool = False
-    environment: Literal["flat", "raised", "wall", "edge-wall"] = "flat"
+    environment: Literal["flat", "raised", "wall", "edge-wall", "door-cycle"] = "flat"
     discovered: bool = True
     cast_level: int | None = Field(default=None, ge=1, le=9)
     ward_expiry: bool = False

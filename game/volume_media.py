@@ -45,6 +45,11 @@ class SurfaceVolume:
     # Camera-local XY/Z displacement after resolving an authored rig attachment.
     # Y is host elevation steps; the propagation origin remains authoritative.
     translation: tuple[float, float, float] = (0, 0, 0)
+    # Later door closure changes occlusion, not the established native field.
+    resolved_occupancy: bool = False
+    # Samples disclosed only above an occluded column. The isometric camera
+    # must not turn those grants into cloud in front of the known wall face.
+    upper_only: np.ndarray | None = None
 
 
 @lru_cache(maxsize=32)
@@ -159,12 +164,14 @@ def _visibility_origins(center, radius, segments):
 
 def _visual_boundary_coverage(keep: np.ndarray, depth: np.ndarray, x: np.ndarray, z: np.ndarray,
                               destination: tuple[int, int], boundaries: tuple[BoundarySprite, ...],
-                              vx: float, vz: float) -> None:
+                              vx: float, vz: float, upper_only: np.ndarray | None) -> None:
     """Occlude samples behind finite registered boundary billboards.
 
     The picture owns the visual cap/holes, while the received segment owns its
-    world depth. A foreground sample may overlap that picture without being
-    hidden. This is a billboard registration, not a reconstructed wall volume.
+    world depth. Fully observed foreground samples may overlap it. Upper-only
+    sight does not expose cloud in front of a wall's otherwise hidden face;
+    that stone silhouette remains in front in the isometric view. The finite
+    segment still leaves exposed ends alone.
     """
     # Adjacent sprites overlap across their cell seam. Their visible cap must
     # share the connected finite edge, rather than reopen one-pixel cracks when
@@ -207,7 +214,10 @@ def _visual_boundary_coverage(keep: np.ndarray, depth: np.ndarray, x: np.ndarray
                 if axis == 0 else (pz, px, vz, vx))
             crossing_time = (first[axis] - component) / direction
             along = other + crossing_time * cross_direction
-            behind |= (crossing_time > 1e-5) & (along >= low) & (along <= high)
+            covered = crossing_time > 1e-5
+            if upper_only is not None:
+                covered |= upper_only[selection]
+            behind |= covered & (along >= low) & (along <= high)
         keep[selection] &= ~(behind & (opacity == 255))
         # Translucent edge pixels still composite normally over the sample.
         # Put that contribution behind the boundary instead of flattening alpha.
@@ -237,7 +247,7 @@ def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
     barriers = _barriers(volume.boundaries, volume.solids)
     segments = _segments(_barriers(volume.boundaries, tuple(solid for solid in volume.solids
         if solid.position != volume.center)), volume.elevation)
-    if segments:
+    if segments and not volume.resolved_occupancy:
         reachable = np.zeros(owned.shape, dtype=bool)
         origins = (_visibility_origins(volume.center, volume.radius, segments)
                    if volume.propagation == "connected" else (volume.center,))
@@ -267,7 +277,7 @@ def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
     center_depth = project_world(volume.center, quadrant=camera.quadrant)[1]
     depth = center_depth + 32 * (local[:, :, 0] + local[:, :, 2] + dx + dz)
     if visual_boundaries is not None:
-        _visual_boundary_coverage(keep, depth, x, z, destination, visual_boundaries, vx, vz)
+        _visual_boundary_coverage(keep, depth, x, z, destination, visual_boundaries, vx, vz, volume.upper_only)
     for sphere in volume.exclusions:
         dx, dz = x - sphere.center[0], z - sphere.center[1]
         dy = (height - sphere.elevation) / sphere.vertical_scale

@@ -442,7 +442,21 @@
     "/spritesheets/Melee9/Special1.png": "game/assets/neuroclient/spritesheets/Melee9/Special1.png",
     "/spritesheets/Melee9/Run.png": "game/assets/neuroclient/spritesheets/Melee9/Run.png",
     "/spritesheets/Melee9/Rolling.png": "game/assets/neuroclient/spritesheets/Melee9/Rolling.png",
-    "/spritesheets/Melee9/Kick.png": "game/assets/neuroclient/spritesheets/Melee9/Kick.png"
+    "/spritesheets/Melee9/Kick.png": "game/assets/neuroclient/spritesheets/Melee9/Kick.png",
+    "/spritesheets/Head5/Idle.png": "game/assets/neuroclient/spritesheets/Head5/Idle.png",
+    "/spritesheets/Head5/Attack1.png": "game/assets/neuroclient/spritesheets/Head5/Attack1.png",
+    "/spritesheets/Head5/Attack2.png": "game/assets/neuroclient/spritesheets/Head5/Attack2.png",
+    "/spritesheets/Head5/Attack4.png": "game/assets/neuroclient/spritesheets/Head5/Attack4.png",
+    "/spritesheets/Head5/Attack5.png": "game/assets/neuroclient/spritesheets/Head5/Attack5.png",
+    "/spritesheets/Head5/Attack6.png": "game/assets/neuroclient/spritesheets/Head5/Attack6.png",
+    "/spritesheets/Head5/Attack3.png": "game/assets/neuroclient/spritesheets/Head5/Attack3.png",
+    "/spritesheets/Head5/TakeDamage.png": "game/assets/neuroclient/spritesheets/Head5/TakeDamage.png",
+    "/spritesheets/Head5/Die.png": "game/assets/neuroclient/spritesheets/Head5/Die.png",
+    "/spritesheets/Head5/Taunt.png": "game/assets/neuroclient/spritesheets/Head5/Taunt.png",
+    "/spritesheets/Head5/Special1.png": "game/assets/neuroclient/spritesheets/Head5/Special1.png",
+    "/spritesheets/Head5/Run.png": "game/assets/neuroclient/spritesheets/Head5/Run.png",
+    "/spritesheets/Head5/Rolling.png": "game/assets/neuroclient/spritesheets/Head5/Rolling.png",
+    "/spritesheets/Head5/Kick.png": "game/assets/neuroclient/spritesheets/Head5/Kick.png"
   },
   "relocations": [
     "spell.misty_step"

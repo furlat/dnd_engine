@@ -14,6 +14,7 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.gridmap import SpatialConditionOwner, get_map
 from dnd.core.geometry import supercover_line
+from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.values import ModifiableValue
 from dnd.core.events import (
     Event, EventType, EventPhase, SpatialChangeEvent,
@@ -21,7 +22,7 @@ from dnd.core.events import (
     SensoryUpdateReason,
 )
 from dnd.types.senses import (
-    OpticalObscurement, PerceivedContact, PerceivedSpatialEffect, SenseMode, SensesType,
+    OpticalObscurement, PerceivedContact, PerceivedSpatialEffect, SenseMode, SensesType, VolumeSurfaceSight,
     SensesSnapshot as SensesSnapshot,
     reduce_senses_snapshot as reduce_senses_snapshot,
 )
@@ -38,6 +39,7 @@ class ObserverField:
     modes: Dict[SensesType, int]
     ordinary_sight: bool
     visible_volumes: Dict[UUID, frozenset[Tuple[int, int]]]
+    upper_volume_surfaces: Dict[UUID, Tuple[VolumeSurfaceSight, ...]]
     max_distance: int
     revisions: Tuple[int, int, int]
     occupancy_revision: int
@@ -843,11 +845,13 @@ class SpatialSensesSystem:
             sense_modes_hash=senses.compute_sense_modes_hash(),
             visual_access=senses.visual_access.normalized_score,
         )
+        volumes, upper_surfaces, volume_dependencies = self._visible_volume_geometry(origin, optical_candidates,
+            visible_volume_surfaces, modes, ordinary_sight, senses, optical_radius)
         senses._field = ObserverField(
             modes=modes,
             ordinary_sight=ordinary_sight,
-            visible_volumes=self._visible_volume_geometry(origin, optical_candidates,
-                visible_volume_surfaces, modes, ordinary_sight, senses),
+            visible_volumes=volumes,
+            upper_volume_surfaces=upper_surfaces,
             max_distance=max_distance,
             revisions=(grid.optical_revision, grid.illumination_revision, grid.propagation_revision),
             occupancy_revision=grid.occupancy_revision,
@@ -855,7 +859,7 @@ class SpatialSensesSystem:
             nonvisual_positions=nonvisual_positions,
         )
         self._refresh_hazards(observer_uuid, senses, hazard_positions)
-        subscribed = set(optical_candidates)
+        subscribed = set(optical_candidates) | volume_dependencies
         for positions in nonvisual_positions.values():
             subscribed.update(positions)
         grid.subscribe_to_cells(observer_uuid, subscribed)
@@ -873,12 +877,15 @@ class SpatialSensesSystem:
         for position in senses.hazardous_cells.keys() - visible:
             senses.hazardous_cells.pop(position)
         volumes = senses._field.visible_volumes if senses._field is not None else {}
-        surfaces = set().union(*volumes.values()) if volumes else set()
+        upper = senses._field.upper_volume_surfaces if senses._field is not None else {}
+        surfaces = {row.position for rows in upper.values() for row in rows}
+        surfaces.update(set().union(*volumes.values()) if volumes else set())
         if not positions and not surfaces:
             for identity, previous in tuple(senses.spatial_effects.items()):
-                if previous.visible_volume_positions or any(row.positions for row in previous.suppressions):
+                if previous.visible_volume_positions or previous.upper_volume_surfaces or any(row.positions for row in previous.suppressions):
                     senses.spatial_effects[identity] = previous.model_copy(update={
                         "visible_volume_positions": (),
+                        "upper_volume_surfaces": (),
                         "suppressions": tuple(row.model_copy(update={"positions": tuple(
                             position for position in row.positions if position in visible)})
                                               for row in previous.suppressions)})
@@ -888,7 +895,8 @@ class SpatialSensesSystem:
         candidates: Dict[UUID, Tuple[SpatialConditionOwner, Set[Tuple[int, int]]]] = {}
         for position in positions | surfaces:
             for condition in grid.get_spatial_conditions_at(position):
-                if position not in visible and position not in volumes.get(condition.uuid, ()):
+                if (position not in visible and position not in volumes.get(condition.uuid, ())
+                        and not any(row.position == position for row in upper.get(condition.uuid, ()))):
                     continue
                 if condition.uuid not in candidates:
                     candidates[condition.uuid] = (condition, set())
@@ -904,6 +912,7 @@ class SpatialSensesSystem:
                 observations[condition.uuid] = observation.model_copy(update={
                     "positions": tuple(sorted(set(observation.positions) | volume_positions)),
                     "visible_volume_positions": tuple(sorted(volume_positions)),
+                    "upper_volume_surfaces": upper.get(condition.uuid, ()),
                 })
         # Resolve references after all candidates: a first observation must not
         # depend on whether the provider or its affected field was visited first.
@@ -938,6 +947,7 @@ class SpatialSensesSystem:
                 senses.spatial_effects[identity] = (observed or previous).model_copy(
                     update={"positions": tuple(sorted(retained)),
                             "visible_volume_positions": observed.visible_volume_positions if observed is not None else (),
+                            "upper_volume_surfaces": observed.upper_volume_surfaces if observed is not None else (),
                             "suppressions": observed.suppressions if observed is not None else tuple(
                                 row.model_copy(update={"positions": tuple(position for position in row.positions
                                     if position in visible)}) for row in previous.suppressions)},
@@ -953,7 +963,8 @@ class SpatialSensesSystem:
     @classmethod
     def _visible_volume_geometry(cls, origin: Tuple[int, int], candidates: Set[Tuple[int, int]],
             first_surfaces: Set[Tuple[int, int]], modes: Dict[SensesType, int],
-            ordinary_sight: bool, senses: Senses) -> Dict[UUID, frozenset[Tuple[int, int]]]:
+            ordinary_sight: bool, senses: Senses, optical_radius: int,
+            ) -> Tuple[Dict[UUID, frozenset[Tuple[int, int]]], Dict[UUID, Tuple[VolumeSurfaceSight, ...]], Set[Tuple[int, int]]]:
         """Observe a volume's geometry without treating its own interior as a wall.
 
         First-surface sight establishes the object. Its geometry may be viewed
@@ -965,12 +976,44 @@ class SpatialSensesSystem:
                   for condition in grid.get_spatial_conditions_at(position)
                   if condition.get_optical_obscurement_at(position) is not None}
         result = {}
+        upper_result = {}
+        dependencies: Set[Tuple[int, int]] = set()
         for identity, condition in owners.items():
             observed: Set[Tuple[int, int]] = set()
-            geometry_positions = grid.get_spatial_condition_positions(identity)
+            occupied = grid.get_spatial_condition_positions(identity)
+            geometry_positions = occupied
             for suppression in condition.spatial_suppressions:
                 geometry_positions = geometry_positions | set(suppression.positions)
-            for position in candidates & geometry_positions:
+            upper_surfaces = []
+            observation = condition.get_spatial_observation(set(), observer_uuid=senses.source_entity_uuid,
+                discovered=True)
+            sphere = observation.area_geometry if observation is not None else None
+            base = observation.anchor_elevation_steps if observation is not None else None
+            for position in sorted(geometry_positions):
+                planes = ()
+                if position not in candidates:
+                    if (not isinstance(sphere, SpherePresentationGeometry) or base is None
+                            or position not in occupied
+                            or sum((position[i] - origin[i]) ** 2 for i in (0, 1)) > optical_radius ** 2):
+                        continue
+                    # Subscribe to tested routes even when rejected: a remote
+                    # door closing OR reopening must update this surface sight.
+                    dependencies.update((cell[0]+dx, cell[1]+dy)
+                        for cell in supercover_line(origin, position)
+                        for dx,dy in ((0,0),(1,0),(-1,0),(0,1),(0,-1))
+                        if grid.get_tile(cell[0]+dx, cell[1]+dy) is not None)
+                    planes = grid.upper_volume_sight_planes(origin, position)
+                    if not planes:
+                        continue
+                    # Sphere top in native elevation steps. Cell-corner maximum
+                    # keeps a partly exposed cell without granting its lower half.
+                    dx = max(0., abs(position[0] - sphere.center[0]) - .5)
+                    dy = max(0., abs(position[1] - sphere.center[1]) - .5)
+                    top = base + math.sqrt(max(0., (sphere.radius_feet / 5) ** 2 - dx*dx - dy*dy))
+                    if all(max(a*x + b*y + c for a,b,c in planes) >= top
+                           for x,y in ((position[0]+dx, position[1]+dy)
+                                       for dx in (-.5,.5) for dy in (-.5,.5))):
+                        continue
                 route = supercover_line(origin, position)
                 entry = next((index for index, cell in enumerate(route)
                               if condition.get_optical_obscurement_at(cell) is not None), None)
@@ -988,7 +1031,12 @@ class SpatialSensesSystem:
                 normal, special = cls._visual_route_modes(modes, ordinary_sight,
                     senses.get_feet_distance(position), obscurements, tile.resolved_light_level)
                 if normal or special:
-                    observed.add(position)
+                    if planes:
+                        upper_surfaces.append(VolumeSurfaceSight(position=position, lower_height_planes=planes))
+                    else:
+                        observed.add(position)
+            if upper_surfaces:
+                upper_result[identity] = tuple(upper_surfaces)
             if observed:
                 result[identity] = frozenset(observed)
         # A currently observed cloud/protection intersection also exposes the
@@ -1005,7 +1053,7 @@ class SpatialSensesSystem:
                 surface = observed & set(suppression.positions) & grid.get_spatial_condition_positions(provider)
                 if surface:
                     result[provider] = result.get(provider, frozenset()) | surface
-        return result
+        return result, upper_result, dependencies
 
     @staticmethod
     def _visual_route_modes(

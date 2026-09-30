@@ -6,7 +6,7 @@ from typing import Literal
 from uuid import uuid4
 from unittest.mock import patch
 
-from dnd.actions_functional import execute_available_action, get_available_actions, register_spell, setup_standard_actions
+from dnd.actions_functional import execute_available_action, execute_use_action, get_available_actions, register_spell, setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
@@ -14,12 +14,13 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.content.items.authored_item_builders import build_authored_item
-from dnd.content.items.environment_item_builders import build_directional_wall
+from dnd.content.items.environment_item_builders import build_authored_door, build_directional_wall
 from dnd.controller import HumanController
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.core.events import Event, EventPhase, EventQueue
+from dnd.core.item_types import ItemIntegrity
 from dnd.core.gridmap import get_map
 from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.core.modifiers import NumericalModifier
@@ -57,7 +58,7 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
         energy: Literal['Acid', 'Cold', 'Fire', 'Lightning', 'Thunder'] = 'Fire',
         saved: bool = True, jump: bool = False,
         shield_delivery: Literal['melee', 'ranged', 'missile'] = 'melee',
-        environment: Literal['flat', 'raised', 'wall', 'edge-wall'] = 'flat', jump_across: bool = False,
+        environment: Literal['flat', 'raised', 'wall', 'edge-wall', 'door-cycle'] = 'flat', jump_across: bool = False,
         discovered: bool = True, cast_level: int | None = None,
         ward_expiry: bool = False, ward_retained: bool = False,
         retain_field: bool = False) -> CapturedHistory:
@@ -66,6 +67,7 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
     reset_engine_runtime()
     battlefield = 'battlefield.open_floor_bright'
     build_battlefield(battlefield)
+    door = None
     if environment == 'raised':
         for x in range(2, 15):
             for y in range(4, 14):
@@ -77,6 +79,12 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
     elif environment == 'edge-wall':
         for y in range(4, 14):
             build_directional_wall().place_on_grid((14, y), boundary_direction=CardinalDirection.EAST)
+    elif environment == 'door-cycle':
+        door = build_authored_door('environment.door.indoor_door_shabby', is_open=True)
+        door.place_on_grid((7, 6), boundary_direction=CardinalDirection.EAST)
+        for y in range(3, 14):
+            if y != 6:
+                build_directional_wall().place_on_grid((7, y), boundary_direction=CardinalDirection.EAST)
     game = Game()
     try:
         positions = {'caster': (3, 6), 'target': (4, 6)}
@@ -86,6 +94,8 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
                 positions['target'] = (5, 6) if program == 'grease' else (9, 12)
         if program == 'shield' and shield_delivery != 'melee':
             positions['target'] = (6, 7)
+        if environment == 'door-cycle':
+            positions = {'caster': (7, 5), 'target': (5, 9)}
         actors = {}
         for role, position in positions.items():
             actor = Entity.create(uuid4(), role.title(), config=EntityConfig(
@@ -175,7 +185,24 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
                 assert result.phase is EventPhase.COMPLETION, (program, behavior, result)
             return result
 
-        if program == 'sanctuary':
+        if environment == 'door-cycle':
+            assert door is not None
+            perform(caster, 'spell.' + program, position=(9, 9))
+            zone, = get_map().get_spatial_conditions()
+            identity, occupied = zone.uuid, set(zone.affected_positions)
+            assert (6, 9) in occupied, 'The initial cloud must spread around the doorway'
+            for action in ('Close Door', 'Open Door', 'Close Door'):
+                result = execute_use_action(caster, door.uuid, action)
+                assert result is not None and not result.canceled, result
+                assert zone.uuid == identity and zone.affected_positions == occupied
+            # Ordinary attacks and turns break the actual door, rather than
+            # setting its integrity or fabricating a destruction event.
+            while door.integrity is not ItemIntegrity.DESTROYED:
+                perform(caster, 'action.attack_object', position=door.position,
+                    dice=(6,) * 20, fresh=True)
+                assert zone.affected_positions == occupied
+            perform(caster, 'action.drop_concentration')
+        elif program == 'sanctuary':
             perform(caster, 'spell.sanctuary', recipient=caster)
             assert 'Sanctuary' in caster.active_conditions and 'Concentrating' not in caster.active_conditions
             perform(caster, 'action.move', position=(3, 7))

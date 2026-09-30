@@ -17,6 +17,7 @@ import pygame
 
 from dnd.core.base_actions import AvailableActionsResult
 from dnd.core.events import EventQueue
+from dnd.core.life_types import LifeState
 from game.animation_data import load_animation_data
 from game.animation_draw import LoadedBodyRows
 from game.animation_types import Facing8
@@ -29,7 +30,7 @@ from game.condition_media_lifetime import register_condition_lifetimes
 from game.spatial_media_lifetime import register_spatial_lifetimes
 from game.deposit_media import register_deposit_starts
 from game.motion_media import MotionMediaCue, bind_motion_media, choreography_motion_media
-from game.controls import ActionSelection, EndTurn, MenuState, draw_menu, draw_target_preview, handle_menu_event
+from game.controls import ActionSelection, EndTurn, MenuState, draw_menu, draw_target_preview, handle_menu_event, initial_menu
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import sample_playback_frame
 from game.presentation import capture_interval, capture_lineage
@@ -71,6 +72,7 @@ class GameSummary:
     player_commands: int
     presentation_gaps: tuple[tuple[UUID, str], ...]
     encounter_ended: bool
+    restart_requested: bool = False
 
 
 PlayerInput = Callable[[PlayerState, AvailableActionsResult], ActionSelection | EndTurn | None]
@@ -119,8 +121,8 @@ async def _run(
         cache = SurfaceCache(catalog)
         panel_rect = pygame.Rect(0, 0, 345, window_size[1] - 145)
         feedback_viewport = pygame.Rect(panel_rect.right, 0, window_size[0] - panel_rect.right, panel_rect.height)
-        focus = (sum(actor.contact.grid[0] for actor in actors) / len(actors),
-                 sum(actor.contact.grid[1] for actor in actors) / len(actors))
+        min_x, min_y, max_x, max_y = historical.world.bounds
+        focus = ((min_x + max_x) / 2, (min_y + max_y) / 2)
         camera = Camera(quadrant=quadrant, zoom=1.0, viewport=window_size).with_focus(focus)
         camera = camera.with_screen_pan((panel_rect.width / 2, -45))
         pending: deque[PresentationGroup] = deque()
@@ -142,6 +144,7 @@ async def _run(
         waiting_for_player = encounter_ended = paused = show_debug = False
         show_grid = False
         running = True
+        restart_requested = False
         frame = issued = 0
         elapsed_ms = presentation_ms = 0.0
         condition_lifetimes = register_condition_lifetimes({}, historical, data, absolute_start_ms=0)
@@ -180,7 +183,7 @@ async def _run(
                 if actor_uuid is None:
                     raise RuntimeError("human boundary lacks its displayed turn owner")
                 choices = discover_player_actions(session, actor_uuid)
-                menu = MenuState()
+                menu = initial_menu(choices, panel_rect)
             command: ActionSelection | EndTurn | None = None
             for event in frame_events.get(frame, ()):
                 pygame.event.post(event)
@@ -189,6 +192,10 @@ async def _run(
                     running = False
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif (event.key == pygame.K_r and encounter_ended
+                          and active is None and not pending and not paused):
+                        restart_requested = True
                         running = False
                     elif event.key == pygame.K_SPACE:
                         paused = not paused
@@ -331,18 +338,23 @@ async def _run(
                               shown_hp=shown_hp, active_uuid=displayed.current_actor_uuid,
                               commands=commands, viewport=feedback_viewport)
             actor = displayed.actors.get(displayed.current_actor_uuid) if displayed.current_actor_uuid else None
+            settled_end = encounter_ended and not pending and active is None
+            outcome = ("You survived" if historical.actors[observer.uuid].life_state is LifeState.ALIVE
+                       else "You fell")
             draw_menu(screen, cache.debug_font, menu, choices if ready else None,
                       panel_rect=panel_rect, enabled=ready and not paused,
                       actor_name=actor.name if actor else "Encounter",
-                      waiting_text="Encounter ended" if encounter_ended and not pending and active is None
+                      waiting_text=f"{outcome} · R to retry" if settled_end
                       else "Paused" if paused else "Waiting for animation")
             panel = pygame.Surface((screen.width, 145))
             panel.fill((16, 21, 29))
-            state = "Paused" if paused else "Encounter ended" if encounter_ended and not pending and active is None else "Your turn" if ready else "Playing history"
-            lines = [f"Round {displayed.round_number} · {state} · view: {historical.actors[observer.uuid].name}",
-                     "Space pause · Q/E rotate · WASD pan · G grid · F3 details · N end turn · Esc close"]
+            state = "Paused" if paused else f"Encounter complete · {outcome}" if settled_end else "Your turn" if ready else "Playing history"
+            lines = [f"{session.encounter.name} · Round {displayed.round_number} · {state}",
+                     "R retry · Esc close" if settled_end else
+                     "Defeat the enemy side · Up/Down action · Tab target · Enter confirm · N end turn",
+                     "Space pause · Q/E rotate · WASD pan · Wheel zoom · G grid · F3 details · Esc close"]
             current_lines = _log_lines(active) if active is not None and complete else ()
-            lines.extend((*logs, *current_lines)[-4:])
+            lines.extend((*logs, *current_lines)[-3:])
             for index, line in enumerate(lines):
                 panel.blit(cache.debug_font.render(line[:170], True, (226, 229, 235)), (16, 8 + index * 22))
             screen.blit(panel, (0, screen.height - panel.height))
@@ -371,7 +383,8 @@ async def _run(
                 break
             if exit_when_ended and encounter_ended and active is None and not pending:
                 break
-        return GameSummary(latest, historical, tuple(frames), tuple(retained), issued, tuple(gaps), encounter_ended)
+        return GameSummary(latest, historical, tuple(frames), tuple(retained), issued, tuple(gaps), encounter_ended,
+                           restart_requested)
     finally:
         close_session(session)
         pygame.quit()

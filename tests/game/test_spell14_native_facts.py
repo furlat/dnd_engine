@@ -382,6 +382,8 @@ def test_volume_geometry_excludes_other_owners_and_walls(blocker):
     observed=observer.senses.spatial_effects[zone.uuid]
     assert (6,4) in observed.visible_volume_positions and (8,4) not in observed.visible_volume_positions
     assert (6,4) not in observer.senses.visible
+    if blocker in ("other_fog", "other_darkness"):
+        assert not any(row.position == (8,4) for row in observed.upper_volume_surfaces)
     reset_engine_runtime()
 
 

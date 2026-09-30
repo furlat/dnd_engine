@@ -4,7 +4,7 @@ The [user complaint record](agent_docs/USER_COMPLAINTS.md) preserves the user's
 corrections and required contracts, including record-once event replay. Read it
 alongside this plan; a bounded implementation status does not relax those contracts.
 
-Updated 2026-09-24, retaining the user's correction: **develop the game, not a
+Updated 2026-09-30, retaining the user's correction: **develop the game, not a
 sequence of spell demonstrations.** Working branch: **codex/recovery-design**,
 based on **codex/july-reconstruction at 16a6bfe**. The human committed the
 validated recovery implementation as **58b0946** (`visio nextraction working`).
@@ -26,6 +26,99 @@ is now imported through the original Studio schema, independently of gameplay.
 ## Active work — playable encounter through shared capabilities
 
 ### Current position — read this before the checkpoint details
+
+**October 1 — move on to windows.** The user ended cloud iteration and asked for
+coordination with environment thread `01a0b501-8a27-7413-ba24-4a36e5b140d2`.
+Window opening/closing is canceled. Current scope: targetable and breakable
+windows, with crawling/climbing through selected apertures. The artist is
+finishing the Fantasy window masks, window-only and parent-wall destruction,
+and separate selection highlights; Desert remains deferred. Requested the exact
+family/state/traversal decisions and ready-versus-draft production handoff.
+Do not infer traversal, light or attack rules from sprite dimensions, and do not
+restart clouds or the obsolete openable-window work while coordinating this.
+
+**October 1 — window content scaffold.** The ten Fantasy families now have
+passive native definitions in `dnd/content/items/window_definitions.py`: ten
+parent walls and nine inserts, with no fictional insert for empty G7. They are
+not yet registered as playable items. The artist delivered the completed,
+human-approved destruction/highlight set. The focused
+[window plan](agent_docs/WINDOWS_IMPLEMENTATION_PLAN_2026-10-01.md) separates
+content authoring from the missing parent cascade, physical reach and
+state-gated traversal. Native profiles/clearance are not inferred from art.
+The nine-column preview atlas has uneven source sample times; preserve those
+times or use full native-rate renders during production packing.
+Both independent reviewers approved the scaffold/plan with explicit touch-spell
+reach coverage added. Ten families/nineteen IDs validate; focused typing is clean.
+The user confirmed simple window traversal at double normal movement cost;
+the plan records this as a multiplier, not a fixed fee.
+Attack passage must follow the existing spatial-provider/query pattern and be
+requester/attack-relative, like sense-dependent visibility. The user proposed
+Light melee weapons through a cleared opening; this predicate and nonweapon
+contact cases are being reasoned through. Do not implement a blanket movement
+test, a globally cached attack permission or window-specific attack subclasses.
+
+**October 1 — attack and opportunity-action audit completed.** The
+[detailed companion](agent_docs/WINDOW_ATTACK_ACCESS_AUDIT_2026-10-01.md) covers
+normal/class/natural attacks, wrapper costs, reaction timing, threat previews,
+ranged pressure, touch spells, direct object uses and retained spatial policy.
+Both anti-slop and anti-OOP reviewers approved it. Existing OA already resolves
+before departure for Move, Jump and TraverseConnector; preserve that ordering.
+Threat geometry currently uses adjacency and propagation without selected weapon
+context, so changing only ordinary Attack validation is insufficient. Baseline:
+sixteen selected combat/cost tests pass. No runtime change was made in this audit;
+window attack access and traversal are still planned, not implemented.
+
+**Current September 30 handoff:** the full art-led NPC roster and fixed-pack
+study now belongs to **Art-led NPC roster and rig authoring**, thread
+`01a0f3b4-277a-7fa0-9356-d1c9de5527b8` (GPT-6.1 Sol, extra-high; Luna studies).
+See the [study and handoff](agent_docs/PACKED_CREATURE_CONTENT_STUDY_2026-09-30.md).
+Keep modular humanoids/Body2 skeletons separate from fixed-artwork NPC variants.
+The user narrowed this chat to [cloud backend propagation](agent_docs/CLOUD_PROPAGATION_IMPLEMENTATION_2026-09-30.md).
+**October 1 — movement restoration after an incomplete rollback.** Removing the
+black fill alone retained the experimental destination-space upper mask and the
+wall ordering that switched when the field center crossed a wall. The user
+rejected the purportedly restored movement. Black remains removed. The field-center
+wall policy (including its authoring field) is now removed, restoring per-sample
+XYZ wall composition. Moving sight samples the already recorded endpoint grants
+at displayed world XYZ; decorative fringe ownership follows the current sphere,
+so future columns cannot cut the departure frame. No native visibility, spell
+mechanics, asset or frame-rate changes are part of this correction. Current
+validation: **225 tests passed**, scoped typing clean, **4/4 saved-event clips**
+with unchanged inputs. [Replacement movement review](http://127.0.0.1:8767/runs/20260930T224312Z-ab00bf/index.html).
+The prior rollback gallery `20260930T221537Z-b0d2c5` is rejected, not an accepted
+movement baseline. Do not restart the black-fill experiment or wall proposals.
+
+**October 1 — hidden-side wall face correction.** The user clarified that the
+isometric view shows wall faces the character cannot see: cloud observed only
+above that hidden side must not overwrite the known stone silhouette. The
+renderer now retains that upper-only permission per sample through composition,
+including during movement. Fully observed cloud and exposed ends retain XYZ
+depth. No black fill, field-center policy or native-rule change was added.
+The focused suite validated 234 cases (232 passed initially; the two comparisons
+of invisible alpha-zero RGB passed after normalizing that irrelevant storage;
+all nine departure/arrival checks passed on rerun). Typing is clean. Both saved
+wall clips were replayed unchanged and both movement intervals inspected in the
+[new review](http://127.0.0.1:8767/runs/20260930T230008Z-93ff39/index.html).
+Final visual approval remains with the user.
+
+The six maintained clouds retain connected backend propagation. Established
+occupancy survives later door changes. Their existing XYZ upper-surface grants
+remain separate from ground/actor sight. The original wall-case cut and subjective
+visibility discussion remain documented; passing tests do not imply the human
+approved every visual. Windows are a separate next task; multi-Z stays deferred.
+Storehouse/demo edits remain a paused experiment. The art-led NPC work belongs
+to the separate thread above.
+
+**Earlier September 30 — demo experiment, now paused.** The proposed furnished
+storehouse encounter uses the existing Pygame loop: one premade spellblade,
+real chest/door/lever/furniture, native Goblins and turns, clear completion and
+retry. Reuse current content and event-driven playback. The
+[bounded implementation plan](agent_docs/PLAYABLE_DEMO_2026-09-30.md) records the
+scope, independent reviews and acceptance. More spell art, windows and multi-Z
+are not prerequisites. Multi-Z is explicitly deferred. The separately reviewed
+[cloud/window backend design](agent_docs/CLOUDS_AND_WINDOWS_BACKEND_DESIGN_2026-09-30.md)
+remains pending; closing a door does not retract an already cast cloud. Godot has
+the separate 32 FPS sensory-art handoff request; it does not block this demo.
 
 **Completed September 24 — selected spell media packed at 32 FPS.** The official
 248-record / 251-phase delivery is installed with unchanged gameplay, target
@@ -75,14 +168,15 @@ replays identical saved inputs with both observers/four cameras. The reported
 moments and the full movement were visually inspected. The user accepted this
 correction before requesting the two-second asset integration above.
 
-**Separate observed wall issue:** the native maintained clouds still construct
+**September 24 wall finding — resolved by the September 30 backend unit above:**
+the native maintained clouds constructed
 line-of-effect spheres, while the XYZ compositor defaults to connected propagation.
-Fog's higher cuts above an inset wall come from those 36 native cells, not actual
+Fog's higher cuts above an inset wall came from those 36 native cells, not actual
 XYZ/wall intersections. Do not bypass their recorded footprint or claim all wall
-silhouettes are clean. The user has been asked whether the existing full-propagation
-agreement also covers all six maintained clouds. Align the native/render contract
-after that decision and generate fresh inputs if gameplay changes; preserve old
-recordings. No gameplay rule or asset changed in the edge/fringe repair.
+silhouettes are clean. The user subsequently approved connected propagation for
+the six maintained clouds. Fresh inputs exercise that gameplay change; existing
+recordings and the approved renderer remain intact. No gameplay rule or asset
+changed in the earlier edge/fringe repair.
 
 **Completed September 24 correction — cloud XYZ and visible shield surfaces.** Human review
 found foreground wall leakage, tile-column holes around Globe, and loss of the

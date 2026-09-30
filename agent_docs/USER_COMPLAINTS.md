@@ -793,3 +793,23 @@ four-camera and paired-perspective review workflow within that smaller scope.
   magic, including dispersal of an emitted projectile, rather than an abrupt cut.
 - Preserve actual recorded outcomes and ordinary approved spell behavior while
   adjusting these shared presentation rules; review the same saved input sequences.
+
+## September 30 — cloud wall visuals must retain the approved result
+
+The user rejected the cut above the inset wall in `persistent-cloudkill-wall`
+(camera 0, about 2.956 seconds) and reiterated that this backend task must not
+change the approved renderer. Unchanged source and passing replay checks are not
+proof of unchanged visible output. Compare the same saved input and wall layout;
+the approved map-edge wall case cannot stand in for an inset-wall case. Do not
+mark the cloud work visually complete, substitute an easier scene, or silently
+expand into renderer/visibility changes. The concrete comparison is recorded in
+[the cloud unit](CLOUD_PROPAGATION_IMPLEMENTATION_2026-09-30.md).
+
+### September 30 — wall cap after upper cloud repair
+
+The missing upper volume is improved, but the user rejected cloud painted over
+the stone cap: “the wall should never be covered,” then “just draw the wall above
+the cloud … in that situation.” Do not explain away that artifact as foreground
+samples. Preserve the complete foreground wall silhouette without reopening the
+cloud hole. The user requested an ad-hoc artifact with visual alternatives; the
+same-cast A/B wall comparison is now saved separately from gameplay galleries.

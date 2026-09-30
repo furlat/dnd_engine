@@ -9,6 +9,7 @@ import pygame
 import pytest
 
 from dnd.core.events import EventQueue
+from dnd.content.items.environment_item_builders import build_directional_wall
 from dnd.core.gridmap import get_map
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.world_edges import ElevationSurfaceKind
@@ -17,9 +18,13 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.abjuration import GlobeOfInvulnerability
 from dnd.spells.conjuration import Cloudkill, CloudkillZone, FogCloud
+from dnd.types.world import CardinalDirection
 from game.animation import view_facing
 from game.animation_data import load_animation_data
 from game.animation_types import ProjectileStorage, SpatialMediaBinding, SpatialMediaLayer
+from game.app import draw_frame
+from game.assets import SurfaceCache, load_catalog
+from game.area_media import BoundarySprite
 from game.choreography import bind_choreography, sample_choreography
 from game.maintained_media import maintained_media_alpha, maintained_media_frame
 from game.player_reduction import decode_player_sequence, reduce_lineage
@@ -31,6 +36,7 @@ from game.spatial_media_draw import spatial_media_draw_commands
 from game.spatial_media_lifetime import register_spatial_lifetimes
 from game.world_animation import sample_world_transitions
 from tests.game.test_spell14_native_facts import actors, saved_views
+from tests.game.test_area_scene_occlusion import boundary_silhouette
 from tests.engine.test_spell_families import create_family_caster, create_family_target
 
 
@@ -40,6 +46,109 @@ def rendering():
     pygame.display.set_mode((640, 480))
     yield load_animation_data()
     pygame.quit()
+
+
+@pytest.mark.parametrize("quadrant", (0, 1))
+def test_unseen_side_cloud_does_not_overwrite_known_wall_face(rendering, quadrant):
+    caster, _ = actors()
+    Entity.update_entity_position(caster, (3, 6))
+    for y in range(6, 12):
+        build_directional_wall().place_on_grid((11, y), boundary_direction=CardinalDirection.EAST)
+    Entity.update_all_entities_senses(max_distance=20)
+    cast = Cloudkill(source_entity_uuid=caster.uuid, end_position=(10, 8), template=False).apply()
+    assert cast is not None and not cast.canceled
+    start = EventQueue.event_cursor()
+    caster.on_turn_start(round_number=2, turn_index=0)
+    payload, = saved_views((caster,), start).values()
+    state, roots = decode_player_sequence(payload)
+    state = reduce_lineage(state, roots[0])
+    assert state.senses is not None
+    effect, = state.senses.spatial_effects.values()
+    upper = {row.position for row in effect.upper_volume_surfaces}
+    assert upper and not upper.intersection(effect.visible_volume_positions)
+    camera = Camera(quadrant=quadrant, zoom=.5, viewport=(640, 480)).with_focus((11, 8))
+    catalog = load_catalog()
+    cache = SurfaceCache(catalog)
+    # Inspect the middle of the real wall; exposed ends have independent XYZ
+    # depth. Native upper-only sight must not turn the stone face into a hole.
+    middle = replace(state, objects={key: obj for key, obj in state.objects.items()
+                                    if obj.placement.position in ((11, 8), (11, 9))})
+    opaque = pygame.surfarray.array_alpha(boundary_silhouette(middle, catalog, cache, camera)) == 255
+    commands = tuple(row for row in spatial_media_draw_commands(state, rendering, 5000., camera)
+                     if row.evidence[1] in upper)
+    assert commands
+    screen = pygame.Surface(camera.viewport)
+
+    def pixels(extra):
+        draw_frame(screen, state, catalog, cache, camera, 5., show_grid=False,
+                   show_debug=False, mouse_position=None, extra_commands=extra)
+        return pygame.surfarray.array3d(screen)
+
+    changed = np.any(pixels(commands) != pixels(()), axis=2)
+    assert not np.any(changed & opaque), "Upper-only cloud overwrote the hidden side's known stone face"
+    assert np.any(changed & ~opaque), "The visible cloud above the wall must remain"
+    assert EventQueue.event_cursor() == 0
+
+
+@pytest.mark.parametrize("quadrant", range(4))
+@pytest.mark.parametrize("with_walls", (False, True))
+def test_moving_cloud_starts_with_departure_sight_not_destination_mask(rendering, quadrant, with_walls):
+    caster, _ = actors()
+    Entity.update_entity_position(caster, (3, 6))
+    for y in range(6, 12):
+        build_directional_wall().place_on_grid((11, y), boundary_direction=CardinalDirection.EAST)
+    Entity.update_all_entities_senses(max_distance=20)
+    cast = Cloudkill(source_entity_uuid=caster.uuid, end_position=(10, 8), template=False).apply()
+    assert cast is not None and not cast.canceled
+    start = EventQueue.event_cursor()
+    caster.on_turn_start(round_number=2, turn_index=0)
+    payload, = saved_views((caster,), start).values()
+    before, heads = decode_player_sequence(payload)
+    group = bind_choreography(before, heads[0], rendering)
+    transition, = (row for row in group.world_transitions if row.spatial_motion is not None)
+    path = transition.spatial_motion
+    assert path is not None
+    assert len(path.before.visible_volume_positions) > len(path.after.visible_volume_positions)
+    camera = Camera(quadrant=quadrant, viewport=(900, 700)).with_focus((11, 8))
+    boundaries = ()
+    if with_walls:
+        catalog = load_catalog()
+        boundaries = (BoundarySprite(tuple(obj.placement for obj in before.objects.values()),
+            boundary_silhouette(before, catalog, SurfaceCache(catalog), camera), (0, 0),
+            (100, 0., 0., 0, ('wall',))),)
+
+    def pixels(state, transitions=()):
+        surface = pygame.Surface(camera.viewport, pygame.SRCALPHA)
+        for row in spatial_media_draw_commands(state, rendering, 5000., camera, transitions):
+            image = row.surface
+            if with_walls and row.volume is not None:
+                image, _ = compose_volume(image, row.volume, camera,
+                    destination=row.destination, visual_boundaries=boundaries)
+            surface.blit(image, row.destination, special_flags=row.blend)
+        # Alpha-zero RGB in differently cropped pieces is invisible under normal
+        # cloud blending; compare displayed color/coverage, not that storage.
+        pygame.surfarray.pixels3d(surface)[:] *= (pygame.surfarray.array_alpha(surface) > 0)[:, :, None]
+        return pygame.image.tobytes(surface, "RGBA")
+
+    for fraction in (0., 1.):
+        now = transition.start_ms + fraction * path.duration_ms
+        sample = sample_choreography(group, now)
+        assert pixels(sample.displayed, sample_world_transitions(group.world_transitions, now)) == pixels(
+            before if fraction == 0 else sample.displayed), (quadrant, fraction)
+    # The first nonzero instant must not introduce the destination-only
+    # column before the moving sphere can rise above the wall there.
+    now = transition.start_ms + .00001
+    sample = sample_choreography(group, now)
+    departure = np.frombuffer(pixels(before), dtype=np.uint8).reshape(-1, 4)
+    moving = np.frombuffer(pixels(sample.displayed, sample_world_transitions(group.world_transitions, now)),
+                           dtype=np.uint8).reshape(-1, 4)
+    assert not np.any((moving[:, 3] > 0) & (departure[:, 3] == 0))
+    now = transition.start_ms + path.duration_ms - .00001
+    approaching = sample_choreography(group, now)
+    at_end = sample_choreography(group, transition.start_ms + path.duration_ms)
+    assert pixels(approaching.displayed, sample_world_transitions(group.world_transitions, now)) == pixels(
+        at_end.displayed), "The last moving frame must not drop a different mask on arrival"
+    assert EventQueue.event_cursor() == 0
 
 
 @pytest.mark.parametrize("production", (False, True))

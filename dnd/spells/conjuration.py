@@ -95,6 +95,7 @@ from dnd.spatial.memberships import (
 )
 from dnd.spatial.transitions import bind_spatial_interactions
 from dnd.types.spatial_effects import (
+    AreaPropagation,
     SpatialEffectChangeOperation,
     SpatialEffectAnchorKind,
     SpatialEffectBlockingPolicy,
@@ -1913,6 +1914,7 @@ class CloudkillZone(AreaCondition):
         }),
     )
     zone_shape: str = Field(default="sphere", description="Area shape used by cloudkill zone to compute affected grid positions.")
+    area_propagation: AreaPropagation = "connected"
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by cloudkill zone.")
     adds_difficult_terrain: bool = Field(default=False, description="Whether cloudkill zone makes affected tiles difficult terrain.")
 
@@ -2716,6 +2718,7 @@ class FogCloudZone(AreaCondition):
         default=SpatialEffectOccupancyPolicy.EXCLUSIVE_TRANSFORMING,
     )
     zone_shape: str = Field(default="sphere", description="Area shape used by fog cloud zone to compute affected grid positions.")
+    area_propagation: AreaPropagation = "connected"
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by fog cloud zone.")
 
     optical_obscurement: Optional[OpticalObscurement] = Field(
@@ -2898,6 +2901,7 @@ class DarknessZone(AreaCondition):
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
     )
     zone_shape: str = Field(default="sphere", description="Area shape used by darkness zone to compute affected grid positions.")
+    area_propagation: AreaPropagation = "connected"
     zone_radius_feet: int = Field(default=15, description="Zone radius in feet used by darkness zone.")
 
     sets_light_level: Optional[LightLevel] = Field(default=LightLevel.DARKNESS, description="Darkness caps objective illumination in affected cells.")
@@ -3306,6 +3310,7 @@ class InsectPlagueZone(AreaCondition):
         }),
     )
     zone_shape: str = Field(default="sphere", description="Area shape used by insect plague zone to compute affected grid positions.")
+    area_propagation: AreaPropagation = "connected"
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by insect plague zone.")
     adds_difficult_terrain: bool = Field(default=True, description="Whether insect plague zone makes affected tiles difficult terrain.")
 
@@ -3544,6 +3549,7 @@ class IncendiaryCloudZone(AreaCondition):
         }),
     )
     zone_shape: str = Field(default="sphere", description="Area shape used by incendiary cloud zone to compute affected grid positions.")
+    area_propagation: AreaPropagation = "connected"
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by incendiary cloud zone.")
     adds_difficult_terrain: bool = Field(default=False, description="Whether incendiary cloud zone makes affected tiles difficult terrain.")
     optical_obscurement: Optional[OpticalObscurement] = Field(
@@ -3872,6 +3878,7 @@ class StinkingCloudZone(AreaCondition):
         }),
     )
     zone_shape: str = Field(default="sphere", description="Area shape used by stinking cloud zone to compute affected grid positions.")
+    area_propagation: AreaPropagation = "connected"
     zone_radius_feet: int = Field(default=20, description="Zone radius in feet used by stinking cloud zone.")
     adds_difficult_terrain: bool = Field(default=False, description="Whether stinking cloud zone makes affected tiles difficult terrain.")
 

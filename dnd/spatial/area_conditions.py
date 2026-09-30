@@ -32,6 +32,7 @@ from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.traps import TrapState
 from dnd.types.world import OccupancyLayer
 from dnd.types.spatial_effects import (
+    AreaPropagation,
     SpatialEffectAnchorKind,
     SpatialEffectBlockingPolicy,
     SpatialEffectChangeOperation,
@@ -872,6 +873,7 @@ class AreaCondition(SpatialCondition):
     """Shared geometry and cell mechanics owned by one spatial condition."""
 
     zone_shape: str = Field(default="sphere")
+    area_propagation: AreaPropagation = "line_of_effect"
     zone_radius_feet: int = Field(default=20, ge=0)
     zone_width_feet: int = Field(default=5, ge=5)
     zone_direction: Optional[Tuple[int, int]] = None
@@ -905,11 +907,13 @@ class AreaCondition(SpatialCondition):
             previous = observer.senses.spatial_effects.get(self.uuid) if observer is not None else None
             if previous is not None:
                 return observed.model_copy(update={"area_geometry": previous.area_geometry,
+                    "area_propagation": self.area_propagation,
                     "anchor_elevation_steps": previous.anchor_elevation_steps})
         geometry = (snapshot_aoe_presentation_geometry(self._area_shape(anchor), anchor)
                     if anchor is not None else None)
         support = get_map().get_tile(*anchor) if anchor is not None else None
         return observed.model_copy(update={"area_geometry": geometry,
+            "area_propagation": self.area_propagation,
             "anchor_elevation_steps": support.height if support is not None else None})
 
     def _area_shape(self, anchor: Tuple[int, int]) -> AoEShape:
@@ -958,6 +962,7 @@ class AreaCondition(SpatialCondition):
             )
         else:
             raise ValueError(f"Unsupported area shape: {self.zone_shape}")
+        shape.propagation = self.area_propagation
         return shape
 
     def _compute_affected_positions(self) -> Set[Tuple[int, int]]:

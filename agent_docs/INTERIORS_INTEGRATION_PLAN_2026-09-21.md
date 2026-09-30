@@ -5,6 +5,13 @@ Authority: [RECOVERY_PLAN](../RECOVERY_PLAN.md), the user's consolidated asset
 handoff and subsequent instruction to cover all assets, backend first.
 This replaces this document's earlier small-lodge-only delivery framing.
 
+**September 30 window scope update:** the first window release follows the
+[cloud/window action plan](CLOUDS_AND_WINDOWS_BACKEND_DESIGN_2026-09-30.md): existing
+whole-edge channels, shared physical reach, and user-selected state profiles.
+The numerical aperture, eye/emitter-height and per-ray opening work described
+below is deferred, not a prerequisite for these simple windows. The environment
+artist is cataloguing the actual window families for the user's choices.
+
 **Destruction refinement:** the user selected same-object destroyed state and
 requested complete existing/new content coverage. The reviewed
 [dedicated destruction plan](DESTRUCTION_LIFECYCLE_PLAN_2026-09-21.md) owns that

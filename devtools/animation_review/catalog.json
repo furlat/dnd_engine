@@ -10939,5 +10939,22 @@
     },
     "framing": "actors",
     "tail_duration_ms": 7000
+  },
+  {
+    "id": "cloud-door-lifecycle",
+    "title": "Insect Plague \u00b7 spread, close, reopen and break door",
+    "tags": [
+      "cloud-backend",
+      "wall-interaction",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real cast around an open doorway. Close, reopen, close and destroy the door with ordinary attacks: native cloud cells and turn effects persist. End concentration to clear. Renderer unchanged. Known visual limitation: after closure the existing compositor hides the swarm on the caster side despite retained cells and continuing damage; inspect around 3.3 seconds. Passing checks establish event consistency, not visual approval.",
+    "tail_duration_ms": 1600,
+    "scenario": {
+      "kind": "persistent-spell",
+      "program": "insect_plague",
+      "environment": "door-cycle"
+    }
   }
 ]

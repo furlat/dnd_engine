@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from math import gcd
-from typing import AbstractSet, Literal, Optional, Set, Tuple
+from typing import AbstractSet, Optional, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field
@@ -24,6 +24,7 @@ from dnd.core.presentation_geometry import (
     SpherePresentationGeometry,
 )
 from dnd.blocks.sensory import Senses
+from dnd.types.spatial_effects import AreaPropagation
 
 
 class AoEShape(BaseObject):
@@ -40,7 +41,7 @@ class AoEShape(BaseObject):
     computed_origin: Optional[Tuple[int, int]] = Field(default=None, description="Origin used by the last computation.")
     affected_positions: Set[Tuple[int, int]] = Field(default_factory=set, description="Positions affected by the last computation.")
     affected_entity_uuids: Set[UUID] = Field(default_factory=set, description="Entity UUIDs affected by the last computation.")
-    propagation: Literal["line_of_effect", "connected"] = "line_of_effect"
+    propagation: AreaPropagation = "line_of_effect"
 
     def _connected_positions(self, origin: Tuple[int, int], geometric: Set[Tuple[int, int]]) -> Set[Tuple[int, int]]:
         """Spread through open edges without extending the original footprint.

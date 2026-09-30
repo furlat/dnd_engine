@@ -62,6 +62,7 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
     for identity, effect in effects.items():
         translation = (0., 0.)
         previous_suppressions = ()
+        previous_effect = None
         movement = moving.get(identity)
         if movement is not None:
             path = movement.transition.spatial_motion
@@ -71,7 +72,12 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
             translation = ((start_position[0] - end_position[0]) * remaining,
                            (start_position[1] - end_position[1]) * remaining)
             previous_suppressions = path.before.suppressions
-            effect = path.after
+            if movement.elapsed_ms == 0:
+                effect = path.before
+                translation = (0., 0.)
+            else:
+                previous_effect = path.before
+                effect = path.after
         binding = data.spatial_media.get(effect.content_ref.content_id)
         geometry = effect.area_geometry
         if binding is None or identity in introducing or geometry is None:
@@ -115,7 +121,8 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
                           if suppression in protections for position in suppression.positions))))
                 commands.extend(field_media_commands(state, data, identity, geometry, admitted,
                     binding, layer, layer_index, asset_id, frame, camera, alpha, translation,
-                    anchor_elevation_steps=effect.anchor_elevation_steps, area=area, exclusions=exclusions))
+                    anchor_elevation_steps=effect.anchor_elevation_steps, area=area, exclusions=exclusions,
+                    upper_surfaces=effect.upper_volume_surfaces, previous_effect=previous_effect))
         if not isinstance(geometry, (LinePresentationGeometry, SpherePresentationGeometry)):
             continue
         origin = geometry.origin if isinstance(geometry, LinePresentationGeometry) else geometry.center

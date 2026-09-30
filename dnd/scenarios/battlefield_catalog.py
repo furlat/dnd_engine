@@ -7,7 +7,7 @@ from typing import Callable, cast
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from dnd.content.items.authored_item_builders import build_authored_item
-from dnd.content.items.world_prop_builders import settle_world_prop
+from dnd.content.items.world_prop_builders import build_world_prop, settle_world_prop
 from dnd.content.items.environment_item_builders import (
     build_control_lever,
     build_directional_door,
@@ -336,6 +336,22 @@ def _preview_for_battlefield(battlefield_id: str) -> BattlefieldPreview:
 
 BATTLEFIELDS: tuple[BattlefieldDefinition, ...] = (
     BattlefieldDefinition(
+        battlefield_id="battlefield.storehouse_demo", title="Occupied Storehouse",
+        width=13, height=9, light_level="darkness",
+        tags=("interior", "door", "furniture", "demo"),
+        capabilities=("closed-door", "remote-door", "container-lid", "furniture", "wall-torches"),
+        preview=BattlefieldPreview(objects=(
+            *(_preview_object((6, y), "door" if y == 4 else "wall",
+                              "Storehouse Door" if y == 4 else "Storehouse Wall",
+                              blocked_directions=("west",), is_open=False if y == 4 else None)
+              for y in range(9)),
+            _preview_object((2, 3), "loot_chest", "Supply Chest"),
+            _preview_object((3, 4), "trap_lever", "Door Lever"),
+            _preview_object((4, 1), "wall_torch", "Torch"),
+            _preview_object((10, 1), "wall_torch", "Torch"),
+        )),
+    ),
+    BattlefieldDefinition(
         battlefield_id="battlefield.environment_controls", title="Control Room and Store",
         width=13, height=10, light_level="darkness",
         tags=("environment", "controls", "container"),
@@ -657,6 +673,46 @@ def _build_standard_hazards(
         notable_positions={"door": door_position},
         object_uuids={"door": environment.barrier.door.uuid},
     )
+
+
+def _build_storehouse_demo(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
+    """One small playable room using ordinary doors, loot, lights and furniture."""
+    for x in range(definition.width):
+        for y in range(definition.height):
+            grid.set_tile(x, y, name="Wooden Floor", surface=TileSurface(base_material=Material.WOOD),
+                          default_light=LightLevel.DARKNESS)
+    objects: dict[str, UUID] = {}
+    door = build_directional_door(display_name="Storehouse Door")
+    door.place_on_grid((6, 4), boundary_direction=CardinalDirection.WEST)
+    objects["door"] = door.uuid
+    for y in range(definition.height):
+        if y != 4:
+            wall = build_directional_wall(blocked_channels=STANDARD_BLOCKING_CHANNELS)
+            wall.place_on_grid((6, y), boundary_direction=CardinalDirection.WEST)
+    lever = build_control_lever(LeverLink(target_item_uuid=door.uuid, target_kind="door"))
+    lever.name = "Door Lever"
+    lever.place_on_grid((3, 4))
+    objects["lever"] = lever.uuid
+    chest = build_storage_chest("Supply Chest", include_loot_all_action=True, is_open=False)
+    chest.chest_inventory.source_entity_uuid = chest.uuid
+    chest.chest_inventory.add_item(build_healing_potion(chest.uuid, heal_amount=8))
+    chest.place_on_grid((2, 3))
+    objects["chest"] = chest.uuid
+    for key, position in (("entry_torch", (4, 1)), ("store_torch", (10, 1))):
+        torch = build_wall_torch()
+        torch.mount(position, lit=False)
+        objects[key] = torch.uuid
+    for key, item_id, position in (
+        ("bed", "environment.furniture.bed", (1, 7)),
+        ("table", "environment.furniture.table", (8, 2)),
+        ("crates", "environment.furniture.crate_stack", (10, 7)),
+    ):
+        item = build_world_prop(item_id, defer_behaviors=True)
+        item.place_on_grid(position)
+        objects[key] = item.uuid
+    return BuiltBattlefield(definition=definition, environment=None,
+        notable_positions={"entry": (2, 4), "door": (6, 4), "lever": (3, 4), "chest": (2, 3)},
+        object_uuids=objects)
 
 
 def _build_environment_workshop(definition: BattlefieldDefinition, grid: GridMap) -> BuiltBattlefield:
@@ -1097,6 +1153,7 @@ BattlefieldBuilder = Callable[
 ]
 
 _BUILDERS: dict[str, BattlefieldBuilder] = {
+    "battlefield.storehouse_demo": _build_storehouse_demo,
     "battlefield.environment_controls": _build_environment_controls,
     "battlefield.environment_workshop": _build_environment_workshop,
     "battlefield.visibility_open_range": _build_visibility_open_range,

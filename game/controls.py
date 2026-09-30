@@ -51,6 +51,14 @@ def _select_action(state: MenuState, index: int, count: int, panel: pygame.Rect)
     return MenuState(selected_action=index, scroll=scroll)
 
 
+def initial_menu(actions: AvailableActionsResult, panel_rect: pygame.Rect) -> MenuState:
+    """Start on a usable choice while keeping unavailable actions inspectable."""
+    index = next((i for i, row in enumerate(actions.all_actions) if row.valid_targets), 0)
+    if not actions.all_actions:
+        return MenuState()
+    return _select_action(MenuState(), index, len(actions.all_actions), panel_rect)
+
+
 def _choose_target(state: MenuState, action: AvailableActionInfo,
                    target: AvailableTarget) -> tuple[MenuState, ActionSelection | None]:
     if action.allow_same_target is False and target.index in state.selected_targets:
@@ -88,6 +96,10 @@ def handle_menu_event(
         visible = _rows_rect(panel_rect).height // _ROW_HEIGHT
         return replace(state, scroll=max(0, min(len(rows) - visible, state.scroll - event.y * 3))), None
     if event.type == pygame.KEYDOWN:
+        if event.key == pygame.K_m:
+            index = next((i for i, row in enumerate(rows) if row.behavior_id == "action.move"), None)
+            if index is not None:
+                return _select_action(state, index, len(rows), panel_rect), None
         if event.key in (pygame.K_UP, pygame.K_DOWN):
             return _select_action(state, state.selected_action + (-1 if event.key == pygame.K_UP else 1),
                                   len(rows), panel_rect), None
@@ -226,7 +238,7 @@ def draw_menu(
                 text(f"Allocation {len(state.selected_targets)}/{action.num_projectiles or 1}", y + 80)
         text(state.status, y + 101, (240, 201, 128))
     text("Up/Down action · Tab target · Enter", panel_rect.bottom - 78)
-    text("Click map · Backspace clear", panel_rect.bottom - 58)
+    text("M move · Click map · Backspace clear", panel_rect.bottom - 58)
     button = _end_button(panel_rect)
     pygame.draw.rect(screen, (55, 69, 89) if enabled else (38, 42, 51), button)
     text("End turn [N]", button.top + 3)

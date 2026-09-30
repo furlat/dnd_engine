@@ -3358,6 +3358,57 @@ class GridMap:
             record_action_timing("grid.directional_fov.total_ms", total_started)
         return visible_positions
 
+    def upper_volume_sight_planes(
+        self, origin: Tuple[int, int], destination: Tuple[int, int],
+    ) -> Tuple[Tuple[float, float, float], ...]:
+        """Clearance over finite optical boundaries, from existing support height.
+
+        This grants only an upper volume surface. Center-cell opacity remains
+        opaque; ordinary ground/actor FOV is unchanged. Include boundary ends
+        crossed by any corner ray to conservatively cover the whole target cell.
+        """
+        route = supercover_line(origin, destination)
+        support = self.get_tile(*origin)
+        if support is None or any(self.is_blocking_optics(*cell) for cell in route[1:]):
+            return ()
+        providers: Set[UUID] = set()
+        for cell in route:
+            for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
+                nearby = cell[0] + dx, cell[1] + dy
+                for direction in CardinalDirection:
+                    providers.update(self.get_boundary_objects_at(nearby, direction))
+        planes: Set[Tuple[float, float, float]] = set()
+        for identity in providers:
+            provider = BaseBlock.get(identity)
+            placement = self.get_object_placement(identity)
+            structure = provider.get_boundary_structure() if provider is not None else None
+            if (placement is None or structure is None
+                    or WorldEdgeChannel.OPTICAL not in structure.blocked_channels):
+                continue
+            direction = placement.boundary_direction
+            axis = 0 if direction in (CardinalDirection.EAST, CardinalDirection.WEST) else 1
+            offset = .5 if direction in (CardinalDirection.EAST, CardinalDirection.NORTH) else -.5
+            boundary = placement.position[axis] + offset
+            distance = boundary - origin[axis]
+            if distance == 0:
+                continue
+            crossed = False
+            for dx, dy in ((-.5, -.5), (-.5, .5), (.5, -.5), (.5, .5), (0., 0.)):
+                end = destination[0] + dx, destination[1] + dy
+                delta = end[axis] - origin[axis]
+                if delta == 0:
+                    continue
+                t = distance / delta
+                cross = origin[1-axis] + t * (end[1-axis] - origin[1-axis])
+                if 0 < t <= 1 and abs(cross - placement.position[1-axis]) <= .500001:
+                    crossed = True
+                    break
+            if crossed:
+                slope = (placement.top_height_steps - support.height) / distance
+                planes.add((slope if axis == 0 else 0., slope if axis == 1 else 0.,
+                            support.height - slope * origin[axis]))
+        return tuple(sorted(planes))
+
     def compute_fov(
         self,
         origin: Tuple[int, int],

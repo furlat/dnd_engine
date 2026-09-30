@@ -16,6 +16,10 @@ from dnd.core.content.encounters import (
     EncounterRecipe,
 )
 from dnd.core.gridmap import GridMap
+from dnd.core.world_edges import (
+    progressive_elevation_transition, transition_axis, world_edge_contribution_allows,
+)
+from dnd.types.world import MovementMode, WorldEdgeChannel
 
 
 ResolvedRosterPositions = dict[str, dict[str, tuple[int, int]]]
@@ -358,6 +362,10 @@ def _topology_transition_allows(
             from_position,
             to_position,
         )
+    source = grid.get_tile(*from_position)
+    destination = grid.get_tile(*to_position)
+    if source is None or destination is None or source.height != destination.height:
+        return False
     bridges = (
         (from_position[0] + dx, from_position[1]),
         (from_position[0], from_position[1] + dy),
@@ -406,7 +414,26 @@ def _topology_cardinal_transition_allows(
         != 1
     ):
         return False
-    return grid.can_transition(from_position, to_position)
+    if grid.get_tile(*from_position) is None or grid.get_tile(*to_position) is None:
+        return False
+    edge = grid.get_world_edge(from_position, to_position)
+    if edge.elevation_delta_steps != 0 and not progressive_elevation_transition(
+        edge.source_height_steps, edge.source_surface_kind, edge.source_slope_axis,
+        edge.destination_height_steps, edge.destination_surface_kind, edge.destination_slope_axis,
+        transition_axis(from_position, to_position),
+    ):
+        return False
+    for contribution in (*edge.exit_contributions, *edge.entry_contributions):
+        provider = BaseBlock.get(contribution.provider_uuid)
+        if provider is not None and provider.get_spatial_open_state() is False:
+            continue
+        if not world_edge_contribution_allows(
+            contribution, WorldEdgeChannel.MOVEMENT,
+            source_height=edge.source_height_steps, destination_height=edge.destination_height_steps,
+            movement_mode=MovementMode.WALKING,
+        ):
+            return False
+    return True
 
 
 __all__ = [

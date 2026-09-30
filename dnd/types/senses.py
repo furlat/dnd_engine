@@ -14,6 +14,7 @@ from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.traps import TrapState
 from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.spell_suppression import SpellSuppression
+from dnd.types.spatial_effects import AreaPropagation
 
 
 class SensesType(str, Enum):
@@ -54,6 +55,18 @@ class PerceivedContact(BaseModel):
     )
 
 
+class VolumeSurfaceSight(BaseModel):
+    """Upper volume permission; never permission to see its ground or occupants.
+
+    A sample is visible above every plane: height > a*x + b*y + c.
+    Coordinates and height use native grid/elevation steps, before animation.
+    """
+
+    model_config = ConfigDict(frozen=True)
+    position: tuple[int, int]
+    lower_height_planes: tuple[tuple[float, float, float], ...] = Field(min_length=1)
+
+
 class PerceivedSpatialEffect(BaseModel):
     """Last observed spatial effect and only its discovered footprint cells."""
 
@@ -72,8 +85,10 @@ class PerceivedSpatialEffect(BaseModel):
     anchor_position: tuple[int, int] | None = None
     anchor_elevation_steps: int | None = None
     area_geometry: AoEPresentationGeometry | None = None
+    area_propagation: AreaPropagation | None = None  # Absent in historical recordings.
     deposit_source: MaterialDepositSource | None = None
     visible_volume_positions: tuple[tuple[int, int], ...] = ()
+    upper_volume_surfaces: tuple[VolumeSurfaceSight, ...] = ()
     suppressions: tuple[SpellSuppression, ...] = ()
 
 

@@ -120,6 +120,30 @@ def test_registered_door_holes_and_edges_preserve_normal_compositing(alpha):
     assert actual.get_at((0, 0)) == expected.get_at((0, 0))
 
 
+@pytest.mark.parametrize("alpha", (0, 128, 255))
+def test_upper_only_cloud_keeps_stone_in_front_but_preserves_visible_corner_and_opening(alpha):
+    image = pygame.Surface((3, 1), pygame.SRCALPHA); image.fill((100, 50, 25, 255))
+    stone = pygame.Surface((3, 1), pygame.SRCALPHA); stone.fill((20, 60, 100, alpha))
+    key = (100, 16., 0., 0, ('wall',))
+    boundary = BoundarySprite((wall((0, 0), CardinalDirection.EAST),), stone, (0, 0), key)
+    # First two samples share XYZ but have different received sight. The last
+    # extends beyond the finite wall end and cannot be hidden by its face.
+    xyz = np.array([[[.75, 2.5, .5]], [[.75, 2.5, .5]], [[.75, 2.5, 2.]]])
+    volume = SurfaceVolume((0, 0), 0, 4, xyz, np.ones((3, 1)), 1,
+                           upper_only=np.array([[True], [False], [True]]))
+    result, depth = compose_volume(image, volume, Camera(), visual_boundaries=(boundary,))
+    # Normal alpha compositing, including an entirely open sprite hole.
+    actual = pygame.Surface((3, 1)); actual.fill((0, 0, 0))
+    commands = (DrawCommand(key, result, (0, 0), 0, (), world_depth=depth),
+                DrawCommand(key, stone, (0, 0), 0, ()))
+    for row in sorted(split_world_depth(commands), key=lambda row: row.key):
+        actual.blit(row.surface, row.destination)
+    expected = pygame.Surface((1, 1)); expected.blit(image, (0, 0)); expected.blit(stone, (0, 0))
+    assert actual.get_at((0, 0)) == expected.get_at((0, 0))
+    assert actual.get_at((1, 0)) == image.get_at((1, 0)), "Full sight retains foreground XYZ depth"
+    assert actual.get_at((2, 0)) == image.get_at((2, 0)), "The corner must not become an infinite wall"
+
+
 def test_boundary_corner_segments_are_finite_and_openings_are_not_inferred_solid():
     art = pygame.Surface((3, 1), pygame.SRCALPHA); art.fill((20, 60, 100, 255))
     corner = BoundarySprite((wall((0, 0), CardinalDirection.EAST),

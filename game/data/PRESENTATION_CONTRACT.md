@@ -1411,3 +1411,40 @@ providers and removed providers remain respected. A sphere shell is submitted
 when its footprint or surface is currently observed, using received anchor height;
 its center ground tile need not be visible. Remembered membership alone is
 insufficient. Actual geometric occlusion then determines which shell pixels show.
+
+### Upper surfaces of observed obscuring volumes
+
+`PerceivedSpatialEffect.upper_volume_surfaces` is optional current perception data
+(default empty for historical recordings). Each row names an actual occupied
+cell and nonempty `lower_height_planes`; an XYZ sample is permitted only when its
+native elevation is above every `a*x + b*y + c` plane. Coordinates refer to the
+native world, and are evaluated at the displayed XYZ during movement. These grants expose neither
+the ground nor its occupants, and do not establish a hidden protection provider.
+Full `visible_volume_positions` retains its existing meaning.
+
+Native perception derives conservative clearance over finite structural boundaries
+from the observer's support elevation. Existing range, first-surface, lighting and
+other-owner obscuration checks still apply. Current grants expire on perception
+refresh; remembered effect geometry alone cannot renew them. The renderer applies
+this permission using authored XYZ, then ordinary finite wall and Globe occlusion.
+No sprite/art metadata enters native perception.
+
+Maintained XYZ fields already have resolved observed occupancy. Their compositor
+performs camera occlusion against current doors without re-running propagation
+from the spell center. This does not change instantaneous volume propagation.
+
+Moving maintained fields use the already recorded before/after surface grants.
+Sight planes stay in world space while the artwork moves. Decorative edge owners
+remain separate from visibility: their ownership follows the displayed sphere,
+including at map edges. Upper grants are usable only once the displayed sphere
+can reach above their plane. Departure and arrival reproduce their stationary
+states; playback does not query native senses. Unknown columns remain unknown.
+
+Fully observed cloud uses per-sample XYZ depth. Samples received only through
+upper-surface grants retain that distinction through wall composition: the known
+stone silhouette covers them where their camera line intersects its finite edge,
+even when the isometric camera exposes the otherwise unseen side. Transparent
+openings and exposed ends remain open. During movement this distinction follows
+the same world-space permission sampling as cloud visibility. It adds no sight
+grants or gameplay occupancy. The field-center wall policy and black unseen fill
+remain removed.

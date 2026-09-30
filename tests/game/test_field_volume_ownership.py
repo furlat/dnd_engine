@@ -12,6 +12,7 @@ import pytest
 
 from dnd.core.events import EventQueue
 from dnd.spells.conjuration import FogCloud
+from dnd.types.senses import VolumeSurfaceSight
 from game.animation import view_facing
 from game.animation_types import ProjectileStorage, SpatialMediaBinding, SpatialMediaLayer
 from game.player_reduction import decode_player_sequence
@@ -137,3 +138,70 @@ def test_full_observed_cloud_preserves_authored_round_fringe(rendering, retained
             reference.blit(row.surface, row.destination, special_flags=row.blend)
     assert pygame.image.tobytes(remaining, "RGBA") == pygame.image.tobytes(reference, "RGBA")
     assert pygame.image.tobytes(remaining, "RGBA") != pygame.image.tobytes(actual, "RGBA")
+
+
+@pytest.mark.parametrize('quadrant', range(4))
+@pytest.mark.parametrize('height', (0, 2))
+def test_upper_volume_cut_uses_displayed_xyz_without_granting_hidden_columns(
+    rendering, retained_field, tmp_path, quadrant, height,
+):
+    state, effect = retained_field
+    center = effect.area_geometry.center
+    upper_cell = center[0] + 1, center[1]
+    hidden_cell = center[0] + 2, center[1]
+    # Same upper-only cell, two different Y values; another column stays unknown.
+    points = ((1., 1., 0.), (1., 3., 0.), (2., 3., 0.))
+    colors = ((255, 0, 0, 255), (0, 255, 0, 255), (0, 0, 255, 255))
+    origin = np.array(rotate_position((0., 0.), quadrant))
+    xyz = []
+    for x, y, z in points:
+        local = np.array(rotate_position((x, z), quadrant)) - origin
+        xyz.append((local[0], y, local[1]))
+    encoded = np.rint((np.array(xyz) + 4) * 65535 / 8).astype('>u2').tobytes()
+    path = tmp_path / 'upper-volume-probes.bin.gz'
+    path.write_bytes(gzip.compress(struct.pack('<HHhh', 3, 1, 0, 0)
+        + b''.join(bytes(color) for color in colors) + encoded + bytes([1]) * 3))
+    identity = 'test.upper.volume'
+    asset = rendering.projectile_assets['persistent.fog_cloud.hold'].model_copy(update={'assetId': identity})
+    facing = view_facing('E', quadrant, rendering)
+    storage = ProjectileStorage.model_validate_json(json.dumps({'phases': {'impact': {'surfaceFrames': {
+        'frameIndices': [0], 'bounds': [-4, 4], 'verticalScale': 1,
+        'componentsByFacing': {facing: [{'pattern': str(path), 'pivot': [448, 448], 'blendMode': 'normal'}]},
+    }}}}))
+    data = replace(rendering, projectile_assets={**rendering.projectile_assets, identity: asset},
+        projectile_storage={**rendering.projectile_storage, identity: storage})
+    state = replace(state, tiles={})  # No hidden supporting floor is needed or invented.
+    layer = SpatialMediaLayer(assetId=identity, composition='xyz_volume')
+    binding = SpatialMediaBinding(layers=(layer,), holdStartFrame=0, holdFrames=1, fps=32,
+        scale=data.rig.TILE_W / TILE_WIDTH)
+    grant = VolumeSurfaceSight(position=upper_cell,
+        lower_height_planes=((.5, 0., height + 2. - .5 * upper_cell[0]),))
+    camera = Camera(quadrant=quadrant, zoom=1).with_focus(center)
+    for translation in ((0., 0.), (0., -.3), (-3., 0.)):
+        commands = field_media_commands(state, data, uuid4(), effect.area_geometry, (),
+            binding, layer, 0, identity, 0, camera, 1., translation=translation,
+            anchor_elevation_steps=height, upper_surfaces=(grant,))
+        shown = {tuple(pixel) for row in commands
+            for pixel in np.frombuffer(pygame.image.tobytes(row.surface, 'RGBA'), dtype=np.uint8).reshape(-1, 4)
+            if pixel[3]}
+        assert shown == ({colors[0], colors[1]} if translation[0] == -3.
+                         else {colors[1]})
+        assert not state.tiles and hidden_cell not in state.senses.visible
+
+    # Same authored low/high points, travelling from a fully seen column into
+    # the upper-only column. This exercises the real movement sight path.
+    previous = effect.model_copy(update={
+        "area_geometry": effect.area_geometry.model_copy(update={"center": (center[0]-2, center[1])}),
+        "positions": ((center[0]-1, center[1]), center),
+        "visible_volume_positions": ((center[0]-1, center[1]), center),
+        "upper_volume_surfaces": (grant,), "suppressions": (),
+    })
+    for translation, red_visible in (((-1., 0.), True), ((-.25, 0.), False)):
+        commands = field_media_commands(state, data, uuid4(), effect.area_geometry, (),
+            binding, layer, 0, identity, 0, camera, 1., translation=translation,
+            anchor_elevation_steps=height, upper_surfaces=(grant,), previous_effect=previous)
+        shown = {tuple(pixel) for row in commands
+            for pixel in np.frombuffer(pygame.image.tobytes(row.surface, 'RGBA'), dtype=np.uint8).reshape(-1, 4)
+            if pixel[3]}
+        assert (colors[0] in shown) is red_visible
+        assert colors[1] in shown

@@ -1,6 +1,10 @@
 """Dependency-neutral identities for persistent spatial conditions."""
 
 from enum import Enum
+from typing import Literal
+
+
+AreaPropagation = Literal["line_of_effect", "connected"]
 
 
 class SpatialEffectLayer(str, Enum):
