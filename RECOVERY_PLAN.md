@@ -27,6 +27,40 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**October 2 — next lane: missing and variant item content for all 150 rows.**
+The [updated item content plan](agent_docs/ITEM_CONTENT_IMPLEMENTATION_PLAN_2026-10-02.md)
+builds on the completed prerequisites and accepted palette/floor/transfer fixes.
+The original bible chat (`01a0f3b4-277a-7fa0-9356-d1c9de5527b8`) is active again
+to finish the previously assigned actual matching analysis. Its saved all-150
+handoff contains candidates, zero selected appearances and 93 unresolved VFX
+observations. Consume its completed versioned matches before content authoring;
+do not duplicate the study or treat unresolved fiction as approved rules.
+Independent anti-slop and ECS/anti-OOP reviewers approve the corrected plan.
+Historical visual preset labels are metadata, and derived definitions stay
+downstream of cold types/transforms. Later per-grant appearance selection remains
+an explicit character-lane integration gap. This update authors
+no items, characters or gameplay rules. Conditions/abilities then characters
+remain the agreed order; scenario redesign and multi-Z stay deferred.
+
+**October 2 — approved item prerequisites implemented.**
+[Implementation record](agent_docs/ITEMS_PREREQUISITES_IMPLEMENTATION_2026-10-02.md)
+documents immutable item-definition transforms through the one canonical builder,
+shared native properties, transfer admission, recipient-free source release facts,
+42 hand substitutions, 282 ground bindings and item-owned effect replay.
+Independent anti-slop and ECS/anti-OOP reviewers approve. Complete engine suite:
+**1,955 passed**; scoped native/render typing: **0 errors**. Renderer suite receipts
+and known baseline issues are in the implementation record. Original packs remain
+private and preserved. Actual paving/four-camera review:
+`.runtime/items-module-20261002/review/index.html`.
+That entry now redirects to the standard gallery's two complete 32-FPS transfer
+recordings. Held/floor palette swaps, source tile registration and every pickup
+frame have direct pixel/state regressions; the unhelpful one-second checkpoints
+are superseded. Full renderer-suite baseline failures are independently classified
+in the implementation record.
+Next is item-first roster authoring with the complete artist reconciliation;
+fixed-rig loss fiction, missing consumable media and 93 VFX ownership decisions
+remain explicit. No characters, firearm rules or new wall mechanics were authored.
+
 **October 2 — accepted existing-gear repair implemented.** The human approved
 intrinsic anatomy ownership, Assassin's Dagger weapon scoping, item-owned coating
 cleanup/transfer/clock continuity and explicit magical wearable identity.
@@ -41,7 +75,7 @@ architecture failures are documented separately;
 no unrelated expectations or backend were changed. Wider item factory and roster
 content remain outside this repair.
 
-**October 2 — current checkpoint: item-first full-roster study complete.** The
+**October 2 — historical baseline: item-first full-roster study.** The
 human chose gear first, then ability-derived conditions/effects, then all 150
 characters. [Item inventory and composition study](agent_docs/GEAR_INVENTORY_AND_COMPOSITION_2026-10-02.md)
 records 289 canonical item builders, 46 cold weapons/64 wearables and 77 visual
@@ -50,10 +84,11 @@ all150 candidate rows, inspected sampled roster/modular plates and explicit
 existing/missing/native-versus-visual decisions. Complete builder IDs are separate
 from the110 cold weapon/wearable details. Both anti-slop and ECS reviewers approve
 the corrected study/design; no runtime code/art changes. Existing gear tests53pass,
-but intrinsic removal, dagger weapon scoping, coat contribution ownership/lifetime,
-magical wearable flag and ranged hand reservation gaps remain documented, not
-fixed. Proposed composition preserves one canonical builder table and typed
-item-owned effect contributions. Next step is agreed bounded gear implementation;
+with intrinsic removal, dagger weapon scoping, coat contribution ownership/lifetime,
+magical wearable flag and ranged hand reservation gaps recorded at that time.
+The repair/prerequisites checkpoints above supersede the first four bug statuses
+and the composition proposal. Composition preserves one canonical builder table
+and typed item-owned contributions. Next is the updated item content plan;
 firearm rules and individual bound/conjured/loss representation remain decisions.
 Review served at `http://127.0.0.1:8768/gear-study-20261002/index.html`.
 

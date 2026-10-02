@@ -20,6 +20,7 @@ from dnd.core.events import (
     Trigger,
     WorldTileState,
 )
+from dnd.core.item_properties import ItemWearerValues
 from dnd.types.senses import (
     SenseMode as SenseMode,
     SensesType as SensesType,
@@ -33,6 +34,7 @@ from dnd.types.world_placement import (
     BoundaryStructure,
     WorldPlacementKind,
     WorldPlacementSpec,
+    WorldObjectPlacement,
 )
 
 from collections import defaultdict
@@ -402,6 +404,10 @@ class BaseBlock(BaseModel):
         """Return sense modes for this block as an observer."""
         return []
 
+    def get_item_wearer_values(self) -> Optional[ItemWearerValues]:
+        """Actors expose the accepted wearer property channels through this capability."""
+        return None
+
     def get_senses(self) -> Optional[SensesView]:
         """Override in Entity to return Senses block for subjective perception."""
         return None
@@ -586,6 +592,10 @@ class BaseBlock(BaseModel):
             True when the owner published the destruction fact.
         """
         return False
+
+    def on_grid_object_placed(self, placement: WorldObjectPlacement) -> None:
+        """Synchronize floor-aware provider data before spatial completion."""
+        pass
 
     def on_grid_object_removed(self, position: Tuple[int, int], clear_location: bool = True, parent_event: Optional[Event] = None) -> None:
         """React after this block is removed from GridMap object indexes.

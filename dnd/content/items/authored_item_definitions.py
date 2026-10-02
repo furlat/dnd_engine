@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Literal, Mapping, Optional
 
+from dnd.core.item_properties import AdditionalDamage, ArmorPenalties, ItemProperty, UnseenStrike, WearerBonus, WearerValue
 from dnd.core.creature_types import DamageType
 from dnd.core.equipment_types import ArmorType, BodyPart, WeaponProperty
 from dnd.core.item_types import EquippedVisualPolicy, ItemDestructionProfile
@@ -26,6 +27,17 @@ def _validate_common_item_definition(
         raise ValueError("max_stack must be positive")
     if max_stack > 1 and stack_id is None:
         raise ValueError("stackable items require a stack_id")
+
+
+def _validate_properties(properties: tuple[ItemProperty, ...], *, weapon: bool) -> None:
+    seen: set[object] = set()
+    for property in properties:
+        if (weapon and isinstance(property, ArmorPenalties)) or (not weapon and isinstance(property, UnseenStrike)):
+            raise ValueError("Item property is incompatible with its base family")
+        key = (WearerBonus, property.target) if isinstance(property, WearerBonus) else type(property)
+        if key in seen:
+            raise ValueError("Duplicate item property family/target")
+        seen.add(key)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +76,7 @@ class WeaponDefinition:
     visual_item_name: Optional[str] = None
     visual_variant_id: Optional[str] = None
     equipped_visual_policy: EquippedVisualPolicy = EquippedVisualPolicy.VISIBLE
+    item_properties: tuple[ItemProperty, ...] = ()
     intrinsic: bool = False
     damage_die: Literal[4, 6, 8, 10, 12, 20] = 4
     damage_dice_count: int = 1
@@ -79,8 +92,20 @@ class WeaponDefinition:
     extra_damage_die: Optional[Literal[4, 6, 8, 10, 12, 20]] = None
     extra_damage_dice_count: int = 0
     extra_damage_type: Optional[DamageType] = None
+    additional_damage: tuple[AdditionalDamage, ...] = ()
 
     def __post_init__(self) -> None:
+        _validate_properties(self.item_properties, weapon=True)
+        if self.stack_id is not None or self.max_stack != 1:
+            raise ValueError("Equippable definitions represent one physical item; equipment stacks are unsupported")
+        packets = self.additional_damage
+        if self.extra_damage_die is not None:
+            if self.extra_damage_type is None:
+                raise ValueError("Additional damage requires an authored damage type")
+            packets = (AdditionalDamage(self.extra_damage_die, self.extra_damage_dice_count,
+                self.extra_damage_type), *packets)
+        if len(set(packets)) != len(packets):
+            raise ValueError("Duplicate additional damage property")
         _validate_common_item_definition(
             item_id=self.item_id,
             name=self.name,
@@ -102,6 +127,7 @@ class WearableDefinition:
     visual_item_name: Optional[str] = None
     visual_variant_id: Optional[str] = None
     equipped_visual_policy: EquippedVisualPolicy = EquippedVisualPolicy.VISIBLE
+    item_properties: tuple[ItemProperty, ...] = ()
     intrinsic: bool = False
     is_magical: bool = False
     wearable_kind: str = "body_armor"
@@ -114,6 +140,9 @@ class WearableDefinition:
     stealth_disadvantage: bool = False
 
     def __post_init__(self) -> None:
+        _validate_properties(self.item_properties, weapon=False)
+        if self.stack_id is not None or self.max_stack != 1:
+            raise ValueError("Equippable definitions represent one physical item; equipment stacks are unsupported")
         _validate_common_item_definition(
             item_id=self.item_id,
             name=self.name,
@@ -274,6 +303,13 @@ STATIC_BLOCKER_DEFINITIONS: Mapping[
 
 
 _AUTHORED_WEAPONS = (
+    WeaponDefinition(
+        "weapon.assassin_dagger", "Assassin's Dagger",
+        "A shadowy blade that deals 1d6 extra piercing damage when its target cannot see the wielder.",
+        (), visual_item_name="Dagger", visual_variant_id="10000004",
+        damage_die=4, damage_type=DamageType.PIERCING,
+        properties=(WeaponProperty.FINESSE, WeaponProperty.LIGHT),
+        item_properties=(UnseenStrike(),)),
     WeaponDefinition(
         "weapon.club", "Club", "A simple wooden club.",
         ("melee", "simple", "weapon"), damage_die=4,
@@ -513,6 +549,7 @@ _AUTHORED_WEAPONS = (
         "weapon.arcane_staff", "Arcane Staff",
         "A staff crackling with arcane energy that improves spell attacks while equipped.",
         ("arcane", "melee", "staff", "weapon"),
+        item_properties=(WearerBonus(WearerValue.SPELL_ATTACK, 1, "Arcane Staff"),),
         visual_item_name="Quarterstaff",
         visual_variant_id="1000000f",
         is_magical=True,
@@ -1099,7 +1136,8 @@ _AUTHORED_WEARABLES = (
         "An arcane crown granting +3 Charisma while equipped.",
         ("apparel", "headgear", "arcane", "crown"),
         visual_item_name="Crown",
-        wearable_kind="spellblade_crown", body_part=BodyPart.HEAD,
+        wearable_kind="helmet", body_part=BodyPart.HEAD,
+        item_properties=(WearerBonus(WearerValue.CHARISMA, 3, "Spellblade Crown Charisma"),),
         is_magical=True,
     ),
     WearableDefinition(

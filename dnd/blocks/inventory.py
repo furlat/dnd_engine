@@ -8,6 +8,7 @@ from pydantic import Field
 from dnd.core.base_block import BaseBlock
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.core.gridmap import get_map
+from dnd.core.item_types import ItemLocation
 
 
 @dataclass(frozen=True)
@@ -53,6 +54,7 @@ class Inventory(BaseBlock):
             if (
                 existing.uuid != item.uuid
                 and existing.stack_id == item.stack_id
+                and self.stacks_are_compatible(existing, item)
                 and existing.stack_count < existing.max_stack
             ):
                 return existing
@@ -82,20 +84,46 @@ class Inventory(BaseBlock):
         item.is_equipped = False
         item.equipped_slot = None
 
-    def _detach_item_from_previous_location(self, item: BaseItem) -> None:
-        """Remove an item from its previous floor or container location.
+    @staticmethod
+    def stacks_are_compatible(left: BaseItem, right: BaseItem) -> bool:
+        """Only identical cold recipes without live owned state may merge."""
+        return (
+            left.has_mergeable_stack_state() and right.has_mergeable_stack_state()
+            and left.item_id == right.item_id
+            and left.max_stack == right.max_stack
+            and left.weight == right.weight
+            and left.is_magical == right.is_magical
+            and left.visual_item_name == right.visual_item_name
+            and left.visual_variant_id == right.visual_variant_id
+        )
 
-        Args:
-            item: Item being accepted into this inventory.
-        """
+    def _detach_item_from_previous_location(
+        self, item: BaseItem, parent_event: Optional[UUID] = None,
+    ) -> bool:
+        """Admit floor removal before changing any container membership."""
+        grid = get_map()
+        prepared = None
+        if grid.get_object_position(item.uuid) is not None:
+            prepared = grid.prepare_object_removals((item.uuid,), parent_event)
+            if prepared is None:
+                return False
+        if not self.can_add(item):
+            if prepared is not None:
+                grid.cancel_object_removals(prepared, "Inventory changed during transfer admission")
+            return False
+        previous_container = None
         if item.stored_in_uuid is not None and item.stored_in_uuid != self.uuid:
             previous_container = BaseBlock.get(item.stored_in_uuid)
-            if previous_container is not None:
-                previous_container.remove_contained_item(item.uuid)
-        gridmap = get_map()
-        if gridmap.get_object_position(item.uuid) is not None:
-            gridmap.remove_object(item.uuid)
+            if previous_container is None:
+                if prepared is not None:
+                    grid.cancel_object_removals(prepared, "Previous container no longer exists")
+                return False
+        if previous_container is not None:
+            previous_container.remove_contained_item(item.uuid)
+        if prepared is not None:
+            grid.commit_object_removals(prepared, parent_event=parent_event)
         item.tile_uuid = None
+        return True
 
     def _stamp_item_location(self, item: BaseItem) -> None:
         """Stamp an item stack as stored in this inventory.
@@ -103,6 +131,7 @@ class Inventory(BaseBlock):
         Args:
             item: Item stack that survived insertion into this inventory.
         """
+        item.source_entity_uuid = self.source_entity_uuid
         item.owner_uuid = self.source_entity_uuid
         item.stored_in_uuid = self.uuid
 
@@ -112,14 +141,49 @@ class Inventory(BaseBlock):
         A compatible existing stack bypasses the slot check because no new item
         entry is required when the incoming stack fully merges.
         """
-        if item.intrinsic_owner_uuid is not None:
+        if item.intrinsic_owner_uuid is not None or item.is_equipped:
             return False
+        if self.items.get(item.uuid) is item:
+            return True
         remainder_count = self._stack_remainder_count(item)
         needs_new_stack = remainder_count > 0
         if self.max_slots is not None and needs_new_stack and self.item_count >= self.max_slots:
             return False
         if self.weight_capacity is not None:
             if self.total_weight + item.weight * item.stack_count > self.weight_capacity:
+                return False
+        return True
+
+    def can_add_all(
+        self, items: Iterable[BaseItem], *, excluding: Iterable[UUID] = (),
+    ) -> bool:
+        """Check a finite displacement batch using virtual counts, without mutation."""
+        excluded = set(excluding)
+        stacks = [item for item in self.items.values() if item.uuid not in excluded]
+        counts = {item.uuid: item.stack_count for item in stacks}
+        weight = sum(item.weight * counts[item.uuid] for item in stacks)
+        for item in items:
+            if item.intrinsic_owner_uuid is not None:
+                return False
+            if item.uuid in counts:
+                continue
+            weight += item.weight * item.stack_count
+            remainder = item.stack_count
+            if item.stack_id is not None:
+                for existing in stacks:
+                    if (existing.stack_id == item.stack_id
+                            and self.stacks_are_compatible(existing, item)
+                            and counts[existing.uuid] < existing.max_stack):
+                        amount = min(remainder, existing.max_stack - counts[existing.uuid])
+                        counts[existing.uuid] += amount
+                        remainder -= amount
+                        break
+            if remainder:
+                stacks.append(item)
+                counts[item.uuid] = remainder
+            if self.max_slots is not None and len(stacks) > self.max_slots:
+                return False
+            if self.weight_capacity is not None and weight > self.weight_capacity:
                 return False
         return True
 
@@ -187,7 +251,9 @@ class Inventory(BaseBlock):
             if not result.succeeded or result.inserted_item is not item:
                 raise RuntimeError("validated initial inventory commit diverged")
 
-    def add_item_with_result(self, item: BaseItem) -> InventoryAddResult:
+    def add_item_with_result(
+        self, item: BaseItem, *, parent_event: Optional[UUID] = None,
+    ) -> InventoryAddResult:
         """Add an item stack atomically and return every changed stack.
 
         If fully merged, the consumed item is unregistered and
@@ -198,7 +264,10 @@ class Inventory(BaseBlock):
         if not self.can_add(item):
             return InventoryAddResult(succeeded=False)
 
-        self._detach_item_from_previous_location(item)
+        previous_owner_uuid = item.owner_uuid
+        previous_container_uuid = item.stored_in_uuid
+        if not self._detach_item_from_previous_location(item, parent_event):
+            return InventoryAddResult(succeeded=False)
         existing = self._find_compatible_stack(item)
         if existing is not None:
             space = existing.max_stack - existing.stack_count
@@ -208,6 +277,10 @@ class Inventory(BaseBlock):
             if item.stack_count == 0:
                 self._clear_consumed_item_location(item)
                 BaseBlock._registry.pop(item.uuid, None)
+                if (previous_owner_uuid is not None and previous_container_uuid is not None
+                        and previous_owner_uuid != self.source_entity_uuid):
+                    item.publish_holdings_release(previous_owner_uuid, previous_container_uuid,
+                        parent_event=parent_event)
                 return InventoryAddResult(
                     succeeded=True,
                     merged_into_item=existing,
@@ -215,6 +288,10 @@ class Inventory(BaseBlock):
 
         self.items[item.uuid] = item
         self._stamp_item_location(item)
+        if (previous_owner_uuid is not None and previous_container_uuid is not None
+                and previous_owner_uuid != self.source_entity_uuid):
+            item.publish_holdings_release(previous_owner_uuid, previous_container_uuid,
+                parent_event=parent_event)
         return InventoryAddResult(
             succeeded=True,
             inserted_item=item,
@@ -264,18 +341,27 @@ class Inventory(BaseBlock):
             target: Inventory receiving the item stack.
 
         Returns:
-            True when the transfer or merge succeeds; otherwise False after
-            rolling the source inventory back.
+            True when admission succeeds; rejection leaves the source intact.
         """
-        item = self.remove_item(item_uuid)
+        item = self.items.get(item_uuid)
         if item is None:
             return False
-        if not target.add_item(item):
-            self.add_item(item)
+        result = target.add_item_with_result(item)
+        if not result.succeeded:
             return False
-        if target.has_item(item.uuid):
-            item.owner_uuid = target.source_entity_uuid
-            item.stored_in_uuid = target.uuid
+        if result.merged_into_item is not None:
+            result.merged_into_item.publish_location_state(
+                ItemLocation.INVENTORY, owner_uuid=target.source_entity_uuid,
+                container_uuid=target.uuid,
+            )
+        if result.inserted_item is not None:
+            result.inserted_item.publish_location_state(
+                ItemLocation.INVENTORY, owner_uuid=target.source_entity_uuid,
+                container_uuid=target.uuid,
+            )
         else:
-            self._clear_consumed_item_location(item)
+            item.publish_location_state(
+                ItemLocation.MERGED, stack_count=0,
+                merged_into_item_uuid=result.merged_into_item.uuid if result.merged_into_item is not None else None,
+            )
         return True

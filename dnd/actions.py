@@ -5334,7 +5334,8 @@ class PickUp(BaseAction):
         if not item.is_pickable or not entity.inventory.can_add(item):
             return execution_event.cancel(status_message="Cannot pick up this object")
 
-        entity.loot_item(item, parent_event=execution_event)
+        if not entity.loot_item(item, parent_event=execution_event):
+            return execution_event.cancel(status_message="Item transfer was rejected")
         return execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
             status_message=f"Picked up {item.name}"
@@ -5364,6 +5365,21 @@ class Drop(BaseAction):
         description="No-cost action-economy payload for item drops.",
     )
     item_uuid: Optional[UUID] = Field(default=None, description="UUID of the item to drop (bound at creation)")
+    charge_cost: int = Field(default=0, description="Dropping an item does not use its charges.")
+
+    def get_discovery_variants(self, entity: Entity) -> List[BaseAction]:
+        """Specialize the ordinary Drop template to each current inventory item."""
+        return [self.model_copy(deep=True, update={
+            "item_uuid": item.uuid, "source_item_uuid": item.uuid,
+            "name": f"Drop ({item.name})",
+        }) for item in entity.inventory.items.values()
+            if item.intrinsic_owner_uuid is None]
+
+    def get_discovery_template_name(self) -> str:
+        return f"Drop__item_{self.item_uuid}" if self.item_uuid is not None else "Drop"
+
+    def get_discovery_display_name(self) -> str:
+        return self.name or "Drop"
 
     def get_physical_access(self) -> Optional[PhysicalAccess]:
         return PhysicalAccess.BODY

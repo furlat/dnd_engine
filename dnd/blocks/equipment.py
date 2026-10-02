@@ -21,11 +21,12 @@ from dnd.core.equipment_types import (
     WeaponSet,
     WeaponSlot,
 )
-from dnd.core.item_types import ItemPresentationKind, ItemPresentationState
+from dnd.core.item_types import ItemEffectPresentationState, ItemPresentationKind, ItemPresentationState
 
 import copy
 
 from dnd.core.base_block import BaseBlock
+from dnd.core.gridmap import get_map
 from dnd.blocks.base_item import EquippableItem
 
 
@@ -431,11 +432,18 @@ class Weapon(EquippableItem):
     ) -> ItemPresentationState:
         """Add weapon-owned presentation facts to the common item payload."""
         state = super().to_item_presentation_state(stack_count=stack_count)
+        owned = {effect.contribution_uuid for effect in state.item_effects}
+        effects = (*state.item_effects, *(ItemEffectPresentationState(
+            effect_uuid=bonus.uuid, contribution_uuid=bonus.uuid,
+            behavior_id="item.property.additional_damage", damage_type=damage_type,
+        ) for bonus, damage_type in zip(self.extra_damage_bonus, self.extra_damage_type)
+            if bonus.uuid not in owned))
         return state.model_copy(update={
             "item_kind": ItemPresentationKind.WEAPON,
             "damage_dice": f"{self.dice_numbers}d{self.damage_dice}",
             "damage_type": self.damage_type.value,
             "weapon_properties": tuple(prop.value for prop in self.properties),
+            "item_effects": effects,
         })
 
     def get_base_damage(self, equipment_block: 'Equipment', ability_block: AbilityScores,
@@ -1500,6 +1508,12 @@ class Equipment(BaseBlock):
         selected_slot: EquipmentSlot,
     ) -> None:
         """Commit one already-validated item through equipment-owned hooks."""
+        previous_owner_uuid = item.owner_uuid
+        previous_container_uuid = item.stored_in_uuid
+        if item.stored_in_uuid is not None and item.stored_in_uuid != self.uuid:
+            previous_container = BaseBlock.get(item.stored_in_uuid)
+            if previous_container is not None:
+                previous_container.remove_contained_item(item.uuid)
         self._reparent_equippable_item(item)
         setattr(self, _SLOT_ATTRIBUTE_BY_SLOT[selected_slot], item)
         item.owner_uuid = self.source_entity_uuid
@@ -1507,6 +1521,9 @@ class Equipment(BaseBlock):
         item.equip(selected_slot, self.source_entity_uuid)
         if isinstance(selected_slot, WeaponSlot):
             self._reconcile_active_weapon_set(preferred_slot=selected_slot)
+        if (previous_owner_uuid is not None and previous_container_uuid is not None
+                and previous_owner_uuid != self.source_entity_uuid):
+            item.publish_holdings_release(previous_owner_uuid, previous_container_uuid)
 
     def install_initial_items(
         self,
@@ -1551,6 +1568,8 @@ class Equipment(BaseBlock):
         parent_event_uuid: Optional[UUID] = None,
     ) -> Optional[_PreparedEquipmentTransition]:
         """Run pure declaration/execution validators without publishing events."""
+        if equipping and item.is_equipped and item.stored_in_uuid != self.uuid:
+            return None
         if item.intrinsic_owner_uuid is not None and (
             not equipping or item.intrinsic_owner_uuid != self.source_entity_uuid
         ):
@@ -1606,6 +1625,9 @@ class Equipment(BaseBlock):
         self,
         item: EquippableItem,
         slot: Optional[EquipmentSlot] = None,
+        *,
+        admit_displacements: Optional[Callable[[Tuple[EquippableItem, ...]], bool]] = None,
+        commit_displacements: Optional[Callable[[], None]] = None,
     ) -> EquipmentEquipResult:
         """Atomically validate, displace conflicts, and equip one item.
 
@@ -1635,6 +1657,34 @@ class Equipment(BaseBlock):
                 return EquipmentEquipResult(succeeded=False, selected_slot=selected_slot)
             prepared_unequips.append(prepared_unequip)
 
+        displaced = tuple(transition.item for transition in prepared_unequips
+                          if transition.item.uuid != item.uuid)
+        grid = get_map()
+        floor_removals = None
+        if grid.get_object_position(item.uuid) is not None:
+            floor_removals = grid.prepare_object_removals((item.uuid,))
+            if floor_removals is None:
+                return EquipmentEquipResult(succeeded=False, selected_slot=selected_slot)
+        if admit_displacements is not None and not admit_displacements(displaced):
+            if floor_removals is not None:
+                grid.cancel_object_removals(floor_removals, "Equipment destination rejected")
+            return EquipmentEquipResult(succeeded=False, selected_slot=selected_slot)
+        if any(self.get_item_by_slot(conflict_slot) is not current
+               for conflict_slot, current in conflicts):
+            if floor_removals is not None:
+                grid.cancel_object_removals(floor_removals, "Equipment changed during admission")
+            return EquipmentEquipResult(succeeded=False, selected_slot=selected_slot)
+
+        if floor_removals is not None and any(
+            grid.get_object_placement(obj.uuid) != previous or BaseBlock.get(obj.uuid) is not obj
+            for obj, previous, _ in floor_removals
+        ):
+            grid.cancel_object_removals(floor_removals, "Incoming floor item changed during destination admission")
+            return EquipmentEquipResult(succeeded=False, selected_slot=selected_slot)
+
+        if floor_removals is not None:
+            grid.commit_object_removals(floor_removals)
+
         published_unequips = [
             self._publish_prepared_transition(transition)
             for transition in prepared_unequips
@@ -1649,6 +1699,8 @@ class Equipment(BaseBlock):
                 displaced_items.append(transition.item)
 
         self._commit_equipped_item(item, selected_slot)
+        if commit_displacements is not None:
+            commit_displacements()
 
         for transition in published_unequips:
             transition.execution.phase_to(EventPhase.EFFECT).phase_to(
@@ -1671,7 +1723,11 @@ class Equipment(BaseBlock):
         """Equip an item, preserving the historical boolean direct-call API."""
         return self.equip_transaction(item, slot).succeeded
 
-    def unequip(self, slot: EquipmentSlot, parent_event_uuid: Optional[UUID] = None) -> Optional[EquippableItem]:
+    def unequip(
+        self, slot: EquipmentSlot, parent_event_uuid: Optional[UUID] = None, *,
+        admit_destination: Optional[Callable[[EquippableItem], bool]] = None,
+        commit_destination: Optional[Callable[[], None]] = None,
+    ) -> Optional[EquippableItem]:
         """Unequip the item in the specified slot.
 
         Direct equipment calls clear the slot and call item hooks, but leave
@@ -1703,12 +1759,19 @@ class Equipment(BaseBlock):
         )
         if prepared is None:
             return None
+        if admit_destination is not None and not admit_destination(current_item):
+            return None
+        if self.get_item_by_slot(slot) is not current_item:
+            return None
         published = self._publish_prepared_transition(prepared)
 
         current_item.unequip(slot, self.source_entity_uuid)
         setattr(self, attribute_name, None)
         if isinstance(slot, WeaponSlot):
             self._reconcile_active_weapon_set(preferred_slot=slot)
+
+        if commit_destination is not None:
+            commit_destination()
 
         published.execution.phase_to(EventPhase.EFFECT).phase_to(
             EventPhase.COMPLETION, active_weapon_set_after=self.active_weapon_set,

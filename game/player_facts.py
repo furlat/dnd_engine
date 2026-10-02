@@ -19,7 +19,7 @@ from dnd.core.creature_types import DamageType, Size
 from dnd.core.dice import AttackOutcome
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.events import EventPhase, EventType, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState
-from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot,
+from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot, ItemEffectPresentationState,
     ItemIntegrity, ItemPresentationKind, ItemPresentationState, ItemRemnantState)
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.core.presentation_geometry import AoEPresentationGeometry
@@ -45,6 +45,7 @@ class VisualItem:
     visual_item_name: str
     visual_variant_id: str | None
     equipped_visual_policy: EquippedVisualPolicy
+    item_effects: tuple[ItemEffectPresentationState, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -93,6 +94,8 @@ class AttackFact:
     attack_outcome: AttackOutcome | None
     damage_types: tuple[DamageType, ...]
     source_item_id: str | None
+    source_item_uuid: UUID | None = None
+    item_effects: tuple[ItemEffectPresentationState, ...] = ()
     intercepted_by_condition_uuid: UUID | None = None
     projectile_deflection_position: tuple[float, float] | None = None
     target_kind: Literal["creature", "object"] = "creature"
@@ -495,6 +498,9 @@ class FloorItem:
     boundary_structure: BoundaryStructure | None
     is_open: bool | None
     is_lit: bool | None
+    stack_count: int = 1
+    is_pickable: bool = True
+    item_effects: tuple[ItemEffectPresentationState, ...] = ()
     blocks_propagation: bool = False
     contact_passage: ContactPassage = ContactPassage.STRUCTURAL
     supported_by_uuid: UUID | None = None

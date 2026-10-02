@@ -1507,3 +1507,31 @@ Sparse frame parts may supply registered `colorMasks`; optional `safeSideTint`
 selects physical mask sign from recorded wall `hot_side` before camera lookup.
 Mask blending copies RGB, preserves alpha and uses the bounded frame cache.
 Absent historical side metadata supplies no tint; unsupported curved geometry supplies no substitute bank. Original RGBA remains intact.
+
+Item appearance uses the original category plus variant ID as stable identity.
+`item_appearances.json` provides explicit per-hand geometry/tint substitutions
+and ground registrations (original frame, four camera rows/pivots, scale, rotation,
+layer tint and optional original contact shadow). These are presentation values;
+they grant no slots, damage, collision, pickability or gameplay quantity. Missing
+media stays unbound. Existing environment/structure/device bindings take priority.
+Ground sprites use the received support-light treatment. Several objects in one
+native cell remain distinct public Pick Up targets; the existing Tab/Enter chooser
+selects each exact UUID without moving their native placements.
+
+Received floor items retain quantity and native pickability. Equipped/floor item
+effects retain exact condition/property contribution UUIDs, native behavior ID,
+damage type and condition application cursor. Shared existing coat materials
+follow that item UUID across holders and floor placement. Attack facts snapshot
+source item UUID and these contributions at declaration. Decorative authored
+colors grant no elemental damage. Existing coat removal clears the same retained
+item material; spell and creature conditions do not migrate with loot. A disclosed
+location change removes the matching UUID from previously retained holdings before
+applying the receiving state; private receiving inventories remain undisclosed.
+
+Resolved equipment layers retain the disclosed owning `item_uuid`. Held and
+ground equipment swap zones from the reviewed source `paletteMap.json`, leaving
+unmatched material colors and source alpha intact. Coating recipes supply the
+replacement palette color on the same source zones, rather than multiplying an
+already colored item. Ground registration includes `reference_tile_width`; the
+vendor equipment uses a 64-pixel tile against the game's 128-pixel tile. Image,
+pivot and shadow share that conversion before the authored scale and camera zoom.

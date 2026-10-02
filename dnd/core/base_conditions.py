@@ -43,7 +43,7 @@ from dnd.types.world import OccupancyLayer
 from dnd.types.traps import TrapState
 from dnd.types.residues import TileResidueState
 from dnd.types.residues import ObjectResidueState
-from dnd.core.item_types import ItemConcentrationSlot, ItemPresentationState
+from dnd.core.item_types import ItemConcentrationSlot, ItemEffectPresentationState, ItemPresentationState
 from dnd.types.residue_fear import PaidEntryRetreat
 
 
@@ -656,6 +656,10 @@ class BaseCondition(BaseObject):
         """
         self.target_entity_uuid = target_entity_uuid
         self.duration.target_entity_uuid = target_entity_uuid
+
+    def snapshot_item_effect(self) -> ItemEffectPresentationState | None:
+        """Only conditions with an accepted item effect expose this membership."""
+        return None
 
     def snapshot_state(self) -> ConditionState:
         """Record the current semantics without retaining an executable condition."""

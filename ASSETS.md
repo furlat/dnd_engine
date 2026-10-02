@@ -157,3 +157,19 @@ register fixed radius10ft/width1ft. Donor outer/inner masks map to positive/nega
 safe outside tints front only, safe inside rear only. Whole-ring media requires
 complete received shell coverage and no suppression; partial views remain an
 explicit gap pending the requested matching ownership companion. No radius warp.
+
+October 2 item media: preserve the complete `Stand-alone Character creator - 2D
+Fantasy V1.3.zip` in `sources/item-equipment-20261002/`. The explicit public
+`game/data/item_media_sources.json` selects 645 unchanged sheets, 86,538,120 bytes:
+weapon/shield/offhand action banks, original Slash1/Slash2 Attack5 accents, and
+separated apparel Idle frames. Import with
+`uv run --no-sync python devtools/import_item_media.py --archive <original.zip>
+--preserved /home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002
+--production /home/tommaso/Dev/neurodragon_art-production`. The importer installs
+private production and local assets, updates the production manifest, and writes
+an exact SHA-256 receipt. Original alpha, frame clocks and pixels remain intact.
+`game/data/item_appearances.json` explicitly registers category-qualified hand
+substitutions and sampled ground frames/pivots/tints/contact shadows. Offhand
+geometry reuse is approximate and accepted; floor apparel retains its separated
+layer composite. The archive supplies no separate consumable bottle/potion art;
+those ground appearances remain unbound.

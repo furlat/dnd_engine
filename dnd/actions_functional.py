@@ -103,6 +103,7 @@ def setup_standard_actions(entity: Entity) -> None:
         ),
         (Shove(source_entity_uuid=entity.uuid, template=True), "action.shove"),
         (PickUp(source_entity_uuid=entity.uuid, template=True), "action.pick_up"),
+        (Drop(source_entity_uuid=entity.uuid, template=True), "action.core.drop"),
     ):
         action.behavior_binding = BehaviorBinding(
             behavior_id=behavior_id,

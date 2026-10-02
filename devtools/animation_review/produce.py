@@ -24,6 +24,7 @@ from tests.game.projectile_life_scenarios import projectile_life_history
 from tests.game.true_strike_scenarios import true_strike_history
 from tests.game.dread_residue_scenarios import dread_residue_history
 from tests.game.equipment_scenarios import equipment_sequence_history
+from tests.game.item_appearance_scenarios import item_transfer_history
 from tests.game.mechanism_scenarios import mechanism_history
 from tests.game.trap_expansion_scenarios import trap_expansion_history
 from tests.game.portal_scenarios import portal_history
@@ -48,7 +49,7 @@ from tests.game.scenarios import (
 
 from devtools.animation_review.cases import (
     AreaSpellCase, CantripCase, AttackCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DeviceCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,
-    MechanismCase, PortalCase, WindowCase, DoorCase, TrapHardwareCase, PropDestructionCase, ObjectAttackCase, LiquidBarrelCase, EnvironmentCase, EnvironmentControlCase, EquipmentCase, ForcedMovementCase, GroundContactCase, HealingCase, LifecycleCase, MovementCase,
+    MechanismCase, PortalCase, WindowCase, DoorCase, TrapHardwareCase, PropDestructionCase, ObjectAttackCase, LiquidBarrelCase, EnvironmentCase, EnvironmentControlCase, EquipmentCase, ItemTransferCase, ForcedMovementCase, GroundContactCase, HealingCase, LifecycleCase, MovementCase,
     ParalysisCase, ParalysisLifecycleCase, PendingSpellCase, PersistentSpellCase, WallSpellCase, GlobeCase, InterruptionCase, ControlSpellCase, ProjectileLifeCase, ReviewCase, SpellHandoffCase, SupportCase, HealingBatchCase, SupportConditionCase, TrueStrikeCase, TeleportCase, TrapCase, VisibilityCase, WebCase,
 )
 
@@ -162,6 +163,9 @@ def produce(case: ReviewCase) -> CapturedHistory:
                                                 seed=scenario.seed)
         case EquipmentCase() as scenario:
             return equipment_sequence_history(replacement=scenario.replacement, attacks=scenario.attacks)
+        case ItemTransferCase() as scenario:
+            return item_transfer_history(include_floor_robe=False, initial_hand=scenario.initial_hand,
+                                         drop_position=(3, 4))[3]
         case DiscoveryCase() as scenario:
             return discovery_history(mode=scenario.mode)
         case VisibilityCase() as scenario:

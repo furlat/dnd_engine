@@ -114,7 +114,8 @@ def persistent_limitations(recipe: ConditionRecipe,
         *(f"Condition strip unsupported: {identity}/{layer.id}" for layer in persistent.layers
           if not supported_layer(layer, media)),
         *(f"Condition equipment modifier unsupported: {identity}/{modifier.id}"
-          for modifier in persistent.equipmentModifiers),
+          for modifier in persistent.equipmentModifiers
+          if recipe.classification.runtimeRole != "equipment_or_weapon_state"),
         *(f"Condition rig layer unsupported: {identity}/{layer.id}" for layer in persistent.appearanceLayers),
         *(f"Condition response strip unsupported: {identity}/{effect.id}"
           for response in recipe.responses for effect in response.effects

@@ -449,9 +449,9 @@ class LootAllAction(BaseAction):
         if self.source_item_uuid is None:
             return declaration_event.cancel(status_message="No chest linked")
         chest = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(chest, StorageChest) or not chest.is_active:
+        if not isinstance(chest, StorageChest):
             return declaration_event.cancel(status_message="Chest not found")
-        if not chest.is_open:
+        if chest.is_active and not chest.is_open:
             return declaration_event.cancel(status_message="Chest is closed")
         if not chest.chest_inventory.items:
             return declaration_event.cancel(status_message="Chest is empty")
@@ -464,7 +464,7 @@ class LootAllAction(BaseAction):
         if self.source_item_uuid is None:
             return execution_event.cancel(status_message="No chest linked")
         chest = BaseBlock.get(self.source_item_uuid)
-        if not isinstance(chest, StorageChest) or not chest.is_active:
+        if not isinstance(chest, StorageChest):
             return execution_event.cancel(status_message="Chest not found")
         looted = 0
         for item in list(chest.chest_inventory.items.values()):
@@ -475,11 +475,22 @@ class LootAllAction(BaseAction):
         return effect.with_updates(
             status_message=f"Looted {looted} items from chest")
 
+    def source_item_error(self, *, subjective: bool = False) -> Optional[str]:
+        """A broken container still supplies looting, using ordinary hand contact."""
+        chest = BaseBlock.get(self.source_item_uuid) if self.source_item_uuid else None
+        if not isinstance(chest, StorageChest) or not chest.has_accessible_contents():
+            return "Chest contents are unavailable"
+        return self.source_item_contact_error(subjective=subjective)
+
 
 class StorageChest(UsableItem):
     """A fixed container with an independent lid and optional looting/breakage."""
 
     is_open: bool = False
+    destruction_profile: Optional[ItemDestructionProfile] = Field(
+        default_factory=lambda: ItemDestructionProfile(name="Broken Chest"),
+        description="The physical container remains available if a spill is rejected.",
+    )
 
     name: str = Field(default="Chest", description="Display name for the storage chest.")
     is_pickable: bool = Field(default=False, description="Chests are fixed environment objects by default.")
@@ -501,7 +512,13 @@ class StorageChest(UsableItem):
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         if not self.is_active:
-            return []
+            if not self.chest_inventory.items:
+                return []
+            return [self.bind_dynamic_use_action(template.model_copy(deep=True, update={
+                "uuid": uuid4(), "source_entity_uuid": user_entity_uuid,
+                "source_item_uuid": self.uuid,
+                "source_item_presentation": self.to_item_presentation_state(),
+            })) for template in self.use_action_templates if isinstance(template, LootAllAction)]
         lid_action = CloseChestAction if self.is_open else OpenChestAction
         actions = [self.bind_dynamic_use_action(lid_action(
             source_entity_uuid=user_entity_uuid,
@@ -511,6 +528,12 @@ class StorageChest(UsableItem):
         if self.is_open and self.chest_inventory.items:
             actions.extend(super().get_use_actions(user_entity_uuid))
         return actions
+
+    def has_accessible_contents(self) -> bool:
+        return bool(self.chest_inventory.items) and (not self.is_active or self.is_open)
+
+    def should_include_in_available_object_actions(self) -> bool:
+        return super().should_include_in_available_object_actions() or self.has_accessible_contents()
 
     def get_storage_block(self) -> BaseBlock:
         """Expose contained items through the canonical item-storage capability."""
@@ -522,11 +545,22 @@ class StorageChest(UsableItem):
         if pos is None:
             return
         for item_uuid in list(self.chest_inventory.items.keys()):
-            item = self.chest_inventory.remove_item(item_uuid)
-            if item:
-                item.owner_uuid = None
-                item.stored_in_uuid = None
-                item.place_on_grid(pos, parent_event=parent_event.uuid if parent_event is not None else None)
+            item = self.chest_inventory.items[item_uuid]
+            grid = get_map()
+            prepared = grid.prepare_object_placement(
+                item.uuid, pos, parent_event.uuid if parent_event is not None else None,
+            )
+            if prepared is None:
+                continue
+            if (self.chest_inventory.items.get(item_uuid) is not item
+                    or not grid.validate_prepared_object_placement(prepared)):
+                grid.cancel_object_placement(prepared, "Chest contents changed during spill admission")
+                continue
+            self.chest_inventory.remove_item(item_uuid)
+            item.owner_uuid = None
+            item.stored_in_uuid = None
+            grid.commit_object_placement(prepared)
+            item.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
 
 
 class RestAction(BaseAction):

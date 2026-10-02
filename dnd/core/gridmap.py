@@ -5,6 +5,7 @@ import time
 from typing import AbstractSet, Any, Dict, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
+from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 
@@ -70,6 +71,15 @@ DIRECTIONAL_CHANNELS: Tuple[str, ...] = (
 )
 ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "entity.world_presence.absent"
 OBJECT_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN = "object.world_presence.absent"
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedObjectPlacement:
+    """One exact admitted placement awaiting its location commit."""
+
+    obj: BaseBlock
+    placement: WorldObjectPlacement
+    effect: Optional[Event]
 
 
 class SpatialConditionOwner(Protocol):
@@ -2844,7 +2854,7 @@ class GridMap:
             ),
         }
 
-    def place_object(
+    def prepare_object_placement(
         self,
         object_uuid: UUID,
         position: Tuple[int, int],
@@ -2853,19 +2863,17 @@ class GridMap:
         boundary_direction: Optional[CardinalDirection] = None,
         base_height_steps: Optional[int] = None,
         orientation: Optional[CardinalDirection] = None,
-    ) -> WorldObjectPlacement:
-        """Commit the first exact placement of one registered object."""
-        candidate = self._object_placement_candidate(
-            object_uuid,
-            position,
-            boundary_direction=boundary_direction,
-            base_height_steps=base_height_steps,
-            orientation=orientation,
-        )
+    ) -> Optional[PreparedObjectPlacement]:
+        """Admit the first placement without detaching its current container."""
+        try:
+            candidate = self._object_placement_candidate(
+                object_uuid, position, boundary_direction=boundary_direction,
+                base_height_steps=base_height_steps, orientation=orientation,
+            )
+        except ValueError:
+            return None
         old = self._object_placements.get(object_uuid)
         if old is not None:
-            if old == candidate:
-                return old
             raise ValueError("object is already placed; use move_object")
         obj = BaseBlock.get(object_uuid)
         assert obj is not None
@@ -2889,13 +2897,77 @@ class GridMap:
             else None
         )
         if self._events_enabled and effect is None:
-            raise ValueError("object placement was canceled")
+            return None
+        prepared = PreparedObjectPlacement(obj, candidate, effect)
+        if (BaseBlock.get(object_uuid) is not obj
+                or object_uuid in self._object_placements):
+            self.cancel_object_placement(prepared, "Object changed during placement admission")
+            return None
+        return prepared
+
+    @staticmethod
+    def cancel_object_placement(prepared: PreparedObjectPlacement, reason: str) -> None:
+        if prepared.effect is not None and not prepared.effect.canceled:
+            prepared.effect.cancel(status_message=reason)
+
+    def validate_prepared_object_placement(self, prepared: PreparedObjectPlacement) -> bool:
+        """Recheck admitted geometry before its caller changes membership."""
+        candidate = prepared.placement
+        if (BaseBlock.get(prepared.obj.uuid) is not prepared.obj
+                or prepared.obj.uuid in self._object_placements):
+            self.cancel_object_placement(prepared, "Object changed during placement admission")
+            return False
+        try:
+            current = self._object_placement_candidate(
+                prepared.obj.uuid, candidate.position,
+                boundary_direction=candidate.boundary_direction,
+                base_height_steps=candidate.base_height_steps,
+                orientation=candidate.orientation,
+            )
+        except ValueError:
+            self.cancel_object_placement(prepared, "Destination changed during placement admission")
+            return False
+        if current != candidate:
+            self.cancel_object_placement(prepared, "Placement geometry changed during admission")
+            return False
+        return True
+
+    def commit_object_placement(self, prepared: PreparedObjectPlacement) -> WorldObjectPlacement:
+        """Commit admitted geometry and provider fields before completion facts."""
+        obj, candidate, effect = prepared.obj, prepared.placement, prepared.effect
+        if not self.validate_prepared_object_placement(prepared):
+            raise RuntimeError("admitted object placement changed before commit")
         self._replace_placement_bands(candidate, add=True)
-        self._object_placements[object_uuid] = candidate
+        self._object_placements[obj.uuid] = candidate
+        obj.on_grid_object_placed(candidate)
         self._bump_spatial_revisions(self._object_revision_channels(obj))
         if effect is not None:
             self._complete_event_effect(effect)
         return candidate
+
+    def place_object(
+        self, object_uuid: UUID, position: Tuple[int, int],
+        parent_event: Optional[UUID] = None, *,
+        boundary_direction: Optional[CardinalDirection] = None,
+        base_height_steps: Optional[int] = None,
+        orientation: Optional[CardinalDirection] = None,
+    ) -> WorldObjectPlacement:
+        """Commit a first placement; repeating the exact placement is harmless."""
+        candidate = self._object_placement_candidate(
+            object_uuid, position, boundary_direction=boundary_direction,
+            base_height_steps=base_height_steps, orientation=orientation,
+        )
+        old = self._object_placements.get(object_uuid)
+        if old is not None and old == candidate:
+            return old
+        prepared = self.prepare_object_placement(
+            object_uuid, position, parent_event,
+            boundary_direction=boundary_direction,
+            base_height_steps=base_height_steps, orientation=orientation,
+        )
+        if prepared is None:
+            raise ValueError("object placement was canceled")
+        return self.commit_object_placement(prepared)
 
     def place_object_assembly(
         self, object_uuids: Tuple[UUID, ...], position: Tuple[int, int],

@@ -186,6 +186,7 @@ class EventType(str, Enum):
     SHIELD_EQUIP = "shield_equip"
     SHIELD_UNEQUIP = "shield_unequip"
     ITEM_LOCATION_STATE = "item_location_state"
+    ITEM_HOLDINGS_RELEASED = "item_holdings_released"
     ITEM_DESTRUCTION = "item_destruction"
     ITEM_CHARGE_CONSUMPTION = "item_charge_consumption"
     WORLD_INITIALIZED = "world_initialized"

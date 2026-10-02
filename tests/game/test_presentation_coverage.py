@@ -54,7 +54,17 @@ def test_initialized_inventory_distinguishes_missing_casts_partial_tracks_and_ac
     assert potion["binding"] == "action.item.potion_greater_invisibility.drink"
     assert potion["status"] == "binding_selected"
     assert indexed["action_source_media", potion["identity"]]["status"] == "accepted_omission"
-    assert indexed["condition", "condition.consumable.weapon_coat.fire"]["status"] == "partial"
+    coat_identity = "condition.consumable.weapon_coat.fire"
+    assert indexed["condition", coat_identity]["status"] == "binding_selected"
+    coat = data.condition_recipes[coat_identity]
+    unsupported_coat = coat.model_copy(update={"classification":
+        data.condition_recipes["condition.poisoned"].classification})
+    unsupported_rows = presentation_inventory(replace(data,
+        condition_recipes={**data.condition_recipes, coat_identity: unsupported_coat}))
+    unsupported, = (row for row in unsupported_rows
+                    if row["family"] == "condition" and row["identity"] == coat_identity)
+    assert unsupported["status"] == "partial"
+    assert any("equipment modifier unsupported" in issue for issue in unsupported["details"])
     assert indexed["fact", "turn"]["status"] == "state_only"
     reaction = indexed["action", "reaction.spell.hellish_rebuke"]
     assert reaction["owner"] == "cast" and reaction["binding"] == "spell.hellish_rebuke"

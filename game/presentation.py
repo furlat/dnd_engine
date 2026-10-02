@@ -8,7 +8,7 @@ from typing import Mapping
 from uuid import UUID
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, TraverseConnectorEvent, ShoveEvent, SpellEvent
-from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
+from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
 from dnd.core.base_actions import ActionEvent, BaseCost
@@ -58,6 +58,7 @@ from dnd.world_facts import WorldFacts, apply_world_fact as apply_recorded_world
 from game.event_record import RecordedEvent
 from game.actor_facts import ActorState, ConditionFact, PresentationTarget
 from dnd.actor_projection import condition_fact as committed_condition_fact
+from dnd.actor_projection import remove_previous_item_holdings
 from game.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
 
 
@@ -355,8 +356,17 @@ def _copy_snapshot(snapshot: SensesSnapshot | None) -> SensesSnapshot | None:
 def apply_world_fact(target: PresentationTarget, event: Event, condition: ConditionFact | None = None) -> bool:
     """Fold recorded world after-values, reporting whether any were applied."""
     world = WorldFacts(world=target.world, tiles=target.tiles, objects=target.objects)
+    holdings_changed = bool(remove_previous_item_holdings(target.actors, event)) if isinstance(event, ItemLocationStateEvent) else False
+    owned_item = condition.resulting_item if condition is not None else None
+    owned_changed = False
+    if owned_item is not None:
+        for identity, actor in tuple(target.actors.items()):
+            if any(item.item_uuid == owned_item.item_uuid for item in actor.items):
+                target.actors[identity] = replace(actor, items=tuple(
+                    owned_item if item.item_uuid == owned_item.item_uuid else item for item in actor.items))
+                owned_changed = True
     if not apply_recorded_world_fact(world, event, condition):
-        return False
+        return owned_changed or holdings_changed
     target.world = world.world
     target.tiles = world.tiles
     target.objects = world.objects
@@ -406,6 +416,8 @@ def reduce_interval(
             apply_world_fact(target, event, condition)
             pending.add(index)
             continue
+        if isinstance(event, ItemLocationStateEvent):
+            remove_previous_item_holdings(target.actors, event)
         owner = actor_fact_owner(event)
         if owner is not None:
             actor = target.actors.get(owner)
@@ -630,7 +642,7 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
             copied = event.model_copy(update=common)
         case ActionEvent() if type(event) is ActionEvent:
             copied = event.model_copy(update=common)
-        case EquipmentEvent() | ItemChargeConsumptionEvent():
+        case EquipmentEvent() | ItemChargeConsumptionEvent() | ItemHoldingsReleasedEvent():
             copied = event.model_copy(update=common)
         case ItemLocationStateEvent() | ItemDestructionEvent():
             copied = event.model_copy(update=common)
@@ -650,7 +662,7 @@ def _actor_participants(event: Event) -> tuple[UUID, ...]:
     match event:
         case TurnEvent() | RoundEvent() | EncounterEvent() | SensoryUpdateEvent():
             return ()
-        case ItemChargeConsumptionEvent():
+        case ItemChargeConsumptionEvent() | ItemHoldingsReleasedEvent():
             return (event.source_entity_uuid,) if event.source_entity_uuid is not None else ()
         case SpatialChangeEvent(change_type=SpatialChangeType.LIGHT_CHANGED):
             # light_changed() stores the affected tile UUID in entity_uuid.
@@ -753,6 +765,8 @@ def _capture_actor_admissions(
                 ))
                 admitted.add(identity)
         if completed:
+            if isinstance(event, ItemLocationStateEvent):
+                remove_previous_item_holdings(actors, event)
             owner = actor_fact_owner(event)
             if owner is not None and owner in actors:
                 actors[owner] = apply_actor_fact(actors[owner], event, _condition_fact(event))
@@ -937,6 +951,8 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
         if condition is not None and (condition.resulting_tile is not None or condition.resulting_item is not None):
             apply_world_fact(result, event, condition)
             continue
+        if isinstance(event, ItemLocationStateEvent):
+            remove_previous_item_holdings(result.actors, event)
         owner = actor_fact_owner(event)
         if owner is not None:
             actor = result.actors.get(owner)

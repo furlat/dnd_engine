@@ -3,6 +3,7 @@ from typing import AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Itera
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
 from collections import defaultdict
+from dataclasses import dataclass
 from contextlib import contextmanager
 import time
 
@@ -75,6 +76,7 @@ from dnd.blocks.base_item import (
     UsableItem,
 )
 from dnd.core.item_types import ItemLocation
+from dnd.core.item_properties import ItemWearerValues
 from dnd.blocks.appearance import Appearance, AppearanceConfig
 from dnd.types.abilities import AbilityName, SkillName
 from dnd.types.character_progression import (
@@ -90,6 +92,7 @@ from dnd.types.character_progression import (
 from dnd.types.character_receipts import CharacterGrantReceipt
 from dnd.core.gridmap import (
     ENTITY_WORLD_PRESENCE_LIGHT_SUPPRESSION_TOKEN,
+    PreparedObjectPlacement,
     get_map,
 )
 from dnd.core.positioning import PositionCommitError, PositionPublicationError
@@ -107,6 +110,12 @@ from dnd.core.base_actions import (
     OpportunityAttackExposure,
     PositionDiscoveryContract, target_resolution_sort_key,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _EquipmentStorageDestination:
+    item: BaseItem
+    floor: Optional[PreparedObjectPlacement] = None
 
 
 _CONCRETE_EQUIPMENT_SLOTS: Tuple[EquipmentSlot, ...] = (
@@ -3280,6 +3289,16 @@ class Entity(BaseBlock):
         """Override BaseBlock virtual — returns Senses block for subjective perception."""
         return self.senses
 
+    def get_item_wearer_values(self) -> ItemWearerValues:
+        """Expose the native values supported by item-owned wearer properties."""
+        return ItemWearerValues(
+            charisma=self.ability_scores.charisma.ability_score,
+            strength=self.ability_scores.strength.ability_score,
+            spell_attack=self.spellcasting.spell_attack_bonus,
+            stealth=self.skill_set.stealth.skill_bonus,
+            movement=self.action_economy.movement,
+        )
+
     def appears_in_entity_contacts(self) -> bool:
         """Dead entities no longer occupy living-creature perception contacts."""
         return self.health.life_state is not LifeState.DEAD
@@ -4273,16 +4292,12 @@ class Entity(BaseBlock):
             return False
         if not self.inventory.can_add(item):
             return False
-        item_uuid = item.uuid
-        item.source_entity_uuid = self.uuid
-        result = self.inventory.add_item_with_result(item)
+        result = self.inventory.add_item_with_result(
+            item, parent_event=parent_event.uuid if parent_event is not None else None,
+        )
         if not result.succeeded:
             return False
         merged = result.inserted_item is None
-        item.tile_uuid = None
-        gridmap = get_map()
-        if gridmap.get_object_position(item_uuid) is not None:
-            gridmap.remove_object(item_uuid)
         if not merged:
             item.owner_uuid = self.uuid
             item.stored_in_uuid = self.inventory.uuid
@@ -4309,16 +4324,25 @@ class Entity(BaseBlock):
         Returns:
             The dropped item, or None if not found in inventory.
         """
-        held = self.inventory.items.get(item_uuid)
-        if held is not None and held.intrinsic_owner_uuid is not None:
-            return None
-        item = self.inventory.remove_item(item_uuid)
-        if item is None:
+        item = self.inventory.items.get(item_uuid)
+        if item is None or item.intrinsic_owner_uuid is not None:
             return None
         drop_pos = position if position is not None else self.position
+        grid = get_map()
+        prepared = grid.prepare_object_placement(
+            item_uuid, drop_pos,
+            parent_event.uuid if parent_event is not None else None,
+        )
+        if prepared is None:
+            return None
+        if (self.inventory.items.get(item_uuid) is not item
+                or not grid.validate_prepared_object_placement(prepared)):
+            grid.cancel_object_placement(prepared, "Inventory changed during drop admission")
+            return None
+        self.inventory.remove_item(item_uuid)
         item.owner_uuid = None
         item.stored_in_uuid = None
-        item.place_on_grid(drop_pos)
+        grid.commit_object_placement(prepared)
         item.drop(entity_uuid=self.uuid, position=drop_pos)
         self._publish_owned_item_location(
             item,
@@ -4327,17 +4351,64 @@ class Entity(BaseBlock):
         )
         return item
 
-    def _store_or_drop_equipment_item(self, item: BaseItem) -> None:
-        """Move a displaced equipment item to inventory or the entity's tile."""
-        result = self.inventory.add_item_with_result(item)
-        if result.succeeded:
-            self._publish_inventory_add_result(item, result)
-            return
-        item.owner_uuid = None
-        item.stored_in_uuid = None
-        item.place_on_grid(self.position)
-        item.drop(entity_uuid=self.uuid, position=self.position)
-        self._publish_owned_item_location(item, ItemLocation.FLOOR)
+    def _prepare_equipment_storage(
+        self, items: Tuple[EquippableItem, ...], *, excluding: Tuple[UUID, ...] = (),
+    ) -> Optional[Tuple[_EquipmentStorageDestination, ...]]:
+        """Admit storage or floor destinations before unequipping anything."""
+        grid = get_map()
+        destinations: list[_EquipmentStorageDestination] = []
+        stored: list[BaseItem] = []
+        for item in items:
+            if self.inventory.can_add_all((*stored, item), excluding=excluding):
+                stored.append(item)
+                destinations.append(_EquipmentStorageDestination(item))
+                continue
+            floor = grid.prepare_object_placement(item.uuid, self.position)
+            if floor is None:
+                for destination in destinations:
+                    if destination.floor is not None:
+                        grid.cancel_object_placement(destination.floor, "Equipment destination rejected")
+                return None
+            destinations.append(_EquipmentStorageDestination(item, floor))
+        if (not self.inventory.can_add_all(stored, excluding=excluding)
+                or any(destination.floor is not None
+                       and not grid.validate_prepared_object_placement(destination.floor)
+                       for destination in destinations)):
+            for destination in destinations:
+                if destination.floor is not None:
+                    grid.cancel_object_placement(destination.floor, "Inventory changed during equipment admission")
+            return None
+        return tuple(destinations)
+
+    def _commit_equipment_storage(
+        self, destinations: Tuple[_EquipmentStorageDestination, ...],
+    ) -> Tuple[Tuple[BaseItem, Optional[InventoryAddResult]], ...]:
+        """Commit admitted destinations before equipment completion is observed."""
+        committed: list[Tuple[BaseItem, Optional[InventoryAddResult]]] = []
+        for destination in destinations:
+            item = destination.item
+            if destination.floor is None:
+                result = self.inventory.add_item_with_result(item)
+                if not result.succeeded:
+                    raise RuntimeError("admitted equipment storage changed before commit")
+                committed.append((item, result))
+            else:
+                item.owner_uuid = None
+                item.stored_in_uuid = None
+                get_map().commit_object_placement(destination.floor)
+                item.drop(entity_uuid=self.uuid, position=destination.floor.placement.position)
+                committed.append((item, None))
+        return tuple(committed)
+
+    def _publish_equipment_storage(
+        self, committed: Tuple[Tuple[BaseItem, Optional[InventoryAddResult]], ...],
+    ) -> None:
+        """Retain slot-completion then location-fact ordering after native commit."""
+        for item, result in committed:
+            if result is None:
+                self._publish_owned_item_location(item, ItemLocation.FLOOR)
+            else:
+                self._publish_inventory_add_result(item, result)
 
     def on_owned_item_destroyed(
         self,
@@ -4382,8 +4453,38 @@ class Entity(BaseBlock):
             return False
         item = self.inventory.items[item_uuid]
         assert isinstance(item, EquippableItem)
-        result = self.equipment.equip_transaction(item, slot)
+        destinations: Tuple[_EquipmentStorageDestination, ...] = ()
+        committed: Tuple[Tuple[BaseItem, Optional[InventoryAddResult]], ...] = ()
+
+        def admit_displacements(displaced: Tuple[EquippableItem, ...]) -> bool:
+            nonlocal destinations
+            if self.inventory.items.get(item_uuid) is not item:
+                return False
+            prepared = self._prepare_equipment_storage(displaced, excluding=(item_uuid,))
+            if prepared is None:
+                return False
+            destinations = prepared
+            if self.inventory.items.get(item_uuid) is not item:
+                for destination in destinations:
+                    if destination.floor is not None:
+                        get_map().cancel_object_placement(destination.floor, "Incoming gear changed during admission")
+                destinations = ()
+                return False
+            return True
+
+        def commit_displacements() -> None:
+            nonlocal committed
+            self.inventory.remove_item(item_uuid)
+            committed = self._commit_equipment_storage(destinations)
+
+        result = self.equipment.equip_transaction(
+            item, slot, admit_displacements=admit_displacements,
+            commit_displacements=commit_displacements,
+        )
         if not result.succeeded:
+            for destination in destinations:
+                if destination.floor is not None:
+                    get_map().cancel_object_placement(destination.floor, "Equipment transition rejected")
             return False
 
         self.inventory.remove_item(item_uuid)
@@ -4395,8 +4496,7 @@ class Entity(BaseBlock):
             ItemLocation.EQUIPMENT,
             equipment_slot=selected_slot,
         )
-        for displaced_item in result.displaced_items:
-            self._store_or_drop_equipment_item(displaced_item)
+        self._publish_equipment_storage(committed)
         return True
 
     def unequip_item(self, slot: EquipmentSlot) -> Optional[BaseItem]:
@@ -4410,10 +4510,30 @@ class Entity(BaseBlock):
         Returns:
             The unequipped item, or None if slot was empty or unequip canceled.
         """
-        item = self.equipment.unequip(slot)
+        destinations: Tuple[_EquipmentStorageDestination, ...] = ()
+        committed: Tuple[Tuple[BaseItem, Optional[InventoryAddResult]], ...] = ()
+
+        def admit_destination(item: EquippableItem) -> bool:
+            nonlocal destinations
+            prepared = self._prepare_equipment_storage((item,))
+            if prepared is None:
+                return False
+            destinations = prepared
+            return True
+
+        def commit_destination() -> None:
+            nonlocal committed
+            committed = self._commit_equipment_storage(destinations)
+
+        item = self.equipment.unequip(
+            slot, admit_destination=admit_destination,
+            commit_destination=commit_destination,
+        )
         if item is None:
-            return None
-        self._store_or_drop_equipment_item(item)
+            for destination in destinations:
+                if destination.floor is not None:
+                    get_map().cancel_object_placement(destination.floor, "Unequip transition rejected")
+        self._publish_equipment_storage(committed)
         return item
 
     def materialize_navigation(
@@ -4712,7 +4832,7 @@ class Entity(BaseBlock):
             num_projectiles=template.get_multi_target_count() if target_type == TargetType.MULTI_ENTITY else None,
             allow_same_target=template.allow_same_target if target_type == TargetType.MULTI_ENTITY else None,
             is_item_use=is_item_use,
-            source_item_uuid=source_item_uuid,
+            source_item_uuid=source_item_uuid or template.source_item_uuid,
             item_stack_count=item_stack_count,
             item_charge_cost=item_charge_cost,
             fixed_healing=template.get_fixed_healing(self),

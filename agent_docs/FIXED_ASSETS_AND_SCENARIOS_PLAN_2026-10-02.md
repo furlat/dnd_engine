@@ -6,6 +6,11 @@ for the complete batch. Windows and accepted spell rendering stay outside this l
 
 ## Evidence and scope
 
+Item prerequisites are now implemented. Their next content phase follows the
+[updated item content plan](ITEM_CONTENT_IMPLEMENTATION_PLAN_2026-10-02.md),
+consuming the original bible thread's completed matching work before authoring.
+This parent's broader animation/character port remains subsequent work.
+
 Source: `.runtime/pack-study-20260930/integration-preparation/artist-review-20261002/`
 (`bible.html`, `data/artist-review.json`, `data/package-validation.json`). The
 [renderer handoff](audits/FIXED_CHARACTER_RENDERER_INTEGRATION_2026-10-01.md)

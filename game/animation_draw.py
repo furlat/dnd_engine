@@ -27,6 +27,7 @@ from game.action_media import ActionStripCue, ActionStripSample
 from game.attack import AttackSample, AttackTimeline, attack_actor_contacts, attack_projectile_contact, project_attack_projectile
 from game.condition_animation import ConditionAppearance, condition_body_pose, condition_contact
 from game.condition_types import ConditionLiveCopies
+from game.item_effects import item_material
 from game.body_effects import distort_body, ghost_body
 from game.body_pose_types import BodyTrailPose
 from game.condition_draw import (CONDITION_BODY_SLOTS, compose_condition_layers, condition_body_color,
@@ -452,6 +453,10 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             else:
                 color = flash if isinstance(flash, int) else tint
                 colored = frame if overlay is not None and flash is None else _colored(frame, color)
+            if (layer is not None and overlay is None and flash is None
+                    and layer.item_uuid is not None):
+                colored = item_material(frame, layer.item_effects, slot, data.condition_recipes,
+                                        category=category, base_tint=tint)
             if (flash is None and condition is not None and condition.body_color is not None
                     and slot in CONDITION_BODY_SLOTS):
                 colored = condition_body_color(colored, condition.body_color)

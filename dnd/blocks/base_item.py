@@ -10,6 +10,8 @@ from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, model_validator
 
 from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.core.item_properties import ItemProperty
+from dnd.items.property_composition import ItemPropertyContribution, install_item_properties, release_item_properties
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import DiceRoll
 from dnd.core.gridmap import get_map
@@ -46,6 +48,15 @@ from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
     bind_runtime_behavior_child,
 )
+
+
+class ItemHoldingsReleasedEvent(Event):
+    """Committed removal from the former owner's holdings, without a recipient."""
+
+    name: str = "Item Holdings Released"
+    event_type: EventType = EventType.ITEM_HOLDINGS_RELEASED
+    item_uuid: UUID
+    previous_container_uuid: UUID
 
 
 class ItemLocationStateEvent(Event):
@@ -282,6 +293,8 @@ class BaseItem(BaseBlock):
             stack_id=self.stack_id,
             visual_item_name=self.visual_item_name or self.name,
             visual_variant_id=self.visual_variant_id,
+            item_effects=tuple(effect for condition in self.active_conditions_by_uuid.values()
+                if (effect := condition.snapshot_item_effect()) is not None),
             equipped_visual_policy=self.equipped_visual_policy,
             stack_count=self.stack_count if stack_count is None else stack_count,
             max_stack=self.max_stack,
@@ -325,6 +338,22 @@ class BaseItem(BaseBlock):
     def snapshot_item_state(self) -> ItemPresentationState:
         """Capture committed item condition membership without inventory contents."""
         return self.to_item_presentation_state()
+
+    def publish_holdings_release(
+        self, previous_owner_uuid: UUID, previous_container_uuid: UUID,
+        *, parent_event: Optional[UUID] = None,
+    ) -> ItemHoldingsReleasedEvent:
+        """Record an accepted source removal without disclosing its destination."""
+        declaration = ItemHoldingsReleasedEvent(
+            source_entity_uuid=previous_owner_uuid,
+            item_uuid=self.uuid,
+            previous_container_uuid=previous_container_uuid,
+            parent_event=parent_event,
+            use_register=False,
+        )
+        return declaration.phase_to(EventPhase.EXECUTION).phase_to(
+            EventPhase.EFFECT,
+        ).phase_to(EventPhase.COMPLETION, use_register=True)
 
     def publish_location_state(
         self,
@@ -558,6 +587,10 @@ class BaseItem(BaseBlock):
         self.position = placement.position
         self.tile_uuid = placement.tile_uuid
 
+    def on_grid_object_placed(self, placement: WorldObjectPlacement) -> None:
+        """Make location snapshots agree with the committed spatial indexes."""
+        self.synchronize_floor_placement(placement)
+
     def on_grid_object_removed(self, position: Tuple[int, int], clear_location: bool = True, parent_event: Optional[Event] = None) -> None:
         """Synchronize floor-location fields after GridMap removes this item.
 
@@ -596,6 +629,12 @@ class BaseItem(BaseBlock):
     def _on_drop(self, entity_uuid: UUID, position: Tuple[int, int]) -> None:
         """Subclass override hook for drop behavior."""
         pass
+
+    def has_mergeable_stack_state(self) -> bool:
+        """Live condition or handler ownership prevents consuming this identity."""
+        return (not self.active_conditions and not self.event_handlers
+                and self.health is None and self.integrity is ItemIntegrity.INTACT
+                and self.remnant_state is None and self.supported_by_uuid is None)
 
     def destroy(self, parent_event: Optional[Event] = None) -> None:
         """Apply physical breakage once; authored scenery keeps its identity."""
@@ -873,6 +912,9 @@ class EquippableItem(BaseItem):
     is_equippable: bool = Field(default=True, description="Whether this item can be equipped.")
     is_pickable: bool = Field(default=True, description="Whether this item can be picked up.")
 
+    item_properties: Tuple[ItemProperty, ...] = Field(default=(), frozen=True)
+    _property_contributions: List[ItemPropertyContribution] = PrivateAttr(default_factory=list)
+
     def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
         """Return every slot this concrete item may occupy.
 
@@ -919,16 +961,15 @@ class EquippableItem(BaseItem):
     def equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
         """Called by Equipment.equip() after slot assignment.
 
-        Sets equipped tracking fields, clears floor placement if item was on ground,
-        then calls the subclass hook.
+        Equipment admits and removes any floor placement before this commit hook.
         """
+        if get_map().get_object_position(self.uuid) is not None:
+            raise RuntimeError("equipment commit requires an admitted floor removal")
         self.is_equipped = True
         self.equipped_slot = slot.value
-        if self.tile_uuid is not None:
-            gridmap = get_map()
-            if gridmap.get_object_position(self.uuid) is not None:
-                gridmap.remove_object(self.uuid)
-            self.tile_uuid = None
+        release_item_properties(self._property_contributions)
+        self._property_contributions = install_item_properties(
+            self.uuid, self.item_id, self.name, entity_uuid, self.item_properties)
         self._on_equip(slot, entity_uuid)
 
     def _on_equip(self, slot: EquipmentSlot, entity_uuid: UUID) -> None:
@@ -946,6 +987,7 @@ class EquippableItem(BaseItem):
         stored_in_uuid is NOT cleared — the caller decides where the item goes next.
         """
         self._on_unequip(slot, entity_uuid)
+        release_item_properties(self._property_contributions)
         self.is_equipped = False
         self.equipped_slot = None
 
@@ -997,6 +1039,10 @@ class UsableItem(BaseItem):
             "charges": self.charges,
             "max_charges": self.max_charges,
         })
+
+    def has_mergeable_stack_state(self) -> bool:
+        return (super().has_mergeable_stack_state()
+                and (self.charges == -1 or self.charges == self.max_charges))
 
     def remaining_finite_uses(self) -> Optional[int]:
         """Return total currently available uses represented by this stack.

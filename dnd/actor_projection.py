@@ -5,7 +5,7 @@ from uuid import UUID
 
 from dnd.actions import AttackEvent
 from dnd.blocks.appearance import AppearanceConfig
-from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
+from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.creature_types import Size
@@ -41,7 +41,7 @@ def actor_fact_owner(event: Event) -> UUID | None:
     match event:
         case AttackEvent() if event.attack_outcome is not None:
             return event.source_entity_uuid
-        case EquipmentEvent() | ItemChargeConsumptionEvent():
+        case EquipmentEvent() | ItemChargeConsumptionEvent() | ItemHoldingsReleasedEvent():
             return event.source_entity_uuid
         case DamageAppliedEvent() | HealEvent():
             return event.target_entity_uuid
@@ -59,6 +59,15 @@ def actor_fact_owner(event: Event) -> UUID | None:
 def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact | None = None) -> ActorState:
     """Apply native after-values; do not execute damage, hooks or equipment rules."""
     match event:
+        case ItemHoldingsReleasedEvent():
+            return replace(actor,
+                items=tuple(item for item in actor.items if item.item_uuid != event.item_uuid),
+                equipment=tuple((slot, identity) for slot, identity in actor.equipment if identity != event.item_uuid))
+        case ItemLocationStateEvent(location=ItemLocation.FLOOR):
+            return replace(actor,
+                items=tuple(item for item in actor.items if item.item_uuid != event.item_state.item_uuid),
+                equipment=tuple((slot, identity) for slot, identity in actor.equipment
+                                if identity != event.item_state.item_uuid))
         case SpatialChangeEvent(change_type=SpatialChangeType.ENTITY_ENTERED | SpatialChangeType.ENTITY_LEFT):
             return (actor if event.occupancy_layer is None
                     else replace(actor, occupancy_layer=event.occupancy_layer))
@@ -118,6 +127,21 @@ def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact |
             return (actor if event.active_weapon_set_after is None
                     else replace(actor, active_weapon_set=event.active_weapon_set_after))
     return actor
+
+
+def remove_previous_item_holdings(actors: dict[UUID, ActorState], event: ItemLocationStateEvent) -> tuple[UUID, ...]:
+    """One received location has one owner; remove only previously known holdings."""
+    retained_owner = event.owner_uuid if event.location in (ItemLocation.INVENTORY, ItemLocation.EQUIPMENT) else None
+    changed = []
+    for identity, actor in tuple(actors.items()):
+        if identity == retained_owner or not any(item.item_uuid == event.item_state.item_uuid for item in actor.items):
+            continue
+        actors[identity] = replace(actor,
+            items=tuple(item for item in actor.items if item.item_uuid != event.item_state.item_uuid),
+            equipment=tuple((slot, item_uuid) for slot, item_uuid in actor.equipment
+                            if item_uuid != event.item_state.item_uuid))
+        changed.append(identity)
+    return tuple(changed)
 
 
 def apply_stats(actor: ActorState, stats: EntityStatsState | None) -> ActorState:

@@ -30,6 +30,7 @@ from game.condition_types import load_condition_recipes
 from game.condition_media import load_condition_media
 from game.authoring_conversion import explicit_attachments, explicit_composition, explicit_spatial_composition, validate_composition, validate_wall_modules, validate_contact_sweeps
 from game.player_facts import PlayerActor, VisualItem
+from game.item_appearance import hand_appearance
 from game.world_animation import prop_animation
 from game.portal_art import load_portal_art
 
@@ -115,6 +116,13 @@ def resolve_actor_layers(
         if root is None or root.mechanical_factory_identity is None:
             raise ValueError(f"missing authored item visual: {item.visual_item_name}")
         visual_slot = _VISUAL_SLOT_BY_ENGINE_SLOT[slot]
+        explicit = hand_appearance(item.visual_item_name, item.visual_variant_id, visual_slot)
+        if explicit is not None:
+            for layer in explicit.layers:
+                layers[layer.render_layer.value] = RigLayer(
+                    layer.render_layer.value, layer.sprite_key, layer.tint_rgb,
+                    item_effects=item.item_effects, item_uuid=item.item_uuid)
+            continue
         category = _EQUIPMENT_CATEGORIES.get((root.mechanical_factory_identity, visual_slot))
         if category is None:
             raise ValueError(f"missing unique authored equipment binding: {item.visual_item_name}/{slot}")
@@ -127,6 +135,8 @@ def resolve_actor_layers(
         for layer in authored:
             layers[layer.render_layer.value] = RigLayer(
                 layer.render_layer.value, layer.sprite_key, layer.tint_rgb,
+                item_effects=item.item_effects,
+                item_uuid=item.item_uuid,
             )
     return tuple(layers[slot] for slot in rig.slot_order if slot in layers)
 

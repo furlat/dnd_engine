@@ -94,6 +94,12 @@ class EquipmentCase(BaseModel):
     attacks: bool = True
 
 
+class ItemTransferCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["item-transfer"]
+    initial_hand: WeaponSlot = WeaponSlot.MELEE_MAIN
+
+
 class ObjectAttackCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["object-attack"]
@@ -439,11 +445,12 @@ class ReviewCase(BaseModel):
     framing: Literal["scene", "actors"] = "scene"
     initial_facings: tuple[ReviewFacing, ...] = ()
     scenario: Annotated[AttackCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | CreatureCase | EquipmentCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
+                        | CreatureCase | EquipmentCase | ItemTransferCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)
     tail_duration_ms: float = Field(default=800, ge=0)
+    settled_hold_ms: float = Field(default=0, ge=0)
 
 
 @dataclass(frozen=True)

@@ -13,6 +13,7 @@ from game.draw_commands import DrawCommand
 from game.environment_art import EnvironmentBank, load_environment_art
 from game.environment_art import prop_state_key
 from game.player_facts import PlayerObject
+from game.item_draw import item_selection_command
 from dnd.core.item_types import ItemIntegrity
 from game.fixture_depth import FixtureDepthSample
 from game.projection import Camera, HEIGHT_STEP_PIXELS, camera_pose, painter_key, project_screen
@@ -86,7 +87,9 @@ def environment_depth_sample(command: DrawCommand, index: int, bank: Environment
 def environment_selection_command(obj: PlayerObject, camera: Camera) -> DrawCommand | None:
     """Use a registered target region at the received object's exact mount."""
     art = load_environment_art().props.get(obj.item.item_id)
-    if art is None or obj.item.integrity is ItemIntegrity.DESTROYED:
+    if art is None:
+        return item_selection_command(obj, camera)
+    if obj.item.integrity is ItemIntegrity.DESTROYED:
         return None
     direction = obj.placement.boundary_direction or obj.placement.orientation
     pose = camera_pose(direction.value if direction is not None else "east", camera.quadrant)

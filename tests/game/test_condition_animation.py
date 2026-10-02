@@ -121,12 +121,17 @@ def test_source_state_only_and_unimplemented_appearance_domains_are_distinct(rec
     assert sample.membership == (fact,) and sample.feedback is None
     assert sample.appearance.alpha == 1 and sample.appearance.body_color is None
     assert timeline.complete_ms == 0 and not timeline.unsupported
-    equipment_recipe = next(recipe for recipe in recipes.values() if recipe.persistent.equipmentModifiers)
+    equipment_recipe = recipes["condition.consumable.weapon_coat.fire"]
+    assert equipment_recipe.persistent.equipmentModifiers
     equipment = condition_fact(equipment_recipe.definitionRef.content_id, equipment_recipe.label)
     timeline = compile_condition(recipes, header(equipment), equipment, (), start_ms=0, badge_style=badge_style)
-    assert timeline.unsupported
-    assert any("equipment modifier unsupported" in issue for issue in timeline.unsupported)
+    assert not timeline.unsupported
     assert sample_condition(timeline, 0).membership == (equipment,)
+    unsupported_recipe = equipment_recipe.model_copy(update={"classification": state_recipe.classification})
+    unsupported = compile_condition({equipment.behavior_id: unsupported_recipe}, header(equipment), equipment,
+                                    (), start_ms=0, badge_style=badge_style)
+    assert any("equipment modifier unsupported" in issue for issue in unsupported.unsupported)
+    assert sample_condition(unsupported, 0).membership == (equipment,)
 
 
 def test_missing_recipe_keeps_actual_membership_without_inventing_a_transition(recipes, badge_style) -> None:

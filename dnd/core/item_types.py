@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.core.presentation_geometry import AoEPresentationGeometry
+from dnd.core.creature_types import DamageType
 from dnd.types.world_placement import BoundaryStructure, WorldPlacementSpec
 from dnd.types.residues import ObjectResidueState
 from dnd.types.traps import TrapState
@@ -105,6 +106,17 @@ class ItemDestructionProfile(BaseModel):
     is_pickable: bool = False
 
 
+class ItemEffectPresentationState(BaseModel):
+    """Native item-owned membership; media remains independently authored."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    effect_uuid: UUID
+    contribution_uuid: UUID
+    behavior_id: str
+    damage_type: DamageType
+    applied_source_event_cursor: int | None = None
+
+
 class ItemPresentationState(BaseModel):
     """Immutable item data needed to materialize an equipment/inventory row.
 
@@ -140,6 +152,7 @@ class ItemPresentationState(BaseModel):
     stack_id: Optional[str] = None
     visual_item_name: str = Field(description="Renderer item-catalog key.")
     visual_variant_id: Optional[str] = Field(default=None, description="Renderer variant key.")
+    item_effects: tuple[ItemEffectPresentationState, ...] = ()
     equipped_visual_policy: EquippedVisualPolicy = Field(
         description="Whether the equipped item contributes its own actor layer."
     )

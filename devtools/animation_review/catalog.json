@@ -13264,5 +13264,41 @@
       "kind": "wall-spell",
       "ring_hot_side": "outside"
     }
+  },
+  {
+    "id": "item-dagger-transfer-melee-main",
+    "title": "Coated dagger \u00b7 main hand, floor, pickup and attack",
+    "tags": [
+      "items",
+      "item-transfer",
+      "four-corners",
+      "native-events"
+    ],
+    "description": "Discovered native coat, drop, pickup and offhand attack; one dagger on the floor. Coating follows the item through the transfer, then a recorded condition removal restores its dark material. Brief holds show settled states without changing game turns or animation speed.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "item-transfer",
+      "initial_hand": "MELEE_MAIN"
+    },
+    "settled_hold_ms": 700,
+    "tail_duration_ms": 1800
+  },
+  {
+    "id": "item-dagger-transfer-melee-off",
+    "title": "Coated dagger \u00b7 offhand, floor, pickup and attack",
+    "tags": [
+      "items",
+      "item-transfer",
+      "four-corners",
+      "native-events"
+    ],
+    "description": "Discovered native coat, drop, pickup and offhand attack; one dagger on the floor. Coating follows the item through the transfer, then a recorded condition removal restores its dark material. Brief holds show settled states without changing game turns or animation speed.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "item-transfer",
+      "initial_hand": "MELEE_OFF"
+    },
+    "settled_hold_ms": 700,
+    "tail_duration_ms": 1800
   }
 ]

@@ -61,6 +61,7 @@ from dnd.core.content.runtime import (
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import Event, EventPhase
 from dnd.core.creature_types import DamageType
+from dnd.core.item_types import ItemEffectPresentationState
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
 from dnd.spells.divination import TrueSeeingEffect
@@ -370,6 +371,15 @@ class _WeaponCoatCondition(BaseCondition):
     )
     damage_contribution_uuid: Optional[UUID] = None
     last_duration_interval: Optional[tuple[UUID, int]] = None
+
+    def snapshot_item_effect(self) -> ItemEffectPresentationState | None:
+        if self.damage_contribution_uuid is None:
+            return None
+        return ItemEffectPresentationState(
+            effect_uuid=self.uuid, contribution_uuid=self.damage_contribution_uuid,
+            behavior_id=self.get_semantic_key(), damage_type=self.coat_damage_type,
+            applied_source_event_cursor=self.applied_source_event_cursor,
+        )
 
     def progress_for_interval(self, interval: Optional[tuple[UUID, int]]) -> bool:
         """Count an existing encounter round once despite changes of holder/location."""

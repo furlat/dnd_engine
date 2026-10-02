@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated, Literal, Mapping, TypeVar
+from uuid import UUID
 
 from pydantic import (
     AfterValidator, BaseModel, ConfigDict, Field, JsonValue, PlainSerializer,
@@ -19,6 +20,7 @@ from pydantic import (
 
 from dnd.core.content.identities import ContentRef
 from dnd.core.condition_types import ConditionTag
+from dnd.core.item_types import ItemEffectPresentationState
 from game.condition_types import ConditionBodyAnimation, ConditionRecipe
 from game.condition_media import ConditionLayerMedia
 from game.device_art import DeviceArt
@@ -52,6 +54,8 @@ class RigLayer:
     category: str
     tint: int = 0xFFFFFF
     alpha: float = 1.0
+    item_effects: tuple[ItemEffectPresentationState, ...] = ()
+    item_uuid: UUID | None = None
 
 
 class AuthoredRecord(BaseModel):

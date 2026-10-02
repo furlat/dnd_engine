@@ -38,7 +38,7 @@ def test_retained_body_identity_and_authored_dagger_supply_layers(
         "shadow": RigLayer("shadow", "Shadow", alpha=0.5),
         "body": RigLayer("body", "NakedBody", 0xDDAA88),
         "head": RigLayer("head", "Head22", 0x332211),
-        "weapon": RigLayer("weapon", "Melee1", 8952234),
+        "weapon": RigLayer("weapon", "Melee1", 8952234, item_uuid=dagger.item_uuid),
     }
     appearance.skin_tint = 0xFFFFFF
     assert next(layer for layer in resolved if layer.slot == "body").tint == 0xDDAA88

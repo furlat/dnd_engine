@@ -33,7 +33,7 @@
       "match": {"kind": "attack", "delivery": "melee", "weaponSlots": ["MELEE_OFF"], "outcomes": null, "primaryDamageTypes": null, "elemental": null, "sourceItemRefs": null},
       "actor": {"clip": "Attack5", "playbackSpeed": 1, "hiddenSlots": [], "media": [], "enabled": true},
       "anchors": [{"name": "action_start", "frame": 0}, {"name": "contact", "frame": 8}, {"name": "recover", "frame": 10}],
-      "attackVfx": {"onHit": {}, "onMiss": {}},
+      "attackVfx": {"onHit": {"slash": {"category": "Slash1", "tint": "$element.primary"}}, "onMiss": {}, "onCrit": {"slash": {"category": "Slash2", "tint": "$element.primary"}}},
       "projectile": null,
       "precedence": 100
     },

@@ -462,6 +462,11 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                               f"Rendered {contact.grid} retains its motion endpoint; legal tile is {expected}.")
                 before = after
                 presentation_ms += interval
+                # Review-only dwell on completed state; no fabricated events or
+                # game turns. Existing animations retain their authored speed.
+                for _ in range(ceil(case.settled_hold_ms / interval)):
+                    capture()
+                    presentation_ms += interval
             tail = max(case.tail_duration_ms, max((track.start_ms + track.duration_ms - presentation_ms for track in feedback), default=0),
                        max((cue.media.end_ms-presentation_ms for cue in motion_media), default=0))
             for _ in range(ceil(tail / interval)):

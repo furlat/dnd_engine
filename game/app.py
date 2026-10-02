@@ -48,6 +48,7 @@ from game.volume_media import compose_volume
 from game.environment_art import load_environment_art, prop_state_key, sample_environment_frame
 from game.environment_animation import door_pose, trap_pose, remnant_bank
 from game.environment_draw import environment_command, environment_depth_sample, environment_aperture_image
+from game.item_draw import item_ground_commands
 from game.boundary_occlusion import clip_actor_boundaries
 
 
@@ -1124,6 +1125,13 @@ def draw_frame(
         device_art = load_device_art().get(fixture.item.item_id)
         wreck_art = (device_art if fixture.item.integrity is ItemIntegrity.DESTROYED
                      else load_device_wrecks().get(fixture.item.item_id))
+        if binding is None and device_art is None and wreck_art is None and fixture_uuid in senses.objects:
+            disclosure = _disclosure(target, (fixture.placement.position,))
+            if disclosure is not None:
+                _, level = disclosure
+                _, multiplier = _treatment(catalog, level)
+                commands.extend(command._replace(surface=device_treatment(command.surface, multiplier))
+                                for command in item_ground_commands(fixture, camera))
         if (binding is None and device_art is None and wreck_art is None) or fixture_uuid not in senses.objects:
             continue
         fixture_state = fixture.item

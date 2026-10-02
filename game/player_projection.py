@@ -10,7 +10,7 @@ from uuid import UUID
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent, TraverseConnectorEvent
 from dnd.spells.abjuration import CounterspellReactionEvent
-from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
+from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
@@ -30,6 +30,7 @@ from dnd.types.world import CardinalDirection
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult, ObjectResidueState
 from game.actor_facts import ActorState, ConditionFact, PresentationTarget
 from game.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
+from dnd.actor_projection import remove_previous_item_holdings
 from game.player_facts import (
     ActionCancellation, ActionFact, ActionReaction, AreaReachFact, AttackFact, ConditionChangeFact, ContentAttribution, DamageFact,
     DeathSaveFact, EquipmentFact, FloorItem, ForcedMovementFact, PortalTransferFact, MechanismActivationFact, HealFact, ItemChargeFact, LifeFact,
@@ -71,7 +72,8 @@ def _visual_loadout(actor: ActorState) -> VisualLoadout:
         VisualItem(slot=slot, item_uuid=identity, item_id=items[identity].item_id,
             item_kind=items[identity].item_kind, visual_item_name=items[identity].visual_item_name,
             visual_variant_id=items[identity].visual_variant_id,
-            equipped_visual_policy=items[identity].equipped_visual_policy)
+            equipped_visual_policy=items[identity].equipped_visual_policy,
+            item_effects=items[identity].item_effects)
         for slot, identity in actor.equipment))
 
 
@@ -221,6 +223,8 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 intercepted_by_condition_uuid=event.intercepted_by_condition_uuid,
                 projectile_deflection_position=event.projectile_deflection_position if deflection_visible else None,
                 source_item_id=event.source_item_presentation.item_id if event.source_item_presentation is not None else None,
+                source_item_uuid=event.source_item_uuid,
+                item_effects=event.source_item_presentation.item_effects if event.source_item_presentation is not None else (),
                 target_kind=event.target_kind,
                 target_position=event.target_position if event.target_kind == "object" and (
                     source == observer or event.target_position is not None and (
@@ -426,7 +430,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
             return (ItemChargeFact(source_entity_uuid=observer, item_uuid=event.item_uuid,
                 charges_after=event.charges_after, stack_count_after=event.stack_count_after,
                 item_destroyed=event.item_destroyed) if event.source_entity_uuid == observer else None)
-        case EquipmentEvent() | ItemLocationStateEvent():
+        case EquipmentEvent() | ItemLocationStateEvent() | ItemHoldingsReleasedEvent():
             owner = actor_fact_owner(event)
             if owner is None or owner not in known or owner not in actors or not _identified(event, owner, observer):
                 return None
@@ -520,6 +524,7 @@ def _observed_remnant(state: ItemRemnantState | None, known_objects: set[UUID]) 
 def _floor_item(item: ItemPresentationState, residues: tuple[ObjectResidueState, ...]) -> FloorItem:
     return FloorItem(item_uuid=item.item_uuid, item_id=item.item_id, name=item.name,
         visual_item_name=item.visual_item_name, visual_variant_id=item.visual_variant_id,
+        stack_count=item.stack_count, is_pickable=item.is_pickable, item_effects=item.item_effects,
         map_char=item.map_char, boundary_structure=item.boundary_structure,
         contact_passage=item.contact_passage,
         supported_by_uuid=item.supported_by_uuid,
@@ -691,8 +696,33 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
             if isinstance(event, EntityCreatedEvent):
                 private_actors[event.entity_uuid] = actor_from_birth(event)
             owner = actor_fact_owner(event)
+            if isinstance(event, ItemLocationStateEvent):
+                removed_holders = remove_previous_item_holdings(private_actors, event)
+                for identity in removed_holders:
+                    contact = private_world.senses.entities.get(identity) if private_world.senses is not None else None
+                    if identity in remembered.actors and (identity == observer or contact is not None and contact.visual):
+                        actor = private_actors[identity]
+                        observed = replace(remembered.actors[identity], visual_loadout=_visual_loadout(actor),
+                                           controlled_items=actor.items if identity == observer else None)
+                        observations.append(PlayerObservation(event_uuid=event.uuid, actor=observed, contact=None))
+                        remembered.actors[identity] = observed
             if owner is not None and owner in private_actors:
                 private_actors[owner] = apply_actor_fact(private_actors[owner], event, facts.get(event.uuid))
+            condition = facts.get(event.uuid)
+            owned_item = condition.resulting_item if condition is not None else None
+            if owned_item is not None:
+                for identity, actor in tuple(private_actors.items()):
+                    if not any(item.item_uuid == owned_item.item_uuid for item in actor.items):
+                        continue
+                    actor = replace(actor, items=tuple(owned_item if item.item_uuid == owned_item.item_uuid else item
+                                                       for item in actor.items))
+                    private_actors[identity] = actor
+                    contact = private_world.senses.entities.get(identity) if private_world.senses is not None else None
+                    if identity in remembered.actors and (identity == observer or contact is not None and contact.visual):
+                        observed = replace(remembered.actors[identity], visual_loadout=_visual_loadout(actor),
+                                           controlled_items=actor.items if identity == observer else None)
+                        observations.append(PlayerObservation(event_uuid=event.uuid, actor=observed, contact=None))
+                        remembered.actors[identity] = observed
             world_changed = apply_world_fact(private_world, event, facts.get(event.uuid))
             if isinstance(event, SensoryUpdateEvent) and event.observer_uuid == observer:
                 # Native spatial commits publish their sensory child before
