@@ -4310,6 +4310,7 @@ CONTINUAL_FLAME_CONDITION_CONTENT_REF = ContentRef(
 class ContinualFlameCondition(SpatialCondition):
     """Permanent world-object-anchored light owner."""
 
+    has_visible_presence: bool = True
     name: str = Field(default="Continual Flame")
     description: str = Field(
         default="A permanent heatless flame sheds bright and dim light.",

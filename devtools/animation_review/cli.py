@@ -60,8 +60,8 @@ def main(
     parser.add_argument("--list", action="store_true", help="List the catalog without running the engine.")
     parser.add_argument("--output", type=Path, default=Path(".runtime/animation-review"))
     parser.add_argument("--fps", type=int, default=24)
-    parser.add_argument("--floor", choices=("paving", "scene"), default="paving",
-                        help="Floor artwork: Fantasy H1 paving (default) or original scene bindings.")
+    parser.add_argument("--floor", choices=("paving", "wood", "scene"), default="paving",
+                        help="Floor artwork: real paving (default), wooden tiles, or original scene bindings.")
     parser.add_argument("--width", type=int, default=960, help="Width of each of the four camera views.")
     parser.add_argument("--height", type=int, default=640, help="Height of each camera view; video is a 2x2 mosaic.")
     args = parser.parse_args(argv)

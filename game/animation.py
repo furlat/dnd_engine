@@ -101,6 +101,7 @@ class CastApplication:
     travel_apex_steps: float = 0.0
     hit: bool | None = None
     removed_condition_tags: frozenset[ConditionTag] = frozenset()
+    save_succeeded: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1045,7 +1046,8 @@ def _media_segment_frame(at: float, start: float, end: float, first: float, last
 
 def media_target_applies(track: StudioMediaTrack, application: CastApplication) -> bool:
     return (track.requireRemovedConditionTag is None
-            or track.requireRemovedConditionTag in application.removed_condition_tags)
+            or track.requireRemovedConditionTag in application.removed_condition_tags) and (
+            track.requiredSaveSuccess is None or application.save_succeeded is track.requiredSaveSuccess)
 
 
 def finite_media_end(data: AnimationData, tracks: tuple[StudioMediaTrack, ...], release_ms: float,
@@ -1053,7 +1055,7 @@ def finite_media_end(data: AnimationData, tracks: tuple[StudioMediaTrack, ...], 
     """Finite recipe media joins delivery before recovery; retained contact tails do not."""
     end = release_ms
     for track in tracks:
-        if track.requireRemovedConditionTag is not None and not any(
+        if (track.requireRemovedConditionTag is not None or track.requiredSaveSuccess is not None) and not any(
                 media_target_applies(track, application) for application in applications):
             continue
         start = release_ms + track.startOffsetMs
@@ -1331,7 +1333,9 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
             if projectile.travel.enabled:
                 intervals.append(_phase(data, recipe, projectile.travel, "travel", start,
                                         duration + projectile.travel.overlapContactMs))
-            if projectile.impact.enabled:
+            if projectile.impact.enabled and not (
+                projectile.impact.onMiss == "omit" and application.hit is False
+            ):
                 intervals.append(_phase(data, recipe, projectile.impact, "impact",
                                         0 if projectile.targetLocal is not None else arrival))
         count, occurrence = counts[feedback_identity(target)], indices.get(feedback_identity(target), 0)

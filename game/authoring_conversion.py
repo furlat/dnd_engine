@@ -109,6 +109,27 @@ def validate_wall_modules(binding: SpatialMediaBinding,
     if signatures and any(signature != signatures[0] for signature in signatures[1:]):
         raise ValueError("paired wall layers must share axis spacing, angular admission and mask normals")
     for layer in binding.layers:
+        assembly = layer.wallAssembly
+        if assembly is not None:
+            banks = (*assembly.modules, *((assembly.ring,) if assembly.ring is not None else ()))
+            for bank in banks:
+                for identity in (bank.assetId, bank.applicationAssetId, bank.removalAssetId):
+                    asset, source = assets.get(identity), storage.get(identity)
+                    if asset is None or source is None or binding.assetPhase not in source.phases:
+                        raise ValueError(f"Assembly phase lacks registered media: {identity}")
+                    phase = {"cast": asset.phases.cast, "travel": asset.phases.travel,
+                             "impact": asset.phases.impact}[binding.assetPhase]
+                    if phase is None or (phase.fps or asset.fps) != binding.fps:
+                        raise ValueError(f"Assembly phase clock differs: {identity}")
+                    if identity == bank.assetId and binding.holdStartFrame + binding.holdFrames > phase.frames:
+                        raise ValueError(f"Assembly hold exceeds delivered frames: {identity}")
+                    if identity != bank.assetId and phase.loop:
+                        raise ValueError(f"Assembly formation/retirement must be finite: {identity}")
+                    for part in source.phases[binding.assetPhase].layers:
+                        if part.partsByFacing is None or any(facing not in part.partsByFacing
+                                or len(part.partsByFacing[facing]) != phase.frames
+                                for facing in ("E", "S", "W", "N")):
+                            raise ValueError(f"Assembly phase requires four native cameras: {identity}")
         if layer.composition != "wall_modules":
             continue
         banks = tuple(variant for axis in layer.wallAxes for variant in axis.variants)

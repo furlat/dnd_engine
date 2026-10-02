@@ -408,6 +408,10 @@ class BaseBlock(BaseModel):
         """Actors expose the accepted wearer property channels through this capability."""
         return None
 
+    def permits_use_by(self, actor_uuid: UUID) -> bool:
+        """Source-owned activation admission; ordinary blocks add no restriction."""
+        return True
+
     def get_senses(self) -> Optional[SensesView]:
         """Override in Entity to return Senses block for subjective perception."""
         return None

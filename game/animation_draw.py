@@ -10,7 +10,7 @@ from colorsys import rgb_to_hsv
 from dataclasses import dataclass, replace
 from math import ceil, cos, degrees, floor, hypot, pi, sin, sqrt
 from types import MappingProxyType
-from typing import Mapping, Sequence
+from typing import Literal, Mapping, NamedTuple, Sequence
 
 import numpy as np
 import pygame
@@ -31,7 +31,7 @@ from game.item_effects import item_material
 from game.body_effects import distort_body, ghost_body
 from game.body_pose_types import BodyTrailPose
 from game.condition_draw import (CONDITION_BODY_SLOTS, compose_condition_layers, condition_body_color,
-    condition_body_ramp, blend_body_ramp)
+    condition_body_ramp, blend_body_ramp, condition_body_outline)
 from game.projectile_media import projectile_frame_layers
 from game.media_coverage import covered_media
 from game.cast_media import cast_media_draw_commands, preload_cast_media, cast_surface_volume
@@ -584,6 +584,9 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             )
             destination = (round(destination[0] + registration[0]), round(destination[1] + registration[1]))
     if condition is not None:
+        if condition.body_outline is not None and not only_shadow:
+            image.blit(condition_body_outline(image, condition.body_outline, condition.outline_age_ms,
+                quiet_age_ms=condition.time_ms), (0, 0))
         if condition.layers and not only_shadow:
             image, destination = compose_condition_layers(image, destination, ground, viewed_body.facing,
                 contact.visual_scale * camera.zoom, contact.visual_scale_x,
@@ -599,10 +602,26 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
     return image, destination
 
 
+class ProjectileLayerBlit(NamedTuple):
+    image: pygame.Surface
+    destination: tuple[int, int]
+    blend: int
+    depth: Literal["world", "behind_body", "front_body"] = "world"
+
+
 def projectile_layer_blits(timeline: CastTimeline, effect: ProjectileSample,
                            media: AnimationMedia, camera: Camera,
                            *, coverage: pygame.Surface | None = None,
                            ) -> tuple[tuple[pygame.Surface, tuple[int, int], int], ...]:
+    """Keep the existing pixel API; ordering metadata is compositor-owned."""
+    return tuple((layer.image, layer.destination, layer.blend) for layer in
+        _projectile_layer_blits(timeline, effect, media, camera, coverage=coverage))
+
+
+def _projectile_layer_blits(timeline: CastTimeline, effect: ProjectileSample,
+                           media: AnimationMedia, camera: Camera,
+                           *, coverage: pygame.Surface | None = None,
+                           ) -> tuple[ProjectileLayerBlit, ...]:
     """Ordered shared layer pixels; masks must leave source surfaces untouched."""
     data = timeline.data
     factor = TILE_WIDTH / data.rig.TILE_W * camera.zoom
@@ -641,8 +660,18 @@ def projectile_layer_blits(timeline: CastTimeline, effect: ProjectileSample,
             else:
                 frame.set_alpha(round((frame.get_alpha() or 255) * effect.opacity))
         destination = (round(center[0] - frame.width / 2), round(center[1] - frame.height / 2))
-        result.append((frame, destination, layer.blend))
+        result.append(ProjectileLayerBlit(frame, destination, layer.blend, layer.depth))
     return tuple(result)
+
+
+def _projectile_body_contact(timeline: CastTimeline, effect: ProjectileSample) -> ActorContact | ObjectContact | None:
+    """Only declared source preparation and recipient impact can bracket bodies."""
+    if effect.phase == "prepare":
+        return timeline.source.caster
+    if effect.phase == "impact":
+        return next((row.target for row in timeline.source.applications
+            if row.application_id == effect.application_id), None)
+    return None
 
 
 def _number_blit(number: NumberSample, contact: ActorContact | ObjectContact, font: pygame.font.Font,
@@ -807,6 +836,7 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
                             media: AnimationMedia, camera: Camera, *,
                             condition_appearances: Mapping[str, ConditionAppearance] | None = None,
                             include_bodies: bool = True,
+                            actor_bounds: Mapping[str, pygame.Rect] | None = None,
                             projectile_coverage: pygame.Surface | None = None,
                             ) -> tuple[AnimationDrawCommand, ...]:
     """Join sampled actors and effects to the map's existing painter ordering."""
@@ -853,7 +883,7 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
                             volume=cast_surface_volume(timeline, layer, media.area, position, height),
                             world_depth_group=(source.root_event_uuid, effect.phase, effect.application_id or "")))
                     continue
-                layers = projectile_layer_blits(timeline, effect, media, camera, coverage=projectile_coverage)
+                layers = _projectile_layer_blits(timeline, effect, media, camera, coverage=projectile_coverage)
                 visual, frame = effect.asset_id, effect.column
             case GeometryProjectileSample():
                 effect = project_geometry_projectile(timeline, reference_effect, camera.quadrant)
@@ -873,15 +903,26 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
                           role=role, identity=(source.root_event_uuid, effect.application_id or "", effect.phase))
         if projectile.depthMode == "overlay":
             key = (200, *key[1:])
-        commands.extend(AnimationDrawCommand(
-            key, image, destination, blend,
-            (source.root_event_uuid, position, visual, "current", None, "authored",
-             "projectile", height, effect.phase, frame, effect.application_id),
-            AreaLayer(source.ground_target.grid, source.ground_target.elevation_steps, media.area)
-            if source.ground_target is not None and effect.phase == "impact" else None,
-        ) for image, destination, blend in layers)
+        for layer in layers:
+            layer_key = key
+            contact = _projectile_body_contact(timeline, effect)
+            if layer.depth != "world" and contact is not None:
+                contact_height = (body_elevation_steps(contact, data)
+                    if isinstance(contact, ActorContact) else contact.elevation_steps)
+                actor_key = painter_key(contact.grid, elevation_steps=contact_height,
+                    quadrant=camera.quadrant, role="actor",
+                    identity=(source.root_event_uuid, effect.application_id or "", effect.phase))
+                layer_key = (*actor_key[:3], actor_key[3] + (-1 if layer.depth == "behind_body" else 1), actor_key[4])
+            commands.append(AnimationDrawCommand(
+                layer_key, layer.image, layer.destination, layer.blend,
+                (source.root_event_uuid, position, visual, "current", None, "authored",
+                 "projectile", height, effect.phase, frame, effect.application_id),
+                AreaLayer(source.ground_target.grid, source.ground_target.elevation_steps, media.area)
+                if source.ground_target is not None and effect.phase == "impact" else None,
+            ))
     if sample.delivery_enabled:
-        commands.extend(cast_media_draw_commands(timeline, sample, camera, media.area, media.projectile_rows))
+        commands.extend(cast_media_draw_commands(timeline, sample, camera, media.area, media.projectile_rows,
+            actor_bounds=actor_screen_bounds(commands) if actor_bounds is None else actor_bounds))
     commands.extend(number_draw_commands(data, sample.numbers, feedback_contacts, media.font, camera))
     return tuple(commands)
 
@@ -1030,19 +1071,26 @@ def draw_animation(surface: pygame.Surface, timeline: CastTimeline, sample: Cast
         match reference_effect:
             case ProjectileSample():
                 effect = project_projectile(timeline, reference_effect, camera.quadrant)
-                layers = projectile_layer_blits(timeline, effect, media, camera)
+                layers = _projectile_layer_blits(timeline, effect, media, camera)
             case GeometryProjectileSample():
                 effect = project_geometry_projectile(timeline, reference_effect, camera.quadrant)
-                layers = (_geometry_blit(data, effect, timeline.recipe.elementColors, camera),)
+                layers = (ProjectileLayerBlit(*_geometry_blit(data, effect, timeline.recipe.elementColors, camera)),)
         _, support_height = projectile_contact(timeline, effect, quadrant=camera.quadrant)
         unlifted_y = effect.point[1] + support_height * HEIGHT_STEP_PIXELS * data.rig.TILE_W / TILE_WIDTH
         depth = {"overlay": float("inf"), "ground": -float("inf"),
                  "world": unlifted_y / (data.rig.TILE_H / 2) * 1024 + 240}[projectile.depthMode]
-        for image, destination, blend in layers:
+        for layer in layers:
+            image, destination, blend = layer.image, layer.destination, layer.blend
+            layer_depth = depth
+            if isinstance(effect, ProjectileSample) and layer.depth != "world":
+                contact = _projectile_body_contact(timeline, effect)
+                if contact is not None:
+                    layer_depth = _reference_actor_depth(rotate_position(contact.grid, camera.quadrant),
+                        feedback_identity(contact)) + (-1 if layer.depth == "behind_body" else 1)
             ground = source.ground_target
             if ground is not None and effect.phase == "impact" and media.area is not None:
                 image = mask_ground_area(image, destination, ground.grid, ground.elevation_steps, camera, media.area)
-            draws.append((depth, image, destination, blend))
+            draws.append((layer_depth, image, destination, blend))
     for _, image, destination, blend in sorted(draws, key=lambda item: item[0]):
         surface.blit(image, destination, special_flags=blend)
     for number in sample.numbers:

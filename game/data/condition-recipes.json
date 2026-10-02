@@ -1853,10 +1853,10 @@
         "presentationDomains": [
           "body"
         ],
-        "visualFamily": "control.blinded"
+        "visualFamily": "divine.blinded"
       },
       "composition": {
-        "group": "control.blinded",
+        "group": "divine.blinded",
         "exclusiveGroup": null,
         "priority": 30,
         "maxLayers": 3
@@ -1868,10 +1868,11 @@
         "appearanceLayers": [],
         "layers": [
           {
-            "id": "control.blinded.sustain.back",
-            "assetId": "control.blinded.sustain.back",
+            "id": "divine.blinded.back",
+            "assetId": "divine.blinded.back",
             "category": "blinded",
             "animation": "loop",
+            "fps": 32,
             "attachment": "head",
             "priority": 30,
             "colors": {
@@ -1879,14 +1880,7 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 500,
             "drawOrder": "behind_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -1897,15 +1891,15 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 0,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
+            "startOffsetMs": 0,
+            "offsetY": -4
           },
           {
-            "id": "control.blinded.sustain.front",
-            "assetId": "control.blinded.sustain.front",
+            "id": "divine.blinded.front",
+            "assetId": "divine.blinded.front",
             "category": "blinded",
             "animation": "loop",
+            "fps": 32,
             "attachment": "head",
             "priority": 30,
             "colors": {
@@ -1913,14 +1907,7 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 500,
             "drawOrder": "in_front_of_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -1931,117 +1918,22 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 0,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
+            "startOffsetMs": 0,
+            "offsetY": -4
           }
         ]
       },
       "application": {
         "durationMs": 220,
-        "feedbackEnabled": true,
+        "feedbackEnabled": false,
         "feedbackColor": 9167960,
-        "effects": [
-          {
-            "id": "control.blinded.application.back",
-            "assetId": "control.blinded.application.back",
-            "category": "blinded",
-            "animation": "finite",
-            "attachment": "head",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 0,
-            "drawOrder": "behind_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "durationMs": 500.0,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
-          },
-          {
-            "id": "control.blinded.application.front",
-            "assetId": "control.blinded.application.front",
-            "category": "blinded",
-            "animation": "finite",
-            "attachment": "head",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 0,
-            "drawOrder": "in_front_of_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "durationMs": 500.0,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
-          }
-        ]
+        "effects": []
       },
       "removal": {
-        "durationMs": 200,
-        "feedbackEnabled": true,
+        "durationMs": 600,
+        "feedbackEnabled": false,
         "feedbackColor": 2608707,
-        "effects": [
-          {
-            "id": "control.blinded.removal.back",
-            "assetId": "control.blinded.removal.back",
-            "category": "blinded",
-            "animation": "finite",
-            "attachment": "head",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 0,
-            "drawOrder": "behind_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "durationMs": 597.2222222222222,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
-          },
-          {
-            "id": "control.blinded.removal.front",
-            "assetId": "control.blinded.removal.front",
-            "category": "blinded",
-            "animation": "finite",
-            "attachment": "head",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 0,
-            "drawOrder": "in_front_of_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "durationMs": 597.2222222222222,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
-          }
-        ]
+        "effects": []
       }
     },
     {
@@ -2193,10 +2085,10 @@
         "presentationDomains": [
           "body"
         ],
-        "visualFamily": "control.deafened"
+        "visualFamily": "divine.deafened"
       },
       "composition": {
-        "group": "control.deafened",
+        "group": "divine.deafened",
         "exclusiveGroup": null,
         "priority": 30,
         "maxLayers": 3
@@ -2208,10 +2100,11 @@
         "appearanceLayers": [],
         "layers": [
           {
-            "id": "control.deafened.sustain.back",
-            "assetId": "control.deafened.sustain.back",
+            "id": "divine.deafened.back",
+            "assetId": "divine.deafened.back",
             "category": "deafened",
             "animation": "loop",
+            "fps": 32,
             "attachment": "head",
             "priority": 30,
             "colors": {
@@ -2219,14 +2112,7 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 500,
             "drawOrder": "behind_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -2237,15 +2123,15 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 0,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
+            "startOffsetMs": 0,
+            "offsetY": -11.5
           },
           {
-            "id": "control.deafened.sustain.front",
-            "assetId": "control.deafened.sustain.front",
+            "id": "divine.deafened.front",
+            "assetId": "divine.deafened.front",
             "category": "deafened",
             "animation": "loop",
+            "fps": 32,
             "attachment": "head",
             "priority": 30,
             "colors": {
@@ -2253,14 +2139,7 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 500,
             "drawOrder": "in_front_of_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "fps": 32,
             "activeDuring": [
               "idle",
               "move",
@@ -2271,117 +2150,22 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 0,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
+            "startOffsetMs": 0,
+            "offsetY": -11.5
           }
         ]
       },
       "application": {
         "durationMs": 220,
-        "feedbackEnabled": true,
+        "feedbackEnabled": false,
         "feedbackColor": 14966104,
-        "effects": [
-          {
-            "id": "control.deafened.application.back",
-            "assetId": "control.deafened.application.back",
-            "category": "deafened",
-            "animation": "finite",
-            "attachment": "head",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 0,
-            "drawOrder": "behind_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "durationMs": 500.0,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
-          },
-          {
-            "id": "control.deafened.application.front",
-            "assetId": "control.deafened.application.front",
-            "category": "deafened",
-            "animation": "finite",
-            "attachment": "head",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 0,
-            "drawOrder": "in_front_of_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "durationMs": 500.0,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
-          }
-        ]
+        "effects": []
       },
       "removal": {
-        "durationMs": 200,
-        "feedbackEnabled": true,
+        "durationMs": 600,
+        "feedbackEnabled": false,
         "feedbackColor": 13534503,
-        "effects": [
-          {
-            "id": "control.deafened.removal.back",
-            "assetId": "control.deafened.removal.back",
-            "category": "deafened",
-            "animation": "finite",
-            "attachment": "head",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 0,
-            "drawOrder": "behind_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "durationMs": 597.2222222222222,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
-          },
-          {
-            "id": "control.deafened.removal.front",
-            "assetId": "control.deafened.removal.front",
-            "category": "deafened",
-            "animation": "finite",
-            "attachment": "head",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 0,
-            "drawOrder": "in_front_of_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "durationMs": 597.2222222222222,
-            "offsetX": 0,
-            "offsetY": 33.952796770426
-          }
-        ]
+        "effects": []
       }
     },
     {
@@ -6067,6 +5851,2135 @@
         "feedbackColor": 16777215,
         "effects": []
       }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.bestow_curse.ability",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Bestow Curse",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.remove_curse",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": false,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=curse-cleanse; effect=cleanse.curse; disposition=beneficial; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.bestow_curse",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=ability; effect=condition.bestow_curse.ability; disposition=harmful; target=selected_target; gates=saving_throw:wisdom:failed:actor_spell_save_dc+configuration:curse_option=ability"
+          },
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.greater_restoration",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": false,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=curse-cleanse; effect=cleanse.curse; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "primary_dynamic",
+        "presentationDomains": [
+          "body",
+          "head"
+        ],
+        "visualFamily": "control.bestow_curse.ability"
+      },
+      "composition": {
+        "group": "curse.ability",
+        "exclusiveGroup": null,
+        "priority": 60,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "curse.ability.rings.back",
+            "assetId": "curse.ability.rings.back",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "ground",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.ability.rings.front",
+            "assetId": "curse.ability.rings.front",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "ground",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          },
+          {
+            "id": "curse.ability.mark.back",
+            "assetId": "curse.ability.mark.back",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.ability.mark.front",
+            "assetId": "curse.ability.mark.front",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 5811428,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 1750,
+        "feedbackEnabled": false,
+        "feedbackColor": 2568910,
+        "effects": [
+          {
+            "id": "curse.ability.rings.back.removal",
+            "assetId": "curse.ability.rings.back.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "ground",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.ability.rings.front.removal",
+            "assetId": "curse.ability.rings.front.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "ground",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "in_front_of_body"
+          },
+          {
+            "id": "curse.ability.mark.back.removal",
+            "assetId": "curse.ability.mark.back.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "head",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.ability.mark.front.removal",
+            "assetId": "curse.ability.mark.front.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "head",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "in_front_of_body"
+          }
+        ],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.bestow_curse.attack",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Bestow Curse",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.remove_curse",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": false,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=curse-cleanse; effect=cleanse.curse; disposition=beneficial; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.bestow_curse",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=attack; effect=condition.bestow_curse.attack; disposition=harmful; target=selected_target; gates=saving_throw:wisdom:failed:actor_spell_save_dc+configuration:curse_option=attack"
+          },
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.greater_restoration",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": false,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=curse-cleanse; effect=cleanse.curse; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "primary_dynamic",
+        "presentationDomains": [
+          "body",
+          "head"
+        ],
+        "visualFamily": "control.bestow_curse.attack"
+      },
+      "composition": {
+        "group": "curse.attack",
+        "exclusiveGroup": null,
+        "priority": 60,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "curse.attack.rings.back",
+            "assetId": "curse.attack.rings.back",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "ground",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.attack.rings.front",
+            "assetId": "curse.attack.rings.front",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "ground",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          },
+          {
+            "id": "curse.attack.mark.back",
+            "assetId": "curse.attack.mark.back",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.attack.mark.front",
+            "assetId": "curse.attack.mark.front",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 14964922,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 1750,
+        "feedbackEnabled": false,
+        "feedbackColor": 13510467,
+        "effects": [
+          {
+            "id": "curse.attack.rings.back.removal",
+            "assetId": "curse.attack.rings.back.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "ground",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.attack.rings.front.removal",
+            "assetId": "curse.attack.rings.front.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "ground",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "in_front_of_body"
+          },
+          {
+            "id": "curse.attack.mark.back.removal",
+            "assetId": "curse.attack.mark.back.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "head",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.attack.mark.front.removal",
+            "assetId": "curse.attack.mark.front.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "head",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "in_front_of_body"
+          }
+        ],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.bestow_curse.inaction",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Bestow Curse",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.remove_curse",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": false,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=curse-cleanse; effect=cleanse.curse; disposition=beneficial; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.bestow_curse",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=inaction; effect=condition.bestow_curse.inaction; disposition=harmful; target=selected_target; gates=saving_throw:wisdom:failed:actor_spell_save_dc+configuration:curse_option=inaction"
+          },
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.greater_restoration",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": false,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=curse-cleanse; effect=cleanse.curse; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "primary_dynamic",
+        "presentationDomains": [
+          "body",
+          "head"
+        ],
+        "visualFamily": "control.bestow_curse.inaction"
+      },
+      "composition": {
+        "group": "curse.inaction",
+        "exclusiveGroup": null,
+        "priority": 60,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "curse.inaction.rings.back",
+            "assetId": "curse.inaction.rings.back",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "ground",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.inaction.rings.front",
+            "assetId": "curse.inaction.rings.front",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "ground",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          },
+          {
+            "id": "curse.inaction.mark.back",
+            "assetId": "curse.inaction.mark.back",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.inaction.mark.front",
+            "assetId": "curse.inaction.mark.front",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 14985048,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 1750,
+        "feedbackEnabled": false,
+        "feedbackColor": 12439079,
+        "effects": [
+          {
+            "id": "curse.inaction.rings.back.removal",
+            "assetId": "curse.inaction.rings.back.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "ground",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.inaction.rings.front.removal",
+            "assetId": "curse.inaction.rings.front.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "ground",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "in_front_of_body"
+          },
+          {
+            "id": "curse.inaction.mark.back.removal",
+            "assetId": "curse.inaction.mark.back.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "head",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.inaction.mark.front.removal",
+            "assetId": "curse.inaction.mark.front.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "head",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "in_front_of_body"
+          }
+        ],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.bestow_curse.damage",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Bestow Curse",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.remove_curse",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": false,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=curse-cleanse; effect=cleanse.curse; disposition=beneficial; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.bestow_curse",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=damage; effect=condition.bestow_curse.damage; disposition=harmful; target=selected_target; gates=saving_throw:wisdom:failed:actor_spell_save_dc+configuration:curse_option=damage"
+          },
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.greater_restoration",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": false,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=curse-cleanse; effect=cleanse.curse; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "primary_dynamic",
+        "presentationDomains": [
+          "body",
+          "head"
+        ],
+        "visualFamily": "control.bestow_curse.damage"
+      },
+      "composition": {
+        "group": "curse.damage",
+        "exclusiveGroup": null,
+        "priority": 60,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "curse.damage.rings.back",
+            "assetId": "curse.damage.rings.back",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "ground",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.damage.rings.front",
+            "assetId": "curse.damage.rings.front",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "ground",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          },
+          {
+            "id": "curse.damage.mark.back",
+            "assetId": "curse.damage.mark.back",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.damage.mark.front",
+            "assetId": "curse.damage.mark.front",
+            "category": "bestow_curse",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 11622628,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 1750,
+        "feedbackEnabled": false,
+        "feedbackColor": 13510578,
+        "effects": [
+          {
+            "id": "curse.damage.rings.back.removal",
+            "assetId": "curse.damage.rings.back.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "ground",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.damage.rings.front.removal",
+            "assetId": "curse.damage.rings.front.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "ground",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "in_front_of_body"
+          },
+          {
+            "id": "curse.damage.mark.back.removal",
+            "assetId": "curse.damage.mark.back.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "head",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "curse.damage.mark.front.removal",
+            "assetId": "curse.damage.mark.front.removal",
+            "category": "bestow_curse",
+            "animation": "finite",
+            "attachment": "head",
+            "priority": 60,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "durationMs": 1750,
+            "drawOrder": "in_front_of_body"
+          }
+        ],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.beacon_of_hope",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Beacon of Hope",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.beacon_of_hope",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=beneficial; target=each_affected_entity; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "divine.beacon_of_hope"
+      },
+      "composition": {
+        "group": "divine.beacon_of_hope",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "divine.beacon_of_hope.back",
+            "assetId": "divine.beacon_of_hope.back",
+            "category": "beacon_of_hope",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "startOffsetMs": 0,
+            "offsetY": 0
+          },
+          {
+            "id": "divine.beacon_of_hope.front",
+            "assetId": "divine.beacon_of_hope.front",
+            "category": "beacon_of_hope",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "startOffsetMs": 0,
+            "offsetY": 0
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 220,
+        "feedbackEnabled": false,
+        "feedbackColor": 14964917,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 600,
+        "feedbackEnabled": false,
+        "feedbackColor": 13510461,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.slow",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Slow",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.slow",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=harmful; target=each_affected_entity; gates=saving_throw:wisdom:failed:actor_spell_save_dc"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "control.slow"
+      },
+      "composition": {
+        "group": "control.slow",
+        "exclusiveGroup": null,
+        "priority": 70,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "control.slow.back",
+            "assetId": "control.slow.back",
+            "category": "Slow",
+            "animation": "sustain",
+            "fps": 32,
+            "attachment": "body",
+            "priority": 70,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "startOffsetMs": 0,
+            "offsetY": 0,
+            "fadeInMs": 150
+          },
+          {
+            "id": "control.slow.front",
+            "assetId": "control.slow.front",
+            "category": "Slow",
+            "animation": "sustain",
+            "fps": 32,
+            "attachment": "body",
+            "priority": 70,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "startOffsetMs": 0,
+            "offsetY": 0,
+            "fadeInMs": 150
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 150,
+        "feedbackEnabled": false,
+        "feedbackColor": 11619920,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 550,
+        "feedbackEnabled": false,
+        "feedbackColor": 11619920,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.hold_person",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Hold Person",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.hold_person",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=failed-save; effect=condition.hold_person; disposition=harmful; target=selected_target; gates=saving_throw:wisdom:failed:actor_spell_save_dc"
+          }
+        ],
+        "relatedStates": [
+          {
+            "relation": "shares_persistent_profile_with",
+            "targetRef": {
+              "pack_id": "core.rules",
+              "definition_kind": "condition",
+              "content_id": "condition.paralyzed",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "evidenceStatus": "authored_visual_relation"
+          }
+        ],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "control.hold_human"
+      },
+      "composition": {
+        "group": "control.hold_human",
+        "exclusiveGroup": null,
+        "priority": 75,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "control.hold_human.back",
+            "assetId": "control.hold_human.back",
+            "category": "Hold human",
+            "animation": "hold",
+            "fps": 32,
+            "attachment": "body",
+            "priority": 75,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ]
+          },
+          {
+            "id": "control.hold_human.front",
+            "assetId": "control.hold_human.front",
+            "category": "Hold human",
+            "animation": "hold",
+            "fps": 32,
+            "attachment": "body",
+            "priority": 75,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ]
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 14964843,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 13527591,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.hold_monster",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Hold Monster",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.hold_monster",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=failed-save; effect=condition.hold_monster; disposition=harmful; target=each_affected_entity; gates=saving_throw:wisdom:failed:actor_spell_save_dc"
+          }
+        ],
+        "relatedStates": [
+          {
+            "relation": "shares_persistent_profile_with",
+            "targetRef": {
+              "pack_id": "core.rules",
+              "definition_kind": "condition",
+              "content_id": "condition.paralyzed",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "evidenceStatus": "authored_visual_relation"
+          }
+        ],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "control.hold_human"
+      },
+      "composition": {
+        "group": "control.hold_human",
+        "exclusiveGroup": null,
+        "priority": 75,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "control.hold_human.back",
+            "assetId": "control.hold_human.back",
+            "category": "Hold human",
+            "animation": "hold",
+            "fps": 32,
+            "attachment": "body",
+            "priority": 75,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ]
+          },
+          {
+            "id": "control.hold_human.front",
+            "assetId": "control.hold_human.front",
+            "category": "Hold human",
+            "animation": "hold",
+            "fps": 32,
+            "attachment": "body",
+            "priority": 75,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ]
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 5825696,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 2606542,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "condition",
+        "content_id": "condition.paralyzed",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Paralyzed",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "condition",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "condition",
+              "content_id": "condition.spell.hold_monster",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=harmful; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "condition",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "condition",
+              "content_id": "condition.spell.hold_person",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=harmful; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "trait",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "trait",
+              "content_id": "trait.ghoul_paralysis",
+              "content_version": 1,
+              "definition_contract_hash": "8b81685f804e251441a0107c1620212c9d441cf2d4c30a29cd5c34d344201c9a"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=harmful; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.lesser_restoration",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=exact-condition-cleanse; effect=cleanse.condition.paralyzed; disposition=beneficial; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.greater_restoration",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=exact-condition-cleanse; effect=cleanse.condition.paralyzed; disposition=beneficial; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "initialization_or_rules_effect",
+            "sourceRef": null,
+            "direct": true,
+            "evidenceStatus": "verified_backend_inventory",
+            "evidence": "Core Paralyzed is registered; specific spell/trait implementations often use their own exact condition refs."
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "paralysis.alpha-contour"
+      },
+      "composition": {
+        "group": "body",
+        "exclusiveGroup": null,
+        "priority": 60,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": {
+          "clip": "Idle",
+          "frame": 0,
+          "framesByRig": {
+            "neuroclient.modular": 3
+          }
+        },
+        "bodyOutline": {
+          "color": 16761417,
+          "pulseColor": 16766076,
+          "alphaThreshold": 100,
+          "opacity": 0.55,
+          "pulseOpacity": 0.75,
+          "periodMs": 1400,
+          "onsetMs": 300
+        },
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": []
+      },
+      "application": {
+        "durationMs": 220.0,
+        "feedbackEnabled": false,
+        "feedbackColor": 14178532,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 200.0,
+        "feedbackEnabled": false,
+        "feedbackColor": 13510531,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "condition",
+        "content_id": "condition.frightened",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Frightened",
+      "disposition": "authored",
+      "mediaFailurePolicy": "omit_optional_track",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "action",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "action",
+              "content_id": "action.class.barbarian.intimidating_presence",
+              "content_version": 1,
+              "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=failed-save; effect=condition.frightened; disposition=harmful; target=selected_target; gates=saving_throw:wisdom:failed:actor_action_dc"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "class_feature",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "class_feature",
+              "content_id": "class_feature.sorcerer.draconic_presence.aura",
+              "content_version": 1,
+              "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=failed-save-fear; effect=condition.frightened; disposition=harmful; target=each_affected_entity; gates=saving_throw:wisdom:failed:actor_action_dc+configuration:presence_mode=fear"
+          },
+          {
+            "effect": "cleanse",
+            "triggerType": "condition",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "condition",
+              "content_id": "condition.spell.heroes_feast",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition-cleanse; effect=cleanse.frightened; disposition=beneficial; target=actor; gates=automatic"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "condition",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "condition",
+              "content_id": "condition.spell.fear",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=harmful; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "condition",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "condition",
+              "content_id": "condition.spell.eyebite.panicked",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=harmful; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.greater_restoration",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=exact-condition-cleanse; effect=cleanse.condition.frightened; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.frightened"
+      },
+      "composition": {
+        "group": "control.frightened",
+        "exclusiveGroup": null,
+        "priority": 70,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "frightened.back",
+            "assetId": "control.frightened.back",
+            "category": "Frightened",
+            "animation": "hold",
+            "fps": 32,
+            "attachment": "ground",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 70,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "frightened.front",
+            "assetId": "control.frightened.front",
+            "category": "Frightened",
+            "animation": "hold",
+            "fps": 32,
+            "attachment": "ground",
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 70,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 14083160,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 6606375,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.fear",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Fear",
+      "disposition": "authored",
+      "mediaFailurePolicy": "omit_optional_track",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.fear",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=failed-save; effect=condition.fear; disposition=harmful; target=each_affected_entity; gates=saving_throw:wisdom:failed:actor_spell_save_dc"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.spell.fear"
+      },
+      "composition": {
+        "group": "body",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": []
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 14985048,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 12439079,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.hypnotic_pattern",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Hypnotic Pattern",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "control.incapacitated"
+      },
+      "composition": {
+        "group": "control.incapacitated",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "control.incapacitated.front",
+            "assetId": "control.incapacitated.front",
+            "category": "incapacitated",
+            "animation": "hold",
+            "attachment": "head",
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "fps": 32,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ]
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 312.5,
+        "feedbackEnabled": false,
+        "feedbackColor": 14964843,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 400,
+        "feedbackEnabled": false,
+        "feedbackColor": 13527591,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
     }
   ]
 }

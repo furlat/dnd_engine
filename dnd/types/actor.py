@@ -4,6 +4,7 @@ from uuid import UUID
 from typing import Literal
 
 from dnd.core.creature_types import DamageType, Size
+from dnd.core.item_types import ItemConcentrationSlot
 from dnd.types.abilities import AbilityName
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
@@ -44,6 +45,7 @@ class ConditionState(BaseModel):
     size_change: Literal["enlarge", "reduce"] | None = None
     energy_type: DamageType | None = None
     enhanced_ability: AbilityName | None = None
+    concentration_slots: tuple[ItemConcentrationSlot, ...] = ()
 
 
 class TemporaryHitPointsGrant(BaseModel):

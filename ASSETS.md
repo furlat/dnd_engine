@@ -12,6 +12,16 @@ Keep pixels, binary geometry and generated previews private. Keep code and
 authored JSON contracts public. Put review output in `.runtime/` or `output/`.
 Importers update media registration/storage, never rewrite selected recipes.
 
+October 2 Holds/Fear/Scorching sources are preserved under
+`sources/holds-eefffc58e8c5/`, `sources/fear-eyebite-deb28a4f625f/`,
+`sources/fear-diagonal-v7-20261002/` and `sources/scorching-isolated-v23-16a3b4f1525d/`.
+Use their named `devtools.import_*_media` adapters and existing registered atlas
+packer. Installed selections: Holds8pages/503,957bytes, Fear46pages/39,824,994bytes,
+Scorching16pages/1,246,355bytes. Retain all camera banks/pivots and finite phases;
+Holds has a one-frame quiet sustain, Fear a source-authored loop overlap, and
+Scorching14 finite travel samples. Source archives include deferred counterparts;
+they are not production bindings. Private install receipts are in the spell queue.
+
 Wall of Fire retains its complete pinned delivery in
 `sources/wall-of-fire-20261001/`. `devtools/import_wall_media.py` installs the
 82 original atlas pages (31,027,806 bytes) into `game/assets/wall_media/` and the
@@ -173,3 +183,66 @@ substitutions and sampled ground frames/pivots/tints/contact shadows. Offhand
 geometry reuse is approximate and accepted; floor apparel retains its separated
 layer composite. The archive supplies no separate consumable bottle/potion art;
 those ground appearances remain unbound.
+
+October 2 roster item appearances share 235 additional original action sheets
+(32,487,518 bytes), preserved in `sources/item-equipment-20261002/` and installed
+privately. `devtools/author_roster_item_appearances.py` generates passive recipes
+from the pinned intake; colors use palette replacement, never extra painted sheets.
+`devtools/import_item_media.py --path <registered-path>` installs a bounded selection.
+Preserve the first admission receipt; the authoring tool refuses to overwrite it.
+The later selected offhand-longsword recipe/binding reuses existing Melee2 and
+Offhand1 banks; it adds zero original sheets and preserves the first receipt.
+
+Bestow Curse originals remain in `sources/bestow-curse-8aa6f9ef813c/`.
+`devtools/import_curse_media.py` installs 120 accepted atlas pages (1,882,300 bytes);
+local/private copies are hash checked and listed in the private installer manifest.
+
+Holy support originals and normalized symbol contracts remain in
+`sources/divine-support-20261002/`. The bounded delivery installs 56 original
+RGBA PNG atlas pages (6,696,513 bytes) under `game/assets/divine_media/` and in
+the private production repository. The installer manifest retains previous
+entries; exact local/private SHA verification and a preserved prior-manifest
+backup accompany the source receipt. No XYZ pages are selected for this batch.
+
+October 2 ordinary backpack gear adds 14 unchanged original Bag2 action sheets
+(2,025,461 bytes), selected by `ordinary-gear-admission.json` and verified against
+local/private copies in `backpack-copy-verification.json`. The complete vendor ZIP
+and prior installation receipt remain in `sources/item-equipment-20261002/`.
+Cloak now has its own passive rig layer (Bag1), distinct from backpack (Bag2);
+no source pixels, shadows or palette-replacement behavior changed.
+
+Slow originals remain in `sources/control-slow-d0c688dbeb5b/`. The bounded
+production delivery preserves eight unchanged RGBA atlas pages (2,872,507 bytes),
+local/private hash verification and every prior manifest entry; no XYZ is selected.
+Receipt: `.runtime/spell-queue-20261002/slow-private-install-receipt.json`.
+
+The final roster Maul binding reuses the installed Melee11 banks with a source-zone
+palette swap. It adds zero media pages; native weapon.maul owns its own rules.
+The modular hammer head remains explicitly smaller than the fixed source art.
+
+Continual Flame originals remain in `sources/continual-flame-v41-7863efac984b/`.
+The accepted fixed-origin v41_0 installs eight unchanged RGBA pages (540,600
+bytes), with shared48-frame onset/64-frame hold at32FPS and original pivot.
+Both source variants remain archived. Local/private hashes and prior manifest
+entries are preserved; receipt: `.runtime/spell-queue-20261002/continual-private-install-receipt.json`.
+
+Flame Strike v15 originals remain in `sources/flame-strike-v15-6e290dcc4e50/`.
+Lossless2048px atlases preserve all96 samples, original pivots/offsets and656
+nonempty RGBA crops:496→168pages,84,368,797→83,434,119bytes. Selected staging:
+`staging/flame-strike-v15-2048/`; local/private installer hashes agree, all prior
+manifest records retained. Receipt: `.runtime/spell-queue-20261002/flame-strike-private-install-receipt.json`.
+
+Holds originals, including the deferred Ogre bank, remain in
+`sources/holds-eefffc58e8c5/`. Both spells reuse the accepted human chains for
+humanoid recipients; no unknown-anatomy scaling. Selected human bind53/still1/
+release87 samples pack into8pages/503,957bytes, retaining all768 addressed crops
+exactly. `devtools/import_hold_media.py` registers those phases through existing
+paged storage. Private/local hashes and prior installer entries are preserved;
+receipt: `.runtime/spell-queue-20261002/holds-private-install-receipt.json`.
+
+Hypnotic originals remain in `sources/hypnotic-589d88efa3e7/`. The registered atlas
+packer preserves748 exact crops in24 pages (4,096,916bytes); use
+`devtools/import_hypnotic_media.py` for96 finite rosette/128 loop samples, excluding
+the duplicate endpoint. Two approved Incapacitated cue pages (823bytes) come from
+`devtools/bake_incapacitated_media.py` and its pinned artist reference. The26-file
+private install receipt is `hypnotic-private-install-receipt.json` in the spell queue.

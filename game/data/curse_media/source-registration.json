@@ -1,0 +1,640 @@
+{
+  "schema": "dnd.curseSourceRegistration",
+  "version": 1,
+  "package": "bestow-curse-8aa6f9ef813c",
+  "hasXYZ": false,
+  "banks": {
+    "curse_touch_v8": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 40
+    },
+    "curse_rings_loop_v13": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 96
+    },
+    "curse_rings_release_v13": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 56
+    },
+    "curse_ability_burden_loop_source_v12": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 96
+    },
+    "curse_ability_burden_release_source_v12": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 56
+    },
+    "curse_ability_burden_resisted_source_v12": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 48
+    },
+    "curse_bent_strike_loop_source_v12": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 96
+    },
+    "curse_bent_strike_release_source_v12": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 56
+    },
+    "curse_bent_strike_resisted_source_v12": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 48
+    },
+    "curse_action_denial_loop_source_v12": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 96
+    },
+    "curse_action_denial_release_source_v12": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 56
+    },
+    "curse_action_denial_resisted_source_v12": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 48
+    },
+    "curse_necrotic_wound_loop_source_v14": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 96
+    },
+    "curse_necrotic_wound_release_source_v14": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 56
+    },
+    "curse_necrotic_wound_resisted_source_v14": {
+      "cell": 384,
+      "ortho": 8,
+      "targetY": 1,
+      "pivot": [
+        192.0,
+        233.56921938144
+      ],
+      "frames": 48
+    }
+  },
+  "payloads": {
+    "media/curse_touch_v8/q0/back-0.png": {
+      "sha256": "d5cc8b8bffe456d21a8c43ab20ab7f85e8973d97be68fc142c1e4efcb35ebeab",
+      "bytes": 12509
+    },
+    "media/curse_touch_v8/q0/front-0.png": {
+      "sha256": "c172071e5da3f8f5ff054e703e65ecb5885fdcc25ed0227753bd8f71449c9527",
+      "bytes": 15657
+    },
+    "media/curse_touch_v8/q1/back-0.png": {
+      "sha256": "375492ba05d96558557df5009bd60c27c7e71b065308f16a5c071659181618c8",
+      "bytes": 10786
+    },
+    "media/curse_touch_v8/q1/front-0.png": {
+      "sha256": "44e6c9185a21a290a705f7dd4482b53c2ba9b4cf39fc4a39ad82af3baa38ea9b",
+      "bytes": 17546
+    },
+    "media/curse_touch_v8/q2/back-0.png": {
+      "sha256": "7d2a2f2d5433d8d235026604bb32066727a608ec0906f7ce8ea87773f7e8b390",
+      "bytes": 15724
+    },
+    "media/curse_touch_v8/q2/front-0.png": {
+      "sha256": "bafe16f457f4741948115255b3284f43322944d6a9e7150531b2ae63ed17dae7",
+      "bytes": 12652
+    },
+    "media/curse_touch_v8/q3/back-0.png": {
+      "sha256": "57e42b16d9278d8e27ceb08af04e95e541f17cf37e392c218d15b22f4f9daddd",
+      "bytes": 16973
+    },
+    "media/curse_touch_v8/q3/front-0.png": {
+      "sha256": "f6e6210cb39049f9afee115f6d32eef301d6f7bc90314fd4e8a9d15839e75a32",
+      "bytes": 10836
+    },
+    "media/curse_rings_loop_v13/q0/back-0.png": {
+      "sha256": "92bdef2a7ddcdbb7c9a8bb93cfe0b73252118b154c1318ef1e57b5d9b9a4719d",
+      "bytes": 18216
+    },
+    "media/curse_rings_loop_v13/q0/front-0.png": {
+      "sha256": "dce4d33689485f4c82d1c2c5804fceddfff5a059ebdf11b5a9414daa4969f138",
+      "bytes": 20590
+    },
+    "media/curse_rings_loop_v13/q1/back-0.png": {
+      "sha256": "f17ce2b816efc5270794e5699acb37e67440c51cb579170d37e95f221df37a65",
+      "bytes": 16502
+    },
+    "media/curse_rings_loop_v13/q1/front-0.png": {
+      "sha256": "85d63a6a727a9c74d581daf366721f46d4f8e619385c43db1d7505c6f13dcafe",
+      "bytes": 22701
+    },
+    "media/curse_rings_loop_v13/q2/back-0.png": {
+      "sha256": "dd845c154342ae391d12c3493cb33e3760c5786a852aef405195f04dc335e80d",
+      "bytes": 18302
+    },
+    "media/curse_rings_loop_v13/q2/front-0.png": {
+      "sha256": "41c62158e4cf6189a2cfecbf94b1d8c52ed1393e71e729e31f4103da859549bc",
+      "bytes": 21379
+    },
+    "media/curse_rings_loop_v13/q3/back-0.png": {
+      "sha256": "12753019d96f74607f0aa3e441dce2eba4cdf5b56438b8377b54d204a99ea6b0",
+      "bytes": 17356
+    },
+    "media/curse_rings_loop_v13/q3/front-0.png": {
+      "sha256": "70293800b50ec3e18d8697e360200101b670511b38d355fb7ca18cfbdef06c5f",
+      "bytes": 20235
+    },
+    "media/curse_rings_release_v13/q0/back-0.png": {
+      "sha256": "4ddb95c0b623682e5054b41086431d1e4544b17779ead3421c08ba3748c9fac6",
+      "bytes": 10668
+    },
+    "media/curse_rings_release_v13/q0/front-0.png": {
+      "sha256": "4206566e78a16ca191bc5d0db89fc8241a7be58041d79848979d8823fb637fea",
+      "bytes": 11229
+    },
+    "media/curse_rings_release_v13/q1/back-0.png": {
+      "sha256": "25be683f73256b58b792ac4cb95bfa13181bcdfade7385c05a05fc04f90f9e30",
+      "bytes": 10410
+    },
+    "media/curse_rings_release_v13/q1/front-0.png": {
+      "sha256": "97e2a4b0893684aaeee625d1de1d972f717b36d67fbeb33bd6d6e4ab74cc29ee",
+      "bytes": 11481
+    },
+    "media/curse_rings_release_v13/q2/back-0.png": {
+      "sha256": "02e8586aee2012a2ec82f1373b30a6094a863ee1ee3fc592b02002810f58c0e0",
+      "bytes": 10819
+    },
+    "media/curse_rings_release_v13/q2/front-0.png": {
+      "sha256": "fe0eb3f2dd79d6ea2df3684ba6a8ad75ac85d28c2cb9ba49ee2aea0102d5913c",
+      "bytes": 10928
+    },
+    "media/curse_rings_release_v13/q3/back-0.png": {
+      "sha256": "3461cb97289102da38341cfa946f99f726cd93bdeb3e25be370350f175a8eeee",
+      "bytes": 10696
+    },
+    "media/curse_rings_release_v13/q3/front-0.png": {
+      "sha256": "f62a2f750da6783d36cdba9465d8f81aed0d6ed0ffd70dd1653684e4bba9ac6a",
+      "bytes": 10618
+    },
+    "media/curse_ability_burden_loop_source_v12/q0/back-0.png": {
+      "sha256": "8ff9063533a3018b0ff40b05d9e3e251f04d1b2645eb3e401832824dd1d5b338",
+      "bytes": 46011
+    },
+    "media/curse_ability_burden_loop_source_v12/q0/front-0.png": {
+      "sha256": "c030e304b22f2a3b35fe41bec3248821eb26211a8b3ce8cb415e166e597a6377",
+      "bytes": 10655
+    },
+    "media/curse_ability_burden_loop_source_v12/q1/back-0.png": {
+      "sha256": "ad853d5097a4a3fe38c7350cadd8aa59f5a8588aaaae8d8d93db184b53a26941",
+      "bytes": 42049
+    },
+    "media/curse_ability_burden_loop_source_v12/q1/front-0.png": {
+      "sha256": "c7e32e9173d62e0a453fab7c53636abbcae189c5eaffa44a08fcc832c42497ba",
+      "bytes": 15991
+    },
+    "media/curse_ability_burden_loop_source_v12/q2/back-0.png": {
+      "sha256": "400691734e268b1f6cd4cc67624d91bb15a29cbd010ed75729e7e433873d5fcc",
+      "bytes": 47282
+    },
+    "media/curse_ability_burden_loop_source_v12/q2/front-0.png": {
+      "sha256": "4de0b363da9887e329215f086a40b3b9acd5583be4657cdc552bf6829f5e39be",
+      "bytes": 13684
+    },
+    "media/curse_ability_burden_loop_source_v12/q3/back-0.png": {
+      "sha256": "9885c90efaf693f260e12d2fec15d9e077f1d6fef3c72034754aeba74b87651f",
+      "bytes": 40353
+    },
+    "media/curse_ability_burden_loop_source_v12/q3/front-0.png": {
+      "sha256": "253ce6eb0f044178201a729229b61a143b1321bf4c81b15527cb50f343b1078c",
+      "bytes": 11883
+    },
+    "media/curse_ability_burden_release_source_v12/q0/back-0.png": {
+      "sha256": "68bb7c96bfed3d0531c1ee30ec88e13e3afd014692e5fc3449fce0cdbf720bd6",
+      "bytes": 15701
+    },
+    "media/curse_ability_burden_release_source_v12/q0/front-0.png": {
+      "sha256": "5a65ea9eca7bab04218845c8c81ff017b6ec0de34afe97073e1df02603ac6740",
+      "bytes": 4301
+    },
+    "media/curse_ability_burden_release_source_v12/q1/back-0.png": {
+      "sha256": "3b32f1d6ff007445f0e5eba40deaace3c29156426109c1084183294de748223a",
+      "bytes": 14619
+    },
+    "media/curse_ability_burden_release_source_v12/q1/front-0.png": {
+      "sha256": "a4ac15e3bb7c11efc7119b5ebbae88099e364dec125ae0190121f28e298628cc",
+      "bytes": 5961
+    },
+    "media/curse_ability_burden_release_source_v12/q2/back-0.png": {
+      "sha256": "e27e2d8b5435807fba4ce68cb3be14d62ee025404230ead99d0a00dfbd9a9116",
+      "bytes": 16702
+    },
+    "media/curse_ability_burden_release_source_v12/q2/front-0.png": {
+      "sha256": "7487be5664bde270d5981ad52bb6cdb697dc0179c615274bbc22da7f35dc64ed",
+      "bytes": 5166
+    },
+    "media/curse_ability_burden_release_source_v12/q3/back-0.png": {
+      "sha256": "43ba9a2464a2c17f5b03a59f1d4243f02790f60dec54d2718812d3ad0b1e4fcf",
+      "bytes": 14827
+    },
+    "media/curse_ability_burden_release_source_v12/q3/front-0.png": {
+      "sha256": "79041a378e513c2aae936c687980069452b8554e9eeba81d94ef6260e1c70dea",
+      "bytes": 4733
+    },
+    "media/curse_ability_burden_resisted_source_v12/q0/back-0.png": {
+      "sha256": "d83b127b9fd70440fb01c08f611a963a8fd97a05fd2a89fbcfd4ba88046e6fcc",
+      "bytes": 12290
+    },
+    "media/curse_ability_burden_resisted_source_v12/q0/front-0.png": {
+      "sha256": "2f0f2c164aa1a9b117e9b263ca6caafd27eadd05e0062e8ff38e88a21665d96c",
+      "bytes": 3342
+    },
+    "media/curse_ability_burden_resisted_source_v12/q1/back-0.png": {
+      "sha256": "dd5ab50d389986e4fe8a8fbb463f0051f7d8b6a172c095d5fe8157bad3dc5ebc",
+      "bytes": 11690
+    },
+    "media/curse_ability_burden_resisted_source_v12/q1/front-0.png": {
+      "sha256": "685cbd015d0d74587541e2a583de18930728cd91c4eed9dbf5b99e7bdaca8ec7",
+      "bytes": 4020
+    },
+    "media/curse_ability_burden_resisted_source_v12/q2/back-0.png": {
+      "sha256": "50719c95a76e82d10a10af5f0d7d19012145b6c857d3b9b4eb3816a0a1c0a2c9",
+      "bytes": 13339
+    },
+    "media/curse_ability_burden_resisted_source_v12/q2/front-0.png": {
+      "sha256": "eea4cf13d923de8e73463009519cd0e45c017f04a0feccbad2288ceb4ae20133",
+      "bytes": 3584
+    },
+    "media/curse_ability_burden_resisted_source_v12/q3/back-0.png": {
+      "sha256": "118fdcc928d67726451810604530aeedcd3c23947ccab4404228ce7b60717114",
+      "bytes": 11232
+    },
+    "media/curse_ability_burden_resisted_source_v12/q3/front-0.png": {
+      "sha256": "833bd966834c6c64518ed04b90745be5c0e7433b4a596a42246b5ca6d08d450d",
+      "bytes": 3048
+    },
+    "media/curse_bent_strike_loop_source_v12/q0/back-0.png": {
+      "sha256": "f43d9d40af2afc1451e9d69a3f109a9780cd3e7261a127389d5a70744d55ed96",
+      "bytes": 46500
+    },
+    "media/curse_bent_strike_loop_source_v12/q0/front-0.png": {
+      "sha256": "a44e523cdbf666ec1a1f07f479c0e06093052d90b3ca42270a66fe8fa5f6e1a5",
+      "bytes": 10504
+    },
+    "media/curse_bent_strike_loop_source_v12/q1/back-0.png": {
+      "sha256": "a94c969afcc880c5a0d60c287a807bb0f6ccbdcf5252b03f0542c3af2237cd96",
+      "bytes": 42636
+    },
+    "media/curse_bent_strike_loop_source_v12/q1/front-0.png": {
+      "sha256": "8c4008e83376e8de436ea8af66d9512e248a512c08b982bef1455c8ddebde0fa",
+      "bytes": 15225
+    },
+    "media/curse_bent_strike_loop_source_v12/q2/back-0.png": {
+      "sha256": "3ba756a61e4533106b7e571bfec2306ae51c6ec22ba2459ac077b4badacf4d3e",
+      "bytes": 47665
+    },
+    "media/curse_bent_strike_loop_source_v12/q2/front-0.png": {
+      "sha256": "ff5972650ad4ee8c9a2f73a5002a767c7aad59f112cef5b1bd57185cea072f1c",
+      "bytes": 12368
+    },
+    "media/curse_bent_strike_loop_source_v12/q3/back-0.png": {
+      "sha256": "74a0ec297680a8efead614b09195f3f43e2e58327b5cea1676d468dfbf7a9f56",
+      "bytes": 41736
+    },
+    "media/curse_bent_strike_loop_source_v12/q3/front-0.png": {
+      "sha256": "9b7aad3924baf6d2f144aeda48a3a54d5708d804fa825a55aa11e4783ee2ec4a",
+      "bytes": 12051
+    },
+    "media/curse_bent_strike_release_source_v12/q0/back-0.png": {
+      "sha256": "49eded2f5dfe2c33221acd114708fff6f1b153330a69eb52406beebf9eb3a7bf",
+      "bytes": 15714
+    },
+    "media/curse_bent_strike_release_source_v12/q0/front-0.png": {
+      "sha256": "74f1ab24f0c1169cccc6546658f2d45e7767cade6a3e7fddd5e3355879f7960f",
+      "bytes": 4453
+    },
+    "media/curse_bent_strike_release_source_v12/q1/back-0.png": {
+      "sha256": "f8e6d8c97b2925c06ca73bafcfc92eb227f791d660cef46d078874349a1cba7f",
+      "bytes": 14805
+    },
+    "media/curse_bent_strike_release_source_v12/q1/front-0.png": {
+      "sha256": "9cb197c71929ecbaa43f0cf96855ae04a5f7089209ea36e678296c3d4877ac73",
+      "bytes": 6039
+    },
+    "media/curse_bent_strike_release_source_v12/q2/back-0.png": {
+      "sha256": "d3269f8e95f59165d76ca8b2083c1817c92c1c386822d1dc90fc57812c37593a",
+      "bytes": 16892
+    },
+    "media/curse_bent_strike_release_source_v12/q2/front-0.png": {
+      "sha256": "65bfaebad52a2a1a79aa1d1c12703b549778cd6a9189f93d8b155a3397b5b44b",
+      "bytes": 4428
+    },
+    "media/curse_bent_strike_release_source_v12/q3/back-0.png": {
+      "sha256": "d7ff91408a087c54bfee97cb5a549d20a5e1c47c38b5128be8369d90fbe88e65",
+      "bytes": 15188
+    },
+    "media/curse_bent_strike_release_source_v12/q3/front-0.png": {
+      "sha256": "b8fd9d3a49987c3d0b8fc4f466fe54bdf8360fa5fba206bc2b979a84990d85d2",
+      "bytes": 4357
+    },
+    "media/curse_bent_strike_resisted_source_v12/q0/back-0.png": {
+      "sha256": "1277e47f50a101029fdb3f30f468a804dac5cbb41552c00f15cc18c6c78acd7e",
+      "bytes": 11991
+    },
+    "media/curse_bent_strike_resisted_source_v12/q0/front-0.png": {
+      "sha256": "41d1ee8cc07210785a051702aaf51ebb1573a291f878d2017f81036f6d60c7ae",
+      "bytes": 3541
+    },
+    "media/curse_bent_strike_resisted_source_v12/q1/back-0.png": {
+      "sha256": "a39c515fadfef5ecf8d39f0bb22cfca457801ac04fb0cd6512151873f29e5a02",
+      "bytes": 11680
+    },
+    "media/curse_bent_strike_resisted_source_v12/q1/front-0.png": {
+      "sha256": "0935cd67d587c15f39a2cfdd6d6e97691395e2333a7d2576021f7d1c49619902",
+      "bytes": 4004
+    },
+    "media/curse_bent_strike_resisted_source_v12/q2/back-0.png": {
+      "sha256": "04274166a426f08bd6c2971fa6d58b58c93045c597705ec27c38273bb526507a",
+      "bytes": 13674
+    },
+    "media/curse_bent_strike_resisted_source_v12/q2/front-0.png": {
+      "sha256": "38a4b479160afad8e9f82643ea3c2807807898eede107f051d6737ceeecc75e8",
+      "bytes": 3205
+    },
+    "media/curse_bent_strike_resisted_source_v12/q3/back-0.png": {
+      "sha256": "fe3d69774b761464aa501e83115b6fc70fcaedf198a8b0178ba9c73cd459fe42",
+      "bytes": 11806
+    },
+    "media/curse_bent_strike_resisted_source_v12/q3/front-0.png": {
+      "sha256": "59666783b6113e670574aaacdbfaa67dc257f99b8656d0b55a45f15bee8e3815",
+      "bytes": 3286
+    },
+    "media/curse_action_denial_loop_source_v12/q0/back-0.png": {
+      "sha256": "ae5e36bdccdf243e324e42c5dba632b6b9cfd4aaccf8cf600e1a4deb94b6efff",
+      "bytes": 43249
+    },
+    "media/curse_action_denial_loop_source_v12/q0/front-0.png": {
+      "sha256": "deb8b66fe2c6c559f56e5ef660b9cfc739bc39f5c0b852b272b0e2851652c9c4",
+      "bytes": 11761
+    },
+    "media/curse_action_denial_loop_source_v12/q1/back-0.png": {
+      "sha256": "21828ab504e49585d24139927ea4939c4e7bd487f5ec6c1395f4af30c7cd5b19",
+      "bytes": 39933
+    },
+    "media/curse_action_denial_loop_source_v12/q1/front-0.png": {
+      "sha256": "4e78ed05308ad2465fb5fd8f3f2c3e723b4644bdf5dffce236f76bedd15cd14b",
+      "bytes": 16854
+    },
+    "media/curse_action_denial_loop_source_v12/q2/back-0.png": {
+      "sha256": "5a58ab355dc25773a1e72eab35921edb6e59fcc4105ed5420e795152022d2cda",
+      "bytes": 44535
+    },
+    "media/curse_action_denial_loop_source_v12/q2/front-0.png": {
+      "sha256": "a5582174f8f6de6e8b966d674dbef3a9290cc4413f0e913c288f00a4105f9ba0",
+      "bytes": 13699
+    },
+    "media/curse_action_denial_loop_source_v12/q3/back-0.png": {
+      "sha256": "546cf23de1c8dd2d11f013647556f1ec560265c8e641333ff4b6e9821d2d8fc8",
+      "bytes": 39659
+    },
+    "media/curse_action_denial_loop_source_v12/q3/front-0.png": {
+      "sha256": "2d1f5aa4858c5bb678010f37f7decaad533aade186ba1cc62eaed7b8b3c8d827",
+      "bytes": 12264
+    },
+    "media/curse_action_denial_release_source_v12/q0/back-0.png": {
+      "sha256": "86f910a781a25216927a6bbbe29d3f27e5e3dff068c9a1b6ea128258b5aabd15",
+      "bytes": 14417
+    },
+    "media/curse_action_denial_release_source_v12/q0/front-0.png": {
+      "sha256": "033f08385f2041d318f008591261c9d5031e9f5dd9be18e5bfe5024a706bd69f",
+      "bytes": 4811
+    },
+    "media/curse_action_denial_release_source_v12/q1/back-0.png": {
+      "sha256": "987618d9e26ece39aa38921763ee6576bb20ceb3513c126976fca03661187683",
+      "bytes": 13367
+    },
+    "media/curse_action_denial_release_source_v12/q1/front-0.png": {
+      "sha256": "41436a52afdb5c8158b41f0a632fe2fe99123302adb293e78222c6487fff419b",
+      "bytes": 6823
+    },
+    "media/curse_action_denial_release_source_v12/q2/back-0.png": {
+      "sha256": "fee16b87d0c08133874dc4f022082a87a830c4b15fa6afb4dc5e41bcc8c02c49",
+      "bytes": 15986
+    },
+    "media/curse_action_denial_release_source_v12/q2/front-0.png": {
+      "sha256": "22272f83dfdb6d2d117d23187f18eb7e0adeb28a6d810f06d83219b3cfeb151c",
+      "bytes": 4652
+    },
+    "media/curse_action_denial_release_source_v12/q3/back-0.png": {
+      "sha256": "11beea311c8daaa444f85af7dd3adc96903112e43d1150e5384dffe4a5d3ca4e",
+      "bytes": 14363
+    },
+    "media/curse_action_denial_release_source_v12/q3/front-0.png": {
+      "sha256": "165a289378778b67f8bb4f03b31385d816e9584b2871ef1fe379d1ee21614bbd",
+      "bytes": 4241
+    },
+    "media/curse_action_denial_resisted_source_v12/q0/back-0.png": {
+      "sha256": "6c33657db5f5f01c3ea8d02cc68ec9cba21d8963d6c7453af2ba3865a0cb4f80",
+      "bytes": 11237
+    },
+    "media/curse_action_denial_resisted_source_v12/q0/front-0.png": {
+      "sha256": "7bb2c23857cd8ae2c23ae906fba4fa41e791d6cf0f424f9ffbf1a2bffb1d8dd4",
+      "bytes": 3966
+    },
+    "media/curse_action_denial_resisted_source_v12/q1/back-0.png": {
+      "sha256": "b520787a59b8254c9d16241e8f83bede10513d0125e12a4d91e1f7377a41e19a",
+      "bytes": 10964
+    },
+    "media/curse_action_denial_resisted_source_v12/q1/front-0.png": {
+      "sha256": "adf057c5a54e767e104be57f777a3a5b45a041ae648e611bb7cc17d868940827",
+      "bytes": 4671
+    },
+    "media/curse_action_denial_resisted_source_v12/q2/back-0.png": {
+      "sha256": "a5841840ec82e315cf90fb9a905fbe3d2b3e3ab403b9cbe97e1a4994b45eb23c",
+      "bytes": 13036
+    },
+    "media/curse_action_denial_resisted_source_v12/q2/front-0.png": {
+      "sha256": "c6afbf8643b8e4572598289f24dff0d671f076dbf7d3fe9790a2debf1dc7db26",
+      "bytes": 3307
+    },
+    "media/curse_action_denial_resisted_source_v12/q3/back-0.png": {
+      "sha256": "dad70868bbe43aaa8ae7aea6e1b15b7b1cc32eb1af62e6aabbb4da7880298926",
+      "bytes": 11505
+    },
+    "media/curse_action_denial_resisted_source_v12/q3/front-0.png": {
+      "sha256": "9941078e4815c40cdf23fda0e79cd9daeba42848a9368b284a97ee6b38b27d1e",
+      "bytes": 3185
+    },
+    "media/curse_necrotic_wound_loop_source_v14/q0/back-0.png": {
+      "sha256": "aadd4e1a0282538da403e094f03fc2c8945740f08013dddace5e05a7c57a6083",
+      "bytes": 48413
+    },
+    "media/curse_necrotic_wound_loop_source_v14/q0/front-0.png": {
+      "sha256": "3b16a263b01600818e228a05b090e2d53d79b8bba8700a716f778cdaae1dd030",
+      "bytes": 16001
+    },
+    "media/curse_necrotic_wound_loop_source_v14/q1/back-0.png": {
+      "sha256": "33b8ce749dfeeda468b58b9183bc15b02a8f6e10b47b59b8f22f187024bd3780",
+      "bytes": 44944
+    },
+    "media/curse_necrotic_wound_loop_source_v14/q1/front-0.png": {
+      "sha256": "2c921b00a08cf605067749eb9d74b34c6b06ad66d0741ad3a13d5fca3220a222",
+      "bytes": 21357
+    },
+    "media/curse_necrotic_wound_loop_source_v14/q2/back-0.png": {
+      "sha256": "a0042eaac59329fc5ef8c0470ea202ee535ab529a535091d9d8c90a30dea2529",
+      "bytes": 49204
+    },
+    "media/curse_necrotic_wound_loop_source_v14/q2/front-0.png": {
+      "sha256": "6a8330a2348e148dabd02e685fc92045e8cbb0ab5f10238cd04aacd0f48d1327",
+      "bytes": 17676
+    },
+    "media/curse_necrotic_wound_loop_source_v14/q3/back-0.png": {
+      "sha256": "ed2e41df982860e20e017ff5aaff0c45a4d4f33d5bec1dc57e191f874aa2bd45",
+      "bytes": 43782
+    },
+    "media/curse_necrotic_wound_loop_source_v14/q3/front-0.png": {
+      "sha256": "1fe4c4c953432a5d04ad64805f619aa2eb4cfe6fa26fdb3c46643bd5605caef5",
+      "bytes": 16794
+    },
+    "media/curse_necrotic_wound_release_source_v14/q0/back-0.png": {
+      "sha256": "f562efb8f3ebb9d51a90e236218006ea2a66ad1ee819d23782e9fcefc4e82633",
+      "bytes": 16010
+    },
+    "media/curse_necrotic_wound_release_source_v14/q0/front-0.png": {
+      "sha256": "0ad309e99b4bd9b0e71760a8c6a940ed0fd6aa5cb638c7dfe67eaaeee2e15b5e",
+      "bytes": 6368
+    },
+    "media/curse_necrotic_wound_release_source_v14/q1/back-0.png": {
+      "sha256": "af883fb6356d9c96c729e6193ada7f9055151913c9c14fc270c4d68ba53b4162",
+      "bytes": 14988
+    },
+    "media/curse_necrotic_wound_release_source_v14/q1/front-0.png": {
+      "sha256": "c62c381b32c3a0b42a2d062567323ec8e0fbbd325838574fe860c2f2de4444e0",
+      "bytes": 8355
+    },
+    "media/curse_necrotic_wound_release_source_v14/q2/back-0.png": {
+      "sha256": "93457a18087c7d52181e7fb16e8ec6a902b6a0b84fc7a01d0b1de857fdbc0d86",
+      "bytes": 17123
+    },
+    "media/curse_necrotic_wound_release_source_v14/q2/front-0.png": {
+      "sha256": "f8f606a5885d8019b5d9fb81e45d0fde8f74129cc7da1b4546d0666aaacd83ca",
+      "bytes": 6325
+    },
+    "media/curse_necrotic_wound_release_source_v14/q3/back-0.png": {
+      "sha256": "b527991f65bc987d01af35800a7932297f8fd2abbba112bbad1d54337bb0aed6",
+      "bytes": 16141
+    },
+    "media/curse_necrotic_wound_release_source_v14/q3/front-0.png": {
+      "sha256": "84d95816b2a29adf9e3103d348e39d30d2b953982195e705c9b0452df1f6d0c2",
+      "bytes": 5901
+    },
+    "media/curse_necrotic_wound_resisted_source_v14/q0/back-0.png": {
+      "sha256": "d2c2830395dd2763a7731020bfb8d38142c893432d7f4901fe1499543b8cf0fe",
+      "bytes": 12367
+    },
+    "media/curse_necrotic_wound_resisted_source_v14/q0/front-0.png": {
+      "sha256": "a6a364a94dcc51f455a5a347c27407e4d54d4b55684c751adc600a93f6ccbed8",
+      "bytes": 4978
+    },
+    "media/curse_necrotic_wound_resisted_source_v14/q1/back-0.png": {
+      "sha256": "bdfa30a0f3cb8337f8a1496cfce39d96ea97bac184e66c389d6ad340016663d7",
+      "bytes": 11739
+    },
+    "media/curse_necrotic_wound_resisted_source_v14/q1/front-0.png": {
+      "sha256": "f8fbee931a491026942a511a872e81fa3d81218f56e71bb4d84b8ae44f602069",
+      "bytes": 5903
+    },
+    "media/curse_necrotic_wound_resisted_source_v14/q2/back-0.png": {
+      "sha256": "1e0f1c54cbbc1e996a76f978d3e7ec0a9c1a743c07242f0d97dede255d5e6ed3",
+      "bytes": 13820
+    },
+    "media/curse_necrotic_wound_resisted_source_v14/q2/front-0.png": {
+      "sha256": "1fa07a3708783b08a6cf555be9e24f3bd142ac080bd61f587a61b31eead0d106",
+      "bytes": 4406
+    },
+    "media/curse_necrotic_wound_resisted_source_v14/q3/back-0.png": {
+      "sha256": "f26d857d4df35f438b2ea19ef4b9868b035960deb337929b32b3d56651f579f9",
+      "bytes": 11763
+    },
+    "media/curse_necrotic_wound_resisted_source_v14/q3/front-0.png": {
+      "sha256": "6c60f251c4f6bb01d025e9e9fa41f7155099dde323a6cea10c27c26e256801fc",
+      "bytes": 4433
+    }
+  }
+}

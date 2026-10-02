@@ -23,7 +23,9 @@ from game.choreography_draw import ChoreographyMedia, load_choreography_media, l
 from game.combat import BoundCast, actor_contact
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
 from game.condition_media_lifetime import register_condition_lifetimes
+from game.construction_media_lifetime import register_construction_lifetimes
 from game.spatial_media_lifetime import register_spatial_lifetimes
+from game.concentration_media import register_concentration_lifetimes
 from game.deposit_media import register_deposit_starts
 from game.motion_media import MotionMediaCue, bind_motion_media, choreography_motion_media
 from game.motion import MotionTimeline, bind_motion
@@ -44,7 +46,7 @@ from devtools.animation_review.trace import LINEAGE, STATE, draw_trace, frame_tr
 def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 sequence: ReviewSequence, fps: int, size: tuple[int, int], ffmpeg: str,
                 coverage_inventory: list[dict[str, Any]] | None = None,
-                floor_style: Literal["paving", "scene"] = "paving",
+                floor_style: Literal["paving", "wood", "scene"] = "paving",
                 animation_data: AnimationData | None = None) -> dict[str, Any]:
     before = sequence.before
     latest = before
@@ -85,11 +87,11 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                   for style in (data.number_style, data.badge_style))
     number_font, badge_font = fonts
     catalog = load_catalog()
-    if floor_style == "paving":
+    if floor_style in ("paving", "wood"):
         # Select real floor artwork for the review without changing received state.
         terrain = cast(Mapping[str, object], catalog.bindings["terrain"])
         catalog = replace(catalog, bindings={**catalog.bindings, "terrain": {
-            **terrain, "stone": {pose: f"terrain.paving.{pose}" for pose in ("e", "n", "s", "w")},
+            **terrain, "stone": {pose: f"terrain.{floor_style}.{pose}" for pose in ("e", "n", "s", "w")},
         }})
     cache = SurfaceCache(catalog)
     facings: dict[str, Facing8] = {
@@ -242,6 +244,8 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     presentation_ms = 0.0
     condition_lifetimes = register_condition_lifetimes({}, before, data, absolute_start_ms=0)
     spatial_lifetimes = register_spatial_lifetimes({}, before, data, absolute_start_ms=0)
+    construction_lifetimes = register_construction_lifetimes({}, before, data, absolute_start_ms=0)
+    concentration_lifetimes = register_concentration_lifetimes({}, before, data, absolute_start_ms=0)
     deposit_starts = register_deposit_starts({}, before, data, absolute_start_ms=0)
     body_history = retain_body_head((), before, None, start_ms=0, facings=facings, positions=positions)
     frame_index = 0
@@ -276,7 +280,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     body_media, number_font, badge_font, choreography=choreography,
                     choreography_media=choreography_media, motion=motion, reaction_media=reaction_media,
                     feedback=feedback, condition_lifetimes=condition_lifetimes,
-                    spatial_lifetimes=spatial_lifetimes, deposit_starts=deposit_starts,
+                    spatial_lifetimes=spatial_lifetimes, construction_lifetimes=construction_lifetimes, concentration_lifetimes=concentration_lifetimes, deposit_starts=deposit_starts,
                     positions=positions, feedback_viewport=feedback_viewport, motion_media=motion_media, body_history=body_history,
                 )
                 samples.append(sample)
@@ -373,6 +377,10 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 condition_lifetimes = register_condition_lifetimes(condition_lifetimes, before, data,
                     absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
                 spatial_lifetimes = register_spatial_lifetimes(spatial_lifetimes, before, data,
+                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
+                construction_lifetimes = register_construction_lifetimes(construction_lifetimes, before, data,
+                    absolute_start_ms=presentation_ms, choreography=group, motion=motion)
+                concentration_lifetimes = register_concentration_lifetimes(concentration_lifetimes, before, data,
                     absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
                 deposit_starts = register_deposit_starts(deposit_starts, before, data,
                     absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)

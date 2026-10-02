@@ -4189,6 +4189,253 @@
         "color": 7133070,
         "strength": 0.6
       }
+    },
+    "spatial_effect.spell.daylight": {
+      "layers": [
+        {
+          "assetId": "divine.daylight.hold.back",
+          "applicationAssetId": "divine.daylight.apply.back",
+          "side": "rear",
+          "composition": "clump"
+        },
+        {
+          "assetId": "divine.daylight.hold.front",
+          "applicationAssetId": "divine.daylight.apply.front",
+          "side": "front",
+          "composition": "clump"
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 0.5,
+      "removalFadeMs": 600,
+      "removalEasing": "smoothstep"
+    },
+    "spatial_effect.spell.continual_flame": {
+      "layers": [
+        {
+          "assetId": "fire.continual_flame.hold.back",
+          "applicationAssetId": "fire.continual_flame.apply.back",
+          "side": "rear",
+          "composition": "clump"
+        },
+        {
+          "assetId": "fire.continual_flame.hold.front",
+          "applicationAssetId": "fire.continual_flame.apply.front",
+          "side": "front",
+          "composition": "clump"
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 0.5,
+      "removalFadeMs": 400,
+      "removalEasing": "smoothstep"
+    },
+    "spatial_effect.spell.wall_of_thorns": {
+      "layers": [
+        {
+          "assetId": "wall.thorns_d0.hold.back",
+          "applicationAssetId": "wall.thorns_d0.application.back",
+          "removalAssetId": "wall.thorns_d0.removal.back",
+          "side": "center",
+          "composition": "wall_assembly",
+          "wallAssembly": {
+            "modules": [
+              {
+                "tangent": [
+                  1.0,
+                  -0.0
+                ],
+                "assetId": "wall.thorns_d0.hold.back",
+                "applicationAssetId": "wall.thorns_d0.application.back",
+                "removalAssetId": "wall.thorns_d0.removal.back"
+              },
+              {
+                "tangent": [
+                  0.707106781,
+                  -0.707106781
+                ],
+                "assetId": "wall.thorns_d1.hold.back",
+                "applicationAssetId": "wall.thorns_d1.application.back",
+                "removalAssetId": "wall.thorns_d1.removal.back"
+              },
+              {
+                "tangent": [
+                  0.0,
+                  -1.0
+                ],
+                "assetId": "wall.thorns_d2.hold.back",
+                "applicationAssetId": "wall.thorns_d2.application.back",
+                "removalAssetId": "wall.thorns_d2.removal.back"
+              },
+              {
+                "tangent": [
+                  -0.707106781,
+                  -0.707106781
+                ],
+                "assetId": "wall.thorns_d3.hold.back",
+                "applicationAssetId": "wall.thorns_d3.application.back",
+                "removalAssetId": "wall.thorns_d3.removal.back"
+              },
+              {
+                "tangent": [
+                  -1.0,
+                  -0.0
+                ],
+                "assetId": "wall.thorns_d4.hold.back",
+                "applicationAssetId": "wall.thorns_d4.application.back",
+                "removalAssetId": "wall.thorns_d4.removal.back"
+              },
+              {
+                "tangent": [
+                  -0.707106781,
+                  0.707106781
+                ],
+                "assetId": "wall.thorns_d5.hold.back",
+                "applicationAssetId": "wall.thorns_d5.application.back",
+                "removalAssetId": "wall.thorns_d5.removal.back"
+              },
+              {
+                "tangent": [
+                  -0.0,
+                  1.0
+                ],
+                "assetId": "wall.thorns_d6.hold.back",
+                "applicationAssetId": "wall.thorns_d6.application.back",
+                "removalAssetId": "wall.thorns_d6.removal.back"
+              },
+              {
+                "tangent": [
+                  0.707106781,
+                  0.707106781
+                ],
+                "assetId": "wall.thorns_d7.hold.back",
+                "applicationAssetId": "wall.thorns_d7.application.back",
+                "removalAssetId": "wall.thorns_d7.removal.back"
+              }
+            ],
+            "moduleLengthCells": 1,
+            "widthFeet": 5,
+            "pixelScale": 1,
+            "ring": {
+              "assetId": "wall.thorns_ring.hold.back",
+              "applicationAssetId": "wall.thorns_ring.application.back",
+              "removalAssetId": "wall.thorns_ring.removal.back",
+              "radiusFeet": 10,
+              "widthFeet": 5,
+              "pixelScale": 1.3333333333333333,
+              "heightFeet": 10
+            },
+            "heightFeet": 10
+          }
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 1
+    },
+    "spatial_effect.spell.wind_wall": {
+      "layers": [
+        {
+          "assetId": "wall.wind_d0.hold.back",
+          "applicationAssetId": "wall.wind_d0.application.back",
+          "removalAssetId": "wall.wind_d0.removal.back",
+          "side": "center",
+          "composition": "wall_assembly",
+          "wallAssembly": {
+            "modules": [
+              {
+                "tangent": [
+                  1.0,
+                  0.0
+                ],
+                "assetId": "wall.wind_d0.hold.back",
+                "applicationAssetId": "wall.wind_d0.application.back",
+                "removalAssetId": "wall.wind_d0.removal.back"
+              },
+              {
+                "tangent": [
+                  0.707106781,
+                  0.707106781
+                ],
+                "assetId": "wall.wind_d1.hold.back",
+                "applicationAssetId": "wall.wind_d1.application.back",
+                "removalAssetId": "wall.wind_d1.removal.back"
+              },
+              {
+                "tangent": [
+                  0.0,
+                  1.0
+                ],
+                "assetId": "wall.wind_d2.hold.back",
+                "applicationAssetId": "wall.wind_d2.application.back",
+                "removalAssetId": "wall.wind_d2.removal.back"
+              },
+              {
+                "tangent": [
+                  -0.707106781,
+                  0.707106781
+                ],
+                "assetId": "wall.wind_d3.hold.back",
+                "applicationAssetId": "wall.wind_d3.application.back",
+                "removalAssetId": "wall.wind_d3.removal.back"
+              },
+              {
+                "tangent": [
+                  -1.0,
+                  0.0
+                ],
+                "assetId": "wall.wind_d4.hold.back",
+                "applicationAssetId": "wall.wind_d4.application.back",
+                "removalAssetId": "wall.wind_d4.removal.back"
+              },
+              {
+                "tangent": [
+                  -0.707106781,
+                  -0.707106781
+                ],
+                "assetId": "wall.wind_d5.hold.back",
+                "applicationAssetId": "wall.wind_d5.application.back",
+                "removalAssetId": "wall.wind_d5.removal.back"
+              },
+              {
+                "tangent": [
+                  -0.0,
+                  -1.0
+                ],
+                "assetId": "wall.wind_d6.hold.back",
+                "applicationAssetId": "wall.wind_d6.application.back",
+                "removalAssetId": "wall.wind_d6.removal.back"
+              },
+              {
+                "tangent": [
+                  0.707106781,
+                  -0.707106781
+                ],
+                "assetId": "wall.wind_d7.hold.back",
+                "applicationAssetId": "wall.wind_d7.application.back",
+                "removalAssetId": "wall.wind_d7.removal.back"
+              }
+            ],
+            "moduleLengthCells": 1,
+            "widthFeet": 1,
+            "pixelScale": 1,
+            "heightFeet": 15
+          }
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 1
     }
   },
   "liquid_surfaces": {
@@ -4594,6 +4841,470 @@
           "scale": 1
         }
       ]
+    }
+  },
+  "concentration_media": {
+    "spell.hypnotic_pattern": {
+      "layers": [
+        {
+          "assetId": "control.hypnotic_spiral.hold.back",
+          "composition": "floor"
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 128,
+      "fps": 32,
+      "scale": 0.5,
+      "formationFadeMs": 450,
+      "removalFadeMs": 400
+    }
+  },
+  "construction_media": {
+    "spell_construction.stone.section": {
+      "directions": [
+        {
+          "tangent": [
+            1,
+            0
+          ],
+          "centerlineOffsetCells": [
+            0,
+            0.5
+          ],
+          "variants": [
+            {
+              "application": [
+                "wall.stone_v0_d0.application.back",
+                "wall.stone_v0_d0.application.front"
+              ],
+              "intact": [
+                "wall.stone_v0_d0.hold.back",
+                "wall.stone_v0_d0.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v0_d0.destruction.back",
+                "wall.stone_v0_d0.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.stone_v1_d0.application.back",
+                "wall.stone_v1_d0.application.front"
+              ],
+              "intact": [
+                "wall.stone_v1_d0.hold.back",
+                "wall.stone_v1_d0.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v1_d0.destruction.back",
+                "wall.stone_v1_d0.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.stone_v2_d0.application.back",
+                "wall.stone_v2_d0.application.front"
+              ],
+              "intact": [
+                "wall.stone_v2_d0.hold.back",
+                "wall.stone_v2_d0.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v2_d0.destruction.back",
+                "wall.stone_v2_d0.destruction.front"
+              ]
+            }
+          ]
+        },
+        {
+          "tangent": [
+            0,
+            -1
+          ],
+          "centerlineOffsetCells": [
+            0.5,
+            0
+          ],
+          "variants": [
+            {
+              "application": [
+                "wall.stone_v0_d1.application.back",
+                "wall.stone_v0_d1.application.front"
+              ],
+              "intact": [
+                "wall.stone_v0_d1.hold.back",
+                "wall.stone_v0_d1.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v0_d1.destruction.back",
+                "wall.stone_v0_d1.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.stone_v1_d1.application.back",
+                "wall.stone_v1_d1.application.front"
+              ],
+              "intact": [
+                "wall.stone_v1_d1.hold.back",
+                "wall.stone_v1_d1.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v1_d1.destruction.back",
+                "wall.stone_v1_d1.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.stone_v2_d1.application.back",
+                "wall.stone_v2_d1.application.front"
+              ],
+              "intact": [
+                "wall.stone_v2_d1.hold.back",
+                "wall.stone_v2_d1.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v2_d1.destruction.back",
+                "wall.stone_v2_d1.destruction.front"
+              ]
+            }
+          ]
+        },
+        {
+          "tangent": [
+            -1,
+            0
+          ],
+          "centerlineOffsetCells": [
+            0,
+            -0.5
+          ],
+          "variants": [
+            {
+              "application": [
+                "wall.stone_v0_d2.application.back",
+                "wall.stone_v0_d2.application.front"
+              ],
+              "intact": [
+                "wall.stone_v0_d2.hold.back",
+                "wall.stone_v0_d2.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v0_d2.destruction.back",
+                "wall.stone_v0_d2.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.stone_v1_d2.application.back",
+                "wall.stone_v1_d2.application.front"
+              ],
+              "intact": [
+                "wall.stone_v1_d2.hold.back",
+                "wall.stone_v1_d2.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v1_d2.destruction.back",
+                "wall.stone_v1_d2.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.stone_v2_d2.application.back",
+                "wall.stone_v2_d2.application.front"
+              ],
+              "intact": [
+                "wall.stone_v2_d2.hold.back",
+                "wall.stone_v2_d2.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v2_d2.destruction.back",
+                "wall.stone_v2_d2.destruction.front"
+              ]
+            }
+          ]
+        },
+        {
+          "tangent": [
+            0,
+            1
+          ],
+          "centerlineOffsetCells": [
+            -0.5,
+            0
+          ],
+          "variants": [
+            {
+              "application": [
+                "wall.stone_v0_d3.application.back",
+                "wall.stone_v0_d3.application.front"
+              ],
+              "intact": [
+                "wall.stone_v0_d3.hold.back",
+                "wall.stone_v0_d3.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v0_d3.destruction.back",
+                "wall.stone_v0_d3.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.stone_v1_d3.application.back",
+                "wall.stone_v1_d3.application.front"
+              ],
+              "intact": [
+                "wall.stone_v1_d3.hold.back",
+                "wall.stone_v1_d3.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v1_d3.destruction.back",
+                "wall.stone_v1_d3.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.stone_v2_d3.application.back",
+                "wall.stone_v2_d3.application.front"
+              ],
+              "intact": [
+                "wall.stone_v2_d3.hold.back",
+                "wall.stone_v2_d3.hold.front"
+              ],
+              "destruction": [
+                "wall.stone_v2_d3.destruction.back",
+                "wall.stone_v2_d3.destruction.front"
+              ]
+            }
+          ]
+        }
+      ],
+      "lengthFeet": 10,
+      "heightFeet": 10,
+      "pixelScale": 1
+    },
+    "spell_construction.ice.section": {
+      "directions": [
+        {
+          "tangent": [
+            1,
+            0
+          ],
+          "centerlineOffsetCells": [
+            0,
+            0.5
+          ],
+          "variants": [
+            {
+              "application": [
+                "wall.ice_v0_d0.application.back",
+                "wall.ice_v0_d0.application.front"
+              ],
+              "intact": [
+                "wall.ice_v0_d0.hold.back",
+                "wall.ice_v0_d0.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v0_d0.destruction.back",
+                "wall.ice_v0_d0.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.ice_v1_d0.application.back",
+                "wall.ice_v1_d0.application.front"
+              ],
+              "intact": [
+                "wall.ice_v1_d0.hold.back",
+                "wall.ice_v1_d0.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v1_d0.destruction.back",
+                "wall.ice_v1_d0.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.ice_v2_d0.application.back",
+                "wall.ice_v2_d0.application.front"
+              ],
+              "intact": [
+                "wall.ice_v2_d0.hold.back",
+                "wall.ice_v2_d0.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v2_d0.destruction.back",
+                "wall.ice_v2_d0.destruction.front"
+              ]
+            }
+          ]
+        },
+        {
+          "tangent": [
+            0,
+            -1
+          ],
+          "centerlineOffsetCells": [
+            0.5,
+            0
+          ],
+          "variants": [
+            {
+              "application": [
+                "wall.ice_v0_d1.application.back",
+                "wall.ice_v0_d1.application.front"
+              ],
+              "intact": [
+                "wall.ice_v0_d1.hold.back",
+                "wall.ice_v0_d1.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v0_d1.destruction.back",
+                "wall.ice_v0_d1.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.ice_v1_d1.application.back",
+                "wall.ice_v1_d1.application.front"
+              ],
+              "intact": [
+                "wall.ice_v1_d1.hold.back",
+                "wall.ice_v1_d1.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v1_d1.destruction.back",
+                "wall.ice_v1_d1.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.ice_v2_d1.application.back",
+                "wall.ice_v2_d1.application.front"
+              ],
+              "intact": [
+                "wall.ice_v2_d1.hold.back",
+                "wall.ice_v2_d1.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v2_d1.destruction.back",
+                "wall.ice_v2_d1.destruction.front"
+              ]
+            }
+          ]
+        },
+        {
+          "tangent": [
+            -1,
+            0
+          ],
+          "centerlineOffsetCells": [
+            0,
+            -0.5
+          ],
+          "variants": [
+            {
+              "application": [
+                "wall.ice_v0_d2.application.back",
+                "wall.ice_v0_d2.application.front"
+              ],
+              "intact": [
+                "wall.ice_v0_d2.hold.back",
+                "wall.ice_v0_d2.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v0_d2.destruction.back",
+                "wall.ice_v0_d2.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.ice_v1_d2.application.back",
+                "wall.ice_v1_d2.application.front"
+              ],
+              "intact": [
+                "wall.ice_v1_d2.hold.back",
+                "wall.ice_v1_d2.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v1_d2.destruction.back",
+                "wall.ice_v1_d2.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.ice_v2_d2.application.back",
+                "wall.ice_v2_d2.application.front"
+              ],
+              "intact": [
+                "wall.ice_v2_d2.hold.back",
+                "wall.ice_v2_d2.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v2_d2.destruction.back",
+                "wall.ice_v2_d2.destruction.front"
+              ]
+            }
+          ]
+        },
+        {
+          "tangent": [
+            0,
+            1
+          ],
+          "centerlineOffsetCells": [
+            -0.5,
+            0
+          ],
+          "variants": [
+            {
+              "application": [
+                "wall.ice_v0_d3.application.back",
+                "wall.ice_v0_d3.application.front"
+              ],
+              "intact": [
+                "wall.ice_v0_d3.hold.back",
+                "wall.ice_v0_d3.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v0_d3.destruction.back",
+                "wall.ice_v0_d3.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.ice_v1_d3.application.back",
+                "wall.ice_v1_d3.application.front"
+              ],
+              "intact": [
+                "wall.ice_v1_d3.hold.back",
+                "wall.ice_v1_d3.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v1_d3.destruction.back",
+                "wall.ice_v1_d3.destruction.front"
+              ]
+            },
+            {
+              "application": [
+                "wall.ice_v2_d3.application.back",
+                "wall.ice_v2_d3.application.front"
+              ],
+              "intact": [
+                "wall.ice_v2_d3.hold.back",
+                "wall.ice_v2_d3.hold.front"
+              ],
+              "destruction": [
+                "wall.ice_v2_d3.destruction.back",
+                "wall.ice_v2_d3.destruction.front"
+              ]
+            }
+          ]
+        }
+      ],
+      "lengthFeet": 10,
+      "heightFeet": 10,
+      "pixelScale": 1
     }
   }
 }

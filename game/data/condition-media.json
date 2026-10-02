@@ -1157,6 +1157,431 @@
       "removal_fade_ms": 450,
       "scale": 0.5,
       "world_basis": "E"
+    },
+    "curse.ability.rings.back": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_rings_loop_v13.hold.back",
+      "application_asset_id": "curse.curse_rings_loop_v13.apply.back",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250
+    },
+    "curse.ability.rings.back.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_rings_release_v13.finite.back",
+      "scale": 1,
+      "world_basis": "E"
+    },
+    "curse.ability.rings.front": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_rings_loop_v13.hold.front",
+      "application_asset_id": "curse.curse_rings_loop_v13.apply.front",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250
+    },
+    "curse.ability.rings.front.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_rings_release_v13.finite.front",
+      "scale": 1,
+      "world_basis": "E"
+    },
+    "curse.ability.mark.back": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_ability_burden_loop_source_v12.hold.back",
+      "application_asset_id": "curse.curse_ability_burden_loop_source_v12.apply.back",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250,
+      "actor_top_clearance_px": 10
+    },
+    "curse.ability.mark.back.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_ability_burden_release_source_v12.finite.back",
+      "scale": 1,
+      "world_basis": "E",
+      "actor_top_clearance_px": 10
+    },
+    "curse.ability.mark.front": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_ability_burden_loop_source_v12.hold.front",
+      "application_asset_id": "curse.curse_ability_burden_loop_source_v12.apply.front",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250,
+      "actor_top_clearance_px": 10
+    },
+    "curse.ability.mark.front.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_ability_burden_release_source_v12.finite.front",
+      "scale": 1,
+      "world_basis": "E",
+      "actor_top_clearance_px": 10
+    },
+    "curse.attack.rings.back": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_rings_loop_v13.hold.back",
+      "application_asset_id": "curse.curse_rings_loop_v13.apply.back",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250
+    },
+    "curse.attack.rings.back.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_rings_release_v13.finite.back",
+      "scale": 1,
+      "world_basis": "E"
+    },
+    "curse.attack.rings.front": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_rings_loop_v13.hold.front",
+      "application_asset_id": "curse.curse_rings_loop_v13.apply.front",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250
+    },
+    "curse.attack.rings.front.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_rings_release_v13.finite.front",
+      "scale": 1,
+      "world_basis": "E"
+    },
+    "curse.attack.mark.back": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_bent_strike_loop_source_v12.hold.back",
+      "application_asset_id": "curse.curse_bent_strike_loop_source_v12.apply.back",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250,
+      "actor_top_clearance_px": 10
+    },
+    "curse.attack.mark.back.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_bent_strike_release_source_v12.finite.back",
+      "scale": 1,
+      "world_basis": "E",
+      "actor_top_clearance_px": 10
+    },
+    "curse.attack.mark.front": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_bent_strike_loop_source_v12.hold.front",
+      "application_asset_id": "curse.curse_bent_strike_loop_source_v12.apply.front",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250,
+      "actor_top_clearance_px": 10
+    },
+    "curse.attack.mark.front.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_bent_strike_release_source_v12.finite.front",
+      "scale": 1,
+      "world_basis": "E",
+      "actor_top_clearance_px": 10
+    },
+    "curse.inaction.rings.back": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_rings_loop_v13.hold.back",
+      "application_asset_id": "curse.curse_rings_loop_v13.apply.back",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250
+    },
+    "curse.inaction.rings.back.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_rings_release_v13.finite.back",
+      "scale": 1,
+      "world_basis": "E"
+    },
+    "curse.inaction.rings.front": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_rings_loop_v13.hold.front",
+      "application_asset_id": "curse.curse_rings_loop_v13.apply.front",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250
+    },
+    "curse.inaction.rings.front.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_rings_release_v13.finite.front",
+      "scale": 1,
+      "world_basis": "E"
+    },
+    "curse.inaction.mark.back": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_action_denial_loop_source_v12.hold.back",
+      "application_asset_id": "curse.curse_action_denial_loop_source_v12.apply.back",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250,
+      "actor_top_clearance_px": 10
+    },
+    "curse.inaction.mark.back.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_action_denial_release_source_v12.finite.back",
+      "scale": 1,
+      "world_basis": "E",
+      "actor_top_clearance_px": 10
+    },
+    "curse.inaction.mark.front": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_action_denial_loop_source_v12.hold.front",
+      "application_asset_id": "curse.curse_action_denial_loop_source_v12.apply.front",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250,
+      "actor_top_clearance_px": 10
+    },
+    "curse.inaction.mark.front.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_action_denial_release_source_v12.finite.front",
+      "scale": 1,
+      "world_basis": "E",
+      "actor_top_clearance_px": 10
+    },
+    "curse.damage.rings.back": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_rings_loop_v13.hold.back",
+      "application_asset_id": "curse.curse_rings_loop_v13.apply.back",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250
+    },
+    "curse.damage.rings.back.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_rings_release_v13.finite.back",
+      "scale": 1,
+      "world_basis": "E"
+    },
+    "curse.damage.rings.front": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_rings_loop_v13.hold.front",
+      "application_asset_id": "curse.curse_rings_loop_v13.apply.front",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250
+    },
+    "curse.damage.rings.front.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_rings_release_v13.finite.front",
+      "scale": 1,
+      "world_basis": "E"
+    },
+    "curse.damage.mark.back": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_necrotic_wound_loop_source_v14.hold.back",
+      "application_asset_id": "curse.curse_necrotic_wound_loop_source_v14.apply.back",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250,
+      "actor_top_clearance_px": 10
+    },
+    "curse.damage.mark.back.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_necrotic_wound_release_source_v14.finite.back",
+      "scale": 1,
+      "world_basis": "E",
+      "actor_top_clearance_px": 10
+    },
+    "curse.damage.mark.front": {
+      "category": "bestow_curse",
+      "animation": "loop",
+      "asset_id": "curse.curse_necrotic_wound_loop_source_v14.hold.front",
+      "application_asset_id": "curse.curse_necrotic_wound_loop_source_v14.apply.front",
+      "application_mode": "sequence",
+      "scale": 1,
+      "world_basis": "E",
+      "loop_crossfade_ms": 250,
+      "actor_top_clearance_px": 10
+    },
+    "curse.damage.mark.front.removal": {
+      "category": "bestow_curse",
+      "animation": "finite",
+      "asset_id": "curse.curse_necrotic_wound_release_source_v14.finite.front",
+      "scale": 1,
+      "world_basis": "E",
+      "actor_top_clearance_px": 10
+    },
+    "divine.blinded.back": {
+      "category": "blinded",
+      "animation": "loop",
+      "scale": 0.5,
+      "world_basis": "E",
+      "removal_fade_ms": 600,
+      "asset_id": "divine.divine_condition_blinded.sustain.back"
+    },
+    "divine.blinded.front": {
+      "category": "blinded",
+      "animation": "loop",
+      "scale": 0.5,
+      "world_basis": "E",
+      "removal_fade_ms": 600,
+      "asset_id": "divine.divine_condition_blinded.sustain.front"
+    },
+    "divine.deafened.back": {
+      "category": "deafened",
+      "animation": "loop",
+      "scale": 0.5,
+      "world_basis": "E",
+      "removal_fade_ms": 600,
+      "asset_id": "divine.divine_condition_deafened.sustain.back"
+    },
+    "divine.deafened.front": {
+      "category": "deafened",
+      "animation": "loop",
+      "scale": 0.5,
+      "world_basis": "E",
+      "removal_fade_ms": 600,
+      "asset_id": "divine.divine_condition_deafened.sustain.front"
+    },
+    "divine.beacon_of_hope.back": {
+      "category": "beacon_of_hope",
+      "animation": "loop",
+      "scale": 0.5,
+      "world_basis": "E",
+      "removal_fade_ms": 600,
+      "asset_id": "divine.beacon_of_hope.hold.back",
+      "application_asset_id": "divine.beacon_of_hope.apply.back",
+      "application_mode": "sequence"
+    },
+    "divine.beacon_of_hope.front": {
+      "category": "beacon_of_hope",
+      "animation": "loop",
+      "scale": 0.5,
+      "world_basis": "E",
+      "removal_fade_ms": 600,
+      "asset_id": "divine.beacon_of_hope.hold.front",
+      "application_asset_id": "divine.beacon_of_hope.apply.front",
+      "application_mode": "sequence"
+    },
+    "control.slow.back": {
+      "category": "Slow",
+      "animation": "sustain",
+      "asset_id": "control.slow.sustain.back",
+      "scale": 0.5,
+      "world_basis": "E",
+      "removal_fade_ms": 550
+    },
+    "control.slow.front": {
+      "category": "Slow",
+      "animation": "sustain",
+      "asset_id": "control.slow.sustain.front",
+      "scale": 0.5,
+      "world_basis": "E",
+      "removal_fade_ms": 550
+    },
+    "control.hold_human.back": {
+      "category": "Hold human",
+      "animation": "hold",
+      "asset_id": "control.hold_human.hold.back",
+      "application_asset_id": "control.hold_human.apply.back",
+      "application_fade_ms": [
+        1506.25,
+        1656.25
+      ],
+      "sustain_start_ms": 1506.25,
+      "removal_asset_id": "control.hold_human.release.back",
+      "removal_crossfade_ms": 150,
+      "scale": 0.5
+    },
+    "control.hold_human.front": {
+      "category": "Hold human",
+      "animation": "hold",
+      "asset_id": "control.hold_human.hold.front",
+      "application_asset_id": "control.hold_human.apply.front",
+      "application_fade_ms": [
+        1506.25,
+        1656.25
+      ],
+      "sustain_start_ms": 1506.25,
+      "removal_asset_id": "control.hold_human.release.front",
+      "removal_crossfade_ms": 150,
+      "scale": 0.5
+    },
+    "control.frightened.back": {
+      "category": "Frightened",
+      "animation": "hold",
+      "asset_id": "control.frightened.hold.back",
+      "application_asset_id": "control.frightened.apply.back",
+      "application_fade_ms": [
+        1000,
+        1500
+      ],
+      "sustain_start_ms": 1000,
+      "loop_crossfade_ms": 500,
+      "removal_fade_ms": 450,
+      "world_basis": "E",
+      "scale": 0.5
+    },
+    "control.frightened.front": {
+      "category": "Frightened",
+      "animation": "hold",
+      "asset_id": "control.frightened.hold.front",
+      "application_asset_id": "control.frightened.apply.front",
+      "application_fade_ms": [
+        1000,
+        1500
+      ],
+      "sustain_start_ms": 1000,
+      "loop_crossfade_ms": 500,
+      "removal_fade_ms": 450,
+      "world_basis": "E",
+      "scale": 0.5
+    },
+    "control.incapacitated.front": {
+      "category": "incapacitated",
+      "animation": "hold",
+      "asset_id": "control.incapacitated.hold.front",
+      "application_asset_id": "control.incapacitated.apply.front",
+      "application_mode": "sequence",
+      "scale": 0.5,
+      "world_basis": "E",
+      "actor_top_clearance_px": 3,
+      "removal_fade_ms": 400
     }
   }
 }

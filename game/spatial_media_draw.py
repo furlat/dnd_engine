@@ -24,6 +24,7 @@ from game.spatial_field_media import field_media_commands, spatial_origin
 from game.world_animation import WorldTransitionSample
 from game.maintained_media import maintained_media_alpha, maintained_media_frame, maintained_removal_duration
 from game.wall_media import wall_media_draw_commands
+from game.wall_assembly_media import assembly_media_draw_commands
 
 
 @lru_cache(maxsize=8)
@@ -81,7 +82,8 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
                 effect = path.after
         binding = data.spatial_media.get(effect.content_ref.content_id)
         geometry = effect.area_geometry
-        if binding is None or identity in introducing or geometry is None:
+        if (binding is None or identity in introducing
+                or geometry is None and not any(layer.composition == "clump" for layer in binding.layers)):
             continue
         lifetime = lifetimes.get(identity)
         start = lifetime.applied_ms if lifetime is not None else None
@@ -103,6 +105,11 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
             for suppression in protections
             if isinstance(suppression.area_geometry, SpherePresentationGeometry)
             and suppression.anchor_elevation_steps is not None and suppression.provider_content_ref is not None)
+        if any(layer.wallAssembly is not None for layer in binding.layers):
+            commands.extend(assembly_media_draw_commands(effect, identity, data, binding,
+                presentation_ms, camera, start, removed, area, exclusions,
+                tuple(position for suppression in protections for position in suppression.positions)))
+            continue
         for layer_index, layer in enumerate(binding.layers):
             field_layer = (layer.composition in ("floor", "xy_volume", "clump")
                 or layer.composition == "xyz_volume" and isinstance(geometry, SpherePresentationGeometry))
@@ -127,7 +134,8 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
                 commands.extend(field_media_commands(state, data, identity, geometry, admitted,
                     binding, layer, layer_index, asset_id, frame, camera, alpha, translation,
                     anchor_elevation_steps=effect.anchor_elevation_steps, area=area, exclusions=exclusions,
-                    upper_surfaces=effect.upper_volume_surfaces, previous_effect=previous_effect))
+                    upper_surfaces=effect.upper_volume_surfaces, previous_effect=previous_effect,
+                    anchor_position=effect.anchor_position))
         if not isinstance(geometry, (LinePresentationGeometry, SpherePresentationGeometry)):
             continue
         origin = geometry.origin if isinstance(geometry, LinePresentationGeometry) else geometry.center

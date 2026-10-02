@@ -333,6 +333,7 @@ class SlowedEffect(BaseCondition):
             )
             target.action_economy.movement.self_static.add_value_modifier(speed_mod)
             outs.append((target.action_economy.movement.uuid, speed_mod.uuid))
+            target.action_economy.movement_speed_factors[speed_mod.uuid] = 0.5
 
         ac_mod = NumericalModifier(
             name="Slowed",
@@ -654,6 +655,7 @@ class HasteEffect(BaseCondition):
             )
             target.action_economy.movement.self_static.add_value_modifier(speed_mod)
             outs.append((target.action_economy.movement.uuid, speed_mod.uuid))
+            target.action_economy.movement_speed_factors[speed_mod.uuid] = 2.0
 
         ac_mod = NumericalModifier(
             name="Haste",

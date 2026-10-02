@@ -35,6 +35,7 @@ class VisualLoadoutSlot(str, Enum):
     BOOTS = "boots"
     AMULET = "amulet"
     CLOAK = "cloak"
+    BACKPACK = "backpack"
     RING_LEFT = "ring_left"
     RING_RIGHT = "ring_right"
 
@@ -42,6 +43,8 @@ class VisualLoadoutSlot(str, Enum):
 class EquipmentRenderLayer(str, Enum):
     """Dependency-neutral renderer layers contributed by equipped items."""
 
+    BACKPACK = "backpack"
+    CLOAK = "cloak"
     BELT = "belt"
     CHEST = "chest"
     HANDS = "hands"
@@ -63,6 +66,7 @@ class BodyPart(str, Enum):
     AMULET = "Amulet"
     RING = "Ring"
     CLOAK = "Cloak"
+    BACKPACK = "Backpack"
 
 
 class RingSlot(str, Enum):

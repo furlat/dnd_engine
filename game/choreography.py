@@ -60,6 +60,8 @@ from game.environment_animation import remnant_bank
 from game.player_reduction import copy_target, lineage_branch, reduce_lineage, reduce_nodes, observe_actors, stage_actors, stage_lineage, state_before_event as _before_event
 from game.stationary_media import StationaryMediaCue
 from game.spatial_contact_media import bind_spatial_contacts, ground_contact_is_authored, bind_suppression_media, damage_sweep_recipe
+from game.construction_media import construction_duration, construction_media_limitation
+from game.construction_transitions import construction_creation_transitions
 from game.wall_media import wall_media_limitation
 
 
@@ -521,6 +523,12 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                             duration_ms=field_motion.duration_ms, spatial_motion=field_motion))
                         end = max(end, at + field_motion.duration_ms)
                         at = observation_at = state_at_effect = end
+            if spatial_media is None and fact.operation is SpatialEffectChangeOperation.REMOVED:
+                previous = before.senses.spatial_effects.get(fact.spatial_effect_uuid) if before.senses is not None else None
+                if previous is not None and any(obj.item.item_id in data.construction_media
+                        and obj.item.construction_geometry in previous.construction_sections
+                        for obj in before.objects.values()):
+                    recorded_transitions.append(WorldTransition(fact.spatial_effect_uuid, "removal", None, None, at))
             if fact.previous_pressed is not None and fact.pressed is not None:
                 recorded_transitions.append(WorldTransition(fact.spatial_effect_uuid, "pressed",
                     str(fact.previous_pressed).lower(), str(fact.pressed).lower(), at))
@@ -585,7 +593,16 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             body_uuid = fact.replacement_uuid or fact.object_uuid
             body = after_destruction.objects.get(body_uuid)
             art = data.devices.get(fact.item_id)
-            if body is not None and art is not None and art.destruction is not None:
+            construction = data.construction_media.get(fact.item_id)
+            original = prior.objects.get(fact.object_uuid)
+            if construction is not None and original is not None:
+                limitation = construction_media_limitation(original, construction)
+                if limitation is not None:
+                    gaps.append((event.uuid, limitation))
+                else:
+                    recorded_transitions.append(WorldTransition(fact.object_uuid, "destruction", None, None,
+                        state_at_effect, duration_ms=construction_duration(data, construction, 'destruction')))
+            elif body is not None and art is not None and art.destruction is not None:
                 # The public fact owns witnessed placement. Physical state
                 # commits at contact; only art settles.
                 device_facing = (facings or {}).get(str(fact.object_uuid))
@@ -1202,6 +1219,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             tuple(update for update in lineage.world_updates if update.event_uuid in identities))
         states.append((at, state))
         complete = max(complete, at)
+    recorded_transitions.extend(construction_creation_transitions(displayed_before, states, lineage, data))
     transitions = {(row.identity, row.field, row.start_ms): row
                    for row in (*world_transitions(displayed_before, states), *recorded_transitions,
                        *(replace(change, start_ms=change.start_ms + cue.start_ms)

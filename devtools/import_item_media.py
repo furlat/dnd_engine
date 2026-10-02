@@ -12,10 +12,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def import_item_media(archive: Path, preserved: Path, production: Path,
-                      output_root: Path = ROOT) -> tuple[int, int]:
+                      output_root: Path = ROOT, *,
+                      selected_paths: frozenset[str] | None = None) -> tuple[int, int]:
     document = json.loads((ROOT / "game/data/item_media_sources.json").read_text())
     if archive.name != document["archive"]:
         raise ValueError("incorrect item source archive")
+    if selected_paths is not None and not selected_paths <= {row["path"] for row in document["files"]}:
+        raise ValueError("selected item media must be in the authored source manifest")
     preserved.mkdir(parents=True, exist_ok=True)
     original = preserved / archive.name
     if not original.exists():
@@ -25,6 +28,8 @@ def import_item_media(archive: Path, preserved: Path, production: Path,
     receipts = []
     with zipfile.ZipFile(original) as source:
         for row in document["files"]:
+            if selected_paths is not None and row["path"] not in selected_paths:
+                continue
             relative = PurePosixPath(row["path"])
             if relative.is_absolute() or ".." in relative.parts or relative.parts[:3] != ("game", "assets", "neuroclient"):
                 raise ValueError("item media destination escapes private art")
@@ -49,5 +54,7 @@ if __name__ == "__main__":
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--preserved", type=Path, required=True)
     parser.add_argument("--production", type=Path, required=True)
+    parser.add_argument("--path", action="append", help="Install only these authored paths; leave other sheets untouched")
     arguments = parser.parse_args()
-    print(import_item_media(arguments.archive, arguments.preserved, arguments.production))
+    print(import_item_media(arguments.archive, arguments.preserved, arguments.production,
+                            selected_paths=None if arguments.path is None else frozenset(arguments.path)))

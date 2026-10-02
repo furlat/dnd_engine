@@ -63,7 +63,7 @@ def test_equippable_items_declare_compatible_and_default_slots() -> None:
         WeaponSlot.MELEE_OFF,
     })
     assert bow.occupied_equipment_slots(WeaponSlot.RANGED_MAIN) == frozenset({
-        WeaponSlot.RANGED_MAIN,
+        WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF,
     })
     assert shield.compatible_equipment_slots() == (WeaponSlot.MELEE_OFF,)
     assert shield.default_equipment_slot() == WeaponSlot.MELEE_OFF

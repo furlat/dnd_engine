@@ -144,6 +144,7 @@ def cast_surface_volume(timeline: CastTimeline, sample: RegisteredMediaSample, a
 def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera: Camera,
                              area: AreaMedia | None,
                              rows: Mapping[tuple[str, int], pygame.Surface],
+                             *, actor_bounds: Mapping[str, pygame.Rect] | None = None,
                              ) -> tuple[DrawCommand, ...]:
     data, source, recipe = timeline.data, timeline.source, timeline.recipe
     bodies = {body.actor_uuid: body for body in sample.bodies}
@@ -158,7 +159,7 @@ def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera:
         asset = data.projectile_assets[track.assetId]
         contacts = targets if track.attachment.startswith("target_") else (source.caster,)
         for contact in contacts:
-            if track.requireRemovedConditionTag is not None and not any(
+            if (track.requireRemovedConditionTag is not None or track.requiredSaveSuccess is not None) and not any(
                     feedback_identity(application.target) == feedback_identity(contact) and media_target_applies(track, application)
                     for application in source.applications):
                 continue
@@ -167,6 +168,11 @@ def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera:
                 continue
             grid, height, anchor, factor, rotation = cast_media_placement(
                 timeline, track, contact, camera, bodies.get(feedback_identity(contact)))
+            if track.actorTopClearancePx is not None:
+                bounds = None if actor_bounds is None else actor_bounds.get(feedback_identity(contact))
+                if bounds is None:
+                    continue
+                anchor = (anchor[0], bounds.top - track.actorTopClearancePx * camera.zoom)
             origin = project_screen(grid, camera, elevation_steps=height)
             dx, dy = (anchor[0]-origin[0])/camera.zoom, (anchor[1]-origin[1])/camera.zoom
             translation = dx/TILE_WIDTH, -dy/HEIGHT_STEP_PIXELS, -dx/TILE_WIDTH

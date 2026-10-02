@@ -30,11 +30,19 @@ class ConditionMediaSource(BaseModel):
     application_mode: Literal["crossfade", "sequence"] = "crossfade"
     removal_mask_asset_id: str | None = None
     sustain_start_ms: NonNegativeFloat = 0
+    loop_crossfade_ms: NonNegativeFloat = 0
+    actor_top_clearance_px: NonNegativeFloat | None = None
+    removal_asset_id: str | None = None
+    removal_crossfade_ms: NonNegativeFloat = 0
 
     @model_validator(mode="after")
     def ordered_fade(self) -> "ConditionMediaSource":
         if self.application_fade_ms[1] < self.application_fade_ms[0]:
             raise ValueError("application fade end must follow its start")
+        if self.removal_asset_id is not None and (self.asset_id is None or self.removal_mask_asset_id is not None):
+            raise ValueError("color release requires a maintained asset and cannot also use a removal mask")
+        if self.removal_crossfade_ms and self.removal_asset_id is None:
+            raise ValueError("removal crossfade requires a color release asset")
         return self
 
 
@@ -62,6 +70,11 @@ class ConditionLayerMedia:
     # Local loop origin when application and hold overlap. Reacquired owners
     # have no witnessed application and enter the ordinary quiet-loop clock.
     sustain_start_ms: float = 0
+    # Source-authored end/start overlap; zero preserves ordinary frame wrapping.
+    loop_crossfade_ms: float = 0
+    actor_top_clearance_px: float | None = None
+    removal_asset_id: str | None = None
+    removal_crossfade_ms: float = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +99,8 @@ def load_condition_media(path: Path, resources_path: Path, root: Path) -> Mappin
         MappingProxyType({facing: resources[asset] for facing, asset in row.images_by_facing.items()}),
         row.asset_id, row.application_asset_id, row.application_fade_ms,
         row.removal_fade_ms, row.scale, row.world_basis, row.application_mode,
-        row.removal_mask_asset_id, row.sustain_start_ms)
+        row.removal_mask_asset_id, row.sustain_start_ms, row.loop_crossfade_ms, row.actor_top_clearance_px,
+        row.removal_asset_id, row.removal_crossfade_ms)
         for identity, row in document.layers.items()})
 
 

@@ -27,20 +27,104 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
-**October 2 — next lane: missing and variant item content for all 150 rows.**
-The [updated item content plan](agent_docs/ITEM_CONTENT_IMPLEMENTATION_PLAN_2026-10-02.md)
-builds on the completed prerequisites and accepted palette/floor/transfer fixes.
-The original bible chat (`01a0f3b4-277a-7fa0-9356-d1c9de5527b8`) is active again
-to finish the previously assigned actual matching analysis. Its saved all-150
-handoff contains candidates, zero selected appearances and 93 unresolved VFX
-observations. Consume its completed versioned matches before content authoring;
-do not duplicate the study or treat unresolved fiction as approved rules.
-Independent anti-slop and ECS/anti-OOP reviewers approve the corrected plan.
-Historical visual preset labels are metadata, and derived definitions stay
-downstream of cold types/transforms. Later per-grant appearance selection remains
-an explicit character-lane integration gap. This update authors
-no items, characters or gameplay rules. Conditions/abilities then characters
-remain the agreed order; scenario redesign and multi-Z stay deferred.
+**October 3 — implementation stopped; cleanup plan proposed.**
+The [source review](agent_docs/audits/OVERALL_ANTISLOP_REVIEW_2026-10-02.md)
+and [cleanup plan](agent_docs/ANTISLOP_CLEANUP_PLAN_2026-10-03.md) supersede earlier
+architectural approval claims for the new ability machinery. The human confirmed
+keeping all six requested spells and three backpack powers while cleaning their
+implementation. New ammunition integration is on the removal list. The plan
+also covers event ownership, resource changes, duplicate state publication and
+presentation traversal. The October 3
+[whole-source rendering review](agent_docs/audits/RENDER_EVENT_CONTRACT_REVIEW_2026-10-03.md)
+confirmed committed workarounds as well: recipe-dependent damage ownership,
+target/time matching and formation-specific sensory splitting. Cleanup steps
+5–6 now require typed causal/result links and shared milestone scheduling before
+traversal extraction; the existing renderer/authoring system stays. No production
+edits or tests for this plan. The human required two independent approvals:
+anti-slop and ECS/import-DAG. Both reviewers requested corrections, then approved
+the revised design; [exact-revision receipts](agent_docs/audits/ANTISLOP_CLEANUP_PLAN_REVIEWS_2026-10-03.md)
+record the blockers, fixes and approvals. These are plan approvals, not
+implementation authorization. Unrelated agent coordination remains stopped.
+Earlier checkpoints below are historical evidence.
+
+**October 2 — roster ability/effect native batch implemented.**
+The [plan](agent_docs/ROSTER_ABILITIES_AND_SIMPLE_SPELLS_PLAN_2026-10-02.md),
+[complete dispositions](agent_docs/ROSTER_ABILITY_DISPOSITIONS_2026-10-02.md) and
+[implementation checkpoint](agent_docs/ROSTER_ABILITIES_IMPLEMENTATION_2026-10-02.md)
+account for all150 rows/78 proposed signatures. Six simple SRD5.1 spells
+(Produce Flame/Shillelagh/Longstrider/Barkskin/Fly/Fire Shield), selected creature
+effects, four stackable arrow payloads and three backpack-slot powers are native.
+Flight uses ground-to-ground traversal without hovering; ordinary attack budgets,
+item ownership and shared movement expenditure are preserved. The human deferred
+ordinary Grapple: its new action, dragging and hand-reservation machinery are
+removed and preserved privately; the existing Grappled condition is unchanged.
+Both independent anti-slop and ECS/anti-OOP reviewers approve this scope reduction.
+Post-removal focused native checks: **104 passed**; scoped typing: **0 errors**.
+Final broad verification is recorded in the checkpoint. The
+[visual handoff](agent_docs/ROSTER_ABILITIES_VISUAL_HANDOFF_2026-10-02.md) names
+actual owners and missing bindings. Visual completion and full character
+registration remain pending; scenarios/multi-Z stay deferred. Items/materials
+stay accepted. The human has banned further agent messages in this chat.
+
+**October 2 — complete item appearance crosswalk.** All113 new recipes are admitted,
+including canonical Maul with explicitly approximate original Melee11 geometry.
+The exact165-record/478-possession receipt validates category, variant and ground
+binding, and all51 native references (including coating) construct. Six psychic possessions keep
+per-possession power and selected main/offhand appearance. Paired native Maul
+transfer gallery passes; native+renderer14checks and typing0. Ember and Basic Poison rules are implemented. Complete engine suite: **1,990 passed**;
+focused item rules: **50 passed**, typing0, both independent reviewers approve.
+The updated complete-item-rules-handoff.json maps exact native item/coating references.
+Human disallows new weapon/effect art: existing shapes stay accepted. Item-owned
+Fire/Psychic/Lightning/Poison palette swaps and bounded interior bloom now share
+the held/ground material path. Renderer/replay37checks and six paired galleryclips
+pass, typing0, both reviewers approve. No new sprite bytes. Current complete receipt:
+complete-item-materials-handoff.json. Character/ability port remains separate.
+
+**October 2 — ordinary roster gear amendment complete.** Human simplified specialist
+ammunition/focus/tool/container/mount rules out of this lane. Wand/crowbar/banner
+use the existing melee route, musket the existing ranged route; quiver/canister
+use a real native backpack equipment slot, separate from cloak. Saddle/tack is
+ordinary inventory. Birth/displacement/veto/loot/transfer preserve native ownership.
+Ranged two-handed footprints reserve both hands; Mage Armor preserves cloth
+accessories through the existing body-armor predicate. Full engine: **1,979 passed**.
+Appearance admission is now **112**; 14 original Bag2 sheets (2,025,461 bytes)
+are preserved and local/private hash verified. Exact donor geometry and deferred
+specialist mechanics remain disclosed. ECS review approves; normal paired replay
+checks and the backpack review are recorded in the implementation checkpoint.
+
+
+**October 2 — active items lane: first roster appearance step implemented.**
+The [full item plan](agent_docs/ITEM_CONTENT_IMPLEMENTATION_PLAN_2026-10-02.md)
+still covers all 165 records / 150 characters. The
+[implementation checkpoint](agent_docs/ITEM_CONTENT_IMPLEMENTATION_2026-10-02.md)
+records 110 new appearances, native cloak support, seven explicitly anchored
+partial garments, lawful hand substitutions and 235 shared original action sheets
+(32,487,518 bytes). Palette replacement preserves original alpha/shadows; no
+new weapon rules or inferred magical powers. The possession-level ownership
+supplement is complete and its concrete remaining proposals are in the plan.
+Anti-slop and ECS/anti-OOP reviewers approve this step. Complete engine suite:
+**1,955 passed**; focused item/render/replay checks: **31 passed**; scoped typing:
+**0 errors**. Two complete native-event transfer clips show sword, waist and cloak
+moving to body 2 without duplicate floor items. Full renderer-suite validation
+awaits the separate spells lane's stable checkpoint; do not claim global green.
+The human confirmed psychic damage for purple weapons (power/tier design delegated), no separate
+firearm proficiency, explicit character talents for non-light offhand use, existing
+melee/ranged switching for bow/blade loadouts, and deferred
+fixed-sheet loot-removal art. These decisions supersede the supplement defaults.
+The revised full plan has fresh anti-slop/ECS approval, including transactional
+non-light offhand talent removal and existing either-hand-first action budgets.
+Five psychic definitions and Maul now use the canonical builder; actor-owned
+non-light offhand grants and transactional removal are implemented, preserving
+normal attack budgets and item identity. One additional longsword recipe/binding
+brings appearance admission to 111. Final native suite: **1,969 passed**;
+Haste budget suite including talent-present matrix: **352 passed**; focused
+native/item render checks pass and typing is clean. Broad renderer diagnostic:
+**2,706 passed / 7 failed / 177 errors**, all non-passing reports in the previously
+documented wall-media/lifecycle/legacy-record categories. Its sources changed
+while running; this is not final combined acceptance or global green.
+Items root and spells chat share this checkout under
+`.runtime/lane-coordination-20261002/README.md`. Conditions/abilities then characters
+remain the order; scenarios/multi-Z deferred.
 
 **October 2 — approved item prerequisites implemented.**
 [Implementation record](agent_docs/ITEMS_PREREQUISITES_IMPLEMENTATION_2026-10-02.md)

@@ -11,7 +11,8 @@ from dnd.core.base_actions import (
     SPELL_SLOT_TEMPLATE_SEPARATOR, TargetType, ActionTargetEffectProfile,
     spell_slot_cost_type, TargetEffectDisposition,
 )
-from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec
+from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, AttackAmmunitionPayload, AttackAmmunitionMetadata
+from dnd.damage_payloads import append_saved_poison
 from dnd.core.values import ModifiableValue
 from dnd.core.condition_types import ConditionRemovalTrigger, DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
@@ -91,7 +92,7 @@ from dnd.core.combat_log import (
     md_color
 )
 from dnd.types.physical_access import PhysicalAccess
-from pydantic import BaseModel, Field, StrictBool, StrictInt, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, StrictBool, StrictInt, model_validator
 from typing import AbstractSet, Any, Callable, ClassVar, Dict, Iterable, Literal, Optional, List, Set, TypeVar, Tuple, Self, cast
 from uuid import UUID, uuid4
 from dnd.entity import Entity, determine_attack_outcome
@@ -494,6 +495,13 @@ class Move(BaseAction):
             self._setup_path()
             self._setup_costs_from_path()
 
+    def get_movement_mode(self) -> MovementMode:
+        return self.movement_mode
+
+    def _movement_cost_evaluator(self, entity_uuid: UUID, cost_type: CostType, cost: int) -> bool:
+        entity = Entity.get(entity_uuid)
+        return entity is not None and entity.action_economy.movement_remaining(self.movement_mode) >= cost
+
     def _setup_costs_from_path(self) -> None:
         """Rebuild the movement cost from the resolved path and terrain."""
         if self.path is not None and self.use_movement_cost:
@@ -519,7 +527,7 @@ class Move(BaseAction):
                     name="Movement Cost",
                     cost_type="movement",
                     cost=feet_cost,
-                    evaluator=entity_action_economy_cost_evaluator,
+                    evaluator=self._movement_cost_evaluator,
                 )
             )
 
@@ -702,7 +710,7 @@ class Move(BaseAction):
                     )
 
                 feet_cost = int(total_cost * 5)
-                costs.append(Cost(name="Movement Cost", cost_type="movement", cost=feet_cost, evaluator=entity_action_economy_cost_evaluator))
+                costs.append(Cost(name="Movement Cost", cost_type="movement", cost=feet_cost, evaluator=self._movement_cost_evaluator))
 
         return MovementEvent(
             name=f"{self.name}",
@@ -830,7 +838,7 @@ class Move(BaseAction):
 
                 remaining_movement = (self.movement_allowance_feet - traversed_movement_cost
                     if self.movement_allowance_feet is not None
-                    else source_entity.action_economy.movement.normalized_score)
+                    else source_entity.action_economy.movement_remaining(self.movement_mode))
                 if remaining_movement < step_cost_feet:
                     termination_reason = MovementTerminationReason.INSUFFICIENT_MOVEMENT
                     break
@@ -889,10 +897,17 @@ class Move(BaseAction):
                     break
                 transition_check_seconds += time.perf_counter() - phase_started
 
-                resolved_speed_feet = source_entity.action_economy.current_speed()
+                resolved_speed_feet = source_entity.action_economy.current_speed(self.movement_mode)
+                if (self.movement_allowance_feet is None
+                        and source_entity.action_economy.movement_remaining(self.movement_mode) < step_cost_feet):
+                    interrupted_by_condition = True
+                    termination_reason = MovementTerminationReason.INSUFFICIENT_MOVEMENT
+                    processed_step.phase_to(EventPhase.COMPLETION, committed=False,
+                        status_message="Movement grant changed before entering the next position")
+                    break
                 phase_started = time.perf_counter()
                 if self.movement_allowance_feet is None:
-                    source_entity.action_economy.consume("movement", step_cost_feet)
+                    source_entity.action_economy.consume("movement", step_cost_feet, movement_mode=self.movement_mode)
                 consume_movement_seconds += time.perf_counter() - phase_started
 
                 phase_started = time.perf_counter()
@@ -941,7 +956,7 @@ class Move(BaseAction):
                         traversed_path=tuple(traversed_path),
                         movement_spent=traversed_movement_cost,
                         movement_remaining=(
-                            source_entity.action_economy.movement.normalized_score
+                            source_entity.action_economy.movement_remaining(self.movement_mode)
                         ),
                         source_event_cursor_start=step_source_cursor_start,
                         source_event_cursor_end=EventQueue.event_cursor(),
@@ -965,7 +980,7 @@ class Move(BaseAction):
             started = time.perf_counter()
             remaining_path_distance = max(
                 0,
-                (source_entity.action_economy.movement.normalized_score + 4) // 5,
+                (source_entity.action_economy.movement_remaining(self.movement_mode) + 4) // 5,
             )
             source_entity.materialize_navigation(
                 max_distance=20,
@@ -1563,6 +1578,9 @@ class AttackEvent(ActionEvent):
     damage_rolls: Optional[List[DiceRoll]] = Field(default=None, description="Damage rolls after result handlers.")
     event_type: EventType = Field(default=EventType.ATTACK, description="Event category for attacks.")
     weapon_name: Optional[str] = Field(default=None, description="Display name of the weapon used.")
+    selected_ammunition_uuid: UUID | None = None
+    ammunition_payload: AttackAmmunitionPayload | None = None
+    attack_is_magical: bool = False
     override_ability: Optional[AbilityName] = Field(
         default=None,
         description="Ability override for attack and damage rolls.",
@@ -1845,10 +1863,12 @@ def create_weapon_attack_declaration_event(
         ),
         weapon_name=weapon_name,
         override_ability=override_ability,
+        attack_is_magical=(weapon.attack_is_magical(source_entity_uuid) if source_entity is not None and weapon is not None else False),
         damage_types=damage_types,
         source_item_uuid=source_item_uuid,
         source_item_presentation=source_item_presentation,
     )
+
 
 
 @_core_action_identity(
@@ -1890,6 +1910,37 @@ class Attack(BaseAction):
         description="Ability override for attack and damage rolls.",
     )
 
+    selected_ammunition_uuid: UUID | None = None
+    _prepared_ammunition: Event | None = PrivateAttr(default=None)
+
+    def selected_ammunition(self):
+        actor = Entity.get(self.source_entity_uuid)
+        item = actor.inventory.items.get(self.selected_ammunition_uuid) if actor and self.selected_ammunition_uuid else None
+        weapon = actor.equipment.get_weapon(self.weapon_slot) if actor else None
+        allowed_budget = not any(cost.cost_type in ("bonus_actions","reactions") for cost in self.effective_costs)
+        if (item is None or not item.ammunition_available() or weapon is None
+                or self.weapon_slot != WeaponSlot.RANGED_MAIN or not allowed_budget
+                or self.get_natural_weapon() is not None or not weapon.supports_arrow_payload):
+            return None
+        return item
+
+    def get_discovery_variants(self, entity: Any) -> List[BaseAction]:
+        variants = super().get_discovery_variants(entity)
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None or self.selected_ammunition_uuid is not None:
+            return variants
+        for base_variant in tuple(variants):
+            variant = cast(Attack, base_variant)
+            for item in actor.inventory.items.values():
+                if not item.ammunition_available():
+                    continue
+                candidate = variant.model_copy(deep=True, update={"uuid":uuid4(),
+                    "selected_ammunition_uuid":item.uuid,"name":f"{variant.name}: {item.name}",
+                    "registered_template_uuid": self.registered_template_uuid or self.uuid})
+                if candidate.selected_ammunition() is not None:
+                    variants.append(candidate)
+        return variants
+
     additional_damages: List[Damage] = Field(default_factory=list)
 
     def get_natural_weapon(self) -> Optional[NaturalWeaponSpec]:
@@ -1902,8 +1953,14 @@ class Attack(BaseAction):
         natural = self.get_natural_weapon()
         if natural is not None:
             return AttackSourceMetadata(kind="natural", weapon_slot=self.weapon_slot,
-                name=natural.name, damage_types=(natural.damage_type,))
+                name=natural.name, damage_types=(natural.damage_type,), magical=natural.magical)
         return source.equipment.snapshot_attack_source_metadata(self.weapon_slot)
+
+    def get_attack_ammunition_metadata(self) -> AttackAmmunitionMetadata | None:
+        item = self.selected_ammunition()
+        if item is None or item.attack_ammunition_payload is None:
+            return None
+        return AttackAmmunitionMetadata(item_uuid=item.uuid, payload=item.attack_ammunition_payload)
 
     def get_range(self) -> Optional[Range]:
         source = Entity.get(self.source_entity_uuid)
@@ -1945,6 +2002,13 @@ class Attack(BaseAction):
             for damage_profile in condition.get_action_damage_roll_profiles(self, actor):
                 if isinstance(damage_profile, DamageRollProfile):
                     extra_damage_rolls.append(damage_profile)
+        ammunition = self.selected_ammunition()
+        if ammunition is not None and ammunition.attack_ammunition_payload is not None:
+            payload = ammunition.attack_ammunition_payload
+            extra_damage_rolls.append(DamageRollProfile(dice_count=payload.dice_count,
+                die_size=payload.damage_die, damage_type=payload.damage_type.value,
+                save_dc=payload.save_dc, save_ability="constitution" if payload.save_dc else None,
+                double_on_critical=payload.save_dc is None))
         if not extra_damage_rolls:
             return profile
         return profile.model_copy(update={
@@ -2068,6 +2132,16 @@ class Attack(BaseAction):
         )
 
     @staticmethod
+    def equipped_source_is_eligible(event: AttackEvent, source: Entity) -> bool:
+        """Recheck the declared physical weapon and actor-owned hand permission."""
+        if event.natural_weapon is not None:
+            return True
+        weapon = source.equipment.get_weapon(event.weapon_slot)
+        if event.source_item_uuid is not None and (weapon is None or weapon.uuid != event.source_item_uuid):
+            return False
+        return weapon is None or event.weapon_slot in source.equipment.compatible_slots_for_actor(weapon)
+
+    @staticmethod
     def attack_consequences(execution_event: AttackEvent, source_entity_uuid: UUID, *,
                             physical_access: Optional[PhysicalAccess] = None) -> Optional[AttackEvent]:
             """
@@ -2088,6 +2162,8 @@ class Attack(BaseAction):
                 return execution_event.cancel(status_message=f"Source entity not found for {execution_event.name}")
             if not isinstance(source_entity, Entity):
                 return execution_event.cancel(status_message=f"Source entity not found for {execution_event.name}")
+            if not Attack.equipped_source_is_eligible(execution_event, source_entity):
+                return execution_event.cancel(status_message="Declared weapon or hand permission is no longer available")
             if not target_entity_uuid:
                 return execution_event.cancel(status_message=f"Target entity uuid not present for {execution_event.name}")
             target_entity = BaseBlock.get(target_entity_uuid)
@@ -2257,6 +2333,13 @@ class Attack(BaseAction):
             started = time.perf_counter()
             damages = source_entity.get_damages(weapon_slot, target_entity_uuid, override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
             damages.extend(execution_event.additional_damages)
+            payload = execution_event.ammunition_payload
+            if payload is not None and payload.save_dc is None:
+                damages.append(Damage(name="Special arrow",source_entity_uuid=source_entity.uuid,
+                    target_entity_uuid=target_entity.uuid,damage_type=payload.damage_type,
+                    damage_dice=payload.damage_die,dice_numbers=payload.dice_count,
+                    damage_bonus=ModifiableValue.create(source_entity_uuid=source_entity.uuid,
+                        base_value=0,value_name="Arrow payload")))
             record_action_timing("attack.get_damages_ms", started)
             started = time.perf_counter()
             attack_event = attack_event.phase_to(
@@ -2313,6 +2396,12 @@ class Attack(BaseAction):
                     return attack_event.cancel(
                         status_message=damage_roll_event.status_message or "Damage application interrupted",
                     )
+
+                if payload is not None and payload.save_dc is not None:
+                    damage_roll_event = append_saved_poison(damage_roll_event,dc=payload.save_dc,
+                        die=payload.damage_die,name="Venom arrow",cause_id=payload.item_id,
+                        bonus=ModifiableValue.create(source_entity_uuid=source_entity.uuid,
+                            base_value=0,value_name="Venom payload"))
 
                 damage_rolls = [
                     packet.final_roll
@@ -2387,8 +2476,10 @@ class Attack(BaseAction):
         if source is None or not source.action_economy.grant_attack_batch(execution.lineage_uuid):
             return
         if "ExtraAttacksGranted" not in source.active_conditions:
-            source.add_condition(ExtraAttacksGranted(source_entity_uuid=source.uuid,
-                target_entity_uuid=source.uuid), parent_event=declaration)
+            source.add_condition(
+                ExtraAttacksGranted(source_entity_uuid=source.uuid, target_entity_uuid=source.uuid),
+                parent_event=declaration,
+            )
 
     def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
         """Create the declaration event for the attack action."""
@@ -2408,12 +2499,18 @@ class Attack(BaseAction):
             event = event.model_copy(update={"natural_weapon": natural, "range": natural.range,
                 "weapon_name": natural.name, "attack_source_kind": "natural",
                 "source_item_uuid": None, "source_item_presentation": None,
-                "damage_types": [natural.damage_type]})
-        return event.model_copy(update={"additional_damages": list(self.additional_damages),
+                "damage_types": [natural.damage_type], "attack_is_magical": natural.magical})
+        ammunition = self.selected_ammunition() if self.selected_ammunition_uuid else None
+        return event.model_copy(update={"selected_ammunition_uuid":self.selected_ammunition_uuid,
+            "ammunition_payload":ammunition.attack_ammunition_payload if ammunition else None,
+            "additional_damages": list(self.additional_damages),
             "damage_types": list(dict.fromkeys([*event.damage_types, *(damage.damage_type for damage in self.additional_damages)]))})
 
     def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
         """Validate range, line of sight, and ranged-attack conditions."""
+        source = Entity.get(self.source_entity_uuid)
+        if source is None or not Attack.equipped_source_is_eligible(declaration_event, source):
+            return declaration_event.cancel(status_message="Declared weapon or hand permission is unavailable")
         range_validated_event = Attack.validate_range(declaration_event, self.source_entity_uuid)
         if range_validated_event is None:
             return declaration_event.cancel(status_message=f"Range validation returned None for {self.name}")
@@ -2445,7 +2542,39 @@ class Attack(BaseAction):
 
     def _apply_costs(self, execution_event: AttackEvent) -> Optional[AttackEvent]:
         """Commit attack costs before execution is published."""
+        source = Entity.get(self.source_entity_uuid)
+        if source is None or not Attack.equipped_source_is_eligible(execution_event, source):
+            return execution_event.cancel(status_message="Declared weapon or hand permission is no longer available")
+        ammunition = self.selected_ammunition() if self.selected_ammunition_uuid else None
+        if self.selected_ammunition_uuid is not None and ammunition is None:
+            return execution_event.cancel(status_message="Selected arrow is unavailable or incompatible")
         return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
+
+    def _prepare_item_charge(self, execution_event: ActionEvent,
+            declaration_event: ActionEvent) -> tuple[ActionEvent, Event | None]:
+        execution_event, prepared_item_charge = super()._prepare_item_charge(execution_event, declaration_event)
+        if execution_event.canceled:
+            return execution_event, prepared_item_charge
+        ammunition = self.selected_ammunition() if self.selected_ammunition_uuid else None
+        if self.selected_ammunition_uuid is not None and ammunition is None:
+            return execution_event.cancel(status_message="Selected arrow is unavailable or incompatible"), prepared_item_charge
+        self._prepared_ammunition = None
+        if ammunition is not None:
+            prepared = ammunition.prepare_ammunition_release(self.source_entity_uuid, declaration_event)
+            if prepared is None or prepared.canceled or self.selected_ammunition() is None:
+                return execution_event.cancel(status_message="Arrow release admission canceled"), prepared_item_charge
+            self._prepared_ammunition = prepared
+        return execution_event, prepared_item_charge
+
+    def _commit_release_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        if self.selected_ammunition_uuid is None:
+            return execution_event
+        ammunition = self.selected_ammunition()
+        if ammunition is None or self._prepared_ammunition is None:
+            return execution_event.cancel(status_message="Selected arrow lost before release")
+        if not ammunition.commit_ammunition_release(self._prepared_ammunition):
+            return execution_event.cancel(status_message="Arrow release canceled")
+        return execution_event
 
     def apply(self, parent_event: Optional[Event] = None) -> Optional[AttackEvent]:
         """Override to provide specific return type."""
@@ -3323,7 +3452,7 @@ class Jump(BaseAction):
 
         action_range = self.get_range()
         max_range = action_range.normal if action_range else 15
-        movement_available = entity.action_economy.movement.normalized_score
+        movement_available = entity.action_economy.movement_remaining()
         grid = get_map()
         valid: List[Tuple[int, int]] = []
 
@@ -3494,7 +3623,7 @@ class Jump(BaseAction):
                 step_source_cursor_start = EventQueue.event_cursor()
 
                 step_cost_feet = 5
-                remaining_movement = source_entity.action_economy.movement.normalized_score
+                remaining_movement = source_entity.action_economy.movement_remaining()
                 if remaining_movement < step_cost_feet:
                     break
 
@@ -3541,7 +3670,7 @@ class Jump(BaseAction):
                         parent_event=processed_step.uuid, occupancy_layer=OccupancyLayer.AIR,
                     )
                     if (not source_entity.can_take_actions()
-                            or source_entity.action_economy.movement.normalized_score < step_cost_feet):
+                            or source_entity.action_economy.movement_remaining() < step_cost_feet):
                         interrupted_by_condition = True
                         processed_step.phase_to(EventPhase.COMPLETION, committed=False)
                         break

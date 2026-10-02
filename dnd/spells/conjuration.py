@@ -30,6 +30,7 @@ from dnd.core.base_actions import (
     TargetType,
     TopologyEffectProfile,
 )
+from dnd.core.aoe import AoEShape, Sphere
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -125,7 +126,7 @@ class CallLightningStrike(BaseAction):
     """
     name: str = Field(default="Call Lightning Strike", description="Display name for the call lightning strike action.")
     description: str = Field(default="Call down a bolt of lightning", description="Rules-facing summary for the call lightning strike action.")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for call lightning strike.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for call lightning strike.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Strike Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="Action economy costs paid to execute call lightning strike.")
 
     spell_dc: int = Field(default=10, description="Spell save DC used by call lightning strike saving throws.")
@@ -136,48 +137,35 @@ class CallLightningStrike(BaseAction):
         description="Range contract used when validating targets for call lightning strike.",
     )
 
-    def _create_event(self) -> Event:
-        """Create a generic action event."""
-        return Event(
-            name=self.name,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            event_type=EventType.CAST_SPELL,
-            phase=EventPhase.DECLARATION
-        )
+    include_self: bool = True
+    valid_target_filter: str = "all"
 
-    def _validate(self, declaration_event: Event) -> Optional[Event]:
-        """Validate target is in range and LOS."""
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.end_position is None and self.target_entity_uuid is not None:
+            target = Entity.get(self.target_entity_uuid)
+            if target is not None:
+                self.end_position = target.position
+        if self.aoe_shape is None:
+            self.aoe_shape = Sphere(source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (0, 0), radius_feet=5)
 
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        return self._resolve_area_targets()
+
+    def get_range(self) -> Range:
+        return self.spell_range
+
+    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not caster or not target:
-            return declaration_event.cancel(status_message="Caster or target not found")
-
-        if "Concentrating" not in caster.active_conditions:
-            return declaration_event.cancel(status_message="Not concentrating on Call Lightning")
-
+        if caster is None or self.end_position is None:
+            return declaration_event.cancel(status_message="Caster or strike point missing")
         conc = caster.active_conditions.get("Concentrating")
         if not isinstance(conc, Concentrating) or conc.get_slot_by_spell_name("Call Lightning") is None:
             return declaration_event.cancel(status_message="Not concentrating on Call Lightning")
+        return super()._validate(declaration_event)
 
-        contact = caster.senses.entities.get(target.uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not in line of sight")
-
-        distance = caster.senses.get_feet_distance(target.position)
-        if distance > self.spell_range.normal:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.spell_range.normal}ft)"
-            )
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
-
-    def _apply(self, execution_event: Event) -> Optional[Event]:
+    def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
         """Strike with lightning - DEX save for half damage."""
 
         caster = Entity.get(self.source_entity_uuid)
@@ -225,6 +213,7 @@ class CallLightningStrike(BaseAction):
         return effect_event.with_updates(
             damages=[lightning_damage],
             damage_rolls=[damage_roll],
+            total_damage=final_damage,
             status_message=f"{self.name} dealt {final_damage} lightning damage{save_text}"
         )
 
@@ -254,7 +243,7 @@ class CallLightning(SpellAction):
     spell_level: int = Field(default=3, description="Spell slot level required to cast call lightning; cantrips use 0.")
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify call lightning.")
     concentration: bool = Field(default=True, description="Whether call lightning creates and maintains a concentration condition.")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for call lightning.")
+    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for call lightning.")
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
         description="Range contract used when validating targets for call lightning.",
@@ -262,29 +251,26 @@ class CallLightning(SpellAction):
     projectile_type: Optional[str] = Field(default="bolt", description="Projectile visualization hint for call lightning.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.LIGHTNING, description="Primary damage type for VFX")
 
+    include_self: bool = True
+    valid_target_filter: str = "all"
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.end_position is None and self.target_entity_uuid is not None:
+            target = Entity.get(self.target_entity_uuid)
+            if target is not None:
+                self.end_position = target.position
+        if self.aoe_shape is None:
+            self.aoe_shape = Sphere(source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (0, 0), radius_feet=5)
+
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        return self._resolve_area_targets()
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate range and line of sight."""
-
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        distance = self.get_target_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        if Entity.get(self.source_entity_uuid) is None or self.end_position is None:
+            return declaration_event.cancel(status_message="Caster or strike point missing")
+        return type_cast(Optional[SpellEvent], super()._validate(declaration_event))
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Cast Call Lightning - initial strike + grant repeatable action."""
@@ -340,6 +326,22 @@ class CallLightning(SpellAction):
             parent_event=effect_event.uuid
         )
 
+
+        save_text = " (save for half)" if success else ""
+        return effect_event.with_updates(
+            damages=[lightning_damage],
+            damage_rolls=[damage_roll],
+            total_damage=final_damage,
+            status_message=f"{self.name} dealt {final_damage} lightning damage{save_text}"
+        )
+
+    def _finalize_aoe(self, effect_event: ActionEvent) -> None:
+        """Grant one repeat action even when the initial area is empty."""
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return
+        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+        damage_dice_count = 3 + self.get_upcast_bonus()
         strike_action = CallLightningStrike(
             source_entity_uuid=caster.uuid,
             spell_dc=dc,
@@ -358,12 +360,6 @@ class CallLightning(SpellAction):
         caster.add_condition(marker, parent_event=effect_event)
         concentration.add_linked_condition(caster.uuid, marker.uuid)
 
-        save_text = " (save for half)" if success else ""
-        return effect_event.with_updates(
-            damages=[lightning_damage],
-            damage_rolls=[damage_roll],
-            status_message=f"{self.name} dealt {final_damage} lightning damage{save_text} - can strike again each turn"
-        )
 
 class PoisonSpray(SpellAction):
     """Poison Spray - Conjuration Cantrip
@@ -3105,6 +3101,7 @@ class DaylightZone(AreaCondition):
 
     sets_light_level: Optional[LightLevel] = Field(default=LightLevel.VERY_BRIGHT, description="Light level applied to affected tiles by daylight zone.")
     light_is_obscurement: bool = Field(default=False, description="Whether daylight zone blocks sight through its light level.")
+    has_visible_presence: bool = True
 
 
 def _is_daylight_targetable_darkness(position: Tuple[int, int]) -> bool:

@@ -1,0 +1,270 @@
+{
+  "schema": "dnd.spellStudioDrafts",
+  "version": 3,
+  "spells": [
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.beacon_of_hope",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 14003810,
+        "secondary": 16049592,
+        "tertiary": 4534354
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 11,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/healing-spells/aid/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 14003810,
+            "secondary": 16049592,
+            "tertiary": 4534354,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "media": [],
+      "contact": {
+        "delayMs": 0
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.daylight",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 14992773,
+        "secondary": 16313285,
+        "tertiary": 5719121
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 11,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/healing-spells/aid/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 14992773,
+            "secondary": 16313285,
+            "tertiary": 5719121,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "media": [],
+      "contact": {
+        "delayMs": 0
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.mass_healing_word",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 7388105,
+        "secondary": 12119014,
+        "tertiary": 3160405
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 11,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/healing-spells/aid/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 7388105,
+            "secondary": 12119014,
+            "tertiary": 3160405,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "media": [
+        {
+          "id": "mass_healing_word.back",
+          "assetId": "divine.mass_healing_word.finite.back",
+          "attachment": "target_ground",
+          "fps": 32,
+          "scale": 0.5,
+          "viewFacing": "E",
+          "depth": "behind_body"
+        },
+        {
+          "id": "mass_healing_word.front",
+          "assetId": "divine.mass_healing_word.finite.front",
+          "attachment": "target_ground",
+          "fps": 32,
+          "scale": 0.5,
+          "viewFacing": "E",
+          "depth": "front_body"
+        }
+      ],
+      "contact": {
+        "delayMs": 656.25
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.divine_word",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 14858086,
+        "secondary": 16312503,
+        "tertiary": 5059639
+      },
+      "cast": {
+        "actionClip": "Special1",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 11,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/healing-spells/aid/cast.png",
+          "colors": {
+            "source": "override",
+            "primary": 14858086,
+            "secondary": 16312503,
+            "tertiary": 5059639,
+            "mode": "multiTint"
+          }
+        },
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "media": [
+        {
+          "id": "divine_word.back",
+          "assetId": "divine.divine_word.finite.back",
+          "attachment": "target_ground",
+          "fps": 32,
+          "scale": 0.5,
+          "viewFacing": "E",
+          "depth": "behind_body"
+        },
+        {
+          "id": "divine_word.front",
+          "assetId": "divine.divine_word.finite.front",
+          "attachment": "target_ground",
+          "fps": 32,
+          "scale": 0.5,
+          "viewFacing": "E",
+          "depth": "front_body"
+        },
+        {
+          "id": "proclamation.back",
+          "assetId": "divine.divine_proclamation.finite.back",
+          "attachment": "source_ground",
+          "fps": 32,
+          "scale": 0.5,
+          "viewFacing": "E",
+          "depth": "behind_body"
+        },
+        {
+          "id": "proclamation.front",
+          "assetId": "divine.divine_proclamation.finite.front",
+          "attachment": "source_ground",
+          "fps": 32,
+          "scale": 0.5,
+          "viewFacing": "E",
+          "depth": "front_body"
+        }
+      ],
+      "contact": {
+        "delayMs": 906.25
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    }
+  ]
+}

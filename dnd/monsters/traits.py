@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 from typing import Callable, Literal, Optional, Tuple, List
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from dnd.types.physical_access import PhysicalAccess
 from pydantic import Field
 from pydantic_core import PydanticUndefined
 
-from dnd.core.attack_types import NaturalWeaponSpec
+from dnd.core.attack_types import NaturalWeaponSpec, AttackAmmunitionMetadata
 from dnd.blocks.base_item import BaseItem
-from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, Move, build_weapon_attack_outcome_profile, entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
+from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, Move, entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
 from dnd.blocks.equipment import Damage
 from dnd.conditions import Paralyzed, Prone
 from dnd.core.base_actions import (
@@ -525,17 +525,70 @@ class MultiattackAction(BaseAction):
     action_category: ActionCategory = Field(default=ActionCategory.ATTACK, description="Attack category.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Multiattack Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="One action cost.")
     attack_sequence: tuple[tuple[WeaponSlot, int], ...] = Field(default_factory=tuple, description="Weapon slots and counts.")
+    selected_ammunition_uuid: UUID | None = None
+    attack_substitution: Attack | None = None
+    substitution_slot: WeaponSlot | None = None
+    substitution_item_id: str | None = None
+    use_attack_substitution: bool = False
+
+    def _substitution_available(self, actor: Entity) -> bool:
+        slot = self.substitution_slot
+        weapon = actor.equipment.get_weapon(slot) if slot else None
+        return (self.attack_substitution is not None and weapon is not None
+            and weapon.item_id == self.substitution_item_id and weapon.range.type is RangeType.REACH
+            and any(entry_slot == slot and count > 0 for entry_slot,count in self.attack_sequence))
+
+    def get_discovery_variants(self, entity: object) -> list[BaseAction]:
+        if not isinstance(entity, Entity):
+            return []
+        variants = super().get_discovery_variants(entity)
+        if self._substitution_available(entity) and not self.use_attack_substitution:
+            variants += [variant.model_copy(deep=True, update={"uuid":uuid4(),
+                "use_attack_substitution":True, "name":f"{self.name} (Life Drain)",
+                "registered_template_uuid":self.registered_template_uuid or self.uuid}) for variant in tuple(variants)]
+        result = list(variants)
+        ranged_count = sum(count for slot,count in self.attack_sequence if slot is WeaponSlot.RANGED_MAIN)
+        if ranged_count > 0 and self.selected_ammunition_uuid is None:
+            for variant in variants:
+                for item in entity.inventory.items.values():
+                    attack = Attack(source_entity_uuid=entity.uuid,weapon_slot=WeaponSlot.RANGED_MAIN,
+                        selected_ammunition_uuid=item.uuid,costs=[],use_register=False)
+                    if item.stack_count >= ranged_count and attack.selected_ammunition() is not None:
+                        result.append(variant.model_copy(deep=True, update={"uuid":uuid4(),
+                            "selected_ammunition_uuid":item.uuid,"name":f"{variant.name}: {item.name}",
+                            "registered_template_uuid":self.registered_template_uuid or self.uuid}))
+        return result
+
+    def _selected_attacks(self) -> list[Attack]:
+        result: list[Attack] = []
+        substituted = False
+        for slot,count in self.attack_sequence:
+            for _ in range(count):
+                if self.use_attack_substitution and not substituted and slot == self.substitution_slot and self.attack_substitution:
+                    result.append(self.attack_substitution.model_copy(deep=True,update={"uuid":uuid4(),
+                        "source_entity_uuid":self.source_entity_uuid,"target_entity_uuid":self.target_entity_uuid,
+                        "costs":[],"template":False,"use_register":False}))
+                    substituted = True
+                else:
+                    result.append(Attack(name=f"{self.name}: Attack",source_entity_uuid=self.source_entity_uuid,
+                        target_entity_uuid=self.target_entity_uuid,weapon_slot=slot,costs=[],use_register=False,
+                        selected_ammunition_uuid=self.selected_ammunition_uuid if slot is WeaponSlot.RANGED_MAIN else None))
+        return result
+
+    def get_attack_ammunition_metadata(self) -> AttackAmmunitionMetadata | None:
+        return next((metadata for attack in self._selected_attacks()
+            if (metadata := attack.get_attack_ammunition_metadata()) is not None), None)
 
     def get_outcome_profile(self, actor: object) -> Optional[ActionOutcomeProfile]:
         """Return a repeated-attack profile when every attack shares one shape."""
         if not isinstance(actor, Entity):
             return None
         profiles: list[ActionOutcomeProfile] = []
-        for slot, count in self.attack_sequence:
-            profile = build_weapon_attack_outcome_profile(actor, slot)
+        for attack in self._selected_attacks():
+            profile = attack.get_outcome_profile(actor)
             if profile is None:
                 return None
-            profiles.extend(profile for _ in range(count))
+            profiles.append(profile)
         if not profiles:
             return None
         first = profiles[0]
@@ -559,6 +612,17 @@ class MultiattackAction(BaseAction):
         return "No legal attacks for Multiattack"
 
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+        actor = Entity.get(self.source_entity_uuid)
+        if actor is None:
+            return declaration_event.cancel(status_message="Multiattack actor missing")
+        if self.use_attack_substitution and not self._substitution_available(actor):
+            return declaration_event.cancel(status_message="Selected Multiattack substitution unavailable")
+        if self.selected_ammunition_uuid is not None:
+            item = actor.inventory.items.get(self.selected_ammunition_uuid)
+            children = [attack for attack in self._selected_attacks() if attack.selected_ammunition_uuid]
+            if (not children or item is None or item.stack_count < len(children)
+                    or any(attack.selected_ammunition() is None for attack in children)):
+                return declaration_event.cancel(status_message="Selected arrows cannot pay the ranged Multiattack")
         return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Multiattack validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -567,20 +631,11 @@ class MultiattackAction(BaseAction):
         if actor is None or not isinstance(target, (Entity, BaseItem)):
             return execution_event.cancel(status_message="Multiattack actor or target missing")
         effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} uses {self.name}")
-        for slot, count in self.attack_sequence:
-            for _ in range(count):
-                if target.get_hp() <= 0:
-                    break
-                attack = Attack(
-                    name=f"{self.name}: Attack",
-                    source_entity_uuid=actor.uuid,
-                    target_entity_uuid=target.uuid,
-                    weapon_slot=slot,
-                    costs=[],
-                    use_register=False,
-                )
-                if attack.pre_validate():
-                    attack.apply(parent_event=effect_event)
+        for attack in self._selected_attacks():
+            if target.get_hp() <= 0:
+                break
+            if attack.pre_validate():
+                attack.apply(parent_event=effect_event)
         return effect_event.with_updates(status_message=f"{self.name} completed")
 
     def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
@@ -594,6 +649,9 @@ class NaturalAttack(Attack):
     weapon_slot: WeaponSlot = Field(default=WeaponSlot.MELEE_MAIN, description="Proxy slot used by attack plumbing.")
     natural_damage_dice: DamageDieValue = Field(default=4, description="Natural weapon die size.")
     natural_dice_numbers: int = Field(default=1, description="Number of natural weapon dice.")
+    magical: bool = False
+    fixed_attack_bonus: int | None = None
+    fixed_damage_bonus: int | None = None
     natural_damage_type: DamageType = Field(default=DamageType.PIERCING, description="Natural weapon damage type.")
     natural_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Natural weapon range.")
 
@@ -603,7 +661,8 @@ class NaturalAttack(Attack):
     def get_natural_weapon(self) -> NaturalWeaponSpec:
         return NaturalWeaponSpec(name=self.name, dice_numbers=self.natural_dice_numbers,
             damage_dice=self.natural_damage_dice, damage_type=self.natural_damage_type,
-            range=self.natural_range)
+            range=self.natural_range, magical=self.magical, fixed_attack_bonus=self.fixed_attack_bonus,
+            fixed_damage_bonus=self.fixed_damage_bonus)
 
     def get_outcome_profile(self, actor: object) -> Optional[ActionOutcomeProfile]:
         profile = super().get_outcome_profile(actor)

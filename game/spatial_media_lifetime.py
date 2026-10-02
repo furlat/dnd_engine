@@ -72,7 +72,9 @@ def register_spatial_lifetimes(
     """Cold acquisition sustains; only witnessed creation/removal animates."""
     observed = _observed(before, data)
     result = {owner: record for owner, record in retained.items()
-        if owner in observed or (record.removed_ms is not None and absolute_start_ms
+        if owner in observed or (record.removed_ms is None and any(layer.wallAssembly is not None
+            for layer in data.spatial_media[record.effect.content_ref.content_id].layers))
+        or (record.removed_ms is not None and absolute_start_ms
             < record.removed_ms + maintained_removal_duration(data, data.spatial_media[record.effect.content_ref.content_id]))}
     for owner, effect in observed.items():
         result.setdefault(owner, SpatialMediaLifetime(effect))

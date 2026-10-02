@@ -160,6 +160,7 @@ def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySam
                                badge_font: pygame.font.Font, camera: Camera, *,
                                condition_appearances: Mapping[str, ConditionAppearance] | None = None,
                                include_bodies: bool = True,
+                               actor_bounds: Mapping[str, pygame.Rect] | None = None,
                                ) -> tuple[AnimationDrawCommand, ...]:
     commands: list[tuple[int, AnimationDrawCommand]] = []
     # There is one displayed body per actor. A child's active gesture replaces
@@ -193,7 +194,8 @@ def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySam
                     media.staged_areas[node.event_uuid] = area
                 cast_media = replace(cast_media, area=area)
             drawn = animation_draw_commands(node.bound.timeline, current, cast_media, camera,
-                                             condition_appearances=condition_appearances, include_bodies=include_bodies)
+                                             condition_appearances=condition_appearances, include_bodies=include_bodies,
+                                             actor_bounds=actor_bounds)
         else:
             raise ValueError("choreography sample does not match its bound primitive")
         for body in current.bodies:

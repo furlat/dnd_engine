@@ -35,6 +35,7 @@
     "offhand",
     "weapon",
     "weaponGlow",
+    "cloak",
     "backpack",
     "beard",
     "head",
@@ -226,6 +227,9 @@
     "aura": [
       "Effect4",
       "Effect5"
+    ],
+    "cloak": [
+      "Bag1"
     ]
   },
   "HAIR_CATEGORIES": [

@@ -1,0 +1,3275 @@
+{
+  "resources": {},
+  "spells": {
+    "spell.call_lightning": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.call_lightning",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    }
+  },
+  "projectileStorage": {
+    "lightning.call_lightning.finite.back": {
+      "phases": {
+        "impact": {
+          "layers": [
+            {
+              "partsByFacing": {
+                "E": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        182,
+                        88
+                      ],
+                      "offset": [
+                        421,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        184,
+                        0,
+                        182,
+                        88
+                      ],
+                      "offset": [
+                        421,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        368,
+                        0,
+                        180,
+                        88
+                      ],
+                      "offset": [
+                        422,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        550,
+                        0,
+                        180,
+                        88
+                      ],
+                      "offset": [
+                        422,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        732,
+                        0,
+                        180,
+                        86
+                      ],
+                      "offset": [
+                        422,
+                        757
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        914,
+                        0,
+                        174,
+                        82
+                      ],
+                      "offset": [
+                        425,
+                        759
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        1090,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        1304,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        1518,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        1732,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        0,
+                        104,
+                        210,
+                        102
+                      ],
+                      "offset": [
+                        407,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        212,
+                        104,
+                        210,
+                        100
+                      ],
+                      "offset": [
+                        407,
+                        750
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "SE": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        182,
+                        88
+                      ],
+                      "offset": [
+                        421,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        184,
+                        0,
+                        182,
+                        88
+                      ],
+                      "offset": [
+                        421,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        368,
+                        0,
+                        180,
+                        88
+                      ],
+                      "offset": [
+                        422,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        550,
+                        0,
+                        180,
+                        88
+                      ],
+                      "offset": [
+                        422,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        732,
+                        0,
+                        180,
+                        86
+                      ],
+                      "offset": [
+                        422,
+                        757
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        914,
+                        0,
+                        174,
+                        82
+                      ],
+                      "offset": [
+                        425,
+                        759
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        1090,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        1304,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        1518,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        1732,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        0,
+                        104,
+                        210,
+                        102
+                      ],
+                      "offset": [
+                        407,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-back-0.png",
+                      "rect": [
+                        212,
+                        104,
+                        210,
+                        100
+                      ],
+                      "offset": [
+                        407,
+                        750
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "S": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        178,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        356,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        534,
+                        0,
+                        174,
+                        90
+                      ],
+                      "offset": [
+                        425,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        710,
+                        0,
+                        172,
+                        90
+                      ],
+                      "offset": [
+                        426,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        884,
+                        0,
+                        166,
+                        88
+                      ],
+                      "offset": [
+                        429,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        1052,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        1260,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        1468,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        1676,
+                        0,
+                        204,
+                        106
+                      ],
+                      "offset": [
+                        410,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        0,
+                        108,
+                        204,
+                        106
+                      ],
+                      "offset": [
+                        410,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        206,
+                        108,
+                        200,
+                        104
+                      ],
+                      "offset": [
+                        412,
+                        748
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "SW": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        178,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        356,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        534,
+                        0,
+                        174,
+                        90
+                      ],
+                      "offset": [
+                        425,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        710,
+                        0,
+                        172,
+                        90
+                      ],
+                      "offset": [
+                        426,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        884,
+                        0,
+                        166,
+                        88
+                      ],
+                      "offset": [
+                        429,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        1052,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        1260,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        1468,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        1676,
+                        0,
+                        204,
+                        106
+                      ],
+                      "offset": [
+                        410,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        0,
+                        108,
+                        204,
+                        106
+                      ],
+                      "offset": [
+                        410,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-back-0.png",
+                      "rect": [
+                        206,
+                        108,
+                        200,
+                        104
+                      ],
+                      "offset": [
+                        412,
+                        748
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "W": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        182,
+                        88
+                      ],
+                      "offset": [
+                        421,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        184,
+                        0,
+                        182,
+                        88
+                      ],
+                      "offset": [
+                        421,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        368,
+                        0,
+                        180,
+                        88
+                      ],
+                      "offset": [
+                        422,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        550,
+                        0,
+                        180,
+                        88
+                      ],
+                      "offset": [
+                        422,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        732,
+                        0,
+                        180,
+                        86
+                      ],
+                      "offset": [
+                        422,
+                        757
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        914,
+                        0,
+                        174,
+                        82
+                      ],
+                      "offset": [
+                        425,
+                        759
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        1090,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        1304,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        1518,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        1732,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        0,
+                        104,
+                        210,
+                        102
+                      ],
+                      "offset": [
+                        407,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        212,
+                        104,
+                        210,
+                        100
+                      ],
+                      "offset": [
+                        407,
+                        750
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "NW": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        182,
+                        88
+                      ],
+                      "offset": [
+                        421,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        184,
+                        0,
+                        182,
+                        88
+                      ],
+                      "offset": [
+                        421,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        368,
+                        0,
+                        180,
+                        88
+                      ],
+                      "offset": [
+                        422,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        550,
+                        0,
+                        180,
+                        88
+                      ],
+                      "offset": [
+                        422,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        732,
+                        0,
+                        180,
+                        86
+                      ],
+                      "offset": [
+                        422,
+                        757
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        914,
+                        0,
+                        174,
+                        82
+                      ],
+                      "offset": [
+                        425,
+                        759
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        1090,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        1304,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        1518,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        1732,
+                        0,
+                        212,
+                        102
+                      ],
+                      "offset": [
+                        406,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        0,
+                        104,
+                        210,
+                        102
+                      ],
+                      "offset": [
+                        407,
+                        749
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-back-0.png",
+                      "rect": [
+                        212,
+                        104,
+                        210,
+                        100
+                      ],
+                      "offset": [
+                        407,
+                        750
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "N": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        178,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        356,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        534,
+                        0,
+                        174,
+                        90
+                      ],
+                      "offset": [
+                        425,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        710,
+                        0,
+                        172,
+                        90
+                      ],
+                      "offset": [
+                        426,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        884,
+                        0,
+                        166,
+                        88
+                      ],
+                      "offset": [
+                        429,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        1052,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        1260,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        1468,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        1676,
+                        0,
+                        204,
+                        106
+                      ],
+                      "offset": [
+                        410,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        0,
+                        108,
+                        204,
+                        106
+                      ],
+                      "offset": [
+                        410,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        206,
+                        108,
+                        200,
+                        104
+                      ],
+                      "offset": [
+                        412,
+                        748
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "NE": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        178,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        356,
+                        0,
+                        176,
+                        90
+                      ],
+                      "offset": [
+                        424,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        534,
+                        0,
+                        174,
+                        90
+                      ],
+                      "offset": [
+                        425,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        710,
+                        0,
+                        172,
+                        90
+                      ],
+                      "offset": [
+                        426,
+                        755
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        884,
+                        0,
+                        166,
+                        88
+                      ],
+                      "offset": [
+                        429,
+                        756
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        1052,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        1260,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        1468,
+                        0,
+                        206,
+                        106
+                      ],
+                      "offset": [
+                        409,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        1676,
+                        0,
+                        204,
+                        106
+                      ],
+                      "offset": [
+                        410,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        0,
+                        108,
+                        204,
+                        106
+                      ],
+                      "offset": [
+                        410,
+                        747
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-back-0.png",
+                      "rect": [
+                        206,
+                        108,
+                        200,
+                        104
+                      ],
+                      "offset": [
+                        412,
+                        748
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "blendMode": "normal"
+            }
+          ]
+        }
+      }
+    },
+    "lightning.call_lightning.finite.front": {
+      "phases": {
+        "impact": {
+          "layers": [
+            {
+              "partsByFacing": {
+                "E": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        149,
+                        528
+                      ],
+                      "offset": [
+                        444,
+                        295
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        151,
+                        0,
+                        166,
+                        521
+                      ],
+                      "offset": [
+                        433,
+                        302
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        319,
+                        0,
+                        167,
+                        514
+                      ],
+                      "offset": [
+                        433,
+                        308
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        488,
+                        0,
+                        169,
+                        520
+                      ],
+                      "offset": [
+                        433,
+                        303
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        659,
+                        0,
+                        141,
+                        527
+                      ],
+                      "offset": [
+                        463,
+                        296
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        802,
+                        0,
+                        147,
+                        537
+                      ],
+                      "offset": [
+                        458,
+                        287
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        951,
+                        0,
+                        166,
+                        638
+                      ],
+                      "offset": [
+                        427,
+                        187
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        1119,
+                        0,
+                        184,
+                        655
+                      ],
+                      "offset": [
+                        419,
+                        174
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        1305,
+                        0,
+                        193,
+                        658
+                      ],
+                      "offset": [
+                        416,
+                        171
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        1500,
+                        0,
+                        194,
+                        658
+                      ],
+                      "offset": [
+                        415,
+                        171
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        1696,
+                        0,
+                        192,
+                        653
+                      ],
+                      "offset": [
+                        416,
+                        176
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        1890,
+                        0,
+                        126,
+                        658
+                      ],
+                      "offset": [
+                        448,
+                        171
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "SE": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        149,
+                        528
+                      ],
+                      "offset": [
+                        444,
+                        295
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        151,
+                        0,
+                        166,
+                        521
+                      ],
+                      "offset": [
+                        433,
+                        302
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        319,
+                        0,
+                        167,
+                        514
+                      ],
+                      "offset": [
+                        433,
+                        308
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        488,
+                        0,
+                        169,
+                        520
+                      ],
+                      "offset": [
+                        433,
+                        303
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        659,
+                        0,
+                        141,
+                        527
+                      ],
+                      "offset": [
+                        463,
+                        296
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        802,
+                        0,
+                        147,
+                        537
+                      ],
+                      "offset": [
+                        458,
+                        287
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        951,
+                        0,
+                        166,
+                        638
+                      ],
+                      "offset": [
+                        427,
+                        187
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        1119,
+                        0,
+                        184,
+                        655
+                      ],
+                      "offset": [
+                        419,
+                        174
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        1305,
+                        0,
+                        193,
+                        658
+                      ],
+                      "offset": [
+                        416,
+                        171
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        1500,
+                        0,
+                        194,
+                        658
+                      ],
+                      "offset": [
+                        415,
+                        171
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        1696,
+                        0,
+                        192,
+                        653
+                      ],
+                      "offset": [
+                        416,
+                        176
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q0-front-0.png",
+                      "rect": [
+                        1890,
+                        0,
+                        126,
+                        658
+                      ],
+                      "offset": [
+                        448,
+                        171
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "S": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        138,
+                        529
+                      ],
+                      "offset": [
+                        447,
+                        295
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        140,
+                        0,
+                        158,
+                        534
+                      ],
+                      "offset": [
+                        433,
+                        291
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        300,
+                        0,
+                        158,
+                        535
+                      ],
+                      "offset": [
+                        433,
+                        290
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        460,
+                        0,
+                        157,
+                        534
+                      ],
+                      "offset": [
+                        433,
+                        291
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        619,
+                        0,
+                        143,
+                        532
+                      ],
+                      "offset": [
+                        444,
+                        293
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        764,
+                        0,
+                        119,
+                        528
+                      ],
+                      "offset": [
+                        458,
+                        296
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        885,
+                        0,
+                        207,
+                        638
+                      ],
+                      "offset": [
+                        388,
+                        189
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        1094,
+                        0,
+                        209,
+                        639
+                      ],
+                      "offset": [
+                        396,
+                        188
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        1305,
+                        0,
+                        209,
+                        640
+                      ],
+                      "offset": [
+                        399,
+                        187
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        1516,
+                        0,
+                        216,
+                        640
+                      ],
+                      "offset": [
+                        393,
+                        187
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        1734,
+                        0,
+                        210,
+                        639
+                      ],
+                      "offset": [
+                        390,
+                        188
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        0,
+                        642,
+                        213,
+                        640
+                      ],
+                      "offset": [
+                        388,
+                        187
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "SW": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        138,
+                        529
+                      ],
+                      "offset": [
+                        447,
+                        295
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        140,
+                        0,
+                        158,
+                        534
+                      ],
+                      "offset": [
+                        433,
+                        291
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        300,
+                        0,
+                        158,
+                        535
+                      ],
+                      "offset": [
+                        433,
+                        290
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        460,
+                        0,
+                        157,
+                        534
+                      ],
+                      "offset": [
+                        433,
+                        291
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        619,
+                        0,
+                        143,
+                        532
+                      ],
+                      "offset": [
+                        444,
+                        293
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        764,
+                        0,
+                        119,
+                        528
+                      ],
+                      "offset": [
+                        458,
+                        296
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        885,
+                        0,
+                        207,
+                        638
+                      ],
+                      "offset": [
+                        388,
+                        189
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        1094,
+                        0,
+                        209,
+                        639
+                      ],
+                      "offset": [
+                        396,
+                        188
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        1305,
+                        0,
+                        209,
+                        640
+                      ],
+                      "offset": [
+                        399,
+                        187
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        1516,
+                        0,
+                        216,
+                        640
+                      ],
+                      "offset": [
+                        393,
+                        187
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        1734,
+                        0,
+                        210,
+                        639
+                      ],
+                      "offset": [
+                        390,
+                        188
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q1-front-0.png",
+                      "rect": [
+                        0,
+                        642,
+                        213,
+                        640
+                      ],
+                      "offset": [
+                        388,
+                        187
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "W": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        147,
+                        536
+                      ],
+                      "offset": [
+                        431,
+                        287
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        149,
+                        0,
+                        166,
+                        545
+                      ],
+                      "offset": [
+                        425,
+                        280
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        317,
+                        0,
+                        167,
+                        546
+                      ],
+                      "offset": [
+                        424,
+                        279
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        486,
+                        0,
+                        169,
+                        545
+                      ],
+                      "offset": [
+                        422,
+                        280
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        657,
+                        0,
+                        139,
+                        541
+                      ],
+                      "offset": [
+                        420,
+                        283
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        798,
+                        0,
+                        147,
+                        533
+                      ],
+                      "offset": [
+                        419,
+                        290
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        947,
+                        0,
+                        164,
+                        659
+                      ],
+                      "offset": [
+                        431,
+                        170
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        1113,
+                        0,
+                        184,
+                        657
+                      ],
+                      "offset": [
+                        421,
+                        172
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        1299,
+                        0,
+                        192,
+                        649
+                      ],
+                      "offset": [
+                        416,
+                        180
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        1493,
+                        0,
+                        194,
+                        635
+                      ],
+                      "offset": [
+                        415,
+                        190
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        1689,
+                        0,
+                        193,
+                        639
+                      ],
+                      "offset": [
+                        416,
+                        186
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        1884,
+                        0,
+                        126,
+                        637
+                      ],
+                      "offset": [
+                        450,
+                        188
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "NW": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        147,
+                        536
+                      ],
+                      "offset": [
+                        431,
+                        287
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        149,
+                        0,
+                        166,
+                        545
+                      ],
+                      "offset": [
+                        425,
+                        280
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        317,
+                        0,
+                        167,
+                        546
+                      ],
+                      "offset": [
+                        424,
+                        279
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        486,
+                        0,
+                        169,
+                        545
+                      ],
+                      "offset": [
+                        422,
+                        280
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        657,
+                        0,
+                        139,
+                        541
+                      ],
+                      "offset": [
+                        420,
+                        283
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        798,
+                        0,
+                        147,
+                        533
+                      ],
+                      "offset": [
+                        419,
+                        290
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        947,
+                        0,
+                        164,
+                        659
+                      ],
+                      "offset": [
+                        431,
+                        170
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        1113,
+                        0,
+                        184,
+                        657
+                      ],
+                      "offset": [
+                        421,
+                        172
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        1299,
+                        0,
+                        192,
+                        649
+                      ],
+                      "offset": [
+                        416,
+                        180
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        1493,
+                        0,
+                        194,
+                        635
+                      ],
+                      "offset": [
+                        415,
+                        190
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        1689,
+                        0,
+                        193,
+                        639
+                      ],
+                      "offset": [
+                        416,
+                        186
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q2-front-0.png",
+                      "rect": [
+                        1884,
+                        0,
+                        126,
+                        637
+                      ],
+                      "offset": [
+                        450,
+                        188
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "N": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        140,
+                        529
+                      ],
+                      "offset": [
+                        439,
+                        294
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        142,
+                        0,
+                        156,
+                        523
+                      ],
+                      "offset": [
+                        434,
+                        299
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        300,
+                        0,
+                        158,
+                        518
+                      ],
+                      "offset": [
+                        433,
+                        304
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        460,
+                        0,
+                        157,
+                        522
+                      ],
+                      "offset": [
+                        433,
+                        300
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        619,
+                        0,
+                        124,
+                        528
+                      ],
+                      "offset": [
+                        437,
+                        294
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        745,
+                        0,
+                        121,
+                        535
+                      ],
+                      "offset": [
+                        446,
+                        288
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        868,
+                        0,
+                        209,
+                        642
+                      ],
+                      "offset": [
+                        427,
+                        185
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        1079,
+                        0,
+                        210,
+                        642
+                      ],
+                      "offset": [
+                        418,
+                        185
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        1291,
+                        0,
+                        209,
+                        637
+                      ],
+                      "offset": [
+                        416,
+                        190
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        1502,
+                        0,
+                        216,
+                        634
+                      ],
+                      "offset": [
+                        415,
+                        193
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        1720,
+                        0,
+                        201,
+                        635
+                      ],
+                      "offset": [
+                        433,
+                        192
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        0,
+                        644,
+                        213,
+                        635
+                      ],
+                      "offset": [
+                        423,
+                        192
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "NE": [
+                  [],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        0,
+                        0,
+                        140,
+                        529
+                      ],
+                      "offset": [
+                        439,
+                        294
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        142,
+                        0,
+                        156,
+                        523
+                      ],
+                      "offset": [
+                        434,
+                        299
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        300,
+                        0,
+                        158,
+                        518
+                      ],
+                      "offset": [
+                        433,
+                        304
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        460,
+                        0,
+                        157,
+                        522
+                      ],
+                      "offset": [
+                        433,
+                        300
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        619,
+                        0,
+                        124,
+                        528
+                      ],
+                      "offset": [
+                        437,
+                        294
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        745,
+                        0,
+                        121,
+                        535
+                      ],
+                      "offset": [
+                        446,
+                        288
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        868,
+                        0,
+                        209,
+                        642
+                      ],
+                      "offset": [
+                        427,
+                        185
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        1079,
+                        0,
+                        210,
+                        642
+                      ],
+                      "offset": [
+                        418,
+                        185
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        1291,
+                        0,
+                        209,
+                        637
+                      ],
+                      "offset": [
+                        416,
+                        190
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        1502,
+                        0,
+                        216,
+                        634
+                      ],
+                      "offset": [
+                        415,
+                        193
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        1720,
+                        0,
+                        201,
+                        635
+                      ],
+                      "offset": [
+                        433,
+                        192
+                      ]
+                    }
+                  ],
+                  [
+                    {
+                      "file": "game/assets/lightning_media/call-lightning/q3-front-0.png",
+                      "rect": [
+                        0,
+                        644,
+                        213,
+                        635
+                      ],
+                      "offset": [
+                        423,
+                        192
+                      ]
+                    }
+                  ],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ]
+              },
+              "blendMode": "normal"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "actionDeliveries": {
+    "action.spell.call_lightning.strike": "spell.call_lightning"
+  }
+}

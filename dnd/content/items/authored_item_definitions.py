@@ -78,6 +78,7 @@ class WeaponDefinition:
     equipped_visual_policy: EquippedVisualPolicy = EquippedVisualPolicy.VISIBLE
     item_properties: tuple[ItemProperty, ...] = ()
     intrinsic: bool = False
+    supports_arrow_payload: bool = False
     damage_die: Literal[4, 6, 8, 10, 12, 20] = 4
     damage_dice_count: int = 1
     damage_type: DamageType = DamageType.BLUDGEONING
@@ -457,7 +458,7 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.HEAVY,
             WeaponProperty.MARTIAL,
         ),
-        range_kind="range",
+        supports_arrow_payload=True, range_kind="range",
         normal_range_feet=150,
         long_range_feet=600,
     ),
@@ -510,7 +511,7 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.RANGED,
             WeaponProperty.TWO_HANDED,
         ),
-        range_kind="range",
+        supports_arrow_payload=True, range_kind="range",
         normal_range_feet=80,
         long_range_feet=320,
     ),
@@ -525,7 +526,7 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.SIMPLE,
             WeaponProperty.TWO_HANDED,
         ),
-        range_kind="range",
+        supports_arrow_payload=True, range_kind="range",
         normal_range_feet=80,
         long_range_feet=320,
     ),
@@ -541,7 +542,7 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.RANGED,
             WeaponProperty.TWO_HANDED,
         ),
-        range_kind="range",
+        supports_arrow_payload=True, range_kind="range",
         normal_range_feet=100,
         long_range_feet=400,
     ),
@@ -626,7 +627,7 @@ _AUTHORED_WEAPONS = (
         damage_die=6,
         damage_type=DamageType.PIERCING,
         properties=(WeaponProperty.RANGED,),
-        range_kind="range",
+        supports_arrow_payload=True, range_kind="range",
         normal_range_feet=30,
         long_range_feet=120,
     ),
@@ -762,6 +763,13 @@ AUTHORED_WEAPON_DEFINITIONS: Mapping[str, WeaponDefinition] = MappingProxyType({
 
 
 _AUTHORED_WEARABLES = (
+    WearableDefinition(
+        "apparel.cloak", "Cloak",
+        "An ordinary cloth cloak, without armor or magical bonuses.",
+        ("apparel", "cloth", "cloak"),
+        visual_item_name="Cloak",
+        wearable_kind="cloak", body_part=BodyPart.CLOAK,
+    ),
     WearableDefinition(
         "armor.padded", "Padded Armor",
         "Quilted layers of cloth and batting.",

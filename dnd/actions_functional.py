@@ -146,7 +146,7 @@ def _create_prone_auto_stand_handler(entity_uuid: UUID) -> EventHandler:
 
         base_movement = entity.action_economy.get_base_value("movement")
         half_movement = base_movement // 2
-        current_movement = entity.action_economy.movement.normalized_score
+        current_movement = entity.action_economy.movement_remaining()
         if current_movement < half_movement:
             return None
         entity.action_economy.consume("movement", half_movement)
@@ -357,7 +357,7 @@ def _disclosed_movement_path(
     Returns:
         The exact path to bind, or `None` when discovery supplied no path.
     """
-    movement_remaining = entity.action_economy.movement.normalized_score
+    movement_remaining = entity.action_economy.movement_remaining()
     if (
         prefer_safe
         and target.safe_path is not None

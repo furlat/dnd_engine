@@ -1765,7 +1765,7 @@ class CommandFleeEffect(CommandNextTurnEffect):
         if isinstance(caster, Entity):
             path_distance = max(
                 0,
-                (target.action_economy.movement.normalized_score + 4) // 5,
+                (target.action_economy.movement_remaining() + 4) // 5,
             )
             target.materialize_navigation(
                 max_distance=20,

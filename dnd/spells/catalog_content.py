@@ -37,6 +37,7 @@ import dnd.spells.illusion as illusion
 import dnd.spells.ice_knife as ice_knife
 import dnd.spells.necromancy as necromancy
 import dnd.spells.transmutation as transmutation
+import dnd.spells.roster_support as roster_support
 import dnd.spells.walls as walls
 import dnd.spells.wall_fields as wall_fields
 import dnd.spells.wall_constructions as wall_constructions
@@ -174,6 +175,12 @@ def _catalog(
 
 
 SPELL_CONTENT_IDENTITY_SPECS: tuple[SpellContentIdentitySpec, ...] = (
+    SpellContentIdentitySpec("Produce Flame", roster_support.ProduceFlame, SRD_SPELL_PACK_ID, "spell.produce_flame", "conjuration", 0, 171, 2200),
+    SpellContentIdentitySpec("Shillelagh", roster_support.Shillelagh, SRD_SPELL_PACK_ID, "spell.shillelagh", "transmutation", 0, 179, 2210),
+    SpellContentIdentitySpec("Longstrider", roster_support.Longstrider, SRD_SPELL_PACK_ID, "spell.longstrider", "transmutation", 1, 159, 2220),
+    SpellContentIdentitySpec("Barkskin", roster_support.Barkskin, SRD_SPELL_PACK_ID, "spell.barkskin", "transmutation", 2, 121, 2230),
+    SpellContentIdentitySpec("Fly", roster_support.Fly, SRD_SPELL_PACK_ID, "spell.fly", "transmutation", 3, 145, 2240),
+    SpellContentIdentitySpec("Fire Shield", roster_support.FireShield, SRD_SPELL_PACK_ID, "spell.fire_shield", "evocation", 4, 144, 2250),
     SpellContentIdentitySpec("Fire Bolt", evocation.FireBolt, SRD_SPELL_PACK_ID, "spell.fire_bolt", "evocation", 0, 144, 10),
     SpellContentIdentitySpec("Sacred Flame", evocation.SacredFlame, SRD_SPELL_PACK_ID, "spell.sacred_flame", "evocation", 0, 176, 20),
     SpellContentIdentitySpec("Poison Spray", conjuration.PoisonSpray, SRD_SPELL_PACK_ID, "spell.poison_spray", "conjuration", 0, 169, 30),
@@ -318,6 +325,12 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     tuple[type[SpellAction], SpellCatalogMetadata],
     ...,
 ] = (
+    (roster_support.ProduceFlame, _catalog('produce_flame', 'Hand flame; hurl30ft for1d8 fire, bright/dim10ft for10minutes.', 'entity', 'ranged', 30, 'single_projectile', projectile='bolt', damage=(DamageType.FIRE,), attack_roll=True, classes=('druid',))),
+    (roster_support.Shillelagh, _catalog('shillelagh', 'Bonus action: held club/staff becomes magical,d8 for1minute; optional casting ability.', 'self', 'self', 0, 'self', classes=('druid',))),
+    (roster_support.Longstrider, _catalog('longstrider', 'Touch: speed+10ft for1hour; upcast adds recipients.', 'multi_entity', 'touch', 5, 'touch', multi_target=_multi_target(1, 1, False), classes=('bard','druid','ranger','wizard'))),
+    (roster_support.Barkskin, _catalog('barkskin', 'Touch: AC floor16, concentration1hour.', 'entity', 'touch', 5, 'touch', concentration=True, classes=('druid','ranger'))),
+    (roster_support.Fly, _catalog('fly', 'Touch:60ft flying speed, concentration10minutes; ground-to-ground adaptation.', 'multi_entity', 'touch', 5, 'touch', concentration=True, multi_target=_multi_target(1, 1, False), classes=('sorcerer','warlock','wizard'))),
+    (roster_support.FireShield, _catalog('fire_shield', 'Warm/cold resistance,10ft light and2d8 melee retaliation for10minutes.', 'self', 'self', 0, 'self', classes=('wizard',))),
     (evocation.FireBolt, _catalog(
         'fire_bolt', 'Hurl a mote of fire at a target', 'entity', 'ranged', 120, 'single_projectile',
         projectile='bolt', damage=(DamageType.FIRE,), attack_roll=True, classes=('wizard', 'sorcerer', 'warlock'), tags=('fire', 'bolt'),
@@ -542,8 +555,8 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
         multi_target=_multi_target(1, 1, True),
     )),
     (conjuration.CallLightning, _catalog(
-        'call_lightning', 'Summon storm cloud, strike with lightning each turn', 'entity', 'ranged', 120, 'single_projectile',
-        projectile='bolt', damage=(DamageType.LIGHTNING,), saves=_saving_throws('dexterity'), concentration=True, tags=('lightning', 'bolt', 'concentration'),
+        'call_lightning', 'Summon storm cloud, strike a five-foot area each turn', 'position_aoe', 'ranged', 120, 'aoe',
+        area=_area('sphere', radius_ft=5), projectile='bolt', damage=(DamageType.LIGHTNING,), saves=_saving_throws('dexterity'), concentration=True, tags=('lightning', 'bolt', 'concentration'),
     )),
     (evocation.Fireball, _catalog(
         'fireball', '20ft radius explosion dealing 8d6 fire damage (DEX save half)', 'position_aoe', 'ranged', 150, 'aoe_projectile',
@@ -832,6 +845,9 @@ _SPELL_GRANTED_ACTION_TYPES_BY_CLASS: Mapping[
     type[SpellAction],
     tuple[type[object], ...],
 ] = MappingProxyType({
+    roster_support.ProduceFlame: (roster_support.HurlProduceFlame, roster_support.DismissProduceFlame),
+    roster_support.FireShield: (roster_support.DismissFireShield,),
+    roster_support.Fly: (roster_support.FlyingMovement,),
     conjuration.HeroesFeast: (
         conjuration.EatFromFeast,
     ),

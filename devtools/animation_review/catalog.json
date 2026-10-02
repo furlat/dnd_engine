@@ -13300,5 +13300,848 @@
     },
     "settled_hold_ms": 700,
     "tail_duration_ms": 1800
+  },
+  {
+    "id": "roster-items-transfer",
+    "title": "Roster gear \u00b7 palette, waist and cloak transfer",
+    "tags": [
+      "roster-items",
+      "item-transfer",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native ordinary scimitar receives an existing fire coating, changes legal hands, and transfers with a partial outfit and ordinary cloak through real drop/pickup/equip actions. Recipient is body-2; native blade damage and coating removal follow the existing rules. Colors use source-zone swaps. No roster-specific enchantment or character ability is inferred.",
+    "framing": "actors",
+    "tail_duration_ms": 1600,
+    "scenario": {
+      "kind": "item-transfer",
+      "initial_hand": "MELEE_MAIN",
+      "roster_outfit": true
+    },
+    "settled_hold_ms": 500
+  },
+  {
+    "id": "bestow-curse-1-lifecycle",
+    "title": "Bestow Curse \u00b7 Ability burden \u00b7 move and release",
+    "tags": [
+      "bestow-curse",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast and Wisdom saving throw. Source-owned mark follows movement and disappears when concentration ends.",
+    "scenario": {
+      "kind": "curse",
+      "option": 1,
+      "saved": false
+    },
+    "settled_hold_ms": 3000,
+    "tail_duration_ms": 2200,
+    "framing": "actors"
+  },
+  {
+    "id": "bestow-curse-1-resisted",
+    "title": "Bestow Curse \u00b7 Ability burden \u00b7 successful save",
+    "tags": [
+      "bestow-curse",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast and Wisdom saving throw. Successful save produces only the finite resisted mark.",
+    "scenario": {
+      "kind": "curse",
+      "option": 1,
+      "saved": true
+    },
+    "settled_hold_ms": 3000,
+    "tail_duration_ms": 2200,
+    "framing": "actors"
+  },
+  {
+    "id": "bestow-curse-2-lifecycle",
+    "title": "Bestow Curse \u00b7 Bent strike \u00b7 move and release",
+    "tags": [
+      "bestow-curse",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast and Wisdom saving throw. Source-owned mark follows movement and disappears when concentration ends.",
+    "scenario": {
+      "kind": "curse",
+      "option": 2,
+      "saved": false
+    },
+    "settled_hold_ms": 3000,
+    "tail_duration_ms": 2200,
+    "framing": "actors"
+  },
+  {
+    "id": "bestow-curse-2-resisted",
+    "title": "Bestow Curse \u00b7 Bent strike \u00b7 successful save",
+    "tags": [
+      "bestow-curse",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast and Wisdom saving throw. Successful save produces only the finite resisted mark.",
+    "scenario": {
+      "kind": "curse",
+      "option": 2,
+      "saved": true
+    },
+    "settled_hold_ms": 3000,
+    "tail_duration_ms": 2200,
+    "framing": "actors"
+  },
+  {
+    "id": "bestow-curse-3-lifecycle",
+    "title": "Bestow Curse \u00b7 Action denial \u00b7 move and release",
+    "tags": [
+      "bestow-curse",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast and Wisdom saving throw. Source-owned mark follows movement and disappears when concentration ends.",
+    "scenario": {
+      "kind": "curse",
+      "option": 3,
+      "saved": false
+    },
+    "settled_hold_ms": 3000,
+    "tail_duration_ms": 2200,
+    "framing": "actors"
+  },
+  {
+    "id": "bestow-curse-3-resisted",
+    "title": "Bestow Curse \u00b7 Action denial \u00b7 successful save",
+    "tags": [
+      "bestow-curse",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast and Wisdom saving throw. Successful save produces only the finite resisted mark.",
+    "scenario": {
+      "kind": "curse",
+      "option": 3,
+      "saved": true
+    },
+    "settled_hold_ms": 3000,
+    "tail_duration_ms": 2200,
+    "framing": "actors"
+  },
+  {
+    "id": "bestow-curse-4-lifecycle",
+    "title": "Bestow Curse \u00b7 Necrotic wound \u00b7 move and release",
+    "tags": [
+      "bestow-curse",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast and Wisdom saving throw. Source-owned mark follows movement and disappears when concentration ends.",
+    "scenario": {
+      "kind": "curse",
+      "option": 4,
+      "saved": false
+    },
+    "settled_hold_ms": 3000,
+    "tail_duration_ms": 2200,
+    "framing": "actors"
+  },
+  {
+    "id": "bestow-curse-4-resisted",
+    "title": "Bestow Curse \u00b7 Necrotic wound \u00b7 successful save",
+    "tags": [
+      "bestow-curse",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native cast and Wisdom saving throw. Successful save produces only the finite resisted mark.",
+    "scenario": {
+      "kind": "curse",
+      "option": 4,
+      "saved": true
+    },
+    "settled_hold_ms": 3000,
+    "tail_duration_ms": 2200,
+    "framing": "actors"
+  },
+  {
+    "id": "divine-beacon-of-hope",
+    "title": "Beacon of Hope \u00b7 selected blessing, movement and source release",
+    "tags": [
+      "divine-support",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native selected recipient gains a maintained blessing; an unselected bystander does not. Actual movement and concentration removal retain owner clocks.",
+    "scenario": {
+      "kind": "divine",
+      "program": "beacon_of_hope",
+      "multiple_targets": false
+    },
+    "settled_hold_ms": 3500,
+    "tail_duration_ms": 2500,
+    "framing": "actors"
+  },
+  {
+    "id": "divine-daylight",
+    "title": "Daylight \u00b7 compact light source and removal",
+    "tags": [
+      "divine-support",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native 60-foot illumination field with a compact visible source, followed by actual source removal. The orb does not represent damage or an opaque 60-foot bubble.",
+    "scenario": {
+      "kind": "divine",
+      "program": "daylight",
+      "multiple_targets": false
+    },
+    "settled_hold_ms": 3500,
+    "tail_duration_ms": 2500,
+    "framing": "actors"
+  },
+  {
+    "id": "divine-mass-healing-word",
+    "title": "Mass Healing Word \u00b7 two selected recipients",
+    "tags": [
+      "divine-support",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Two selected wounded recipients heal from one native cast; the unselected wounded bystander is unchanged. Healing feedback follows the authored contact peak.",
+    "scenario": {
+      "kind": "divine",
+      "program": "mass_healing_word",
+      "multiple_targets": true
+    },
+    "settled_hold_ms": 3500,
+    "tail_duration_ms": 2500,
+    "framing": "actors"
+  },
+  {
+    "id": "divine-divine-word",
+    "title": "Divine Word \u00b7 HP-gated blindness and deafness",
+    "tags": [
+      "divine-support",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native failed Charisma save on a 35-HP recipient applies Blinded and Deafened. Shared gold glyphs follow actual condition membership. No invented damage.",
+    "scenario": {
+      "kind": "divine",
+      "program": "divine_word",
+      "multiple_targets": false
+    },
+    "settled_hold_ms": 3500,
+    "tail_duration_ms": 2500,
+    "framing": "actors"
+  },
+  {
+    "id": "queue-slow-lifecycle",
+    "title": "Slow \u00b7 two failed saves, movement and clear",
+    "tags": [
+      "control-queue",
+      "slow",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Two native failed Wisdom saves establish Slow. The actual recipient moves; concentration clear removes both envelopes. No preview animation-rate multiplier.",
+    "scenario": {
+      "kind": "slow",
+      "saved": false
+    },
+    "settled_hold_ms": 4500,
+    "tail_duration_ms": 2500,
+    "framing": "actors"
+  },
+  {
+    "id": "queue-slow-resisted",
+    "title": "Slow \u00b7 successful saves, no envelope",
+    "tags": [
+      "control-queue",
+      "slow",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native successful Wisdom saves leave no Slow envelope. Actual movement follows the cast.",
+    "scenario": {
+      "kind": "slow",
+      "saved": true
+    },
+    "settled_hold_ms": 4500,
+    "tail_duration_ms": 2500,
+    "framing": "actors"
+  },
+  {
+    "id": "roster-backpack-transfer",
+    "title": "Roster gear \u00b7 cloak and quiver coexist, drop and transfer",
+    "tags": [
+      "roster-items",
+      "backpack",
+      "item-transfer",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native cloak and quiver occupy separate equipment slots and render separately. Real drop/pickup/equip transfers both to body-2 with the sword and outfit, preserving UUIDs and existing coating rules. Vendor donor silhouettes are approximate; no ammunition or container subsystem is implied.",
+    "framing": "actors",
+    "tail_duration_ms": 1600,
+    "scenario": {
+      "kind": "item-transfer",
+      "initial_hand": "MELEE_MAIN",
+      "roster_outfit": true,
+      "roster_backpack": true
+    },
+    "settled_hold_ms": 500
+  },
+  {
+    "id": "roster-maul-transfer",
+    "title": "Roster Maul \u00b7 two-handed attack, drop and transfer",
+    "tags": [
+      "roster-items",
+      "maul",
+      "item-transfer",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Canonical 2d6 heavy two-handed Maul uses original Melee11 hammer-family geometry with disclosed smaller-head approximation. Native drop/pickup/equip and attack transfer to body-2; existing fire coating remains item-owned and is removed normally. No Warhammer mechanics or illegal offhand equip.",
+    "framing": "actors",
+    "tail_duration_ms": 1600,
+    "scenario": {
+      "kind": "item-transfer",
+      "initial_hand": "MELEE_MAIN",
+      "roster_outfit": true,
+      "weapon_item_id": "weapon.maul"
+    },
+    "settled_hold_ms": 500
+  },
+  {
+    "id": "queue-continual-flame-lifecycle",
+    "title": "Continual Flame \u00b7 two permanent anchors and independent removal",
+    "tags": [
+      "spell-queue",
+      "continual-flame",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Real native touch-position casts create two heatless permanent light anchors. Movement retains them; each source object removal retires only its own flame. Uses the actual point/tile anchor, without claiming elevated item sockets.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "continual-flame"
+    },
+    "settled_hold_ms": 1800,
+    "tail_duration_ms": 900
+  },
+  {
+    "id": "divine-flame-strike",
+    "title": "Flame Strike \u00b7 two recipients in the native cylinder",
+    "tags": [
+      "fire-queue",
+      "paired-observers",
+      "four-corners",
+      "native-area"
+    ],
+    "description": "One native10ft-radius cylinder resolves fire and radiant damage for two actual recipients; caster and outside bystander remain safe. Native paired banks form before injury feedback.",
+    "scenario": {
+      "kind": "divine",
+      "program": "flame_strike",
+      "multiple_targets": false
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 1500,
+    "framing": "scene"
+  },
+  {
+    "id": "item-material-psychic",
+    "title": "Psychic blades \u00b7 item material transfer",
+    "tags": [
+      "item-materials",
+      "item-transfer",
+      "four-corners",
+      "palette-swap"
+    ],
+    "description": "Native drop, pickup and equip; received item effects select palette replacement and bounded glow on original modular pixels. Poison expiry removes its material; intrinsic properties persist.",
+    "framing": "actors",
+    "tail_duration_ms": 1600,
+    "scenario": {
+      "kind": "item-transfer",
+      "roster_outfit": true,
+      "weapon_item_id": "weapon.roster.psychic_scimitar",
+      "coating_item_id": null
+    },
+    "settled_hold_ms": 500
+  },
+  {
+    "id": "item-material-ember",
+    "title": "Ember sword \u00b7 item material transfer",
+    "tags": [
+      "item-materials",
+      "item-transfer",
+      "four-corners",
+      "palette-swap"
+    ],
+    "description": "Native drop, pickup and equip; received item effects select palette replacement and bounded glow on original modular pixels. Poison expiry removes its material; intrinsic properties persist.",
+    "framing": "actors",
+    "tail_duration_ms": 1600,
+    "scenario": {
+      "kind": "item-transfer",
+      "roster_outfit": true,
+      "weapon_item_id": "weapon.roster.ember_longsword",
+      "coating_item_id": null
+    },
+    "settled_hold_ms": 500
+  },
+  {
+    "id": "item-material-poison",
+    "title": "Basic Poison \u00b7 item material transfer",
+    "tags": [
+      "item-materials",
+      "item-transfer",
+      "four-corners",
+      "palette-swap"
+    ],
+    "description": "Native drop, pickup and equip; received item effects select palette replacement and bounded glow on original modular pixels. Poison expiry removes its material; intrinsic properties persist.",
+    "framing": "actors",
+    "tail_duration_ms": 1600,
+    "scenario": {
+      "kind": "item-transfer",
+      "roster_outfit": true,
+      "weapon_item_id": "weapon.longsword",
+      "coating_item_id": "consumable.weapon_coat.basic_poison"
+    },
+    "settled_hold_ms": 500
+  },
+  {
+    "id": "control-hold-person-clear",
+    "title": "Hold Person \u00b7 bind, held pose and source clear",
+    "tags": [
+      "control-queue",
+      "paired-observers",
+      "four-corners",
+      "native-conditions"
+    ],
+    "description": "Native cast and actual source clear on the modular human rig. Accepted humanoid chains for either spell; independent Paralyzed owns the frozen pose and amber alpha contour. Ogre attachment is deferred to the authored Ogre profile.",
+    "scenario": {
+      "kind": "hold",
+      "program": "hold_person",
+      "saved": false,
+      "retain_paralysis": false
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 3000,
+    "framing": "actors"
+  },
+  {
+    "id": "control-hold-person-save",
+    "title": "Hold Person \u00b7 successful save, no chains",
+    "tags": [
+      "control-queue",
+      "paired-observers",
+      "four-corners",
+      "native-conditions"
+    ],
+    "description": "Native cast and actual source clear on the modular human rig. Accepted humanoid chains for either spell; independent Paralyzed owns the frozen pose and amber alpha contour. Ogre attachment is deferred to the authored Ogre profile.",
+    "scenario": {
+      "kind": "hold",
+      "program": "hold_person",
+      "saved": true,
+      "retain_paralysis": false
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 3000,
+    "framing": "actors"
+  },
+  {
+    "id": "control-hold-person-independent",
+    "title": "Hold Person \u00b7 chains clear, independent paralysis remains",
+    "tags": [
+      "control-queue",
+      "paired-observers",
+      "four-corners",
+      "native-conditions"
+    ],
+    "description": "Native cast and actual source clear on the modular human rig. Accepted humanoid chains for either spell; independent Paralyzed owns the frozen pose and amber alpha contour. Ogre attachment is deferred to the authored Ogre profile.",
+    "scenario": {
+      "kind": "hold",
+      "program": "hold_person",
+      "saved": false,
+      "retain_paralysis": true
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 3000,
+    "framing": "actors"
+  },
+  {
+    "id": "control-hold-monster-clear",
+    "title": "Hold Monster \u00b7 bind, held pose and source clear",
+    "tags": [
+      "control-queue",
+      "paired-observers",
+      "four-corners",
+      "native-conditions"
+    ],
+    "description": "Native cast and actual source clear on the modular human rig. Accepted humanoid chains for either spell; independent Paralyzed owns the frozen pose and amber alpha contour. Ogre attachment is deferred to the authored Ogre profile.",
+    "scenario": {
+      "kind": "hold",
+      "program": "hold_monster",
+      "saved": false,
+      "retain_paralysis": false
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 3000,
+    "framing": "actors"
+  },
+  {
+    "id": "control-hold-monster-save",
+    "title": "Hold Monster \u00b7 successful save, no chains",
+    "tags": [
+      "control-queue",
+      "paired-observers",
+      "four-corners",
+      "native-conditions"
+    ],
+    "description": "Native cast and actual source clear on the modular human rig. Accepted humanoid chains for either spell; independent Paralyzed owns the frozen pose and amber alpha contour. Ogre attachment is deferred to the authored Ogre profile.",
+    "scenario": {
+      "kind": "hold",
+      "program": "hold_monster",
+      "saved": true,
+      "retain_paralysis": false
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 3000,
+    "framing": "actors"
+  },
+  {
+    "id": "control-hold-monster-independent",
+    "title": "Hold Monster \u00b7 chains clear, independent paralysis remains",
+    "tags": [
+      "control-queue",
+      "paired-observers",
+      "four-corners",
+      "native-conditions"
+    ],
+    "description": "Native cast and actual source clear on the modular human rig. Accepted humanoid chains for either spell; independent Paralyzed owns the frozen pose and amber alpha contour. Ogre attachment is deferred to the authored Ogre profile.",
+    "scenario": {
+      "kind": "hold",
+      "program": "hold_monster",
+      "saved": false,
+      "retain_paralysis": true
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 3000,
+    "framing": "actors"
+  },
+  {
+    "id": "control-fear-cardinal",
+    "title": "Fear \u00b7 cardinal cone, mixed saves and source clear",
+    "tags": [
+      "spell-queue",
+      "control",
+      "fear",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native discovered cone: one failed save, one successful save and an outside bystander. Real movement and concentration clear; no animation-driven fleeing. Accepted eight-heading finite art and continuous Frightened sustain.",
+    "scenario": {
+      "kind": "fear",
+      "direction": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "id": "control-fear-diagonal",
+    "title": "Fear \u00b7 diagonal cone, mixed saves and source clear",
+    "tags": [
+      "spell-queue",
+      "control",
+      "fear",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native discovered cone: one failed save, one successful save and an outside bystander. Real movement and concentration clear; no animation-driven fleeing. Accepted eight-heading finite art and continuous Frightened sustain.",
+    "scenario": {
+      "kind": "fear",
+      "direction": [
+        -1,
+        1
+      ]
+    }
+  },
+  {
+    "id": "fire-scorching-repeat",
+    "title": "Scorching Ray \u00b7 three rays, one recipient",
+    "tags": [
+      "spell-queue",
+      "scorching-ray",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "One native three-ray cast, original finite eight-heading travel, actual per-ray outcomes and paired recipient impact. Misses do not envelop the recipient; injury feedback follows contact.",
+    "scenario": {
+      "kind": "scorching",
+      "direction": [
+        1,
+        0
+      ],
+      "split": false,
+      "miss": false
+    },
+    "settled_hold_ms": 1500,
+    "tail_duration_ms": 2500,
+    "framing": "actors"
+  },
+  {
+    "id": "fire-scorching-split",
+    "title": "Scorching Ray \u00b7 split volley, two recipients",
+    "tags": [
+      "spell-queue",
+      "scorching-ray",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "One native three-ray cast, original finite eight-heading travel, actual per-ray outcomes and paired recipient impact. Misses do not envelop the recipient; injury feedback follows contact.",
+    "scenario": {
+      "kind": "scorching",
+      "direction": [
+        -1,
+        1
+      ],
+      "split": true,
+      "miss": false
+    },
+    "settled_hold_ms": 1500,
+    "tail_duration_ms": 2500,
+    "framing": "actors"
+  },
+  {
+    "id": "fire-scorching-miss",
+    "title": "Scorching Ray \u00b7 native misses, no recipient flames",
+    "tags": [
+      "spell-queue",
+      "scorching-ray",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "One native three-ray cast, original finite eight-heading travel, actual per-ray outcomes and paired recipient impact. Misses do not envelop the recipient; injury feedback follows contact.",
+    "scenario": {
+      "kind": "scorching",
+      "direction": [
+        0,
+        1
+      ],
+      "split": true,
+      "miss": true
+    },
+    "settled_hold_ms": 1500,
+    "tail_duration_ms": 2500,
+    "framing": "actors"
+  },
+  {
+    "id": "control-hypnotic-clear",
+    "tags": [
+      "spell-queue",
+      "hypnotic",
+      "paired-observers",
+      "four-corners",
+      "concentration"
+    ],
+    "description": "Native square membership, mixed saves and exact slot-owned spiral. Actual target recovery and concentration clear.",
+    "scenario": {
+      "kind": "hypnotic",
+      "mode": "clear"
+    },
+    "title": "Hypnotic Pattern \u00b7 clear"
+  },
+  {
+    "id": "control-hypnotic-damage-one",
+    "tags": [
+      "spell-queue",
+      "hypnotic",
+      "paired-observers",
+      "four-corners",
+      "concentration"
+    ],
+    "description": "Native square membership, mixed saves and exact slot-owned spiral. Actual target recovery and concentration clear.",
+    "scenario": {
+      "kind": "hypnotic",
+      "mode": "damage_one"
+    },
+    "title": "Hypnotic Pattern \u00b7 damage one"
+  },
+  {
+    "id": "control-hypnotic-recast",
+    "tags": [
+      "spell-queue",
+      "hypnotic",
+      "paired-observers",
+      "four-corners",
+      "concentration"
+    ],
+    "description": "Native square membership, mixed saves and exact slot-owned spiral. Actual target recovery and concentration clear.",
+    "scenario": {
+      "kind": "hypnotic",
+      "mode": "recast"
+    },
+    "title": "Hypnotic Pattern \u00b7 recast"
+  },
+  {
+    "id": "wall-assembly-thorns-straight-1-0",
+    "title": "Wall of Thorns \u00b7 straight",
+    "tags": [
+      "spell-queue",
+      "wall-assembly",
+      "four-corners",
+      "paired-observers",
+      "thorns"
+    ],
+    "description": "Native multi-recipient formation, actual turn behavior and concentration clear. Original registered modular RGBA; contact-specific deformation remains a source integration gap.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "wall-assembly",
+      "program": "thorns",
+      "form": "straight",
+      "direction": [
+        1,
+        0
+      ]
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "wall-assembly-thorns-straight-1-1",
+    "title": "Wall of Thorns \u00b7 straight",
+    "tags": [
+      "spell-queue",
+      "wall-assembly",
+      "four-corners",
+      "paired-observers",
+      "thorns"
+    ],
+    "description": "Native multi-recipient formation, actual turn behavior and concentration clear. Original registered modular RGBA; contact-specific deformation remains a source integration gap.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "wall-assembly",
+      "program": "thorns",
+      "form": "straight",
+      "direction": [
+        1,
+        1
+      ]
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "wall-assembly-thorns-ring-1-0",
+    "title": "Wall of Thorns \u00b7 ring",
+    "tags": [
+      "spell-queue",
+      "wall-assembly",
+      "four-corners",
+      "paired-observers",
+      "thorns"
+    ],
+    "description": "Native multi-recipient formation, actual turn behavior and concentration clear. Original registered modular RGBA; contact-specific deformation remains a source integration gap.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "wall-assembly",
+      "program": "thorns",
+      "form": "ring",
+      "direction": [
+        1,
+        0
+      ]
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "wall-assembly-wind-straight-1-0",
+    "title": "Wind Wall \u00b7 straight",
+    "tags": [
+      "spell-queue",
+      "wall-assembly",
+      "four-corners",
+      "paired-observers",
+      "wind"
+    ],
+    "description": "Native multi-recipient formation, actual turn behavior and concentration clear. Original registered modular RGBA; contact-specific deformation remains a source integration gap.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "wall-assembly",
+      "program": "wind",
+      "form": "straight",
+      "direction": [
+        1,
+        0
+      ]
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "wall-assembly-wind-straight-1-1",
+    "title": "Wind Wall \u00b7 straight",
+    "tags": [
+      "spell-queue",
+      "wall-assembly",
+      "four-corners",
+      "paired-observers",
+      "wind"
+    ],
+    "description": "Native multi-recipient formation, actual turn behavior and concentration clear. Original registered modular RGBA; contact-specific deformation remains a source integration gap.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "wall-assembly",
+      "program": "wind",
+      "form": "straight",
+      "direction": [
+        1,
+        1
+      ]
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "wall-assembly-wind-corner-1-0",
+    "title": "Wind Wall \u00b7 corner",
+    "tags": [
+      "spell-queue",
+      "wall-assembly",
+      "four-corners",
+      "paired-observers",
+      "wind"
+    ],
+    "description": "Native multi-recipient formation, actual turn behavior and concentration clear. Original registered modular RGBA; contact-specific deformation remains a source integration gap.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "wall-assembly",
+      "program": "wind",
+      "form": "corner",
+      "direction": [
+        1,
+        0
+      ]
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "call-lightning-area-repeat",
+    "title": "Call Lightning \u00b7 area and repeat action",
+    "tags": [
+      "call-lightning",
+      "native",
+      "paired-observers"
+    ],
+    "description": "Public initial cast and granted next-turn strike. Three occupants receive individual simultaneous bolts, Dexterity saves determine damage, and the outside creature remains untouched. Dropping concentration revokes the action. Original LeLu geometry and materials.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "call-lightning"
+    },
+    "tail_duration_ms": 1200
   }
 ]

@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "recipes": [
+    {
+      "behavior_id": "item.property.additional_damage",
+      "damage_type": "Fire",
+      "tint_rgb": 16739125,
+      "bloom_strength": 0.22,
+      "bloom_radius": 2,
+      "priority": 40
+    },
+    {
+      "behavior_id": "item.property.additional_damage",
+      "damage_type": "Psychic",
+      "tint_rgb": 12875775,
+      "bloom_strength": 0.22,
+      "bloom_radius": 2,
+      "priority": 40
+    },
+    {
+      "behavior_id": "item.property.additional_damage",
+      "damage_type": "Lightning",
+      "tint_rgb": 8441855,
+      "bloom_strength": 0.22,
+      "bloom_radius": 2,
+      "priority": 40
+    },
+    {
+      "behavior_id": "item.property.additional_damage",
+      "damage_type": "Poison",
+      "tint_rgb": 8441669,
+      "bloom_strength": 0.22,
+      "bloom_radius": 2,
+      "priority": 40
+    },
+    {
+      "behavior_id": "condition.consumable.weapon_coat.fire",
+      "damage_type": "Fire",
+      "tint_rgb": 16739125,
+      "bloom_strength": 0.22,
+      "bloom_radius": 2,
+      "priority": 80
+    },
+    {
+      "behavior_id": "condition.consumable.weapon_coat.concentration_fire",
+      "damage_type": "Fire",
+      "tint_rgb": 16739125,
+      "bloom_strength": 0.22,
+      "bloom_radius": 2,
+      "priority": 80
+    },
+    {
+      "behavior_id": "condition.consumable.weapon_coat.timed_fire",
+      "damage_type": "Fire",
+      "tint_rgb": 16739125,
+      "bloom_strength": 0.22,
+      "bloom_radius": 2,
+      "priority": 80
+    },
+    {
+      "behavior_id": "condition.consumable.weapon_coat.lightning",
+      "damage_type": "Lightning",
+      "tint_rgb": 8441855,
+      "bloom_strength": 0.22,
+      "bloom_radius": 2,
+      "priority": 80
+    },
+    {
+      "behavior_id": "condition.consumable.weapon_coat.basic_poison",
+      "damage_type": "Poison",
+      "tint_rgb": 8441669,
+      "bloom_strength": 0.16,
+      "bloom_radius": 2,
+      "priority": 80
+    }
+  ]
+}

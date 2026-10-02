@@ -455,7 +455,7 @@ class MageArmorCondition(BaseCondition):
         condition_target_uuid = self.target_entity_uuid
 
         def mage_armor_equip_processor(event: Event, handler_source_uuid: UUID) -> Optional[Event]:
-            """End Mage Armor if any armor is equipped."""
+            """End Mage Armor when committed equipment actually counts as armor."""
             _ = handler_source_uuid
 
             if event.source_entity_uuid != condition_target_uuid:
@@ -468,7 +468,7 @@ class MageArmorCondition(BaseCondition):
             if "Mage Armor" not in entity.active_conditions:
                 return None
 
-            if isinstance(event, ArmorEquipEvent):
+            if isinstance(event, ArmorEquipEvent) and not entity.equipment.is_unarmored():
                 entity.remove_condition("Mage Armor", parent_event=event)
                 return event.with_updates(
                     status_message=(

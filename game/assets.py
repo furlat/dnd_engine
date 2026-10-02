@@ -146,9 +146,11 @@ class WorldBindingsSource(_WorldSource):
     residue_ground: dict[str, dict[str, str]] = Field(default_factory=dict)
     residue_surfaces: dict[str, ResidueSurfaceSource] = Field(default_factory=dict)
     liquid_surfaces: dict[str, LiquidSurfaceSource] = Field(default_factory=dict)
-    # These two sections are decoded into SpatialMediaBinding/DepositMediaBinding
+    # These presentation sections are decoded into SpatialMediaBinding/DepositMediaBinding
     # by animation_data. They are not consumed a second time by this catalog.
     spatial_media: dict[str, JsonValue] = Field(default_factory=dict)
+    concentration_media: dict[str, JsonValue] = Field(default_factory=dict)
+    construction_media: dict[str, JsonValue] = Field(default_factory=dict)
     deposit_media: dict[str, JsonValue] = Field(default_factory=dict)
 
 

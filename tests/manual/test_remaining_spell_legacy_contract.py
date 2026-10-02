@@ -122,7 +122,7 @@ def test_call_lightning_grants_repeatable_strike_and_cleans_on_replacement() -> 
     hp_after_cast = get_hp(target)
     with fixed_dice_faces(10, 3, 3, 3):
         strike = strike_template.instantiate(
-            target_entity_uuid=target.uuid
+            end_position=target.position
         ).apply()
 
     assert strike is not None

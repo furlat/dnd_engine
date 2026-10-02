@@ -1,4 +1,4 @@
-from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec
+from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, WeaponAttackOverride
 """Equipment, armor, weapon, and shield models for entity combat gear."""
 
 from dataclasses import dataclass
@@ -303,6 +303,27 @@ class Shield(EquippableItem):
 
 
 class Weapon(EquippableItem):
+    supports_arrow_payload: bool = False
+    attack_overrides: dict[UUID, WeaponAttackOverride] = Field(default_factory=dict)
+
+    def attack_override(self, wielder_uuid: UUID) -> WeaponAttackOverride | None:
+        return next((value for value in self.attack_overrides.values() if value.wielder_uuid == wielder_uuid), None)
+
+    def attack_damage_die(self, wielder_uuid: UUID):
+        override = self.attack_override(wielder_uuid)
+        return override.damage_die if override else self.damage_dice
+
+    def attack_is_magical(self, wielder_uuid: UUID) -> bool:
+        override = self.attack_override(wielder_uuid)
+        return self.is_magical or (override is not None and override.magical)
+
+    def selected_attack_ability(self, abilities: AbilityScores, requested: AbilityName | None) -> AbilityName | None:
+        override = self.attack_override(abilities.source_entity_uuid)
+        if requested is not None or override is None:
+            return requested
+        candidate = abilities.get_ability(override.optional_ability)
+        return override.optional_ability if candidate.modifier > abilities.strength.modifier else "strength"
+
     """Equippable weapon with attack, damage, range, and property metadata."""
 
     missile_size: Literal["ordinary", "large"] = Field(default="ordinary",
@@ -399,13 +420,12 @@ class Weapon(EquippableItem):
         self,
         selected_slot: EquipmentSlot,
     ) -> frozenset[EquipmentSlot]:
-        """Declare that a two-handed melee main weapon also occupies its off hand."""
-        if (
-            selected_slot == WeaponSlot.MELEE_MAIN
-            and WeaponProperty.TWO_HANDED in self.properties
-            and WeaponProperty.RANGED not in self.properties
-        ):
-            return frozenset((WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF))
+        """Two-handed main weapons reserve both hands of their own loadout."""
+        if WeaponProperty.TWO_HANDED in self.properties:
+            if selected_slot == WeaponSlot.MELEE_MAIN:
+                return frozenset((WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF))
+            if selected_slot == WeaponSlot.RANGED_MAIN:
+                return frozenset((WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF))
         return super().occupied_equipment_slots(selected_slot)
 
     def incompatible_equipment_slot_message(self, slot: EquipmentSlot) -> str:
@@ -468,7 +488,8 @@ class Weapon(EquippableItem):
         if equipment_block.damage_bonus is not None:
             bonuses.append(equipment_block.damage_bonus)
 
-        if override_ability is not None:
+        override_ability = self.selected_attack_ability(ability_block, override_ability)
+        if override_ability is not None and not is_off_hand:
             ability = ability_block.get_ability(override_ability)
             bonuses.append(ability.get_combined_values())
         elif not is_off_hand:
@@ -497,7 +518,7 @@ class Weapon(EquippableItem):
             bonuses.append(melee_bonus)
 
         combined_bonuses = bonuses[0].combine_values(bonuses[1:])
-        return Damage(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid, damage_dice=self.damage_dice, dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
+        return Damage(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid, damage_dice=self.attack_damage_die(equipment_block.source_entity_uuid), dice_numbers=self.dice_numbers, damage_bonus=combined_bonuses, damage_type=self.damage_type)
 
     def get_extra_damages(self) -> List[Damage]:
         """Return extra damage payloads attached directly to this weapon."""
@@ -526,6 +547,7 @@ _SLOT_ATTRIBUTE_BY_SLOT = {
     RingSlot.LEFT: "ring_left",
     RingSlot.RIGHT: "ring_right",
     BodyPart.CLOAK: "cloak",
+    BodyPart.BACKPACK: "backpack",
 }
 _MELEE_WEAPON_SLOTS = (
     WeaponSlot.MELEE_MAIN,
@@ -584,6 +606,8 @@ class ArmorClassFormulaCandidate(BaseModel):
 class EquipmentConfig(BaseModel):
     """Configuration payload for equipment-wide combat modifiers."""
 
+    one_handed_offhand_grants: set[UUID] = Field(default_factory=set,
+        description="Owned talent receipts installed before initial equipment admission.")
     unarmored_ac_type: UnarmoredAc = Field(default=UnarmoredAc.NONE, description="Unarmored Armor Class")
     unarmored_ac: int = Field(default=10, description="Unarmored Armor Class")
     unarmored_ac_modifiers: List[Tuple[str, int]] = Field(default_factory=list, description="Any additional static modifiers applied to the unarmored  armor class")
@@ -614,6 +638,10 @@ class Equipment(BaseBlock):
     """Container for equipped items and equipment-derived combat values."""
 
     name: str = Field(default="Equipped", description="Equipment slots for an entity")
+    one_handed_offhand_grants: set[UUID] = Field(
+        default_factory=set,
+        description="Actor-owned receipts permitting non-light one-handed melee weapons offhand.",
+    )
     active_weapon_set: WeaponSet = Field(
         default=WeaponSet.NONE,
         description=(
@@ -630,6 +658,7 @@ class Equipment(BaseBlock):
     ring_left: Optional[Ring] = Field(default=None, description="Left ring slot")
     ring_right: Optional[Ring] = Field(default=None, description="Right ring slot")
     cloak: Optional[Cloak] = Field(default=None, description="Cloak slot item")
+    backpack: Optional[Armor] = Field(default=None, description="Backpack slot accessory")
     weapon_melee_main: Optional[Weapon] = Field(default=None, description="Main melee weapon slot")
     weapon_melee_off: Optional[Union[Weapon, Shield]] = Field(default=None, description="Off-hand melee weapon or shield slot")
     weapon_ranged_main: Optional[Weapon] = Field(default=None, description="Main ranged weapon slot")
@@ -866,6 +895,8 @@ class Equipment(BaseBlock):
         override_ability: Optional[AbilityName],
     ) -> Ability:
         """Select the ability used by a weapon attack roll."""
+        if weapon is not None:
+            override_ability = weapon.selected_attack_ability(ability_block, override_ability)
         if override_ability is not None:
             return ability_block.get_ability(override_ability)
         if weapon is None:
@@ -885,6 +916,8 @@ class Equipment(BaseBlock):
         override_ability: Optional[AbilityName],
     ) -> Ability:
         """Select the ability used by a weapon damage roll."""
+        if weapon is not None:
+            override_ability = weapon.selected_attack_ability(ability_block, override_ability)
         if override_ability is not None:
             return ability_block.get_ability(override_ability)
         if weapon is None:
@@ -968,7 +1001,8 @@ class Equipment(BaseBlock):
         )
         components = (weapon_bonus, self.attack_bonus, typed_bonus)
         return (
-            ability.modifier + sum(component.normalized_score for component in components),
+            (natural_weapon.fixed_attack_bonus if natural_weapon is not None and natural_weapon.fixed_attack_bonus is not None
+                else ability.modifier) + sum(component.normalized_score for component in components),
             ability.modifier_bonus.advantage_sum
             + sum(component.advantage_sum for component in components),
         )
@@ -1010,7 +1044,7 @@ class Equipment(BaseBlock):
             )
             profiles.append(profile_factory(
                 dice_count=weapon.dice_numbers,
-                die_size=weapon.damage_dice,
+                die_size=weapon.attack_damage_die(self.source_entity_uuid),
                 flat_bonus=(
                     sum(value.normalized_score for value in base_bonuses)
                     + ability_bonus
@@ -1047,7 +1081,8 @@ class Equipment(BaseBlock):
                 die_size=natural_weapon.damage_dice if natural_weapon else self.unarmed_damage_dice,
                 flat_bonus=(
                     sum(value.normalized_score for value in base_bonuses)
-                    + ability.modifier
+                    + (natural_weapon.fixed_damage_bonus if natural_weapon is not None and natural_weapon.fixed_damage_bonus is not None
+                        else ability.modifier)
                 ),
                 damage_type=(natural_weapon.damage_type if natural_weapon else self.unarmed_damage_type).value,
             ))
@@ -1073,7 +1108,7 @@ class Equipment(BaseBlock):
         weapon = self.get_weapon(slot)
         return AttackSourceMetadata(kind="equipped" if weapon else "unarmed",
             weapon_slot=slot, name=name, damage_types=damage_types,
-            item_uuid=weapon.uuid if weapon else None)
+            item_uuid=weapon.uuid if weapon else None, magical=weapon.attack_is_magical(self.source_entity_uuid) if weapon else False)
 
     def snapshot_attack_event_metadata(
         self,
@@ -1178,6 +1213,9 @@ class Equipment(BaseBlock):
                 if dexterity_bonus.normalized_score > strength_bonus.normalized_score:
                     ability = dexterity
                     ability_bonus = dexterity_bonus
+        if natural_weapon is not None and natural_weapon.fixed_damage_bonus is not None:
+            ability_bonus = ModifiableValue.create(source_entity_uuid=self.source_entity_uuid,
+                value_name="Intrinsic damage bonus",base_value=natural_weapon.fixed_damage_bonus)
         combined_bonus = unarmed_damage_bonus.combine_values([self.damage_bonus,self.melee_damage_bonus, ability_bonus])
         combined_bonus.set_context({
             "attack_ability": ability.name,
@@ -1404,6 +1442,17 @@ class Equipment(BaseBlock):
             return self.body_armor.max_dex_bonus
         return None
 
+    def compatible_slots_for_actor(self, item: EquippableItem) -> Tuple[EquipmentSlot, ...]:
+        """Combine an item's unchanged baseline with this actor's hand capability."""
+        slots = item.compatible_equipment_slots()
+        if (self.one_handed_offhand_grants
+                and WeaponSlot.MELEE_MAIN in slots
+                and WeaponSlot.MELEE_OFF not in slots
+                and item.occupied_equipment_slots(WeaponSlot.MELEE_MAIN)
+                    == frozenset((WeaponSlot.MELEE_MAIN,))):
+            return (*slots, WeaponSlot.MELEE_OFF)
+        return slots
+
     def resolve_equipment_slot(
         self,
         item: EquippableItem,
@@ -1415,7 +1464,7 @@ class Equipment(BaseBlock):
             raise ValueError(f"{item.name} requires an explicit equipment slot")
         if selected_slot not in _SLOT_ATTRIBUTE_BY_SLOT:
             raise ValueError(f"Invalid equipment slot: {selected_slot}")
-        if selected_slot not in item.compatible_equipment_slots():
+        if selected_slot not in self.compatible_slots_for_actor(item):
             raise ValueError(item.incompatible_equipment_slot_message(selected_slot))
         return selected_slot
 
@@ -1787,7 +1836,7 @@ class Equipment(BaseBlock):
         for item in items:
             if not isinstance(item, EquippableItem):
                 continue
-            for slot in item.compatible_equipment_slots():
+            for slot in self.compatible_slots_for_actor(item):
                 attribute_name = _SLOT_ATTRIBUTE_BY_SLOT.get(slot)
                 if attribute_name is None:
                     continue
@@ -1859,5 +1908,6 @@ class Equipment(BaseBlock):
                 unarmed_damage_bonus.self_static.add_value_modifier(NumericalModifier.create(source_entity_uuid=source_entity_uuid, name=modifier[0], value=modifier[1]))
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
+                       one_handed_offhand_grants=set(config.one_handed_offhand_grants),
                        unarmored_ac=unarmored_ac, ac_bonus=ac_bonus,unarmored_ac_type=config.unarmored_ac_type, damage_bonus=damage_bonus, attack_bonus=attack_bonus, melee_attack_bonus=melee_attack_bonus, ranged_attack_bonus=ranged_attack_bonus,
                        melee_damage_bonus=melee_damage_bonus, ranged_damage_bonus=ranged_damage_bonus, unarmed_attack_bonus=unarmed_attack_bonus, unarmed_damage_bonus=unarmed_damage_bonus)

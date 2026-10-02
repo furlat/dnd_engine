@@ -41,6 +41,8 @@ from game.device_draw import device_draw_command, device_wreck_draw_command
 from game.combat import BoundCast
 from game.spatial_media_draw import spatial_media_draw_commands
 from game.spatial_media_lifetime import SpatialMediaLifetime
+from game.construction_media import ConstructionMediaLifetime, construction_media_draw_commands
+from game.concentration_media import ConcentrationMediaLifetime, concentration_media_draw_commands
 from game.portal_draw import portal_draw_commands, clip_portal_bodies
 from game.deposit_media import observed_deposits
 from game.deposit_draw import deposit_draw_commands
@@ -72,6 +74,8 @@ def sample_playback_frame(
     motion_media: Sequence[MotionMediaCue] = (),
     condition_lifetimes: Mapping[UUID, ConditionMediaLifetime] = MappingProxyType({}),
     spatial_lifetimes: Mapping[UUID, SpatialMediaLifetime] = MappingProxyType({}),
+    construction_lifetimes: Mapping[UUID, ConstructionMediaLifetime] = MappingProxyType({}),
+    concentration_lifetimes: Mapping[UUID, ConcentrationMediaLifetime] = MappingProxyType({}),
     deposit_starts: Mapping[UUID, float] = MappingProxyType({}),
     positions: Mapping[str, VisualPosition] | None = None,
     feedback_viewport: pygame.Rect | None = None,
@@ -132,9 +136,6 @@ def sample_playback_frame(
                              for identity, appearance in condition_appearances.items()}
     if group is not None and group_sample is not None:
         condition_appearances = condition_transition_appearances(group.conditions, group_elapsed, condition_appearances)
-        assert group_media is not None
-        extra = choreography_draw_commands(group, group_sample, group_media,
-            number_font, badge_font, camera, condition_appearances=condition_appearances, include_bodies=False)
     for pose in body_frame.poses:
         actor, body = pose.actor, pose.body
         appearance = condition_appearances[body.actor_uuid]
@@ -142,6 +143,11 @@ def sample_playback_frame(
                      ) if group_sample is not None else None
         extra = (*extra, *actor_draw_commands(data, body, actor.contact, actor.layers, body_media,
                                               camera, flash=flash, condition=appearance))
+    if group is not None and group_sample is not None:
+        assert group_media is not None
+        extra = (*extra, *choreography_draw_commands(group, group_sample, group_media,
+            number_font, badge_font, camera, condition_appearances=condition_appearances,
+            include_bodies=False, actor_bounds=actor_screen_bounds(extra)))
     extra = (*extra, *(body_trail_draw_command(trail, data, body_media, camera)
         for trail in sample_body_trails(body_history, body_frame, condition_appearances, data, presentation_ms)))
     # The caller retains each FloatingText track independently of this head.
@@ -194,6 +200,8 @@ def sample_playback_frame(
     deposits = observed_deposits(displayed, data)
     extra = (*extra, *deposit_draw_commands(displayed, deposits, deposit_starts, data, presentation_ms, camera),
              *spatial_media_draw_commands(displayed, data, presentation_ms, camera, transitions, spatial_lifetimes),
+             *construction_media_draw_commands(displayed, data, presentation_ms, camera, construction_lifetimes),
+             *concentration_media_draw_commands(displayed, data, presentation_ms, camera, concentration_lifetimes),
              *motion_media_draw_commands(motion_media, presentation_ms, camera))
     portals = group_sample.portals if group_sample is not None else ()
     extra = (*extra, *portal_draw_commands(displayed, data, presentation_ms, camera, transitions, portals))

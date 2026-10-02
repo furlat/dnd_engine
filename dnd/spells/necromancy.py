@@ -2404,6 +2404,7 @@ class BestowCurse(SpellAction):
         if self.curse_option < 1 or self.curse_option > 4:
             return declaration_event.cancel(status_message=f"Invalid curse option: {self.curse_option}")
 
+        declaration_event.effect_id = f"control.bestow_curse.option_{self.curse_option}"
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 

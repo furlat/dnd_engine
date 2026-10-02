@@ -40,6 +40,13 @@ def extra_media_members(actor: PlayerActor) -> tuple[tuple[UUID, str], ...]:
 
 
 def _removal_duration(media: ConditionLayerMedia, data: AnimationData) -> float:
+    if media.removal_asset_id is not None:
+        asset = data.projectile_assets[media.removal_asset_id]
+        phase = asset.phases.impact
+        assert phase is not None
+        if phase.loop:
+            raise ValueError("color release requires a finite bank")
+        return phase.frames * 1000 / (phase.fps or asset.fps)
     if media.removal_mask_asset_id is None:
         return media.removal_fade_ms
     asset = data.projectile_assets[media.removal_mask_asset_id]
@@ -66,7 +73,7 @@ def _members(actor: PlayerActor, data: AnimationData) -> dict[UUID, str]:
             if (recipe := data.condition_recipes.get(identity)) is not None
             and (_media_assets(recipe, data) or recipe.persistent.liveCopies is not None
                  or recipe.persistent.bodyDistortion is not None or recipe.persistent.bodyScale is not None
-                 or recipe.persistent.bodyRamp is not None)}
+                 or recipe.persistent.bodyRamp is not None or recipe.persistent.bodyOutline is not None)}
 
 
 def _effective_assets(recipe: ConditionRecipe, data: AnimationData,
@@ -320,11 +327,13 @@ def sample_condition_lifetimes(
                 if media.asset_id is None or not end <= absolute_ms < end + duration:
                     continue
                 start = lifetime.applied_ms
+                color_release = media.removal_asset_id is not None
+                clock = end if color_release else absolute_ms
                 layers.append(ResolvedConditionLayer(layer, media, lifetime.owner_uuid,
-                    max(0., absolute_ms - start) if start is not None else absolute_ms,
-                    start is not None, 1. if media.removal_mask_asset_id else 1 - (absolute_ms - end) / duration,
+                    max(0., clock - start) if start is not None else clock,
+                    start is not None, 1. if media.removal_mask_asset_id or color_release else 1 - (absolute_ms - end) / duration,
                     fade_in_age_ms=max(0., end - start - layer.startOffsetMs) if start is not None else None,
-                    removal_age_ms=absolute_ms - end if media.removal_mask_asset_id else None))
+                    removal_age_ms=absolute_ms - end if media.removal_mask_asset_id or color_release else None))
         copies = appearance.live_copies
         distortion = appearance.distortion
         distortion_strength = 1.
@@ -363,7 +372,11 @@ def sample_condition_lifetimes(
             sampled = _sample_copies(lifetime, recipe, absolute_ms, data)
             if sampled.slots:
                 copies = sampled
+        outline_lifetime = records.get(appearance.outline_owner_uuid) if appearance.outline_owner_uuid is not None else None
+        outline_start = outline_lifetime.applied_ms if outline_lifetime is not None else None
+        outline_age = max(0., absolute_ms - outline_start) if outline_start is not None else None
         result[actor_id] = replace(appearance, layers=tuple(layers), live_copies=copies, time_ms=absolute_ms,
+                                  outline_age_ms=outline_age,
                                   distortion=distortion, distortion_strength=distortion_strength,
                                   body_ramp=ramp, ramp_strength=ramp_strength)
     return result

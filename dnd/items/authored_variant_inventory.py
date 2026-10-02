@@ -53,6 +53,7 @@ class AuthoredItemBasePresentation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     equipment_layers: tuple[AuthoredItemEquipmentLayer, ...]
+    registration_render_layer: EquipmentRenderLayer | None = None
     notes: str
     tags: tuple[str, ...]
 
@@ -78,6 +79,7 @@ class AuthoredItemVariantInventoryRow(BaseModel):
     source_order: int = Field(ge=0)
     source_visual_variant_id: str = Field(min_length=1)
     equipment_layers: tuple[AuthoredItemEquipmentLayer, ...]
+    registration_render_layer: EquipmentRenderLayer | None = None
     tags: tuple[str, ...]
     visual_variant_id: str | None
 
@@ -118,6 +120,7 @@ class AuthoredItemVariantCategory(BaseModel):
     ]
     mechanical_factory_identity: str | None
     primary_render_layer: EquipmentRenderLayer
+    allowed_registration_layers: tuple[EquipmentRenderLayer, ...] = ()
     source_order: int = Field(ge=0)
     unsupported_reason: str | None
     variants: tuple[AuthoredItemVariantInventoryRow, ...]
@@ -163,16 +166,24 @@ class AuthoredItemVariantCategory(BaseModel):
             self.base_presentation,
             *self.variants,
         )
+        if len(set(self.allowed_registration_layers)) != len(self.allowed_registration_layers):
+            raise ValueError("registration layer alternatives must be unique")
+        allowed = self.allowed_registration_layers or (self.primary_render_layer,)
+        if self.primary_render_layer not in allowed:
+            raise ValueError("registration layer alternatives must include the category primary")
         for presentation in presentations:
+            anchor = presentation.registration_render_layer or self.primary_render_layer
+            if anchor not in allowed:
+                raise ValueError("presentation registration layer is not declared by its category")
             matches = tuple(
                 layer
                 for layer in presentation.equipment_layers
-                if layer.render_layer is self.primary_render_layer
+                if layer.render_layer is anchor
             )
             if len(matches) != 1:
                 raise ValueError(
                     "authored item presentation requires exactly one primary "
-                    f"render layer: {self.base_category}",
+                    f"render layer: {self.base_category}/{anchor.value}",
                 )
         return self
 
@@ -295,7 +306,7 @@ def primary_authored_item_equipment_layer(
     matches = tuple(
         layer
         for layer in presentation.equipment_layers
-        if layer.render_layer is category.primary_render_layer
+        if layer.render_layer is (presentation.registration_render_layer or category.primary_render_layer)
     )
     if len(matches) != 1:
         raise ValueError(

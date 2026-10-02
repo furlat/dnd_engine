@@ -17,7 +17,8 @@ from game.animation import (ActorContact, BodySample, BodyTransition, NumberSamp
                             compile_body_transition, sample_body_transition)
 from game.animation_types import AnimationData, FloatingFeedbackStyle, StudioCondition
 from game.condition_types import (Activity, ConditionBodyColor, ConditionLabel, ConditionRecipe, ConditionTransition,
-                                  ConditionBodyDistortion, ConditionLiveCopies, ConditionBodyRamp, ConditionTransitionEffect)
+                                  ConditionBodyDistortion, ConditionLiveCopies, ConditionBodyRamp, ConditionTransitionEffect,
+                                  ConditionFrozenPose, ConditionBodyOutline)
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer, supported_layer
 from game.actor_facts import ConditionFact
 from game.player_facts import ConditionChangeFact, PlayerNode
@@ -50,6 +51,10 @@ class ConditionAppearance:
     time_ms: float = 0.
     body_ramp: ConditionBodyRamp | None = None
     ramp_strength: float = 1.
+    frozen_pose: ConditionFrozenPose | None = None
+    body_outline: ConditionBodyOutline | None = None
+    outline_owner_uuid: UUID | None = None
+    outline_age_ms: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +168,8 @@ def resolve_condition_appearance(
     alpha, body, pose, label = 1.0, None, None, None
     scale = 1.
     copies, distortion, ramp = None, None, None
+    frozen, outline = None, None
+    outline_owner = None
     layers: list[ResolvedConditionLayer] = []
     for recipe in ordered:
         composition = recipe.composition
@@ -191,6 +198,11 @@ def resolve_condition_appearance(
             distortion = persistent.bodyDistortion
         if ramp is None and persistent.bodyRamp is not None:
             ramp = persistent.bodyRamp
+        if frozen is None and persistent.frozenPose is not None:
+            frozen = persistent.frozenPose
+        if outline is None and persistent.bodyOutline is not None:
+            outline = persistent.bodyOutline
+            outline_owner = owner
         alpha *= persistent.alphaMultiplier
         if body is None and persistent.bodyColor is not None:
             body = persistent.bodyColor
@@ -207,7 +219,8 @@ def resolve_condition_appearance(
         unsupported.extend(persistent_limitations(recipe, media))
     selected_layers = tuple(sorted(layers, key=lambda value: (-value.layer.priority, value.layer.id)))
     return ConditionAppearance(alpha, body, tuple(selected), tuple(dict.fromkeys(unsupported)), pose, label,
-                               selected_layers, scale=scale, live_copies=copies, distortion=distortion, body_ramp=ramp)
+                               selected_layers, scale=scale, live_copies=copies, distortion=distortion, body_ramp=ramp,
+                               frozen_pose=frozen, body_outline=outline, outline_owner_uuid=outline_owner)
 
 
 def condition_contact(contact: ActorContact, appearance: ConditionAppearance | None) -> ActorContact:
@@ -221,6 +234,12 @@ def condition_contact(contact: ActorContact, appearance: ConditionAppearance | N
 def condition_body_pose(data: AnimationData, body: BodySample, contact: ActorContact,
                         appearance: ConditionAppearance | None) -> BodySample:
     """A retained condition replaces idle only; actions and death keep ownership."""
+    if appearance is not None and appearance.frozen_pose is not None and contact.life_state is not LifeState.DEAD:
+        pose = appearance.frozen_pose
+        frame = pose.framesByRig.get(contact.rig_id, pose.frame)
+        if frame >= body_clip(data, contact, pose.clip).frames:
+            raise ValueError("frozen pose frame exceeds the registered clip")
+        return replace(body, clip=pose.clip, frame=frame)
     if (body.clip not in ("Idle", data.damage_context.bodyClip) or contact.life_state is LifeState.DEAD
             or appearance is None or appearance.body_pose is None):
         return body

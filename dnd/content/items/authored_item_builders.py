@@ -8,8 +8,10 @@ from uuid import UUID
 from dnd.core.item_properties import AdditionalDamage, ArmorPenalties
 from dnd.blocks.base_item import BaseItem, WorldItem
 from dnd.blocks.equipment import (
+    Armor,
     BodyArmor,
     Boots,
+    Cloak,
     Gauntlets,
     Helmet,
     Shield,
@@ -50,6 +52,8 @@ from dnd.content.items.environment_item_builders import (
     build_wall_torch,
 )
 from dnd.content.items.door_profiles import DOOR_PROFILES
+from dnd.items.roster_carried_powers import PACK_POWERS, ARROW_PAYLOADS, build_powered_backpack, build_special_arrow
+from dnd.content.items.roster_item_definitions import ROSTER_EMBER_DEFINITIONS, ROSTER_MAUL_DEFINITION, ROSTER_WEAPON_DEFINITIONS, ROSTER_GEAR_DEFINITIONS, ROSTER_CARRIED_DEFINITIONS, ROSTER_INVENTORY_DEFINITIONS
 from dnd.content.items.window_definitions import WINDOW_DEFINITIONS
 from dnd.content.items.window_builders import build_window_component
 from dnd.content.items.trap_hardware_builders import TRAP_HARDWARE_PROFILES, build_trap_hardware
@@ -57,6 +61,7 @@ from dnd.content.items.ground_hardware_builders import GROUND_HARDWARE_PROFILES,
 from dnd.content.items.world_prop_builders import WORLD_PROP_PROFILES, build_world_prop
 from dnd.extensions.field_focus import build_field_kit
 from dnd.items.consumables import (
+    build_basic_poison_weapon_coat,
     build_concentration_fire_weapon_coat,
     build_fire_weapon_coat,
     build_greater_invisibility_potion,
@@ -141,6 +146,7 @@ def _build_weapon(
         dice_numbers=definition.damage_dice_count,
         damage_type=definition.damage_type,
         properties=list(definition.properties),
+        supports_arrow_payload=definition.supports_arrow_payload,
         range=Range(
             type=(
                 RangeType.RANGE
@@ -187,7 +193,7 @@ def _armor_value(source_entity_uuid: UUID, name: str, value: int) -> ModifiableV
 def _build_wearable(
     definition: WearableDefinition,
     source_entity_uuid: UUID,
-) -> BaseItem:
+) -> Armor | Shield:
     properties = definition.item_properties
     if definition.stealth_disadvantage and not any(isinstance(value, ArmorPenalties) for value in properties):
         properties = (*properties, ArmorPenalties(True, definition.strength_requirement))
@@ -214,13 +220,17 @@ def _build_wearable(
                 definition.shield_armor_class_bonus,
             ),
         )
-    item_type: type[BodyArmor | Boots | Gauntlets | Helmet]
+    item_type: type[Armor | BodyArmor | Boots | Cloak | Gauntlets | Helmet]
     if definition.wearable_kind == "boots":
         item_type = Boots
     elif definition.wearable_kind == "gauntlets":
         item_type = Gauntlets
     elif definition.wearable_kind == "helmet":
         item_type = Helmet
+    elif definition.wearable_kind == "cloak":
+        item_type = Cloak
+    elif definition.wearable_kind == "accessory":
+        item_type = Armor
     else:
         item_type = BodyArmor
     return item_type(
@@ -246,7 +256,7 @@ def materialize_item_definition(
     definition: WeaponDefinition | WearableDefinition,
     source_entity_uuid: UUID,
     *, quantity: int = 1,
-) -> BaseItem:
+) -> Weapon | Armor | Shield:
     """Create a physical copy through the same native materializers as named content.
 
     Pure definition composition does not install another content registry. Named
@@ -408,7 +418,15 @@ def _window_component_builder(family: str, *, insert: bool) -> ItemBuilder:
         family, insert=insert, source_entity_uuid=source))
 
 
+def _carried_power_builder(item_id: str, *, arrow: bool) -> ItemBuilder:
+    def build(actor_uuid: UUID, quantity: int = 1) -> BaseItem:
+        return build_special_arrow(item_id,actor_uuid,quantity) if arrow else build_powered_backpack(item_id,actor_uuid,quantity)
+    return build
+
+
 DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
+    **{item_id:_carried_power_builder(item_id,arrow=False) for item_id in PACK_POWERS},
+    **{item_id:_carried_power_builder(item_id,arrow=True) for item_id in ARROW_PAYLOADS},
     **{p.wall.item_id: _window_component_builder(family, insert=False) for family, p in WINDOW_DEFINITIONS.items()},
     **{p.insert.item_id: _window_component_builder(family, insert=True) for family, p in WINDOW_DEFINITIONS.items() if p.insert is not None},
     **{item_id: _chest_definition_builder(definition) for item_id, definition in CHEST_DEFINITIONS.items()},
@@ -425,6 +443,15 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
         item_id: _weapon_definition_builder(definition)
         for item_id, definition in AUTHORED_WEAPON_DEFINITIONS.items()
     },
+    **{item_id: _weapon_definition_builder(definition)
+       for item_id, definition in {**ROSTER_WEAPON_DEFINITIONS, **ROSTER_EMBER_DEFINITIONS}.items()},
+    **{item_id: _weapon_definition_builder(definition)
+       for item_id, definition in ROSTER_CARRIED_DEFINITIONS.items()},
+    **{item_id: _wearable_definition_builder(definition)
+       for item_id, definition in ROSTER_GEAR_DEFINITIONS.items()},
+    **{item_id: _fixed_definition_builder(definition)
+       for item_id, definition in ROSTER_INVENTORY_DEFINITIONS.items()},
+    ROSTER_MAUL_DEFINITION.item_id: _weapon_definition_builder(ROSTER_MAUL_DEFINITION),
     **{
         item_id: _wearable_definition_builder(definition)
         for item_id, definition in AUTHORED_WEARABLE_DEFINITIONS.items()
@@ -443,6 +470,9 @@ DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
     ),
     "consumable.potion_true_seeing": _single_item_builder(
         "consumable.potion_true_seeing", build_true_seeing_potion,
+    ),
+    "consumable.weapon_coat.basic_poison": _single_item_builder(
+        "consumable.weapon_coat.basic_poison", build_basic_poison_weapon_coat,
     ),
     "consumable.weapon_coat.fire": _single_item_builder(
         "consumable.weapon_coat.fire", build_fire_weapon_coat,

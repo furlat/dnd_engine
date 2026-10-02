@@ -515,6 +515,8 @@ class FloorItem:
     remnant_state: ItemRemnantState | None = None
     integrity: ItemIntegrity = ItemIntegrity.INTACT
     destruction_outcome: str | None = None
+    construction_geometry: AoEPresentationGeometry | None = None
+    known_to_creator: bool = False
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

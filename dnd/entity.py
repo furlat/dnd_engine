@@ -1,3 +1,4 @@
+from dnd.core.effect_types import EffectOrigin
 from dnd.core.attack_types import NaturalWeaponSpec
 from typing import AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
@@ -129,6 +130,7 @@ _CONCRETE_EQUIPMENT_SLOTS: Tuple[EquipmentSlot, ...] = (
     RingSlot.LEFT,
     RingSlot.RIGHT,
     BodyPart.CLOAK,
+    BodyPart.BACKPACK,
 )
 
 
@@ -1887,6 +1889,10 @@ class Entity(BaseBlock):
             self._expire_long_rest_conditions_on_block(item)
         for item in self.inventory.items.values():
             self._expire_long_rest_conditions_on_block(item)
+        holdings: dict[UUID, BaseItem] = {item.uuid: item for item in self.equipment.get_all_equipped_items()}
+        holdings.update(self.inventory.items)
+        for item in holdings.values():
+            item.on_long_rest(self.uuid)
         self.health.on_long_rest()
         return True
 
@@ -2363,7 +2369,7 @@ class Entity(BaseBlock):
 
         actions = self.action_economy.actions.normalized_score
         bonus_actions = self.action_economy.bonus_actions.normalized_score
-        movement = self.action_economy.movement.normalized_score
+        movement = self.action_economy.movement_remaining()
         reactions = self.action_economy.reactions.normalized_score
 
         event = event.phase_to(
@@ -2402,9 +2408,7 @@ class Entity(BaseBlock):
 
         actions_used = max(0, 1 - self.action_economy.actions.normalized_score)
         bonus_used = max(0, 1 - self.action_economy.bonus_actions.normalized_score)
-        base_mod = self.action_economy.movement.get_base_modifier()
-        base_movement = base_mod.value if base_mod else 30
-        movement_used = max(0, base_movement - self.action_economy.movement.normalized_score)
+        movement_used = self.action_economy.movement_spent()
 
         event = TurnEndEvent(
             source_entity_uuid=self.uuid,
@@ -2519,6 +2523,13 @@ class Entity(BaseBlock):
             proficiency_bonus = proficiency_bonus.model_copy(deep=True)
             proficiency_bonus.update_normalizers(lambda _bonus: 0)
 
+        if natural_weapon is not None and natural_weapon.fixed_attack_bonus is not None:
+            intrinsic = ModifiableValue.create(source_entity_uuid=self.uuid, target_entity_uuid=self.target_entity_uuid, value_name="Intrinsic attack bonus",
+                base_value=natural_weapon.fixed_attack_bonus)
+            # Keep independent actor/target effects; fixed baseline replaces STR/proficiency.
+            weapon_bonus = weapon_bonus.combine_values([intrinsic])
+            proficiency_bonus = ModifiableValue.create(source_entity_uuid=self.uuid, target_entity_uuid=self.target_entity_uuid, value_name="Intrinsic proficiency", base_value=0)
+            ability_bonuses = []
         return proficiency_bonus, weapon_bonus, attack_bonuses, ability_bonuses, range
 
     def saving_throw_bonus(self, target_entity_uuid: Optional[UUID], ability_name: AbilityName) -> ModifiableValue:
@@ -2796,6 +2807,8 @@ class Entity(BaseBlock):
             )
             else 0
         )
+        if natural_weapon is not None and natural_weapon.fixed_attack_bonus is not None:
+            proficiency_score = 0
         advantage_sum = equipment_advantage + self.proficiency_bonus.advantage_sum
         if advantage_sum > 0:
             advantage = AdvantageStatus.ADVANTAGE
@@ -3028,6 +3041,7 @@ class Entity(BaseBlock):
         effect_id: Optional[str] = None,
         impact_direction: tuple[float, float] | None = None,
         spatial_source: SpatialDamageSource | None = None,
+        effect_origin: EffectOrigin | None = None,
     ) -> int:
         """Apply damage through the engine event lifecycle.
 
@@ -3073,6 +3087,7 @@ class Entity(BaseBlock):
             effect_id=effect_id,
             parent_event=parent_event,
             spatial_source=spatial_source,
+            effect_origin=effect_origin,
             phase=EventPhase.DECLARATION
         )
 
@@ -4353,6 +4368,7 @@ class Entity(BaseBlock):
 
     def _prepare_equipment_storage(
         self, items: Tuple[EquippableItem, ...], *, excluding: Tuple[UUID, ...] = (),
+        allow_ground_fallback: bool = True,
     ) -> Optional[Tuple[_EquipmentStorageDestination, ...]]:
         """Admit storage or floor destinations before unequipping anything."""
         grid = get_map()
@@ -4363,6 +4379,8 @@ class Entity(BaseBlock):
                 stored.append(item)
                 destinations.append(_EquipmentStorageDestination(item))
                 continue
+            if not allow_ground_fallback:
+                return None
             floor = grid.prepare_object_placement(item.uuid, self.position)
             if floor is None:
                 for destination in destinations:
@@ -4499,7 +4517,24 @@ class Entity(BaseBlock):
         self._publish_equipment_storage(committed)
         return True
 
-    def unequip_item(self, slot: EquipmentSlot) -> Optional[BaseItem]:
+    def grant_one_handed_offhand(self, grant_uuid: UUID) -> None:
+        """Install an independently owned talent receipt before gear admission."""
+        self.equipment.one_handed_offhand_grants.add(grant_uuid)
+
+    def revoke_one_handed_offhand(self, grant_uuid: UUID) -> bool:
+        """Release one receipt, retaining it if required inventory-only unequip fails."""
+        grants = self.equipment.one_handed_offhand_grants
+        if grant_uuid not in grants:
+            return False
+        item = self.equipment.weapon_melee_off
+        if (len(grants) == 1 and item is not None
+                and WeaponSlot.MELEE_OFF not in item.compatible_equipment_slots()):
+            if self.unequip_item(WeaponSlot.MELEE_OFF, allow_ground_fallback=False) is not item:
+                return False
+        grants.remove(grant_uuid)
+        return True
+
+    def unequip_item(self, slot: EquipmentSlot, *, allow_ground_fallback: bool = True) -> Optional[BaseItem]:
         """Move item from equipment slot to inventory.
 
         If inventory is full, drops item to ground at entity position.
@@ -4515,7 +4550,7 @@ class Entity(BaseBlock):
 
         def admit_destination(item: EquippableItem) -> bool:
             nonlocal destinations
-            prepared = self._prepare_equipment_storage((item,))
+            prepared = self._prepare_equipment_storage((item,), allow_ground_fallback=allow_ground_fallback)
             if prepared is None:
                 return False
             destinations = prepared
@@ -4837,6 +4872,10 @@ class Entity(BaseBlock):
             item_charge_cost=item_charge_cost,
             fixed_healing=template.get_fixed_healing(self),
         )
+        ammunition = template.get_attack_ammunition_metadata()
+        if ammunition is not None:
+            action_info.selected_ammunition_uuid = ammunition.item_uuid
+            action_info.ammunition_payload = ammunition.payload
         action_info.set_execution_template(template)
         return action_info
 
@@ -5670,7 +5709,7 @@ class Entity(BaseBlock):
     ) -> List[AvailableTarget]:
         """Retain candidates whose target-specialized costs are affordable."""
         executable: List[AvailableTarget] = []
-        remaining_movement = self.action_economy.movement.normalized_score
+        remaining_movement = self.action_economy.movement_remaining()
         for candidate in candidates:
             if candidate.position is None:
                 continue
@@ -5896,7 +5935,8 @@ class Entity(BaseBlock):
                     ))
                     continue
                 else:
-                    movement_mode = getattr(template, "movement_mode", MovementMode.WALKING)
+                    movement_mode = template.get_movement_mode()
+                    remaining_movement = self.action_economy.movement_remaining(movement_mode)
                     rules_route_exists = self._has_subjective_path_destination(
                         movement_mode,
                     )
@@ -7034,7 +7074,7 @@ class Entity(BaseBlock):
         """
         timing = action_timing_enabled()
         started = time.perf_counter() if timing else 0.0
-        remaining_movement = self.action_economy.movement.normalized_score
+        remaining_movement = self.action_economy.movement_remaining()
         if timing:
             record_action_timing("available_actions.remaining_movement_ms", started)
 

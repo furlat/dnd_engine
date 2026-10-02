@@ -533,7 +533,8 @@ def _floor_item(item: ItemPresentationState, residues: tuple[ObjectResidueState,
         surface_residues=residues, current_hit_points=item.current_hit_points, maximum_hit_points=item.maximum_hit_points,
         concentration_capacity=item.concentration_capacity, concentration_slots=item.concentration_slots,
         door_mechanism=item.door_mechanism, door_swing=item.door_swing, remnant_state=item.remnant_state,
-        integrity=item.integrity, destruction_outcome=item.destruction_outcome)
+        integrity=item.integrity, destruction_outcome=item.destruction_outcome,
+        construction_geometry=item.construction_geometry, known_to_creator=item.known_to_creator)
 
 
 _DELTAS = {CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),

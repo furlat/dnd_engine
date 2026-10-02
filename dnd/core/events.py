@@ -5266,6 +5266,11 @@ class TakeDamageEvent(Event):
         description="Factual defense and hit-point allocation attached at completion.",
     )
 
+    effect_origin: EffectOrigin | None = None
+
+    def get_effect_origin(self) -> EffectOrigin | None:
+        return self.effect_origin
+
     def get_effective_damage(self) -> int:
         """Get the damage amount to apply (final_damage if set, else total_damage)."""
         return self.final_damage if self.final_damage is not None else self.total_damage

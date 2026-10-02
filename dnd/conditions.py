@@ -3,7 +3,7 @@
 from types import MappingProxyType
 
 from pydantic import Field, PrivateAttr
-from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, Duration
+from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, ConditionStateChangedEvent, Duration
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
     ConditionCategory,
@@ -29,6 +29,7 @@ from dnd.core.content.registration import (
 )
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.entity import Entity
+from dnd.types.actor import ConditionState
 from dnd.blocks.base_item import BaseItem
 from dnd.core.item_types import ItemConcentrationSlot, ItemLocation
 from dnd.types.residue_fear import PaidEntryRetreat, ResidueFearOrigin
@@ -829,6 +830,7 @@ class Exhaustion(BaseCondition):
                     )
                 )
                 outs.append((target_entity.action_economy.movement.uuid, modifier_uuid))
+                target_entity.action_economy.movement_speed_factors[modifier_uuid] = 0.5
                 effect_event = effect_event.phase_to(
                     EventPhase.EFFECT,
                     update={"condition": self},
@@ -1600,7 +1602,7 @@ class Prone(BaseCondition):
             ):
                 base_movement = target_entity.action_economy.get_base_value("movement")
                 half_movement = base_movement // 2
-                current_movement = target_entity.action_economy.movement.normalized_score
+                current_movement = target_entity.action_economy.movement_remaining()
                 if current_movement >= half_movement:
                     target_entity.action_economy.consume("movement", half_movement)
                     return [], [], [], [], declaration_event.cancel(
@@ -1909,6 +1911,7 @@ class Concentrating(BaseCondition):
         if self.concentration_slots.pop(slot_uuid, None) is not None:
             slot.remove_from_register()
         self._sync_spell_name()
+        self.publish_owner_state(parent_event)
         return True
 
     def cleanup_if_no_effects(self, parent_event: Optional[Event] = None) -> None:
@@ -1929,10 +1932,26 @@ class Concentrating(BaseCondition):
         return tuple(ItemConcentrationSlot(slot_uuid=slot.uuid, spell_id=slot.spell_id,
             spell_name=slot.spell_name) for slot in self.concentration_slots.values() if slot.linked_entries)
 
-    def publish_owner_state(self, parent_event: Event) -> None:
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={
+            "concentration_slots": self.snapshot_concentration_slots(),
+        })
+
+    def publish_owner_state(self, parent_event: Event | None) -> None:
         owner = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         if isinstance(owner, BaseItem) and owner.tile_uuid is not None:
             owner.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
+        elif isinstance(owner, Entity) and owner.active_conditions_by_uuid.get(self.uuid) is self:
+            ConditionStateChangedEvent(
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=owner.uuid,
+                parent_event=parent_event.uuid if parent_event is not None else None,
+                parent_lineage=parent_event.lineage_uuid if parent_event is not None else None,
+                phase=EventPhase.COMPLETION,
+                condition_state=self.snapshot_state(),
+                resulting_stats=owner.snapshot_entity_stats(),
+                behavior_id=self.behavior_binding.behavior_id if self.behavior_binding is not None else None,
+            )
 
     def unlink_condition(self, condition_uuid: UUID, *, parent_event: Event) -> None:
         super().unlink_condition(condition_uuid, parent_event=parent_event)
@@ -2380,6 +2399,8 @@ class InvisibilityEffect(BaseCondition):
     description: str = Field(default="Invisible until attacking or casting a spell", description="Condition description.")
     obscures_perceivability: bool = Field(default=True, description="Removing invisibility may reveal the target.")
     creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition.")
+    reveal_on_spell: bool = True
+    reveal_on_other_actions: bool = True
 
     def format_application_log(self, target_name: str) -> str:
         """Render the invisibility-specific application message."""
@@ -2481,6 +2502,10 @@ def invisibility_reveal_processor(event: Event, source_entity_uuid: UUID) -> Opt
         condition = entity.active_conditions.get("Invisible")
         if isinstance(condition, InvisibilityEffect):
             if condition.creation_lineage_uuid == event.lineage_uuid:
+                return None
+            if event.event_type == EventType.CAST_SPELL and not condition.reveal_on_spell:
+                return None
+            if event.event_type == EventType.BASE_ACTION and not condition.reveal_on_other_actions:
                 return None
             entity.remove_condition("Invisible", parent_event=event)
     return None

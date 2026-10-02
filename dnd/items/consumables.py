@@ -1,10 +1,11 @@
 """Canonical Neurodragon consumables and their definition-owned behavior."""
 
+from functools import partial
 from types import MappingProxyType
-from typing import Any, Optional
+from typing import Any, Optional, Literal, Self
 from uuid import UUID, uuid4
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from dnd.actions import (
     entity_action_economy_cost_applier,
@@ -59,13 +60,19 @@ from dnd.core.content.runtime import (
     bind_runtime_behavior_child,
 )
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Event, EventPhase
+from dnd.core.events import Event, EventPhase, EventType, EventQueue, EventHandler, Trigger, DamageRollResultEvent
+from dnd.core.dice import AttackOutcome
 from dnd.core.creature_types import DamageType
 from dnd.core.item_types import ItemEffectPresentationState
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
+from dnd.damage_payloads import append_saved_poison
 from dnd.spells.divination import TrueSeeingEffect
 from dnd.spells.transmutation import HasteEffect
+
+
+BASIC_POISON_APPLY_SEMANTIC_KEY = "content.neurodragon:action:action.consumable.weapon_coat.basic_poison.apply@1"
+BASIC_POISON_CONDITION_SEMANTIC_KEY = "content.neurodragon:condition:condition.consumable.weapon_coat.basic_poison@1"
 
 
 HEALING_POTION_DRINK_SEMANTIC_KEY = (
@@ -347,6 +354,23 @@ class _HealingPotion(UsableItem):
     )
 
 
+def _saved_coat_damage(event: Event, source_entity_uuid: UUID, *, weapon_uuid: UUID,
+                       dc: int, die: Literal[4, 6, 8, 10, 12, 20], name: str,
+                       bonus: ModifiableValue) -> Event | None:
+    if not isinstance(event, DamageRollResultEvent) or event.canceled or event.attack_outcome not in (AttackOutcome.HIT, AttackOutcome.CRIT):
+        return None
+    attack = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event else None
+    if not isinstance(attack, ActionEvent) or attack.canceled or attack.event_type != EventType.ATTACK or attack.source_item_uuid != weapon_uuid:
+        return None
+    attacker = Entity.get(event.source_entity_uuid) if event.source_entity_uuid else None
+    target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+    # Objects use normal weapon damage; they do not have a creature Constitution save.
+    if attacker is None or target is None:
+        return None
+    return append_saved_poison(event,dc=dc,die=die,name=name,bonus=bonus,
+        cause_id="consumable.weapon_coat.basic_poison")
+
+
 class _WeaponCoatCondition(BaseCondition):
     """Shared internal mechanic for authored weapon-coat conditions."""
 
@@ -371,6 +395,17 @@ class _WeaponCoatCondition(BaseCondition):
     )
     damage_contribution_uuid: Optional[UUID] = None
     last_duration_interval: Optional[tuple[UUID, int]] = None
+    coat_damage_die: Literal[4, 6, 8, 10, 12, 20] = 6
+    coat_save_dc: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_damage_profile(self) -> Self:
+        if self.coat_save_dc is None and self.coat_damage_die != 6:
+            raise ValueError("Unconditional coat retains its existing 1d6 packet")
+        if self.coat_save_dc is not None and (self.coat_damage_die != 4 or self.coat_damage_type != DamageType.POISON):
+            raise ValueError("Save-gated coat requires the supported 1d4 poison profile")
+        return self
+
 
     def snapshot_item_effect(self) -> ItemEffectPresentationState | None:
         if self.damage_contribution_uuid is None:
@@ -418,16 +453,23 @@ class _WeaponCoatCondition(BaseCondition):
                 status_message="Weapon not found",
             )
 
-        bonus_mv = ModifiableValue.create(
-            source_entity_uuid=self.target_entity_uuid,
-            base_value=0,
-            value_name=f"{self.name} Bonus",
-        )
+        handlers = []
+        bonus_mv = ModifiableValue.create(source_entity_uuid=weapon.uuid,
+            base_value=0, value_name=f"{self.name} Bonus")
         self.damage_contribution_uuid = bonus_mv.uuid
-        weapon.extra_damage_dices.append(6)
-        weapon.extra_damage_dices_numbers.append(1)
-        weapon.extra_damage_bonus.append(bonus_mv)
-        weapon.extra_damage_type.append(self.coat_damage_type)
+        if self.coat_save_dc is None:
+            weapon.extra_damage_dices.append(self.coat_damage_die)
+            weapon.extra_damage_dices_numbers.append(1)
+            weapon.extra_damage_bonus.append(bonus_mv)
+            weapon.extra_damage_type.append(self.coat_damage_type)
+        else:
+            handler = EventHandler(name=self.name, source_entity_uuid=weapon.uuid,
+                trigger_conditions=[Trigger(event_type=EventType.DAMAGE_ROLL_RESULT, event_phase=EventPhase.EFFECT)],
+                event_processor=partial(_saved_coat_damage, weapon_uuid=weapon.uuid,
+                    dc=self.coat_save_dc, die=self.coat_damage_die, name=self.name, bonus=bonus_mv))
+            bind_runtime_behavior_child(handler, provider_binding=self.behavior_binding, runtime_owner_uuid=weapon.uuid)
+            weapon.add_event_handler(handler)
+            handlers.append(handler.uuid)
 
         effect = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -436,7 +478,7 @@ class _WeaponCoatCondition(BaseCondition):
                 f"Weapon coated with {self.coat_damage_type.value}"
             ),
         )
-        return [], [], [], [], effect
+        return [], handlers, [], [], effect
 
     def _release_owned_runtime_state(self, *, parent_event: Optional[Event] = None) -> None:
         """Remove only this packet on ordinary cleanup or provisional rollback."""
@@ -454,6 +496,10 @@ class _WeaponCoatCondition(BaseCondition):
                         bonus.remove_from_register()
                         weapon.extra_damage_type.pop(index)
                         break
+        if self.coat_save_dc is not None and self.damage_contribution_uuid is not None:
+            bonus = ModifiableValue.get(self.damage_contribution_uuid)
+            if bonus is not None:
+                bonus.remove_from_register()
         self.damage_contribution_uuid = None
         super()._release_owned_runtime_state(parent_event=parent_event)
 
@@ -552,7 +598,20 @@ class _TimedFireWeaponCoatCondition(_WeaponCoatCondition):
     coat_damage_type: DamageType = Field(default=DamageType.FIRE)
 
 
+@_consumable_condition_identity(
+    content_id="condition.consumable.weapon_coat.basic_poison", display_name="Basic Poison",
+    description="DC10 Constitution on hit, 1d4 poison on failure; no Poisoned condition.", sort_order=50)
+class _BasicPoisonWeaponCoatCondition(_WeaponCoatCondition):
+    name: str = "Basic Poison"
+    description: str = "DC10 Constitution on hit, 1d4 poison on failure; no Poisoned condition."
+    condition_category: ConditionCategory = ConditionCategory.CONDITION
+    coat_damage_type: DamageType = DamageType.POISON
+    coat_damage_die: Literal[4, 6, 8, 10, 12, 20] = 4
+    coat_save_dc: int | None = Field(default=10, gt=0)
+
+
 _WEAPON_COAT_CONDITION_TYPES_BY_SEMANTIC_KEY = MappingProxyType({
+    BASIC_POISON_CONDITION_SEMANTIC_KEY: _BasicPoisonWeaponCoatCondition,
     FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY:
         _FireWeaponCoatCondition,
     LIGHTNING_WEAPON_COAT_CONDITION_SEMANTIC_KEY:
@@ -594,7 +653,7 @@ class _ApplyWeaponCoatAction(BaseAction):
     )
     costs: list[Cost] = Field(
         default_factory=list,
-        description="No-cost action-economy payload for coat application.",
+        description="Authored action-economy cost for coat application.",
     )
     source_item_uuid: Optional[UUID] = Field(
         default=None,
@@ -620,6 +679,9 @@ class _ApplyWeaponCoatAction(BaseAction):
         default=FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY,
         description="Stable definition identity of the applied coat condition.",
     )
+
+    def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
     def _validate(
         self,
@@ -1111,12 +1173,14 @@ def _build_direct_weapon_coat(
     include_off_hand: bool = True,
     duration: Optional[int] = None,
     concentration: bool = False,
+    application_cost: int = 0,
 ) -> UsableItem:
     """Construct one weapon coating from explicit mechanical facts."""
     actions: list[BaseAction] = [_ApplyWeaponCoatAction(
         source_entity_uuid=uuid4(),
         source_item_uuid=uuid4(),
         name="Coat Main Hand",
+        costs=[Cost(name="Coating application", cost_type="actions", cost=application_cost, evaluator=entity_action_economy_cost_evaluator)] if application_cost else [],
         semantic_key=action_id,
         condition_semantic_key=condition_id,
         weapon_slot="MELEE_MAIN",
@@ -1130,6 +1194,7 @@ def _build_direct_weapon_coat(
             source_entity_uuid=uuid4(),
             source_item_uuid=uuid4(),
             name="Coat Off Hand",
+            costs=[Cost(name="Coating application", cost_type="actions", cost=application_cost, evaluator=entity_action_economy_cost_evaluator)] if application_cost else [],
             semantic_key=action_id,
             condition_semantic_key=condition_id,
             weapon_slot="MELEE_OFF",
@@ -1145,6 +1210,14 @@ def _build_direct_weapon_coat(
         use_action_templates=actions,
         stack_id=stack_id,
     )
+
+
+def build_basic_poison_weapon_coat(source_entity_uuid: UUID) -> UsableItem:
+    return _build_direct_weapon_coat(source_entity_uuid,
+        item_id="consumable.weapon_coat.basic_poison", display_name="Basic Poison",
+        damage_type=DamageType.POISON, action_id=BASIC_POISON_APPLY_SEMANTIC_KEY,
+        condition_id=BASIC_POISON_CONDITION_SEMANTIC_KEY, stack_id="weapon_coat_basic_poison",
+        duration=10, application_cost=1)
 
 
 def build_fire_weapon_coat(source_entity_uuid: UUID) -> UsableItem:

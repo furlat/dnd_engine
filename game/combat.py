@@ -11,7 +11,7 @@ from uuid import UUID
 from dnd.core.equipment_types import WeaponSet
 from dnd.core.life_types import LifeState
 from dnd.core.dice import AttackOutcome
-from dnd.core.presentation_geometry import ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry, SpherePresentationGeometry
+from dnd.core.presentation_geometry import ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry, SpherePresentationGeometry, CylinderPresentationGeometry
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.types.world_placement import WorldObjectPlacement
 from game.animation import (
@@ -20,7 +20,7 @@ from game.animation import (
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, Facing8, RigLayer
 from game.player_facts import (
-    ActionFact, AreaReachFact, AttackFact, ConditionChangeFact, DamageFact, EquipmentFact, LifeFact, ObjectDamageFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SpellFact,
+    ActionFact, AreaReachFact, AttackFact, ConditionChangeFact, DamageFact, EquipmentFact, LifeFact, ObjectDamageFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SavingThrowFact, SpellFact,
 )
 from game.player_reduction import reduce_lineage, state_before_event
 from game.device_art import DeviceEmission, device_bank
@@ -233,6 +233,8 @@ def bind_cast(
             owned_life_events.update(identity for identity, _ in changes)
         object_damage = next((row.fact for row in descendants if isinstance(row.fact, ObjectDamageFact)
             and row.fact.object_uuid == recipient_uuid and row.fact.applied_damage > 0), None)
+        received_saves = tuple(row.fact for row in descendants if not row.canceled
+            and isinstance(row.fact, SavingThrowFact) and row.fact.target_entity_uuid == recipient_uuid)
         applications.append(CastApplication(
             application_id=(str(application.application_id)
                 if isinstance(application, SpellFact) and application.application_id is not None else None),
@@ -252,6 +254,8 @@ def bind_cast(
                 and event.fact.target_entity_uuid == recipient_uuid
                 and event.fact.event_type is EventType.CONDITION_REMOVAL
                 and event.fact.condition.state is not None for tag in event.fact.condition.state.tags),
+            # Ambiguous/missing disclosures cannot authorize outcome-specific art.
+            save_succeeded=received_saves[0].succeeded if len(received_saves) == 1 else None,
         ))
     if root_node.canceled and not application_roots and not area:
         # The declaration is real attempted allocation, even when no application
@@ -291,7 +295,7 @@ def bind_cast(
                        area_direction=area_direction,
                        area_propagation=spell.area_propagation if spell is not None else "line_of_effect",
                        area_radius_feet=(spell.area_geometry.radius_feet
-                           if spell is not None and isinstance(spell.area_geometry, SpherePresentationGeometry) else 0),
+                           if spell is not None and isinstance(spell.area_geometry, (SpherePresentationGeometry, CylinderPresentationGeometry)) else 0),
                        protections=tuple((identity, target.senses.spatial_effects[identity])
                            for identity in dict.fromkeys(suppression.provider_uuid
                                for fact in (spell, *(fact for _, fact in spell_applications)) if fact is not None

@@ -589,7 +589,10 @@ def twf_off_hand_melee_ability_bonus(
     if not off_hand or isinstance(off_hand, Shield):
         return None
 
-    if WeaponProperty.FINESSE in off_hand.properties:
+    override_ability = off_hand.selected_attack_ability(entity.ability_scores, None)
+    if override_ability is not None:
+        bonus = entity.ability_scores.get_ability(override_ability).modifier
+    elif WeaponProperty.FINESSE in off_hand.properties:
         str_mod = entity.ability_scores.strength.modifier
         dex_mod = entity.ability_scores.dexterity.modifier
         bonus = max(str_mod, dex_mod)
@@ -1174,7 +1177,7 @@ class ExtraAttack(Attack):
             return super().get_discovery_variants(entity)
         if not isinstance(entity, Entity):
             return []
-        variants: List[BaseAction] = []
+        variants: List[Attack] = []
         for slot in (
             WeaponSlot.MELEE_MAIN,
             WeaponSlot.MELEE_OFF,
@@ -1199,7 +1202,8 @@ class ExtraAttack(Attack):
                     },
                 ),
             )
-        return variants
+        return [candidate for variant in variants
+            for candidate in Attack.get_discovery_variants(variant, entity)]
 
     def validate_source_requirements_for_discovery(self) -> bool:
         """Require a committed ordinary Attack before exposing the earned batch."""

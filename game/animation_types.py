@@ -160,6 +160,7 @@ class MediaTimePoint(AuthoredRecord):
 
 class StudioProjectilePhase(AuthoredRecord):
     enabled: bool
+    onMiss: Literal["play", "omit"] = "play"
     assetId: Identifier | None = None
     assetPhase: Literal["cast", "travel", "impact"]
     startFrame: BodyFrame | None = None
@@ -414,6 +415,8 @@ class StudioMediaTrack(AuthoredRecord):
     viewFacing: Facing8 | None = None
     onMiss: Literal["play", "omit"] = "play"
     requireRemovedConditionTag: ConditionTag | None = None
+    requiredSaveSuccess: bool | None = None
+    actorTopClearancePx: NonNegative | None = None
     worldOffsetsByFacing: FacingMap[Point] | None = None
     timeMap: tuple[MediaTimePoint, ...] = ()
     timeMapsByFacing: FacingMap[tuple[MediaTimePoint, ...]] | None = None
@@ -425,6 +428,10 @@ class StudioMediaTrack(AuthoredRecord):
     def removal_gate_target(self) -> StudioMediaTrack:
         if self.requireRemovedConditionTag is not None and not self.attachment.startswith("target_"):
             raise ValueError("condition-removal media requires a target attachment")
+        if self.requiredSaveSuccess is not None and not self.attachment.startswith("target_"):
+            raise ValueError("save-outcome media requires a target attachment")
+        if self.actorTopClearancePx is not None and not self.attachment.startswith("target_"):
+            raise ValueError("actor clearance requires a target attachment")
         return self
 
 
@@ -552,6 +559,7 @@ class ProjectileFrameLayer(AuthoredRecord):
     parts: tuple[tuple[ProjectileFramePart, ...], ...] | None = None
     blendMode: Literal["normal", "add"]
     gain: Annotated[float, Field(ge=0, le=1)] = 1
+    depth: Literal["world", "behind_body", "front_body"] = "world"
 
     @model_validator(mode="after")
     def one_source(self) -> ProjectileFrameLayer:
@@ -1360,6 +1368,43 @@ class WallRingMedia(AuthoredRecord):
     widthFeet: Positive
 
 
+class AssemblyModuleMedia(AuthoredRecord):
+    """One native orientation with independently selected lifecycle phases."""
+
+    tangent: tuple[float, float]
+    assetId: Identifier
+    applicationAssetId: Identifier
+    removalAssetId: Identifier
+
+
+class AssemblyRingMedia(AuthoredRecord):
+    heightFeet: Positive
+    assetId: Identifier
+    applicationAssetId: Identifier
+    removalAssetId: Identifier
+    radiusFeet: Positive
+    widthFeet: Positive
+    pixelScale: Positive
+
+
+class WallAssemblyMedia(AuthoredRecord):
+    """Registered passive construction data, separate from Fire's paired banks."""
+
+    modules: Annotated[tuple[AssemblyModuleMedia, ...], Field(min_length=1)]
+    moduleLengthCells: Positive
+    heightFeet: Positive
+    widthFeet: Positive
+    pixelScale: Positive
+    ring: AssemblyRingMedia | None = None
+
+    @model_validator(mode="after")
+    def distinct_directions(self) -> "WallAssemblyMedia":
+        tangents = [row.tangent for row in self.modules]
+        if len(set(tangents)) != len(tangents) or any(x*x+y*y <= 0 for x, y in tangents):
+            raise ValueError("assembly modules require distinct nonzero native tangents")
+        return self
+
+
 class SpatialMediaLayer(AuthoredRecord):
     """One registered layer around the received area's occupants."""
     assetId: Identifier
@@ -1367,12 +1412,15 @@ class SpatialMediaLayer(AuthoredRecord):
     side: Literal["center", "rear", "front"] = "center"
     removalAssetId: Identifier | None = None
     suppressionAssetId: Identifier | None = None
-    composition: Literal["billboard", "line_floor", "floor", "xy_volume", "xyz_volume", "clump", "wall_modules", "legacy", "volume"] = "legacy"
+    composition: Literal["billboard", "line_floor", "floor", "xy_volume", "xyz_volume", "clump", "wall_modules", "wall_assembly", "legacy", "volume"] = "legacy"
     wallAxes: tuple[WallAxisMedia, ...] = ()
     wallRing: WallRingMedia | None = None
+    wallAssembly: WallAssemblyMedia | None = None
 
     @model_validator(mode="after")
     def wall_banks(self) -> "SpatialMediaLayer":
+        if (self.wallAssembly is not None) != (self.composition == "wall_assembly"):
+            raise ValueError("wall_assembly composition requires its explicit registration")
         if self.composition == "wall_modules":
             axes = {row.axis for row in self.wallAxes}
             if not {"x", "y"} <= axes or len(axes) != len(self.wallAxes):
@@ -1442,6 +1490,7 @@ class SpatialMediaBinding(AuthoredRecord):
     holdFrames: Annotated[int, Field(ge=1)]
     fps: Positive
     scale: Positive
+    formationFadeMs: NonNegative = 0
     removalFadeMs: NonNegative = 0
     removalEasing: Literal["linear", "smoothstep"] = "linear"
     referenceRadiusFeet: Positive | None = None
@@ -1464,6 +1513,36 @@ class DepositMediaBinding(AuthoredRecord):
 
     radiusCells: Annotated[int, Field(ge=0)]
     variants: Annotated[tuple[SpatialMediaBinding, ...], Field(min_length=1)]
+
+
+class ConstructionPhaseMedia(AuthoredRecord):
+    """One original paired section bank; destruction requires its own fact."""
+
+    application: tuple[Identifier, Identifier]
+    intact: tuple[Identifier, Identifier]
+    destruction: tuple[Identifier, Identifier]
+
+
+class ConstructionDirectionMedia(AuthoredRecord):
+    tangent: tuple[float, float]
+    centerlineOffsetCells: tuple[float, float]
+    variants: Annotated[tuple[ConstructionPhaseMedia, ...], Field(min_length=1)]
+
+
+class ConstructionMediaBinding(AuthoredRecord):
+    """Artwork for an admitted physical object, independently of its spell zone."""
+
+    directions: Annotated[tuple[ConstructionDirectionMedia, ...], Field(min_length=1)]
+    lengthFeet: Positive
+    heightFeet: Positive
+    pixelScale: Positive = 1
+
+    @model_validator(mode="after")
+    def unique_headings(self) -> "ConstructionMediaBinding":
+        tangents = [row.tangent for row in self.directions]
+        if len(set(tangents)) != len(tangents) or any(x*x+y*y <= 0 for x, y in tangents):
+            raise ValueError('Construction banks require distinct nonzero tangents')
+        return self
 
 
 @dataclass(frozen=True, slots=True)
@@ -1515,3 +1594,5 @@ class AnimationData:
     action_deliveries: Mapping[str, str] = field(default_factory=dict)
     movement_reference_speed_feet: float = 30
     deposit_media: Mapping[str, DepositMediaBinding] = field(default_factory=dict)
+    concentration_media: Mapping[str, SpatialMediaBinding] = field(default_factory=dict)
+    construction_media: Mapping[str, ConstructionMediaBinding] = field(default_factory=dict)

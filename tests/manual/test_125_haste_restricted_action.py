@@ -815,17 +815,21 @@ def _extra_credits(actor: Entity) -> int:
 @pytest.mark.parametrize("attacks_per_action", [1, 2, 3, 4])
 @pytest.mark.parametrize("surge", [False, True])
 @pytest.mark.parametrize("recipients", ["creature", "object", "mixed"])
+@pytest.mark.parametrize("offhand_talent", [False, True])
 def test_attack_budget_grid_preserves_all_resources_for_creatures_and_objects(
     slow: bool,
     haste_policy: HasteActionPolicy | None,
     attacks_per_action: int,
     surge: bool,
     recipients: str,
+    offhand_talent: bool,
 ) -> None:
     """The 48 budget combinations have the same meaning for either recipient kind."""
     actor, creature, object_uuid = _create_grid_actor(
         attacks_per_action, haste_policy, slow=slow, surge=surge,
     )
+    if offhand_talent:
+        actor.grant_one_handed_offhand(uuid4())
     targets = {
         "creature": (creature.uuid,),
         "object": (object_uuid,),

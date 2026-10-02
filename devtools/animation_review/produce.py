@@ -4,6 +4,24 @@ from dnd.core.life_types import LifeState
 from devtools.animation_review.control_cases import control_spell_history
 from game.combat_demo import capture_combat_demo
 from game.replay import CapturedHistory
+from tests.game.curse_scenarios import curse_history
+from devtools.animation_review.curse_cases import CurseCase
+from devtools.animation_review.divine_cases import DivineCase
+from tests.game.divine_scenarios import divine_history
+from devtools.animation_review.slow_cases import SlowCase
+from devtools.animation_review.hold_cases import HoldCase
+from tests.game.hold_scenarios import hold_history
+from devtools.animation_review.fear_cases import FearCase
+from devtools.animation_review.hypnotic_cases import HypnoticCase
+from devtools.animation_review.assembly_cases import AssemblyCase
+from tests.game.assembly_scenarios import assembly_history
+from tests.game.hypnotic_scenarios import hypnotic_history
+from devtools.animation_review.scorching_cases import ScorchingCase
+from tests.game.fear_scenarios import fear_history
+from tests.game.scorching_scenarios import scorching_history
+from tests.game.slow_scenarios import slow_history
+from devtools.animation_review.continual_flame_cases import ContinualFlameCase
+from tests.game.continual_flame_scenarios import continual_flame_history
 from tests.game.body_residue_scenarios import body_residue_history, hidden_residue_history
 from tests.game.creature_scenarios import creature_history
 from tests.game.concealment_scenarios import concealment_history
@@ -57,6 +75,24 @@ from devtools.animation_review.cases import (
 def produce(case: ReviewCase) -> CapturedHistory:
     """Run real rules once, then hand only retained values to the recorder."""
     match case.scenario:
+        case AssemblyCase() as scenario:
+            return assembly_history(program=scenario.program,direction=scenario.direction,form=scenario.form)
+        case ScorchingCase() as scenario:
+            return scorching_history(direction=scenario.direction,split=scenario.split,miss=scenario.miss)
+        case HypnoticCase() as scenario:
+            return hypnotic_history(mode=scenario.mode)
+        case FearCase() as scenario:
+            return fear_history(direction=scenario.direction)
+        case ContinualFlameCase():
+            return continual_flame_history()
+        case CurseCase() as scenario:
+            return curse_history(option=scenario.option, saved=scenario.saved)
+        case HoldCase() as scenario:
+            return hold_history(program=scenario.program, saved=scenario.saved, retain_paralysis=scenario.retain_paralysis)
+        case SlowCase() as scenario:
+            return slow_history(saved=scenario.saved)
+        case DivineCase() as scenario:
+            return divine_history(program=scenario.program, multiple_targets=scenario.multiple_targets)
         case WallSpellCase() as scenario:
             return wall_spell_history(axis=scenario.axis, raised=scenario.raised,
                 retain_field=scenario.retain_field, multiple_targets=scenario.multiple_targets,
@@ -165,7 +201,10 @@ def produce(case: ReviewCase) -> CapturedHistory:
             return equipment_sequence_history(replacement=scenario.replacement, attacks=scenario.attacks)
         case ItemTransferCase() as scenario:
             return item_transfer_history(include_floor_robe=False, initial_hand=scenario.initial_hand,
-                                         drop_position=(3, 4))[3]
+                                         drop_position=(3, 4), roster_outfit=scenario.roster_outfit,
+                                         roster_backpack=scenario.roster_backpack,
+                                         weapon_item_id=scenario.weapon_item_id,
+                                         coating_item_id=scenario.coating_item_id)[3]
         case DiscoveryCase() as scenario:
             return discovery_history(mode=scenario.mode)
         case VisibilityCase() as scenario:

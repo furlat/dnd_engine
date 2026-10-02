@@ -43,6 +43,7 @@ from dnd.core.item_types import (
 )
 from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
 from dnd.core.base_actions import BaseAction
+from dnd.core.attack_types import AttackAmmunitionPayload
 from dnd.core.content.identities import validate_namespaced_id
 from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
@@ -159,6 +160,21 @@ class BaseItem(BaseBlock):
     )
     is_pickable: bool = Field(default=True, description="Can be picked up by entities")
     is_equippable: bool = Field(default=False, description="Can be equipped")
+    attack_ammunition_payload: AttackAmmunitionPayload | None = None
+
+    def ammunition_available(self) -> bool:
+        return False
+
+    def prepare_ammunition_release(self, actor_uuid: UUID, event: Event) -> Event | None:
+        return None
+
+    def commit_ammunition_release(self, prepared: Event) -> bool:
+        return False
+
+    def on_long_rest(self, actor_uuid: UUID) -> None:
+        """Default possessions have no item-owned rest resource."""
+        return None
+
     is_usable: bool = Field(default=False, description="Can be used (activate effect)")
     is_consumable: bool = Field(default=False, description="Destroyed on use")
     is_magical: bool = Field(default=False, description="Rules-facing magic-item protection, independent of artwork.")
@@ -1012,6 +1028,34 @@ class UsableItem(BaseItem):
         description="Action templates cloned and rebound when this item is used.",
     )
 
+    recharge_on_long_rest: bool = False
+
+    def ammunition_available(self) -> bool:
+        return self.is_active and self.attack_ammunition_payload is not None and self.charges > 0
+
+    def prepare_ammunition_release(self, actor_uuid: UUID, event: Event) -> Event | None:
+        if not self.ammunition_available():
+            return None
+        return self.prepare_charge_consumption(1, actor_uuid, event)
+
+    def commit_ammunition_release(self, prepared: Event) -> bool:
+        return not self.commit_prepared_charge(prepared).canceled
+
+    def on_long_rest(self, actor_uuid: UUID) -> None:
+        if not self.is_active or not self.recharge_on_long_rest or self.charges >= self.max_charges:
+            return
+        before = self.charges
+        event = ItemChargeConsumptionEvent(source_entity_uuid=actor_uuid,target_entity_uuid=self.uuid,
+            item_uuid=self.uuid,item_id=self.item_id,item_name=self.name,amount=self.max_charges-before,
+            resource_change="recharge",name="Item Charge Recharge",
+            charges_before=before,charges_after=before,stack_count_before=self.stack_count,
+            stack_count_after=self.stack_count)
+        event = event.phase_to(EventPhase.EXECUTION).phase_to(EventPhase.EFFECT)
+        if event.canceled:
+            return
+        self.charges = self.max_charges
+        event.phase_to(EventPhase.COMPLETION,charges_after=self.charges,status_message="Item recharged on long rest")
+
     def bind_dynamic_use_action(self, action: BaseAction) -> BaseAction:
         """Bind one state-dependent action through this exact item provider.
 
@@ -1144,6 +1188,11 @@ class UsableItem(BaseItem):
             RuntimeError: If the item cannot pay a charge already validated by
                 action discovery and execution.
         """
+        prepared = self.prepare_charge_consumption(amount, source_entity_uuid, parent_event)
+        return self.commit_prepared_charge(prepared)
+
+    def prepare_charge_consumption(self, amount: int, source_entity_uuid: UUID, parent_event: Event) -> Event:
+        """Dispatch vetoable resource admission without changing charges."""
         declaration = ItemChargeConsumptionEvent(
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=self.uuid,
@@ -1165,8 +1214,17 @@ class UsableItem(BaseItem):
             EventPhase.EFFECT,
             status_message="Finite item resource ready for consumption",
         )
+        return effect
+
+    def commit_prepared_charge(self, prepared: Event) -> "ItemChargeConsumptionEvent":
+        """Commit an admitted resource at release, once per stored event."""
+        effect = cast(ItemChargeConsumptionEvent, prepared)
         if effect.canceled:
             return effect
+        if (effect.item_uuid != self.uuid or self.charges != effect.charges_before
+                or self.stack_count != effect.stack_count_before):
+            return cast(ItemChargeConsumptionEvent, effect.cancel(status_message="Finite item resource changed after admission"))
+        amount = effect.amount
         if not self.consume_charge(amount, parent_event=effect):
             effect.cancel(status_message="Finite item resource changed after validation")
             raise RuntimeError(
@@ -1197,7 +1255,8 @@ class ItemChargeConsumptionEvent(Event):
         description="Direct authored identity of the consumed item.",
     )
     item_name: str = Field(default="Item", description="Human-readable consumed item name.")
-    amount: int = Field(default=1, ge=1, description="Number of charges consumed.")
+    resource_change: Literal["consume", "recharge"] = "consume"
+    amount: int = Field(default=1, ge=1, description="Number of charges changed.")
     charges_before: int = Field(ge=0, description="Active-item charges before consumption.")
     charges_after: int = Field(ge=0, description="Active-item charges after consumption.")
     stack_count_before: int = Field(ge=1, description="Represented item copies before consumption.")

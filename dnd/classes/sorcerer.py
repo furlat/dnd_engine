@@ -395,6 +395,9 @@ class DragonWingsActive(BaseCondition):
             return [], [], [], [], declaration_event.cancel(
                 status_message="Dragon Wings target does not exist",
             )
+        target.action_economy.movement_speed_grants[self.uuid] = {
+            MovementMode.FLYING: target.action_economy.get_base_value("movement")
+        }
         return [], [], [], [], declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
@@ -418,6 +421,7 @@ class DragonWingsActive(BaseCondition):
         template = cast(DragonWings, template)
         if template.active_wings_condition_uuid != self.uuid:
             raise RuntimeError("Dragon Wings owner edge is inconsistent")
+        target.action_economy.movement_speed_grants.pop(self.uuid, None)
         result = super()._remove(event)
         template.active_wings_condition_uuid = None
         return result

@@ -219,11 +219,38 @@ class ConditionResponse(_Record):
     effects: tuple[ConditionTransitionEffect, ...]
 
 
+class ConditionFrozenPose(_Record):
+    clip: Name
+    frame: Annotated[int, Field(ge=0)]
+    framesByRig: Mapping[str, Annotated[int, Field(ge=0)]] = Field(default_factory=dict)
+
+    @field_serializer("framesByRig")
+    def serialize_frames(self, value: Mapping[str, int]) -> dict[str, int]:
+        return dict(value)
+
+    @model_validator(mode="after")
+    def freeze_frames(self) -> "ConditionFrozenPose":
+        object.__setattr__(self, "framesByRig", MappingProxyType(dict(self.framesByRig)))
+        return self
+
+
+class ConditionBodyOutline(_Record):
+    color: Color
+    pulseColor: Color
+    alphaThreshold: Annotated[int, Field(ge=1, le=255)] = 100
+    opacity: Alpha = .55
+    pulseOpacity: Alpha = .75
+    periodMs: Annotated[float, Field(gt=0)] = 1400
+    onsetMs: Annotated[float, Field(gt=0)] = 300
+
+
 class ConditionPersistent(_Record):
     alphaMultiplier: Alpha
     bodyColor: ConditionBodyColor | None
     # Hold the final frame of a mapped rig clip when no action owns the body.
     bodyPose: Name | None = None
+    frozenPose: ConditionFrozenPose | None = None
+    bodyOutline: ConditionBodyOutline | None = None
     label: ConditionLabel | None = None
     bodyScale: ConditionBodyScale | None = None
     liveCopies: ConditionLiveCopies | None = None
@@ -278,7 +305,8 @@ class ConditionRecipe(_Record):
             if (self.classification.visualIntensity not in ("state_only", "icon_only")
                     or any(domain not in ("none", "hud_only") for domain in self.classification.presentationDomains)
                     or persistent.alphaMultiplier != 1 or persistent.bodyColor is not None
-                    or persistent.bodyPose is not None or persistent.label is not None
+                    or persistent.bodyPose is not None or persistent.frozenPose is not None
+                    or persistent.bodyOutline is not None or persistent.label is not None
                     or persistent.bodyScale is not None or persistent.liveCopies is not None
                     or persistent.bodyDistortion is not None or persistent.bodyRamp is not None
                     or persistent.equipmentModifiers or persistent.appearanceLayers or persistent.layers

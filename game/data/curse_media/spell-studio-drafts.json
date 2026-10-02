@@ -1,0 +1,384 @@
+{
+  "schema": "dnd.spellStudioDrafts",
+  "version": 3,
+  "spells": [
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.bestow_curse",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 12135992,
+        "secondary": 16410453,
+        "tertiary": 6496556
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      },
+      "contact": {
+        "delayMs": 656.25
+      },
+      "media": [
+        {
+          "id": "touch.back",
+          "assetId": "curse.curse_touch_v8.finite.back",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "behind_body",
+          "viewFacing": "E"
+        },
+        {
+          "id": "touch.front",
+          "assetId": "curse.curse_touch_v8.finite.front",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "front_body",
+          "viewFacing": "E"
+        }
+      ]
+    }
+  ],
+  "effectDrafts": {
+    "control.bestow_curse.option_1": {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.bestow_curse",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 12135992,
+        "secondary": 16410453,
+        "tertiary": 6496556
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      },
+      "contact": {
+        "delayMs": 656.25
+      },
+      "media": [
+        {
+          "id": "touch.back",
+          "assetId": "curse.curse_touch_v8.finite.back",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "behind_body",
+          "viewFacing": "E"
+        },
+        {
+          "id": "touch.front",
+          "assetId": "curse.curse_touch_v8.finite.front",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "front_body",
+          "viewFacing": "E"
+        },
+        {
+          "id": "resisted.back",
+          "assetId": "curse.curse_ability_burden_resisted_source_v12.finite.back",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "behind_body",
+          "viewFacing": "E",
+          "startOffsetMs": 656.25,
+          "requiredSaveSuccess": true,
+          "actorTopClearancePx": 10
+        },
+        {
+          "id": "resisted.front",
+          "assetId": "curse.curse_ability_burden_resisted_source_v12.finite.front",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "front_body",
+          "viewFacing": "E",
+          "startOffsetMs": 656.25,
+          "requiredSaveSuccess": true,
+          "actorTopClearancePx": 10
+        }
+      ]
+    },
+    "control.bestow_curse.option_2": {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.bestow_curse",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 12135992,
+        "secondary": 16410453,
+        "tertiary": 6496556
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      },
+      "contact": {
+        "delayMs": 656.25
+      },
+      "media": [
+        {
+          "id": "touch.back",
+          "assetId": "curse.curse_touch_v8.finite.back",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "behind_body",
+          "viewFacing": "E"
+        },
+        {
+          "id": "touch.front",
+          "assetId": "curse.curse_touch_v8.finite.front",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "front_body",
+          "viewFacing": "E"
+        },
+        {
+          "id": "resisted.back",
+          "assetId": "curse.curse_bent_strike_resisted_source_v12.finite.back",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "behind_body",
+          "viewFacing": "E",
+          "startOffsetMs": 656.25,
+          "requiredSaveSuccess": true,
+          "actorTopClearancePx": 10
+        },
+        {
+          "id": "resisted.front",
+          "assetId": "curse.curse_bent_strike_resisted_source_v12.finite.front",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "front_body",
+          "viewFacing": "E",
+          "startOffsetMs": 656.25,
+          "requiredSaveSuccess": true,
+          "actorTopClearancePx": 10
+        }
+      ]
+    },
+    "control.bestow_curse.option_3": {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.bestow_curse",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 12135992,
+        "secondary": 16410453,
+        "tertiary": 6496556
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      },
+      "contact": {
+        "delayMs": 656.25
+      },
+      "media": [
+        {
+          "id": "touch.back",
+          "assetId": "curse.curse_touch_v8.finite.back",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "behind_body",
+          "viewFacing": "E"
+        },
+        {
+          "id": "touch.front",
+          "assetId": "curse.curse_touch_v8.finite.front",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "front_body",
+          "viewFacing": "E"
+        },
+        {
+          "id": "resisted.back",
+          "assetId": "curse.curse_action_denial_resisted_source_v12.finite.back",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "behind_body",
+          "viewFacing": "E",
+          "startOffsetMs": 656.25,
+          "requiredSaveSuccess": true,
+          "actorTopClearancePx": 10
+        },
+        {
+          "id": "resisted.front",
+          "assetId": "curse.curse_action_denial_resisted_source_v12.finite.front",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "front_body",
+          "viewFacing": "E",
+          "startOffsetMs": 656.25,
+          "requiredSaveSuccess": true,
+          "actorTopClearancePx": 10
+        }
+      ]
+    },
+    "control.bestow_curse.option_4": {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.bestow_curse",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 12135992,
+        "secondary": 16410453,
+        "tertiary": 6496556
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        }
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      },
+      "contact": {
+        "delayMs": 656.25
+      },
+      "media": [
+        {
+          "id": "touch.back",
+          "assetId": "curse.curse_touch_v8.finite.back",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "behind_body",
+          "viewFacing": "E"
+        },
+        {
+          "id": "touch.front",
+          "assetId": "curse.curse_touch_v8.finite.front",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "front_body",
+          "viewFacing": "E"
+        },
+        {
+          "id": "resisted.back",
+          "assetId": "curse.curse_necrotic_wound_resisted_source_v14.finite.back",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "behind_body",
+          "viewFacing": "E",
+          "startOffsetMs": 656.25,
+          "requiredSaveSuccess": true,
+          "actorTopClearancePx": 10
+        },
+        {
+          "id": "resisted.front",
+          "assetId": "curse.curse_necrotic_wound_resisted_source_v14.finite.front",
+          "attachment": "target_body",
+          "fps": 32,
+          "scale": 1,
+          "depth": "front_body",
+          "viewFacing": "E",
+          "startOffsetMs": 656.25,
+          "requiredSaveSuccess": true,
+          "actorTopClearancePx": 10
+        }
+      ]
+    }
+  }
+}

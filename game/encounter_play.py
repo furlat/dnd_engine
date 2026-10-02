@@ -27,7 +27,9 @@ from game.choreography import BoundChoreography, bind_choreography
 from game.choreography_draw import ChoreographyMedia, load_choreography_media, load_motion_media
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
 from game.condition_media_lifetime import register_condition_lifetimes
+from game.construction_media_lifetime import register_construction_lifetimes
 from game.spatial_media_lifetime import register_spatial_lifetimes
+from game.concentration_media import register_concentration_lifetimes
 from game.deposit_media import register_deposit_starts
 from game.motion_media import MotionMediaCue, bind_motion_media, choreography_motion_media
 from game.controls import ActionSelection, EndTurn, MenuState, draw_menu, draw_target_preview, handle_menu_event, initial_menu
@@ -169,6 +171,8 @@ async def _run(
         elapsed_ms = presentation_ms = 0.0
         condition_lifetimes = register_condition_lifetimes({}, historical, data, absolute_start_ms=0)
         spatial_lifetimes = register_spatial_lifetimes({}, historical, data, absolute_start_ms=0)
+        construction_lifetimes = register_construction_lifetimes({}, historical, data, absolute_start_ms=0)
+        concentration_lifetimes = register_concentration_lifetimes({}, historical, data, absolute_start_ms=0)
         deposit_starts = register_deposit_starts({}, historical, data, absolute_start_ms=0)
         body_history = retain_body_head((), historical, None, start_ms=0, facings=facings, positions=positions)
         clock = pygame.time.Clock()
@@ -318,6 +322,10 @@ async def _run(
                     absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
                 spatial_lifetimes = register_spatial_lifetimes(spatial_lifetimes, historical, data,
                     absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
+                construction_lifetimes = register_construction_lifetimes(construction_lifetimes, historical, data,
+                    absolute_start_ms=presentation_ms, choreography=choreography, motion=motion)
+                concentration_lifetimes = register_concentration_lifetimes(concentration_lifetimes, historical, data,
+                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
                 deposit_starts = register_deposit_starts(deposit_starts, historical, data,
                     absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
                 if motion is not None:
@@ -341,7 +349,7 @@ async def _run(
                 camera, facings, body_media, number_font, badge_font,
                 choreography=choreography, choreography_media=choreography_media,
                 motion=motion, reaction_media=reaction_media, feedback=feedback, condition_lifetimes=condition_lifetimes,
-                spatial_lifetimes=spatial_lifetimes, deposit_starts=deposit_starts,
+                spatial_lifetimes=spatial_lifetimes, construction_lifetimes=construction_lifetimes, concentration_lifetimes=concentration_lifetimes, deposit_starts=deposit_starts,
                 positions=positions, feedback_viewport=feedback_viewport, motion_media=motion_media, body_history=body_history,
             )
             displayed, actors, commands = playback.displayed, playback.actors, playback.commands

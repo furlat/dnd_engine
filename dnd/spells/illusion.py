@@ -569,6 +569,10 @@ class HypnoticPattern(SpellAction):
             ),
         )
 
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        """Retain the exact execution area already used for native target resolution."""
+        return self._resolve_area_targets()
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate target position is in LOS and range."""
         caster = Entity.get(self.source_entity_uuid)

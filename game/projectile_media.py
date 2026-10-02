@@ -108,6 +108,7 @@ class ProjectileFrameImage:
     offset: tuple[float, float] = (0, 0)
     footpoint: FootpointImage | None = None
     positions: SurfacePositions | None = None
+    depth: Literal["world", "behind_body", "front_body"] = "world"
 
 
 # Four-camera reviews and concurrent historical cast media share source pixels.
@@ -302,7 +303,8 @@ def projectile_frame_layers(
                     footpoint = (FootpointImage(_raw_part(cache, data.media_root / part.footpoint.file,
                         part.rect), part.footpoint.bounds) if part.footpoint is not None else None)
                     result.append(ProjectileFrameImage(image,
-                        pygame.BLEND_RGB_ADD if layer.blendMode == "add" else 0, part.offset, footpoint))
+                        pygame.BLEND_RGB_ADD if layer.blendMode == "add" else 0, part.offset, footpoint,
+                        depth=layer.depth))
                 continue
             if layer.pages is not None:
                 page = next(page for page in layer.pages[direction]
@@ -330,7 +332,8 @@ def projectile_frame_layers(
                 if image.get_size() != (width, height):
                     raise ValueError(f"projectile frame dimensions differ from its authored asset: {path}")
                 image = _remember(cache, key, _prepare(image, visual.tint, alpha, layer.blendMode))
-            result.append(ProjectileFrameImage(image, pygame.BLEND_RGB_ADD if layer.blendMode == "add" else 0))
+            result.append(ProjectileFrameImage(image, pygame.BLEND_RGB_ADD if layer.blendMode == "add" else 0,
+                depth=layer.depth))
         return tuple(result)
     if visual.blendMode == "screen":
         raise ValueError("screen blend requires a separate pixel parity proof")

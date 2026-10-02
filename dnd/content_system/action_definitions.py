@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 
+import dnd.monsters.roster_abilities as roster_abilities
+import dnd.items.roster_carried_powers as carried_powers
 import dnd.actions as actions
 import dnd.classes.barbarian as barbarian
 import dnd.classes.fighter as fighter
@@ -30,6 +32,7 @@ import dnd.spells.enchantment as enchantment
 import dnd.spells.evocation as evocation
 import dnd.spells.necromancy as necromancy
 import dnd.spells.transmutation as transmutation
+import dnd.spells.roster_support as roster_support
 from dnd.core.base_actions import BaseAction
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -130,6 +133,13 @@ def _original(
 
 
 ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
+    _srd(roster_abilities.InnateInvisibility,"action.monster.innate_invisibility","Innate Invisibility","Concentrate on indefinite innate invisibility.",root_owned=True),
+    _srd(roster_abilities.WightLifeDrain,"action.monster.wight.life_drain","Life Drain","Intrinsic necrotic contact with saved maximum HP reduction.",root_owned=True),
+    _original(carried_powers.EmberQuiverActivation,"action.item.ember_quiver","Ember Quiver","Apply a ten-round fire coating to an equipped bow or crossbow."),
+    _srd(roster_support.HurlProduceFlame, "action.spell.produce_flame.hurl", "Hurl Produce Flame", "Hurl the retained hand flame."),
+    _srd(roster_support.DismissProduceFlame, "action.spell.produce_flame.dismiss", "Dismiss Produce Flame", "Dismiss the retained hand flame."),
+    _srd(roster_support.DismissFireShield, "action.spell.fire_shield.dismiss", "Dismiss Fire Shield", "Dismiss the retained fire or cold shield."),
+    _srd(roster_support.FlyingMovement, "action.spell.fly.move", "Flying Movement", "Fly between supported positions using shared movement expenditure."),
     # SRD-compatible standard and class actions not in the core starter set.
     _srd(actions.Drop, "action.core.drop", "Drop", "Drop one carried item onto the current tile."),
     _srd(actions.DropProne, "action.core.drop_prone", "Drop Prone", "Voluntarily become prone without spending movement."),

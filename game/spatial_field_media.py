@@ -6,7 +6,10 @@ from uuid import UUID
 import numpy as np
 import pygame
 
-from dnd.core.presentation_geometry import AoEPresentationGeometry, CylinderPresentationGeometry, SpherePresentationGeometry
+from dnd.core.presentation_geometry import (
+    AoEPresentationGeometry, ConePresentationGeometry, CubePresentationGeometry,
+    CylinderPresentationGeometry, LinePresentationGeometry, SpherePresentationGeometry,
+)
 from dnd.core.geometry import circle_positions
 from dnd.types.senses import PerceivedSpatialEffect, VolumeSurfaceSight
 from game.animation import view_facing
@@ -21,11 +24,15 @@ from game.volume_media import ExcludedSphere, SurfaceVolume, unobstructed_volume
 
 
 def spatial_origin(geometry: AoEPresentationGeometry) -> tuple[int, int]:
-    return geometry.center if isinstance(geometry, (SpherePresentationGeometry, CylinderPresentationGeometry)) else geometry.origin
+    if isinstance(geometry, (SpherePresentationGeometry, CylinderPresentationGeometry)):
+        return geometry.center
+    # Walls have their own registered placement composer, never a field origin.
+    assert isinstance(geometry, (ConePresentationGeometry, CubePresentationGeometry, LinePresentationGeometry))
+    return geometry.origin
 
 
 def field_media_commands(state: PlayerState, data: AnimationData, identity: UUID,
-                         geometry: AoEPresentationGeometry, positions: tuple[tuple[int, int], ...],
+                         geometry: AoEPresentationGeometry | None, positions: tuple[tuple[int, int], ...],
                          binding: SpatialMediaBinding, layer: SpatialMediaLayer, layer_index: int,
                          asset_id: str, frame: int, camera: Camera, alpha: float,
                          translation: tuple[float, float] = (0, 0),
@@ -34,10 +41,13 @@ def field_media_commands(state: PlayerState, data: AnimationData, identity: UUID
                          exclusions: tuple[ExcludedSphere, ...] = (),
                          upper_surfaces: tuple[VolumeSurfaceSight, ...] = (),
                          previous_effect: PerceivedSpatialEffect | None = None,
+                         anchor_position: tuple[int, int] | None = None,
                          ) -> tuple[DrawCommand, ...]:
     """Authored registration never adds native cells or discovers occupants."""
     senses = state.senses
     if senses is None:
+        return ()
+    if geometry is None and (layer.composition != "clump" or anchor_position is None):
         return ()
     volume_layer = layer.composition in ("xy_volume", "xyz_volume")
     upper = {row.position: row.lower_height_planes for row in upper_surfaces
@@ -70,7 +80,8 @@ def field_media_commands(state: PlayerState, data: AnimationData, identity: UUID
             supported[position] = tile.elevation_steps
     if not supported:
         return ()
-    origin = spatial_origin(geometry)
+    origin = spatial_origin(geometry) if geometry is not None else anchor_position
+    assert origin is not None
     radius_scale = (geometry.radius_feet / binding.referenceRadiusFeet
         if volume_layer and isinstance(geometry, SpherePresentationGeometry)
         and binding.referenceRadiusFeet is not None else 1.)

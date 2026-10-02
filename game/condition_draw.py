@@ -1,12 +1,13 @@
 """Pygame pixels for the original per-slot Pixi condition body filter."""
 
+from math import sin, pi
 from pathlib import Path
 from typing import Mapping, Sequence, cast
 
 import numpy as np
 import pygame
 
-from game.condition_types import Activity, ConditionBodyColor, ConditionBodyRamp
+from game.condition_types import Activity, ConditionBodyColor, ConditionBodyRamp, ConditionBodyOutline
 from dnd.core.life_types import LifeState
 from game.condition_media import ResolvedConditionLayer
 from game.condition_sampling import sample_condition_media
@@ -60,6 +61,12 @@ def compose_condition_layers(body: pygame.Surface, destination: tuple[int, int],
             if attachment_anchors is None or layer.attachment not in attachment_anchors:
                 continue
             anchor = attachment_anchors[layer.attachment]
+            if resolved.media.actor_top_clearance_px is not None:
+                # Use the rendered actor/gear envelope, never a standing-height
+                # guess. The mark's lowest extent is its registered pivot.
+                top = destination[1] + body.get_bounding_rect().top
+                anchor = (anchor[0], min(anchor[1], top)
+                    - resolved.media.actor_top_clearance_px * scale)
         factor = scale * TILE_WIDTH / data.rig.TILE_W if data is not None else scale
         anchor = (anchor[0] + layer.offsetX * factor * scale_x, anchor[1] + layer.offsetY * factor)
         media = resolved.media
@@ -147,3 +154,35 @@ def condition_body_color(surface: pygame.Surface, color: ConditionBodyColor) -> 
     pixels[:] = np.clip(np.rint(rgb), 0, 255).astype(np.uint8)
     del pixels
     return image
+
+
+def condition_body_outline(body: pygame.Surface, recipe: ConditionBodyOutline, age_ms: float | None,
+                           *, quiet_age_ms: float = 0.) -> pygame.Surface:
+    """An alpha-only inner contour and short clipped angular pulses; RGB stays authored."""
+    alpha = pygame.surfarray.array_alpha(body)
+    occupied = alpha >= recipe.alphaThreshold
+    padded = np.pad(occupied, 1)
+    interior = (padded[:-2, 1:-1] & padded[2:, 1:-1]
+        & padded[1:-1, :-2] & padded[1:-1, 2:])
+    edge = occupied & ~interior
+    pulse_age = quiet_age_ms if age_ms is None else age_ms
+    beat = max(0., sin(max(0., pulse_age) * 2 * pi / recipe.periodMs)) ** 6
+    onset = 0. if age_ms is None else max(0., 1 - max(0., age_ms) / recipe.onsetMs)
+    overlay = pygame.Surface(body.get_size(), pygame.SRCALPHA)
+    overlay.fill(((recipe.color >> 16) & 255, (recipe.color >> 8) & 255, recipe.color & 255, 0))
+    output_alpha = pygame.surfarray.pixels_alpha(overlay)
+    output_alpha[:] = np.where(edge, round(255 * min(1., recipe.opacity + .4 * beat)), 0)
+    del output_alpha
+    pulse = pygame.Surface(body.get_size(), pygame.SRCALPHA)
+    width, height = body.get_size()
+    color = ((recipe.pulseColor >> 16) & 255, (recipe.pulseColor >> 8) & 255,
+        recipe.pulseColor & 255, round(255 * recipe.pulseOpacity * max(beat, onset)))
+    for k in range(5):
+        y = height * (.29 + k * .085)
+        pygame.draw.lines(pulse, color, False, [(width*.30,y), (width*.44,y-3),
+            (width*.49,y+2), (width*.56,y-3), (width*.70,y)])
+    pulse_alpha = pygame.surfarray.pixels_alpha(pulse)
+    pulse_alpha[:] = np.minimum(pulse_alpha, alpha)
+    del pulse_alpha
+    overlay.blit(pulse, (0, 0))
+    return overlay

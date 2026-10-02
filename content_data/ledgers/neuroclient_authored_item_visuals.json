@@ -1,6 +1,6 @@
 {
-  "authored_category_count": 77,
-  "authored_variant_count": 205,
+  "authored_category_count": 85,
+  "authored_variant_count": 318,
   "inventory": {
     "categories": [
       {
@@ -1095,6 +1095,28 @@
               "dark"
             ],
             "visual_variant_id": "30000003"
+          },
+          {
+            "display_name": "Battleaxe",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Melee16",
+                "tint_rgb": 5974125
+              }
+            ],
+            "inventory_id": "item_visual.roster.b94babfabf15",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.battleaxe@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.c83f738eca5c16a9; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Correct broad family; stylized size, crossguard and grip differences accepted as recommendation, not exact pixel equivalence. This color is a static material proposal; animated emissions are classified separately. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.b94babfabf15",
+            "source_order": 3,
+            "source_visual_variant_id": "roster-derived:recommendation.c83f738eca5c16a9",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.b94babfabf15"
           }
         ]
       },
@@ -1289,6 +1311,28 @@
               "shadow"
             ],
             "visual_variant_id": "30000009"
+          },
+          {
+            "display_name": "Greatsword",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Melee8",
+                "tint_rgb": 11627310
+              }
+            ],
+            "inventory_id": "item_visual.roster.b25b1c9931b1",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.greatsword@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.4040045336dce65f; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Correct broad family; stylized size, crossguard and grip differences accepted as recommendation, not exact pixel equivalence. This color is a static material proposal; animated emissions are classified separately. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.b25b1c9931b1",
+            "source_order": 4,
+            "source_visual_variant_id": "roster-derived:recommendation.4040045336dce65f",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.b25b1c9931b1"
           }
         ]
       },
@@ -1365,6 +1409,28 @@
               "dark"
             ],
             "visual_variant_id": "3000000b"
+          },
+          {
+            "display_name": "Greataxe",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Melee14",
+                "tint_rgb": 5974125
+              }
+            ],
+            "inventory_id": "item_visual.roster.e2e34fdcf4d3",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.greataxe@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.c88329735c18a355; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Correct broad family; stylized size, crossguard and grip differences accepted as recommendation, not exact pixel equivalence. This color is a static material proposal; animated emissions are classified separately. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.e2e34fdcf4d3",
+            "source_order": 2,
+            "source_visual_variant_id": "roster-derived:recommendation.c88329735c18a355",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.e2e34fdcf4d3"
           }
         ]
       },
@@ -1504,6 +1570,116 @@
               "shadow"
             ],
             "visual_variant_id": "30000010"
+          },
+          {
+            "display_name": "Longsword",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Melee2",
+                "tint_rgb": 11627310
+              }
+            ],
+            "inventory_id": "item_visual.roster.8fce8f4404d0",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.longsword@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.1d0b9289826eadd8; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Correct broad family; stylized size, crossguard and grip differences accepted as recommendation, not exact pixel equivalence. This color is a static material proposal; animated emissions are classified separately. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.8fce8f4404d0",
+            "source_order": 5,
+            "source_visual_variant_id": "roster-derived:recommendation.1d0b9289826eadd8",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.8fce8f4404d0"
+          },
+          {
+            "display_name": "Longsword",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Melee2",
+                "tint_rgb": 11373110
+              }
+            ],
+            "inventory_id": "item_visual.roster.c005f92a6b6d",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.longsword@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.68246903b5c6bea7; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Correct broad family; stylized size, crossguard and grip differences accepted as recommendation, not exact pixel equivalence. This color is a static material proposal; animated emissions are classified separately. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.c005f92a6b6d",
+            "source_order": 6,
+            "source_visual_variant_id": "roster-derived:recommendation.68246903b5c6bea7",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.c005f92a6b6d"
+          },
+          {
+            "display_name": "Longsword",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Melee2",
+                "tint_rgb": 5974125
+              }
+            ],
+            "inventory_id": "item_visual.roster.d7ebed5af586",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.longsword@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.91f5435129ebdd8b; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Correct broad family; stylized size, crossguard and grip differences accepted as recommendation, not exact pixel equivalence. This color is a static material proposal; animated emissions are classified separately. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.d7ebed5af586",
+            "source_order": 7,
+            "source_visual_variant_id": "roster-derived:recommendation.91f5435129ebdd8b",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.d7ebed5af586"
+          },
+          {
+            "display_name": "Longsword",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Melee2",
+                "tint_rgb": 8135732
+              }
+            ],
+            "inventory_id": "item_visual.roster.6647658ca617",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.longsword@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.ac31df11cd1ec781; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Correct broad family; stylized size, crossguard and grip differences accepted as recommendation, not exact pixel equivalence. This color is a static material proposal; animated emissions are classified separately. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.6647658ca617",
+            "source_order": 8,
+            "source_visual_variant_id": "roster-derived:recommendation.ac31df11cd1ec781",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.6647658ca617"
+          },
+          {
+            "display_name": "Longsword",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Melee2",
+                "tint_rgb": 12039858
+              }
+            ],
+            "inventory_id": "item_visual.roster.0b5b0e9f7dae",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.longsword@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.724760f143086fc2; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Recommend existing straight Offhand1 geometry for depicted left longsword. New Longsword/off-hand appearance binding needed; non-light eligibility stays native. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.0b5b0e9f7dae",
+            "source_order": 9,
+            "source_visual_variant_id": "roster-derived:recommendation.724760f143086fc2",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.0b5b0e9f7dae"
           }
         ]
       },
@@ -1803,6 +1979,28 @@
               "exotic"
             ],
             "visual_variant_id": "a0000001"
+          },
+          {
+            "display_name": "Scimitar",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Melee4",
+                "tint_rgb": 5974125
+              }
+            ],
+            "inventory_id": "item_visual.roster.04d42f39cbd2",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.scimitar@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.22009339b4e0c521; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Correct broad family; stylized size, crossguard and grip differences accepted as recommendation, not exact pixel equivalence. This color is a static material proposal; animated emissions are classified separately. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.04d42f39cbd2",
+            "source_order": 4,
+            "source_visual_variant_id": "roster-derived:recommendation.22009339b4e0c521",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.04d42f39cbd2"
           }
         ]
       },
@@ -1977,6 +2175,28 @@
               "enchanted"
             ],
             "visual_variant_id": "3000001d"
+          },
+          {
+            "display_name": "Trident",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Melee23",
+                "tint_rgb": 5974125
+              }
+            ],
+            "inventory_id": "item_visual.roster.26ceabf2b7f3",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.trident@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.dc59778f5480b582; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Correct broad family; stylized size, crossguard and grip differences accepted as recommendation, not exact pixel equivalence. This color is a static material proposal; animated emissions are classified separately. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.26ceabf2b7f3",
+            "source_order": 2,
+            "source_visual_variant_id": "roster-derived:recommendation.dc59778f5480b582",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.26ceabf2b7f3"
           }
         ]
       },
@@ -2212,6 +2432,50 @@
               "ornate"
             ],
             "visual_variant_id": "a0000009"
+          },
+          {
+            "display_name": "Longbow",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Ranged4",
+                "tint_rgb": 13026218
+              }
+            ],
+            "inventory_id": "item_visual.roster.1f3002f46a98",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.longbow@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.7665d0f63f59878e; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Pale/ivory bow source-zone recolor selected from observed bow body, with emission handled separately. Existing bow silhouette is an approximation. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.1f3002f46a98",
+            "source_order": 5,
+            "source_visual_variant_id": "roster-derived:recommendation.7665d0f63f59878e",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.1f3002f46a98"
+          },
+          {
+            "display_name": "Longbow",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Ranged3",
+                "tint_rgb": 13026218
+              }
+            ],
+            "inventory_id": "item_visual.roster.0170f5544333",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.longbow@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.b3dc126edcc61687; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Pale/ivory bow source-zone recolor selected from observed bow body, with emission handled separately. Existing bow silhouette is an approximation. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.0170f5544333",
+            "source_order": 6,
+            "source_visual_variant_id": "roster-derived:recommendation.b3dc126edcc61687",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.0170f5544333"
           }
         ]
       },
@@ -3621,6 +3885,198 @@
               "evil"
             ],
             "visual_variant_id": "7000000b"
+          },
+          {
+            "display_name": "plate steel",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs8",
+                "tint_rgb": 12039858
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest8",
+                "tint_rgb": 12039858
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.f322fbc40aeb",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:armor.plate@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.092f1157295fa0fb; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Broad chest/limb coverage fits plate presentation. Plate AC18 is proposed rules authoring, not a measurement of the sprite. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.f322fbc40aeb",
+            "source_order": 5,
+            "source_visual_variant_id": "roster-derived:recommendation.092f1157295fa0fb",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.f322fbc40aeb"
+          },
+          {
+            "display_name": "plate ivory",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs8",
+                "tint_rgb": 13026218
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest8",
+                "tint_rgb": 13026218
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.1c7e9a4cf511",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:armor.plate@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.0ce05bfa12de4a20; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Broad chest/limb coverage fits plate presentation. Plate AC18 is proposed rules authoring, not a measurement of the sprite. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.1c7e9a4cf511",
+            "source_order": 6,
+            "source_visual_variant_id": "roster-derived:recommendation.0ce05bfa12de4a20",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.1c7e9a4cf511"
+          },
+          {
+            "display_name": "plate gold",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs8",
+                "tint_rgb": 12756577
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest8",
+                "tint_rgb": 12756577
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.22b396342a97",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:armor.plate@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.427024aeb729a1e7; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Broad chest/limb coverage fits plate presentation. Plate AC18 is proposed rules authoring, not a measurement of the sprite. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.22b396342a97",
+            "source_order": 7,
+            "source_visual_variant_id": "roster-derived:recommendation.427024aeb729a1e7",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.22b396342a97"
+          },
+          {
+            "display_name": "plate ivory blue",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs8",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest8",
+                "tint_rgb": 13026218
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.13d306686b05",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:armor.plate@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.8483f79cceb28624; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Broad chest/limb coverage fits plate presentation. Plate AC18 is proposed rules authoring, not a measurement of the sprite. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.13d306686b05",
+            "source_order": 8,
+            "source_visual_variant_id": "roster-derived:recommendation.8483f79cceb28624",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.13d306686b05"
+          },
+          {
+            "display_name": "plate brown blue",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs8",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest8",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.8b17d71cf320",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:armor.plate@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.beb2713779eff579; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Broad chest/limb coverage fits plate presentation. Plate AC18 is proposed rules authoring, not a measurement of the sprite. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.8b17d71cf320",
+            "source_order": 9,
+            "source_visual_variant_id": "roster-derived:recommendation.beb2713779eff579",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.8b17d71cf320"
+          },
+          {
+            "display_name": "plate black",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs8",
+                "tint_rgb": 2105381
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest8",
+                "tint_rgb": 2105381
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.a89dcf3c4259",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:armor.plate@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.c220511678ff9bb6; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Broad chest/limb coverage fits plate presentation. Plate AC18 is proposed rules authoring, not a measurement of the sprite. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.a89dcf3c4259",
+            "source_order": 10,
+            "source_visual_variant_id": "roster-derived:recommendation.c220511678ff9bb6",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.a89dcf3c4259"
           }
         ]
       },
@@ -4046,6 +4502,230 @@
               "wizard"
             ],
             "visual_variant_id": "8100000b"
+          },
+          {
+            "display_name": "robe brown",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs2",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest14",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 8135732
+              }
+            ],
+            "inventory_id": "item_visual.roster.8b96d8a2913a",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.robes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.01235c825cc7124c; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Long cloth silhouette with separate sash; no armor or spell property from robe color. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.8b96d8a2913a",
+            "source_order": 11,
+            "source_visual_variant_id": "roster-derived:recommendation.01235c825cc7124c",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.8b96d8a2913a"
+          },
+          {
+            "display_name": "robe blue",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs2",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest14",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 3427187
+              }
+            ],
+            "inventory_id": "item_visual.roster.ac042c42155f",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.robes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.21e1d1e2f6f8fc0a; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Long cloth silhouette with separate sash; no armor or spell property from robe color. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.ac042c42155f",
+            "source_order": 12,
+            "source_visual_variant_id": "roster-derived:recommendation.21e1d1e2f6f8fc0a",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.ac042c42155f"
+          },
+          {
+            "display_name": "robe blue dark",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs2",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest14",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 3486774
+              }
+            ],
+            "inventory_id": "item_visual.roster.039a46b7e3a0",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.robes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.34b21b66c106d052; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Long cloth silhouette with separate sash; no armor or spell property from robe color. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.039a46b7e3a0",
+            "source_order": 13,
+            "source_visual_variant_id": "roster-derived:recommendation.34b21b66c106d052",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.039a46b7e3a0"
+          },
+          {
+            "display_name": "robe purple",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs2",
+                "tint_rgb": 5974125
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest14",
+                "tint_rgb": 5974125
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 5974125
+              }
+            ],
+            "inventory_id": "item_visual.roster.ac36c74adec6",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.robes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.418b98527759ca73; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Long cloth silhouette with separate sash; no armor or spell property from robe color. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.ac36c74adec6",
+            "source_order": 14,
+            "source_visual_variant_id": "roster-derived:recommendation.418b98527759ca73",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.ac36c74adec6"
+          },
+          {
+            "display_name": "robe dark",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs2",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest14",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 3486774
+              }
+            ],
+            "inventory_id": "item_visual.roster.51a81ec5104c",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.robes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.57a817234421cf99; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Long cloth silhouette with separate sash; no armor or spell property from robe color. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.51a81ec5104c",
+            "source_order": 15,
+            "source_visual_variant_id": "roster-derived:recommendation.57a817234421cf99",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.51a81ec5104c"
+          },
+          {
+            "display_name": "robe orange",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs2",
+                "tint_rgb": 11627310
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest14",
+                "tint_rgb": 11627310
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 11627310
+              }
+            ],
+            "inventory_id": "item_visual.roster.ff5115c38bc8",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.robes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.894ac6387a87ae43; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Long cloth silhouette with separate sash; no armor or spell property from robe color. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.ff5115c38bc8",
+            "source_order": 16,
+            "source_visual_variant_id": "roster-derived:recommendation.894ac6387a87ae43",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.ff5115c38bc8"
+          },
+          {
+            "display_name": "robe black",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs2",
+                "tint_rgb": 2105381
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest14",
+                "tint_rgb": 2105381
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 2105381
+              }
+            ],
+            "inventory_id": "item_visual.roster.828dfafaac2b",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.robes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.cc6016a40c7a07db; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Long cloth silhouette with separate sash; no armor or spell property from robe color. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.828dfafaac2b",
+            "source_order": 17,
+            "source_visual_variant_id": "roster-derived:recommendation.cc6016a40c7a07db",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.828dfafaac2b"
           }
         ]
       },
@@ -4318,7 +4998,1320 @@
               "poor"
             ],
             "visual_variant_id": "82000009"
+          },
+          {
+            "display_name": "waist ochre",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 11373110
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.71a974f1ab28",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.0180217b2e2a4602; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Waist cloth/shorts only: omit chest layer, preserve exposed torso. Short modular shape approximates torn hem. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.71a974f1ab28",
+            "source_order": 9,
+            "source_visual_variant_id": "roster-derived:recommendation.0180217b2e2a4602",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.71a974f1ab28",
+            "registration_render_layer": "legs"
+          },
+          {
+            "display_name": "shirt teal teal",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3304560
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest3",
+                "tint_rgb": 3304560
+              }
+            ],
+            "inventory_id": "item_visual.roster.e1d9d1e35aa0",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.0a1e65badf6d7536; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Reuse ordinary shirt/trouser geometry and specified two-zone palette. Torn holes, suspenders, short/missing legs remain source-specific silhouette compromises. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.e1d9d1e35aa0",
+            "source_order": 10,
+            "source_visual_variant_id": "roster-derived:recommendation.0a1e65badf6d7536",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.e1d9d1e35aa0"
+          },
+          {
+            "display_name": "shirt green gray",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 7566970
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 3561526
+              }
+            ],
+            "inventory_id": "item_visual.roster.9a49593e6d25",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.0a6ef2ece1fbafca; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.9a49593e6d25",
+            "source_order": 11,
+            "source_visual_variant_id": "roster-derived:recommendation.0a6ef2ece1fbafca",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.9a49593e6d25"
+          },
+          {
+            "display_name": "dress teal",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs2",
+                "tint_rgb": 3304560
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest14",
+                "tint_rgb": 3304560
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 3304560
+              }
+            ],
+            "inventory_id": "item_visual.roster.d230e32fd30e",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.0c0c1317758f463f; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Long cloth silhouette with separate sash; no armor or spell property from robe color. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.d230e32fd30e",
+            "source_order": 12,
+            "source_visual_variant_id": "roster-derived:recommendation.0c0c1317758f463f",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.d230e32fd30e"
+          },
+          {
+            "display_name": "shirt orange dark",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 11627310
+              }
+            ],
+            "inventory_id": "item_visual.roster.1d61d776333a",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.1328ed0f06175ebe; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.1d61d776333a",
+            "source_order": 13,
+            "source_visual_variant_id": "roster-derived:recommendation.1328ed0f06175ebe",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.1d61d776333a"
+          },
+          {
+            "display_name": "shirt teal olive",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 7830837
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 3304560
+              }
+            ],
+            "inventory_id": "item_visual.roster.6849f4bdbbc7",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.132cfdea18d94696; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.6849f4bdbbc7",
+            "source_order": 14,
+            "source_visual_variant_id": "roster-derived:recommendation.132cfdea18d94696",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.6849f4bdbbc7"
+          },
+          {
+            "display_name": "harness dark purple",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 5974125
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest6",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.a68bab6659b8",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.15beb7325423fe47; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest6 open harness and short cloth preserve exposed chest/arms; no full tunic or plate inferred. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.a68bab6659b8",
+            "source_order": 15,
+            "source_visual_variant_id": "roster-derived:recommendation.15beb7325423fe47",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.a68bab6659b8"
+          },
+          {
+            "display_name": "shirt green purple",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 5974125
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 3561526
+              }
+            ],
+            "inventory_id": "item_visual.roster.8a2e4d420ed7",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.23bba05d47693fd5; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.8a2e4d420ed7",
+            "source_order": 16,
+            "source_visual_variant_id": "roster-derived:recommendation.23bba05d47693fd5",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.8a2e4d420ed7"
+          },
+          {
+            "display_name": "shirt brown teal",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3304560
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.e2f4afb83dc2",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.23d37ba7f2da68d5; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.e2f4afb83dc2",
+            "source_order": 17,
+            "source_visual_variant_id": "roster-derived:recommendation.23d37ba7f2da68d5",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.e2f4afb83dc2"
+          },
+          {
+            "display_name": "shirt gray olive",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 7830837
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 7566970
+              }
+            ],
+            "inventory_id": "item_visual.roster.c73653f2b4f3",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.27d026776842425c; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.c73653f2b4f3",
+            "source_order": 18,
+            "source_visual_variant_id": "roster-derived:recommendation.27d026776842425c",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.c73653f2b4f3"
+          },
+          {
+            "display_name": "waist brown",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.4d3cef9ad848",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.2af518dd2cc66815; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Waist cloth/shorts only: omit chest layer, preserve exposed torso. Short modular shape approximates torn hem. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.4d3cef9ad848",
+            "source_order": 19,
+            "source_visual_variant_id": "roster-derived:recommendation.2af518dd2cc66815",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.4d3cef9ad848",
+            "registration_render_layer": "legs"
+          },
+          {
+            "display_name": "tunic dark",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest3",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.b35efe0e3757",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.2e5000113808206d; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Cloth tunic/trousers, exposed arms. Ordinary apparel, no AC upgrade inferred. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.b35efe0e3757",
+            "source_order": 20,
+            "source_visual_variant_id": "roster-derived:recommendation.2e5000113808206d",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.b35efe0e3757"
+          },
+          {
+            "display_name": "shirt brown olive",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 7830837
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.c7c75c0fe69c",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.336b961a65f3cdbd; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.c7c75c0fe69c",
+            "source_order": 21,
+            "source_visual_variant_id": "roster-derived:recommendation.336b961a65f3cdbd",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.c7c75c0fe69c"
+          },
+          {
+            "display_name": "shirt green dark",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 3561526
+              }
+            ],
+            "inventory_id": "item_visual.roster.c08eb7bb05f3",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.3470a11457b0b089; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.c08eb7bb05f3",
+            "source_order": 22,
+            "source_visual_variant_id": "roster-derived:recommendation.3470a11457b0b089",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.c08eb7bb05f3"
+          },
+          {
+            "display_name": "shirt gray purple",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 5974125
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 7566970
+              }
+            ],
+            "inventory_id": "item_visual.roster.8068ff89f025",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.4048a5ddf9dc9165; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.8068ff89f025",
+            "source_order": 23,
+            "source_visual_variant_id": "roster-derived:recommendation.4048a5ddf9dc9165",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.8068ff89f025"
+          },
+          {
+            "display_name": "tunic brown",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest3",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.0d05aa170681",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.5315c72170f735f8; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Cloth tunic/trousers, exposed arms. Ordinary apparel, no AC upgrade inferred. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.0d05aa170681",
+            "source_order": 24,
+            "source_visual_variant_id": "roster-derived:recommendation.5315c72170f735f8",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.0d05aa170681"
+          },
+          {
+            "display_name": "shirt blue missinglegs",
+            "equipment_layers": [
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 3427187
+              }
+            ],
+            "inventory_id": "item_visual.roster.77d3ed985006",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.55eefa9509130177; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.77d3ed985006",
+            "source_order": 25,
+            "source_visual_variant_id": "roster-derived:recommendation.55eefa9509130177",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.77d3ed985006"
+          },
+          {
+            "display_name": "shirt white blue",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 12828083
+              }
+            ],
+            "inventory_id": "item_visual.roster.731f50d06eb0",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.5cc5367cedd446db; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.731f50d06eb0",
+            "source_order": 26,
+            "source_visual_variant_id": "roster-derived:recommendation.5cc5367cedd446db",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.731f50d06eb0"
+          },
+          {
+            "display_name": "tunic blue dark",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest3",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.0057edb4295e",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.604aec15e1fdf11a; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Cloth tunic/trousers, exposed arms. Ordinary apparel, no AC upgrade inferred. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.0057edb4295e",
+            "source_order": 27,
+            "source_visual_variant_id": "roster-derived:recommendation.604aec15e1fdf11a",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.0057edb4295e"
+          },
+          {
+            "display_name": "shirt red green",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3561526
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 8135732
+              }
+            ],
+            "inventory_id": "item_visual.roster.705ec0c6dd95",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.6ac6dc03aeab9e58; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.705ec0c6dd95",
+            "source_order": 28,
+            "source_visual_variant_id": "roster-derived:recommendation.6ac6dc03aeab9e58",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.705ec0c6dd95"
+          },
+          {
+            "display_name": "shirt brown ochre",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 11373110
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.06f23b28af97",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.6e9f2137e0a7217b; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.06f23b28af97",
+            "source_order": 29,
+            "source_visual_variant_id": "roster-derived:recommendation.6e9f2137e0a7217b",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.06f23b28af97"
+          },
+          {
+            "display_name": "harness red",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 8135732
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest6",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.3a96aba2f2e8",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.7a5803ffd5efeb55; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest6 open harness and short cloth preserve exposed chest/arms; no full tunic or plate inferred. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.3a96aba2f2e8",
+            "source_order": 30,
+            "source_visual_variant_id": "roster-derived:recommendation.7a5803ffd5efeb55",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.3a96aba2f2e8"
+          },
+          {
+            "display_name": "harness olive brown",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest6",
+                "tint_rgb": 7830837
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.c68d9eb8e61a",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.7cc6836db33513c6; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest6 open harness and short cloth preserve exposed chest/arms; no full tunic or plate inferred. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.c68d9eb8e61a",
+            "source_order": 31,
+            "source_visual_variant_id": "roster-derived:recommendation.7cc6836db33513c6",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.c68d9eb8e61a"
+          },
+          {
+            "display_name": "waist purple",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 5974125
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.7e095b892258",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.89678b97568fd637; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Waist cloth/shorts only: omit chest layer, preserve exposed torso. Short modular shape approximates torn hem. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.7e095b892258",
+            "source_order": 32,
+            "source_visual_variant_id": "roster-derived:recommendation.89678b97568fd637",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.7e095b892258",
+            "registration_render_layer": "legs"
+          },
+          {
+            "display_name": "shirt dark gray",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 7566970
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 3486774
+              }
+            ],
+            "inventory_id": "item_visual.roster.df5f756c224d",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.8a52534727cdc6fb; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.df5f756c224d",
+            "source_order": 33,
+            "source_visual_variant_id": "roster-derived:recommendation.8a52534727cdc6fb",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.df5f756c224d"
+          },
+          {
+            "display_name": "shirt ochre blue",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 11373110
+              }
+            ],
+            "inventory_id": "item_visual.roster.b9e242c20d61",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.9324c6ffa30e447f; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.b9e242c20d61",
+            "source_order": 34,
+            "source_visual_variant_id": "roster-derived:recommendation.9324c6ffa30e447f",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.b9e242c20d61"
+          },
+          {
+            "display_name": "shirt ochre blue",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest3",
+                "tint_rgb": 11373110
+              }
+            ],
+            "inventory_id": "item_visual.roster.c6c962ed11e3",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.9e3497cb5d4a194a; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Reuse ordinary shirt/trouser geometry and specified two-zone palette. Torn holes, suspenders, short/missing legs remain source-specific silhouette compromises. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.c6c962ed11e3",
+            "source_order": 35,
+            "source_visual_variant_id": "roster-derived:recommendation.9e3497cb5d4a194a",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.c6c962ed11e3"
+          },
+          {
+            "display_name": "shirt purple gray",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 7566970
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 5974125
+              }
+            ],
+            "inventory_id": "item_visual.roster.3b43764e27de",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.a546d627446d2304; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.3b43764e27de",
+            "source_order": 36,
+            "source_visual_variant_id": "roster-derived:recommendation.a546d627446d2304",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.3b43764e27de"
+          },
+          {
+            "display_name": "harness brown",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest6",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.16dea1f65105",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.abb82a8077c3ffdd; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest6 open harness and short cloth preserve exposed chest/arms; no full tunic or plate inferred. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.16dea1f65105",
+            "source_order": 37,
+            "source_visual_variant_id": "roster-derived:recommendation.abb82a8077c3ffdd",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.16dea1f65105"
+          },
+          {
+            "display_name": "tunic red dark",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest3",
+                "tint_rgb": 8135732
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.c2721e75195d",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.bec285f8257336f5; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Cloth tunic/trousers, exposed arms. Ordinary apparel, no AC upgrade inferred. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.c2721e75195d",
+            "source_order": 38,
+            "source_visual_variant_id": "roster-derived:recommendation.bec285f8257336f5",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.c2721e75195d"
+          },
+          {
+            "display_name": "shirt ochre brown",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 11373110
+              }
+            ],
+            "inventory_id": "item_visual.roster.a6b82c5afca2",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.bf0a01d4a18fda79; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.a6b82c5afca2",
+            "source_order": 39,
+            "source_visual_variant_id": "roster-derived:recommendation.bf0a01d4a18fda79",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.a6b82c5afca2"
+          },
+          {
+            "display_name": "harness olive gray",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 7566970
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest6",
+                "tint_rgb": 7830837
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.ed87c828a2a2",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.bf39eb7b5ecb8754; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest6 open harness and short cloth preserve exposed chest/arms; no full tunic or plate inferred. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.ed87c828a2a2",
+            "source_order": 40,
+            "source_visual_variant_id": "roster-derived:recommendation.bf39eb7b5ecb8754",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.ed87c828a2a2"
+          },
+          {
+            "display_name": "waist gray",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 7566970
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.3b03cd4905fa",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.c0f88f46f3580350; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Waist cloth/shorts only: omit chest layer, preserve exposed torso. Short modular shape approximates torn hem. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.3b03cd4905fa",
+            "source_order": 41,
+            "source_visual_variant_id": "roster-derived:recommendation.c0f88f46f3580350",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.3b03cd4905fa",
+            "registration_render_layer": "legs"
+          },
+          {
+            "display_name": "shirt olive gray",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 7566970
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 7830837
+              }
+            ],
+            "inventory_id": "item_visual.roster.d732540a9089",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.c18dcbcdf05e062b; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.d732540a9089",
+            "source_order": 42,
+            "source_visual_variant_id": "roster-derived:recommendation.c18dcbcdf05e062b",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.d732540a9089"
+          },
+          {
+            "display_name": "shirt yellow yellow",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 12297000
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest3",
+                "tint_rgb": 12297000
+              }
+            ],
+            "inventory_id": "item_visual.roster.f683076c7f92",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.c4b1a052bb3170a2; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Reuse ordinary shirt/trouser geometry and specified two-zone palette. Torn holes, suspenders, short/missing legs remain source-specific silhouette compromises. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.f683076c7f92",
+            "source_order": 43,
+            "source_visual_variant_id": "roster-derived:recommendation.c4b1a052bb3170a2",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.f683076c7f92"
+          },
+          {
+            "display_name": "waist dark",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.a362994fc0c7",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.cfc18927c465821a; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Waist cloth/shorts only: omit chest layer, preserve exposed torso. Short modular shape approximates torn hem. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.a362994fc0c7",
+            "source_order": 44,
+            "source_visual_variant_id": "roster-derived:recommendation.cfc18927c465821a",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.a362994fc0c7",
+            "registration_render_layer": "legs"
+          },
+          {
+            "display_name": "shirt brown green",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3561526
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.ecb3ca8a6af3",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.dd10bde65cc0e7da; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.ecb3ca8a6af3",
+            "source_order": 45,
+            "source_visual_variant_id": "roster-derived:recommendation.dd10bde65cc0e7da",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.ecb3ca8a6af3"
+          },
+          {
+            "display_name": "dress olive",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs2",
+                "tint_rgb": 7830837
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest14",
+                "tint_rgb": 7830837
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt2",
+                "tint_rgb": 7830837
+              }
+            ],
+            "inventory_id": "item_visual.roster.0ed20a989400",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.e0fde3ffff351317; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Long cloth silhouette with separate sash; no armor or spell property from robe color. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.0ed20a989400",
+            "source_order": 46,
+            "source_visual_variant_id": "roster-derived:recommendation.e0fde3ffff351317",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.0ed20a989400"
+          },
+          {
+            "display_name": "shirt sage dark",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 7507328
+              }
+            ],
+            "inventory_id": "item_visual.roster.dfdb66d44499",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.e25d536d65dba1ba; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.dfdb66d44499",
+            "source_order": 47,
+            "source_visual_variant_id": "roster-derived:recommendation.e25d536d65dba1ba",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.dfdb66d44499"
+          },
+          {
+            "display_name": "harness dark brown",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest6",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.7485a7fa18d5",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.e4ebe1d70d549df4; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest6 open harness and short cloth preserve exposed chest/arms; no full tunic or plate inferred. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.7485a7fa18d5",
+            "source_order": 48,
+            "source_visual_variant_id": "roster-derived:recommendation.e4ebe1d70d549df4",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.7485a7fa18d5"
+          },
+          {
+            "display_name": "shirt dark brown",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 3486774
+              }
+            ],
+            "inventory_id": "item_visual.roster.e25e256bbbdc",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.e555e0abae643127; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.e25e256bbbdc",
+            "source_order": 49,
+            "source_visual_variant_id": "roster-derived:recommendation.e555e0abae643127",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.e25e256bbbdc"
+          },
+          {
+            "display_name": "harness gray",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 7566970
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest6",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.21ae119f8607",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.ef2a87b4916f6e8a; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest6 open harness and short cloth preserve exposed chest/arms; no full tunic or plate inferred. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.21ae119f8607",
+            "source_order": 50,
+            "source_visual_variant_id": "roster-derived:recommendation.ef2a87b4916f6e8a",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.21ae119f8607"
+          },
+          {
+            "display_name": "shirt gray gray",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 7566970
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 7566970
+              }
+            ],
+            "inventory_id": "item_visual.roster.b245ce97ab22",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.f06fac11cd015bca; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.b245ce97ab22",
+            "source_order": 51,
+            "source_visual_variant_id": "roster-derived:recommendation.f06fac11cd015bca",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.b245ce97ab22"
+          },
+          {
+            "display_name": "waist red",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 8135732
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.a7d890606c75",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.f07ff105e0d57f7c; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Waist cloth/shorts only: omit chest layer, preserve exposed torso. Short modular shape approximates torn hem. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.a7d890606c75",
+            "source_order": 52,
+            "source_visual_variant_id": "roster-derived:recommendation.f07ff105e0d57f7c",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.a7d890606c75",
+            "registration_render_layer": "legs"
+          },
+          {
+            "display_name": "waist blue",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.d5ad2d798da8",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.f379e4ee6a9d3386; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Waist cloth/shorts only: omit chest layer, preserve exposed torso. Short modular shape approximates torn hem. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.d5ad2d798da8",
+            "source_order": 53,
+            "source_visual_variant_id": "roster-derived:recommendation.f379e4ee6a9d3386",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.d5ad2d798da8",
+            "registration_render_layer": "legs"
+          },
+          {
+            "display_name": "shirt orange blue",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs1",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest11",
+                "tint_rgb": 11627310
+              }
+            ],
+            "inventory_id": "item_visual.roster.b6a76edcbb50",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.common_clothes@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.fbce33f1a1b14a26; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Open ragged Chest11 selected to preserve torn garment silhouette. Individual chest/leg colors retained; exact holes, trousers length and suspenders remain approximations. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.b6a76edcbb50",
+            "source_order": 54,
+            "source_visual_variant_id": "roster-derived:recommendation.fbce33f1a1b14a26",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.b6a76edcbb50"
           }
+        ],
+        "allowed_registration_layers": [
+          "chest",
+          "legs"
         ]
       },
       {
@@ -5356,6 +7349,314 @@
               "shoulders"
             ],
             "visual_variant_id": "h0000017"
+          },
+          {
+            "display_name": "hood yellow",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head12",
+                "tint_rgb": 12297000
+              }
+            ],
+            "inventory_id": "item_visual.roster.fd17db816b38",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.079ea1aadb369b46; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Cloth cowl, source-zone dye; exposed face remains visible. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.fd17db816b38",
+            "source_order": 5,
+            "source_visual_variant_id": "roster-derived:recommendation.079ea1aadb369b46",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.fd17db816b38"
+          },
+          {
+            "display_name": "cap blue",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head3",
+                "tint_rgb": 3427187
+              }
+            ],
+            "inventory_id": "item_visual.roster.b75f7ac8a78e",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.19b6a78ff3519088; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Head3 short cap silhouette; a new ordinary cap presentation over nonmagical headwear base, no AC bonus. Source cap vs hair ambiguity is retained in observation confidence. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.b75f7ac8a78e",
+            "source_order": 6,
+            "source_visual_variant_id": "roster-derived:recommendation.19b6a78ff3519088",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.b75f7ac8a78e"
+          },
+          {
+            "display_name": "mask ochre",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head13",
+                "tint_rgb": 11373110
+              }
+            ],
+            "inventory_id": "item_visual.roster.2c20a1ab7bca",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.21ac2bc92cf16055; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Barred-face mask uses helmet visor shape; material and ordinary headwear base are recommendations. No native armor benefit. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.2c20a1ab7bca",
+            "source_order": 7,
+            "source_visual_variant_id": "roster-derived:recommendation.21ac2bc92cf16055",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.2c20a1ab7bca"
+          },
+          {
+            "display_name": "cap ochre",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head3",
+                "tint_rgb": 11373110
+              }
+            ],
+            "inventory_id": "item_visual.roster.44e704af2cf6",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.34155c45b867644b; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Head3 short cap silhouette; a new ordinary cap presentation over nonmagical headwear base, no AC bonus. Source cap vs hair ambiguity is retained in observation confidence. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.44e704af2cf6",
+            "source_order": 8,
+            "source_visual_variant_id": "roster-derived:recommendation.34155c45b867644b",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.44e704af2cf6"
+          },
+          {
+            "display_name": "headband red",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head8",
+                "tint_rgb": 8135732
+              }
+            ],
+            "inventory_id": "item_visual.roster.0f70819dd2bd",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.465c01e218fa04c2; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Head8 ring/headband; preserve uncovered head, not a complete helmet. Small source band remains medium confidence. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.0f70819dd2bd",
+            "source_order": 9,
+            "source_visual_variant_id": "roster-derived:recommendation.465c01e218fa04c2",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.0f70819dd2bd"
+          },
+          {
+            "display_name": "cap sage",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head3",
+                "tint_rgb": 7507328
+              }
+            ],
+            "inventory_id": "item_visual.roster.4adbad8c5427",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.6bb65d04bfb56127; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Head3 short cap silhouette; a new ordinary cap presentation over nonmagical headwear base, no AC bonus. Source cap vs hair ambiguity is retained in observation confidence. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.4adbad8c5427",
+            "source_order": 10,
+            "source_visual_variant_id": "roster-derived:recommendation.6bb65d04bfb56127",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.4adbad8c5427"
+          },
+          {
+            "display_name": "cap brown",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head3",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.01cafcf32a1c",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.afab9f5421cbf60a; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Head3 short cap silhouette; a new ordinary cap presentation over nonmagical headwear base, no AC bonus. Source cap vs hair ambiguity is retained in observation confidence. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.01cafcf32a1c",
+            "source_order": 11,
+            "source_visual_variant_id": "roster-derived:recommendation.afab9f5421cbf60a",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.01cafcf32a1c"
+          },
+          {
+            "display_name": "hood red",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head12",
+                "tint_rgb": 8135732
+              }
+            ],
+            "inventory_id": "item_visual.roster.828192008429",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.bd6a1efd016c294f; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Cloth cowl, source-zone dye; exposed face remains visible. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.828192008429",
+            "source_order": 12,
+            "source_visual_variant_id": "roster-derived:recommendation.bd6a1efd016c294f",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.828192008429"
+          },
+          {
+            "display_name": "hood purple",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head12",
+                "tint_rgb": 5974125
+              }
+            ],
+            "inventory_id": "item_visual.roster.c457b0699173",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.c2ed653aac1aec50; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Cloth cowl, source-zone dye; exposed face remains visible. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.c457b0699173",
+            "source_order": 13,
+            "source_visual_variant_id": "roster-derived:recommendation.c2ed653aac1aec50",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.c457b0699173"
+          },
+          {
+            "display_name": "cap teal",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head3",
+                "tint_rgb": 3304560
+              }
+            ],
+            "inventory_id": "item_visual.roster.ee8a39ce656d",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.ccb72c214b0dacc9; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Head3 short cap silhouette; a new ordinary cap presentation over nonmagical headwear base, no AC bonus. Source cap vs hair ambiguity is retained in observation confidence. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.ee8a39ce656d",
+            "source_order": 14,
+            "source_visual_variant_id": "roster-derived:recommendation.ccb72c214b0dacc9",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.ee8a39ce656d"
+          },
+          {
+            "display_name": "hood blue",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head12",
+                "tint_rgb": 3427187
+              }
+            ],
+            "inventory_id": "item_visual.roster.23cf9fb19ebf",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.d5abe60654a039e9; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Cloth cowl, source-zone dye; exposed face remains visible. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.23cf9fb19ebf",
+            "source_order": 15,
+            "source_visual_variant_id": "roster-derived:recommendation.d5abe60654a039e9",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.23cf9fb19ebf"
+          },
+          {
+            "display_name": "hood orange",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head12",
+                "tint_rgb": 11627310
+              }
+            ],
+            "inventory_id": "item_visual.roster.8d9f11106817",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.e537c25d0551a6f0; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Cloth cowl, source-zone dye; exposed face remains visible. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.8d9f11106817",
+            "source_order": 16,
+            "source_visual_variant_id": "roster-derived:recommendation.e537c25d0551a6f0",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.8d9f11106817"
+          },
+          {
+            "display_name": "cap tan",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head3",
+                "tint_rgb": 10849119
+              }
+            ],
+            "inventory_id": "item_visual.roster.d4d3bfacf257",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.e9589de86a915def; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Head3 short cap silhouette; a new ordinary cap presentation over nonmagical headwear base, no AC bonus. Source cap vs hair ambiguity is retained in observation confidence. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.d4d3bfacf257",
+            "source_order": 17,
+            "source_visual_variant_id": "roster-derived:recommendation.e9589de86a915def",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.d4d3bfacf257"
+          },
+          {
+            "display_name": "cap red",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head3",
+                "tint_rgb": 8135732
+              }
+            ],
+            "inventory_id": "item_visual.roster.7d8178761a23",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloth_hood@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.ebbafdb17e445f62; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Head3 short cap silhouette; a new ordinary cap presentation over nonmagical headwear base, no AC bonus. Source cap vs hair ambiguity is retained in observation confidence. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.7d8178761a23",
+            "source_order": 18,
+            "source_visual_variant_id": "roster-derived:recommendation.ebbafdb17e445f62",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.7d8178761a23"
           }
         ]
       },
@@ -5604,6 +7905,94 @@
               "dark"
             ],
             "visual_variant_id": "h000000a"
+          },
+          {
+            "display_name": "steel helm ivory",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head13",
+                "tint_rgb": 13026218
+              }
+            ],
+            "inventory_id": "item_visual.roster.2f2e5c63d268",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.iron_helmet@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.513947242422c8f1; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Simple steel/ivory/gold helmet; source red plume remains cosmetic silhouette discrepancy. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.2f2e5c63d268",
+            "source_order": 3,
+            "source_visual_variant_id": "roster-derived:recommendation.513947242422c8f1",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.2f2e5c63d268"
+          },
+          {
+            "display_name": "hardhat yellow",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head4",
+                "tint_rgb": 12297000
+              }
+            ],
+            "inventory_id": "item_visual.roster.70b201ba7b87",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.iron_helmet@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.53931388b5a3d528; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Head4 rounded helmet reused as yellow safety hat; brim/material approximation, no protection bonus invented. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.70b201ba7b87",
+            "source_order": 4,
+            "source_visual_variant_id": "roster-derived:recommendation.53931388b5a3d528",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.70b201ba7b87"
+          },
+          {
+            "display_name": "steel helm gold",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head13",
+                "tint_rgb": 12756577
+              }
+            ],
+            "inventory_id": "item_visual.roster.c75568cbe4bb",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.iron_helmet@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.a6bd2865b940b496; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Simple steel/ivory/gold helmet; source red plume remains cosmetic silhouette discrepancy. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.c75568cbe4bb",
+            "source_order": 5,
+            "source_visual_variant_id": "roster-derived:recommendation.a6bd2865b940b496",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.c75568cbe4bb"
+          },
+          {
+            "display_name": "steel helm",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head13",
+                "tint_rgb": 12039858
+              }
+            ],
+            "inventory_id": "item_visual.roster.6b64ee00bd15",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.iron_helmet@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.bb8bb8ed69b82d9a; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Simple steel/ivory/gold helmet; source red plume remains cosmetic silhouette discrepancy. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.6b64ee00bd15",
+            "source_order": 6,
+            "source_visual_variant_id": "roster-derived:recommendation.bb8bb8ed69b82d9a",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.6b64ee00bd15"
           }
         ]
       },
@@ -5701,6 +8090,94 @@
               "war"
             ],
             "visual_variant_id": "h000000d"
+          },
+          {
+            "display_name": "horn gold",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head14",
+                "tint_rgb": 12756577
+              }
+            ],
+            "inventory_id": "item_visual.roster.464dd84d9f9c",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.horned_helmet@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.2819400f0bd8a085; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Worn horned helmet silhouette; horns on bare demon heads are intrinsic and not duplicated here. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.464dd84d9f9c",
+            "source_order": 3,
+            "source_visual_variant_id": "roster-derived:recommendation.2819400f0bd8a085",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.464dd84d9f9c"
+          },
+          {
+            "display_name": "horn ivory",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head14",
+                "tint_rgb": 13026218
+              }
+            ],
+            "inventory_id": "item_visual.roster.b4fa7ef2670f",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.horned_helmet@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.62f68ff593cac16b; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Worn horned helmet silhouette; horns on bare demon heads are intrinsic and not duplicated here. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.b4fa7ef2670f",
+            "source_order": 4,
+            "source_visual_variant_id": "roster-derived:recommendation.62f68ff593cac16b",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.b4fa7ef2670f"
+          },
+          {
+            "display_name": "horn dark",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head14",
+                "tint_rgb": 3486774
+              }
+            ],
+            "inventory_id": "item_visual.roster.d0ba4b5081a4",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.horned_helmet@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.908444068e475423; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Worn horned helmet silhouette; horns on bare demon heads are intrinsic and not duplicated here. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.d0ba4b5081a4",
+            "source_order": 5,
+            "source_visual_variant_id": "roster-derived:recommendation.908444068e475423",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.d0ba4b5081a4"
+          },
+          {
+            "display_name": "horn steel",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head14",
+                "tint_rgb": 12039858
+              }
+            ],
+            "inventory_id": "item_visual.roster.5d7242e6fb50",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.horned_helmet@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.a6e317d6994f6539; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Worn horned helmet silhouette; horns on bare demon heads are intrinsic and not duplicated here. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.5d7242e6fb50",
+            "source_order": 6,
+            "source_visual_variant_id": "roster-derived:recommendation.a6e317d6994f6539",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.5d7242e6fb50"
           }
         ]
       },
@@ -6048,6 +8525,50 @@
               "nature"
             ],
             "visual_variant_id": "h0000018"
+          },
+          {
+            "display_name": "skull ivory",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head24",
+                "tint_rgb": 13026218
+              }
+            ],
+            "inventory_id": "item_visual.roster.c0256ebf461b",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.monster_helm@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.edef5fe9dc737808; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original skull/horn mask silhouette, worn where human/orc head has a separate mantle. Creature skull protrusions are separately intrinsic. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.c0256ebf461b",
+            "source_order": 2,
+            "source_visual_variant_id": "roster-derived:recommendation.edef5fe9dc737808",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.c0256ebf461b"
+          },
+          {
+            "display_name": "skull gray",
+            "equipment_layers": [
+              {
+                "render_layer": "helmet",
+                "sprite_key": "Head24",
+                "tint_rgb": 7566970
+              }
+            ],
+            "inventory_id": "item_visual.roster.14548e4f35f9",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.monster_helm@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.f353645e0273f350; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original skull/horn mask silhouette, worn where human/orc head has a separate mantle. Creature skull protrusions are separately intrinsic. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.14548e4f35f9",
+            "source_order": 3,
+            "source_visual_variant_id": "roster-derived:recommendation.f353645e0273f350",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.14548e4f35f9"
           }
         ]
       },
@@ -6487,6 +9008,28 @@
               "silver"
             ],
             "visual_variant_id": "b000000d"
+          },
+          {
+            "display_name": "armored ivory",
+            "equipment_layers": [
+              {
+                "render_layer": "shoes",
+                "sprite_key": "Shoes5",
+                "tint_rgb": 13026218
+              }
+            ],
+            "inventory_id": "item_visual.roster.8cf16a574703",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.armored_boots@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.14994679ff3100cb; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Keep the depicted object family, coverage and dominant palette; shared stylized geometry is an intentional approximation. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.8cf16a574703",
+            "source_order": 3,
+            "source_visual_variant_id": "roster-derived:recommendation.14994679ff3100cb",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.8cf16a574703"
           }
         ]
       },
@@ -6679,6 +9222,28 @@
               "red"
             ],
             "visual_variant_id": "g0000006"
+          },
+          {
+            "display_name": "gloves ochre",
+            "equipment_layers": [
+              {
+                "render_layer": "hands",
+                "sprite_key": "Hands1",
+                "tint_rgb": 11373110
+              }
+            ],
+            "inventory_id": "item_visual.roster.ee40b139ab96",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.leather_gloves@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.c75130b765301bdc; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Soft tan boxing/work gloves; leather/cloth is proposed, not an armored fist or bonus damage item. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.ee40b139ab96",
+            "source_order": 3,
+            "source_visual_variant_id": "roster-derived:recommendation.c75130b765301bdc",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.ee40b139ab96"
           }
         ]
       },
@@ -6776,6 +9341,50 @@
               "silver"
             ],
             "visual_variant_id": "g0000009"
+          },
+          {
+            "display_name": "gauntlets ivory",
+            "equipment_layers": [
+              {
+                "render_layer": "hands",
+                "sprite_key": "Hands4",
+                "tint_rgb": 13026218
+              }
+            ],
+            "inventory_id": "item_visual.roster.b73361b14316",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.gauntlets@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.22437129603ac5c6; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Keep the depicted object family, coverage and dominant palette; shared stylized geometry is an intentional approximation. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.b73361b14316",
+            "source_order": 3,
+            "source_visual_variant_id": "roster-derived:recommendation.22437129603ac5c6",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.b73361b14316"
+          },
+          {
+            "display_name": "gauntlets brown",
+            "equipment_layers": [
+              {
+                "render_layer": "hands",
+                "sprite_key": "Hands4",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.c59f77540e60",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.gauntlets@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.41612fb4c635fcfa; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Keep the depicted object family, coverage and dominant palette; shared stylized geometry is an intentional approximation. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.c59f77540e60",
+            "source_order": 4,
+            "source_visual_variant_id": "roster-derived:recommendation.41612fb4c635fcfa",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.c59f77540e60"
           }
         ]
       },
@@ -7138,6 +9747,28 @@
               "ornate"
             ],
             "visual_variant_id": "oh000008"
+          },
+          {
+            "display_name": "Scimitar",
+            "equipment_layers": [
+              {
+                "render_layer": "offhand",
+                "sprite_key": "Offhand1",
+                "tint_rgb": 5974125
+              }
+            ],
+            "inventory_id": "item_visual.roster.6dc3343e03cc",
+            "mechanical_factory_identity": "content.srd_5_1_cc:item:weapon.scimitar@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.3a631bb4ff2666e1; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Use accepted Offhand1/Offhand2 shared geometry and category-qualified identity. This is a deliberate approximation of the depicted secondary weapon. This color is a static material proposal; animated emissions are classified separately. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.6dc3343e03cc",
+            "source_order": 2,
+            "source_visual_variant_id": "roster-derived:recommendation.3a631bb4ff2666e1",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.6dc3343e03cc"
           }
         ]
       },
@@ -7463,7 +10094,296 @@
         "primary_render_layer": "chest",
         "source_order": 70,
         "unsupported_reason": null,
-        "variants": []
+        "variants": [
+          {
+            "display_name": "partial brown red",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 8135732
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest17",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.a4aaa95f0362",
+            "mechanical_factory_identity": "content.neurodragon:item:armor.armor_scraps@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.02d7840cde7c74e7; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest17 separated shoulder/torso guards approximates partial protection. Existing Armor Scraps has AC13/maxDex0; accepting that mechanic is a separate proposal, not proven by metal pixels. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.a4aaa95f0362",
+            "source_order": 0,
+            "source_visual_variant_id": "roster-derived:recommendation.02d7840cde7c74e7",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.a4aaa95f0362"
+          },
+          {
+            "display_name": "partial steel red",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 8135732
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest17",
+                "tint_rgb": 12039858
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.f8d0f71d39aa",
+            "mechanical_factory_identity": "content.neurodragon:item:armor.armor_scraps@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.585405d18a6b22bd; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest17 separated shoulder/torso guards approximates partial protection. Existing Armor Scraps has AC13/maxDex0; accepting that mechanic is a separate proposal, not proven by metal pixels. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.f8d0f71d39aa",
+            "source_order": 1,
+            "source_visual_variant_id": "roster-derived:recommendation.585405d18a6b22bd",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.f8d0f71d39aa"
+          },
+          {
+            "display_name": "partial ivory red",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 8135732
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest17",
+                "tint_rgb": 13026218
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.d89b12d8d5cf",
+            "mechanical_factory_identity": "content.neurodragon:item:armor.armor_scraps@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.aec0528be7dab4ee; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest17 separated shoulder/torso guards approximates partial protection. Existing Armor Scraps has AC13/maxDex0; accepting that mechanic is a separate proposal, not proven by metal pixels. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.d89b12d8d5cf",
+            "source_order": 2,
+            "source_visual_variant_id": "roster-derived:recommendation.aec0528be7dab4ee",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.d89b12d8d5cf"
+          },
+          {
+            "display_name": "partial dark red",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 8135732
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest17",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.dbb702d53310",
+            "mechanical_factory_identity": "content.neurodragon:item:armor.armor_scraps@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.b1d1657766adb282; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest17 separated shoulder/torso guards approximates partial protection. Existing Armor Scraps has AC13/maxDex0; accepting that mechanic is a separate proposal, not proven by metal pixels. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.dbb702d53310",
+            "source_order": 3,
+            "source_visual_variant_id": "roster-derived:recommendation.b1d1657766adb282",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.dbb702d53310"
+          },
+          {
+            "display_name": "partial steel gray",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 7566970
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest17",
+                "tint_rgb": 12039858
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.5b5b6ba7ea35",
+            "mechanical_factory_identity": "content.neurodragon:item:armor.armor_scraps@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.b3ae4970a3692a34; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest17 separated shoulder/torso guards approximates partial protection. Existing Armor Scraps has AC13/maxDex0; accepting that mechanic is a separate proposal, not proven by metal pixels. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.5b5b6ba7ea35",
+            "source_order": 4,
+            "source_visual_variant_id": "roster-derived:recommendation.b3ae4970a3692a34",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.5b5b6ba7ea35"
+          },
+          {
+            "display_name": "partial dark gray",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 7566970
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest17",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.d6b6c79a6d59",
+            "mechanical_factory_identity": "content.neurodragon:item:armor.armor_scraps@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.c492835e16aa1cb7; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest17 separated shoulder/torso guards approximates partial protection. Existing Armor Scraps has AC13/maxDex0; accepting that mechanic is a separate proposal, not proven by metal pixels. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.d6b6c79a6d59",
+            "source_order": 5,
+            "source_visual_variant_id": "roster-derived:recommendation.c492835e16aa1cb7",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.d6b6c79a6d59"
+          },
+          {
+            "display_name": "partial dark purple",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 5974125
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest17",
+                "tint_rgb": 3486774
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.0055f3081079",
+            "mechanical_factory_identity": "content.neurodragon:item:armor.armor_scraps@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.d1b476402712f74c; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest17 separated shoulder/torso guards approximates partial protection. Existing Armor Scraps has AC13/maxDex0; accepting that mechanic is a separate proposal, not proven by metal pixels. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.0055f3081079",
+            "source_order": 6,
+            "source_visual_variant_id": "roster-derived:recommendation.d1b476402712f74c",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.0055f3081079"
+          },
+          {
+            "display_name": "partial steel brown",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest17",
+                "tint_rgb": 12039858
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.8ab959786f2a",
+            "mechanical_factory_identity": "content.neurodragon:item:armor.armor_scraps@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.f687a5eb997fb546; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest17 separated shoulder/torso guards approximates partial protection. Existing Armor Scraps has AC13/maxDex0; accepting that mechanic is a separate proposal, not proven by metal pixels. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.8ab959786f2a",
+            "source_order": 7,
+            "source_visual_variant_id": "roster-derived:recommendation.f687a5eb997fb546",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.8ab959786f2a"
+          },
+          {
+            "display_name": "partial brown blue",
+            "equipment_layers": [
+              {
+                "render_layer": "legs",
+                "sprite_key": "Legs3",
+                "tint_rgb": 3427187
+              },
+              {
+                "render_layer": "chest",
+                "sprite_key": "Chest17",
+                "tint_rgb": 6637363
+              },
+              {
+                "render_layer": "belt",
+                "sprite_key": "Belt1",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.162aaff7464e",
+            "mechanical_factory_identity": "content.neurodragon:item:armor.armor_scraps@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.fab63cf75d4d818d; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Chest17 separated shoulder/torso guards approximates partial protection. Existing Armor Scraps has AC13/maxDex0; accepting that mechanic is a separate proposal, not proven by metal pixels. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.162aaff7464e",
+            "source_order": 8,
+            "source_visual_variant_id": "roster-derived:recommendation.fab63cf75d4d818d",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.162aaff7464e"
+          }
+        ]
       },
       {
         "base_category": "Performer's Leather Armor",
@@ -7669,6 +10589,346 @@
         "source_order": 76,
         "unsupported_reason": null,
         "variants": []
+      },
+      {
+        "base_category": "Cloak",
+        "base_presentation": {
+          "equipment_layers": [
+            {
+              "render_layer": "cloak",
+              "sprite_key": "Bag1",
+              "tint_rgb": 3421238
+            }
+          ],
+          "notes": "Ordinary cloth cloak; original vendor back layer.",
+          "tags": [
+            "apparel",
+            "cloth",
+            "cloak"
+          ]
+        },
+        "classification": "supported_existing_factory",
+        "equipment_slot": "cloak",
+        "factory_presentation_bindings": [
+          {
+            "equipment_slot": "cloak",
+            "factory_identity": "content.neurodragon:item:apparel.cloak@1",
+            "root_presentation_owner": true
+          }
+        ],
+        "mechanical_factory_identity": "content.neurodragon:item:apparel.cloak@1",
+        "primary_render_layer": "cloak",
+        "source_order": 77,
+        "unsupported_reason": null,
+        "variants": [
+          {
+            "display_name": "cloak blue",
+            "equipment_layers": [
+              {
+                "render_layer": "cloak",
+                "sprite_key": "Bag1",
+                "tint_rgb": 3427187
+              }
+            ],
+            "inventory_id": "item_visual.roster.f4b960fafcb0",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloak@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.22852dc18f7bc2cd; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Bag1 cloak geometry preserves free flowing fabric. Not wings. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.f4b960fafcb0",
+            "source_order": 0,
+            "source_visual_variant_id": "roster-derived:recommendation.22852dc18f7bc2cd",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.f4b960fafcb0"
+          },
+          {
+            "display_name": "cloak dark",
+            "equipment_layers": [
+              {
+                "render_layer": "cloak",
+                "sprite_key": "Bag1",
+                "tint_rgb": 3486774
+              }
+            ],
+            "inventory_id": "item_visual.roster.a2f1778d203d",
+            "mechanical_factory_identity": "content.neurodragon:item:apparel.cloak@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.24e94ba86ac133ff; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Bag1 cloak geometry preserves free flowing fabric. Not wings. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.a2f1778d203d",
+            "source_order": 1,
+            "source_visual_variant_id": "roster-derived:recommendation.24e94ba86ac133ff",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.a2f1778d203d"
+          }
+        ]
+      },
+      {
+        "base_category": "Wand",
+        "base_presentation": {
+          "equipment_layers": [
+            {
+              "render_layer": "weapon",
+              "sprite_key": "Melee19",
+              "tint_rgb": 8952234
+            }
+          ],
+          "notes": "Existing vendor silhouette approximation; does not promise exact wand length, crowbar hook, banner flag, firearm or canister geometry.",
+          "tags": [
+            "ordinary",
+            "approximation"
+          ]
+        },
+        "classification": "supported_existing_factory",
+        "equipment_slot": "weapon_melee_main",
+        "factory_presentation_bindings": [
+          {
+            "equipment_slot": "weapon_melee_main",
+            "factory_identity": "content.neurodragon:item:focus.wand@1",
+            "root_presentation_owner": true
+          }
+        ],
+        "mechanical_factory_identity": "content.neurodragon:item:focus.wand@1",
+        "primary_render_layer": "weapon",
+        "source_order": 78,
+        "unsupported_reason": null,
+        "variants": []
+      },
+      {
+        "base_category": "Crowbar",
+        "base_presentation": {
+          "equipment_layers": [
+            {
+              "render_layer": "weapon",
+              "sprite_key": "Melee10",
+              "tint_rgb": 8952234
+            }
+          ],
+          "notes": "Existing vendor silhouette approximation; does not promise exact wand length, crowbar hook, banner flag, firearm or canister geometry.",
+          "tags": [
+            "ordinary",
+            "approximation"
+          ]
+        },
+        "classification": "supported_existing_factory",
+        "equipment_slot": "weapon_melee_main",
+        "factory_presentation_bindings": [
+          {
+            "equipment_slot": "weapon_melee_main",
+            "factory_identity": "content.neurodragon:item:tool.crowbar@1",
+            "root_presentation_owner": true
+          }
+        ],
+        "mechanical_factory_identity": "content.neurodragon:item:tool.crowbar@1",
+        "primary_render_layer": "weapon",
+        "source_order": 79,
+        "unsupported_reason": null,
+        "variants": []
+      },
+      {
+        "base_category": "Banner",
+        "base_presentation": {
+          "equipment_layers": [
+            {
+              "render_layer": "weapon",
+              "sprite_key": "Melee25",
+              "tint_rgb": 5974125
+            }
+          ],
+          "notes": "Existing vendor silhouette approximation; does not promise exact wand length, crowbar hook, banner flag, firearm or canister geometry.",
+          "tags": [
+            "ordinary",
+            "approximation"
+          ]
+        },
+        "classification": "supported_existing_factory",
+        "equipment_slot": "weapon_melee_main",
+        "factory_presentation_bindings": [
+          {
+            "equipment_slot": "weapon_melee_main",
+            "factory_identity": "content.neurodragon:item:tool.banner@1",
+            "root_presentation_owner": true
+          }
+        ],
+        "mechanical_factory_identity": "content.neurodragon:item:tool.banner@1",
+        "primary_render_layer": "weapon",
+        "source_order": 80,
+        "unsupported_reason": null,
+        "variants": []
+      },
+      {
+        "base_category": "Musket",
+        "base_presentation": {
+          "equipment_layers": [
+            {
+              "render_layer": "weapon",
+              "sprite_key": "Ranged3",
+              "tint_rgb": 8952234
+            }
+          ],
+          "notes": "Existing vendor silhouette approximation; does not promise exact wand length, crowbar hook, banner flag, firearm or canister geometry.",
+          "tags": [
+            "ordinary",
+            "approximation"
+          ]
+        },
+        "classification": "supported_existing_factory",
+        "equipment_slot": "weapon_ranged_main",
+        "factory_presentation_bindings": [
+          {
+            "equipment_slot": "weapon_ranged_main",
+            "factory_identity": "content.neurodragon:item:weapon.musket@1",
+            "root_presentation_owner": true
+          }
+        ],
+        "mechanical_factory_identity": "content.neurodragon:item:weapon.musket@1",
+        "primary_render_layer": "weapon",
+        "source_order": 81,
+        "unsupported_reason": null,
+        "variants": []
+      },
+      {
+        "base_category": "Quiver",
+        "base_presentation": {
+          "equipment_layers": [
+            {
+              "render_layer": "backpack",
+              "sprite_key": "Bag2",
+              "tint_rgb": 6637363
+            }
+          ],
+          "notes": "Existing vendor silhouette approximation; does not promise exact wand length, crowbar hook, banner flag, firearm or canister geometry.",
+          "tags": [
+            "ordinary",
+            "approximation"
+          ]
+        },
+        "classification": "supported_existing_factory",
+        "equipment_slot": "backpack",
+        "factory_presentation_bindings": [
+          {
+            "equipment_slot": "backpack",
+            "factory_identity": "content.neurodragon:item:gear.quiver@1",
+            "root_presentation_owner": true
+          }
+        ],
+        "mechanical_factory_identity": "content.neurodragon:item:gear.quiver@1",
+        "primary_render_layer": "backpack",
+        "source_order": 82,
+        "unsupported_reason": null,
+        "variants": [
+          {
+            "display_name": "Back quiver",
+            "equipment_layers": [
+              {
+                "render_layer": "backpack",
+                "sprite_key": "Bag2",
+                "tint_rgb": 6637363
+              }
+            ],
+            "inventory_id": "item_visual.roster.6c39094102d0",
+            "mechanical_factory_identity": "content.neurodragon:item:gear.quiver@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.18ec8cf1d3121b12; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Original Bag2 quiver shape; new accessory binding, not a body clothing replacement. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.6c39094102d0",
+            "source_order": 0,
+            "source_visual_variant_id": "roster-derived:recommendation.18ec8cf1d3121b12",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.6c39094102d0"
+          }
+        ]
+      },
+      {
+        "base_category": "Back Canister",
+        "base_presentation": {
+          "equipment_layers": [
+            {
+              "render_layer": "backpack",
+              "sprite_key": "Bag2",
+              "tint_rgb": 8952234
+            }
+          ],
+          "notes": "Existing vendor silhouette approximation; does not promise exact wand length, crowbar hook, banner flag, firearm or canister geometry.",
+          "tags": [
+            "ordinary",
+            "approximation"
+          ]
+        },
+        "classification": "supported_existing_factory",
+        "equipment_slot": "backpack",
+        "factory_presentation_bindings": [
+          {
+            "equipment_slot": "backpack",
+            "factory_identity": "content.neurodragon:item:gear.canister@1",
+            "root_presentation_owner": true
+          }
+        ],
+        "mechanical_factory_identity": "content.neurodragon:item:gear.canister@1",
+        "primary_render_layer": "backpack",
+        "source_order": 83,
+        "unsupported_reason": null,
+        "variants": []
+      },
+      {
+        "base_category": "Maul",
+        "base_presentation": {
+          "equipment_layers": [
+            {
+              "render_layer": "weapon",
+              "sprite_key": "Melee11",
+              "tint_rgb": 12039858
+            }
+          ],
+          "notes": "Existing vendor silhouette approximation; does not promise exact wand length, crowbar hook, banner flag, firearm, canister or larger maul-head geometry.",
+          "tags": [
+            "ordinary",
+            "approximation"
+          ]
+        },
+        "classification": "supported_existing_factory",
+        "equipment_slot": "weapon_melee_main",
+        "factory_presentation_bindings": [
+          {
+            "equipment_slot": "weapon_melee_main",
+            "factory_identity": "content.neurodragon:item:weapon.maul@1",
+            "root_presentation_owner": true
+          }
+        ],
+        "mechanical_factory_identity": "content.neurodragon:item:weapon.maul@1",
+        "primary_render_layer": "weapon",
+        "source_order": 84,
+        "unsupported_reason": null,
+        "variants": [
+          {
+            "display_name": "Maul",
+            "equipment_layers": [
+              {
+                "render_layer": "weapon",
+                "sprite_key": "Melee11",
+                "tint_rgb": 12039858
+              }
+            ],
+            "inventory_id": "item_visual.roster.06ceb223da45",
+            "mechanical_factory_identity": "content.neurodragon:item:weapon.maul@1",
+            "notes": "Roster-derived appearance, 2026-10-02; recommendation.95d553b995244dc5; handoff SHA256 fb25c343932523a684e2ea03db9aa287dfd73fc311cfb685867f6b5f9e5e9b8c. Reuse Warhammer original hammer head/haft. Native maul base and much larger source head silhouette remain explicit; do not substitute Warhammer rules. Cosmetic only; unchanged native base rules.",
+            "preset_id": "item_variant.roster.06ceb223da45",
+            "source_order": 0,
+            "source_visual_variant_id": "roster-derived:recommendation.95d553b995244dc5",
+            "tags": [
+              "roster-derived",
+              "palette",
+              "cosmetic"
+            ],
+            "visual_variant_id": "roster.06ceb223da45"
+          }
+        ]
       }
     ],
     "source_visual_variant_id_collisions": {
@@ -7678,7 +10938,7 @@
       ]
     }
   },
-  "inventory_digest": "304c44499560b4165582235c1442a9171a215bb99438023044f684c5b534e018",
+  "inventory_digest": "2f486b552135f7064e8fb6debd81a6012575711a751c40d33c6b8b6d8b52ec89",
   "schema_version": 3,
   "source": {
     "captured_date": "2026-07-25",

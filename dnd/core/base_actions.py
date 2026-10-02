@@ -5,7 +5,7 @@ from math import hypot
 
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, computed_field, field_validator, model_validator
 from dnd.action_timing import action_timing_enabled, record_action_timing
-from dnd.core.attack_types import AttackSourceMetadata
+from dnd.core.attack_types import AttackSourceMetadata, AttackAmmunitionMetadata, AttackAmmunitionPayload
 from dnd.core.action_types import (
     ActionPresentationKind,
     ActionEconomyCostType,
@@ -17,6 +17,7 @@ from dnd.core.action_types import (
 )
 from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range, EventQueue
 from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
+from dnd.types.world import MovementMode
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
 from dnd.core.content.identities import ContentRef, validate_namespaced_id
@@ -45,6 +46,12 @@ class FiniteChargeProvider(Protocol):
     """Structural boundary for an item-backed finite action cost."""
 
     charges: int
+
+    def prepare_charge_consumption(self, amount: int, source_entity_uuid: UUID, parent_event: Event) -> Event:
+        ...
+
+    def commit_prepared_charge(self, prepared: Event) -> Event:
+        ...
 
     def consume_charge_with_event(
         self,
@@ -220,6 +227,9 @@ class DamageRollProfile(BaseModel):
     die_size: int = Field(ge=1, description="Number of faces on each damage die.")
     flat_bonus: int = Field(default=0, description="Flat bonus added once per application.")
     damage_type: str = Field(description="Damage type applied to this component.")
+    save_dc: int | None = Field(default=None, description="Optional on-hit save gating this packet.")
+    save_ability: str | None = None
+    double_on_critical: bool = True
 
 
 class AttackRollBaseline(BaseModel):
@@ -953,6 +963,9 @@ class BaseAction(BaseObject):
     def get_attack_source_metadata(self) -> Optional[AttackSourceMetadata]:
         return None
 
+    def get_attack_ammunition_metadata(self) -> AttackAmmunitionMetadata | None:
+        return None
+
     @property
     def is_attack(self) -> bool:
         """Whether this action is categorized as an attack."""
@@ -1396,6 +1409,9 @@ class BaseAction(BaseObject):
     def source_item_contact_error(self, *, subjective: bool = False) -> Optional[str]:
         if self.source_item_uuid is None:
             return None
+        source_item=BaseBlock.get(self.source_item_uuid)
+        if source_item is None or not source_item.permits_use_by(self.source_entity_uuid):
+            return "Source item cannot be activated by this actor"
         grid = get_map()
         contact_uuid = self.source_item_uuid
         if self._source_item_controller_uuid is not None:
@@ -1471,6 +1487,9 @@ class BaseAction(BaseObject):
             not disclose intermediate movement.
         """
         return None
+
+    def get_movement_mode(self) -> MovementMode:
+        return MovementMode.WALKING
 
     def get_multi_target_count(self) -> Optional[int]:
         """Get the number of targets/projectiles for MULTI_ENTITY actions.
@@ -2054,38 +2073,40 @@ class BaseAction(BaseObject):
         """
         return execution_event
 
-    def _commit_item_charge(
+    def _prepare_item_charge(
         self,
         execution_event: ActionEvent,
         declaration_event: ActionEvent,
-    ) -> Optional[ActionEvent]:
-        """Commit an item-backed finite cost through the item's child event."""
+    ) -> tuple[ActionEvent, Event | None]:
+        """Admit an item-backed finite cost before committing action economy."""
+        if (error := self.source_item_contact_error()) is not None:
+            return execution_event.cancel(status_message=error), None
         if execution_event.item_charge_cost <= 0:
-            return execution_event
+            return execution_event, None
         if execution_event.source_item_uuid is None:
             return execution_event.cancel(
                 status_message="Finite item charge has no source item"
-            )
+            ), None
         if (
             execution_event.item_charge_action_lineage_uuid
             != declaration_event.lineage_uuid
         ):
             return execution_event.cancel(
                 status_message="Finite item charge is not authorized for this action"
-            )
+            ), None
         item = BaseBlock.get(execution_event.source_item_uuid)
         if item is None:
             return execution_event.cancel(
                 status_message="Finite item charge source is no longer available"
-            )
+            ), None
         if not isinstance(item, FiniteChargeProvider):
             return execution_event.cancel(
                 status_message="Action source item cannot provide finite charges"
-            )
+            ), None
         if item.charges == -1:
-            return execution_event
+            return execution_event, None
         try:
-            result = item.consume_charge_with_event(
+            result = item.prepare_charge_consumption(
                 execution_event.item_charge_cost,
                 execution_event.source_entity_uuid,
                 declaration_event,
@@ -2093,13 +2114,26 @@ class BaseAction(BaseObject):
         except RuntimeError:
             return execution_event.cancel(
                 status_message="Finite item charge could not be consumed"
-            )
+            ), None
         if result.canceled:
             return execution_event.cancel(
                 status_message=(
                     "Item charge consumption was canceled before action execution"
                 )
-            )
+            ), None
+        return execution_event, result
+
+    def _commit_item_charge(self, execution_event: ActionEvent, prepared: Event | None) -> ActionEvent:
+        if prepared is None:
+            return execution_event
+        item = BaseBlock.get(execution_event.source_item_uuid) if execution_event.source_item_uuid else None
+        if item is None or not isinstance(item, FiniteChargeProvider):
+            return execution_event.cancel(status_message="Finite item resource lost before commit")
+        result = item.commit_prepared_charge(prepared)
+        return execution_event.cancel(status_message="Finite item resource rejected") if result.canceled else execution_event
+
+    def _commit_release_costs(self, execution_event: ActionEvent) -> ActionEvent:
+        """Resource release after execution admission; ordinary actions have none."""
         return execution_event
 
     @staticmethod
@@ -2228,6 +2262,13 @@ class BaseAction(BaseObject):
         execution_event = execution_event.model_copy(
             update={"use_register": False}
         )
+        execution_event, prepared_item_charge = self._prepare_item_charge(execution_event, declaration_event)
+        if execution_event.canceled:
+            record_total()
+            return self._publish_detached_cancellation(execution_event)
+        # Resource-admission handlers can change source ownership.
+        if (error := self.source_item_contact_error()) is not None:
+            return self._publish_detached_cancellation(execution_event.cancel(status_message=error))
         started = start_phase()
         execution_event = self._apply_costs(execution_event)
         record_phase("apply_costs", started)
@@ -2241,19 +2282,6 @@ class BaseAction(BaseObject):
             raise ValueError("Action cost commitment must preserve execution phase")
 
         self._on_costs_committed(declaration_event, execution_event)
-
-        started = start_phase()
-        execution_event = self._commit_item_charge(
-            execution_event,
-            declaration_event,
-        )
-        record_phase("commit_item_charge", started)
-        if execution_event is None:
-            record_total()
-            return None
-        if execution_event.canceled:
-            record_total()
-            return self._publish_detached_cancellation(execution_event)
         execution_event = execution_event.model_copy(update={
             "use_register": True,
             "lineage_children_events": list(
@@ -2280,6 +2308,12 @@ class BaseAction(BaseObject):
             record_total()
             return execution_event.cancel(status_message=access_error)
 
+        execution_event = self._commit_item_charge(execution_event, prepared_item_charge)
+        if execution_event.canceled:
+            return execution_event
+        execution_event = self._commit_release_costs(execution_event)
+        if execution_event.canceled:
+            return execution_event
         if self.effective_target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
             started = start_phase()
             all_target_uuids, resolved_area_positions = self._resolve_execution_targets()
@@ -2620,6 +2654,8 @@ class AvailableActionInfo(BaseModel):
         ge=0,
         description="Finite source-item charges consumed by successful execution.",
     )
+    selected_ammunition_uuid: UUID | None = None
+    ammunition_payload: AttackAmmunitionPayload | None = None
     fixed_healing: Optional[int] = Field(
         default=None,
         ge=0,

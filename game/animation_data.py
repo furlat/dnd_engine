@@ -24,7 +24,7 @@ from game.animation_types import (
     ForcedMovementProfile, FrozenMap, HealingContext, Identifier, LifecycleFeedback, LifeStateContext,
     MovementMediaTrack, MovementReactionContext, ProjectileStorage, RigLayer, RigTables, ShoveRecipe, StudioDraftFile, StudioSpellDraft,
     VoluntaryMovementContext, MovementPresentation, Point, PoseSockets, SpatialMediaBinding, DepositMediaBinding, FacingMap,
-    InterruptionPresentation,
+    InterruptionPresentation, ConstructionMediaBinding,
 )
 from game.condition_types import load_condition_recipes
 from game.condition_media import load_condition_media
@@ -47,6 +47,8 @@ _VISUAL_SLOT_BY_ENGINE_SLOT = {
     BodyPart.BODY.value: VisualLoadoutSlot.BODY_ARMOR,
     BodyPart.HANDS.value: VisualLoadoutSlot.GAUNTLETS,
     BodyPart.FEET.value: VisualLoadoutSlot.BOOTS,
+    BodyPart.CLOAK.value: VisualLoadoutSlot.CLOAK,
+    BodyPart.BACKPACK.value: VisualLoadoutSlot.BACKPACK,
 }
 _WEAPON_SET_BY_SLOT = {
     WeaponSlot.MELEE_MAIN.value: WeaponSet.MELEE,
@@ -336,7 +338,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         draft_versions[ref] = drafts_file.version
         identities.add(ref.identity_key)
     if authored_bundles is None:
-        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media")
+        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media", "curse_media", "divine_media", "control_media", "fire_media", "lightning_media")
                                  if (data_root.parent / name).is_dir())
     bundle_resources: dict[str, Path] = {}
     projectile_storage: dict[str, ProjectileStorage] = {}
@@ -458,6 +460,27 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     for binding in spatial_media.values():
         validate_wall_modules(binding, projectile_assets, projectile_storage)
         validate_contact_sweeps(binding, projectile_assets, projectile_storage)
+    concentration_media = {identity: explicit_spatial_composition(
+        SpatialMediaBinding.model_validate_json(json.dumps(row)), projectile_storage)
+        for identity, row in world_bindings.get("concentration_media", {}).items()}
+    construction_media = {identity: ConstructionMediaBinding.model_validate_json(json.dumps(row))
+        for identity, row in world_bindings.get("construction_media", {}).items()}
+    for binding in construction_media.values():
+        for direction in binding.directions:
+            for variant in direction.variants:
+                for phase_name, phase_identities in (('application', variant.application), ('intact', variant.intact),
+                                                ('destruction', variant.destruction)):
+                    for identity in phase_identities:
+                        asset = projectile_assets[identity]
+                        phase = asset.phases.impact
+                        storage = projectile_storage[identity].phases['impact']
+                        if (phase is None or (phase.fps or asset.fps) != 32
+                                or phase_name == 'intact' and (phase.frames != 1 or not phase.loop)
+                                or phase_name != 'intact' and phase.loop
+                                or not storage.layers
+                                or any(layer.partsByFacing is None or not {'E', 'S', 'W', 'N'} <= set(layer.partsByFacing)
+                                       for layer in storage.layers)):
+                            raise ValueError('Construction phases require four-view finite banks and a single intact still')
     world_animations = {identity: prop_animation(row["transition"])
         for identity, row in world_bindings["props"].items() if "transition" in row}
     world_animations.update({identity: prop_animation(row)
@@ -510,6 +533,8 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         context_source_json=context_source,
         world_animations=MappingProxyType(world_animations),
         spatial_media=MappingProxyType(spatial_media),
+        concentration_media=MappingProxyType(concentration_media),
+        construction_media=MappingProxyType(construction_media),
         deposit_media=MappingProxyType(TypeAdapter(dict[str, DepositMediaBinding]).validate_json(
             json.dumps(world_bindings.get("deposit_media", {})))),
         action_media_assets=MappingProxyType({asset.assetId: asset for asset in (

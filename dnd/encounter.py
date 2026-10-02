@@ -791,7 +791,7 @@ class Encounter(BaseObject):
             actions_remaining=ae.actions.normalized_score,
             bonus_actions_remaining=ae.bonus_actions.normalized_score,
             reactions_remaining=ae.reactions.normalized_score,
-            movement_remaining=ae.movement.normalized_score,
+            movement_remaining=ae.movement_remaining(),
             visible_enemies=entity.get_visible_enemies(),
             visible_allies=entity.get_visible_allies(),
             encounter_uuid=self.uuid,

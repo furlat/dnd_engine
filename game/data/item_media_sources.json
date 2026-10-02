@@ -3,6 +3,1150 @@
   "archive": "Stand-alone Character creator - 2D Fantasy V1.3.zip",
   "files": [
     {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag1/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag1/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Bag2/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Bag2/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Belt1/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Belt1/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Belt2/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Belt2/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest1/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest1/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest10/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest10/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest11/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest12/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest12/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest13/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest13/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest14/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest14/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest15/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest15/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest16/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest16/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest17/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest18/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest18/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest19/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest19/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest2/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest2/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest3/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest4/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest4/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest5/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest5/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest6/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest7/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest7/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest8/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest9/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Chest9/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands1/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands2/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands2/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands3/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands3/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Hands4/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Head12/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head13/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head13/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Head14/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head15/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head15/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head18/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head18/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head19/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head19/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head20/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head20/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head21/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head21/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head23/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head23/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Head24/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Head3/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Head4/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head5/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head5/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head6/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head6/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head7/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head7/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Head8/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs1/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs1/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs2/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs3/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs4/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs4/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs5/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs5/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs6/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs6/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs7/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs7/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Die.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs8/Taunt.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs9/Idle.png",
+      "path": "game/assets/neuroclient/spritesheets/Legs9/Idle.png"
+    },
+    {
       "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Melee1/Attack1.png",
       "path": "game/assets/neuroclient/spritesheets/Melee1/Attack1.png"
     },
@@ -2355,206 +3499,6 @@
       "path": "game/assets/neuroclient/spritesheets/Shield7/Taunt.png"
     },
     {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Belt1/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Belt1/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Belt2/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Belt2/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest1/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest1/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest10/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest10/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest11/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest11/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest12/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest12/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest13/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest13/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest14/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest14/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest15/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest15/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest16/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest16/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest17/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest17/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest18/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest18/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest19/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest19/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest2/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest2/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest3/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest3/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest4/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest4/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest5/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest5/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest6/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest6/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest7/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest7/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest8/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest8/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Chest9/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Chest9/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands1/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Hands1/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands2/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Hands2/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands3/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Hands3/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Hands4/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Hands4/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head12/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head12/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head13/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head13/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head14/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head14/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head15/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head15/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head18/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head18/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head19/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head19/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head20/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head20/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head21/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head21/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head23/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head23/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head24/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head24/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head3/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head3/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head4/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head4/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head5/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head5/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head6/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head6/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head7/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head7/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Head8/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Head8/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs1/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Legs1/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs2/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Legs2/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs3/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Legs3/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs4/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Legs4/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs5/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Legs5/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs6/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Legs6/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs7/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Legs7/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs8/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Legs8/Idle.png"
-    },
-    {
-      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Legs9/Idle.png",
-      "path": "game/assets/neuroclient/spritesheets/Legs9/Idle.png"
-    },
-    {
       "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes1/Idle.png",
       "path": "game/assets/neuroclient/spritesheets/Shoes1/Idle.png"
     },
@@ -2571,8 +3515,60 @@
       "path": "game/assets/neuroclient/spritesheets/Shoes4/Idle.png"
     },
     {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Attack1.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Attack1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Attack2.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Attack2.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Attack3.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Attack3.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Attack4.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Attack4.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Attack5.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Attack5.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Attack6.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Attack6.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Die.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Die.png"
+    },
+    {
       "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Idle.png",
       "path": "game/assets/neuroclient/spritesheets/Shoes5/Idle.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Kick.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Kick.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Rolling.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Rolling.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Run.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Run.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Special1.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Special1.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/TakeDamage.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/TakeDamage.png"
+    },
+    {
+      "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Shoes5/Taunt.png",
+      "path": "game/assets/neuroclient/spritesheets/Shoes5/Taunt.png"
     },
     {
       "member": "Fantasy Character Creator_Data/StreamingAssets/Spritesheets/Slash1/Attack5.png",

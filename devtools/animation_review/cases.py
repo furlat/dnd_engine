@@ -7,6 +7,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
+from devtools.animation_review.curse_cases import CurseCase
+from devtools.animation_review.divine_cases import DivineCase
+from devtools.animation_review.slow_cases import SlowCase
+from devtools.animation_review.hold_cases import HoldCase
+from devtools.animation_review.fear_cases import FearCase
+from devtools.animation_review.hypnotic_cases import HypnoticCase
+from devtools.animation_review.assembly_cases import AssemblyCase
+from devtools.animation_review.scorching_cases import ScorchingCase
+from devtools.animation_review.continual_flame_cases import ContinualFlameCase
 from dnd.core.equipment_types import WeaponSlot
 from game.player_facts import PlayerLineage, PlayerState
 
@@ -98,6 +107,10 @@ class ItemTransferCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["item-transfer"]
     initial_hand: WeaponSlot = WeaponSlot.MELEE_MAIN
+    roster_outfit: bool = False
+    roster_backpack: bool = False
+    weapon_item_id: str | None = None
+    coating_item_id: str | None = "consumable.weapon_coat.fire"
 
 
 class ObjectAttackCase(BaseModel):
@@ -445,7 +458,7 @@ class ReviewCase(BaseModel):
     framing: Literal["scene", "actors"] = "scene"
     initial_facings: tuple[ReviewFacing, ...] = ()
     scenario: Annotated[AttackCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | CreatureCase | EquipmentCase | ItemTransferCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
+                        | AssemblyCase | HypnoticCase | CurseCase | DivineCase | SlowCase | HoldCase | ScorchingCase | FearCase | ContinualFlameCase | CreatureCase | EquipmentCase | ItemTransferCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)

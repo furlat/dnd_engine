@@ -1,6 +1,7 @@
 """Action economy resources, turn costs, and spell slot values."""
 
 from typing import AbstractSet, Optional, List, Tuple, Dict, Union, Sequence
+from math import prod
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, StrictInt
@@ -10,6 +11,7 @@ from dnd.core.base_actions import CostType, spell_slot_cost_type
 from dnd.core.action_types import ActionEconomyCostType, HasteActionPolicy, RestrictedActionGrant
 from dnd.core.feature_grants import AttackMultiplicityGrant
 
+from dnd.types.world import MovementMode
 from dnd.core.base_block import BaseBlock
 
 
@@ -255,6 +257,9 @@ class ActionEconomyConfig(BaseModel):
 
 
 class ActionEconomy(BaseBlock):
+    movement_speed_grants: Dict[UUID, Dict[MovementMode, int]] = Field(default_factory=dict)
+    movement_speed_factors: Dict[UUID, float] = Field(default_factory=dict, description="Speed factors owned by exact movement modifier handles.")
+
     """Turn resources, named resources, movement, and spell slots for an entity.
 
     Spell slots are stored as `ModifiableValue`s here, with base value 0 for
@@ -988,28 +993,37 @@ class ActionEconomy(BaseBlock):
         return [mod for mod in value.self_static.value_modifiers.values()
                 if mod.name is not None and "cost" in mod.name]
 
-    def current_speed(self) -> int:
-        """Return movement speed before spending movement or applying Dash.
+    def current_speed(self, mode: MovementMode = MovementMode.WALKING) -> int:
+        """Resolve a mode's speed, excluding the one shared expenditure ledger."""
+        channel = self.movement.self_static
+        spent = {modifier.uuid for modifier in self.get_cost_modifiers("movement")}
+        dashes = {modifier.uuid for modifier in channel.value_modifiers.values() if modifier.name == "Dashing"}
+        live = set(channel.value_modifiers) | set(channel.max_constraints)
+        self.movement_speed_factors = {handle: factor for handle, factor in self.movement_speed_factors.items() if handle in live}
+        factor_handles = set(self.movement_speed_factors)
+        factors = list(self.movement_speed_factors.values())
+        excluded = spent | dashes | factor_handles
+        base = self.movement.get_base_modifier()
+        mode_base = max((grant.get(mode, 0) for grant in self.movement_speed_grants.values()), default=0)
+        if mode == MovementMode.FLYING and mode_base <= 0:
+            return 0
+        # A detached value preserves contextual speed restrictions without
+        # rewriting the live base speed or scaling already spent movement.
+        resolved = self.movement.model_copy(deep=True)
+        for handle in excluded:
+            resolved.self_static.remove_modifier(handle)
+        if mode != MovementMode.WALKING and mode_base > 0 and base is not None:
+            resolved.self_static.value_modifiers[base.uuid] = base.model_copy(update={"value": mode_base})
+        speed = max(0, resolved.normalized_score)
+        return max(0, int(speed * prod(factors)))
 
-        Returns:
-            Current constrained speed including ordinary speed modifiers while
-            excluding turn expenditure and existing Dash budget modifiers.
-        """
-        excluded_modifier_uuids = {
-            modifier.uuid
-            for modifier in self.get_cost_modifiers("movement")
-        }
-        excluded_modifier_uuids.update(
-            modifier.uuid
-            for modifier in self.movement.self_static.value_modifiers.values()
-            if modifier.name == "Dashing"
-        )
-        return max(
-            0,
-            self.movement.normalized_score_excluding_static_modifiers(
-                excluded_modifier_uuids
-            ),
-        )
+    def movement_spent(self) -> int:
+        """Actual feet paid this turn, shared by every movement mode."""
+        return max(0, -sum(modifier.normalized_value for modifier in self.get_cost_modifiers("movement")))
+
+    def movement_remaining(self, mode: MovementMode = MovementMode.WALKING) -> int:
+        dashes = sum(modifier.name == "Dashing" for modifier in self.movement.self_static.value_modifiers.values())
+        return max(0, self.current_speed(mode) * (1 + dashes) - self.movement_spent())
 
     def can_afford(self, cost_type: CostType, amount: int) -> bool:
         """Check if the entity can afford a given action type and amount.
@@ -1017,6 +1031,8 @@ class ActionEconomy(BaseBlock):
         Uses value.normalized_score which accounts for all modifiers including
         max constraints from conditions like Incapacitated.
         """
+        if cost_type == "movement":
+            return self.movement_remaining() >= amount
         value = self._get_value_for_cost_type(cost_type)
         return value.normalized_score - amount >= 0
 
@@ -1045,14 +1061,15 @@ class ActionEconomy(BaseBlock):
                 modifier.remove_from_register()
         self._release_unused_normal_spell_slot_floors()
 
-    def consume(self, cost_type: CostType, amount: int, cost_name: Optional[str] = None) -> None:
+    def consume(self, cost_type: CostType, amount: int, cost_name: Optional[str] = None, *, movement_mode: MovementMode = MovementMode.WALKING) -> None:
         """Consume a turn resource, named action bucket, or spell slot.
 
         Uses the full `normalized_score` rather than only static modifiers so
         contextual bonuses and constraints affect affordability consistently.
         """
         value = self._get_value_for_cost_type(cost_type)
-        if value.normalized_score - amount < 0:
+        available = self.movement_remaining(movement_mode) if cost_type == "movement" else value.normalized_score
+        if available - amount < 0:
             raise ValueError(f"Not enough {cost_type} to consume {amount} {cost_name if cost_name is not None else 'cost'}")
 
         self.consume_prevalidated(cost_type, amount, cost_name)

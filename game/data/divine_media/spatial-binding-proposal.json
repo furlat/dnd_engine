@@ -1,0 +1,25 @@
+{
+  "spatial_effect.spell.daylight": {
+    "layers": [
+      {
+        "assetId": "divine.daylight.hold.back",
+        "applicationAssetId": "divine.daylight.apply.back",
+        "side": "rear",
+        "composition": "clump"
+      },
+      {
+        "assetId": "divine.daylight.hold.front",
+        "applicationAssetId": "divine.daylight.apply.front",
+        "side": "front",
+        "composition": "clump"
+      }
+    ],
+    "assetPhase": "impact",
+    "holdStartFrame": 0,
+    "holdFrames": 64,
+    "fps": 32,
+    "scale": 0.5,
+    "removalFadeMs": 600,
+    "removalEasing": "smoothstep"
+  }
+}
