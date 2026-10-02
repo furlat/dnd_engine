@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 from dnd.actions import Move
-from dnd.actions_functional import execute_available_action, execute_use_action, get_available_actions, setup_standard_actions
+from dnd.actions_functional import execute_available_action, execute_use_action, get_available_actions, setup_standard_actions, update_weapon_templates
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
@@ -39,18 +39,24 @@ from game.replay import CapturedHistory, ObserverCapture, RecordedSequence, capt
 DoorProgram = Literal["preview", "passage", "break-closed", "break-open"]
 
 
-def review_actor(game: Game, name: str, position: tuple[int, int], *, strength: int = 10) -> Entity:
+def review_actor(game: Game, name: str, position: tuple[int, int], *, strength: int = 10,
+                 ranged: bool = False, faction: str = "heroes") -> Entity:
     """Compose the same clothed sword bearer for door and hardware stories."""
-    actor = Entity.create(uuid4(), name, config=EntityConfig(position=position, faction="heroes",
+    actor = Entity.create(uuid4(), name, config=EntityConfig(position=position, faction=faction,
         ability_scores=AbilityScoresConfig(strength=AbilityConfig(ability_score=strength)),
         health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=8, mode="maximums")])))
     setup_standard_actions(actor)
     install_body_response(actor, BLOOD_BODY_RESPONSE)
-    actor.install_initial_items((
+    equipment: tuple[tuple[BaseItem, WeaponSlot | BodyPart], ...] = (
         (build_authored_item("weapon.longsword", actor.uuid), WeaponSlot.MELEE_MAIN),
         (build_authored_item("apparel.robes.red_mage", actor.uuid), BodyPart.BODY),
         (build_authored_item("apparel.cloth_shoes.red", actor.uuid), BodyPart.FEET),
-    ))
+    )
+    if ranged:
+        equipment += ((build_authored_item("weapon.longbow", actor.uuid), WeaponSlot.RANGED_MAIN),)
+    actor.install_initial_items(equipment)
+    if ranged:
+        update_weapon_templates(actor)
     actor.compose_entity()
     game.deploy_entity(actor, position)
     return actor
@@ -80,14 +86,14 @@ def walk(actor: Entity, destination: tuple[int, int], *, accepted: bool = True,
     return result
 
 
-def attack_object(actor: Entity, target: BaseItem, face: int, *, additional_dice: tuple[int, ...] = ()) -> Event:
+def attack_item(actor: Entity, target: BaseItem, face: int, *, additional_dice: tuple[int, ...] = ()) -> Event:
     actor.update_entity_senses()
     choices = [(row, choice) for row in get_available_actions(actor).all_actions
-        if row.behavior_id == "action.attack_object"
+        if row.behavior_id == "action.attack" and row.weapon_slot == WeaponSlot.MELEE_MAIN.value
         for choice in row.valid_targets if choice.target_uuid == target.uuid]
     assert choices, f"{actor.name} cannot discover an attack on {target.name}"
     row, choice = choices[0]
-    with fixed_dice_faces(face, *additional_dice):
+    with fixed_dice_faces(19, face, *additional_dice):
         result = execute_available_action(actor, row, choice)
     assert result is not None and not result.canceled and result.phase is EventPhase.COMPLETION
     return result
@@ -154,10 +160,10 @@ def door_destruction_history(*, item_id: str = "environment.door.indoor_door_sha
             walk(attacker, (4, 4))
             use(attacker, "Close Door")
         else:
-            attack_object(attacker, door, 4)
+            attack_item(attacker, door, 4)
             assert door.get_hp() == 8 and door.get_position() == (5, 4)
             take_turn(encounter, attacker, fresh=True)
-            attack_object(attacker, door, 8)
+            attack_item(attacker, door, 8)
             assert door.get_hp() == 0 and door.get_position() == (5, 4)
             assert door.integrity is ItemIntegrity.DESTROYED
             take_turn(encounter, witness)

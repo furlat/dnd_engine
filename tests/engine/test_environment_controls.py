@@ -15,7 +15,7 @@ from dnd.content.items.environment_item_builders import (
     build_trap_lever,
 )
 from dnd.core.base_actions import ActionEvent
-from dnd.core.events import Event, EventPhase, EventQueue, SpatialEffectChangeEvent
+from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, SpatialEffectChangeEvent, Trigger
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import ItemPresentationState
 from dnd.entity import Entity, EntityConfig
@@ -208,6 +208,57 @@ def test_lever_handle_is_independent_when_light_already_matches_request(
     use(operator, lever.uuid, "Toggle Lever")
     assert not lever.is_engaged and light.is_lit
     assert [fact.item_state.item_uuid for fact in item_facts_since(cursor)] == [lever.uuid]
+
+
+@pytest.mark.parametrize("invalid_admission", ("distant_controller", "unlinked_target", "wrong_link_kind", "missing_controller", "parent_only"))
+def test_remote_item_action_requires_a_reachable_exact_authored_link(
+    operator: Entity, invalid_admission: str,
+) -> None:
+    light = build_standing_torch()
+    light.place_on_grid((7, 1))
+    lever = build_control_lever(LeverLink(
+        target_item_uuid=uuid4() if invalid_admission == "unlinked_target" else light.uuid,
+        target_kind="door" if invalid_admission == "wrong_link_kind" else "light",
+    ))
+    lever.place_on_grid((4, 1) if invalid_admission == "distant_controller" else (2, 1))
+    parent = ActionEvent(source_entity_uuid=operator.uuid, phase=EventPhase.EFFECT)
+    template = light.get_use_actions(operator.uuid)[0]
+    action = template.instantiate() if template.template else template
+    cursor = EventQueue.event_cursor()
+
+    if invalid_admission == "parent_only":
+        result = action.apply(parent_event=parent)
+    else:
+        controller_uuid = uuid4() if invalid_admission == "missing_controller" else lever.uuid
+        result = action.apply_from_control(controller_uuid, parent_event=parent)
+
+    assert result is not None and result.canceled
+    assert not light.is_lit and not lever.is_engaged
+    assert not item_facts_since(cursor)
+
+
+def test_linked_action_rechecks_controller_reach_after_execution_handlers(operator: Entity) -> None:
+    light = build_standing_torch()
+    light.place_on_grid((7, 1))
+    lever = build_control_lever(LeverLink(target_item_uuid=light.uuid, target_kind="light"))
+    lever.place_on_grid((2, 1))
+
+    def displace_operator(event: Event, _source: UUID) -> Event:
+        if isinstance(event, ActionEvent) and event.source_item_uuid == light.uuid:
+            Entity.update_entity_position(operator, (4, 4))
+        return event
+
+    EventQueue.add_event_handler(EventHandler(
+        name="Operator displaced during linked activation",
+        source_entity_uuid=operator.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.BASE_ACTION, event_phase=EventPhase.EXECUTION)],
+        event_processor=displace_operator,
+    ))
+    cursor = EventQueue.event_cursor()
+    result = execute_use_action(operator, lever.uuid, "Toggle Lever")
+    assert result is not None and result.canceled
+    assert not light.is_lit and not lever.is_engaged
+    assert not item_facts_since(cursor)
 
 
 def test_occupied_door_rejects_remote_close_without_moving_handle(

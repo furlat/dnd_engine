@@ -261,7 +261,7 @@ def test_first_spell_family_example_prints_catalog_and_outcomes(capsys) -> None:
     print("\n".join(readout_lines))
 
     expected_lines = [
-        "catalog: Fire Bolt -> attack, level=0, school=evocation, target=entity",
+        "catalog: Fire Bolt -> attack, level=0, school=evocation, target=creature_or_object",
         "catalog: Sacred Flame -> save, level=0, school=evocation, target=entity",
         (
             "catalog: Magic Missile -> auto-hit, "
@@ -281,7 +281,7 @@ def test_first_spell_family_example_prints_catalog_and_outcomes(capsys) -> None:
 def test_spell_catalog_groups_representative_runtime_families(capsys) -> None:
     """The catalog maps public spell names to classes with runtime metadata."""
     representatives = {
-        "Fire Bolt": (FireBolt, 0, "evocation", TargetType.ENTITY),
+        "Fire Bolt": (FireBolt, 0, "evocation", TargetType.CREATURE_OR_OBJECT),
         "Magic Missile": (MagicMissile, 1, "evocation", TargetType.MULTI_ENTITY),
         "Mage Armor": (MageArmor, 1, "abjuration", TargetType.ENTITY),
         "Misty Step": (MistyStep, 2, "conjuration", TargetType.POSITION),
@@ -332,7 +332,7 @@ def test_spell_catalog_groups_representative_runtime_families(capsys) -> None:
         "level 9 Power Word Kill lookup: PowerWordKill",
         (
             "Fire Bolt: class=FireBolt, level=0, school=evocation, "
-            "target=entity, catalog_match=True"
+            "target=creature_or_object, catalog_match=True"
         ),
         (
             "Magic Missile: class=MagicMissile, level=1, school=evocation, "

@@ -362,16 +362,15 @@ def test_darkvision_reactively_reveals_dark_target_and_cleanup_hides_it() -> Non
     assert tile is not None
     assert enemy.uuid not in caster.senses.entities
     assert (
-        tile.get_effective_light_for(caster.uuid, caster.position)
-        is LightLevel.DARKNESS
+        tile.resolved_light_level is LightLevel.DARKNESS
     )
 
     assert not _cast_darkvision(caster, caster).canceled
     assert enemy.uuid in caster.senses.entities
     assert (
-        tile.get_effective_light_for(caster.uuid, caster.position)
-        is LightLevel.DIM_LIGHT
+        caster.senses.effective_light_levels[enemy.position] is LightLevel.DIM_LIGHT
     )
+    assert tile.resolved_light_level is LightLevel.DARKNESS
 
     _break_concentration(caster)
     assert enemy.uuid not in caster.senses.entities
@@ -392,7 +391,7 @@ def test_see_invisibility_emits_reactive_add_and_remove_deltas() -> None:
     additions = [
         event
         for event in _completed_sensory_updates(caster.uuid)
-        if enemy.uuid in event.visible_entities_added and event.sense_modes_changed
+        if enemy.uuid in event.entity_contacts_changed and event.sense_modes_changed
     ]
     assert additions
 
@@ -401,7 +400,7 @@ def test_see_invisibility_emits_reactive_add_and_remove_deltas() -> None:
     removals = [
         event
         for event in _completed_sensory_updates(caster.uuid)
-        if enemy.uuid in event.visible_entities_removed and event.sense_modes_changed
+        if enemy.uuid in event.entity_contacts_removed and event.sense_modes_changed
     ]
     assert removals
 

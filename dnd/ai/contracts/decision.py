@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Tuple, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 
 class DecisionModel(BaseModel):
@@ -21,6 +21,10 @@ class ExecuteIntent(DecisionModel):
     extra_target_uuids: Tuple[str, ...] = Field(
         default_factory=tuple,
         description="Additional authorized multi-target selections.",
+    )
+    extra_target_positions: Tuple[Tuple[StrictInt, StrictInt], ...] = Field(
+        default_factory=tuple,
+        description="Ordered additional vertices for a position-path action.",
     )
     prefer_safe: bool = Field(
         default=True,

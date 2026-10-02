@@ -6,12 +6,11 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
-from dnd.actions import AttackObject, PickUp
+from dnd.actions import Attack, AttackEvent, PickUp
 from dnd.actions_functional import execute_use_action, get_available_actions, setup_standard_actions
 from dnd.blocks.base_item import BaseItem, WorldItem
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import build_directional_wall, build_storage_chest
-from dnd.core.base_actions import ActionEvent
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
@@ -71,7 +70,7 @@ def placement(item: BaseItem) -> WorldObjectPlacement:
 
 
 def object_choices(observer: Entity, item: BaseItem) -> list:
-    return [target for action in get_available_actions(observer).object_actions
+    return [target for action in get_available_actions(observer).all_actions
             for target in action.valid_targets if target.target_uuid == item.uuid]
 
 
@@ -199,8 +198,8 @@ def test_far_end_attack_and_same_identity_destruction_update_only_real_supports(
     cursor = EventQueue.event_cursor()
     for remaining in (4, 0):
         attacker.action_economy.reset_all_costs()
-        with fixed_dice_faces(4):
-            result = AttackObject(source_entity_uuid=attacker.uuid, target_entity_uuid=item.uuid).apply()
+        with fixed_dice_faces(19, 4):
+            result = Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=attacker.uuid, target_entity_uuid=item.uuid).apply()
         assert result is not None and not result.canceled
         assert item.get_hp() == remaining
     assert BaseBlock.get(item.uuid) is item
@@ -240,10 +239,16 @@ def test_manual_reach_cannot_pass_an_unrelated_wall_or_blocked_corner(arena: Gam
         second = build_directional_wall()
         second.place_on_grid((3, 3), boundary_direction=CardinalDirection.NORTH)
     assert get_map().manual_object_contact(attacker.uuid, item.uuid) is None
-    result = AttackObject(source_entity_uuid=attacker.uuid, target_entity_uuid=item.uuid).apply()
+    attacker.update_entity_senses()
+    result = Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=attacker.uuid, target_entity_uuid=item.uuid).apply()
     assert result is not None and result.canceled
     assert item.get_hp() == 8
     wall.retire()
+    if diagonal:
+        # A straight reach still intersects the remaining face at the corner;
+        # the newly available walking detour does not establish weapon contact.
+        assert get_map().manual_object_contact(attacker.uuid, item.uuid) is None
+        second.retire()
     assert get_map().manual_object_contact(attacker.uuid, item.uuid) == target_pos
 
 
@@ -252,14 +257,15 @@ def test_stale_attack_rechecks_after_execution_interception(arena: Game) -> None
     item = furniture()
     item.place_on_grid((2, 3))
     def move_target(event: Event, _source: UUID | None) -> Event:
-        if isinstance(event, ActionEvent) and event.target_entity_uuid == item.uuid:
+        if isinstance(event, AttackEvent) and event.target_entity_uuid == item.uuid:
             get_map().move_object(item.uuid, (6, 6), parent_event=event.uuid)
         return event
     handler = EventHandler(name="Move away during execution", source_entity_uuid=uuid4(),
-        trigger_conditions=[Trigger(event_type=EventType.BASE_ACTION, event_phase=EventPhase.EXECUTION)],
+        trigger_conditions=[Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EXECUTION)],
         event_processor=move_target)
     EventQueue.add_event_handler(handler)
-    result = AttackObject(source_entity_uuid=attacker.uuid, target_entity_uuid=item.uuid).apply()
+    attacker.update_entity_senses()
+    result = Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=attacker.uuid, target_entity_uuid=item.uuid).apply()
     assert result is not None and result.canceled
     assert placement(item).position == (6, 6) and item.get_hp() == 8
 

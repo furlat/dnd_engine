@@ -12,7 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from game.animation import ActorContact, CastApplication, CastInput, compile_cast, sample_cast
-from game.animation_data import load_animation_data
+from game.animation_data import DATA_ROOT, load_animation_data
 from game.animation_types import (PackedSurfaceFrames, ProjectileFrameLayer, ProjectileFrameStorage,
                                   ProjectileStorage, StudioMediaTrack, SurfaceArchive)
 from game.projectile_media import ProjectileFrameCache, projectile_frame_layers
@@ -23,7 +23,9 @@ from tests.game.test_projectile_media import sample_data
 def data():
     pygame.init()
     pygame.display.set_mode((8, 8))
-    yield load_animation_data(authored_bundles=())
+    yield load_animation_data(authored_bundles=(
+        DATA_ROOT.parent / "wall_media", DATA_ROOT.parent / "surface_contact_media",
+    ))
     pygame.quit()
 
 

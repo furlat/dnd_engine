@@ -1040,7 +1040,7 @@ class MetamagicActive(BaseCondition):
             for template in target.registered_actions:
                 if (
                     isinstance(template, SpellAction)
-                    and template.target_type == TargetType.ENTITY
+                    and template.target_type in (TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT)
                 ):
                     template.alt_target_type = TargetType.MULTI_ENTITY
                     template.alt_target_count = 2

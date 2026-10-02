@@ -28,6 +28,8 @@ from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import HazardFilter
 from dnd.core.base_object import BaseObject
 from dnd.core.events import EventQueue
+from dnd.core.dice import fixed_dice_faces
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.values import BaseValue
@@ -636,7 +638,7 @@ def test_eb_09_011_move_discovery_marks_hazardous_and_safe_paths() -> None:
 
 
 def test_eb_09_012_attack_object_discovers_and_destroys_breakables() -> None:
-    """EB-09-012: Attack Object targets nearby breakables and can destroy them."""
+    """EB-09-012: Normal Attack discovers and destroys nearby breakables."""
     reset_action_state()
     entity = configured_entity(position=(3, 3))
     crate_source = uuid4()
@@ -658,12 +660,14 @@ def test_eb_09_012_attack_object_discovers_and_destroys_breakables() -> None:
     Entity.update_all_entities_senses()
 
     available = get_available_actions(entity)
-    attack_info = find_action(available, "Attack Object")
+    attack_info = next(row for row in available.all_actions
+                       if row.behavior_id == "action.attack"
+                       and row.weapon_slot == WeaponSlot.MELEE_MAIN.value)
     crate_target = next(
         target for target in attack_info.valid_targets if target.target_uuid == crate.uuid
     )
 
-    assert attack_info.target_type == TargetType.OBJECT
+    assert attack_info.target_type == TargetType.CREATURE_OR_OBJECT
     assert attack_info.action_category == ActionCategory.ATTACK
     assert attack_info.can_afford is True
     assert attack_info.cost_type == "actions"
@@ -672,16 +676,13 @@ def test_eb_09_012_attack_object_discovers_and_destroys_breakables() -> None:
     assert crate_target.distance == 5
     assert get_map().get_object_position(crate.uuid) == (4, 3)
 
-    result = execute_by_index(
-        entity,
-        "Attack Object",
-        crate_target.index,
-        available=available,
-    )
+    with fixed_dice_faces(18, 1):
+        result = execute_by_index(
+            entity, attack_info.template_name, crate_target.index, available=available,
+        )
 
     assert result is not None
     assert not result.canceled
-    assert "Dealt" in (result.status_message or "")
     assert BaseBlock.get(crate.uuid) is None
     assert get_map().get_object_position(crate.uuid) is None
 

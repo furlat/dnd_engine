@@ -6,7 +6,7 @@ from typing import Mapping, NamedTuple
 import pygame
 
 from game.animation import (
-    ActorContact, BodySample, CastSample, CastTimeline, actor_point_offset, body_elevation_steps, body_rig,
+    ActorContact, ObjectContact, feedback_identity, BodySample, CastSample, CastTimeline, actor_point_offset, body_elevation_steps, body_rig,
     facing_vector, media_track_duration, media_track_frame, media_target_applies, view_facing, rest_pose_offset,
 )
 from game.animation_types import AnimationData, StudioMediaTrack
@@ -60,14 +60,14 @@ class CastMediaPlacement(NamedTuple):
 
 
 def cast_media_placement(timeline: CastTimeline, track: StudioMediaTrack,
-                         contact: ActorContact, camera: Camera,
+                         contact: ActorContact | ObjectContact, camera: Camera,
                          body: BodySample | None = None) -> CastMediaPlacement:
     """Resolve one authored registration; shared by drawing and review framing."""
     data, source, recipe = timeline.data, timeline.source, timeline.recipe
     viewed = view_facing(track.viewFacing or timeline.facing, camera.quadrant, data)
     targets = tuple(dict.fromkeys(application.target for application in source.applications))
     grid = contact.grid
-    height = (body_elevation_steps(contact, data) if track.attachment in ("source_hand", "target_body")
+    height = (body_elevation_steps(contact, data) if isinstance(contact, ActorContact) and track.attachment in ("source_hand", "target_body")
               else contact.elevation_steps)
     if track.attachment == "area_ground":
         assert source.ground_target is not None
@@ -77,7 +77,7 @@ def cast_media_placement(timeline: CastTimeline, track: StudioMediaTrack,
         dx, dy = _world_offset((offset.x, offset.y), camera.quadrant)
         grid = grid[0] + dx, grid[1] + dy
     anchor = project_screen(grid, camera, elevation_steps=height)
-    if track.attachment == "source_hand":
+    if track.attachment == "source_hand" and isinstance(contact, ActorContact):
         sockets = recipe.cast.sourceSockets
         if sockets is None:
             raise ValueError("source-hand media requires authored cast sockets")
@@ -86,7 +86,7 @@ def cast_media_placement(timeline: CastTimeline, track: StudioMediaTrack,
             socket = sockets.preparation[viewed][body.frame] or socket
         dx, dy = _socket(data, contact, camera, point=(socket.x, socket.y))
         anchor = anchor[0] + dx, anchor[1] + dy
-    elif track.attachment == "target_body":
+    elif track.attachment == "target_body" and isinstance(contact, ActorContact):
         socket = body_rig(data, contact).body_anchor
         if socket is not None:
             dx, dy = _socket(data, contact, camera, point=(socket.x, socket.y))
@@ -101,19 +101,20 @@ def cast_media_placement(timeline: CastTimeline, track: StudioMediaTrack,
             anchor = anchor[0] + offset.x * factor * contact.visual_scale_x, anchor[1] + offset.y * factor
     rotation = 0.0
     factor = track.scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom
-    if track.scaleWithActor:
+    if track.scaleWithActor and isinstance(contact, ActorContact):
         factor *= contact.visual_scale
     if track.emissionPointByFacing is not None:
         point = track.emissionPointByFacing[viewed]
         anchor = anchor[0] - point.x * factor, anchor[1] - point.y * factor
     if track.orientation == "target_vector" and targets:
         target = targets[0]
-        endpoint = project_screen(target.grid, camera, elevation_steps=body_elevation_steps(target, data))
-        socket = body_rig(data, target).body_anchor
-        if socket is not None:
+        endpoint = project_screen(target.grid, camera, elevation_steps=(body_elevation_steps(target, data)
+            if isinstance(target, ActorContact) else target.elevation_steps))
+        socket = body_rig(data, target).body_anchor if isinstance(target, ActorContact) else None
+        if socket is not None and isinstance(target, ActorContact):
             dx, dy = _socket(data, target, camera, point=(socket.x, socket.y))
             endpoint = endpoint[0] + dx, endpoint[1] + dy
-        dx, dy = rest_pose_offset(data, target, camera.quadrant)
+        dx, dy = rest_pose_offset(data, target, camera.quadrant) if isinstance(target, ActorContact) else (0, 0)
         body_factor = TILE_WIDTH / data.rig.TILE_W * camera.zoom
         endpoint = endpoint[0] + dx * body_factor, endpoint[1] + dy * body_factor
         vx, vy = facing_vector(viewed, data)
@@ -136,7 +137,8 @@ def cast_surface_volume(timeline: CastTimeline, sample: RegisteredMediaSample, a
         sample.positions, sample.ownership, sample.vertical_scale,
         area.boundaries if area is not None else (), exclusions,
         area.solids if area is not None else (), area.supports if area is not None else (),
-        source.area_propagation, translation=translation)
+        source.area_propagation, admitted=area.admitted if area is not None else None,
+        translation=translation, resolved_occupancy=area is not None and area.admitted is not None)
 
 
 def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera: Camera,
@@ -157,21 +159,21 @@ def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera:
         contacts = targets if track.attachment.startswith("target_") else (source.caster,)
         for contact in contacts:
             if track.requireRemovedConditionTag is not None and not any(
-                    application.target.actor_uuid == contact.actor_uuid and media_target_applies(track, application)
+                    feedback_identity(application.target) == feedback_identity(contact) and media_target_applies(track, application)
                     for application in source.applications):
                 continue
-            if track.onMiss == "omit" and any(application.target.actor_uuid == contact.actor_uuid
+            if track.onMiss == "omit" and any(feedback_identity(application.target) == feedback_identity(contact)
                     and application.hit is False for application in source.applications):
                 continue
             grid, height, anchor, factor, rotation = cast_media_placement(
-                timeline, track, contact, camera, bodies.get(contact.actor_uuid))
+                timeline, track, contact, camera, bodies.get(feedback_identity(contact)))
             origin = project_screen(grid, camera, elevation_steps=height)
             dx, dy = (anchor[0]-origin[0])/camera.zoom, (anchor[1]-origin[1])/camera.zoom
             translation = dx/TILE_WIDTH, -dy/HEIGHT_STEP_PIXELS, -dx/TILE_WIDTH
             frame = media_track_frame(data, track, age, viewed)
             key = painter_key(grid, elevation_steps=height, quadrant=camera.quadrant,
                 role="ground_effect" if track.depth == "ground" else "actor" if track.depth in ("behind_body", "front_body") else "projectile",
-                identity=(source.root_event_uuid, track.id, contact.actor_uuid))
+                identity=(source.root_event_uuid, track.id, feedback_identity(contact)))
             if track.depth in ("behind_body", "front_body"):
                 key = (*key[:3], key[3] + (-1 if track.depth == "behind_body" else 1), key[4])
             for layer in registered_media_samples(data, track.assetId,

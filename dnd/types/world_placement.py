@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from dnd.types.materials import Material
+from dnd.types.physical_access import ContactPassage
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 
 
@@ -114,6 +115,7 @@ class BoundaryStructure(BaseModel):
     structure: BoundaryStructureKind
     material: Material
     blocked_channels: tuple[WorldEdgeChannel, ...]
+    contact_passage: ContactPassage = ContactPassage.STRUCTURAL
 
     @model_validator(mode="after")
     def validate_channels(self) -> Self:

@@ -6,6 +6,7 @@ from enum import Enum
 from uuid import UUID
 
 from dnd.types.world import CardinalDirection, MovementMode, WorldEdgeChannel
+from dnd.types.physical_access import ContactPassage
 
 
 class ElevationSurfaceKind(str, Enum):
@@ -71,6 +72,7 @@ class WorldEdgeStructuralContribution:
     base_height_steps: int
     top_height_steps: int
     blocked_channels: tuple[WorldEdgeChannel, ...]
+    contact_passage: ContactPassage = ContactPassage.STRUCTURAL
 
 
 def world_edge_contribution_allows(

@@ -51,7 +51,9 @@ def test_registered_furniture_breaks_once_and_preserves_its_physical_identity(ga
     assert prop.get_hp() == hp and len(placement.positions) == len(profile.footprint_offsets)
     assert placement.top_height_steps - placement.base_height_steps == profile.vertical_extent_steps
     assert all(get_map().get_center_objects_at(point) == {prop.uuid} for point in placement.positions)
-    assert all(not get_map().is_walkable_for(*point) for point in placement.positions)
+    assert all(get_map().is_walkable_for(*point) is (not profile.blocks_movement)
+               for point in placement.positions)
+    assert placement.occupies_bands is profile.occupies_bands
     cursor = EventQueue.event_cursor()
     prop.receive_damage(hp // 2, DamageType.BLUDGEONING, prop.uuid)
     assert prop.get_hp() == hp - hp // 2 and prop.integrity is ItemIntegrity.INTACT
@@ -77,6 +79,47 @@ def test_registered_furniture_breaks_once_and_preserves_its_physical_identity(ga
     prop.destroy()
     assert sum(isinstance(event, ItemDestructionEvent) and event.phase is EventPhase.COMPLETION
                for _, event in EventQueue.iter_events_since(cursor)) == 1
+
+
+@pytest.mark.parametrize("item_id", (
+    "environment.furniture.red_rug", "environment.furniture.pale_rug",
+    "environment.furniture.spent_ashes",
+    *(f"environment.furniture.loose_straw_{index}" for index in range(1, 8)),
+))
+def test_floor_covering_can_be_walked_across_before_and_after_destruction(game: Game, item_id: str):
+    prop = build_authored_item(item_id, uuid4())
+    prop.place_on_grid((3, 3))
+    actor = Entity.create(uuid4(), "Walker", config=EntityConfig(position=(3, 2)))
+    setup_standard_actions(actor)
+    actor.compose_entity()
+    game.deploy_entity(actor, (3, 2))
+    actor.update_entity_senses()
+    for destroyed, origin, destination in ((False, (3, 2), (3, 3)), (True, (3, 3), (3, 2))):
+        if destroyed:
+            prop.receive_damage(prop.get_hp(), DamageType.SLASHING, actor.uuid)
+        budget = actor.action_economy.movement.normalized_score
+        move = Move(source_entity_uuid=actor.uuid, path=[origin, destination], end_position=destination).apply()
+        assert move is not None and not move.canceled
+        assert actor.position == destination
+        assert budget - actor.action_economy.movement.normalized_score == 5
+        assert walking_cost((3, 3)) == 1
+        assert not get_map().get_spatial_conditions()
+
+
+def test_floor_covering_shares_support_with_furniture_without_removing_its_collision(game: Game):
+    rug = build_authored_item("environment.furniture.red_rug", uuid4())
+    table = build_authored_item("environment.furniture.small_wooden_table", uuid4())
+    rug.place_on_grid((3, 3))
+    table.place_on_grid((3, 3))
+    assert get_map().get_center_objects_at((3, 3)) == {rug.uuid, table.uuid}
+    assert not get_map().is_walkable_for(3, 3)
+    other = build_authored_item("environment.furniture.anvil", uuid4())
+    with pytest.raises(ValueError):
+        other.place_on_grid((3, 3))
+    rug.receive_damage(rug.get_hp(), DamageType.SLASHING, table.uuid)
+    assert not get_map().is_walkable_for(3, 3)
+    table.receive_damage(table.get_hp(), DamageType.BLUDGEONING, rug.uuid)
+    assert get_map().is_walkable_for(3, 3)
 
 
 @pytest.mark.parametrize("item_id,occludes", (

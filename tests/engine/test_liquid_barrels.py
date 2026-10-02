@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import AttackObject, Jump, Move
+from dnd.actions import Attack, Jump, Move
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
@@ -75,8 +75,9 @@ def placed_barrel(world: Game, contents: str, position: tuple[int, int] = (1, 1)
 
 def break_with_attack(barrel: BaseItem, attacker: Entity) -> Event:
     attacker.action_economy.reset_all_costs()
-    with fixed_dice_faces(8):
-        result = AttackObject(source_entity_uuid=attacker.uuid, target_entity_uuid=barrel.uuid).apply()
+    with fixed_dice_faces(19, 8):
+        attacker.update_entity_senses()
+        result = Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=attacker.uuid, target_entity_uuid=barrel.uuid).apply()
     assert result is not None and not result.canceled
     assert barrel.integrity is ItemIntegrity.DESTROYED
     return result
@@ -107,10 +108,12 @@ def test_attack_spills_once_under_destruction_and_material_survives_wreck_retire
     original = get_map().get_object_placement(barrel.uuid)
     assert original is not None and not get_map().is_walkable_for(1, 1)
     cursor = EventQueue.event_cursor()
-    with fixed_dice_faces(1):
-        hit = AttackObject(source_entity_uuid=attacker.uuid, target_entity_uuid=barrel.uuid).apply()
+    with fixed_dice_faces(19, 1):
+        attacker.update_entity_senses()
+        hit = Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=attacker.uuid, target_entity_uuid=barrel.uuid).apply()
     assert hit is not None and not hit.canceled and barrel.get_hp() == 7
     assert material_state((1, 1)) == ((), ())
+    cursor = EventQueue.event_cursor()
     break_with_attack(barrel, attacker)
     destruction, = [event for event in completed(cursor) if isinstance(event, ItemDestructionEvent)]
     assert destruction.previous_placement == original

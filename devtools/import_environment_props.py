@@ -19,12 +19,15 @@ SOURCE_DECLARATIONS = ROOT / "game/data/environment_prop_sources.json"
 
 
 def import_environment_props(source: Path, output_root: Path,
-                             declarations: Path = SOURCE_DECLARATIONS) -> Path:
+                             declarations: Path = SOURCE_DECLARATIONS,
+                             bank_ids: tuple[str, ...] | None = None) -> Path:
     authored = json.loads(declarations.read_text())
+    selected = authored["banks"] if bank_ids is None else {
+        identity: authored["banks"][identity] for identity in bank_ids}
     approved = {row["metadata"] for row in json.loads((source / "reviewed-manifest.json").read_text())["banks"]}
     output = output_root / "game/data/environment_art.json"
     document = json.loads(output.read_text())
-    for identity, row in authored["banks"].items():
+    for identity, row in selected.items():
         metadata_path = row["metadata"]
         if metadata_path not in approved:
             raise ValueError(f"Prop bank is absent from accepted manifest: {metadata_path}")
@@ -43,9 +46,10 @@ def import_environment_props(source: Path, output_root: Path,
             image = pygame.image.load(sheet)
             column = image.subsurface((0, 0, metadata["cell"][0], metadata["cell"][1] * len(metadata["rows"])))
             pygame.image.save(column, destination / "intact.png")
+        pivot = row.get("ground_pivot", metadata["pivot"])
         common = {
-            "cell": metadata["cell"], "ground_pivot": metadata["pivot"],
-            "pivots_by_pose": {pose: metadata["pivot"] for pose in metadata["rows"]},
+            "cell": metadata["cell"], "ground_pivot": pivot,
+            "pivots_by_pose": row.get("pivots_by_pose", {pose: pivot for pose in metadata["rows"]}),
             "rows": metadata["rows"], "scale": row["scale"], "fps": metadata["fps"],
         }
         document["banks"][f"prop.{identity}.intact"] = {
@@ -66,8 +70,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("--output-root", type=Path, default=ROOT)
+    parser.add_argument("--bank", action="append", help="Import only this authored bank; repeat as needed")
     args = parser.parse_args()
-    print(import_environment_props(args.source, args.output_root))
+    print(import_environment_props(args.source, args.output_root,
+        bank_ids=tuple(args.bank) if args.bank is not None else None))
 
 
 if __name__ == "__main__":

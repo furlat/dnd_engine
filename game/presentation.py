@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import Mapping
 from uuid import UUID
 
-from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent
+from dnd.actions import AttackEvent, JumpEvent, MovementEvent, TraverseConnectorEvent, ShoveEvent, SpellEvent
 from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
@@ -17,6 +17,7 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent, ConditionStateChangedEvent
 from dnd.core.events import (
+    AreaReachEvent,
     DamageAppliedEvent,
     DamageRollResultEvent,
     D20Event,
@@ -589,7 +590,11 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
         projected_log = CombatLogEntry.model_validate_json(projected_log.model_dump_json())
     common = {"use_register": False, "context": None, "combat_log": projected_log}
     match event:
-        case SpellEvent() | AttackEvent():
+        case AttackEvent():
+            copied = event.model_copy(update={
+                **common, "attack_bonus": None, "ac": None, "damages": None, "additional_damages": [],
+            })
+        case SpellEvent():
             copied = event.model_copy(update={
                 **common, "attack_bonus": None, "ac": None, "damages": None,
             })
@@ -615,7 +620,7 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
             copied = event.model_copy(update=common)
         case ShoveEvent():
             copied = event.model_copy(update={**common, "shover_athletics": None})
-        case MovementEvent() | JumpEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent():
+        case AreaReachEvent() | MovementEvent() | JumpEvent() | TraverseConnectorEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent():
             copied = event.model_copy(update=common)
         case SensoryUpdateEvent() | LifeStateChangeEvent() | DeathEvent() | HealEvent() | TemporaryHitPointsChangedEvent() | ConditionStateChangedEvent():
             copied = event.model_copy(update=common)
@@ -956,7 +961,7 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 pass
             case TurnEvent() | RoundEvent() | EncounterEvent():
                 _reduce_turn_fact(result, event)
-            case StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | SpatialEffectChangeEvent():
+            case AreaReachEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | SpatialEffectChangeEvent():
                 # Senses supplies committed positions and observed fixture state.
                 # Spatial lifecycle events retain causality, not another state writer.
                 pass

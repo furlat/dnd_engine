@@ -1,9 +1,4 @@
 {
-  "action.attack_object": {
-    "source_recipe": "action.attack_object",
-    "action_feedback": null,
-    "interaction_target": "target_item"
-  },
   "action.environment.trap_lever.pull": {
     "source_recipe": "action.environment.trap_lever.pull",
     "action_feedback": null,

@@ -3,7 +3,7 @@
 from types import MappingProxyType
 
 from pydantic import Field, PrivateAttr
-from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent
+from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, Duration
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
     ConditionCategory,
@@ -232,13 +232,40 @@ def underwater_ranged_automiss(
     )
 
 
+class ExtraAttacksGranted(BaseCondition):
+    """Internal marker for an ordinary Attack batch earned this turn.
+
+    Attributes:
+        name: Internal attack-batch marker.
+        duration: One round, matching the attack credit lifetime.
+        condition_category: Internal bookkeeping category.
+    """
+
+    name: str = Field(default="ExtraAttacksGranted", description="Internal attack-batch marker.")
+    duration: Duration = Field(
+        default_factory=lambda: Duration(duration=1, duration_type=DurationType.ROUNDS),
+        description="One round, matching the attack credit lifetime.",
+    )
+    condition_category: ConditionCategory = Field(default=ConditionCategory.INTERNAL, description="Internal bookkeeping category.")
+
+    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        return [], [], [], [], declaration_event.phase_to(
+            EventPhase.EFFECT,
+            status_message="Marked as ExtraAttacksGranted",
+        )
+
+
 class HasAttacked(BaseCondition):
     """Marker condition for an entity that attacked this turn.
 
-    The global standard-action handlers apply this marker. Class features can
-    use it for Extra Attack and rage maintenance decisions.
+    The global standard-action handler records all attacks and whether one
+    targeted a hostile creature, so object attacks do not sustain Rage.
     """
     name: str = Field(default="HasAttacked", description="Condition name.")
+    attacked_hostile_creature: bool = Field(
+        default=False,
+        description="Whether a committed attack targeted a hostile creature during this marker's lifetime.",
+    )
     description: str = Field(default="Has made an attack this turn using an action", description="Condition description.")
     condition_category: ConditionCategory = Field(default=ConditionCategory.INTERNAL, description="Internal marker category.")
 
@@ -348,10 +375,16 @@ def has_attacked_processor(event: Event, source_entity_uuid: UUID) -> Optional[E
     if not EventQueue.is_first_at_phase(event):
         return None
 
-    if "HasAttacked" not in entity.active_conditions:
+    target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+    hostile_creature = target is not None and entity.is_enemy_of(target.uuid)
+    current = entity.active_conditions.get("HasAttacked")
+    if isinstance(current, HasAttacked):
+        current.attacked_hostile_creature |= hostile_creature
+    else:
         has_attacked = HasAttacked(
             source_entity_uuid=source_entity_uuid,
-            target_entity_uuid=source_entity_uuid
+            target_entity_uuid=source_entity_uuid,
+            attacked_hostile_creature=hostile_creature,
         )
         has_attacked.duration.duration_type = DurationType.ROUNDS
         has_attacked.duration.duration = 1
@@ -1904,6 +1937,8 @@ class Concentrating(BaseCondition):
     def unlink_condition(self, condition_uuid: UUID, *, parent_event: Event) -> None:
         super().unlink_condition(condition_uuid, parent_event=parent_event)
         for slot_uuid, slot in tuple(self.concentration_slots.items()):
+            if not any(link[1] == condition_uuid for link in slot.linked_entries):
+                continue
             slot.linked_entries = [link for link in slot.linked_entries if link[1] != condition_uuid]
             if not slot.linked_entries:
                 slot.remove_from_register()
@@ -1922,53 +1957,55 @@ class Concentrating(BaseCondition):
         handler_uuids: List[UUID] = []
 
         existing = target.active_conditions.get("Concentrating")
-        if existing and isinstance(existing, Concentrating):
+        prepared: List[Tuple[Optional[BaseBlock], BaseCondition, Event, bool]] = []
+        retained_slots: Dict[UUID, ConcentrationSlot] = {}
+        retained_links: List[Tuple[UUID, UUID]] = []
+        if isinstance(existing, Concentrating):
             max_slots = (target.max_concentration_slots.normalized_score
                          if isinstance(target, Entity) else target.concentration_capacity)
-
             if isinstance(target, BaseItem) and len(existing.concentration_slots) >= max_slots:
                 return [], [], [], [], declaration_event.cancel(status_message="Device concentration capacity is full")
+            evicted_count = max(0, len(existing.concentration_slots) - max_slots + 1)
+            evicted_slots = set(list(existing.concentration_slots)[:evicted_count])
+            retained_slots = {key: value for key, value in existing.concentration_slots.items()
+                              if key not in evicted_slots}
+            removed_links = list(dict.fromkeys(
+                link for key, slot in existing.concentration_slots.items()
+                if key in evicted_slots for link in slot.linked_entries))
+            retained_links = [link for link in existing.linked_conditions if link not in removed_links]
 
-            while len(existing.concentration_slots) >= max_slots:
-                oldest_uuid = next(iter(existing.concentration_slots))
-                if not existing.drop_slot(
-                    oldest_uuid,
-                    parent_event=declaration_event,
-                ):
+            # Ownership transfer releases the old root but preserves retained children.
+            accepted = BaseBlock._accepted_condition_removals.get()
+            entry = accepted.get(existing.uuid) if accepted is not None else None
+            if entry is None:
+                removal = EventQueue.publish_declaration(
+                    existing._declare_removal_event(parent_event=declaration_event))
+                if removal.canceled:
                     return [], [], [], [], declaration_event.cancel(
-                        status_message=(
-                            "Existing concentration could not be released"
-                        ),
-                    )
-
-                existing = target.active_conditions.get("Concentrating")
-                if not existing or not isinstance(existing, Concentrating):
-                    break
-
-            existing = target.active_conditions.get("Concentrating")
-            if existing and isinstance(existing, Concentrating):
-
-                for slot_uuid, slot in existing.concentration_slots.items():
-                    if slot_uuid not in self.concentration_slots:
-                        self.concentration_slots[slot_uuid] = slot
-                    else:
-                        self.concentration_slots[slot_uuid].linked_entries.extend(slot.linked_entries)
-                for pair in existing.linked_conditions:
-                    if pair not in self.linked_conditions:
-                        self.linked_conditions.append(pair)
-
-                for _, condition_uuid in existing.linked_conditions:
-                    child = BaseObject.get(condition_uuid)
-                    if child and isinstance(child, BaseCondition):
-                        child.parent_link = (target.uuid, self.uuid)
-
-                existing.linked_conditions.clear()
-                existing.sub_conditions.clear()
-
-                existing.concentration_slots.clear()
-                self._sync_spell_name()
-
-                target.remove_condition("Concentrating", parent_event=declaration_event)
+                        status_message="Existing concentration could not be replaced")
+                removal_effect = existing.publish_removal_effect(removal)
+                if removal_effect.canceled:
+                    return [], [], [], [], declaration_event.cancel(
+                        status_message="Existing concentration could not be replaced")
+                entry = (target, existing, removal_effect, False)
+                if accepted is not None:
+                    accepted[existing.uuid] = entry
+            prepared.append(entry)
+            visited: Set[UUID] = {existing.uuid}
+            for block_uuid, condition_uuid in removed_links:
+                child = BaseCondition.get(condition_uuid)
+                owner = BaseBlock.get(block_uuid)
+                if not isinstance(child, BaseCondition) or not child.applied:
+                    continue
+                child_owner = owner if isinstance(owner, BaseBlock) else None
+                canceled = BaseBlock._prepare_condition_removal_tree(
+                    child, condition_owner=child_owner, expire=False,
+                    parent_event=entry[2], prepared=prepared, visited=visited,
+                )
+                if canceled is not None:
+                    BaseBlock._cancel_prepared_condition_removals(prepared, canceled)
+                    return [], [], [], [], declaration_event.cancel(
+                        status_message="Existing concentration could not be released")
 
         def concentration_break_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
             """On damage, make CON save or lose concentration. On death, auto-break."""
@@ -2053,14 +2090,39 @@ class Concentrating(BaseCondition):
             status_message=f"{target.name} is concentrating on {self.spell_name}"
         )
 
+        if effect_event.canceled:
+            BaseBlock._cancel_prepared_condition_removals(prepared, effect_event)
+            return [], handler_uuids, [], [], effect_event
+        if isinstance(existing, Concentrating):
+            for slot_uuid, slot in retained_slots.items():
+                if slot_uuid not in self.concentration_slots:
+                    self.concentration_slots[slot_uuid] = slot
+                else:
+                    self.concentration_slots[slot_uuid].linked_entries.extend(slot.linked_entries)
+            for pair in retained_links:
+                if pair not in self.linked_conditions:
+                    self.linked_conditions.append(pair)
+                child = BaseCondition.get(pair[1])
+                if isinstance(child, BaseCondition):
+                    child.parent_link = (target.uuid, self.uuid)
+            existing.linked_conditions.clear()
+            existing.sub_conditions.clear()
+            for slot_uuid, slot in existing.concentration_slots.items():
+                if slot_uuid not in retained_slots:
+                    slot.remove_from_register()
+            existing.concentration_slots.clear()
+            self._sync_spell_name()
+            BaseBlock._commit_prepared_condition_removals(prepared)
+
         return [], handler_uuids, [], [], effect_event
 
-    def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
-        """When concentration ends, spell effects are cleaned up via linked_conditions."""
-
+    def _release_owned_runtime_state(self, *, parent_event: Optional[Event] = None) -> None:
+        """Release concentration slots on committed removal and provisional rollback."""
         for slot in self.concentration_slots.values():
             slot.remove_from_register()
-        return super()._remove(removal_event)
+        self.concentration_slots.clear()
+        self._active_slot_uuid = None
+        super()._release_owned_runtime_state(parent_event=parent_event)
 
 
 class ConcentrationActionMarker(BaseCondition):

@@ -1,10 +1,14 @@
 """Pygame selection of existing engine action rows and disclosed targets."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from collections import Counter
 from dataclasses import dataclass, replace
 
 import pygame
+from uuid import UUID
+
+from game.environment_draw import environment_selection_command, pick_environment_target
+from game.player_facts import PlayerObject
 
 from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, TargetType
 from dnd.core.events import WorldTileState
@@ -15,6 +19,7 @@ from game.projection import Camera, TILE_HEIGHT, TILE_WIDTH, pick_support, proje
 class MenuState:
     selected_action: int = 0
     selected_targets: tuple[int, ...] = ()
+    selected_positions: tuple[tuple[int, int], ...] = ()
     scroll: int = 0
     status: str = ""
     target_cursor: int = 0
@@ -24,6 +29,7 @@ class MenuState:
 class ActionSelection:
     action_index: int
     target_indices: tuple[int, ...]
+    extra_target_positions: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +67,11 @@ def initial_menu(actions: AvailableActionsResult, panel_rect: pygame.Rect) -> Me
 
 def _choose_target(state: MenuState, action: AvailableActionInfo,
                    target: AvailableTarget) -> tuple[MenuState, ActionSelection | None]:
+    if action.position_selection is not None and action.position_selection.kind == "path":
+        if target.position is None:
+            return replace(state, status="Choose a position."), None
+        return replace(state, selected_targets=(target.index,), selected_positions=(target.position,),
+                       target_cursor=0, status="Click another point or Enter to confirm."), None
     if action.allow_same_target is False and target.index in state.selected_targets:
         return replace(state, status="Choose a different target."), None
     allocation = (*state.selected_targets, target.index)
@@ -78,15 +89,17 @@ def handle_menu_event(
     visible_tiles: Iterable[WorldTileState],
     *,
     panel_rect: pygame.Rect,
+    visible_objects: Mapping[UUID, PlayerObject] | None = None,
+    next_position_options: tuple[tuple[int, int], ...] = (),
 ) -> tuple[MenuState, ActionSelection | EndTurn | None]:
     """Return a selection only; unavailable history supplies actions=None."""
     if actions is None:
         return state, None
     rows = actions.all_actions
     if event.type == pygame.KEYDOWN and event.key == pygame.K_n:
-        return replace(state, selected_targets=(), status=""), EndTurn()
+        return replace(state, selected_targets=(), selected_positions=(), status=""), EndTurn()
     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and _end_button(panel_rect).collidepoint(event.pos):
-        return replace(state, selected_targets=(), status=""), EndTurn()
+        return replace(state, selected_targets=(), selected_positions=(), status=""), EndTurn()
     if not rows:
         return state, None
     if not 0 <= state.selected_action < len(rows):
@@ -104,10 +117,26 @@ def handle_menu_event(
             return _select_action(state, state.selected_action + (-1 if event.key == pygame.K_UP else 1),
                                   len(rows), panel_rect), None
         if event.key == pygame.K_BACKSPACE:
+            if state.selected_positions:
+                remaining = state.selected_positions[:-1]
+                return replace(state, selected_positions=remaining,
+                               selected_targets=state.selected_targets if remaining else (),
+                               target_cursor=0, status=""), None
             return replace(state, selected_targets=(), status=""), None
+        if event.key == pygame.K_TAB and state.selected_positions:
+            return replace(state, target_cursor=(state.target_cursor + 1) % max(1, len(next_position_options))), None
         if event.key == pygame.K_TAB and action.valid_targets:
             return replace(state, target_cursor=(state.target_cursor + 1) % len(action.valid_targets), status=""), None
+        if event.key == pygame.K_p and state.selected_positions:
+            if not next_position_options:
+                return replace(state, status="No further points; Enter confirms."), None
+            chosen = next_position_options[state.target_cursor % len(next_position_options)]
+            return replace(state, selected_positions=(*state.selected_positions, chosen),
+                           target_cursor=0, status="Enter confirms; Backspace removes the last point."), None
         if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            if state.selected_positions:
+                command = ActionSelection(state.selected_action, state.selected_targets, state.selected_positions[1:])
+                return replace(state, selected_targets=(), selected_positions=(), status=""), command
             if not action.valid_targets:
                 return replace(state, status=action.availability_status.value.replace("_", " ")), None
             return _choose_target(state, action, action.valid_targets[state.target_cursor % len(action.valid_targets)])
@@ -118,9 +147,26 @@ def handle_menu_event(
             if index < len(rows):
                 return _select_action(state, index, len(rows), panel_rect), None
         elif not panel_rect.collidepoint(event.pos):
+            if visible_objects is not None and action.target_type in (TargetType.OBJECT, TargetType.CREATURE_OR_OBJECT):
+                chosen = pick_environment_target(event.pos, visible_objects, camera)
+                for index, target in enumerate(action.valid_targets):
+                    if chosen is not None and target.target_uuid == chosen:
+                        return _choose_target(replace(state, target_cursor=index), action, target)
+                if chosen is not None:
+                    return replace(state, status="This object is not a target for this action."), None
+                # Only unmasked targets use the tile fallback.
             support, _ = pick_support(event.pos, camera, visible_tiles)
             if support is not None:
+                if state.selected_positions:
+                    if support.position not in next_position_options:
+                        return replace(state, status="Choose an admitted next point, or Enter to confirm."), None
+                    return replace(state, selected_positions=(*state.selected_positions, support.position),
+                                   target_cursor=0, status="Enter confirms; Backspace removes the last point."), None
                 for index, target in enumerate(action.valid_targets):
+                    if (visible_objects is not None and target.target_uuid is not None
+                            and target.target_uuid in visible_objects
+                            and environment_selection_command(visible_objects[target.target_uuid], camera) is not None):
+                        continue
                     if target.position == support.position:
                         return _choose_target(replace(state, target_cursor=index), action, target)
             return replace(state, status="Choose one of this action's targets."), None
@@ -146,6 +192,8 @@ def draw_target_preview(
     actions: AvailableActionsResult | None,
     camera: Camera,
     visible_tiles: Iterable[WorldTileState],
+    *, visible_objects: Mapping[UUID, PlayerObject] | None = None,
+    next_position_options: tuple[tuple[int, int], ...] = (),
 ) -> None:
     """Mark only disclosed targets and area cells on retained visible supports."""
     if actions is None or not 0 <= state.selected_action < len(actions.all_actions):
@@ -154,7 +202,16 @@ def draw_target_preview(
     if not targets:
         return
     supports = {tile.position: tile for tile in visible_tiles}
-    selected = targets[state.target_cursor % len(targets)]
+    selected = (next(target for target in targets if target.index == state.selected_targets[0])
+                if state.selected_positions else targets[state.target_cursor % len(targets)])
+    if visible_objects is not None and selected.target_uuid is not None:
+        obj = visible_objects.get(selected.target_uuid)
+        command = environment_selection_command(obj, camera) if obj is not None else None
+        if command is not None:
+            image = command.surface.copy()
+            image.fill((255, 205, 75), special_flags=pygame.BLEND_RGB_MULT)
+            image.set_alpha(125)
+            screen.blit(image, command.destination)
     half_width, half_height = TILE_WIDTH * camera.zoom / 2, TILE_HEIGHT * camera.zoom / 2
 
     def diamond(position: tuple[int, int], color: tuple[int, int, int], width: int) -> None:
@@ -163,11 +220,24 @@ def draw_target_preview(
             pygame.draw.polygon(screen, color, ((x, y - half_height), (x + half_width, y),
                                                 (x, y + half_height), (x - half_width, y)), width)
 
-    for target in targets:
-        if target.position is not None:
-            diamond(target.position, (85, 134, 149), 1)
-    for position in selected.affected_positions or ():
-        diamond(position, (204, 160, 87), 2)
+    if not state.selected_positions:
+        for target in targets:
+            if target.position is not None:
+                diamond(target.position, (85, 134, 149), 1)
+    if state.selected_positions:
+        for position in next_position_options:
+            diamond(position, (110, 184, 185), 1)
+        for position in state.selected_positions:
+            diamond(position, (236, 223, 147), 2)
+        points = [project_screen(position, camera, elevation_steps=supports[position].elevation_steps)
+                  for position in state.selected_positions if position in supports]
+        if len(points) > 1:
+            pygame.draw.lines(screen, (236, 223, 147), False, points, 2)
+        if next_position_options:
+            diamond(next_position_options[state.target_cursor % len(next_position_options)], (236, 223, 147), 2)
+    if not state.selected_positions:
+        for position in selected.affected_positions or ():
+            diamond(position, (204, 160, 87), 2)
     if selected.position in supports:
         tile = supports[selected.position]
         x, y = project_screen(tile.position, camera, elevation_steps=tile.elevation_steps)
@@ -231,11 +301,16 @@ def draw_menu(
         )
         text(costs or f"{action.cost_amount} {action.cost_type.replace('_', ' ')}", y + 20)
         if action.valid_targets:
-            target = action.valid_targets[state.target_cursor % len(action.valid_targets)]
-            text(f"Target {state.target_cursor % len(action.valid_targets) + 1}/{len(action.valid_targets)}", y + 40)
-            text(_target_text(target), y + 60)
-            if action.target_type is TargetType.MULTI_ENTITY:
-                text(f"Allocation {len(state.selected_targets)}/{action.num_projectiles or 1}", y + 80)
+            if state.selected_positions:
+                text("Ordered positions", y + 40)
+                text(" → ".join(str(point) for point in state.selected_positions), y + 60)
+                text(f"{len(state.selected_positions)} points · P adds · Enter confirms", y + 80)
+            else:
+                target = action.valid_targets[state.target_cursor % len(action.valid_targets)]
+                text(f"Target {state.target_cursor % len(action.valid_targets) + 1}/{len(action.valid_targets)}", y + 40)
+                text(_target_text(target), y + 60)
+                if action.target_type is TargetType.MULTI_ENTITY:
+                    text(f"Allocation {len(state.selected_targets)}/{action.num_projectiles or 1}", y + 80)
         text(state.status, y + 101, (240, 201, 128))
     text("Up/Down action · Tab target · Enter", panel_rect.bottom - 78)
     text("M move · Click map · Backspace clear", panel_rect.bottom - 58)

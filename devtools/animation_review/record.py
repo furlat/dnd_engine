@@ -5,7 +5,7 @@ from dataclasses import replace
 from math import ceil
 from pathlib import Path
 import subprocess
-from typing import Any
+from typing import Any, Literal, Mapping, cast
 from uuid import UUID
 
 import pygame
@@ -15,7 +15,7 @@ from dnd.core.presentation_geometry import SpherePresentationGeometry
 from game.animation import facing_for_delta
 from game.animation_data import load_animation_data
 from game.animation_draw import LoadedBodyRows, actor_screen_bounds
-from game.animation_types import Facing8
+from game.animation_types import AnimationData, Facing8
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
 from game.choreography import BoundChoreography, bind_choreography
@@ -43,13 +43,16 @@ from devtools.animation_review.trace import LINEAGE, STATE, draw_trace, frame_tr
 
 def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 sequence: ReviewSequence, fps: int, size: tuple[int, int], ffmpeg: str,
-                coverage_inventory: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+                coverage_inventory: list[dict[str, Any]] | None = None,
+                floor_style: Literal["paving", "scene"] = "paving",
+                animation_data: AnimationData | None = None) -> dict[str, Any]:
     before = sequence.before
     latest = before
     for lineage in sequence.lineages:
         latest = reduce_lineage(latest, lineage)
     trace.update({
         "mode": "decoded-recorded-input; latest reduced before historical playback",
+        "floor_style": floor_style,
         "initial": STATE.dump_python(before, mode="json", serialize_as_any=True, warnings="error"),
         "latest": state_summary(latest),
         "lineages": [LINEAGE.dump_python(root, mode="json", serialize_as_any=True, warnings="error")
@@ -74,13 +77,20 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     screen = pygame.display.set_mode(video_size)
     view = pygame.Surface(size)
     pygame.display.set_caption(f"Animation review · {case.id}")
-    data = load_animation_data(rig_files=tuple(sorted(Path("game/data/rigs").glob("*.json"))))
+    data = animation_data if animation_data is not None else load_animation_data(
+        rig_files=tuple(sorted(Path("game/data/rigs").glob("*.json"))))
     if coverage_inventory is not None and not coverage_inventory:
         coverage_inventory.extend(presentation_inventory(data))
     fonts = tuple(pygame.font.SysFont(style.fontFamily, round(style.fontSizePx), bold=style.fontWeight == "bold")
                   for style in (data.number_style, data.badge_style))
     number_font, badge_font = fonts
     catalog = load_catalog()
+    if floor_style == "paving":
+        # Select real floor artwork for the review without changing received state.
+        terrain = cast(Mapping[str, object], catalog.bindings["terrain"])
+        catalog = replace(catalog, bindings={**catalog.bindings, "terrain": {
+            **terrain, "stone": {pose: f"terrain.paving.{pose}" for pose in ("e", "n", "s", "w")},
+        }})
     cache = SurfaceCache(catalog)
     facings: dict[str, Facing8] = {
         actor.contact.actor_uuid: facing_for_delta(

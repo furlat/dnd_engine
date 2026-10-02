@@ -1,13 +1,15 @@
 """Pygame adapter for the shared action/child group, including movement holds."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from typing import Mapping
 from uuid import UUID
 
 import pygame
 
 from dnd.core.life_types import LifeState
-from game.animation import ActorContact, CastSample, actor_rest_pose
+from dnd.types.world import WorldEdgeChannel
+from game.area_media import AreaMedia, AreaSolid
+from game.animation import cast_actor_contacts, ActorContact, CastSample, actor_rest_pose
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, RigLayer
 from game.animation_draw import (
@@ -15,7 +17,7 @@ from game.animation_draw import (
     attack_draw_commands, load_actor_media, load_animation_media, load_attack_media,
     action_media_draw_commands, load_action_strip_media, load_cast_rows,
 )
-from game.attack import AttackSample, BoundAttack
+from game.attack import AttackSample, BoundAttack, attack_actor_contacts
 from game.choreography import BoundChoreography, ChoreographySample
 from game.combat import BoundCast
 from game.condition_animation import ConditionAppearance
@@ -32,6 +34,7 @@ class ChoreographyMedia:
     attacks: Mapping[UUID, BodyRows]
     casts: Mapping[UUID, AnimationMedia]
     strips: Mapping[str, pygame.Surface]
+    staged_areas: dict[UUID, AreaMedia] = field(default_factory=dict)
 
 
 def load_choreography_media(bound: BoundChoreography, *,
@@ -53,14 +56,14 @@ def load_choreography_media(bound: BoundChoreography, *,
             timeline = node.bound.timeline
             attacks[node.event_uuid] = load_attack_media(node.bound.timeline, node.bound.appearances,
                                                          body_rows=body_rows)
-            contacts = (timeline.source, timeline.target)
+            contacts = attack_actor_contacts(timeline)
         else:
             timeline = node.bound.timeline
             casts[node.event_uuid] = load_animation_media(node.bound.timeline, node.bound.appearances,
                                                           body_rows=body_rows,
                                                           area_boundaries=node.bound.area_boundaries, area_solids=node.bound.area_solids,
                                                           area_supports=node.bound.area_supports)
-            contacts = (timeline.source.caster, *(row.target for row in timeline.source.applications))
+            contacts = cast_actor_contacts(timeline.source)
         # Include intermediate condition poses, even if another child removes
         # that condition before the complete lineage settles.
         load_actor_media(timeline.data, tuple(
@@ -169,7 +172,27 @@ def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySam
                 media.attacks[node.event_uuid], font, badge_font, camera,
                 condition_appearances=condition_appearances, include_bodies=include_bodies)
         elif isinstance(node.bound, BoundCast) and isinstance(current, CastSample):
-            drawn = animation_draw_commands(node.bound.timeline, current, media.casts[node.event_uuid], camera,
+            cast_media = media.casts[node.event_uuid]
+            if node.bound.staged_area:
+                # Topology is retained at authored destruction clearance, not
+                # taken from the final native map at frame zero.
+                objects = sample.displayed.objects.values()
+                boundaries = tuple(obj.placement for obj in objects
+                    if obj.item.boundary_structure is not None
+                    and WorldEdgeChannel.PROPAGATION in obj.item.boundary_structure.blocked_channels)
+                solids = tuple(AreaSolid(position, obj.placement.base_height_steps, obj.placement.top_height_steps)
+                    for obj in objects if obj.item.boundary_structure is None and obj.item.blocks_propagation
+                    for position in obj.placement.positions) + tuple(
+                    AreaSolid(tile.position, tile.elevation_steps) for tile in sample.displayed.tiles.values()
+                    if tile.blocks_propagation)
+                admitted = tuple(sorted({position for at, positions in node.bound.area_reach
+                    if current.media_elapsed_ms >= at for position in positions}))
+                area = media.staged_areas.get(node.event_uuid, cast_media.area)
+                if area is None or area.boundaries != boundaries or area.solids != solids or area.admitted != admitted:
+                    area = AreaMedia(boundaries, solids, tuple(sample.displayed.tiles.values()), admitted=admitted)
+                    media.staged_areas[node.event_uuid] = area
+                cast_media = replace(cast_media, area=area)
+            drawn = animation_draw_commands(node.bound.timeline, current, cast_media, camera,
                                              condition_appearances=condition_appearances, include_bodies=include_bodies)
         else:
             raise ValueError("choreography sample does not match its bound primitive")

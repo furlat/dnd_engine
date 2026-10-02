@@ -2,7 +2,7 @@
 
 import random
 from typing import Literal
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from dnd.actions import SpellEvent
 from dnd.actions_functional import execute_available_action, get_available_actions, register_spell, setup_standard_actions
@@ -97,13 +97,15 @@ def web_history(*, delivery: WebDelivery = "mage") -> CapturedHistory:
             observer_uuid=caster.uuid, battlefield_id=battlefield_id)
         before, _ = reduce_interval(None, initial)
 
-        def perform(actor: Entity, identity: str, *, position: tuple[int, int] | None = None,
+        def perform(actor: Entity, identity: str, *, target_uuid: UUID | None = None, position: tuple[int, int] | None = None,
                     dice: tuple[int, ...] = ()) -> Event:
             available = get_available_actions(actor)
             choices = [(row, choice) for row in available.all_actions
                 if row.behavior_id == identity or row.display_name == identity
                 if identity != "spell.web" or row.source_item_uuid == (device.uuid if device is not None else None)
-                for choice in row.valid_targets if position is None or choice.position == position]
+                if identity != "action.attack" or row.weapon_slot == WeaponSlot.MELEE_MAIN.value
+                for choice in row.valid_targets if (position is None or choice.position == position)
+                and (target_uuid is None or choice.target_uuid == target_uuid)]
             if not choices:
                 raise ValueError(f"{actor.name} has no available {identity} toward {position}")
             row, choice = choices[0]
@@ -149,7 +151,7 @@ def web_history(*, delivery: WebDelivery = "mage") -> CapturedHistory:
             assert get_map().get_spatial_condition(zone.uuid) is not None
             assert device.charges == 0 and "Concentrating" not in caster.active_conditions
             advance_to(caster)
-            perform(caster, "action.attack_object", dice=(8,))
+            perform(caster, "action.attack", target_uuid=device.uuid, dice=(19, 8))
             assert get_map().get_object_position(device.uuid) == device.get_position()
             assert device.get_position() is not None and device.integrity is ItemIntegrity.DESTROYED
             assert not device.to_item_presentation_state().concentration_slots

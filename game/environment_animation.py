@@ -11,6 +11,7 @@ from game.world_animation import WorldTransitionSample
 def remnant_bank(art: EnvironmentArt, item_id: str,
                   state: ItemRemnantState | None, *, outcome: str | None = None) -> EnvironmentBank | None:
     return select_environment_destruction(art, item_id, door_open=state.door_open if state is not None else None,
+        intact_supported_items=bool(state.intact_supported_items) if state is not None else False,
         swing=state.door_swing.value if state is not None and state.door_swing is not None else None,
         mechanism_state=state.mechanism_state.value if state is not None and state.mechanism_state is not None else None,
         outcome=outcome)

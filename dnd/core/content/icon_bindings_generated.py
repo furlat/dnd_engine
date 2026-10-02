@@ -3054,12 +3054,6 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         None,
         None,
     ),
-    'core.rules:action:action.attack_object@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
-        'b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0',
-        'bind',
-        'action.attack-object',
-        'fcacf00d428fa28722b48ea7c6ad556961af1b42ee9bad3f3f079e9bad8fbd98',
-    ),
     'core.rules:action:action.dash@1#b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0': (
         'b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0',
         'bind',

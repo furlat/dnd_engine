@@ -24,7 +24,7 @@ from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, RecordedSequence, capture_history
-from tests.game.door_destruction_scenarios import attack_object, review_actor, take_turn, walk
+from tests.game.door_destruction_scenarios import attack_item, review_actor, take_turn, walk
 
 
 def trap_hardware_history(*, item_id: str = "environment.trap.swinging_blade.stone.workshop",
@@ -68,10 +68,10 @@ def trap_hardware_history(*, item_id: str = "environment.trap.swinging_blade.sto
             assert attacker.get_hp() == 76 and witness.get_hp() == 76
             walk(attacker, (4, 4))
             assert not plate.pressed
-        attack_object(attacker, hardware, 4)
+        attack_item(attacker, hardware, 4)
         assert hardware.get_hp() == 8 and mechanism.is_active_spatial_condition()
         take_turn(encounter, attacker, fresh=True)
-        attack_object(attacker, hardware, 8)
+        attack_item(attacker, hardware, 8)
         assert hardware.get_hp() == 0 and hardware.get_position() == (5, 4)
         assert hardware.integrity is ItemIntegrity.DESTROYED
         assert not mechanism.is_active_spatial_condition()

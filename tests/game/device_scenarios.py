@@ -122,7 +122,8 @@ def device_history(*, program: DeviceProgram = "mixed-spells", wake_damage: int 
             available = get_available_actions(operator)
             choices = [(row, choice) for row in available.all_actions
                 if row.behavior_id == behavior
-                and (behavior in ("action.move", "spell.fire_bolt", "action.attack_object") or
+                and (behavior != "action.attack" or row.weapon_slot == WeaponSlot.MELEE_MAIN.value)
+                and (behavior in ("action.move", "spell.fire_bolt", "action.attack") or
                      row.source_item_uuid == (None if program == "normal-sleep" else device.uuid))
                 for choice in row.valid_targets
                 if (position is None or choice.position == position)
@@ -188,12 +189,12 @@ def device_history(*, program: DeviceProgram = "mixed-spells", wake_damage: int 
         assert operator.action_economy.actions.normalized_score == 1
         assert not any(row.source_item_uuid == device.uuid for row in get_available_actions(operator).all_actions)
         if breaking:
-            perform("action.attack_object", recipient=device, dice=(4,))
+            perform("action.attack", recipient=device, dice=(19, 4))
             assert device.get_hp() == 8 and device.get_position() == (4, 5)
             encounter.next_turn()
             while encounter.get_current_entity() is not operator:
                 encounter.next_turn()
-            perform("action.attack_object", recipient=device, dice=(8,))
+            perform("action.attack", recipient=device, dice=(19, 8))
             assert device.get_hp() == 0 and device.get_position() == (4, 5)
             assert device.integrity is ItemIntegrity.DESTROYED
             # Sleep is not sustained by its launcher; breaking it does not wake

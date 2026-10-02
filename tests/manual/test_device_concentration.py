@@ -1,6 +1,6 @@
 """A destructible device owns independent sustained casts through native links."""
 
-from dnd.actions import AttackObject, DropConcentration, SpellEvent
+from dnd.actions import Attack, DropConcentration, SpellEvent
 from dnd.actions_functional import execute_available_action, execute_use_action, get_available_actions
 from dnd.blocks.base_item import BaseItem, ItemLocationStateEvent
 from dnd.conditions import Concentrating
@@ -147,11 +147,12 @@ def test_operator_concentration_is_independent_and_object_attack_destroys_all_de
     assert caster.equip_item(weapon.uuid, WeaponSlot.MELEE_MAIN)
     caster.action_economy.reset_all_costs()
     available = get_available_actions(caster)
-    assert any(row.behavior_id == "action.attack_object" and any(choice.target_uuid == device.uuid
+    assert any(row.behavior_id == "action.attack" and any(choice.target_uuid == device.uuid
                for choice in row.valid_targets) for row in available.all_actions)
     cursor = EventQueue.event_cursor()
-    with fixed_dice_faces(12):
-        attack = AttackObject(source_entity_uuid=caster.uuid, target_entity_uuid=device.uuid).apply()
+    with fixed_dice_faces(19, 12):
+        caster.update_entity_senses()
+        attack = Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=caster.uuid, target_entity_uuid=device.uuid).apply()
     assert attack is not None and not attack.canceled and attack.phase is EventPhase.COMPLETION
     assert get_map().get_object_position(device.uuid) == (5, 10)
     assert BaseBlock.get(device.uuid) is device and device.integrity is ItemIntegrity.DESTROYED

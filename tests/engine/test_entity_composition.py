@@ -315,7 +315,6 @@ def test_eb_06_007_standard_actions_register_templates_and_handlers() -> None:
         "Shake Awake",
         "Shove",
         "Pick Up",
-        "Attack Object",
     }.issubset(template_names)
     assert entity.get_action_template("Dash") is not None
     assert entity.get_event_handler_by_name("Prone Auto-Stand") is not None
@@ -439,13 +438,17 @@ def test_eb_06_011_visible_entities_filter_into_allies_and_enemies() -> None:
 
 
 def test_eb_06_012_equipped_weapons_create_and_remove_attack_templates() -> None:
-    """EB-06-012: weapon equip events keep attack templates synchronized."""
+    """EB-06-012: weapon equip events preserve the ordinary unarmed fallback."""
     reset_entity_state()
     get_map().create_rectangle(0, 0, 8, 8)
     entity = configured_entity("Actor", (1, 1), "heroes")
     setup_standard_actions(entity)
 
-    assert entity.get_action_template("Attack_MELEE_MAIN") is None
+    unarmed = entity.get_action_template("Attack_MELEE_MAIN")
+    assert isinstance(unarmed, Attack)
+    unarmed_source = unarmed.get_attack_source_metadata()
+    assert unarmed_source is not None and unarmed_source.kind == "unarmed"
+    assert unarmed_source.item_uuid is None
 
     sword = build_authored_item("weapon.shortsword", entity.uuid)
     assert isinstance(sword, Weapon)
@@ -467,7 +470,11 @@ def test_eb_06_012_equipped_weapons_create_and_remove_attack_templates() -> None
     assert unequipped is sword
     assert sword.uuid in entity.inventory.items
     assert entity.equipment._get_weapon_by_slot(WeaponSlot.MELEE_MAIN) is None
-    assert entity.get_action_template("Attack_MELEE_MAIN") is None
+    restored = entity.get_action_template("Attack_MELEE_MAIN")
+    assert isinstance(restored, Attack)
+    restored_source = restored.get_attack_source_metadata()
+    assert restored_source is not None and restored_source.kind == "unarmed"
+    assert restored_source.item_uuid is None
 
 
 def test_eb_06_013_saving_throw_and_skill_check_execute_event_phases() -> None:

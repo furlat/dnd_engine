@@ -352,7 +352,7 @@ def test_fighter_champion_applies_1_to_20_and_removes_20_to_1_exactly() -> None:
     } == {fighter.SecondWind, fighter.ActionSurge, fighter.ExtraAttack}
     assert {
         handler.name for handler in entity.event_handlers.values()
-    } == {"Extra Attack Resource", "Indomitable", "Lucky", "Survivor"}
+    } == {"Indomitable", "Lucky", "Survivor"}
     assert all(
         action.behavior_binding is not None
         and action.behavior_binding.origin_root_id == CharacterClass.FIGHTER.value

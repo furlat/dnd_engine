@@ -35,7 +35,8 @@ def cast_fireball(caster: Entity, position: tuple[int, int]) -> tuple[SpellEvent
     target = next(row for row in action.valid_targets if row.position == position)
     cursor = EventQueue.event_cursor()
     # Every creature rolls a failed save followed by eight damage dice of one.
-    with fixed_dice_faces(*([1] * 30)):
+    # Each contacted door now receives its own eight-die structural packet too.
+    with fixed_dice_faces(*([1] * 200)):
         result = execute_available_action(caster, action, target)
     assert isinstance(result, SpellEvent) and not result.canceled
     events = tuple(event for _, event in EventQueue.iter_events_since(cursor)

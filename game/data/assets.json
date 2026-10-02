@@ -19836,6 +19836,54 @@
         208
       ],
       "scale": 1
+    },
+    "terrain.paving.e": {
+      "path": "environment/ground-h1-e.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.paving.n": {
+      "path": "environment/ground-h1-n.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.paving.s": {
+      "path": "environment/ground-h1-s.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
+    },
+    "terrain.paving.w": {
+      "path": "environment/ground-h1-w.png",
+      "native_size": [
+        256,
+        256
+      ],
+      "pivot": [
+        128,
+        208
+      ],
+      "scale": 1.0
     }
   },
   "animations": {

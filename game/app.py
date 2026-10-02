@@ -43,10 +43,12 @@ from game.device_draw import device_draw_command, device_wreck_draw_command, dev
 from game.sustained_draw import sustained_draw_commands
 from game.spatial_field import field_cell, field_supports
 from game.fixture_depth import FixtureDepthSample, partition_world_depth, split_actor_fixtures, split_world_depth
+from game.floor_composition import compose_floor_coverings
 from game.volume_media import compose_volume
 from game.environment_art import load_environment_art, prop_state_key, sample_environment_frame
 from game.environment_animation import door_pose, trap_pose, remnant_bank
-from game.environment_draw import environment_command, environment_depth_sample
+from game.environment_draw import environment_command, environment_depth_sample, environment_aperture_image
+from game.boundary_occlusion import clip_actor_boundaries
 
 
 WINDOW_SIZE = (1280, 720)
@@ -596,6 +598,7 @@ def draw_frame(
             destination,
             0,
             evidence,
+            role="terrain_floor", support_height_steps=tile.elevation_steps,
         ))
         if tile.elevation_steps > 0:
             top_depth = ((destination[1] + np.arange(surface.height) + .5 - camera.pan[1])
@@ -767,6 +770,16 @@ def draw_frame(
         if door is not None and not destroyed and obj.item.door_swing is None:
             continue
         environment_objects.add(identity)
+        parent_uuid = obj.item.supported_by_uuid
+        parent = target.objects.get(parent_uuid) if parent_uuid is not None else None
+        parent_break = destructions.get(parent_uuid) if parent_uuid is not None else None
+        parent_contact = parent_break.transition.destruction if parent_break is not None else None
+        incorporated = (parent_contact.incorporated_items if parent_contact is not None else
+            parent.item.remnant_state.intact_supported_items
+            if parent is not None and parent.item.integrity is ItemIntegrity.DESTROYED
+            and parent.item.remnant_state is not None else ())
+        if prop is not None and prop.omit_with_destroyed_parent and identity in incorporated:
+            continue
         current_contact = identity in senses.objects
         position = obj.placement.position
         base_height = obj.placement.base_height_steps
@@ -850,14 +863,21 @@ def draw_frame(
             role = "environment_wreck"
         command = environment_command(bank, frame, identity=identity, position=position,
             elevation=base_height, pose=pose, boundary_pose=physical_boundary,
-            camera=camera, multiplier=multiplier, flash=flash, role=role)
+            camera=camera, multiplier=multiplier, flash=flash, role=role,
+            flat_ground=prop is not None and prop.flat_ground and (
+                transition is None or frame in (0, bank.frame_count - 1)))
+        if parent_uuid is not None:
+            command = command._replace(key=(*command.key[:4], (str(parent_uuid), "attached", str(identity))))
         depth = environment_depth_sample(command, len(commands), bank, pose, frame, camera,
             position=position)
         commands.append(command)
         if depth is not None:
             fixture_depths.append(depth)
         if physical_boundary is not None:
-            boundary_sprites.append(BoundarySprite((obj.placement,), command.surface, command.destination, command.key))
+            aperture = environment_aperture_image(obj.item.item_id,pose,camera) if not destroyed else None
+            boundary_sprites.append(BoundarySprite((obj.placement,), command.surface, command.destination,
+                command.key,actor_aperture=aperture,
+                actor_occludes=prop is not None and prop.occludes_actor_face and not destroyed))
     wall_rows: dict[
         tuple[tuple[int, int], Material],
         list[
@@ -1414,6 +1434,8 @@ def draw_frame(
             commands.append(mechanism_projectile_draw_command(cue, sample,
                 cache.scaled(sample.asset_id, camera.zoom), catalog.resources[sample.asset_id], camera))
 
+    commands = compose_floor_coverings(commands)
+    commands = clip_actor_boundaries(commands,boundary_sprites,camera)
     commands = split_actor_fixtures(commands, fixture_depths)
     commands = _split_terrain_depths(commands, terrain_depths, extra_commands)
     registered_boundaries = tuple(boundary_sprites)

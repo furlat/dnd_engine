@@ -19,16 +19,13 @@ from dnd.core.base_actions import (
     OutcomeResolution,
     TargetEffectDisposition,
 )
-from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition
-from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, MultiEntityLogData
 from dnd.core.dice import AttackOutcome, fixed_dice_faces
-from dnd.core.events import EventQueue, _enrich_multi_entity_log_from_children
-from dnd.core.gridmap import GridMap, get_map
+from dnd.core.events import _enrich_multi_entity_log_from_children
 from dnd.core.creature_types import CreatureType
-from dnd.core.values import BaseValue
 from dnd.entity import Entity, EntityConfig
+from dnd.runtime_reset import reset_engine_runtime
+from tests.engine.support import create_test_entity
 from tests.spell_test_exports import (
     BurningHands,
     ChillTouch,
@@ -362,16 +359,7 @@ def test_multi_target_summary_excludes_auxiliary_cleanup_from_target_data() -> N
 
 def reset_spell_tutorial_state(width: int = 10, height: int = 6) -> None:
     """Clear global state and create a small spell tutorial arena."""
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    BaseValue._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    GridMap.reset()
-    get_map().create_rectangle(0, 0, width, height)
+    reset_engine_runtime(grid_size=(width, height))
 
 
 def create_spell_actor(
@@ -385,8 +373,8 @@ def create_spell_actor(
 ) -> Entity:
     """Create an actor with spellcasting stats, HP, and optional spell slots."""
     actor_id = uuid4()
-    return Entity.create(
-        source_entity_uuid=actor_id,
+    return create_test_entity(
+        source_id=actor_id,
         name=name,
         config=EntityConfig(
             ability_scores=AbilityScoresConfig(

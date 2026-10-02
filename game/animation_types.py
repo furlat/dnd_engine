@@ -575,6 +575,17 @@ class PackedFootpoint(AuthoredRecord):
         return self
 
 
+class RGBMediaTint(AuthoredRecord):
+    color: Color
+    strength: Annotated[float, Field(ge=0, le=1)]
+
+
+class MaskedMediaTint(RGBMediaTint):
+    """RGB-only material mix through a registered linear single-channel mask."""
+
+    mask: Identifier
+
+
 class ProjectileFramePart(AuthoredRecord):
     """Lossless sparse packing in an asset's unchanged logical canvas."""
 
@@ -582,6 +593,7 @@ class ProjectileFramePart(AuthoredRecord):
     rect: tuple[int, int, int, int]
     offset: tuple[int, int]
     footpoint: PackedFootpoint | None = None
+    colorMasks: FrozenMap[Identifier] = Field(default_factory=dict)
 
 
 class ProjectileFrameStorage(AuthoredRecord):
@@ -1011,6 +1023,28 @@ class ForcedMovementProfile(AuthoredRecord):
     provenance: FrozenMap[str]
 
 
+class ConnectorMovementProfile(AuthoredRecord):
+    animationId: Identifier
+    bodyClip: str
+    durationMs: Annotated[float, Field(ge=100, le=3000)]
+    arcHeightPx: Annotated[float, Field(ge=0, le=200)] = 0
+    bodyLoops: bool = False
+    passageBodyHeightPx: Annotated[float, Field(ge=0, le=200)] | None = None
+    passageScale: tuple[Annotated[float, Field(ge=0.25, le=1)],
+                        Annotated[float, Field(ge=0.25, le=1)]] = (1, 1)
+    passageSocket: Identifier | None = None
+    passageHoldFraction: Annotated[float, Field(ge=0, le=0.9)] = 0
+    bodyFrameKeys: tuple[tuple[Annotated[float, Field(ge=0, le=1)], BodyFrame], ...] = ()
+
+    @model_validator(mode="after")
+    def validate_frame_keys(self) -> ConnectorMovementProfile:
+        if self.bodyFrameKeys:
+            times = tuple(key[0] for key in self.bodyFrameKeys)
+            if self.bodyLoops or times[0] != 0 or times[-1] != 1 or any(a >= b for a, b in zip(times, times[1:])):
+                raise ValueError("connector body frame keys must increase from 0 to 1 without looping")
+        return self
+
+
 class VoluntaryMovementContext(AuthoredRecord):
     walkClip: Literal["Run", "Walk"]
     walkPlaybackSpeed: Annotated[float, Field(ge=0.1, le=8)]
@@ -1029,6 +1063,7 @@ class VoluntaryMovementContext(AuthoredRecord):
     jumpArcMaxPx: Annotated[float, Field(ge=0, le=300)]
     jumpMedia: tuple[MovementMediaTrack, ...]
     jumpRecovery: MovementRecovery
+    connectorProfiles: dict[str, ConnectorMovementProfile] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_jump_duration(self) -> VoluntaryMovementContext:
@@ -1100,6 +1135,7 @@ class AttackProfileMatch(AuthoredRecord):
     sourceItemRefs: tuple[ContentRef, ...] | None
     # Current gear uses stable item identities; imported Studio refs remain readable.
     sourceItemIds: tuple[str, ...] | None = None
+    sourceKinds: tuple[Literal["equipped", "unarmed", "natural"], ...] | None = None
 
 
 class AttackVfxLayer(AuthoredRecord):
@@ -1286,6 +1322,40 @@ class TetherAnimation:
     fps: float
 
 
+class WallModuleAssets(AuthoredRecord):
+    """One paired lifecycle bank; axis selection never rotates baked pixels."""
+
+    assetId: Identifier
+    applicationAssetId: Identifier
+
+
+class WallAxisMedia(AuthoredRecord):
+    axis: Literal["x", "y", "diagonal_positive", "diagonal_negative"]
+    variants: Annotated[tuple[WallModuleAssets, ...], Field(min_length=1)]
+    spacingCells: Annotated[float, Field(gt=0, le=1)] = 1
+    maxAngleDegrees: Annotated[float, Field(ge=0, le=22.5)] = 0
+    positiveMaskNormal: tuple[float, float] | None = None
+
+    @model_validator(mode="after")
+    def registered_mask_normal(self) -> "WallAxisMedia":
+        if self.axis not in ("x", "y") and self.positiveMaskNormal is None:
+            raise ValueError("diagonal wall banks require their registered positive mask normal")
+        if self.positiveMaskNormal is not None:
+            x, y = self.positiveMaskNormal
+            tangent = {"x": (1, 0), "y": (0, 1), "diagonal_positive": (1, 1),
+                       "diagonal_negative": (1, -1)}[self.axis]
+            if x*x+y*y == 0 or abs(x*tangent[0]+y*tangent[1]) > 1e-6:
+                raise ValueError("wall mask normal must be nonzero and perpendicular to its native axis")
+        return self
+
+
+class WallRingMedia(AuthoredRecord):
+    assetId: Identifier
+    applicationAssetId: Identifier
+    radiusFeet: Positive
+    widthFeet: Positive
+
+
 class SpatialMediaLayer(AuthoredRecord):
     """One registered layer around the received area's occupants."""
     assetId: Identifier
@@ -1293,7 +1363,24 @@ class SpatialMediaLayer(AuthoredRecord):
     side: Literal["center", "rear", "front"] = "center"
     removalAssetId: Identifier | None = None
     suppressionAssetId: Identifier | None = None
-    composition: Literal["billboard", "line_floor", "floor", "xy_volume", "xyz_volume", "clump", "legacy", "volume"] = "legacy"
+    composition: Literal["billboard", "line_floor", "floor", "xy_volume", "xyz_volume", "clump", "wall_modules", "legacy", "volume"] = "legacy"
+    wallAxes: tuple[WallAxisMedia, ...] = ()
+    wallRing: WallRingMedia | None = None
+
+    @model_validator(mode="after")
+    def wall_banks(self) -> "SpatialMediaLayer":
+        if self.composition == "wall_modules":
+            axes = {row.axis for row in self.wallAxes}
+            if not {"x", "y"} <= axes or len(axes) != len(self.wallAxes):
+                raise ValueError("wall modules require distinct native banks including X/Y")
+            if not any(variant.assetId == self.assetId and variant.applicationAssetId == self.applicationAssetId
+                       for axis in self.wallAxes for variant in axis.variants):
+                raise ValueError("wall lifecycle reference must identify a declared module variant")
+        elif self.wallAxes or self.wallRing is not None:
+            raise ValueError("wall axis banks require wall_modules composition")
+        if self.wallRing is not None and self.side == "center":
+            raise ValueError("whole-ring banks require rear/front layer ownership")
+        return self
     @field_validator("composition", mode="before")
     @classmethod
     def previous_volume_name(cls, value: str) -> str:
@@ -1301,6 +1388,45 @@ class SpatialMediaLayer(AuthoredRecord):
 
     offsetCells: tuple[float, float] = (0, 0)
     delayMs: NonNegative = 0
+
+
+class ContactSweepVariant(AuthoredRecord):
+    rearAssetId: Identifier
+    frontAssetId: Identifier
+
+
+class ContactSweepDirection(AuthoredRecord):
+    direction: Literal["E", "S", "W", "N"]
+    variants: Annotated[tuple[ContactSweepVariant, ...], Field(min_length=1)]
+
+
+class ContactSweepNode(AuthoredRecord):
+    fraction: Annotated[float, Field(ge=0, le=1)]
+    delayMs: NonNegative
+    variant: Annotated[int, Field(ge=0)]
+
+
+class ContactSweep(AuthoredRecord):
+    """Finite native-pixel accents between received source and recipient contacts."""
+
+    directions: Annotated[tuple[ContactSweepDirection, ...], Field(min_length=4, max_length=4)]
+    nodes: Annotated[tuple[ContactSweepNode, ...], Field(min_length=1)]
+    scale: Positive = 1
+    fadeStartMs: NonNegative
+    fadeEndMs: Positive
+    contactDelayMs: NonNegative = 0
+
+    @model_validator(mode="after")
+    def complete_banks(self) -> ContactSweep:
+        if {bank.direction for bank in self.directions} != {"E", "S", "W", "N"}:
+            raise ValueError("contact sweep requires four distinct cardinal banks")
+        if self.fadeStartMs >= self.fadeEndMs:
+            raise ValueError("contact sweep fade must have positive duration")
+        if self.contactDelayMs >= max(node.delayMs for node in self.nodes)+self.fadeEndMs:
+            raise ValueError("contact sweep must reach its recipient before clearing")
+        if any(node.variant >= len(bank.variants) for node in self.nodes for bank in self.directions):
+            raise ValueError("contact sweep node references a missing variant")
+        return self
 
 
 class SpatialMediaBinding(AuthoredRecord):
@@ -1318,8 +1444,13 @@ class SpatialMediaBinding(AuthoredRecord):
     surfaceHeightScale: Positive = 1
     suppressionDirection: Point | None = None
     movementSpeedCellsPerSecond: Positive | None = None
+    safeSideTint: RGBMediaTint | None = None
     contactMedia: Annotated[
         Mapping[Literal["ground_entry", "damage"], StudioMediaTrack],
+        AfterValidator(MappingProxyType), PlainSerializer(dict, return_type=dict),
+    ] = Field(default_factory=lambda: MappingProxyType({}))
+    damageSweeps: Annotated[
+        Mapping[Literal["contact", "radiated_heat"], ContactSweep],
         AfterValidator(MappingProxyType), PlainSerializer(dict, return_type=dict),
     ] = Field(default_factory=lambda: MappingProxyType({}))
 

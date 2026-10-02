@@ -58,6 +58,7 @@ class DirectionalWall(BaseItem):
     """
 
     name: str = Field(default="Directional Wall", description="Display name for the wall object.")
+    armor_class: int = Field(default=17, ge=0)
     is_pickable: bool = Field(default=False, description="Whether the wall can be looted into inventory.")
     is_usable: bool = Field(default=False, description="Whether the wall exposes use actions.")
     is_targetable: bool = Field(default=False, description="Whether the wall can be directly targeted.")
@@ -229,6 +230,7 @@ class DirectionalDoor(UsableItem):
     """
 
     name: str = Field(default="Directional Door", description="Display name for the door object.")
+    armor_class: int = Field(default=15, ge=0)
     is_pickable: bool = Field(default=False, description="Whether the door can be looted into inventory.")
     is_targetable: bool = Field(default=True, description="Whether the door can be directly targeted.")
     blocks_movement: bool = Field(default=False, description="Global movement blocker flag for the door.")
@@ -416,10 +418,10 @@ class DirectionalDoor(UsableItem):
         self._pending_close_request_uuid = None
         self._pending_close_handler_uuid = None
 
-    def on_grid_object_removed(self, position: tuple[int, int], clear_location: bool = True) -> None:
+    def on_grid_object_removed(self, position: tuple[int, int], clear_location: bool = True, parent_event: Optional[Event] = None) -> None:
         if clear_location:
             self._clear_pending_close()
-        super().on_grid_object_removed(position, clear_location)
+        super().on_grid_object_removed(position, clear_location, parent_event)
 
     def _on_destroy(self, parent_event: Optional[Event]) -> None:
         self._clear_pending_close()

@@ -1,11 +1,13 @@
 """Restored saving-throw, turn-end, and combat-log hierarchy contracts."""
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import Literal
 from unittest.mock import patch
 from uuid import UUID
 
 from dnd.core.combat_log import CombatLogEntryType
+from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import (
     Event,
     EventHandler,
@@ -15,7 +17,9 @@ from dnd.core.events import (
     SavingThrowEvent,
     Trigger,
 )
+from dnd.core.gridmap import get_map
 from dnd.entity import Entity
+from dnd.residues import ASHEN_RESIDUE
 from dnd.spells.evocation import Fireball
 from tests.engine.test_combat_actions import (
     reset_core_action_state,
@@ -246,15 +250,17 @@ def test_fireball_emits_one_parent_log_with_isolated_target_children() -> None:
     ]
     for target in targets:
         penalize_save(target, "dexterity")
+    hp_before = {target.uuid: target.get_hp() for target in targets}
     Entity.update_all_entities_senses(max_distance=80)
     captured: list[Event] = []
     EventQueue.set_combat_log_callback(captured.append)
     try:
-        result = Fireball(
-            source_entity_uuid=caster.uuid,
-            end_position=(8, 5),
-            template=False,
-        ).apply()
+        with fixed_dice_faces(*([2] * 27)):
+            result = Fireball(
+                source_entity_uuid=caster.uuid,
+                end_position=(8, 5),
+                template=False,
+            ).apply()
     finally:
         EventQueue.set_combat_log_callback(None)
 
@@ -264,16 +270,42 @@ def test_fireball_emits_one_parent_log_with_isolated_target_children() -> None:
     parent_log = captured[0].combat_log
     assert parent_log is not None
     assert parent_log.entry_type is CombatLogEntryType.MULTI_ENTITY_ACTION
-    assert len(parent_log.sub_entries) == len(targets)
-    assert {
-        entry.target_uuid for entry in parent_log.sub_entries
-    } == {str(target.uuid) for target in targets}
-    assert len({entry.target_uuid for entry in parent_log.sub_entries}) == len(targets)
-    assert all(
-        entry.sub_entries
-        and all(
-            child.target_uuid in {None, entry.target_uuid}
-            for child in entry.sub_entries
-        )
-        for entry in parent_log.sub_entries
-    )
+    target_ids = {str(target.uuid) for target in targets}
+    target_logs = [entry for entry in parent_log.sub_entries if entry.target_uuid in target_ids]
+    residue_logs = [entry for entry in parent_log.sub_entries if entry.target_uuid not in target_ids]
+    assert len(target_logs) == len(targets)
+    assert {entry.target_uuid for entry in target_logs} == target_ids
+    assert parent_log.data["total_targets"] == len(targets)
+    assert parent_log.data["total_damage"] == 48
+    assert parent_log.data["per_target_damage"] == [16, 16, 16]
+    assert parent_log.data["saves_failed"] == 3
+    assert parent_log.data["saves_succeeded"] == 0
+    per_target_logs = parent_log.data["per_target_logs"]
+    assert len(per_target_logs) == len(targets)
+    assert {entry["target_uuid"] for entry in per_target_logs} == target_ids
+    assert all(target.get_hp() == hp_before[target.uuid] - 16 for target in targets)
+    for entry in target_logs:
+        assert entry.entry_type is CombatLogEntryType.SPELL_SAVE
+        assert entry.data["save_success"] is False
+        assert entry.data["final_damage"] == 16
+        assert Counter(child.entry_type for child in entry.sub_entries) == Counter({
+            CombatLogEntryType.SAVING_THROW: 1,
+            CombatLogEntryType.DAMAGE_TAKEN: 1,
+        })
+        descendants = list(entry.sub_entries)
+        while descendants:
+            child = descendants.pop()
+            assert child.target_uuid in {None, entry.target_uuid}
+            descendants.extend(child.sub_entries)
+
+    # Inert residue remains causal log evidence, without becoming a spell target.
+    residue_tile_ids = set()
+    assert result.resolved_area_positions
+    for position in result.resolved_area_positions:
+        tile = get_map().get_tile(*position)
+        assert tile is not None and ASHEN_RESIDUE.name in tile.active_conditions
+        residue_tile_ids.add(str(tile.uuid))
+    assert len(residue_logs) == len(residue_tile_ids)
+    assert {entry.target_uuid for entry in residue_logs} == residue_tile_ids
+    assert all(entry.entry_type is CombatLogEntryType.CONDITION_APPLIED for entry in residue_logs)
+    assert len(parent_log.sub_entries) == len(targets) + len(residue_tile_ids)

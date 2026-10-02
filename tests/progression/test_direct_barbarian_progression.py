@@ -246,7 +246,6 @@ def test_barbarian_berserker_applies_1_to_20_and_removes_exactly() -> None:
     assert {
         handler.name for handler in entity.event_handlers.values()
     } == {
-        "Extra Attack Resource",
         "Indomitable Might",
         "Lucky",
         "Relentless Rage",

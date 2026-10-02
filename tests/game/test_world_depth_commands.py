@@ -6,6 +6,7 @@ import pytest
 
 from game.draw_commands import DrawCommand
 from game.fixture_depth import partition_world_depth, split_world_depth
+from game.floor_composition import compose_floor_coverings
 
 
 def command(image: pygame.Surface, depth: float, identity: str, *,
@@ -21,6 +22,60 @@ def render(commands: list[DrawCommand]) -> pygame.Surface:
     for row in sorted(commands, key=lambda row: row.key):
         target.blit(row.surface, row.destination, special_flags=row.blend)
     return target
+
+
+@pytest.mark.parametrize("reverse", (False, True))
+@pytest.mark.parametrize("sparse", (False, True))
+def test_overlapping_translucent_coverings_keep_their_painter_order(reverse, sparse):
+    images = []
+    for color in ((100, 100, 100, 255), (0, 200, 0, 128), (0, 0, 200, 128)):
+        image = pygame.Surface((3, 3), pygame.SRCALPHA)
+        image.fill(color)
+        images.append(image)
+    if sparse:
+        images[1].fill((0, 0, 0, 0), (0, 2, 3, 1))
+        images[2].fill((0, 0, 0, 0), (0, 1, 3, 2))
+    ground = command(images[0], 0, "ground")._replace(role="terrain_floor", support_height_steps=2)
+    depth = np.broadcast_to(np.array([-2., -1., 1.])[None, :], (3, 3))
+    coverings = [command(image, 0, identity, world_depth=depth)._replace(
+        role="environment_floor", support_height_steps=2) for image, identity in zip(images[1:], ("a", "b"))]
+    original = [pygame.image.tobytes(image, "RGBA") for image in images]
+    ordered = [ground._replace(key=(40, 0, 0, 0, ("ground",))), *coverings]
+    expected = render(ordered)
+    actual = render(split_world_depth(compose_floor_coverings([ground, *reversed(coverings)]
+                                                            if reverse else [ground, *coverings])))
+    assert pygame.image.tobytes(actual, "RGBA") == pygame.image.tobytes(expected, "RGBA")
+    assert [pygame.image.tobytes(image, "RGBA") for image in images] == original
+
+
+@pytest.mark.parametrize("support", (0, 2))
+@pytest.mark.parametrize("identity", ("a", "z"))
+def test_floor_covering_keeps_the_whole_same_support_shadow_above_it(support, identity):
+    floor = pygame.Surface((3, 3), pygame.SRCALPHA)
+    floor.fill((200, 80, 40, 255))
+    shadow = pygame.Surface((3, 3), pygame.SRCALPHA)
+    shadow.fill((0, 0, 0, 128))
+    depth = np.broadcast_to(np.array([-1., 0., 1.])[None, :], (3, 3))
+    rug = command(floor, 0., identity, world_depth=depth)._replace(
+        role="environment_floor", support_height_steps=support)
+    shade = command(shadow, 0., "shadow")._replace(
+        role="actor_shadow", support_height_steps=support)
+    actual = render(split_world_depth([shade, rug]))
+    expected = render([rug._replace(key=(100, -1., 0., 504, (identity,))), shade])
+    assert pygame.image.tobytes(actual, "RGBA") == pygame.image.tobytes(expected, "RGBA")
+
+
+def test_floor_covering_does_not_bring_a_lower_support_shadow_through_raised_floor():
+    floor = pygame.Surface((3, 3), pygame.SRCALPHA)
+    floor.fill((200, 80, 40, 255))
+    shadow = pygame.Surface((3, 3), pygame.SRCALPHA)
+    shadow.fill((0, 0, 0, 128))
+    rug = command(floor, 0., "rug", world_depth=np.ones((3, 3)))._replace(
+        role="environment_floor", support_height_steps=2)
+    shade = command(shadow, 0., "shadow")._replace(role="actor_shadow", support_height_steps=0)
+    actual = render(split_world_depth([shade, rug]))
+    expected = render([shade, rug._replace(key=(100, 1., 0., 504, ("rug",)))])
+    assert pygame.image.tobytes(actual, "RGBA") == pygame.image.tobytes(expected, "RGBA")
 
 
 @pytest.mark.parametrize("alpha", (96, 255))

@@ -1,0 +1,251 @@
+{
+  "banks": {
+    "window.a4.wall.intact": {
+      "family": "a4",
+      "part": "wall",
+      "mode": "intact"
+    },
+    "window.a4.wall.break": {
+      "family": "a4",
+      "part": "wall",
+      "mode": "break"
+    },
+    "window.a4.wall.after_insert": {
+      "family": "a4",
+      "part": "wall",
+      "mode": "after_insert"
+    },
+    "window.a4.insert.intact": {
+      "family": "a4",
+      "part": "insert",
+      "mode": "intact"
+    },
+    "window.a4.insert.break": {
+      "family": "a4",
+      "part": "insert",
+      "mode": "break"
+    },
+    "window.a5.wall.intact": {
+      "family": "a5",
+      "part": "wall",
+      "mode": "intact"
+    },
+    "window.a5.wall.break": {
+      "family": "a5",
+      "part": "wall",
+      "mode": "break"
+    },
+    "window.a5.wall.after_insert": {
+      "family": "a5",
+      "part": "wall",
+      "mode": "after_insert"
+    },
+    "window.a5.insert.intact": {
+      "family": "a5",
+      "part": "insert",
+      "mode": "intact"
+    },
+    "window.a5.insert.break": {
+      "family": "a5",
+      "part": "insert",
+      "mode": "break"
+    },
+    "window.c4.wall.intact": {
+      "family": "c4",
+      "part": "wall",
+      "mode": "intact"
+    },
+    "window.c4.wall.break": {
+      "family": "c4",
+      "part": "wall",
+      "mode": "break"
+    },
+    "window.c4.wall.after_insert": {
+      "family": "c4",
+      "part": "wall",
+      "mode": "after_insert"
+    },
+    "window.c4.insert.intact": {
+      "family": "c4",
+      "part": "insert",
+      "mode": "intact"
+    },
+    "window.c4.insert.break": {
+      "family": "c4",
+      "part": "insert",
+      "mode": "break"
+    },
+    "window.d16.wall.intact": {
+      "family": "d16",
+      "part": "wall",
+      "mode": "intact"
+    },
+    "window.d16.wall.break": {
+      "family": "d16",
+      "part": "wall",
+      "mode": "break"
+    },
+    "window.d16.wall.after_insert": {
+      "family": "d16",
+      "part": "wall",
+      "mode": "after_insert"
+    },
+    "window.d16.insert.intact": {
+      "family": "d16",
+      "part": "insert",
+      "mode": "intact"
+    },
+    "window.d16.insert.break": {
+      "family": "d16",
+      "part": "insert",
+      "mode": "break"
+    },
+    "window.d7.wall.intact": {
+      "family": "d7",
+      "part": "wall",
+      "mode": "intact"
+    },
+    "window.d7.wall.break": {
+      "family": "d7",
+      "part": "wall",
+      "mode": "break"
+    },
+    "window.d7.wall.after_insert": {
+      "family": "d7",
+      "part": "wall",
+      "mode": "after_insert"
+    },
+    "window.d7.insert.intact": {
+      "family": "d7",
+      "part": "insert",
+      "mode": "intact"
+    },
+    "window.d7.insert.break": {
+      "family": "d7",
+      "part": "insert",
+      "mode": "break"
+    },
+    "window.f16.wall.intact": {
+      "family": "f16",
+      "part": "wall",
+      "mode": "intact"
+    },
+    "window.f16.wall.break": {
+      "family": "f16",
+      "part": "wall",
+      "mode": "break"
+    },
+    "window.f16.wall.after_insert": {
+      "family": "f16",
+      "part": "wall",
+      "mode": "after_insert"
+    },
+    "window.f16.insert.intact": {
+      "family": "f16",
+      "part": "insert",
+      "mode": "intact"
+    },
+    "window.f16.insert.break": {
+      "family": "f16",
+      "part": "insert",
+      "mode": "break"
+    },
+    "window.f7.wall.intact": {
+      "family": "f7",
+      "part": "wall",
+      "mode": "intact"
+    },
+    "window.f7.wall.break": {
+      "family": "f7",
+      "part": "wall",
+      "mode": "break"
+    },
+    "window.f7.wall.after_insert": {
+      "family": "f7",
+      "part": "wall",
+      "mode": "after_insert"
+    },
+    "window.f7.insert.intact": {
+      "family": "f7",
+      "part": "insert",
+      "mode": "intact"
+    },
+    "window.f7.insert.break": {
+      "family": "f7",
+      "part": "insert",
+      "mode": "break"
+    },
+    "window.g7.wall.intact": {
+      "family": "g7",
+      "part": "wall",
+      "mode": "intact"
+    },
+    "window.g7.wall.break": {
+      "family": "g7",
+      "part": "wall",
+      "mode": "break"
+    },
+    "window.g8.wall.intact": {
+      "family": "g8",
+      "part": "wall",
+      "mode": "intact"
+    },
+    "window.g8.wall.break": {
+      "family": "g8",
+      "part": "wall",
+      "mode": "break"
+    },
+    "window.g8.wall.after_insert": {
+      "family": "g8",
+      "part": "wall",
+      "mode": "after_insert"
+    },
+    "window.g8.insert.intact": {
+      "family": "g8",
+      "part": "insert",
+      "mode": "intact"
+    },
+    "window.g8.insert.break": {
+      "family": "g8",
+      "part": "insert",
+      "mode": "break"
+    },
+    "window.g9.wall.intact": {
+      "family": "g9",
+      "part": "wall",
+      "mode": "intact"
+    },
+    "window.g9.wall.break": {
+      "family": "g9",
+      "part": "wall",
+      "mode": "break"
+    },
+    "window.g9.wall.after_insert": {
+      "family": "g9",
+      "part": "wall",
+      "mode": "after_insert"
+    },
+    "window.g9.insert.intact": {
+      "family": "g9",
+      "part": "insert",
+      "mode": "intact"
+    },
+    "window.g9.insert.break": {
+      "family": "g9",
+      "part": "insert",
+      "mode": "break"
+    }
+  },
+  "solid_siblings": {
+    "a4": "a1",
+    "a5": "a1",
+    "c4": "c1",
+    "d7": "d1",
+    "d16": "d8",
+    "f7": "f1",
+    "f16": "f8",
+    "g7": "g1",
+    "g8": "g1",
+    "g9": "g1"
+  }
+}

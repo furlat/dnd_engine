@@ -62,6 +62,7 @@ class SpellGrantingItem(UsableItem):
     materializable by itself. Direct item builders provide authored identity.
     """
 
+    is_magical: bool = True
     name: str = Field(
         default="Spell Item",
         description="Display name for the spell-bearing item.",
@@ -607,6 +608,7 @@ def build_wand_of_fire(
 
 def build_acid_flask(source_entity_uuid: UUID) -> SpellGrantingItem:
     return SpellGrantingItem(
+        is_magical=False,
         source_entity_uuid=source_entity_uuid,
         item_id="consumable.acid_flask",
         name="Acid Flask",

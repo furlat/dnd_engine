@@ -219,8 +219,8 @@ def object_target_uuids(entity: Entity, action_name: str) -> set[UUID]:
     """Return object UUIDs currently offered under one discovered action."""
     return {
         target.target_uuid
-        for action in entity.get_available_actions().object_actions
-        if action.template_name == action_name
+        for action in entity.get_available_actions().all_actions
+        if action.template_name == action_name or action.behavior_id == action_name
         for target in action.valid_targets
         if target.target_uuid is not None
     }
@@ -336,7 +336,7 @@ def test_inventory_removes_floor_item_from_grid_senses_and_object_targets() -> N
     assert grid.get_object_position(crate.uuid) is None
     assert crate.uuid not in grid.get_objects_at((4, 3))
     assert crate.uuid not in actor.senses.objects
-    assert crate.uuid not in object_target_uuids(actor, "Attack Object")
+    assert crate.uuid not in object_target_uuids(actor, "action.attack")
     assert crate.uuid not in object_target_uuids(actor, "Pick Up")
 
 
@@ -437,7 +437,7 @@ def test_nonbreakable_or_unseen_items_are_not_object_targets() -> None:
     Entity.update_all_entities_senses()
 
     assert hidden.uuid not in actor.senses.objects
-    assert pillar.uuid not in object_target_uuids(actor, "Attack Object")
+    assert pillar.uuid not in object_target_uuids(actor, "action.attack")
     assert hidden.uuid not in object_target_uuids(actor, "Pick Up")
 
 

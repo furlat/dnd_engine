@@ -1,6 +1,6 @@
 {
   "asset_index_digest": "3bd799f4ad12eb9d097f1a9c44790a2d0d0e75a8ee8b83e85ababce79aada632",
-  "binding_digest": "539085ff77c8281a34a7c253b3365accf53baae04ce032f404d1e271eae1d50d",
+  "binding_digest": "14490816803b696638dd180366ca724226faff1c76a1bd633eb5c2f4f0a9e9d3",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -8891,20 +8891,6 @@
       "evidence_kind": "intentional_dynamic_provider",
       "evidence_token": "provider_attributed_runtime_icon:core.rules:action:action.attack@1",
       "icon_key": null
-    },
-    {
-      "asset_sha256": "fcacf00d428fa28722b48ea7c6ad556961af1b42ee9bad3f3f079e9bad8fbd98",
-      "content_ref": {
-        "content_id": "action.attack_object",
-        "content_version": 1,
-        "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0",
-        "definition_kind": "action",
-        "pack_id": "core.rules"
-      },
-      "decision": "bind",
-      "evidence_kind": "runtime_action_class",
-      "evidence_token": "dnd.actions.AttackObject",
-      "icon_key": "action.attack-object"
     },
     {
       "asset_sha256": "606977f6ccbada878b23c29d692407b03ca59137d45306e77d6daee439d42baa",

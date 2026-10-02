@@ -46,6 +46,10 @@ ICE_KNIFE_BURST = "spell.ice_knife.burst"
 class IceKnife(SpellAction):
     """One paid cast; attack damage and cold saves retain separate causal branches."""
 
+    @property
+    def performs_attack(self) -> bool:
+        return True
+
     name: str = "Ice Knife"
     description: str = "Ranged attack for 1d10 piercing; hit or miss, a 5ft burst deals 2d6 cold on a failed Dexterity save."
     spell_level: int = 1

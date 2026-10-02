@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from math import isfinite
 from typing import Literal, Mapping
 
-from game.animation import ActorContact, NumberSample
+from game.animation import ActorContact, ObjectContact, NumberSample, feedback_identity
 from game.animation_types import AnimationData, FloatingFeedbackStyle
-from game.attack import BoundAttack
+from game.attack import BoundAttack, attack_actor_contacts
 from game.choreography import BoundChoreography
 from game.combat import actor_contact, actor_is_visible
 from game.forced_movement import forced_contact
@@ -21,7 +21,7 @@ from game.player_reduction import observe_actors
 
 @dataclass(frozen=True, slots=True)
 class FeedbackTrack:
-    contact: ActorContact
+    contact: ActorContact | ObjectContact
     start_ms: float
     duration_ms: float
     value: int | None
@@ -41,7 +41,7 @@ def sample_feedback(track: FeedbackTrack, absolute_ms: float) -> NumberSample | 
     progress = (absolute_ms - track.start_ms) / track.duration_ms
     fade = track.style.fadeStartFraction
     alpha = 1.0 if progress < fade or fade == 1 else (1 - progress) / (1 - fade)
-    return NumberSample(track.contact.actor_uuid, track.value, track.label, track.color,
+    return NumberSample(feedback_identity(track.contact), track.value, track.label, track.color,
                         progress, alpha, track.application_id, track.kind)
 
 
@@ -83,11 +83,15 @@ def choreography_feedback(bound: BoundChoreography, data: AnimationData, absolut
         start = absolute_start_ms + node.start_ms
         if isinstance(node.bound, BoundAttack):
             attack = node.bound.timeline
-            group_contacts.update((contact.actor_uuid, contact) for contact in (attack.source, attack.target))
+            group_contacts.update((contact.actor_uuid, contact) for contact in attack_actor_contacts(attack))
             timing, damage = attack.damage_timing, attack.damage
             if timing is not None and damage is not None and damage.floatingNumber.enabled and attack.damage_total is not None:
                 number = damage.floatingNumber
                 tracks.append(FeedbackTrack(attack.target, start + timing.number_ms, number.durationMs,
+                    attack.damage_total, number.label, number.color, attack.data.number_style))
+            if isinstance(attack.target, ObjectContact) and damage is not None and damage.floatingNumber.enabled and attack.damage_total is not None:
+                number = damage.floatingNumber
+                tracks.append(FeedbackTrack(attack.target, start + attack.contact_ms, number.durationMs,
                     attack.damage_total, number.label, number.color, attack.data.number_style))
             if attack.feedback is not None:
                 style = attack.data.badge_style
@@ -98,7 +102,8 @@ def choreography_feedback(bound: BoundChoreography, data: AnimationData, absolut
             group_contacts[cast.source.caster.actor_uuid] = cast.source.caster
             for application in cast.applications:
                 source, damage = application.source, application.damage
-                group_contacts[source.target.actor_uuid] = source.target
+                if isinstance(source.target, ActorContact):
+                    group_contacts[source.target.actor_uuid] = source.target
                 if (application.number_ms is not None and damage is not None
                         and damage.floatingNumber.enabled and source.damage_total is not None):
                     number = damage.floatingNumber

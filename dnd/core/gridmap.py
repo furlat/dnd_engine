@@ -2,7 +2,7 @@
 
 import math
 import time
-from typing import Any, Dict, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
+from typing import AbstractSet, Any, Dict, List, Optional, Tuple, Set, DefaultDict, Protocol, cast
 from uuid import UUID, uuid4
 from collections import OrderedDict, defaultdict
 
@@ -14,6 +14,7 @@ from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import breadth_first_paths, dijkstra
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
 from dnd.core.condition_types import HazardFilter
+from dnd.core.creature_types import Size
 from dnd.core.item_types import ItemPresentationProvider, ItemPresentationState
 from dnd.core.positioning import PositionCommitError
 from dnd.core.base_tiles import (
@@ -52,6 +53,7 @@ from dnd.types.spatial_effects import (
 )
 from dnd.types.materials import TileSurface
 from dnd.types.traps import TrapState
+from dnd.types.physical_access import PhysicalAccess, contact_passage_allows
 from dnd.types.world_placement import (
     BoundaryStructure,
     WorldObjectPlacement,
@@ -106,6 +108,14 @@ class SpatialConditionOwner(Protocol):
         self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
         discovered: bool = False,
     ) -> Optional[PerceivedSpatialEffect]: ...
+
+    def movement_extra_cost_at(self, position: Tuple[int, int], mode: MovementMode) -> float: ...
+
+    def blocks_crossing_between(self, start: Tuple[int, int], end: Tuple[int, int],
+                                channel: str, requester_uuid: Optional[UUID],
+                                mode: MovementMode, terminal_provider_uuid: Optional[UUID] = None) -> bool: ...
+
+    def missile_deflection_contact(self, start: Tuple[int, int], end: Tuple[int, int], missile_size: str) -> Optional[Tuple[float, float]]: ...
 
     def snapshot_mechanism_state(self) -> Optional[TrapState]: ...
 
@@ -1159,6 +1169,51 @@ class GridMap:
             )
         )
 
+    def connector_movement_cost(
+        self, connector: TraversalConnector, source: Tuple[int, int],
+        requester_uuid: UUID, size: Size, *, subjective: bool = False,
+        ignore_difficult_terrain: bool = False,
+    ) -> Optional[int]:
+        """Resolve an aperture's actual admission and ordinary terrain cost."""
+        aperture = connector.aperture
+        if aperture is None:
+            return connector.movement_cost_feet
+        first, second = connector.endpoints
+        if source == first.position:
+            destination = second.position
+        elif source == second.position and connector.bidirectional:
+            destination = first.position
+        else:
+            return None
+        frame = BaseBlock.get(aperture.frame_uuid)
+        placement = self.get_object_placement(aperture.frame_uuid)
+        if (frame is None or not frame.is_active or placement is None
+                or tuple(Size).index(size) > tuple(Size).index(aperture.maximum_size)
+                or not self.connector_supports_are_current(connector)):
+            return None
+        requester = BaseBlock.get(requester_uuid)
+        senses = requester.get_senses() if requester is not None else None
+        if subjective and (senses is None or frame.uuid not in senses.objects):
+            return None
+        edge = self.get_world_edge(source, destination)
+        if not any(c.provider_uuid == frame.uuid for c in
+                   (*edge.exit_contributions, *edge.entry_contributions)):
+            return None
+        if (not self._elevation_transition_allows(source, destination, MovementMode.WALKING)
+                or not self._world_edge_channel_allows(
+                    edge, WorldEdgeChannel.MOVEMENT, requester_uuid=requester_uuid,
+                    subjective=subjective, ignored_provider_uuid=frame.uuid)):
+            return None
+        cost = self.movement_edge_cost_units(source, destination, MovementMode.WALKING,
+            ignore_difficult_terrain=ignore_difficult_terrain)
+        return math.ceil(cost * 5 * aperture.movement_cost_multiplier) if cost > 0 else None
+
+    def remove_object_connectors(self, object_uuid: UUID, parent_event: Optional[UUID] = None) -> None:
+        """An absent or destroyed frame cannot leave an active passage behind."""
+        for connector in self.get_all_connectors():
+            if connector.aperture is not None and connector.aperture.frame_uuid == object_uuid:
+                self.remove_connector(connector.uuid, parent_event=parent_event)
+
     def set_tile_elevation(
         self,
         position: Tuple[int, int],
@@ -1700,6 +1755,10 @@ class GridMap:
         ignored_provider_uuid: Optional[UUID] = None,
     ) -> bool:
         """Require both ordered Tile-side layers to transmit one channel."""
+        if not self.spatial_crossing_allows(edge.source_position, edge.destination_position,
+                channel.value, requester_uuid, movement_mode, subjective=subjective,
+                terminal_provider_uuid=ignored_provider_uuid):
+            return False
         for contribution in (*edge.exit_contributions, *edge.entry_contributions):
             if contribution.provider_uuid == ignored_provider_uuid:
                 continue
@@ -1749,6 +1808,40 @@ class GridMap:
             transition_axis(from_pos, to_pos),
         )
 
+    def spatial_crossing_allows(self, start: Tuple[int, int], end: Tuple[int, int],
+                                channel: str, requester_uuid: Optional[UUID] = None,
+                                mode: MovementMode = MovementMode.WALKING, *,
+                                subjective: bool = False, terminal_provider_uuid: Optional[UUID] = None) -> bool:
+        requester = BaseBlock.get(requester_uuid) if requester_uuid is not None else None
+        senses = requester.get_senses() if requester is not None else None
+        for owner in self.get_spatial_conditions():
+            if subjective and senses is not None and owner.uuid not in senses.spatial_effects:
+                continue
+            if owner.blocks_crossing_between(start, end, channel, requester_uuid, mode, terminal_provider_uuid):
+                return False
+        return True
+
+    def missile_interceptor(self, start: Tuple[int, int], end: Tuple[int, int], missile_size: str) -> Optional[Tuple[UUID, Tuple[float, float]]]:
+        contacts = [(owner.uuid, contact) for owner in self.get_spatial_conditions()
+                    if (contact := owner.missile_deflection_contact(start, end, missile_size)) is not None]
+        return min(contacts, key=lambda row: ((row[1][0] - start[0]) ** 2 + (row[1][1] - start[1]) ** 2,
+                                             str(row[0]))) if contacts else None
+
+    def movement_cell_cost_units(self, position: Tuple[int, int], movement_mode: MovementMode,
+                                 *, ignore_difficult_terrain: bool = False) -> float:
+        """Terrain plus independent expenditure; identical effects do not compound."""
+        tile = self._tiles.get(position)
+        if tile is None:
+            return 0
+        terrain = tile.get_movement_cost(movement_mode)
+        if terrain <= 0:
+            return terrain
+        if movement_mode is MovementMode.WALKING and ignore_difficult_terrain:
+            terrain = min(terrain, 1)
+        extra = max((owner.movement_extra_cost_at(position, movement_mode)
+                     for owner in self.get_spatial_conditions_at(position)), default=0)
+        return terrain + extra
+
     def movement_edge_cost_units(
         self,
         from_pos: Tuple[int, int],
@@ -1762,9 +1855,8 @@ class GridMap:
         to_tile = self._tiles.get(to_pos)
         if from_tile is None or to_tile is None:
             raise ValueError("movement edge cost requires both support Tiles")
-        terrain_multiplier = to_tile.get_movement_cost(movement_mode)
-        if movement_mode is MovementMode.WALKING and ignore_difficult_terrain:
-            terrain_multiplier = min(terrain_multiplier, 1.0)
+        terrain_multiplier = self.movement_cell_cost_units(to_pos, movement_mode,
+            ignore_difficult_terrain=ignore_difficult_terrain)
         if movement_mode is not MovementMode.FLYING:
             return terrain_multiplier
         base_leg_feet = support_distance_feet(
@@ -1847,6 +1939,9 @@ class GridMap:
                        side_cache: Optional[Dict[Tuple[Tuple[int, int], Tuple[int, int]], bool]] = None,
                        movement_cell_cache: Optional[Dict[Tuple[int, int], bool]] = None) -> bool:
         """Return whether movement can cross from one adjacent tile to another."""
+        if not self.spatial_crossing_allows(from_pos, to_pos, "movement", requesting_entity_uuid,
+            movement_mode, subjective=subjective):
+            return False
         if from_pos == to_pos:
             return True
         if max(abs(to_pos[0] - from_pos[0]), abs(to_pos[1] - from_pos[1])) > 1:
@@ -2266,8 +2361,107 @@ class GridMap:
             for object_uuid, placement in self._object_placements.items()
         }
 
+    def can_reach_between(
+        self, start: Tuple[int, int], end: Tuple[int, int],
+        access: PhysicalAccess, requester_uuid: UUID, *, subjective: bool = False,
+        knowledge_observer_uuid: Optional[UUID] = None,
+        terminal_provider_uuid: Optional[UUID] = None,
+    ) -> bool:
+        """Trace physical passage, independently of sight, range and occupancy.
+
+        At an exact grid corner all incident faces must admit the segment; an
+        L-shaped walking detour cannot establish straight weapon reach.
+        """
+        if start not in self._tiles or end not in self._tiles:
+            return False
+        if not self.spatial_crossing_allows(start, end, "propagation", requester_uuid,
+                subjective=subjective, terminal_provider_uuid=terminal_provider_uuid):
+            return False
+        requester = BaseBlock.get(knowledge_observer_uuid or requester_uuid)
+        senses = requester.get_senses() if requester is not None else None
+
+        def known(identity: UUID) -> bool:
+            return not subjective or senses is None or identity in senses.objects
+
+        def cell_allows(position: Tuple[int, int]) -> bool:
+            if position not in self._tiles:
+                return False
+            if self._tiles[position].blocks_propagation():
+                return False
+            for identity in self.get_center_objects_at(position):
+                if identity == terminal_provider_uuid or not known(identity):
+                    continue
+                provider = BaseBlock.get(identity)
+                if provider is None:
+                    continue
+                if access is PhysicalAccess.PROJECTILE:
+                    if provider.blocks_propagation():
+                        return False
+                elif not contact_passage_allows(
+                    provider.get_contact_passage(), access,
+                    blocks_movement=provider.blocks_walking(requester_uuid),
+                ):
+                    return False
+            # Terrain support and creature occupancy do not obstruct contact.
+            if access is PhysicalAccess.PROJECTILE:
+                return True
+            return not any(condition.blocks_walking_at(position, requester_uuid)
+                           for condition in self.get_spatial_conditions_at(position))
+
+        def side_allows(first: Tuple[int, int], second: Tuple[int, int]) -> bool:
+            if first not in self._tiles or second not in self._tiles:
+                return False
+            edge = self.get_world_edge(first, second)
+            for contribution in (*edge.exit_contributions, *edge.entry_contributions):
+                if contribution.provider_uuid == terminal_provider_uuid or not known(contribution.provider_uuid):
+                    continue
+                if access is PhysicalAccess.PROJECTILE:
+                    if WorldEdgeChannel.PROPAGATION in contribution.blocked_channels:
+                        return False
+                elif (contribution.top_height_steps <= min(edge.source_height_steps, edge.destination_height_steps)
+                      or contribution.base_height_steps >= max(edge.source_height_steps, edge.destination_height_steps) + 1):
+                    continue
+                elif not contact_passage_allows(
+                    contribution.contact_passage, access,
+                    blocks_movement=not world_edge_contribution_allows(
+                        contribution, WorldEdgeChannel.MOVEMENT,
+                        source_height=edge.source_height_steps,
+                        destination_height=edge.destination_height_steps,
+                        movement_mode=MovementMode.WALKING,
+                    ),
+                ):
+                    return False
+            return True
+
+        if start == end:
+            return True
+        ray = supercover_line(start, end)
+        for first, second in zip(ray, ray[1:]):
+            if not cell_allows(second):
+                return False
+            if first[0] != second[0] and first[1] != second[1]:
+                for bridge in ((first[0], second[1]), (second[0], first[1])):
+                    if not (cell_allows(bridge) and side_allows(first, bridge)
+                            and side_allows(bridge, second)):
+                        return False
+            elif not side_allows(first, second):
+                return False
+        return True
+
     def manual_object_contact(
-        self, requester_uuid: UUID, object_uuid: UUID,
+        self, requester_uuid: UUID, object_uuid: UUID, *,
+        access: PhysicalAccess = PhysicalAccess.HAND,
+        subjective: bool = False,
+    ) -> Optional[Tuple[int, int]]:
+        """Find a hand-use contact without expanding manual interaction reach."""
+        return self.attack_object_contact(requester_uuid, object_uuid,
+            range_feet=5, access=access, subjective=subjective)
+
+    def attack_object_contact(
+        self, requester_uuid: UUID, object_uuid: UUID, *,
+        range_feet: int, access: PhysicalAccess,
+        subjective: bool = False,
+        origin: Optional[Tuple[int, int]] = None,
     ) -> Optional[Tuple[int, int]]:
         """Find a reachable footprint surface without walking into the target.
 
@@ -2275,7 +2469,8 @@ class GridMap:
         expose only the contact actually retained by the requester's senses.
         """
         requester = BaseBlock.get(requester_uuid)
-        origin = requester.get_position() if requester is not None else None
+        if origin is None:
+            origin = requester.get_position() if requester is not None else None
         placement = self._object_placements.get(object_uuid)
         if origin is None or placement is None or origin not in self._tiles:
             return None
@@ -2288,46 +2483,61 @@ class GridMap:
             }[placement.boundary_direction]
             positions.add((placement.position[0] + dx, placement.position[1] + dy))
 
-        def cell_allows(position: Tuple[int, int], *, intermediate: bool = False) -> bool:
-            if not self.is_walkable(*position, MovementMode.WALKING):
-                return False
-            occupants = set(self.get_center_objects_at(position)) - {object_uuid}
-            if intermediate:
-                occupants.update(self.get_entities_at(position))
-            for identity in occupants:
-                block = BaseBlock.get(identity)
-                if block is not None and block.blocks_walking(requester_uuid):
-                    return False
-            return not any(condition.blocks_walking_at(position, requester_uuid)
-                           for condition in self.get_spatial_conditions_at(position))
-
-        def side_allows(start: Tuple[int, int], end: Tuple[int, int]) -> bool:
-            return self._world_edge_channel_allows(
-                self.get_world_edge(start, end), WorldEdgeChannel.MOVEMENT,
-                ignored_provider_uuid=object_uuid,
-            )
+        if subjective:
+            senses = requester.get_senses() if requester is not None else None
+            contact = senses.objects.get(object_uuid) if senses is not None else None
+            item = BaseBlock.get(object_uuid)
+            creator_knows = item.is_object_known_to(requester_uuid) if item is not None else False
+            if contact is None and not creator_knows:
+                return None
+            # An identified anchor does not expose the hidden supports of a
+            # multicell body. A boundary can be contacted from the observer's
+            # own side without granting sight of its opposite owner tile.
+            if contact is not None and not creator_knows:
+                positions = {position for position in positions
+                             if position == contact.position or position == origin
+                             or (senses is not None and senses.visible.get(position, False))}
 
         def distance(position: Tuple[int, int]) -> int:
             return support_distance_feet(origin, source_tile.height * 5,
                                          position, placement.base_height_steps * 5)
 
         for position in sorted(positions, key=lambda point: (distance(point), point)):
-            if position not in self._tiles or distance(position) > 5:
+            if position not in self._tiles or distance(position) > range_feet:
                 continue
-            if position == origin:
+            if self.can_reach_between(origin, position, access, requester_uuid,
+                    subjective=subjective, terminal_provider_uuid=object_uuid):
                 return position
-            if not cell_allows(position):
-                continue
-            dx, dy = position[0] - origin[0], position[1] - origin[1]
-            if not dx or not dy:
-                if side_allows(origin, position):
-                    return position
-            else:
-                for bridge in ((origin[0] + dx, origin[1]), (origin[0], origin[1] + dy)):
-                    if (bridge in self._tiles and cell_allows(bridge, intermediate=True)
-                            and side_allows(origin, bridge) and side_allows(bridge, position)):
-                        return position
         return None
+
+    def area_object_contacts(
+        self, reached_positions: AbstractSet[Tuple[int, int]], *,
+        geometric_positions: AbstractSet[Tuple[int, int]],
+        origin: Tuple[int, int],
+    ) -> Dict[UUID, Tuple[int, int]]:
+        """Return actual object surfaces contacted by a finite reached area.
+
+        Boundary objects can belong to the unreached neighbor, so both native
+        edge contributions matter. A reached solid body receives the effect but
+        does not expose boundaries beyond it. Eligibility and damage remain
+        with the action; this query never changes the map or expands its area.
+        """
+        contacts: Dict[UUID, Tuple[int, int]] = {}
+        for position in sorted(reached_positions & geometric_positions):
+            if position not in self._tiles:
+                continue
+            for identity in sorted(self.get_center_objects_at(position), key=str):
+                contacts.setdefault(identity, position)
+            if position != origin and self.is_blocking_propagation(*position):
+                continue
+            for dx, dy in ((-1, 0), (0, -1), (0, 1), (1, 0)):
+                neighbor = (position[0] + dx, position[1] + dy)
+                if neighbor not in geometric_positions or neighbor not in self._tiles:
+                    continue
+                edge = self.get_world_edge(position, neighbor)
+                for contribution in (*edge.exit_contributions, *edge.entry_contributions):
+                    contacts.setdefault(contribution.provider_uuid, position)
+        return contacts
 
     def _object_placement_candidate(
         self,
@@ -2337,6 +2547,7 @@ class GridMap:
         boundary_direction: Optional[CardinalDirection] = None,
         base_height_steps: Optional[int] = None,
         orientation: Optional[CardinalDirection] = None,
+        pending_placements: Optional[Dict[UUID, WorldObjectPlacement]] = None,
     ) -> WorldObjectPlacement:
         """Build and validate one complete placement candidate."""
         if (
@@ -2363,6 +2574,29 @@ class GridMap:
             base_height_steps = tile.height
         if type(base_height_steps) is not int:
             raise TypeError("base_height_steps must be an exact integer")
+        parent_uuid = obj.get_supporting_object_uuid()
+        if parent_uuid is not None:
+            parent = BaseBlock.get(parent_uuid)
+            parent_placement = (pending_placements or {}).get(parent_uuid) or self._object_placements.get(parent_uuid)
+            if (parent is None or parent_placement is None
+                    or (obj.is_active and not parent.is_active)
+                    or spec.kind is not WorldPlacementKind.BOUNDARY
+                    or parent_placement.kind is not WorldPlacementKind.BOUNDARY
+                    or parent_placement.position != position
+                    or parent_placement.boundary_direction is not boundary_direction
+                    or parent_placement.base_height_steps != base_height_steps):
+                raise ValueError("attached item must share its parent's placed boundary")
+        previous = self._object_placements.get(object_uuid)
+        if previous is not None and (
+            previous.position != position or previous.boundary_direction is not boundary_direction
+            or previous.base_height_steps != base_height_steps or previous.orientation is not orientation
+        ):
+            if parent_uuid is not None or any(
+                provider.get_supporting_object_uuid() == object_uuid
+                for identity in self._object_placements
+                if (provider := BaseBlock.get(identity)) is not None
+            ):
+                raise ValueError("cannot relocate one component of an attached assembly")
         supports: list[WorldObjectSupport] = []
         for dx, dy in spec.footprint_offsets:
             # Authoring uses east as the unrotated cardinal orientation.
@@ -2392,6 +2626,13 @@ class GridMap:
             orientation=orientation,
         )
         self._validate_placement_collision(candidate)
+        for other in (pending_placements or {}).values():
+            if (candidate.occupies_bands and other.occupies_bands
+                    and candidate.kind is other.kind and candidate.boundary_direction is other.boundary_direction
+                    and set(candidate.positions).intersection(other.positions)
+                    and max(candidate.base_height_steps, other.base_height_steps)
+                    < min(candidate.top_height_steps, other.top_height_steps)):
+                raise ValueError("assembly components collide in occupied bands")
         return candidate
 
     def _placement_band(
@@ -2656,6 +2897,117 @@ class GridMap:
             self._complete_event_effect(effect)
         return candidate
 
+    def place_object_assembly(
+        self, object_uuids: Tuple[UUID, ...], position: Tuple[int, int],
+        boundary_direction: CardinalDirection, *,
+        connector_definition: Optional[TraversalConnectorDefinition] = None,
+    ) -> Tuple[WorldObjectPlacement, ...]:
+        """Accept every component and its passage before committing any placement."""
+        if not object_uuids or len(set(object_uuids)) != len(object_uuids):
+            raise ValueError("assembly requires unique ordered objects")
+        pending: Dict[UUID, WorldObjectPlacement] = {}
+        objects: list[BaseBlock] = []
+        for identity in object_uuids:
+            obj = BaseBlock.get(identity)
+            if obj is None or identity in self._object_placements:
+                raise ValueError("assembly component must be registered and unplaced")
+            if identity != object_uuids[0] and obj.get_supporting_object_uuid() not in pending:
+                raise ValueError("assembly components must follow their parent")
+            pending[identity] = self._object_placement_candidate(identity, position,
+                boundary_direction=boundary_direction, pending_placements=pending)
+            objects.append(obj)
+        connector = None
+        if connector_definition is not None:
+            if connector_definition.authored_id in self._connector_uuid_by_authored_id:
+                raise ValueError("assembly connector is already registered")
+            connector = self._build_connector(connector_definition)
+        effects: list[Event] = []
+        try:
+            for obj in objects:
+                candidate = pending[obj.uuid]
+                structure = obj.get_boundary_structure()
+                declaration = SpatialChangeEvent.object_placed(position, obj.uuid, candidate,
+                    blocks_optics=obj.blocks_optics_at_center(), blocks_propagation=obj.blocks_propagation(),
+                    blocks_walking=obj.blocks_walking(), object_name=obj.name, object_map_char=obj.get_map_char(),
+                    object_boundary_structure=structure,
+                    **self._boundary_event_metadata(candidate, structure))
+                effect = self._accept_event_effect(declaration) if self._events_enabled else None
+                if self._events_enabled and effect is None:
+                    raise ValueError("assembly component placement was canceled")
+                if effect is not None:
+                    effects.append(effect)
+            if connector is not None and self._events_enabled:
+                effect = self._connector_change_effect(TraversalConnectorChangeOperation.REGISTER,
+                    connector_uuid=connector.uuid, authored_id=connector.authored_id,
+                    old_connector=None, new_connector=connector, parent_event=None)
+                if effect is None:
+                    raise ValueError("window passage registration was canceled")
+                effects.append(effect)
+            checked: Dict[UUID, WorldObjectPlacement] = {}
+            for obj in objects:
+                if BaseBlock.get(obj.uuid) is not obj or obj.uuid in self._object_placements:
+                    raise ValueError("assembly changed during admission")
+                current = self._object_placement_candidate(obj.uuid, position,
+                    boundary_direction=boundary_direction, pending_placements=checked)
+                if current != pending[obj.uuid]:
+                    raise ValueError("assembly geometry changed during admission")
+                checked[obj.uuid] = current
+            if connector is not None and not self.connector_supports_are_current(connector):
+                raise ValueError("assembly connector supports changed during admission")
+        except Exception:
+            for effect in effects:
+                EventQueue.register(effect.cancel("Assembly admission failed"))
+            raise
+        for obj in objects:
+            candidate = pending[obj.uuid]
+            self._replace_placement_bands(candidate, add=True)
+            self._object_placements[obj.uuid] = candidate
+            self._bump_spatial_revisions(self._object_revision_channels(obj))
+        if connector is not None:
+            self._index_connector(connector)
+            self._connector_revision += 1
+        for effect in effects:
+            self._complete_event_effect(effect)
+        return tuple(pending.values())
+
+    def place_object_sections(self, sections: Tuple[Tuple[UUID, Tuple[int, int]], ...],
+                              *, parent_event: Optional[UUID] = None) -> Tuple[WorldObjectPlacement, ...]:
+        """Admit a wall's independent roots before publishing any placed section."""
+        if not sections or len({identity for identity, _ in sections}) != len(sections):
+            raise ValueError("wall requires unique ordered section identities")
+        candidates = [self._object_placement_candidate(identity, anchor) for identity, anchor in sections]
+        effects: list[Event] = []
+        try:
+            for (identity, _), candidate in zip(sections, candidates):
+                obj = BaseBlock.get(identity)
+                if obj is None or identity in self._object_placements or obj.get_supporting_object_uuid() is not None:
+                    raise ValueError("wall section must be an unplaced independent root")
+                declaration = SpatialChangeEvent.object_placed(candidate.position, identity, candidate,
+                    parent_event=parent_event, blocks_optics=obj.blocks_optics_at_center(),
+                    blocks_propagation=obj.blocks_propagation(), blocks_walking=obj.blocks_walking(),
+                    object_name=obj.name, object_map_char=obj.get_map_char())
+                effect = self._accept_event_effect(declaration) if self._events_enabled else None
+                if self._events_enabled and effect is None:
+                    raise ValueError("wall section placement was canceled")
+                if effect is not None:
+                    effects.append(effect)
+            for (identity, anchor), candidate in zip(sections, candidates):
+                if identity in self._object_placements or self._object_placement_candidate(identity, anchor) != candidate:
+                    raise ValueError("wall section changed during admission")
+        except Exception:
+            for effect in effects:
+                EventQueue.register(effect.cancel("Wall section admission failed"))
+            raise
+        for candidate in candidates:
+            obj = BaseBlock.get(candidate.object_uuid)
+            assert obj is not None
+            self._replace_placement_bands(candidate, add=True)
+            self._object_placements[candidate.object_uuid] = candidate
+            self._bump_spatial_revisions(self._object_revision_channels(obj))
+        for effect in effects:
+            self._complete_event_effect(effect)
+        return tuple(candidates)
+
     def move_object(
         self,
         object_uuid: UUID,
@@ -2804,47 +3156,78 @@ class GridMap:
             self._complete_event_effect(effect)
         return candidate
 
-    def remove_object(
-        self,
-        object_uuid: UUID,
-        parent_event: Optional[UUID] = None,
+    def prepare_object_removals(
+        self, object_uuids: Tuple[UUID, ...], parent_event: Optional[UUID] = None,
         clear_object_location: bool = True,
-    ) -> bool:
-        """Terminally remove one exact placement."""
-        previous = self._object_placements.get(object_uuid)
-        if previous is None:
-            return False
-        obj = BaseBlock.get(object_uuid)
-        if obj is None:
-            raise ValueError(f"placed object {object_uuid} is not registered")
-        declaration = SpatialChangeEvent.object_removed(
-            previous.position,
-            object_uuid,
-            previous,
-            parent_event=parent_event,
-            blocks_optics=obj.blocks_optics_at_center(),
-            blocks_propagation=obj.blocks_propagation(),
-            blocks_walking=obj.blocks_walking(),
-            object_boundary_structure=obj.get_boundary_structure(),
-            **self._boundary_event_metadata(
-                previous,
-                obj.get_boundary_structure(),
-            ),
-        )
-        effect = (
-            self._accept_event_effect(declaration)
-            if self._events_enabled
-            else None
-        )
-        if self._events_enabled and effect is None:
-            return False
-        self._replace_placement_bands(previous, add=False)
-        del self._object_placements[object_uuid]
+    ) -> Optional[List[Tuple[BaseBlock, WorldObjectPlacement, Optional[Event]]]]:
+        """Admit a finite owned construction's item removals without mutation."""
+        identities = list(dict.fromkeys(object_uuids))
+        if any(identity not in self._object_placements for identity in identities):
+            return None
         if clear_object_location:
-            obj.on_grid_object_removed(previous.position)
-        self._bump_spatial_revisions(self._object_revision_channels(obj))
-        if effect is not None:
-            self._complete_event_effect(effect)
+            for identity in identities:
+                identities.extend(key for key in self._object_placements
+                    if key not in identities and (provider := BaseBlock.get(key)) is not None
+                    and provider.get_supporting_object_uuid() == identity)
+        prepared: List[Tuple[BaseBlock, WorldObjectPlacement, Optional[Event]]] = []
+        causes: Dict[UUID, Optional[UUID]] = dict.fromkeys(identities, parent_event)
+        for identity in identities:
+            previous = self._object_placements.get(identity)
+            obj = BaseBlock.get(identity)
+            if previous is None or obj is None:
+                self.cancel_object_removals(prepared, "Construction changed before removal")
+                return None
+            supporting_uuid = obj.get_supporting_object_uuid()
+            cause = causes.get(supporting_uuid, parent_event) if supporting_uuid is not None else parent_event
+            declaration = SpatialChangeEvent.object_removed(
+                previous.position, identity, previous, parent_event=cause,
+                blocks_optics=obj.blocks_optics_at_center(), blocks_propagation=obj.blocks_propagation(),
+                blocks_walking=obj.blocks_walking(), object_boundary_structure=obj.get_boundary_structure(),
+                **self._boundary_event_metadata(previous, obj.get_boundary_structure()))
+            effect = self._accept_event_effect(declaration) if self._events_enabled else None
+            if self._events_enabled and effect is None:
+                self.cancel_object_removals(prepared, "Construction removal was canceled")
+                return None
+            prepared.append((obj, previous, effect))
+            causes[identity] = effect.uuid if effect is not None else parent_event
+        if any(self._object_placements.get(obj.uuid) != previous for obj, previous, _ in prepared):
+            self.cancel_object_removals(prepared, "Construction placement changed before removal")
+            return None
+        return prepared
+
+    @staticmethod
+    def cancel_object_removals(prepared: List[Tuple[BaseBlock, WorldObjectPlacement, Optional[Event]]],
+                               reason: str) -> None:
+        for _, _, effect in prepared:
+            if effect is not None and not effect.canceled:
+                effect.cancel(status_message=reason)
+
+    def commit_object_removals(self, prepared: List[Tuple[BaseBlock, WorldObjectPlacement, Optional[Event]]],
+                               *, clear_object_location: bool = True,
+                               parent_event: Optional[UUID] = None) -> None:
+        """Commit only the exact admitted placements, then publish after-values."""
+        if any(self._object_placements.get(obj.uuid) != previous for obj, previous, _ in prepared):
+            self.cancel_object_removals(prepared, "Construction changed after admission")
+            raise RuntimeError("admitted object removal changed before commit")
+        for obj, previous, _ in prepared:
+            self._replace_placement_bands(previous, add=False)
+            del self._object_placements[obj.uuid]
+            self._bump_spatial_revisions(self._object_revision_channels(obj))
+        for obj, previous, effect in reversed(prepared):
+            self.remove_object_connectors(obj.uuid, effect.uuid if effect is not None else parent_event)
+            if clear_object_location:
+                obj.on_grid_object_removed(previous.position, parent_event=effect)
+            if effect is not None:
+                self._complete_event_effect(effect)
+
+    def remove_object(self, object_uuid: UUID, parent_event: Optional[UUID] = None,
+                      clear_object_location: bool = True) -> bool:
+        """Remove a support and attached placements as one accepted change."""
+        prepared = self.prepare_object_removals((object_uuid,), parent_event, clear_object_location)
+        if prepared is None:
+            return False
+        self.commit_object_removals(prepared, clear_object_location=clear_object_location,
+                                    parent_event=parent_event)
         return True
 
     def update_object_boundary_structure(
@@ -3073,6 +3456,7 @@ class GridMap:
                     base_height_steps=placement.base_height_steps,
                     top_height_steps=placement.top_height_steps,
                     blocked_channels=structure.blocked_channels,
+                    contact_passage=structure.contact_passage,
                 )
             )
         return tuple(contributions)
@@ -3580,16 +3964,13 @@ class GridMap:
             tile = self.get_tile(x, y)
             if not tile:
                 return 0
-            cost = tile.get_movement_cost(movement_mode)
-            if ignore_difficult_terrain:
-                return min(cost, 1.0)
-            return cost
+            return self.movement_cell_cost_units((x, y), movement_mode,
+                ignore_difficult_terrain=ignore_difficult_terrain)
 
         def unit_movement_costs() -> bool:
             for tile in self._tiles.values():
-                cost = tile.get_movement_cost(movement_mode)
-                if ignore_difficult_terrain:
-                    cost = min(cost, 1.0)
+                cost = self.movement_cell_cost_units(tile.position, movement_mode,
+                    ignore_difficult_terrain=ignore_difficult_terrain)
                 if cost != 1:
                     return False
             return True
@@ -4410,7 +4791,9 @@ class GridMap:
             candidates |= circle_positions(ent_pos, radius)
         return candidates
 
-    def is_blocking_propagation(self, x: int, y: int) -> bool:
+    def is_blocking_propagation(
+        self, x: int, y: int, *, observer_uuid: Optional[UUID] = None,
+    ) -> bool:
         """Check if position blocks AoE propagation (physical barriers only).
 
         Propagation is independent from optical opacity.
@@ -4418,7 +4801,11 @@ class GridMap:
         tile = self._tiles.get((x, y))
         if tile is None or tile.blocks_propagation():
             return True
+        observer = BaseBlock.get(observer_uuid) if observer_uuid is not None else None
+        senses = observer.get_senses() if observer is not None else None
         for obj_uuid in self.get_center_objects_at((x, y)):
+            if senses is not None and obj_uuid not in senses.objects:
+                continue
             block = BaseBlock.get(obj_uuid)
             if block is not None and block.blocks_propagation():
                 return True
@@ -4445,7 +4832,7 @@ class GridMap:
         def is_blocking_for(x: int, y: int) -> bool:
             return self.is_blocking_propagation(x, y)
 
-        if self._has_directional_blockers("propagation"):
+        if self._has_directional_blockers("propagation") or self._spatial_conditions:
             visible_positions = self._compute_directional_fov(origin, max_distance, "propagation")
         else:
             compute_fov(origin, is_blocking_for, mark_visible, max_distance)

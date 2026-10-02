@@ -18,7 +18,7 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.types.world import CardinalDirection
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
-from tests.game.door_destruction_scenarios import attack_object, review_actor, take_turn, walk
+from tests.game.door_destruction_scenarios import attack_item, review_actor, take_turn, walk
 
 
 Liquid = Literal["oil", "water", "grease", "poison", "blood", "dread_blood"]
@@ -75,7 +75,7 @@ def liquid_barrel_history(*, liquid: Liquid, saved: bool = True,
 
         for damage in (4, 8):
             take_turn(encounter, traveler, fresh=True)
-            attack_object(traveler, barrel, damage, additional_dice=(20,))
+            attack_item(traveler, barrel, damage, additional_dice=(20,))
         assert barrel.integrity is ItemIntegrity.DESTROYED and barrel.get_position() == (5, 4)
         # The attacker is adjacent to the barrel and therefore inside its new
         # footprint. Walk out before testing boundary entry and aerial bypass.

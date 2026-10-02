@@ -249,6 +249,10 @@ class ChillTouch(SpellAction):
     Damage scales to 2d8 at 5th level, 3d8 at 11th level, and 4d8 at 17th
     level. Undead targets also gain disadvantage on attacks against the caster.
     """
+    @property
+    def performs_attack(self) -> bool:
+        return True
+
     name: str = Field(default="Chill Touch", description="Spell name.")
     description: str = Field(
         default="1d8 necrotic, target can't heal. Undead: disadvantage vs caster.",
@@ -1747,6 +1751,10 @@ class FingerOfDeath(SpellAction):
 
 class InflictWounds(SpellAction):
     """Make a melee spell attack for necrotic damage."""
+    @property
+    def performs_attack(self) -> bool:
+        return True
+
     name: str = Field(default="Inflict Wounds", description="Spell name.")
     description: str = Field(default="Melee spell attack, 3d10 necrotic", description="Rules-facing damage summary.")
     spell_level: int = Field(default=1, description="Base spell level.")

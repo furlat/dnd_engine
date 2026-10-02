@@ -7,7 +7,11 @@ from typing import Any, Dict, Literal, Optional, List, Set, Tuple, cast as type_
 from uuid import UUID
 
 from pydantic import Field, PrivateAttr
+from dnd.blocks.base_item import BaseItem
+from dnd.core.base_block import BaseBlock
+from dnd.types.physical_access import PhysicalAccess
 
+from dnd.core.action_types import EntityTargetPerception
 from dnd.core.base_actions import (
     ActionCategory,
     ActionEvent,
@@ -306,9 +310,6 @@ class SlowedEffect(BaseCondition):
     spell_dc: int = Field(default=0, description="DC for repeat WIS save")
     caster_uuid: Optional[UUID] = Field(default=None, description="UUID of the caster")
 
-    _lockout_modifier_uuid: Optional[UUID] = PrivateAttr(default=None)
-    _lockout_target_mv_uuid: Optional[UUID] = PrivateAttr(default=None)
-
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
     ]:
@@ -362,17 +363,8 @@ class SlowedEffect(BaseCondition):
         )
         outs.append((target.action_economy.reactions.uuid, reaction_constraint_uuid))
 
-        lockout_handler = self._create_action_bonus_lockout_handler()
-        target.add_event_handler(lockout_handler)
-        handler_uuids.append(lockout_handler.uuid)
-
-        turn_reset_handler = self._create_turn_start_reset_handler()
-        target.add_event_handler(turn_reset_handler)
-        handler_uuids.append(turn_reset_handler.uuid)
-
-        no_ea_handler = self._create_no_extra_attack_handler()
-        target.add_event_handler(no_ea_handler)
-        handler_uuids.append(no_ea_handler.uuid)
+        target.action_economy.add_action_bonus_exclusion(self.uuid)
+        target.action_economy.add_attack_multiplicity_limit(self.uuid, 1)
 
         if self.caster_uuid and self.spell_dc > 0:
             repeat_save_handler = self._create_repeat_save_handler()
@@ -393,154 +385,13 @@ class SlowedEffect(BaseCondition):
             return {"resulting_ac": target.ac_bonus().normalized_score}
         return {}
 
-    def _release_owned_runtime_state(
-        self,
-        *,
-        parent_event: Optional[Event] = None,
-    ) -> None:
-        """Release the runtime action/bonus lockout owned by Slow."""
+    def _release_owned_runtime_state(self, *, parent_event: Optional[Event] = None) -> None:
+        """Release Slow's owned limits without recreating discarded attack credits."""
         del parent_event
-        if self._lockout_modifier_uuid is not None and self._lockout_target_mv_uuid is not None:
-            mv = ModifiableValue.get(self._lockout_target_mv_uuid)
-            if mv:
-                mv.self_static.remove_max_constraint(self._lockout_modifier_uuid)
-            self._lockout_modifier_uuid = None
-            self._lockout_target_mv_uuid = None
-
-    def _create_action_bonus_lockout_handler(self) -> EventHandler:
-        """Lock bonus actions after an action is used, and actions after a bonus action."""
-        target_uuid = type_cast(UUID, self.target_entity_uuid)
-        condition = self
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if not isinstance(event, ActionEvent):
-                return None
-            if event.source_entity_uuid != target_uuid:
-                return None
-            if condition._lockout_modifier_uuid is not None:
-                return None
-
-            entity = Entity.get(target_uuid)
-            if not entity:
-                return None
-
-            committed_cost_types = {
-                cost.cost_type
-                for cost in event.costs
-                if cost.cost > 0
-            }
-            if ActionEconomyCostType.ACTIONS in committed_cost_types:
-                lock_uuid = entity.action_economy.bonus_actions.self_static.add_max_constraint(
-                    constraint=NumericalModifier(
-                        name="Slowed: Bonus Locked",
-                        value=0,
-                        source_entity_uuid=target_uuid,
-                        target_entity_uuid=target_uuid
-                    )
-                )
-                condition._lockout_modifier_uuid = lock_uuid
-                condition._lockout_target_mv_uuid = entity.action_economy.bonus_actions.uuid
-            elif ActionEconomyCostType.BONUS_ACTIONS in committed_cost_types:
-                lock_uuid = entity.action_economy.actions.self_static.add_max_constraint(
-                    constraint=NumericalModifier(
-                        name="Slowed: Actions Locked",
-                        value=0,
-                        source_entity_uuid=target_uuid,
-                        target_entity_uuid=target_uuid
-                    )
-                )
-                condition._lockout_modifier_uuid = lock_uuid
-                condition._lockout_target_mv_uuid = entity.action_economy.actions.uuid
-            return None
-
-        return EventHandler(
-            name="Slowed: Action/Bonus Lockout",
-            source_entity_uuid=target_uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=event_type,
-                    event_phase=EventPhase.EFFECT,
-                    event_source_entity_uuid=target_uuid
-                )
-                for event_type in (
-                    EventType.BASE_ACTION,
-                    EventType.ATTACK,
-                    EventType.MOVEMENT,
-                    EventType.CAST_SPELL,
-                )
-            ],
-            event_processor=processor
-        )
-
-    def _create_turn_start_reset_handler(self) -> EventHandler:
-        """Reset the action/bonus lockout at turn start."""
-        target_uuid = type_cast(UUID, self.target_entity_uuid)
-        condition = self
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if event.source_entity_uuid != target_uuid:
-                return None
-
-            entity = Entity.get(target_uuid)
-            if not entity:
-                return None
-
-            if condition._lockout_modifier_uuid is not None and condition._lockout_target_mv_uuid is not None:
-                mv = ModifiableValue.get(condition._lockout_target_mv_uuid)
-                if mv:
-                    mv.self_static.remove_max_constraint(condition._lockout_modifier_uuid)
-                condition._lockout_modifier_uuid = None
-                condition._lockout_target_mv_uuid = None
-
-            return None
-
-        return EventHandler(
-            name="Slowed: Turn Start Reset",
-            source_entity_uuid=target_uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=EventType.TURN_START,
-                    event_phase=EventPhase.EXECUTION,
-                    event_source_entity_uuid=target_uuid
-                )
-            ],
-            event_processor=processor
-        )
-
-    def _create_no_extra_attack_handler(self) -> EventHandler:
-        """Zero the extra-attacks resource for action-cost attacks while slowed."""
-        target_uuid = type_cast(UUID, self.target_entity_uuid)
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if event.source_entity_uuid != target_uuid:
-                return None
-
-            entity = Entity.get(target_uuid)
-            if not entity:
-                return None
-
-            if isinstance(event, ActionEvent):
-                has_action_cost = any(c.cost_type == "actions" for c in event.costs)
-                if not has_action_cost:
-                    return None
-
-            if entity.action_economy.has_resource("extra_attacks"):
-                entity.action_economy.resources["extra_attacks"].current = 0
-
-            return None
-
-        return EventHandler(
-            name="Slowed: No Extra Attack",
-            source_entity_uuid=target_uuid,
-            trigger_conditions=[
-                Trigger(
-                    event_type=EventType.ATTACK,
-                    event_phase=EventPhase.EXECUTION,
-                    event_source_entity_uuid=target_uuid
-                )
-            ],
-            event_processor=processor
-        )
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            target.action_economy.remove_action_bonus_exclusion(self.uuid)
+            target.action_economy.remove_attack_multiplicity_limit(self.uuid)
 
     def _create_repeat_save_handler(self) -> EventHandler:
         """WIS save at end of turn to end the Slowed effect."""
@@ -1016,6 +867,10 @@ class DarkvisionSpell(SpellAction):
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Spell range.")
     valid_target_filter: str = Field(default="self_or_allies", description="Valid target filter key.")
 
+    include_self: bool = True
+
+    entity_target_perception: EntityTargetPerception = EntityTargetPerception.TOUCH_CONTACT
+
     def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
         """Declare the granted darkvision sense and possible discoveries.
 
@@ -1047,24 +902,6 @@ class DarkvisionSpell(SpellAction):
                 ),
             ),
         )
-
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not caster or not target:
-            return declaration_event.cancel(status_message="Caster or target not found")
-
-        contact = caster.senses.entities.get(target.uuid)
-        if target.uuid != caster.uuid and (contact is None or not contact.visual):
-            return declaration_event.cancel(status_message="Target not visible")
-
-        distance = self.get_target_distance(target.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Target out of touch range ({distance}ft)")
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1107,7 +944,9 @@ class Disintegrate(SpellAction):
     )
     spell_level: int = Field(default=6, description="Base spell level.")
     spell_school: str = Field(default="transmutation", description="Spell school.")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
+    target_type: TargetType = Field(default=TargetType.CREATURE_OR_OBJECT, description="Targeting mode.")
+    object_target_policy: Literal["damageable", "active"] = "active"
+    physical_access: Optional[PhysicalAccess] = PhysicalAccess.PROJECTILE
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Maximum ray range.",
@@ -1127,16 +966,27 @@ class Disintegrate(SpellAction):
         return self.base_damage_dice + upcast_bonus * 3
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
+        los_event = self.validate_single_recipient(declaration_event)
         if los_event is None or los_event.canceled:
             return los_event
 
+        recipient = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         source = Entity.get(self.source_entity_uuid)
+        if isinstance(recipient, BaseItem):
+            contact = source.senses.objects.get(recipient.uuid) if source is not None else None
+            if contact is None or not contact.visual:
+                return los_event.cancel(status_message="Disintegrate requires a target you can see")
+            error = recipient.disintegration_error()
+            return los_event.cancel(status_message=error) if error else los_event.phase_to(EventPhase.EXECUTION)
+
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
         if not source or not target:
             return declaration_event.cancel(status_message="Entity not found")
+
+        contact = source.senses.entities.get(target.uuid)
+        if target.uuid != source.uuid and (contact is None or not contact.visual):
+            return los_event.cancel(status_message="Disintegrate requires a target you can see")
 
         distance = self.get_target_distance(target.position)
         if distance > self.effective_range:
@@ -1147,6 +997,13 @@ class Disintegrate(SpellAction):
         return los_event.phase_to(EventPhase.EXECUTION, status_message=f"Validated {self.name}")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+        recipient = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if isinstance(recipient, BaseItem):
+            effect = execution_event.phase_to(EventPhase.EFFECT)
+            if effect.canceled:
+                return effect
+            return (effect.with_updates(status_message=f"{recipient.name} disintegrated")
+                    if recipient.disintegrate(effect) else effect.cancel(status_message="Object retirement was refused"))
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
 

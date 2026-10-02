@@ -89,6 +89,43 @@ registries. `AnimationData`, compiled timelines, `Path` values and Pygame surfac
 are runtime products, not portable authoring. Saved subjective events remain a
 separate input stream.
 
+Normal attacks carry `target_kind`, their selected object contact coordinates,
+and `attack_source_kind` (`equipped`, `unarmed`, `natural`). The declared source
+and weapon slot select visible equipment independently of projectile artwork.
+`attack-profiles.json` may match `sourceKinds`; its explicit unarmed profile
+shows hands. Fixed creature rigs retain their baked appearance. Ordinary,
+Extra Attack, opportunity and Frenzied Strike recipes share the authored weapon
+variants. There is no live object-attack gesture recipe.
+
+Attack and spell recipients use either an actor contact or an object contact.
+An object contact is only its received identity and physical impact point: the
+selected support or boundary midpoint, at the middle of its authored height
+band. It has no actor rig, life state or body reaction. The ordinary source
+gesture, projectile, impact and numeric feedback remain shared. Recorded object
+damage/destruction drives the existing flash and break transition at contact;
+only real creature damage can create creature body reactions or blood. Actor
+target sockets and their approved offsets are unchanged.
+
+Finite blast expansion carries native `AreaReachEvent` stages, projected as
+`AreaReachFact`: newly reached cells, the preceding stage and disclosed causal
+destruction lineages. The final cast footprint remains their union. Hidden
+dependency IDs are removed at subjective projection. The presentation compiler
+admits each stage at its prerequisites' authored destruction clearance; this
+same time owns its recipient damage, visibility and object topology. XYZ media
+uses the received admitted cells through `SurfaceVolume`, without recomputing
+gameplay propagation. There is one original explosion clock across all stages.
+Newly revealed recipients bind to their received application state and have no
+body or HP track before admission. Reverse seeking is a pure timeline sample.
+If a chain of structural collapses outlasts the authored impact, its existing
+frames are fitted continuously over the reach stages plus the original tail;
+the impact neither restarts nor freezes on a final frame. First contact stays
+fixed. Destruction observations and their world support are admitted together,
+including when the observer witnesses the break without seeing its attacker.
+Binding preparation supplies absent disclosed contacts without replacing known
+world geometry with future updates. A lethal strike still targets the intact
+object; only the received destruction transition supplies its wreck geometry.
+Existing maintained-cloud presentation is unchanged.
+
 ## Additions to the original Studio vocabulary
 
 | Field | Current consumer and observable meaning |
@@ -491,15 +528,14 @@ only from disclosed historical player state. Actor attribution stays on the
 operator. A future TS consumer needs the same finite binding/sampling operations
 alongside this JSON; it need not import the Python item builder or Pygame adapter.
 
-`neuroclient/object-attack-recipe.json` locally authors the previously disabled
-`action.attack_object` body track as `Attack1`, with contact/effect at frame 8.
-The imported source row remains a historical reference. This is an explicit
-default object strike, not a claim that body actions execute melee weapon-profile
-variants. The review uses a longsword appropriate to that default. The existing
-action binding's `interaction_target` accepts `source_item` or `target_item`;
-the latter uses the retained action target UUID, faces the actor toward the
-object and times child world changes at the authored contact. It uses the same
-gesture/state compositor as levers and other object interactions.
+Object attacks use the ordinary `AttackEvent` and weapon-profile executor with
+a received object contact. The declared source kind and weapon slot select the
+attacker's equipment, body clip and projectile; object damage and destruction
+join at that profile's impact. Objects have no creature rig, hit reaction or
+blood. The retired `action.attack_object` row in the imported source is historical
+evidence only; there is no live object-only action or presentation recipe.
+Non-attack item interactions, including levers, retain the existing body-action
+compositor and its explicit `source_item` or `target_item` interaction target.
 
 A device body may author `destruction` with `fps`, `frameCount`, `pitchBanks`
 (`pitchDegrees` and four camera `sheets`), `wreckItemId`, and four `wreckSheets`.
@@ -1448,3 +1484,26 @@ openings and exposed ends remain open. During movement this distinction follows
 the same world-space permission sampling as cloud visibility. It adds no sight
 grants or gameplay occupancy. The field-center wall policy and black unseen fill
 remain removed.
+
+Cardinal wall modules use an explicit `wall_modules` spatial layer with two
+`wallAxes` banks and declared application/hold asset pairs. Initialization checks
+references, phase clocks, hold bounds and all four camera rows. Received retained
+wall geometry selects the axis and support elevation; disclosed effect positions
+select flame contacts. Hot-side damage coverage never becomes flame occupancy.
+Variants stay stable across cameras and playback. Original front/back crops use
+the existing world painter, with no fabricated XYZ. Their native pixel scale is
+independent of the actor rig. The ordinary maintained clock owns formation, hold
+and removal; the cast recipe supplies only the body action. Curved and diagonal forms report a presentation gap until matching native
+directional modules are delivered. Nearest-cardinal diagonal placement was
+reviewed and rejected: positioning an upright unit does not rotate its local
+footprint. Missing diagonal banks must complete the eight-direction set.
+The delivered banks do not certify precise world height or fine actor occlusion.
+
+Spatial bindings may author `damageSweeps` by recorded contact exposure. Typed
+node fractions, delays, finite fades and `contactDelayMs` reuse stationary media
+and the existing injury clock. Only positive applied damage with a disclosed
+exact owner/source/recipient can select the sweep. The accent grants no terrain.
+Sparse frame parts may supply registered `colorMasks`; optional `safeSideTint`
+selects physical mask sign from recorded wall `hot_side` before camera lookup.
+Mask blending copies RGB, preserves alpha and uses the bounded frame cache.
+Absent historical side metadata supplies no tint; unsupported curved geometry supplies no substitute bank. Original RGBA remains intact.

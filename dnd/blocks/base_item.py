@@ -11,6 +11,7 @@ from pydantic import Field, PrivateAttr, model_validator
 
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.core.creature_types import DamageType
+from dnd.core.dice import DiceRoll
 from dnd.core.gridmap import get_map
 from dnd.core.events import (
     Damage,
@@ -24,6 +25,7 @@ from dnd.core.events import (
 )
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.types.world import CardinalDirection
+from dnd.types.physical_access import ContactPassage
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement, WorldPlacementSpec
 from dnd.core.item_types import (
     EquippedVisualPolicy,
@@ -141,10 +143,15 @@ class BaseItem(BaseBlock):
         default=ItemRarity.COMMON,
         description="Rarity category for this item.",
     )
+    intrinsic_owner_uuid: Optional[UUID] = Field(
+        default=None, frozen=True, description="Stable owner of attached anatomy; never inventory loot.",
+    )
     is_pickable: bool = Field(default=True, description="Can be picked up by entities")
     is_equippable: bool = Field(default=False, description="Can be equipped")
     is_usable: bool = Field(default=False, description="Can be used (activate effect)")
     is_consumable: bool = Field(default=False, description="Destroyed on use")
+    is_magical: bool = Field(default=False, description="Rules-facing magic-item protection, independent of artwork.")
+    known_to_creator: bool = Field(default=False, description="Creator retains knowledge of this authored construction.")
     stack_count: int = Field(
         default=1,
         ge=1,
@@ -183,6 +190,8 @@ class BaseItem(BaseBlock):
     blocks_optics_field: bool = Field(default=False, description="Blocks ordinary optics when on grid")
     blocks_propagation_field: bool = Field(default=False, description="Blocks physical propagation when on grid")
     is_targetable: bool = Field(default=False, description="Can be targeted by attacks")
+    armor_class: int = Field(default=10, ge=0,
+        description="Native structural defense against attacks; authored independently of wearable armor.")
     health: Optional[Health] = Field(default=None, description="Health block for breakable items")
     concentration_capacity: int = Field(default=0, ge=0,
         description="Independent sustained spell slots; zero leaves concentration with the item user.")
@@ -191,6 +200,9 @@ class BaseItem(BaseBlock):
         description="Persistent physical aftermath on this same item; absent for terminal breakage.",
     )
     integrity: ItemIntegrity = ItemIntegrity.INTACT
+    contact_passage: ContactPassage = ContactPassage.STRUCTURAL
+    supported_by_uuid: Optional[UUID] = Field(default=None, frozen=True,
+        description="Physical parent of an attached world item; independent of inventory ownership.")
     _destruction_in_progress: bool = PrivateAttr(default=False)
     perception_condition_uuid: UUID | None = Field(default=None, exclude=True,
         description="Exact existing spatial discovery owner of this physical hardware.")
@@ -204,6 +216,16 @@ class BaseItem(BaseBlock):
     @model_validator(mode="after")
     def validate_item_id(self) -> "BaseItem":
         validate_namespaced_id(self.item_id, "item_id")
+        seen = {self.uuid}
+        parent_uuid = self.supported_by_uuid
+        while parent_uuid is not None:
+            if parent_uuid in seen:
+                raise ValueError("physical attachments cannot be cyclic or self-supporting")
+            seen.add(parent_uuid)
+            parent = BaseBlock.get(parent_uuid)
+            if not isinstance(parent, BaseItem):
+                raise ValueError("physical attachment requires a registered parent item")
+            parent_uuid = parent.supported_by_uuid
         return self
 
     @model_validator(mode="after")
@@ -282,6 +304,8 @@ class BaseItem(BaseBlock):
             concentration_slots=tuple(slot for condition in self.active_conditions.values()
                 for slot in condition.snapshot_concentration_slots()),
             boundary_structure=self.get_boundary_structure(),
+            contact_passage=self.get_contact_passage(),
+            supported_by_uuid=self.supported_by_uuid,
             door_mechanism=self.get_door_mechanism(),
             door_swing=self.get_door_swing(),
             remnant_state=self.remnant_state,
@@ -370,6 +394,22 @@ class BaseItem(BaseBlock):
         if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
             return self.destruction_profile.placement_spec or super().get_world_placement_spec()
         return super().get_world_placement_spec()
+
+    def get_contact_passage(self) -> ContactPassage:
+        structure = self.get_boundary_structure()
+        if structure is not None:
+            return structure.contact_passage
+        if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
+            return self.destruction_profile.contact_passage
+        return self.contact_passage
+
+    def get_supporting_object_uuid(self) -> Optional[UUID]:
+        return self.supported_by_uuid
+
+    def supported_items(self) -> tuple["BaseItem", ...]:
+        """Return authored attachments, including ones not placed yet."""
+        return tuple(item for item in BaseBlock._registry.values()
+                     if isinstance(item, BaseItem) and item.supported_by_uuid == self.uuid)
 
     def get_boundary_structure(self) -> BoundaryStructure | None:
         if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
@@ -518,7 +558,7 @@ class BaseItem(BaseBlock):
         self.position = placement.position
         self.tile_uuid = placement.tile_uuid
 
-    def on_grid_object_removed(self, position: Tuple[int, int], clear_location: bool = True) -> None:
+    def on_grid_object_removed(self, position: Tuple[int, int], clear_location: bool = True, parent_event: Optional[Event] = None) -> None:
         """Synchronize floor-location fields after GridMap removes this item.
 
         Args:
@@ -528,6 +568,8 @@ class BaseItem(BaseBlock):
         """
         if clear_location and self.tile_uuid is not None:
             self.tile_uuid = None
+            for item in self.supported_items():
+                item.retire(parent_event=parent_event)
 
     def loot(self, entity_uuid: UUID, inventory_uuid: UUID) -> None:
         """Called when item is picked up by an entity.
@@ -586,9 +628,13 @@ class BaseItem(BaseBlock):
         mechanism = (get_map().get_spatial_condition(self.perception_condition_uuid)
                      if self.perception_condition_uuid is not None else None)
         self.remnant_state = ItemRemnantState(
+            intact_supported_items=tuple(item.uuid for item in self.supported_items() if item.is_active),
             door_open=self.get_spatial_open_state(), door_swing=self.get_door_swing(),
             mechanism_state=mechanism.snapshot_mechanism_state() if mechanism is not None else None)
         self._set_destroyed_properties()
+        get_map().remove_object_connectors(self.uuid, parent_event.uuid)
+        for item in self.supported_items():
+            item.destroy(parent_event)
         profile = self.destruction_profile
         if profile is None:
             self._on_destroy(parent_event)
@@ -620,6 +666,11 @@ class BaseItem(BaseBlock):
         previous_owner_uuid = self.owner_uuid
         previous_owner = BaseBlock.get(previous_owner_uuid) if previous_owner_uuid is not None else None
         grid = get_map()
+        if grid.get_object_position(self.uuid) is not None and not grid.remove_object(
+                self.uuid, parent_event=parent_event.uuid if parent_event is not None else None):
+            return
+        for item in self.supported_items():
+            item.retire(parent_event)
         grid.cleanup_block_light_sources(self.uuid,
             parent_event=parent_event.uuid if parent_event is not None else None)
         for condition_name in tuple(self.active_conditions):
@@ -628,9 +679,6 @@ class BaseItem(BaseBlock):
             container = BaseBlock.get(self.stored_in_uuid)
             if container is not None:
                 container.remove_contained_item(self.uuid)
-        if grid.get_object_position(self.uuid) is not None:
-            grid.remove_object(self.uuid,
-                parent_event=parent_event.uuid if parent_event is not None else None)
         self.owner_uuid = None
         self.stored_in_uuid = None
         self.tile_uuid = None
@@ -650,6 +698,28 @@ class BaseItem(BaseBlock):
     def is_breakable(self) -> bool:
         """Whether this item can be damaged and destroyed."""
         return self.is_active and self.is_targetable and self.health is not None
+
+    def is_object_known_to(self, observer_uuid: UUID) -> bool:
+        return self.known_to_creator and self.source_entity_uuid == observer_uuid
+
+    def disintegration_error(self) -> str | None:
+        if self.is_magical:
+            return "Magic items are unaffected by Disintegrate"
+        placement = get_map().get_object_placement(self.uuid)
+        if placement is None:
+            return "Disintegrate requires a placed object"
+        xs = [p[0] for p in placement.positions]
+        ys = [p[1] for p in placement.positions]
+        if (max(xs) - min(xs) > 1 or max(ys) - min(ys) > 1
+                or placement.top_height_steps - placement.base_height_steps > 2):
+            return "Partial disintegration of larger objects is not yet supported"
+        return None
+
+    def disintegrate(self, parent_event: Event) -> bool:
+        if self.disintegration_error() is not None:
+            return False
+        self.retire(parent_event)
+        return BaseBlock.get(self.uuid) is None
 
     @property
     def has_hp(self) -> bool:
@@ -681,6 +751,10 @@ class BaseItem(BaseBlock):
         damage_type: DamageType,
         source_uuid: UUID,
         parent_event: Optional[Event] = None,
+        *,
+        damage_rolls: Optional[List[DiceRoll]] = None,
+        damages: Optional[List[Damage]] = None,
+        effect_id: Optional[str] = None,
     ) -> int:
         """Apply item damage through the existing damage-event lifecycle."""
         if self.health is None or not self.is_active:
@@ -693,10 +767,12 @@ class BaseItem(BaseBlock):
             target_entity_uuid=self.uuid,
             target_entity_name=self.name,
             total_damage=amount,
-            damages=[
+            damage_rolls=damage_rolls or [],
+            effect_id=effect_id,
+            damages=damages if damages else [
                 Damage(
                     damage_type=damage_type,
-                    dice_numbers=1,
+                    dice_numbers=0,
                     damage_dice=4,
                     source_entity_uuid=source_uuid,
                     target_entity_uuid=self.uuid,
@@ -712,16 +788,8 @@ class BaseItem(BaseBlock):
         if damage_event.canceled:
             return 0
 
-        resolved_damage_type = (
-            damage_event.damages[0].damage_type
-            if damage_event.damages
-            else damage_type
-        )
-        preview = self.health.preview_damage(
-            damage_event.get_effective_damage(),
-            resolved_damage_type,
-            damage_event.normal_hit_point_damage_cap,
-            declared_damage=damage_event.total_damage,
+        preview = self.health.preview_damage_event(
+            damage_event,
             normal_hit_points_available=max(0, self.get_hp()),
         )
         actual = self.health.apply_damage_preview(preview, source_uuid)

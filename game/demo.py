@@ -65,7 +65,9 @@ def _iter_demo_intervals() -> Iterator[IntervalEnvelope]:
         source_entity_uuid=uuid4(),
         name="Visual observer",
         config=EntityConfig(
-            position=built.notable_positions["observer"],
+            # This observer operates the door by hand; use the authored near
+            # contact instead of the viewing point two cells away.
+            position=built.notable_positions["near_probe"],
             faction="heroes",
             has_ordinary_sight=True,
         ),
@@ -75,7 +77,7 @@ def _iter_demo_intervals() -> Iterator[IntervalEnvelope]:
         raise RuntimeError("standing fixture must own one active light")
 
     game = Game()
-    game.deploy_entity(observer, built.notable_positions["observer"])
+    game.deploy_entity(observer, built.notable_positions["near_probe"])
     startup_end = EventQueue.event_cursor()
     yield capture_interval(
         name="startup",

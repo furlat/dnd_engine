@@ -16,7 +16,7 @@ from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation import capture_interval, reduce_interval
 from game.replay import ObserverCapture, RecordedSequence, capture_history
-from tests.game.door_destruction_scenarios import attack_object, review_actor, take_turn
+from tests.game.door_destruction_scenarios import attack_item, review_actor, take_turn
 
 
 def furniture_history(*, remove=False, late=False):
@@ -46,7 +46,7 @@ def furniture_history(*, remove=False, late=False):
             # salvage/clear action that the game does not currently offer.
             bed.retire()
         else:
-            attack_object(actors["attacker"], bed, 4)
+            attack_item(actors["attacker"], bed, 4)
         if late:
             baseline = EventQueue.event_cursor()
         captured = capture_history(before, (), observers=tuple(

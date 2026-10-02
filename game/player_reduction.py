@@ -4,7 +4,6 @@ from dataclasses import replace
 from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.events import EventType, SpatialChangeType
 from dnd.types.senses import reduce_senses_snapshot
 from game.player_facts import (
@@ -63,11 +62,19 @@ def observe_actors(target: PlayerState, observations: tuple[PlayerObservation, .
 
 
 def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
+    """Supply absent binding contacts without advancing known world geometry."""
     if target.generation != lineage.generation or target.observer_uuid != lineage.observer_uuid:
         raise ValueError("player lineage belongs to a different observer or generation")
     result = stage_actors(target, lineage.observations)
+    connectors = {row.connector_uuid: row for row in result.connectors}
     for update in lineage.world_updates:
-        apply_world_update(result, update)
+        for tile in update.tiles:
+            result.tiles.setdefault(tile.position, tile)
+        for obj in update.objects:
+            result.objects.setdefault(obj.item.item_uuid, obj)
+        for connector in update.connectors:
+            connectors.setdefault(connector.connector_uuid, connector)
+    result.connectors = tuple(connectors.values())
     return result
 
 
@@ -107,7 +114,7 @@ def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
         case AttackFact():
             actor = target.actors.get(fact.source_entity_uuid)
             if actor is not None:
-                stance = WeaponSet.RANGED if fact.weapon_slot in (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF) else WeaponSet.MELEE
+                stance = fact.weapon_set
                 target.actors[actor.uuid] = replace(actor, visual_loadout=replace(actor.visual_loadout, active_weapon_set=stance))
         case DamageFact(stage="applied"):
             actor = target.actors[fact.target_entity_uuid]
@@ -193,6 +200,18 @@ def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: t
     for remaining in pending:
         _observe(result, remaining)
     return result
+
+
+def state_before_event(before: PlayerState, lineage: PlayerLineage, event: PlayerNode) -> PlayerState:
+    """Retained subjective state just before a descendant's declaration."""
+    first = min(row.source_index for row in lineage.version_rows if row.lineage_uuid == event.lineage_uuid)
+    completed = {row.event_uuid for row in lineage.version_rows if row.source_index < first}
+    events = tuple(row for row in lineage.events if row.uuid in completed)
+    if not events:
+        return before
+    return reduce_lineage(before, replace(lineage, events=events, end_cursor=first,
+        observations=tuple(row for row in lineage.observations if row.event_uuid in completed),
+        world_updates=tuple(row for row in lineage.world_updates if row.event_uuid in completed)))
 
 
 def reduce_initialization(initialization: PlayerInitialization) -> PlayerState:

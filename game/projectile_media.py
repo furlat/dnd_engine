@@ -18,7 +18,7 @@ import numpy as np
 import pygame
 
 from game.animation_types import (
-    AnimationData, AuthoredProjectileAsset, BlendMode, Facing8, ProjectileSprite, SurfaceArchive,
+    AnimationData, AuthoredProjectileAsset, BlendMode, Facing8, ProjectileSprite, SurfaceArchive, MaskedMediaTint,
 )
 
 
@@ -36,7 +36,19 @@ class PacketKey:
     reference_pixel_scale: float
 
 
-FrameKey = tuple[Path, tuple[int, int, int, int], int, float, BlendMode | Literal["raw"]] | PacketKey
+@dataclass(frozen=True, slots=True)
+class MaskedFrameKey:
+    path: Path
+    rectangle: tuple[int, int, int, int]
+    tint: int
+    alpha: float
+    blend: BlendMode
+    mask_path: Path
+    color: int
+    strength: float
+
+
+FrameKey = tuple[Path, tuple[int, int, int, int], int, float, BlendMode | Literal["raw"]] | PacketKey | MaskedFrameKey
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +227,7 @@ def projectile_frame_layers(
     phase_name: Literal["cast", "travel", "impact"], frame: int, direction: Facing8,
     visual: ProjectileSprite, legacy_rows: Mapping[tuple[str, int], pygame.Surface], *,
     cache: ProjectileFrameCache = SHARED_PROJECTILE_FRAMES,
+    masked_tint: MaskedMediaTint | None = None,
 ) -> tuple[ProjectileFrameImage, ...]:
     """Resolve one phase-local sample without loading other phases or directions.
 
@@ -264,15 +277,28 @@ def projectile_frame_layers(
                 for part in parts[frame]:
                     path = data.media_root / part.file
                     alpha = visual.alpha * layer.gain
-                    key = (path, part.rect, visual.tint, alpha, layer.blendMode)
+                    key: FrameKey = (path, part.rect, visual.tint, alpha, layer.blendMode)
+                    mask_path = None
+                    if masked_tint is not None:
+                        mask_path = data.media_root / part.colorMasks[masked_tint.mask]
+                        key = MaskedFrameKey(path, part.rect, visual.tint, alpha, layer.blendMode,
+                            mask_path, masked_tint.color, masked_tint.strength)
                     image = _cached(cache, key)
                     if image is None:
                         page_key = (path, (0, 0, 0, 0), 0xFFFFFF, 1.0, "normal")
                         sheet = _cached(cache, page_key)
                         if sheet is None:
                             sheet = _remember(cache, page_key, pygame.image.load(path).convert_alpha())
-                        image = _remember(cache, key, _prepare(sheet.subsurface(part.rect).copy(),
-                                                              visual.tint, alpha, layer.blendMode))
+                        image = sheet.subsurface(part.rect).copy()
+                        if masked_tint is not None and mask_path is not None:
+                            weights = pygame.surfarray.array3d(_raw_part(cache, mask_path, part.rect))[:, :, 0]
+                            weight = weights.astype(np.float32)[:, :, None] * (masked_tint.strength/255)
+                            color = np.array((masked_tint.color >> 16 & 255,
+                                masked_tint.color >> 8 & 255, masked_tint.color & 255), dtype=np.float32)
+                            rgb = pygame.surfarray.pixels3d(image)
+                            rgb[:] = np.rint(rgb*(1-weight)+color*weight).astype(np.uint8)
+                            del rgb
+                        image = _remember(cache, key, _prepare(image, visual.tint, alpha, layer.blendMode))
                     footpoint = (FootpointImage(_raw_part(cache, data.media_root / part.footpoint.file,
                         part.rect), part.footpoint.bounds) if part.footpoint is not None else None)
                     result.append(ProjectileFrameImage(image,

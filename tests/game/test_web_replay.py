@@ -2,7 +2,7 @@
 
 import pytest
 
-from dnd.actions import SpellEvent
+from dnd.actions import AttackEvent, SpellEvent
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY, BaseObject
 from dnd.core.events import EventPhase, EventQueue, SavingThrowEvent, SkillCheckEvent, TakeDamageEvent
 from dnd.core.item_types import ItemIntegrity
@@ -38,7 +38,11 @@ def test_web_gallery_actions_resolve_real_saves_escape_and_native_cleanup(web_ca
     escape = next(root for root in native.lineages if root.root.name == "Escape Web")
     checks = [event for event in escape.events if isinstance(event, SkillCheckEvent)]
     assert len(checks) == 1 and checks[0].result is True and checks[0].dice_roll is not None
-    assert native.lineages[-1].root.name == ("Attack Object" if delivery == "cannon" else "Drop Concentration")
+    if delivery == "cannon":
+        assert isinstance(native.lineages[-1].root, AttackEvent)
+        assert native.lineages[-1].root.target_kind == "object"
+    else:
+        assert native.lineages[-1].root.name == "Drop Concentration"
     if delivery == "cannon":
         second = spells[1].root
         assert isinstance(second, SpellEvent) and second.aoe_position == (13, 5)

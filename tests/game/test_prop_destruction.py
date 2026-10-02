@@ -1,5 +1,7 @@
 """Received prop integrity selects approved entry, break and settled pictures."""
 
+from dataclasses import replace
+
 import numpy as np
 import pygame
 import pytest
@@ -8,6 +10,7 @@ from dnd.core.events import EventQueue
 from dnd.core.item_types import ItemIntegrity
 from dnd.content.items.world_prop_builders import WORLD_PROP_PROFILES
 from game.app import draw_frame
+from game.attack import BoundAttack
 from game.device_draw import device_treatment
 from game.combat import actor_is_visible
 from game.environment_animation import remnant_bank
@@ -15,15 +18,122 @@ from game.environment_art import load_environment_art, prop_state_key
 from game.environment_draw import environment_command
 from game.player_facts import ObjectDestroyedFact
 from game.player_reduction import reduce_lineage
-from game.projection import Camera, camera_pose
+from game.projection import Camera, camera_pose, project_world
 from tests.game.prop_destruction_scenarios import prop_destruction_history
 from tests.game.test_environment_presentation import _render_head, _saved, raster as raster
+from dnd.types.world import CardinalDirection
 
 
 CHESTS = ("environment.storage_chest", "environment.chest.fantasy_a1",
           "environment.chest.fantasy_a3", "environment.chest.fantasy_b1")
 PROPS = ("environment.blocker.crate", "environment.blocker.oil_barrel",
          *WORLD_PROP_PROFILES)
+
+
+@pytest.mark.parametrize("suffix", ("parked_cart", "loaded_wagon", "felled_log"))
+def test_large_prop_registration_follows_actual_footprint_in_every_camera(suffix):
+    art = load_environment_art()
+    binding = art.props[f"environment.furniture.{suffix}"]
+    intact = binding.intact["default"]
+    broken = binding.destructions["default"]
+    # The original source ground centre must project halfway between the two
+    # occupied cells, whatever the native orientation and camera quadrant.
+    for orientation, centre in ((CardinalDirection.EAST, (.5, 0)),
+            (CardinalDirection.SOUTH, (0, -.5)), (CardinalDirection.WEST, (-.5, 0)),
+            (CardinalDirection.NORTH, (0, .5))):
+        for quadrant in range(4):
+            pose = camera_pose(orientation.value, quadrant)
+            origin_px = project_world((0, 0), quadrant=quadrant)
+            centre_px = project_world(centre, quadrant=quadrant)
+            for bank in (intact, broken):
+                pivot = bank.pivots_by_pose[pose]
+                translated = ((192 - pivot[0]) * bank.scale, (271.36 - pivot[1]) * bank.scale)
+                assert translated == pytest.approx(tuple(b - a for a, b in zip(origin_px, centre_px)))
+
+
+@pytest.mark.parametrize("access", ("bow", "fire-bolt"))
+def test_prop_access_story_uses_authored_action_presentation(raster, access):
+    captured = prop_destruction_history(item_id="environment.furniture.clay_stove", access=access)
+    deliveries = 0
+    for native in captured.views.values():
+        state, roots = _saved(native)
+        for root in roots:
+            after, group, _ = _render_head(raster, state, root)
+            assert not group.gaps
+            deliveries += len(group.nodes)
+            state = after
+    assert deliveries >= 2
+
+
+@pytest.mark.parametrize("elevation", (0, 2))
+@pytest.mark.parametrize("suffix", ("red_rug", "loose_straw_1"))
+def test_resting_floor_covering_keeps_all_pixels_above_its_native_support(raster, elevation, suffix):
+    item_id = f"environment.furniture.{suffix}"
+    state, _ = _saved(prop_destruction_history(item_id=item_id, elevation=elevation).views["attacker"])
+    identity, obj = next((key, obj) for key, obj in state.objects.items() if obj.item.item_id == item_id)
+    assert obj.placement.base_height_steps == elevation
+    terrain = replace(state, objects={key: value for key, value in state.objects.items() if key != identity})
+    screen, catalog, cache, _, _ = raster
+    bank = load_environment_art().props[item_id].intact["default"]
+    for quadrant in range(4):
+        camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus(
+            obj.placement.position, elevation_steps=elevation)
+        draw_frame(screen, state, catalog, cache, camera, 0,
+            show_grid=False, show_debug=False, mouse_position=None)
+        actual = pygame.surfarray.array3d(screen)
+        draw_frame(screen, terrain, catalog, cache, camera, 0,
+            show_grid=False, show_debug=False, mouse_position=None)
+        covering = environment_command(bank, 0, identity=identity,
+            position=obj.placement.position, elevation=elevation,
+            pose=camera_pose("east", quadrant), boundary_pose=None,
+            camera=camera, multiplier=(1, 1, 1))
+        # The reference is the received terrain followed by the exact authored
+        # covering, without any other body that could legitimately occlude it.
+        screen.blit(covering.surface, covering.destination)
+        np.testing.assert_array_equal(actual, pygame.surfarray.array3d(screen))
+
+
+@pytest.mark.parametrize("elevation", (0, 2))
+def test_native_walk_across_floor_covering_keeps_the_body_above_it(raster, elevation):
+    history = prop_destruction_history(item_id="environment.furniture.red_rug", elevation=elevation)
+    state, roots = _saved(history.views["attacker"])
+    identity, obj = next((key, obj) for key, obj in state.objects.items()
+                         if obj.item.item_id == "environment.furniture.red_rug")
+    bank = load_environment_art().props[obj.item.item_id].intact["default"]
+    walked = 0
+    inspected = 0
+    for root in roots:
+        after, group, render = _render_head(raster, state, root)
+        for movement in group.movements:
+            for quadrant in range(4):
+                camera = Camera(quadrant=quadrant, viewport=raster[0].get_size()).with_focus(
+                    (5, 4), elevation_steps=elevation)
+                floor = environment_command(bank, 0, identity=identity, position=obj.placement.position,
+                    elevation=elevation, pose=camera_pose("east", quadrant), boundary_pose=None,
+                    camera=camera, multiplier=(1, 1, 1))
+                coverage = pygame.Surface(raster[0].get_size(), pygame.SRCALPHA)
+                coverage.blit(floor.surface, floor.destination)
+                floor_pixels = pygame.surfarray.array_alpha(coverage) != 0
+                for fraction in (.25, .5, .75):
+                    frame, _, pixels = render(camera, movement.start_ms + movement.timeline.complete_ms * fraction)
+                    body, = (command for command in frame.commands if command.role == "actor"
+                             and command.owner == str(state.observer_uuid))
+                    bounds = body.surface.get_rect(topleft=body.destination)
+                    overlap = bounds.clip(raster[0].get_rect())
+                    image = body.surface.subsurface(overlap.move(-bounds.left, -bounds.top))
+                    opaque = pygame.surfarray.array_alpha(image) == 255
+                    # Check the actual floor/body intersection; unrelated terrain
+                    # seams outside this covering are not this feature's oracle.
+                    opaque &= floor_pixels[overlap.left:overlap.right, overlap.top:overlap.bottom]
+                    inspected += np.count_nonzero(opaque)
+                    actual = pixels[overlap.left:overlap.right, overlap.top:overlap.bottom]
+                    np.testing.assert_array_equal(actual[opaque], pygame.surfarray.array3d(image)[opaque])
+            walked += 1
+        state = after
+        if walked == 4:
+            break
+    assert walked == 4
+    assert inspected > 100
 
 
 @pytest.mark.parametrize("item_id", ("environment.furniture.wardrobe",
@@ -126,13 +236,14 @@ def test_native_prop_break_keeps_one_body_and_exact_authored_bank_through_seek(r
             contact = state.senses.entities.get(attacker_uuid)
             attacker_visible = state.observer_uuid == attacker_uuid or contact is not None and contact.visual
             if attacker_visible:
-                gesture, = group.body_actions
-                assert transition.start_ms == gesture.effect_ms
+                attack, = group.nodes
+                assert isinstance(attack.bound, BoundAttack)
+                assert transition.start_ms == attack.start_ms + attack.bound.timeline.contact_ms
             else:
                 # The opposite witness can see the cupboard breaking without
                 # seeing the attacker behind it. Do not invent that body's pose.
                 assert state.observer_uuid != attacker_uuid
-                assert not group.body_actions
+                assert not group.nodes and not group.body_actions
                 assert transition.start_ms == 0
             for quadrant in range(4):
                 camera = Camera(quadrant=quadrant, viewport=raster[0].get_size()).with_focus(before.placement.position)

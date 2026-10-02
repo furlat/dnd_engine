@@ -362,7 +362,7 @@ def test_scroll_targeting_matrix_is_item_bound() -> None:
         "Hold Person": TargetType.ENTITY,
         "Mage Armor": TargetType.ENTITY,
         "Spike Growth": TargetType.POSITION,
-        "Fire Bolt": TargetType.ENTITY,
+        "Fire Bolt": TargetType.CREATURE_OR_OBJECT,
     }
     for name, target_type in expected.items():
         info = item_action(
@@ -768,7 +768,7 @@ def test_fireball_cannon_depletes_and_disappears_from_discovery() -> None:
     """Each cannon shot consumes one charge; the third closes discovery."""
     reset_item_arena()
     caster = create_caster((1, 5))
-    create_target((8, 5))
+    target = create_target((8, 5))
     cannon = build_fireball_cannon(charges=3)
     cannon.place_on_grid((2, 5))
     Entity.update_all_entities_senses()
@@ -780,7 +780,7 @@ def test_fireball_cannon_depletes_and_disappears_from_discovery() -> None:
             caster,
             cannon.uuid,
             info.template_name,
-            info.valid_targets[0],
+            next(row for row in info.valid_targets if row.position == target.position),
         )
         assert result is not None and not result.canceled
         assert cannon.charges == expected_charges

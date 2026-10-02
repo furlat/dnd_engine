@@ -611,6 +611,7 @@ def _action_capability_from_template(
     long_range_feet = action_range.long if action_range is not None else None
     requires_line_of_sight = target_type in {
         TargetType.ENTITY,
+        TargetType.CREATURE_OR_OBJECT,
         TargetType.MULTI_ENTITY,
         TargetType.POSITION_LOS,
         TargetType.POSITION_AOE,
@@ -819,6 +820,7 @@ def _action_row_descriptor_cache_key(row: AvailableActionInfo) -> tuple[Any, ...
         row.requires_concentration,
         row.num_projectiles,
         row.allow_same_target,
+        _frozen_model_key(row.position_selection),
         row.is_item_use,
         str(row.source_item_uuid) if row.source_item_uuid is not None else None,
         row.item_stack_count,
@@ -1018,6 +1020,7 @@ def _action_source_from_action(
         target_options=target_options,
         num_projectiles=row.num_projectiles,
         allow_same_target=row.allow_same_target,
+        position_selection=row.position_selection,
         is_item_use=row.is_item_use,
         source_item_uuid=source_item_uuid,
         weapon_slot=row.weapon_slot,
@@ -1082,6 +1085,7 @@ def _action_target_from_available_target(
     result = ActionTarget.model_construct(
         index=target.index,
         target_uuid=str(target.target_uuid) if target.target_uuid else None,
+        target_kind=target.target_kind,
         target_name=target.target_name,
         position=target.position,
         distance=target.distance,

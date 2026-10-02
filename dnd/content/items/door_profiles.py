@@ -17,6 +17,7 @@ class DoorProfile:
     supports_jammed_remnant: bool = True
     vertical_extent_steps: int = 2
     closed_channels: tuple[WorldEdgeChannel, ...] = tuple(WorldEdgeChannel)
+    armor_class: int | None = None
 
 
 DOOR_PROFILES = MappingProxyType({

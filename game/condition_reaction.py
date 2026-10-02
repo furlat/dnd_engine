@@ -5,7 +5,7 @@ from typing import Mapping, cast
 from uuid import UUID
 
 from dnd.core.events import EventType
-from game.animation import ActorContact, body_elevation_steps, facing_for_delta
+from game.animation import ActorContact, feedback_identity, body_elevation_steps, facing_for_delta
 from game.animation_types import AnimationData, Facing8, StudioMediaTrack
 from game.attack import BoundAttack
 from game.body_action import BodyActionCue, bind_body_action
@@ -43,7 +43,7 @@ def _interceptions(lineage: PlayerLineage, bound: BoundAttack | BoundCast) -> tu
                     application_id = str(parent.fact.application_id)
                     break
             delivery = next((row for row in bound.timeline.applications
-                if row.source.target.actor_uuid == str(fact.target_entity_uuid)
+                if feedback_identity(row.source.target) == str(fact.target_entity_uuid)
                 and (application_id is None or row.source.application_id == application_id)), None)
             if delivery is not None:
                 result.append(_Interception(node.uuid, fact.intercepted_by_condition_uuid,

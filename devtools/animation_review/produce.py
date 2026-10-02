@@ -17,6 +17,7 @@ from tests.game.healing_batch_scenarios import healing_batch_history
 from tests.game.support_conditions_scenarios import support_condition_history
 from tests.game.pending_spell_scenarios import pending_spell_history
 from tests.game.persistent_spell_scenarios import persistent_spell_history
+from tests.game.wall_spell_scenarios import wall_spell_history
 from tests.game.interruption_scenarios import interruption_history
 from tests.game.globe_scenarios import globe_history
 from tests.game.projectile_life_scenarios import projectile_life_history
@@ -27,8 +28,10 @@ from tests.game.mechanism_scenarios import mechanism_history
 from tests.game.trap_expansion_scenarios import trap_expansion_history
 from tests.game.portal_scenarios import portal_history
 from tests.game.door_destruction_scenarios import door_destruction_history
+from tests.game.window_scenarios import window_history
 from tests.game.trap_hardware_scenarios import trap_hardware_history
 from tests.game.prop_destruction_scenarios import prop_destruction_history
+from tests.game.object_attack_scenarios import object_attack_history
 from tests.game.liquid_barrel_scenarios import liquid_barrel_history
 from tests.game.environment_scenarios import environment_history
 from tests.game.environment_control_scenarios import control_history
@@ -45,14 +48,20 @@ from tests.game.scenarios import (
 
 from devtools.animation_review.cases import (
     AreaSpellCase, CantripCase, AttackCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DeviceCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,
-    MechanismCase, PortalCase, DoorCase, TrapHardwareCase, PropDestructionCase, LiquidBarrelCase, EnvironmentCase, EnvironmentControlCase, EquipmentCase, ForcedMovementCase, GroundContactCase, HealingCase, LifecycleCase, MovementCase,
-    ParalysisCase, ParalysisLifecycleCase, PendingSpellCase, PersistentSpellCase, GlobeCase, InterruptionCase, ControlSpellCase, ProjectileLifeCase, ReviewCase, SpellHandoffCase, SupportCase, HealingBatchCase, SupportConditionCase, TrueStrikeCase, TeleportCase, TrapCase, VisibilityCase, WebCase,
+    MechanismCase, PortalCase, WindowCase, DoorCase, TrapHardwareCase, PropDestructionCase, ObjectAttackCase, LiquidBarrelCase, EnvironmentCase, EnvironmentControlCase, EquipmentCase, ForcedMovementCase, GroundContactCase, HealingCase, LifecycleCase, MovementCase,
+    ParalysisCase, ParalysisLifecycleCase, PendingSpellCase, PersistentSpellCase, WallSpellCase, GlobeCase, InterruptionCase, ControlSpellCase, ProjectileLifeCase, ReviewCase, SpellHandoffCase, SupportCase, HealingBatchCase, SupportConditionCase, TrueStrikeCase, TeleportCase, TrapCase, VisibilityCase, WebCase,
 )
 
 
 def produce(case: ReviewCase) -> CapturedHistory:
     """Run real rules once, then hand only retained values to the recorder."""
     match case.scenario:
+        case WallSpellCase() as scenario:
+            return wall_spell_history(axis=scenario.axis, raised=scenario.raised,
+                retain_field=scenario.retain_field, multiple_targets=scenario.multiple_targets,
+                formation_targets=scenario.formation_targets, ring_hot_side=scenario.ring_hot_side)
+        case ObjectAttackCase() as scenario:
+            return object_attack_history(program=scenario.program)
         case GlobeCase() as scenario:
             return globe_history(spell=scenario.spell, protection=scenario.protection,
                 source_inside=scenario.source_inside, impact_offset=scenario.impact_offset, walls=scenario.walls,
@@ -74,13 +83,16 @@ def produce(case: ReviewCase) -> CapturedHistory:
             return pending_spell_history(program=scenario.program, miss=scenario.miss, saved=scenario.saved,
                 blocked=scenario.blocked, raised=scenario.raised, long_jump=scenario.long_jump,
                 replace_grant=scenario.replace_grant, perspective=scenario.perspective)
+        case WindowCase() as scenario:
+            return window_history(family=scenario.family, program=scenario.program)
         case DoorCase() as scenario:
             return door_destruction_history(item_id=scenario.item_id, program=scenario.program,
                 swing=scenario.swing, jammed=scenario.jammed, raised=scenario.raised)
         case TrapHardwareCase() as scenario:
             return trap_hardware_history(item_id=scenario.item_id, deployed=scenario.deployed)
         case PropDestructionCase() as scenario:
-            return prop_destruction_history(item_id=scenario.item_id, opened=scenario.opened)
+            return prop_destruction_history(item_id=scenario.item_id, opened=scenario.opened,
+                                            elevation=scenario.elevation, access=scenario.access)
         case LiquidBarrelCase() as scenario:
             return liquid_barrel_history(liquid=scenario.liquid, saved=scenario.saved, jump=scenario.jump,
                 layout=scenario.layout, landing=scenario.landing)

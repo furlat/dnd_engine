@@ -44,6 +44,7 @@ from game.scene import draw_actor_labels, load_scene_media, scene_actors
 from game.session import (
     Operation, advance_controller, close_session, create_session, discover_player_actions,
     end_player_turn, execute_player_action,
+    player_position_options,
 )
 from game.visual_position import VisualPosition
 from game.body_history import retain_body_head
@@ -140,6 +141,25 @@ async def _run(
         motion_media: list[MotionMediaCue] = []
         choices: AvailableActionsResult | None = None
         menu = MenuState()
+        next_positions: tuple[tuple[int, int], ...] = ()
+        position_choice: AvailableActionsResult | None = None
+        position_prefix: tuple[int, tuple[tuple[int, int], ...]] | None = None
+
+        def refresh_position_options() -> None:
+            nonlocal next_positions, position_choice, position_prefix
+            prefix = (menu.selected_action, menu.selected_positions)
+            if choices is position_choice and prefix == position_prefix:
+                return
+            position_choice, position_prefix = choices, prefix
+            next_positions = ()
+            if choices is None or not menu.selected_positions:
+                return
+            row = choices.all_actions[menu.selected_action]
+            first = next(target for target in row.valid_targets if target.index == menu.selected_targets[0])
+            actor_uuid = historical.current_actor_uuid
+            if actor_uuid is None:
+                raise RuntimeError("position selection lacks its human turn owner")
+            next_positions = player_position_options(session, actor_uuid, row, first, menu.selected_positions[1:])
         logs: deque[str] = deque(maxlen=20)
         waiting_for_player = encounter_ended = paused = show_debug = False
         show_grid = False
@@ -209,11 +229,15 @@ async def _run(
                     zoom_index = max(0, min(len(ZOOM_LEVELS) - 1, ZOOM_LEVELS.index(camera.zoom) + event.y))
                     camera = camera.with_zoom_at(ZOOM_LEVELS[zoom_index], pygame.mouse.get_pos())
                 if ready and not paused and command is None:
+                    refresh_position_options()
                     menu, command = handle_menu_event(
                         menu, event, choices, camera,
                         (tile for position, tile in historical.tiles.items()
                          if historical.senses is not None and position in historical.senses.visible),
                         panel_rect=panel_rect,
+                        next_position_options=next_positions,
+                        visible_objects={key:obj for key,obj in historical.objects.items()
+                            if historical.senses is not None and key in historical.senses.objects},
                     )
             if not running:
                 break
@@ -236,6 +260,7 @@ async def _run(
                             session, actor_uuid, action, selected[0],
                             extra_target_uuids=tuple(target.target_uuid for target in selected[1:]
                                                      if target.target_uuid is not None),
+                            extra_target_positions=command.extra_target_positions,
                         )
                 receive(operation)
                 choices = None
@@ -331,9 +356,13 @@ async def _run(
                        revisions=(latest.reducer_cursor, latest.reducer_cursor, historical.reducer_cursor))
             ready = waiting_for_player and active is None and not pending and not paused
             if ready:
+                refresh_position_options()
                 draw_target_preview(screen, menu, choices, camera,
                                     (tile for position, tile in displayed.tiles.items()
-                                     if displayed.senses is not None and position in displayed.senses.visible))
+                                     if displayed.senses is not None and position in displayed.senses.visible),
+                    next_position_options=next_positions,
+                    visible_objects={key:obj for key,obj in displayed.objects.items()
+                        if displayed.senses is not None and key in displayed.senses.objects})
             draw_actor_labels(screen, cache.debug_font, actors, displayed, camera,
                               shown_hp=shown_hp, active_uuid=displayed.current_actor_uuid,
                               commands=commands, viewport=feedback_viewport)

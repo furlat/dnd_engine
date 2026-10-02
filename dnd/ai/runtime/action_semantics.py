@@ -1574,6 +1574,7 @@ def _targeting_semantics(
     allocation_by_target_type = {
         TargetType.SELF: TargetAllocation.SELF,
         TargetType.ENTITY: TargetAllocation.SINGLE_ENTITY,
+        TargetType.CREATURE_OR_OBJECT: TargetAllocation.SINGLE_ENTITY,
         TargetType.MULTI_ENTITY: TargetAllocation.MULTI_ENTITY,
         TargetType.OBJECT: TargetAllocation.OBJECT,
         TargetType.POSITION: TargetAllocation.POSITION,

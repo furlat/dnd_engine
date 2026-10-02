@@ -24,7 +24,7 @@ from dnd.blocks.equipment import Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.entity import Entity
-from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, Shove, PickUp, AttackObject, Drop, SpellAction
+from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, Shove, PickUp, Drop, SpellAction
 from dnd.conditions import (
     create_has_attacked_handler,
     create_has_taken_damage_handler,
@@ -103,10 +103,6 @@ def setup_standard_actions(entity: Entity) -> None:
         ),
         (Shove(source_entity_uuid=entity.uuid, template=True), "action.shove"),
         (PickUp(source_entity_uuid=entity.uuid, template=True), "action.pick_up"),
-        (
-            AttackObject(source_entity_uuid=entity.uuid, template=True),
-            "action.attack_object",
-        ),
     ):
         action.behavior_binding = BehaviorBinding(
             behavior_id=behavior_id,
@@ -221,7 +217,7 @@ def update_weapon_template(entity: Entity, slot: WeaponSlot) -> None:
     entity.unregister_action(template_name)
 
     weapon = entity.equipment._get_weapon_by_slot(slot)
-    if weapon is not None and isinstance(weapon, Weapon):
+    if isinstance(weapon, Weapon) or (weapon is None and slot is WeaponSlot.MELEE_MAIN):
         action = Attack(
             source_entity_uuid=entity.uuid,
             weapon_slot=slot,
@@ -374,7 +370,8 @@ def _disclosed_movement_path(
 
 
 def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
-                    prefer_safe: bool = True) -> Optional[Event]:
+                    prefer_safe: bool = True, *,
+                    extra_target_positions: Optional[List[Tuple[int, int]]] = None) -> Optional[Event]:
     """Execute an action from template + target.
 
     Creates a one-shot instance from the selected template, binds the target
@@ -393,7 +390,8 @@ def execute_action(entity: Entity, template_name: str, target: AvailableTarget,
         ValueError: If the template is not found or the target is invalid.
     """
     template = _resolve_executable_template(entity, template_name)
-    return _execute_bound_action(entity, template, target, prefer_safe=prefer_safe)
+    return _execute_bound_action(entity, template, target, prefer_safe=prefer_safe,
+                                 extra_target_positions=extra_target_positions or [])
 
 
 def _execute_bound_action(
@@ -402,11 +400,15 @@ def _execute_bound_action(
     target: AvailableTarget,
     *,
     prefer_safe: bool,
+    extra_target_positions: Optional[List[Tuple[int, int]]] = None,
 ) -> Optional[Event]:
     """Execute one exact discovered action object against an authorized target."""
 
+    selection = template.get_position_selection()
+    if extra_target_positions and (selection is None or selection.kind != "path"):
+        raise ValueError("This action does not select additional positions")
     eff_tt = template.effective_target_type
-    if eff_tt == TargetType.ENTITY:
+    if eff_tt in (TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT):
         if target.target_uuid is None:
             raise ValueError("ENTITY action requires target_uuid")
         instance = _bind_executable_action(template, target_entity_uuid=target.target_uuid)
@@ -424,7 +426,7 @@ def _execute_bound_action(
     elif eff_tt == TargetType.POSITION_AOE:
         if target.position is None:
             raise ValueError("POSITION_AOE action requires position")
-        instance = _bind_executable_action(template, end_position=target.position)
+        instance = _bind_executable_action(template, end_position=target.position, extra_target_positions=extra_target_positions or [])
 
     elif eff_tt in (TargetType.POSITION, TargetType.POSITION_PATH, TargetType.POSITION_LOS):
         if target.position is None:
@@ -432,6 +434,7 @@ def _execute_bound_action(
         position_overrides: dict[str, object] = {
             "end_position": target.position,
             "prefer_safe": prefer_safe,
+            "extra_target_positions": extra_target_positions or [],
         }
         if isinstance(template, Move):
             disclosed_path = _disclosed_movement_path(
@@ -452,6 +455,29 @@ def _execute_bound_action(
         instance = _bind_executable_action(template)
 
     return instance.apply()
+
+
+def get_extra_position_options(
+    entity: Entity, action_info: AvailableActionInfo, target: AvailableTarget,
+    extra_target_positions: Optional[List[Tuple[int, int]]] = None,
+) -> List[Tuple[int, int]]:
+    """Query the next position allocation for one exact discovered action."""
+    if target.position is None:
+        raise ValueError("Second-point selection requires a first position")
+    template = action_info.execution_template
+    if template is None:
+        if action_info.is_item_use and action_info.source_item_uuid is not None:
+            item = BaseBlock.get(action_info.source_item_uuid)
+            if not isinstance(item, UsableItem):
+                return []
+            name = action_info.template_name.split("__item_")[0]
+            template = next((action for action in item.get_use_actions(entity.uuid)
+                             if action.get_discovery_template_name() == name), None)
+            if template is None:
+                return []
+        else:
+            template = _resolve_executable_template(entity, action_info.template_name)
+    return template.get_valid_extra_target_positions(target.position, extra_target_positions or ())
 
 
 def _validated_extra_target_uuids(
@@ -493,6 +519,7 @@ def execute_available_action(
     *,
     extra_target_uuids: Optional[List[str]] = None,
     prefer_safe: bool = True,
+    extra_target_positions: Optional[List[Tuple[int, int]]] = None,
 ) -> Optional[Event]:
     """Execute one exact discovery row without name lookup or target mutation."""
     validated_extras = _validated_extra_target_uuids(
@@ -517,6 +544,7 @@ def execute_available_action(
             action_info.source_item_uuid,
             action_name,
             bound_target,
+            extra_target_positions=extra_target_positions,
         )
     template = action_info.execution_template
     if template is None:
@@ -526,6 +554,7 @@ def execute_available_action(
         template,
         bound_target,
         prefer_safe=prefer_safe,
+        extra_target_positions=extra_target_positions,
     )
 
 
@@ -536,6 +565,8 @@ def execute_by_index(
     extra_target_uuids: Optional[List[str]] = None,
     available: Optional[AvailableActionsResult] = None,
     prefer_safe: bool = True,
+    *,
+    extra_target_positions: Optional[List[Tuple[int, int]]] = None,
 ) -> Optional[Event]:
     """Execute action by template name and target index.
 
@@ -583,6 +614,7 @@ def execute_by_index(
         target,
         extra_target_uuids=extra_target_uuids,
         prefer_safe=prefer_safe,
+        extra_target_positions=extra_target_positions,
     )
 
 
@@ -640,7 +672,9 @@ def execute_use_action(
     entity: Entity,
     item_uuid: UUID,
     action_name: str,
-    target: Optional[AvailableTarget] = None
+    target: Optional[AvailableTarget] = None,
+    *,
+    extra_target_positions: Optional[List[Tuple[int, int]]] = None,
 ) -> Optional[Event]:
     """Execute a use action from a UsableItem.
 
@@ -678,33 +712,38 @@ def execute_use_action(
     if template is None:
         raise ValueError(f"Use action '{action_name}' not found on item")
 
+    selection = template.get_position_selection()
+    if extra_target_positions and (selection is None or selection.kind != "path"):
+        raise ValueError("This action does not select additional positions")
+
     charge_cost = template.charge_cost
     if item.charges != -1 and item.charges < charge_cost:
         raise ValueError(f"Use action '{action_name}' requires {charge_cost} charges")
 
     if not template.template:
         instance = template
-        if template.target_type == TargetType.ENTITY and target and target.target_uuid:
+        if template.target_type in (TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT) and target and target.target_uuid:
             instance.target_entity_uuid = target.target_uuid
         elif template.target_type in (TargetType.POSITION, TargetType.POSITION_LOS, TargetType.POSITION_PATH, TargetType.POSITION_AOE) and target and target.position:
             instance.end_position = target.position
+            instance.extra_target_positions = extra_target_positions or []
         elif template.target_type == TargetType.MULTI_ENTITY and target and target.target_uuid:
             instance.target_entity_uuid = target.target_uuid
             instance.extra_target_entity_uuids = target.extra_target_uuids or []
     elif template.target_type == TargetType.SELF:
         instance = template.instantiate()
-    elif template.target_type == TargetType.ENTITY:
+    elif template.target_type in (TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT):
         if target is None or target.target_uuid is None:
             raise ValueError("ENTITY use action requires target")
         instance = template.instantiate(target_entity_uuid=target.target_uuid)
     elif template.target_type in (TargetType.POSITION, TargetType.POSITION_LOS, TargetType.POSITION_PATH):
         if target is None or target.position is None:
             raise ValueError("POSITION use action requires position")
-        instance = template.instantiate(end_position=target.position)
+        instance = template.instantiate(end_position=target.position, extra_target_positions=extra_target_positions or [])
     elif template.target_type == TargetType.POSITION_AOE:
         if target is None or target.position is None:
             raise ValueError("POSITION_AOE use action requires position")
-        instance = template.instantiate(end_position=target.position)
+        instance = template.instantiate(end_position=target.position, extra_target_positions=extra_target_positions or [])
     elif template.target_type == TargetType.MULTI_ENTITY:
         if target is None or target.target_uuid is None:
             raise ValueError("MULTI_ENTITY use action requires target_uuid")

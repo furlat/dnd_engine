@@ -21,6 +21,7 @@ from dnd.scenarios.battlefield_catalog import build_battlefield
 from game.animation_data import load_animation_data
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
+from game.attack import BoundAttack
 from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media
 from game.device_art import DeviceEmission, device_bank, load_device_art
@@ -94,8 +95,9 @@ def test_native_destruction_settles_same_device_body_after_contact_without_retai
     destruction, = (row for row in group.world_transitions if row.field == "destruction")
     contact = destruction.destruction
     assert contact is not None and contact.body_uuid == replacement and contact.facing == facing
-    gesture, = group.body_actions
-    assert destruction.start_ms == gesture.effect_ms
+    attack, = group.nodes
+    assert isinstance(attack.bound, BoundAttack)
+    assert destruction.start_ms == attack.start_ms + attack.bound.timeline.contact_ms
     assert contact.duration_ms == pytest.approx(8 * 1000 / 12)
     assert group.complete_ms >= destruction.start_ms + contact.duration_ms
     rows = {}
@@ -359,8 +361,9 @@ def test_real_sleep_then_nonlethal_and_lethal_attacks_bind_only_the_actual_break
             facts = [node.fact for node in root.events if isinstance(node.fact, ObjectDestroyedFact)]
             assert len(changes) == len(facts)
             if changes:
-                gesture, = group.body_actions
-                assert changes[0].start_ms == gesture.effect_ms
+                attack, = group.nodes
+                assert isinstance(attack.bound, BoundAttack)
+                assert changes[0].start_ms == attack.start_ms + attack.bound.timeline.contact_ms
                 assert not group.gaps
                 breaks.extend(changes)
             state = reduce_lineage(state, root)
@@ -389,9 +392,10 @@ def test_real_item_hits_flash_at_contact_then_restore_approved_body_pixels(raste
             hits.append((fact.applied_damage, fact.resulting_hp))
             group = bind_choreography(state, root, data)
             plain = bind_choreography(state, root, unflashed)
-            gesture, = group.body_actions
+            attack, = group.nodes
+            assert isinstance(attack.bound, BoundAttack)
             flash, = (row for row in group.world_transitions if row.hit_flash is not None)
-            assert flash.start_ms == gesture.effect_ms
+            assert flash.start_ms == attack.start_ms + attack.bound.timeline.contact_ms
             assert flash.hit_flash is not None
             rows = {}
             bodies = load_scene_media((*scene_actors(state, data, {}), *scene_actors(group.after, data, {})),

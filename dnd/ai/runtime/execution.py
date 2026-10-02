@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable
+from uuid import UUID
 
 from dnd.action_dispatch import ActionDispatchResult, dispatch_available_action
+from dnd.actions_functional import get_extra_position_options
 from dnd.ai.contracts.control import ActionAffordance, END_TURN_ROW_ID
 from dnd.ai.contracts.decision import EndTurnIntent, ExecuteIntent, PolicyIntent
 from dnd.ai.contracts.observation import SubjectiveWorldState
@@ -35,6 +37,7 @@ class ValidatedExecuteDecision:
     action_info: AvailableActionInfo
     target: AvailableTarget
     extra_target_uuids: tuple[str, ...]
+    extra_target_positions: tuple[tuple[int, int], ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +105,7 @@ def resolve_policy_intent(
             action_info=validated.action_info,
             target=validated.target,
             extra_target_uuids=validated.extra_target_uuids,
+            extra_target_positions=validated.extra_target_positions,
             prefer_safe=validated.intent.prefer_safe,
             movement_guard=movement_guard,
         )
@@ -140,6 +144,8 @@ def validate_policy_intent(
             row_id=intent.row_id,
         )
     if affordance.row_id == END_TURN_ROW_ID:
+        if intent.extra_target_positions:
+            raise AIDecisionValidationError("end turn does not select positions", row_id=intent.row_id)
         return EndTurnIntent()
     if not affordance.can_afford:
         raise AIDecisionValidationError(
@@ -161,12 +167,29 @@ def validate_policy_intent(
             str(error),
             row_id=intent.row_id,
         ) from error
+    selected_positions: list[tuple[int, int]] = []
+    if intent.extra_target_positions:
+        selection = binding.action_info.position_selection
+        if selection is None or selection.kind != "path":
+            raise AIDecisionValidationError("additional positions require a position-path action", row_id=intent.row_id)
+        actor = Entity.get(UUID(epoch.actor_uuid))
+        if actor is None:
+            raise AIDecisionValidationError("decision actor is unavailable", row_id=intent.row_id)
+        for position in intent.extra_target_positions:
+            try:
+                options = get_extra_position_options(actor, binding.action_info, binding.target, selected_positions)
+            except ValueError as error:
+                raise AIDecisionValidationError(str(error), row_id=intent.row_id) from error
+            if position not in options:
+                raise AIDecisionValidationError("position is not an admitted next vertex", row_id=intent.row_id)
+            selected_positions.append(position)
     return ValidatedExecuteDecision(
         intent=intent,
         affordance=affordance,
         action_info=binding.action_info,
         target=binding.target,
         extra_target_uuids=extra_targets,
+        extra_target_positions=tuple(selected_positions),
     )
 
 

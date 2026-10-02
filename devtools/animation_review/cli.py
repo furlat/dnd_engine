@@ -60,6 +60,8 @@ def main(
     parser.add_argument("--list", action="store_true", help="List the catalog without running the engine.")
     parser.add_argument("--output", type=Path, default=Path(".runtime/animation-review"))
     parser.add_argument("--fps", type=int, default=24)
+    parser.add_argument("--floor", choices=("paving", "scene"), default="paving",
+                        help="Floor artwork: Fantasy H1 paving (default) or original scene bindings.")
     parser.add_argument("--width", type=int, default=960, help="Width of each of the four camera views.")
     parser.add_argument("--height", type=int, default=640, help="Height of each camera view; video is a 2x2 mosaic.")
     args = parser.parse_args(argv)
@@ -126,11 +128,13 @@ def main(
     run = {"id": run_id, "created_at": now.isoformat(),
            **sources,
            "fps": args.fps, "width": args.width * 2, "height": args.height * 2,
+           "floor_style": args.floor,
            "view_width": args.width, "view_height": args.height, "layout": "four-corners-2x2",
            "input_mode": "capture" if capture is not None else "review" if args.review else "saved",
            "command": shlex.join([sys.executable, "-m", "devtools.animation_review.capture" if capture is not None else "devtools.animation_review",
                                   *(["--review", str(args.review.resolve())] if args.review else []),
                                   "--fps", str(args.fps), "--width", str(args.width), "--height", str(args.height),
+                                  "--floor", args.floor,
                                   "--output", str(output),
                                   *[arg for case in selected for arg in ("--case", case.id)]])}
     manifest = {"schema_version": 1, "run": run, "cases": [], "coverage": []}
@@ -183,6 +187,7 @@ def main(
                 json.dumps(persisted.sequence, separators=(",", ":")).encode("utf-8")))
             item.update(record_case(case, folder, trace, sequence=sequence, fps=args.fps,
                                     size=(args.width, args.height), ffmpeg=ffmpeg,
+                                    floor_style=args.floor,
                                     coverage_inventory=manifest["coverage"]))
             item.update(video=(relative / "clip.mp4").as_posix(), poster=(relative / "poster.png").as_posix())
         except Exception as error:

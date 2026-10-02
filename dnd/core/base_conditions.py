@@ -948,6 +948,10 @@ class BaseCondition(BaseObject):
 
         return effect_event
 
+    def cancel_prepared_removal(self, reason: str) -> None:
+        """Release provisional native removal phases after a graph veto."""
+        del reason
+
     def publish_removal_effect(
         self,
         declaration_event: Event,
@@ -1105,6 +1109,10 @@ class BaseCondition(BaseObject):
             True if the duration is expired after progression.
         """
         return self.duration.progress()
+
+    def progress_for_interval(self, interval: Optional[Tuple[UUID, int]]) -> bool:
+        """Progress under an existing owner clock; default conditions need no deduplication."""
+        return self.progress()
 
     def long_rest(self) -> None:
         """Mark this condition's duration as long-rested."""

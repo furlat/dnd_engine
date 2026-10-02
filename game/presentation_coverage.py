@@ -103,8 +103,13 @@ def presentation_inventory(data: AnimationData, *, spell_ids: Iterable[str] = ()
     for family, bindings in (("device", data.devices), ("device_wreck", data.device_wrecks),
                              ("portal", data.portals), ("condition_media", data.condition_media),
                              ("spatial_media", data.spatial_media), ("deposit_media", data.deposit_media)):
-        rows.extend(_row(family, identity, family, "authored media binding", "binding_selected", binding=identity)
-                    for identity in sorted(bindings))
+        for identity in sorted(bindings):
+            wall = family == "spatial_media" and any(
+                layer.composition == "wall_modules" for layer in data.spatial_media[identity].layers)
+            rows.append(_row(family, identity, family, "authored media binding",
+                "partial" if wall else "binding_selected", binding=identity,
+                details=("Cardinal front/back modules only; ring/diagonal banks, XYZ occlusion and physical height registration are pending.",)
+                    if wall else ()))
     for identity, binding in data.spatial_media.items():
         for trigger, track in binding.contactMedia.items():
             limitations = stationary_media_limitations(track)

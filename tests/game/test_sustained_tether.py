@@ -19,7 +19,7 @@ from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media
 from game.device_art import device_bank, load_device_art
 from game.playback_frame import sample_playback_frame
-from game.player_facts import ActionFact
+from game.player_facts import AttackFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, project_screen
@@ -189,7 +189,7 @@ def test_object_attack_gesture_keeps_device_and_tethers_until_authored_strike_co
     before, lineages = retained_sequences[role]
     for lineage in lineages:
         fact = lineage.root.fact
-        if isinstance(fact, ActionFact) and fact.behavior_id == "action.attack_object":
+        if isinstance(fact, AttackFact) and fact.target_kind == "object":
             break
         before = reduce_lineage(before, lineage)
     else:
@@ -200,10 +200,12 @@ def test_object_attack_gesture_keeps_device_and_tethers_until_authored_strike_co
     data = load_animation_data()
     group = bind_choreography(before, lineage, data)
     assert not group.gaps
-    gesture, = group.body_actions
-    assert gesture.enabled and gesture.clip == "Attack1" and gesture.interaction_object_uuid == owner
-    assert gesture.effect_ms == pytest.approx(8 * 1000 / 12)
-    assert group.complete_ms > gesture.effect_ms
+    node, = group.nodes
+    gesture = node.bound.timeline
+    assert gesture.clip == "Attack1" and gesture.target.object_uuid == str(owner)
+    assert gesture.contact_ms == pytest.approx(8 * 1000 / 12)
+    assert group.complete_ms > gesture.contact_ms
+    assert not group.body_actions
     body_rows = {}
     bodies = load_scene_media((*scene_actors(before, data, {}), *scene_actors(after, data, {})),
                              data, body_rows=body_rows)
@@ -217,17 +219,17 @@ def test_object_attack_gesture_keeps_device_and_tethers_until_authored_strike_co
             return sample_playback_frame(before, after, data, time, time, camera, {}, bodies,
                 number_font, badge_font, choreography=group, choreography_media=media)
 
-        winding = frame(gesture.effect_ms - .001)
-        contact = frame(gesture.effect_ms)
+        winding = frame(gesture.contact_ms - .001)
+        contact = frame(gesture.contact_ms)
         actor = next(command for command in winding.commands
-                     if command.evidence[6] == "actor" and command.evidence[0] == gesture.contact.actor_uuid)
+                     if command.evidence[6] == "actor" and command.evidence[0] == gesture.source.actor_uuid)
         assert actor.evidence[8:10] == ("Attack1", 7)
         assert winding.displayed.objects[owner].item.integrity is ItemIntegrity.INTACT
         assert contact.displayed.objects[owner].item.integrity is ItemIntegrity.DESTROYED
         visible, pixels = _render(winding.displayed, raster, camera, commands=winding.commands)
         assert len({row[0] for row in visible}) == 2
         assert _render(contact.displayed, raster, camera, commands=contact.commands)[0] == []
-        sought = frame(gesture.effect_ms - .001)
+        sought = frame(gesture.contact_ms - .001)
         assert np.array_equal(pixels, _render(sought.displayed, raster, camera, commands=sought.commands)[1])
 
 
@@ -246,6 +248,5 @@ def test_object_action_projection_does_not_grant_an_unknown_target_uuid(native_h
     })))
     _, lineages = decode_player_sequence(packet)
     fact = lineages[-1].root.fact
-    assert isinstance(fact, ActionFact) and fact.behavior_id == "action.attack_object"
-    assert fact.target_entity_uuid is None
+    assert fact is None
     assert str(hidden_identity).encode() not in packet

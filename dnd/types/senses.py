@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.types.world import LightLevel
 from dnd.core.content.identities import ContentRef
-from dnd.core.presentation_geometry import AoEPresentationGeometry
+from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
 from dnd.types.traps import TrapState
 from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.spell_suppression import SpellSuppression
@@ -85,6 +85,7 @@ class PerceivedSpatialEffect(BaseModel):
     anchor_position: tuple[int, int] | None = None
     anchor_elevation_steps: int | None = None
     area_geometry: AoEPresentationGeometry | None = None
+    construction_sections: tuple[WallAssemblyPresentationGeometry, ...] = ()
     area_propagation: AreaPropagation | None = None  # Absent in historical recordings.
     deposit_source: MaterialDepositSource | None = None
     visible_volume_positions: tuple[tuple[int, int], ...] = ()

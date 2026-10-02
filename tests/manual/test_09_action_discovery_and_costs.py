@@ -473,8 +473,13 @@ def test_contextual_object_and_environment_discovery_remains_sparse() -> None:
     available = get_available_actions(hero)
 
     assert not any(
-        action.template_name in {"Pick Up", "Attack Object"}
+        action.template_name == "Pick Up"
         for action in available.object_actions
+    )
+    assert not any(
+        choice.target_uuid == distant_potion.uuid
+        for action in available.all_actions if action.behavior_id == "action.attack"
+        for choice in action.valid_targets
     )
     assert not any(
         action.source_item_uuid == distant_potion.uuid

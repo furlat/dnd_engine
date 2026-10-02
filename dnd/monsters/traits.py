@@ -5,10 +5,13 @@ from __future__ import annotations
 from typing import Callable, Literal, Optional, Tuple, List
 from uuid import UUID
 
+from dnd.types.physical_access import PhysicalAccess
 from pydantic import Field
 from pydantic_core import PydanticUndefined
 
-from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, Move, build_weapon_attack_outcome_profile, entity_action_economy_cost_applier, entity_action_economy_cost_evaluator, validate_line_of_sight
+from dnd.core.attack_types import NaturalWeaponSpec
+from dnd.blocks.base_item import BaseItem
+from dnd.actions import Attack, AttackEvent, Dash, Disengage, Hide, Move, build_weapon_attack_outcome_profile, entity_action_economy_cost_applier, entity_action_economy_cost_evaluator
 from dnd.blocks.equipment import Damage
 from dnd.conditions import Paralyzed, Prone
 from dnd.core.base_actions import (
@@ -21,13 +24,13 @@ from dnd.core.base_actions import (
     ActionTargetEffectBranchProfile,
     ActionTargetEffectProfile,
     BaseAction,
-    BaseCost,
     Cost,
     OutcomeResolution,
     TargetEffectDisposition,
     TargetType,
     spell_slot_cost_type,
 )
+from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
@@ -518,7 +521,7 @@ class MultiattackAction(BaseAction):
 
     name: str = Field(default="Multiattack", description="Action name.")
     description: str = Field(default="Make multiple stat-block weapon attacks.", description="Rules summary.")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Multiattack targets one entity for v1.")
+    target_type: TargetType = Field(default=TargetType.CREATURE_OR_OBJECT, description="Multiattack targets one entity for v1.")
     action_category: ActionCategory = Field(default=ActionCategory.ATTACK, description="Attack category.")
     costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Multiattack Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="One action cost.")
     attack_sequence: tuple[tuple[WeaponSlot, int], ...] = Field(default_factory=tuple, description="Weapon slots and counts.")
@@ -544,21 +547,24 @@ class MultiattackAction(BaseAction):
             "applications": len(profiles),
         })
 
+    def physical_access_error(self, *, subjective: bool = False) -> Optional[str]:
+        for slot, count in self.attack_sequence:
+            if count <= 0:
+                continue
+            attack = Attack(source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid, weapon_slot=slot,
+                costs=[], use_register=False)
+            if attack.validate_requirements_for_discovery(subjective=subjective):
+                return None
+        return "No legal attacks for Multiattack"
+
     def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        actor = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if actor is None or target is None:
-            return declaration_event.cancel(status_message="Multiattack requires actor and target")
-        for slot, _count in self.attack_sequence:
-            attack = Attack(source_entity_uuid=actor.uuid, target_entity_uuid=target.uuid, weapon_slot=slot, costs=[], use_register=False)
-            if attack.pre_validate():
-                return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Multiattack validated")
-        return declaration_event.cancel(status_message="No legal attacks for Multiattack")
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message="Multiattack validated")
 
     def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         actor = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if actor is None or target is None:
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if actor is None or not isinstance(target, (Entity, BaseItem)):
             return execution_event.cancel(status_message="Multiattack actor or target missing")
         effect_event = execution_event.phase_to(EventPhase.EFFECT, status_message=f"{actor.name} uses {self.name}")
         for slot, count in self.attack_sequence:
@@ -591,107 +597,20 @@ class NaturalAttack(Attack):
     natural_damage_type: DamageType = Field(default=DamageType.PIERCING, description="Natural weapon damage type.")
     natural_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Natural weapon range.")
 
+    def get_physical_access(self) -> Optional[PhysicalAccess]:
+        return PhysicalAccess.PROJECTILE if self.natural_range.type is RangeType.RANGE else PhysicalAccess.NATURAL
+
+    def get_natural_weapon(self) -> NaturalWeaponSpec:
+        return NaturalWeaponSpec(name=self.name, dice_numbers=self.natural_dice_numbers,
+            damage_dice=self.natural_damage_dice, damage_type=self.natural_damage_type,
+            range=self.natural_range)
+
     def get_outcome_profile(self, actor: object) -> Optional[ActionOutcomeProfile]:
-        """Return natural-weapon damage instead of the proxy equipped slot."""
-        if not isinstance(actor, Entity):
-            return None
-        old_weapon = actor.equipment.weapon_melee_main
-        old_damage_dice = actor.equipment.unarmed_damage_dice
-        old_dice_numbers = actor.equipment.unarmed_dice_numbers
-        old_damage_type = actor.equipment.unarmed_damage_type
-        try:
-            actor.equipment.weapon_melee_main = None
-            actor.equipment.unarmed_damage_dice = self.natural_damage_dice
-            actor.equipment.unarmed_dice_numbers = self.natural_dice_numbers
-            actor.equipment.unarmed_damage_type = self.natural_damage_type
-            profile = build_weapon_attack_outcome_profile(
-                actor,
-                self.weapon_slot,
-                self.override_ability,
-            )
-            if profile is None:
-                return None
-            return profile.model_copy(update={"effect_id": f"natural_attack.{self.name.lower().replace(' ', '_')}"})
-        finally:
-            actor.equipment.weapon_melee_main = old_weapon
-            actor.equipment.unarmed_damage_dice = old_damage_dice
-            actor.equipment.unarmed_dice_numbers = old_dice_numbers
-            actor.equipment.unarmed_damage_type = old_damage_type
+        profile = super().get_outcome_profile(actor)
+        return profile.model_copy(update={"effect_id": f"natural_attack.{self.name.lower().replace(' ', '_')}"}) if profile is not None else None
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[AttackEvent]:
-        """Create an attack event using natural-weapon metadata."""
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        return AttackEvent(
-            name=f"{self.name}",
-            parent_event=parent_event.uuid if parent_event else None,
-            phase=EventPhase.DECLARATION,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            weapon_slot=self.weapon_slot,
-            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
-            use_register=use_register,
-            source_entity_name=source_entity.name if source_entity else None,
-            target_entity_name=target_entity.name if target_entity else None,
-            weapon_name=self.name,
-            override_ability=self.override_ability,
-            damage_types=[self.natural_damage_type],
-            range=self.natural_range,
-        )
-
-    def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
-        """Validate natural attack range, line of sight, and ranged pressure."""
-        source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(declaration_event.target_entity_uuid) if declaration_event.target_entity_uuid else None
-        if source is None or target is None:
-            return declaration_event.cancel(status_message=f"{self.name} requires source and target")
-
-        distance_feet = source.senses.get_feet_distance(target.position)
-        is_long_range = False
-        if self.natural_range.type == RangeType.RANGE:
-            if distance_feet <= self.natural_range.normal:
-                pass
-            elif self.natural_range.long is not None and distance_feet <= self.natural_range.long:
-                is_long_range = True
-            else:
-                return declaration_event.cancel(status_message=f"Target entity not in range for {self.name}")
-        elif distance_feet > self.natural_range.normal:
-            return declaration_event.cancel(status_message=f"Target entity not in reach for {self.name}")
-
-        range_event = declaration_event.with_updates(
-            status_message=f"Validated range for {self.name}",
-            range=self.natural_range,
-            is_long_range=is_long_range,
-        )
-        los_event = validate_line_of_sight(range_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-        ranged_event = Attack.check_ranged_conditions(los_event, self.source_entity_uuid)
-        if ranged_event is None or ranged_event.canceled:
-            return ranged_event
-        return ranged_event.phase_to(EventPhase.EXECUTION, status_message=f"Attack validated for {self.name}")
-
-    def _apply(self, execution_event: AttackEvent) -> Optional[AttackEvent]:
-        """Resolve natural attack damage through the normal attack pipeline."""
-        source = Entity.get(self.source_entity_uuid)
-        if source is None:
-            return execution_event.cancel(status_message=f"Source entity not found for {self.name}")
-
-        old_weapon = source.equipment.weapon_melee_main
-        old_damage_dice = source.equipment.unarmed_damage_dice
-        old_dice_numbers = source.equipment.unarmed_dice_numbers
-        old_damage_type = source.equipment.unarmed_damage_type
-        try:
-            source.equipment.weapon_melee_main = None
-            source.equipment.unarmed_damage_dice = self.natural_damage_dice
-            source.equipment.unarmed_dice_numbers = self.natural_dice_numbers
-            source.equipment.unarmed_damage_type = self.natural_damage_type
-            return Attack.attack_consequences(execution_event, self.source_entity_uuid)
-        finally:
-            source.equipment.weapon_melee_main = old_weapon
-            source.equipment.unarmed_damage_dice = old_damage_dice
-            source.equipment.unarmed_dice_numbers = old_dice_numbers
-            source.equipment.unarmed_damage_type = old_damage_type
+    def get_range(self) -> Range:
+        return self.natural_range
 
 
 class BonusDamageFeature(BaseCondition):

@@ -12,17 +12,17 @@ from dnd.core.equipment_types import WeaponSet
 from dnd.core.life_types import LifeState
 from dnd.core.dice import AttackOutcome
 from dnd.core.presentation_geometry import ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry, SpherePresentationGeometry
-from dnd.types.world import WorldEdgeChannel
+from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.types.world_placement import WorldObjectPlacement
 from game.animation import (
-    ActorContact, CastApplication, CastInput, CastTimeline, EquipmentTimeline, GroundContact, compile_cast, compile_equipment,
+    ActorContact, ObjectContact, CastApplication, CastInput, CastTimeline, EquipmentTimeline, GroundContact, compile_cast, compile_equipment,
 )
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, Facing8, RigLayer
 from game.player_facts import (
-    ActionFact, AttackFact, ConditionChangeFact, DamageFact, EquipmentFact, LifeFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SpellFact,
+    ActionFact, AreaReachFact, AttackFact, ConditionChangeFact, DamageFact, EquipmentFact, LifeFact, ObjectDamageFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SpellFact,
 )
-from game.player_reduction import reduce_lineage
+from game.player_reduction import reduce_lineage, state_before_event
 from game.device_art import DeviceEmission, device_bank
 from game.condition_animation import resolve_condition_appearance
 from game.animation_rates import action_playback_rate
@@ -41,6 +41,8 @@ class BoundCast:
     area_boundaries: tuple[WorldObjectPlacement, ...] = ()
     area_solids: tuple[AreaSolid, ...] = ()
     area_supports: tuple[WorldTileState, ...] = ()
+    staged_area: bool = False
+    area_reach: tuple[tuple[float, tuple[tuple[int, int], ...]], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +103,30 @@ def actor_contact(target: PlayerState, actor: PlayerActor, data: AnimationData, 
     )
 
 
+def object_contact(before: PlayerState, object_uuid: UUID, *,
+                   position: tuple[int, int] | None = None,
+                   base_height_steps: int | None = None) -> ObjectContact | None:
+    target = before.objects.get(object_uuid)
+    if target is None:
+        return None
+    placement = target.placement
+    if placement.boundary_direction is not None:
+        dx, dy = {CardinalDirection.EAST: (1, 0), CardinalDirection.WEST: (-1, 0),
+                  CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1)}[placement.boundary_direction]
+        grid = (placement.position[0] + dx * .5, placement.position[1] + dy * .5)
+    elif position is not None and position in placement.positions:
+        grid = (float(position[0]), float(position[1]))
+    else:
+        grid = (sum(row[0] for row in placement.positions) / len(placement.positions),
+                sum(row[1] for row in placement.positions) / len(placement.positions))
+    # A prop's physical band supplies the impact point; actor chest offsets and
+    # sprite padding have no meaning for an item.
+    base = base_height_steps if base_height_steps is not None else placement.base_height_steps
+    height = base + (placement.top_height_steps - placement.base_height_steps) / 2
+    return ObjectContact(str(object_uuid), grid, height)
+
+
+
 def bind_cast(
     target: PlayerState,
     lineage: PlayerLineage,
@@ -143,9 +169,11 @@ def bind_cast(
                 area_direction = ((1 if dx >= 0 else -1, 0) if abs(dx) >= abs(dy)
                                   else (0, 1 if dy >= 0 else -1))
             ground_target = GroundContact(geometry.origin, target.tiles[geometry.origin].elevation_steps)
+    area_stage_lineages = {event.lineage_uuid for event in lineage.events
+        if isinstance(event.fact, AreaReachFact) and event.parent_lineage == root_node.lineage_uuid}
     spell_applications = sorted(
         ((event, event.fact) for event in lineage.events if isinstance(event.fact, SpellFact)
-         and event.parent_lineage == root_node.lineage_uuid and event.fact.application_index is not None),
+         and (event.parent_lineage == root_node.lineage_uuid or event.parent_lineage in area_stage_lineages) and event.fact.application_index is not None),
         key=lambda row: row[1].application_index or 0,
     )
     if spell_applications and not area:
@@ -158,16 +186,26 @@ def bind_cast(
         application_roots = [(root_node, root)]
     by_lineage = {event.lineage_uuid: event for event in lineage.events}
     actor_contacts = {caster.uuid: source_contact}
+    contact_actors = {caster.uuid: caster}
     applications: list[CastApplication] = []
     owned_life_events: set[UUID] = set()
     for application_node, application in application_roots:
-        recipient = target.actors.get(application.target_entity_uuid) if application.target_entity_uuid else None
-        if area and (recipient is None or not actor_is_visible(target, recipient)):
+        application_state = (state_before_event(target, lineage, application_node)
+            if area_stage_lineages else target)
+        object_target = isinstance(application, SpellFact) and application.target_kind == "object"
+        recipient = application_state.actors.get(application.target_entity_uuid) if application.target_entity_uuid and not object_target else None
+        recipient_contact = (object_contact(application_state, application.target_entity_uuid,
+            position=application.target_position, base_height_steps=application.target_base_height_steps)
+            if object_target and isinstance(application, SpellFact) and application.target_entity_uuid is not None else None)
+        if area and recipient_contact is None and (recipient is None or not actor_is_visible(application_state, recipient)):
             continue
-        if recipient is None:
-            raise ValueError("cast binding requires each retained target actor")
-        actor_contacts.setdefault(recipient.uuid, overrides.get(str(recipient.uuid), actor_contact(
-            target, recipient, data, (facings or {}).get(str(recipient.uuid), "S"))))
+        if recipient is not None:
+            contact_actors[recipient.uuid] = recipient
+            recipient_contact = actor_contacts.setdefault(recipient.uuid, overrides.get(str(recipient.uuid), actor_contact(
+                application_state, recipient, data, (facings or {}).get(str(recipient.uuid), "S"))))
+        if recipient_contact is None:
+            raise ValueError("cast binding requires each retained target contact")
+        recipient_uuid = application.target_entity_uuid
         descendants: list[PlayerNode] = []
         pending = list(application_node.children_lineages)
         while pending:
@@ -183,32 +221,35 @@ def bind_cast(
                    if isinstance(event.fact, DamageFact) and event.fact.stage == "applied"]
         if not applied:
             damage = None
-        elif len(applied) == 1 and applied[0].target_entity_uuid == recipient.uuid:
+        elif len(applied) == 1 and applied[0].target_entity_uuid == recipient_uuid:
             damage = applied[0]
         else:
             raise NotImplementedError("selected cast binding requires one positive packet per application or an actual miss")
         descendants_ids = {event.uuid for event in descendants}
         changes = [(event.uuid, event.fact) for event in lineage.events
                    if event.uuid in descendants_ids and not event.canceled
-                   and isinstance(event.fact, LifeFact) and event.fact.entity_uuid == recipient.uuid]
+                   and isinstance(event.fact, LifeFact) and event.fact.entity_uuid == recipient_uuid]
         if damage is not None:
             owned_life_events.update(identity for identity, _ in changes)
+        object_damage = next((row.fact for row in descendants if isinstance(row.fact, ObjectDamageFact)
+            and row.fact.object_uuid == recipient_uuid and row.fact.applied_damage > 0), None)
         applications.append(CastApplication(
             application_id=(str(application.application_id)
                 if isinstance(application, SpellFact) and application.application_id is not None else None),
-            target=actor_contacts[recipient.uuid],
-            damage_applied=damage is not None,
-            damage_total=damage.applied_damage if damage is not None else None,
+            target=recipient_contact,
+            damage_applied=damage is not None or object_damage is not None,
+            damage_total=damage.applied_damage if damage is not None else object_damage.applied_damage if object_damage else None,
             resulting_hp=(changes[-1][1].normal_hit_points if changes else
                           damage.resulting_normal_hp if damage is not None else None),
             resulting_life_state=changes[-1][1].new_state if changes else None,
-            damage_type=damage.damage_type.value if damage is not None and damage.damage_type is not None else None,
+            damage_type=(damage.damage_type.value if damage is not None and damage.damage_type is not None else
+                         object_damage.damage_type.value if object_damage is not None and object_damage.damage_type is not None else None),
             travel_apex_steps=travel_apex_steps,
             hit=(application.attack_outcome in (AttackOutcome.HIT, AttackOutcome.CRIT)
                  if isinstance(application, SpellFact) and application.attack_outcome is not None else None),
             removed_condition_tags=frozenset(tag for event in descendants if not event.canceled
                 and isinstance(event.fact, ConditionChangeFact)
-                and event.fact.target_entity_uuid == recipient.uuid
+                and event.fact.target_entity_uuid == recipient_uuid
                 and event.fact.event_type is EventType.CONDITION_REMOVAL
                 and event.fact.condition.state is not None for tag in event.fact.condition.state.tags),
         ))
@@ -220,12 +261,17 @@ def bind_cast(
             declared = (root.target_entity_uuid,)
         for index, identity in enumerate(declared):
             recipient = target.actors.get(identity)
-            if recipient is None:
+            attempted_contact = (object_contact(target, identity, position=spell.target_position,
+                base_height_steps=spell.target_base_height_steps)
+                if spell is not None and spell.target_kind == "object" else None)
+            if recipient is not None:
+                contact_actors[identity] = recipient
+                attempted_contact = actor_contacts.setdefault(identity, overrides.get(str(identity), actor_contact(
+                    target, recipient, data, (facings or {}).get(str(identity), "S"))))
+            if attempted_contact is None:
                 raise ValueError("attempt binding requires each disclosed selected target")
-            actor_contacts.setdefault(identity, overrides.get(str(identity), actor_contact(
-                target, recipient, data, (facings or {}).get(str(identity), "S"))))
             applications.append(CastApplication(application_id=f"{root_node.uuid}:attempt:{index}",
-                target=actor_contacts[identity], damage_applied=False, damage_total=None,
+                target=attempted_contact, damage_applied=False, damage_total=None,
                 resulting_hp=None, travel_apex_steps=travel_apex_steps))
     emitter = None
     if spell is not None and spell.cast_origin == "source_item":
@@ -254,7 +300,7 @@ def bind_cast(
     timeline = compile_cast(data, (spell.effect_id if spell is not None else None) or root.behavior_id,
                             source, body_rate=action_playback_rate(data, caster))
     appearances = {
-        contact.actor_uuid: resolve_player_layers(data, target.actors[actor_uuid], rig_id=contact.rig_id)
+        contact.actor_uuid: resolve_player_layers(data, contact_actors[actor_uuid], rig_id=contact.rig_id)
         for actor_uuid, contact in actor_contacts.items()
     }
     boundaries = tuple(obj.placement for obj in target.objects.values()
@@ -266,7 +312,7 @@ def bind_cast(
         AreaSolid(tile.position, tile.elevation_steps) for tile in target.tiles.values()
         if area and tile.blocks_propagation)
     return BoundCast(timeline, reduce_lineage(target, lineage), MappingProxyType(appearances),
-                     frozenset(owned_life_events), boundaries, solids, tuple(target.tiles.values()) if area else ())
+                     frozenset(owned_life_events), boundaries, solids, tuple(target.tiles.values()) if area else (), bool(area_stage_lineages))
 
 
 def bind_equipment(

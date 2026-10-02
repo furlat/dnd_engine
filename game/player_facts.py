@@ -25,9 +25,10 @@ from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState
 from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SenseMode, SensesSnapshot
-from dnd.types.spatial_effects import SpatialEffectChangeOperation
+from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectChangeOperation
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.traps import TrapState
+from dnd.types.physical_access import ContactPassage
 from dnd.types.world import MovementMode, OccupancyLayer
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 from dnd.types.abilities import AbilityName
@@ -93,6 +94,18 @@ class AttackFact:
     damage_types: tuple[DamageType, ...]
     source_item_id: str | None
     intercepted_by_condition_uuid: UUID | None = None
+    projectile_deflection_position: tuple[float, float] | None = None
+    target_kind: Literal["creature", "object"] = "creature"
+    target_position: tuple[int, int] | None = None
+    target_base_height_steps: int | None = None
+    attack_source_kind: Literal["equipped", "unarmed", "natural"] = "equipped"
+
+    @property
+    def weapon_set(self) -> WeaponSet:
+        """The declared source selects gear independently of its authored VFX."""
+        if self.attack_source_kind != "equipped":
+            return WeaponSet.NONE
+        return WeaponSet.RANGED if self.weapon_slot in (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF) else WeaponSet.MELEE
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -117,11 +130,25 @@ class SpellFact:
     resolved_area_positions: tuple[tuple[int, int], ...] | None = None
     suppressions: tuple[SpellSuppression, ...] = ()
     area_propagation: Literal["line_of_effect", "connected"] = "line_of_effect"
+    target_kind: Literal["creature", "object"] = "creature"
+    target_position: tuple[int, int] | None = None
+    target_base_height_steps: int | None = None
 
     @model_validator(mode="before")
     @classmethod
     def restore_recorded_area_policy(cls, value: object) -> object:
         return upgrade_spell_fact(value)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AreaReachFact:
+    """One disclosed propagation stage, ordered by actual structural breaks."""
+
+    kind: Literal["area_reach"] = "area_reach"
+    stage_index: int
+    newly_reached_positions: tuple[tuple[int, int], ...]
+    previous_reach_lineage_uuid: UUID | None
+    prerequisite_destruction_lineages: tuple[UUID, ...]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -139,6 +166,7 @@ class MovementFact:
     movement_mode: MovementMode | None = None
     start_layer: OccupancyLayer | None = None
     end_layer: OccupancyLayer | None = None
+    connector_presentation_key: str | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -204,6 +232,7 @@ class DamageFact:
     body_release: BodyReleaseResult | None = None
     intercepted_by_condition_uuid: UUID | None = None
     effect_id: str | None = None
+    spatial_source: SpatialDamageSource | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -403,7 +432,7 @@ class ObjectDestroyedFact:
 
 
 PlayerFact = Annotated[
-    AttackFact | SpellFact | MovementFact | StepFact | ForcedMovementFact | PortalTransferFact | ShoveFact
+    AttackFact | SpellFact | AreaReachFact | MovementFact | StepFact | ForcedMovementFact | PortalTransferFact | ShoveFact
     | DamageFact | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact | EquipmentFact
     | ConditionChangeFact | SpatialFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
     | ObjectDamageFact | ObjectDestroyedFact | MechanismActivationFact | SavingThrowFact,
@@ -467,6 +496,8 @@ class FloorItem:
     is_open: bool | None
     is_lit: bool | None
     blocks_propagation: bool = False
+    contact_passage: ContactPassage = ContactPassage.STRUCTURAL
+    supported_by_uuid: UUID | None = None
     is_engaged: bool | None = None
     surface_residues: tuple[ObjectResidueState, ...] = ()
     current_hit_points: int | None = None

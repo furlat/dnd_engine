@@ -1098,11 +1098,14 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
         source_entity_uuid=source_entity_uuid,
         target_entity_uuid=event.source_entity_uuid,
         weapon_slot=WeaponSlot.MELEE_MAIN,
-        costs=[],
+        costs=[Cost(
+            name="Retaliation reaction",
+            cost_type="reactions",
+            cost=1,
+            evaluator=entity_action_economy_cost_evaluator,
+        )],
     )
-    result = attack.apply(parent_event=event)
-    if result is not None and not result.canceled:
-        entity.action_economy.consume("reactions", 1)
+    attack.apply(parent_event=event)
 
     return None
 

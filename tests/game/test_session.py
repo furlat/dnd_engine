@@ -8,9 +8,14 @@ from dnd.actions import AttackEvent, MovementEvent
 from dnd.core.base_conditions import ConditionRemovalEvent
 from dnd.core.events import EventPhase, EventQueue, RoundStartEvent, TurnEndEvent, TurnStartEvent
 from dnd.encounter import TurnState
+from dnd.actions import SpellEvent
+from dnd.content.items.environment_item_builders import build_spell_device
+from dnd.entity import Entity
+from dnd.spells.walls import WallOfFire
 from game.session import (
     Operation, Session, advance_controller, close_session, create_session,
     discover_player_actions, end_player_turn, execute_player_action,
+    player_position_options,
 )
 
 
@@ -35,6 +40,29 @@ def _advance_to_human(session: Session, operations: list[Operation]) -> None:
         if operation.boundary.status == "waiting_for_human":
             return
     pytest.fail("native encounter did not return a human decision boundary")
+
+
+def test_human_session_queries_and_executes_explicit_wall_points(session: Session) -> None:
+    _advance_to_human(session, [])
+    actor = session.encounter.get_current_entity()
+    assert actor is not None
+    device = build_spell_device(item_id="environment.fireball_cannon", name="Wall device",
+        spell_templates=[WallOfFire(source_entity_uuid=actor.uuid, template=True, cast_origin="source_item")],
+        charges=2)
+    device.place_on_grid((actor.position[0] + 1, actor.position[1]))
+    Entity.update_all_entities_senses()
+    choices = discover_player_actions(session, actor.uuid)
+    row = next(row for row in choices.position_actions if row.source_item_uuid == device.uuid)
+    start = (actor.position[0], actor.position[1] - 3)
+    end = (start[0] + 3, start[1])
+    target = next(target for target in row.valid_targets if target.position == start)
+    cursor = EventQueue.event_cursor()
+    assert end in player_position_options(session, actor.uuid, row, target)
+    assert EventQueue.event_cursor() == cursor
+    operation = execute_player_action(session, actor.uuid, row, target, extra_target_positions=(end,))
+    spell = next(root for root in operation.roots if isinstance(root, SpellEvent))
+    assert not spell.canceled
+    assert spell.area_geometry.path.start == start and spell.area_geometry.path.end == end
 
 
 def test_two_players_move_spend_actions_and_receive_native_enemy_turns(session: Session) -> None:

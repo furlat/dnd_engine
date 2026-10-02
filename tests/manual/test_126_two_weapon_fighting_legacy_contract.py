@@ -19,8 +19,9 @@ from dnd.core.gridmap import get_map
 from dnd.core.creature_types import DamageType
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity, EntityConfig
-from dnd.monsters.bestiary import create_goblin
-from tests.engine.support import force_attack_miss, reset_combat_state, set_hp
+from dnd.game import Game
+from dnd.monsters.bestiary import create_goblin as build_goblin
+from tests.engine.support import create_test_entity, force_attack_miss, reset_combat_state, set_hp
 
 
 def _reset_state() -> None:
@@ -31,6 +32,7 @@ def _reset_state() -> None:
 def _create_light_dagger(source_uuid: UUID) -> Weapon:
     return Weapon(
         source_entity_uuid=source_uuid,
+        item_id="test.weapon.light_dagger",
         name="Legacy Light Dagger",
         damage_dice=4,
         dice_numbers=1,
@@ -48,6 +50,7 @@ def _create_light_dagger(source_uuid: UUID) -> Weapon:
 def _create_non_light_sword(source_uuid: UUID) -> Weapon:
     return Weapon(
         source_entity_uuid=source_uuid,
+        item_id="test.weapon.non_light_sword",
         name="Legacy Non-Light Sword",
         damage_dice=8,
         dice_numbers=1,
@@ -60,6 +63,13 @@ def _create_non_light_sword(source_uuid: UUID) -> Weapon:
             value_name="Legacy Non-Light Sword Attack Bonus",
         ),
     )
+
+
+def create_goblin(*args, **kwargs) -> Entity:
+    actor = build_goblin(*args, **kwargs)
+    actor.compose_entity()
+    Game().deploy_entity(actor, actor.position)
+    return actor
 
 
 def _equip_off_hand_dagger(entity: Entity) -> Weapon:
@@ -111,8 +121,8 @@ def _create_finesse_actor(
         position=(0, 0),
         faction="heroes",
     )
-    return Entity.create(
-        source_entity_uuid=uuid4(),
+    return create_test_entity(
+        source_id=uuid4(),
         name="Legacy Finesse Fighter",
         config=config,
     )

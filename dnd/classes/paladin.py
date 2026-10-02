@@ -62,7 +62,10 @@ def create_divine_smite_processor(slot_level: int):
         if event.attack_outcome not in (AttackOutcome.HIT, AttackOutcome.CRIT):
             return None
 
-        if event.context.get("divine_smite_applied"):
+        if event.context is not None and event.context.get("divine_smite_applied"):
+            return None
+
+        if event.target_entity_uuid is None or Entity.get(event.target_entity_uuid) is None:
             return None
 
         entity = Entity.get(source_entity_uuid)
@@ -107,7 +110,7 @@ def create_divine_smite_processor(slot_level: int):
             f"Level {slot_level} spell slot",
         )
         context = {
-            **modified_event.context,
+            **(modified_event.context or {}),
             "divine_smite_applied": True,
             "divine_smite_slot_level": slot_level,
             "divine_smite_dice_count": dice_count,

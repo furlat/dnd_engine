@@ -314,37 +314,28 @@ class Senses(BaseBlock):
         self.hazardous_cells = dict(reduced.hazardous_cells)
         self.spatial_effects = dict(reduced.spatial_effects)
 
-    def get_threathened_positions(self) -> List[Tuple[int, int]]:
-        """Return neighboring positions threatened by this observer.
+    def get_threathened_positions(self, *, close_pressure: bool = False,
+                                 knowledge_observer_uuid: Optional[UUID] = None) -> List[Tuple[int, int]]:
+        """Current main-hand reach through structural providers, without cost gates.
 
-        A position is threatened if it's:
-        1. Adjacent to this entity (including diagonals)
-        2. Visible to this entity
-        3. On a walkable tile (regardless of occupancy - an occupied cell is still threatened)
-        4. Physical propagation can cross from this entity to that tile
-
-        Note: Uses tile walkability (self.walkable), not paths, because paths exclude
-        occupied cells but an enemy standing in a cell is still threatened.
+        Close-range pressure is capped at five feet independently of OA reach.
+        Creature occupancy and floor navigation costs do not block weapon contact.
         """
-        position = self.position
-        neighbors = set([
-            (position[0] + 1, position[1]),
-            (position[0] - 1, position[1]),
-            (position[0], position[1] + 1),
-            (position[0], position[1] - 1),
-            (position[0] + 1, position[1] + 1),
-            (position[0] - 1, position[1] - 1),
-            (position[0] + 1, position[1] - 1),
-            (position[0] - 1, position[1] + 1),
-        ])
-        visible_set = set(self.visible.keys())
-        walkable_set = set(pos for pos, is_walkable in self.walkable.items() if is_walkable)
-        candidates = neighbors & visible_set & walkable_set
+        actor = BaseBlock.get(self.source_entity_uuid)
+        if actor is None:
+            return []
+        access, reach = actor.get_melee_threat_access()
+        if close_pressure:
+            reach = min(reach, 5)
+        if reach <= 0:
+            return []
         grid = get_map()
-        return [
-            pos for pos in candidates
-            if grid.can_propagate_transition(position, pos, self.source_entity_uuid)
-        ]
+        return [position for position, visible in self.visible.items()
+                if visible and position != self.position
+                and self.get_feet_distance(position) <= reach
+                and grid.can_reach_between(self.position, position, access, self.source_entity_uuid,
+                    subjective=knowledge_observer_uuid is not None,
+                    knowledge_observer_uuid=knowledge_observer_uuid)]
 
     @classmethod
     def create(
@@ -800,6 +791,13 @@ class SpatialSensesSystem:
                             special_senses=tuple(mode for mode in SensesType if mode in established),
                         )
                     object_contacts[object_uuid] = contact
+
+        # Explicit construction knowledge is not visual sight or truesight.
+        # Only the declaring creator receives this otherwise invisible contact.
+        for identity, position in grid.get_all_object_positions().items():
+            subject = BaseBlock.get(identity)
+            if subject is not None and subject.is_object_known_to(observer_uuid) and identity not in object_contacts:
+                object_contacts[identity] = PerceivedContact(position=position, visual=False, special_senses=())
 
         for object_uuid in sorted(boundary_evidence, key=str):
             subject = BaseBlock.get(object_uuid)

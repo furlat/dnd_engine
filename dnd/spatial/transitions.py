@@ -20,8 +20,10 @@ from dnd.core.events import (
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.types.spatial_effects import (
     SpatialEffectInteractionIntensity,
+    SpatialEffectLayer,
     SpatialEffectTransitionAction,
 )
+from dnd.types.world import OccupancyLayer
 
 
 ReplacementBuilder = Callable[
@@ -45,7 +47,11 @@ def apply_spatial_interaction(
 ) -> None:
     """Apply the strongest admitted authored row to intersecting cells."""
     affected = set(event.positions) & condition.affected_positions
-    if not affected:
+    if not affected or (event.occupancy_layer is OccupancyLayer.AIR
+                        and condition.layer is SpatialEffectLayer.GROUND_SURFACE):
+        return
+    if (event.occupancy_layer is not None
+                        and not condition.affects_occupancy_layer(event.occupancy_layer)):
         return
     admitted = tuple(
         transition

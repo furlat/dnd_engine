@@ -1,22 +1,34 @@
-# Fixed windows: content scaffold and implementation plan
+# Fixed windows: implementation plan and delivery
 
 Scope: the ten Fantasy window families confirmed by the environment artist on
 October 1. The user requested planning against existing code and starting all
 their content now. Window opening/closing is canceled. Desert, multi-Z, cloud
 rendering and the separate NPC roster are outside this work.
 
-## Current deliverable
+## Implementation status — October 1
 
-`dnd/content/items/window_definitions.py` supplies ten passive family records,
-containing nineteen ordinary `AuthoredItemDefinition` values: ten parent walls
-and nine inserts. This is an authoring scaffold, not playable registration.
-It adds no entity subclasses, execution hooks, asset paths, speculative numeric
-geometry or live factory entries. Tags describe content; they do not execute rules.
+Implemented ten registered Fantasy families, nineteen ordinary item definitions,
+shared physical reach queries, parent attachment destruction/removal, and cleared
+aperture traversal through the existing PASSAGE connector. Ordinary native events
+own the changes; rendering uses retained facts and independently authored media.
 
-The artist confirms eight fixed grilles, one empty opening and one wooden shutter.
-Their earlier Small-only/Medium clearance and transmission recommendations are
-proposals, not human-approved physical measurements. Those decisions remain here
-instead of becoming nullable gameplay placeholders or invented defaults in code.
+Traversal costs twice normal destination movement, including difficult terrain.
+A4/A5 admit Small or smaller; the other eight admit Medium or smaller. A4/A5 bars
+use metal material; the other inserts use wooden lattice/shutter. No window
+opening/closing, Desert, multi-Z or cloud changes were introduced.
+
+Approved media now includes parent-wall collapse after prior insert destruction.
+The retained destruction fact captures intact attached items before cascading;
+this selects the right bank and prevents a second insert animation. Uneven source
+sample times are retained. The authored clearance frame delays the visual spatial
+update. Separate masks pick the two independently actionable components, using
+received object state. Crossing records a typed connector movement and samples
+an authored Rolling vault with a small arc; geometry comes from admitted steps.
+
+Validation: 96 focused native tests pass. Anti-slop and anti-OOP reviewers caught
+and prompted fixes for subjective admission, vetoed removal/placement, post-roll
+barrier changes, early duplicate insert drawing, and mixed-target mask fallback.
+Final presentation, recording and UI checks and review-gallery link follow below.
 
 | Artist asset | Native family ID | Independent insert |
 | --- | --- | --- |
@@ -72,7 +84,7 @@ Proposed coarse physical model to confirm:
 | --- | --- | --- | --- | --- |
 | Frame plus intact grille | Blocked | Blocked | Pass | Pass |
 | Frame plus intact G9 shutter | Blocked | Blocked | Blocked | Blocked |
-| Frame with insert broken, or G7 empty | Blocked by retained sill/frame | Restricted by the selected attack; proposed Light weapons | Pass | Pass |
+| Frame with insert broken, or G7 empty | Blocked by retained sill/frame | Restricted by the selected attack; Light melee weapons | Pass | Pass |
 | Parent and insert destroyed | Clear from these providers | Clear from these providers | Clear from these providers | Clear from these providers |
 
 Other map blockers, source/target visibility, support and occupancy still apply.
@@ -152,18 +164,18 @@ geometry, evaluate context-dependent permission per request, and use existing
 spatial events/invalidation when provider state changes. Equipment or relevant
 actor-state changes must also refresh available targets/threats.
 
-The user's proposed weapon predicate is the existing `WeaponProperty.LIGHT`,
+The selected weapon predicate is the existing `WeaponProperty.LIGHT`,
 not absence of `HEAVY`. Current content therefore permits dagger, shortsword and
 handaxe, and excludes spear, rapier and greataxe. This approximates maneuverability,
-not a universal stabbing rule; the exact predicate remains under discussion.
+not a universal stabbing rule.
 Do not infer permission from a slash animation, damage type or sprite size.
 
 Touch spells, unarmed/natural attacks and body-displacing actions need their own
 actual contact context. In particular `NaturalAttack`'s `MELEE_MAIN` slot is a
 plumbing proxy: the held weapon must not decide whether a bite or claw fits.
-Proposed hand contact through an empty aperture must not silently grant passage
+Hand contact through an empty aperture does not grant passage
 through intact bars, a bite, a grapple across the frame or bodily traversal.
-Those action policies remain explicit before implementing their admission.
+The implementation carries these distinct physical access contexts.
 
 Reuse the query in discovery and validation
 for weapon/natural attacks, opportunity threats, touch/REACH spells through
@@ -280,27 +292,21 @@ Do not add a visual regression framework or tests mirroring these table entries.
    Include a viewer on each side and keep native inputs identical across views.
    Native checks and human visual approval are reported separately.
 
-## Decisions to settle during the next backend step
+## Selected gameplay policies and remaining capability boundary
 
-The main gameplay choice is traversal. The artist suggests Small-or-smaller for
-A4/A5 and Medium-or-smaller for the other eight openings. These are candidate
-gameplay categories, not measured dimensions; these size candidates remain to be
-chosen. **Confirmed by the user: double normal movement cost for crossing a
-window.** Express this relative to normal movement, not as a fixed 10-foot fee.
-No additional traversal subsystem is needed.
+A4/A5 admit Small-or-smaller and the other eight admit Medium-or-smaller. These
+are authored gameplay categories, not dimensions inferred from pixels. Crossing
+costs twice normal destination movement, including difficult terrain. Ordinary
+walks cannot bypass a retained sill/frame; parent destruction clears that frame.
+Hand contact and Light melee weapons cross cleared apertures, while body,
+bites/claws and ordinary weapons remain blocked. Native bars/shutters gate their
+own channels independently of the supporting frame.
 
-The other proposed default is the coarse transmission table above, including
-the fixed G9 shutter. Material durability can reuse existing content values when
-authoring each confirmed material; it is routine balancing, not a new subsystem.
-Native bands and available traversal presentation still need explicit authoring.
-
-Parent linkage, structural attack admission and support/occupancy validation are
-implementation obligations, not choices to hand back to the human. Ranged/spell
-object targeting is an existing capability gap to resolve deliberately if needed
-for release, not a new rule where windows are arbitrarily immune to projectiles.
-
-The scaffold is useful without guessing these decisions. It does not register
-half-working windows in maps or expose a misleading playable action.
+Ranged/spell targeting of objects remains the explicitly identified existing
+capability gap. This delivery uses the existing adjacent AttackObject action;
+it does not invent projectile immunity for windows or extend arbitrary spells
+to object targets. Artwork and native object HP are ready for that later shared
+capability work.
 
 ## Independent reviews
 
@@ -314,8 +320,153 @@ and verified that none is prematurely registered with live item builders.
 Both reviewers also approved the subsequent requester-relative attack-access
 refinement in section 3. This follows existing sense-dependent contact resolution
 and requester-dependent movement blockers while keeping knowledge admission
-separate. Light/nonweapon policy choices remain discussion, not implemented rules.
+separate. The selected Light/HAND policies are now implemented.
 Both also approved the detailed attack/action companion after auditing reaction
 timing, every identified attack wrapper, shared spell preflight, direct native
 object use and retained spatial data. The existing reaction/pressure/cost baseline
-passes sixteen selected tests; this is not proof of the unimplemented window rule.
+passed sixteen baseline tests; the implementation now passes 96 native acceptance tests.
+
+## Final delivery and checks
+
+- Native combat, cost, assembly and traversal suite: **96 passed**.
+- Window replay, mixed-target UI, retained history and dependency-boundary suite:
+  **84 passed**. The strengthened mixed-target regression also passes separately.
+- Targeted runtime/importer/review typing: **zero errors**; window-patch whitespace check clean.
+- Both independent reviewers approved after their concrete findings were fixed.
+- [Gameplay review: ten families, both observers, four views](http://127.0.0.1:8767/runs/20261001T004700Z-263b93/index.html):
+  **24/24 captures pass**. Final export reprojects and renders the same saved native
+  inputs; it does not fabricate movement, damage or destruction. Parent-collapse
+  and cleared-aperture cases are separate. Source positions start on opposite
+  sides; the vault deliberately puts the attacker on the witness's side.
+- Public packets retain only disclosed attached identities for composite media;
+  a hidden insert is never revealed by its supporting wall's appearance or collapse.
+- Private originals are preserved; production sheets/masks are installed and
+  included in the private installer manifest. No licensed pixels are Git-tracked
+  in this engine patch.
+
+### Human visual correction — matching wall context
+
+The review fixture now places each window between two existing solid siblings,
+using the recovered architecture handoff: A4/A5→A1, C4→C1, D7→D1, D16→D8,
+F7→F1, F16→F8, G7/G8/G9→G1. Seven intact banks preserve the original 256px
+pixels padded to the same 320px canvas/pivot160240 as the windows; no new wall
+geometry or destruction was generated. These adjoining walls use the existing
+fixed directional-wall provider, not new breakable content or inferred break art.
+The attacker now starts one cell further away and walks to the adjacent cell
+through native movement before attacking. Four-view mounting diagrams verify
+the base sits on the actual edge; no half-cell sprite shift was applied.
+[Focused A4/G8 review](http://127.0.0.1:8767/runs/20261001T011251Z-708dac/index.html)
+contains four event-driven clips, both observers, all cameras; all capture checks
+and the six window presentation tests pass. The rolling vault remains a visual concern. The dense missing-frame delivery
+was subsequently installed:61frames at24FPS,37 for G9 insert; preserved pivots,
+unchanged physical clearance at416.7ms and unchanged source models/transforms.
+The standalone shadow sorting experiment was withdrawn after an opaque-wall
+regression. The human clarified that actors leak through transparent exterior
+wall pixels, while the window opening must remain transparent. A finite boundary
+clip now uses received wall placement and separately authored aperture masks;
+solid siblings explicitly opt in as well. Bodies use billboard depth, shadows
+use their support-plane depth only for clipping. Existing painter order, native
+rules and cloud composition stay unchanged. Four-camera exterior/opening and
+fractional-position shadow checks cover the clarified defect.
+
+[Corrected four-view A4/G8 replay](http://127.0.0.1:8767/runs/20261001T014550Z-d9c5d6/index.html)
+uses the same saved native events and dense art; all four capture checks pass.
+The ECS and anti-slop reviews approved boundary/aperture ownership and the revised
+ground-shadow clipping. Scoped typing and 21 import-boundary tests pass.
+The final focused window, boundary, animation and fixture suite passes 90 tests.
+The four-direction aperture tests explicitly check unpainted exterior margins;
+raised and fractional-position shadow tests retain the existing draw order.
+
+### Follow-up: crossing through the authored opening
+
+Use the existing window aperture measurements to author one camera-independent
+waypoint per family. Resolve the received boundary being crossed, shape the
+connector movement through that point, and align the rolling body with the
+opening. Preserve recorded endpoints, movement costs and ordinary jump behavior.
+Check both directions, small/high apertures, all four cameras and interruption
+continuity. Anti-slop and ECS/anti-OOP reviewers validate this bounded change.
+
+Implemented as authored `passage_point` values beside each parent wall bank, in
+local normal/tangent cells and height steps. The existing connector profile
+authors the Rolling body center at 12 rig pixels. One quadratic curve passes
+through that center, retaining recorded ground supports and exact endpoints;
+its shadow stays on the ground. Only committed crossings use this alignment.
+Reaction pauses and resumed frames retain the original trajectory/clip phase.
+
+A5 has a deep stone reveal: each facing exposes a different interval of the
+same crossing. Its reviewed visible masks are not a thin collision plane. Do
+not shift sprites or add camera-specific curves to force one simultaneous
+point into all four visible contours. The all-view test checks the complete
+trajectory against each visible opening.
+
+[Authored passage review](http://127.0.0.1:8767/runs/20261001T015833Z-dff84e/index.html)
+replays unchanged native inputs for G8, higher D16 and narrow A5: both observers,
+all four cameras, six successful capture checks.
+Final follow-up validation: 76 movement, window, attack and architecture tests
+pass; scoped typing reports zero errors. Independent ECS/data-ownership and
+anti-slop reviews approve the implementation, including the rejected-step gate.
+
+# October 1 corrective validation: insert-only destruction
+
+The user found a standing wall remaining after the final destruction in the
+015833 review. The native saved inputs contain one insert destruction and one
+parent destruction. The imported dense insert animation was a standalone review
+composite containing the parent wall, so its retained final frame incorrectly
+redrew that wall. The artist repackaged the original raw fragment renders without
+the parent beauty layer; no simulation, geometry, camera, timing or parent media
+changed. All nine families/four directions now use explicit insert-only sheets.
+
+The new final-frame pixel regression reproduces the old problem for all nine
+families and passes after the media replacement. The whole window presentation
+suite passes 24 checks. The exact original six saved inputs are replayed in
+`20261001T092718Z-b0a6ce`; this supersedes the defective 015833 visual review.
+Art originals and superseded installed sheets remain private and preserved.
+
+# October 1 corrective implementation: wall clipping and CrawlThroughWindow
+
+The attack leak came from testing a flat sprite's constant depth against each
+pixel of a sloping wall, and stopping the mask at the wall base. Actor contact
+now determines its side of the finite wall plane. Behind-wall sprite overhang
+below the base is clipped on the same support; raised walls still permit lower
+supports. Shadows retain their ground-depth test and cannot extend through the
+boundary from a behind-wall owner. Window alpha remains an explicit opening.
+The environment compositor also now consumes the existing occlusion flag for
+matching solid wall props, instead of requiring a window aperture.
+
+The user's clarification replaces the previous full roll with the independently
+named `CrawlThroughWindow` connector animation. It has its own 450 ms clock,
+selected source pose keys (0–3, brief hold, reverse to 0), 12% sill-height hold, and
+temporary 0.6 × 0.8 squeeze. `Rolling` is only the source pose bank; neither its
+ordinary playback nor Jump's trajectory/timing is changed. Native traversal
+permission, paid movement, endpoints and reaction ordering remain authoritative.
+
+Registration uses `body_center` in the existing typed pose-socket format. The
+120 points are the centres of the alpha≥128 bounds of the unarmed `NakedBody`
+Rolling source, all 15 frames/eight facings. Gear cannot bias that measurement;
+existing head/face sockets remain unchanged. During the passage the sampled
+centre blends onto the authored world-space aperture point. Body scaling and
+registration do not transform the ground shadow, and attached pose effects use
+the transformed sockets. This needs no new artwork or pixel probing at runtime.
+
+Validation: 86 wall/window/attack tests and 42 Jump, visible-movement and rig-data
+checks pass. Scoped typing reports zero errors. The actual-body pixel check
+verifies the measured body centre reaches the opening in every camera; other
+checks cover finite wall ends, preserved aperture alpha, source-surface safety,
+ground shadows, rejected movement and intact/destructed fixtures.
+The six unchanged recorded inputs are replayed in the
+[crawl and clipping review](http://127.0.0.1:8767/runs/20261001T095928Z-aacdbd/index.html).
+All six capture checks pass. This supersedes the earlier window presentation;
+artistic acceptance of the new crawl remains for the user.
+
+October 1 review correction: the user rejected the procedural grid. That entire
+renderer option is removed. The recorder now selects the unmodified Fantasy
+Ground H1 paving sprites through the existing terrain catalog (`--floor paving`,
+default); `--floor scene` retains original scene bindings. Only artwork changes:
+all six saved gameplay sequences compare equal to the earlier recordings. The
+450 ms crawl has a 54 ms sill-height hold instead of 450 ms. All four floor
+sprites match the original ZIP bytes; their private archive and production
+copies are preserved. The six cases pass in the
+[real-floor and faster-crawl review](http://127.0.0.1:8767/runs/20261001T101914Z-682806/index.html).
+Validation for this correction: 53 window/boundary checks and 8 review-pipeline
+checks pass; scoped typing reports zero errors. The actual floor and crawl
+midpoint were inspected in the resulting four-camera video.

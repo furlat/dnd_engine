@@ -447,19 +447,6 @@ def _apply_level_features(
                 ),
             ),
         )
-        handler = fighter.create_extra_attack_resource_handler(
-            entity.uuid,
-            handler_uuid=_source(
-                entity,
-                f"{step_id}.{_EXTRA_ATTACK}.handler",
-            ),
-        )
-        handler.behavior_binding = _binding(
-            entity,
-            behavior_id=_EXTRA_ATTACK,
-            provided_by_id=_EXTRA_ATTACK,
-        )
-        _register_handler(entity, handlers, handler)
     if _FAST_MOVEMENT in features:
         modifier_id = _source(entity, f"{step_id}.{_FAST_MOVEMENT}")
         entity.action_economy.movement.self_contextual.add_value_modifier(

@@ -11,7 +11,14 @@ from uuid import UUID, uuid4
 import pytest
 
 from devtools.generate_event_contract import build_manifest
-from dnd.actions import JumpEvent, Move, MovementEvent
+from dnd.actions import AttackEvent, JumpEvent, Move, MovementEvent, SpellEvent
+from dnd.actions_functional import (
+    execute_available_action,
+    get_available_actions,
+    register_spell,
+    setup_standard_actions,
+)
+from dnd.content.items.environment_item_builders import build_authored_door
 from dnd.core.base_conditions import (
     ConditionApplicationEvent,
     OutcomeProtection,
@@ -21,6 +28,7 @@ from dnd.core.condition_types import (
     ConditionTag,
 )
 from dnd.core.events import (
+    AreaReachEvent,
     Event,
     EventQueue,
     EventPhase,
@@ -31,10 +39,14 @@ from dnd.core.events import (
     SpatialChangeType,
     WindExposureEvent,
 )
+from dnd.core.dice import fixed_dice_faces
 from dnd.entity import Entity
+from dnd.game import Game
 from dnd.monsters.bestiary import create_goblin
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.abjuration import ShieldBuff
+from dnd.spells.evocation import Fireball, FireBolt
+from dnd.types.world import CardinalDirection
 from server.event_contract import (
     EVENT_CONTRACT,
     EventContractError,
@@ -42,6 +54,7 @@ from server.event_contract import (
     serialize_event,
 )
 from server.timeline_contracts import WireEvent
+from tests.manual.spell_regression_support import create_spell_regression_actor
 
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -91,6 +104,10 @@ def test_executed_event_lineages_round_trip_typed_values_through_json() -> None:
         position=(6, 5),
         faction="monsters",
     )
+    world = Game()
+    for actor in (mover, saver, caster):
+        actor.compose_entity()
+        world.deploy_entity(actor, actor.position)
     Entity.update_all_entities_senses(max_distance=30)
 
     movement = Move(
@@ -322,6 +339,55 @@ def test_event_serializer_canonicalizes_every_unordered_wire_field() -> None:
         WireEvent.model_validate(wind_payload).model_dump(mode="json")
         == wind_payload
     )
+
+
+@pytest.mark.parametrize("behavior_id", ["action.attack", "spell.fire_bolt", "spell.fireball"])
+def test_object_attack_and_breach_events_round_trip_after_runtime_reset(behavior_id: str) -> None:
+    """A cold client receives the real selected contact and causal breach stages."""
+    reset_engine_runtime(grid_size=(6, 1))
+    try:
+        actor = create_spell_regression_actor("Wire attacker", (0, 0), "heroes", spell_slots={3: 1})
+        setup_standard_actions(actor)
+        register_spell(actor, FireBolt, caster_level=1)
+        register_spell(actor, Fireball, caster_level=5)
+        door = build_authored_door("environment.door.desert_c7", hit_points=4)
+        door_x = 1 if behavior_id == "action.attack" else 2
+        door.place_on_grid((door_x, 0), boundary_direction=CardinalDirection.WEST)
+        Entity.update_all_entities_senses(max_distance=120)
+        choices = get_available_actions(actor)
+        row, target = next(
+            (row, target)
+            for row in choices.all_actions if row.behavior_id == behavior_id
+            for target in row.valid_targets
+            if (target.position == (1, 0) if behavior_id == "spell.fireball"
+                else target.target_uuid == door.uuid)
+        )
+        cursor = EventQueue.event_cursor()
+        with fixed_dice_faces(*([1] * 100) if behavior_id == "spell.fireball" else (18, 4)):
+            result = execute_available_action(actor, row, target)
+        assert isinstance(result, (AttackEvent, SpellEvent)) and not result.canceled
+        events = [event for _, event in EventQueue.iter_events_since(cursor)]
+        if behavior_id == "spell.fireball":
+            stages = [event for event in events if isinstance(event, AreaReachEvent)
+                      and event.phase is EventPhase.COMPLETION]
+            assert len(stages) == 2
+            assert stages[1].prerequisite_destruction_lineages
+            assert (2, 0) in stages[1].newly_reached_positions
+        else:
+            assert result.target_kind == "object"
+            assert result.target_entity_uuid == door.uuid
+            # Boundary contacts use the reached side, not the far anchor cell.
+            assert result.target_position == (door_x - 1, 0)
+        payloads = [serialize_event(event) for event in events]
+        saved = json.dumps(payloads)
+    finally:
+        reset_engine_runtime()
+
+    assert not Entity.get_all_entities() and EventQueue.event_cursor() == 0
+    decoded = [WireEvent.model_validate(payload).model_dump(mode="json")
+               for payload in json.loads(saved)]
+    assert decoded == payloads
+    assert not Entity.get_all_entities() and EventQueue.event_cursor() == 0
 
 
 def test_unknown_event_subclass_fails_at_the_transport_boundary() -> None:

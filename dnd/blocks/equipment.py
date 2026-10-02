@@ -1,3 +1,4 @@
+from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec
 """Equipment, armor, weapon, and shield models for entity combat gear."""
 
 from dataclasses import dataclass
@@ -303,6 +304,8 @@ class Shield(EquippableItem):
 class Weapon(EquippableItem):
     """Equippable weapon with attack, damage, range, and property metadata."""
 
+    missile_size: Literal["ordinary", "large"] = Field(default="ordinary",
+        description="Physical ranged missile category; large covers siege/giant projectiles.")
     name: str = Field(default="Weapon", description="Name of the weapon")
     map_char: str = Field(default="\u2020", description="Character to display on the map grid")
     description: Optional[str] = Field(
@@ -895,11 +898,12 @@ class Equipment(BaseBlock):
         ability_block: AbilityScores,
         weapon_slot: WeaponSlot,
         override_ability: Optional[AbilityName] = None,
+        natural_weapon: Optional[NaturalWeaponSpec] = None,
     ) -> str:
         """Return the exact ability selected for one weapon attack."""
         return self._select_weapon_attack_ability(
             ability_block,
-            self.get_weapon(weapon_slot),
+            None if natural_weapon else self.get_weapon(weapon_slot),
             override_ability,
         ).name
 
@@ -908,15 +912,16 @@ class Equipment(BaseBlock):
         ability_block: AbilityScores,
         weapon_slot: WeaponSlot,
         override_ability: Optional[AbilityName] = None,
+        natural_weapon: Optional[NaturalWeaponSpec] = None,
     ) -> Tuple[ModifiableValue, List[ModifiableValue], List[ModifiableValue], Range]:
         """Return weapon, equipment, ability, and range attack components."""
-        weapon = self.get_weapon(weapon_slot)
+        weapon = None if natural_weapon else self.get_weapon(weapon_slot)
         ability_bonuses: List[ModifiableValue] = []
         attack_bonuses = [self.attack_bonus]
         if weapon is None:
             weapon_bonus = self.unarmed_attack_bonus
             attack_bonuses.append(self.melee_attack_bonus)
-            weapon_range = self.get_weapon_range(weapon_slot)
+            weapon_range = natural_weapon.range if natural_weapon else self.get_weapon_range(weapon_slot)
         else:
             weapon_bonus = weapon.attack_bonus
             weapon_range = weapon.range
@@ -938,9 +943,10 @@ class Equipment(BaseBlock):
         ability_block: AbilityScores,
         weapon_slot: WeaponSlot,
         override_ability: Optional[AbilityName] = None,
+        natural_weapon: Optional[NaturalWeaponSpec] = None,
     ) -> Tuple[int, int]:
         """Return actor-side attack bonus and advantage contributions."""
-        weapon = self.get_weapon(weapon_slot)
+        weapon = None if natural_weapon else self.get_weapon(weapon_slot)
         ability = self._select_weapon_attack_ability(
             ability_block,
             weapon,
@@ -965,9 +971,10 @@ class Equipment(BaseBlock):
         weapon_slot: WeaponSlot,
         profile_factory: Callable[..., DamageProfileT],
         override_ability: Optional[AbilityName] = None,
+        natural_weapon: Optional[NaturalWeaponSpec] = None,
     ) -> List[DamageProfileT]:
         """Build damage formulas without importing the higher-level action DTO."""
-        weapon = self.get_weapon(weapon_slot)
+        weapon = None if natural_weapon else self.get_weapon(weapon_slot)
         profiles: List[DamageProfileT] = []
         if weapon is not None:
             base_bonuses = [
@@ -1028,13 +1035,13 @@ class Equipment(BaseBlock):
                 self.melee_damage_bonus,
             )
             profiles.append(profile_factory(
-                dice_count=self.unarmed_dice_numbers,
-                die_size=self.unarmed_damage_dice,
+                dice_count=natural_weapon.dice_numbers if natural_weapon else self.unarmed_dice_numbers,
+                die_size=natural_weapon.damage_dice if natural_weapon else self.unarmed_damage_dice,
                 flat_bonus=(
                     sum(value.normalized_score for value in base_bonuses)
                     + ability.modifier
                 ),
-                damage_type=self.unarmed_damage_type.value,
+                damage_type=(natural_weapon.damage_type if natural_weapon else self.unarmed_damage_type).value,
             ))
         profiles.extend(
             profile_factory(
@@ -1051,6 +1058,14 @@ class Equipment(BaseBlock):
             )
         )
         return profiles
+
+    def snapshot_attack_source_metadata(self, slot: WeaponSlot) -> AttackSourceMetadata:
+        """Retain the same selected source identity for discovery and execution."""
+        name, damage_types = self.snapshot_attack_event_metadata(slot)
+        weapon = self.get_weapon(slot)
+        return AttackSourceMetadata(kind="equipped" if weapon else "unarmed",
+            weapon_slot=slot, name=name, damage_types=damage_types,
+            item_uuid=weapon.uuid if weapon else None)
 
     def snapshot_attack_event_metadata(
         self,
@@ -1139,7 +1154,7 @@ class Equipment(BaseBlock):
         """Ranged slots are always ranged, melee slots are never ranged."""
         return weapon_slot in (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF)
 
-    def _get_main_unarmed_damage(self, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None) -> Damage:
+    def _get_main_unarmed_damage(self, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Damage:
         """Combine unarmed, melee, equipment, and ability bonuses into one damage."""
         unarmed_damage_bonus = self.unarmed_damage_bonus
         if override_ability is not None:
@@ -1160,7 +1175,7 @@ class Equipment(BaseBlock):
             "attack_ability": ability.name,
             "range_type": RangeType.REACH.value,
         })
-        unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=self.unarmed_damage_dice, dice_numbers=self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=self.unarmed_damage_type)
+        unarmed_damage = Damage(source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid, damage_dice=natural_weapon.damage_dice if natural_weapon else self.unarmed_damage_dice, dice_numbers=natural_weapon.dice_numbers if natural_weapon else self.unarmed_dice_numbers, damage_bonus=combined_bonus, damage_type=natural_weapon.damage_type if natural_weapon else self.unarmed_damage_type)
         return unarmed_damage
 
     def _get_weapon_base_damage(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None) -> Optional[Damage]:
@@ -1211,10 +1226,10 @@ class Equipment(BaseBlock):
         else:
             return damages
 
-    def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None) -> List[Damage]:
+    def get_damages(self, weapon_slot: WeaponSlot, ability_block: AbilityScores, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> List[Damage]:
         """Return all damage payloads for an attack from a weapon slot."""
-        if self.is_unarmed(weapon_slot):
-            return [self._get_main_unarmed_damage(ability_block, override_ability=override_ability)]+self.get_extra_attack_damage()
+        if natural_weapon or self.is_unarmed(weapon_slot):
+            return [self._get_main_unarmed_damage(ability_block, override_ability=override_ability, natural_weapon=natural_weapon)]+self.get_extra_attack_damage()
         else:
             outs = []
             base_damage = self._get_weapon_base_damage(weapon_slot, ability_block, override_ability=override_ability)
@@ -1450,6 +1465,8 @@ class Equipment(BaseBlock):
             if item.uuid in seen_new or item.uuid in seen_existing:
                 raise ValueError(f"duplicate initial equipment UUID {item.uuid}")
             seen_new.add(item.uuid)
+            if item.intrinsic_owner_uuid not in (None, self.source_entity_uuid):
+                raise ValueError("Intrinsic anatomy belongs to another entity")
             if item.source_entity_uuid != self.source_entity_uuid:
                 raise ValueError(
                     f"initial equipment {item.item_id} belongs to another entity",
@@ -1534,6 +1551,10 @@ class Equipment(BaseBlock):
         parent_event_uuid: Optional[UUID] = None,
     ) -> Optional[_PreparedEquipmentTransition]:
         """Run pure declaration/execution validators without publishing events."""
+        if item.intrinsic_owner_uuid is not None and (
+            not equipping or item.intrinsic_owner_uuid != self.source_entity_uuid
+        ):
+            return None
         declaration = self._create_equipment_event(
             item,
             slot,

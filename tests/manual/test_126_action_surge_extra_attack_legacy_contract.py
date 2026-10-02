@@ -15,6 +15,7 @@ from dnd.classes.fighter import (
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
+from dnd.game import Game
 from dnd.monsters.bestiary import create_goblin, create_skeleton
 from tests.engine.support import force_attack_miss, reset_combat_state, set_hp
 
@@ -44,6 +45,8 @@ def _create_fighter(*, extra_attacks: int) -> Entity:
             num_uses=1,
         )
     )
+    fighter.compose_entity()
+    Game().deploy_entity(fighter, (5, 5))
     fighter.on_turn_start()
     return fighter
 
@@ -54,6 +57,8 @@ def _create_target() -> Entity:
         position=(5, 6),
         faction="monsters",
     )
+    target.compose_entity()
+    Game().deploy_entity(target, (5, 6))
     set_hp(target, 500)
     return target
 

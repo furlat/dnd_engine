@@ -419,19 +419,6 @@ def _apply_level_features(
                     ),
                 ),
             )
-            handler = fighter.create_extra_attack_resource_handler(
-                entity.uuid,
-                handler_uuid=_source(
-                    entity,
-                    f"{step_id}.{_EXTRA_ATTACK}.handler",
-                ),
-            )
-            handler.behavior_binding = _binding(
-                entity,
-                behavior_id=_EXTRA_ATTACK,
-                provided_by_id=_EXTRA_ATTACK,
-            )
-            _register_handler(entity, handlers, handler)
     if _INDOMITABLE in resolved.feature_ids:
         source_id = _source(entity, f"{step_id}.{_INDOMITABLE}")
         entity.action_economy.add_resource_contribution(

@@ -18,6 +18,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from dnd.core.creature_types import Size
 
 
 ConnectorPosition = tuple[StrictInt, StrictInt]
@@ -67,6 +68,16 @@ class ConnectorDestinationStatus(str, Enum):
     UNKNOWN = "unknown"
 
 
+class ApertureTraversal(BaseModel):
+    """A passage through one retained frame, evaluated against current state."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    frame_uuid: UUID
+    maximum_size: Size
+    movement_cost_multiplier: StrictInt = Field(default=2, ge=1)
+
+
 class TraversalConnectorDefinition(BaseModel):
     """Stable map-authored connector identity and mechanics."""
 
@@ -77,6 +88,7 @@ class TraversalConnectorDefinition(BaseModel):
     presentation_key: str
     endpoint_positions: tuple[ConnectorPosition, ConnectorPosition]
     movement_cost_feet: StrictInt = Field(ge=0)
+    aperture: ApertureTraversal | None = None
     action_cost_type: ConnectorActionCostType | None = None
     action_cost_amount: StrictInt = Field(default=0, ge=0)
     bidirectional: StrictBool
@@ -100,6 +112,12 @@ class TraversalConnectorDefinition(BaseModel):
     @model_validator(mode="after")
     def validate_definition(self) -> Self:
         first, second = self.endpoint_positions
+        if self.aperture is not None and (
+            self.kind is not TraversalConnectorKind.PASSAGE
+            or abs(first[0] - second[0]) + abs(first[1] - second[1]) != 1
+            or self.movement_cost_feet != 0
+        ):
+            raise ValueError("apertures require an adjacent passage with computed movement cost")
         if first == second:
             raise ValueError("connector endpoints must be distinct")
         if self.action_cost_type is None:
@@ -135,9 +153,13 @@ def _connector_digest(
     endpoints: tuple[TraversalConnectorEndpoint, TraversalConnectorEndpoint],
     revision: int,
 ) -> str:
+    definition_payload = definition.model_dump(mode="json")
+    if definition.aperture is None:
+        # Preserve the serialized identity of existing non-aperture connectors.
+        definition_payload.pop("aperture")
     payload = {
         "uuid": str(connector_uuid),
-        "definition": definition.model_dump(mode="json"),
+        "definition": definition_payload,
         "endpoints": [endpoint.model_dump(mode="json") for endpoint in endpoints],
         "revision": revision,
     }
@@ -160,6 +182,7 @@ class TraversalConnector(BaseModel):
     presentation_key: str
     endpoints: tuple[TraversalConnectorEndpoint, TraversalConnectorEndpoint]
     movement_cost_feet: StrictInt = Field(ge=0)
+    aperture: ApertureTraversal | None = None
     action_cost_type: ConnectorActionCostType | None = None
     action_cost_amount: StrictInt = Field(default=0, ge=0)
     bidirectional: StrictBool
@@ -188,6 +211,7 @@ class TraversalConnector(BaseModel):
             presentation_key=definition.presentation_key,
             endpoints=endpoints,
             movement_cost_feet=definition.movement_cost_feet,
+            aperture=definition.aperture,
             action_cost_type=definition.action_cost_type,
             action_cost_amount=definition.action_cost_amount,
             bidirectional=definition.bidirectional,
@@ -212,6 +236,7 @@ class TraversalConnector(BaseModel):
                 self.endpoints[1].position,
             ),
             movement_cost_feet=self.movement_cost_feet,
+            aperture=self.aperture,
             action_cost_type=self.action_cost_type,
             action_cost_amount=self.action_cost_amount,
             bidirectional=self.bidirectional,

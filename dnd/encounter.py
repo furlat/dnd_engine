@@ -543,7 +543,7 @@ class Encounter(BaseObject):
                 tile.advance_duration(cond_name)
         for item_block in grid.get_objects_with_conditions():
             for cond_name in list(item_block.active_conditions.keys()):
-                item_block.advance_duration(cond_name)
+                item_block.advance_duration(cond_name, interval=(self.uuid, self.round_number))
 
     def _advance_round(self) -> None:
         """Advance to the next round."""

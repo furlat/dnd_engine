@@ -84,6 +84,10 @@ class AoEShape(BaseObject):
         """Return the explicit or default origin for this shape."""
         return self.origin_override or self._default_origin(caster_pos)
 
+    def geometric_positions(self, caster_pos: Tuple[int, int]) -> Set[Tuple[int, int]]:
+        """Return the original finite envelope before barriers or protection."""
+        return self._get_positions_in_shape(self.get_origin(caster_pos))
+
     def footprint_target_key(self, caster_pos: Tuple[int, int]) -> Tuple[object, ...]:
         """Return the target coordinate identity that determines this footprint."""
         return ("target", *self.target)

@@ -16,7 +16,7 @@ from random import randint
 from functools import cached_property
 
 from dnd.core.base_block import BaseBlock
-from dnd.core.events import EventPhase, EventQueue, TemporaryHitPointsChangedEvent
+from dnd.core.events import EventPhase, EventQueue, TakeDamageEvent, TemporaryHitPointsChangedEvent
 from dnd.types.actor import TemporaryHitPointsGrant
 
 
@@ -620,6 +620,26 @@ class Health(BaseBlock):
         if preview.normal_hit_point_damage > 0:
             self.add_damage(preview.normal_hit_point_damage)
         return preview.normal_hit_point_damage
+
+    def preview_damage_event(
+        self, event: TakeDamageEvent, *,
+        normal_hit_points_available: Optional[int] = None,
+    ) -> DamageApplicationPreview:
+        """Resolve the existing interruptible packet through one defense owner."""
+        if not event.damages:
+            raise ValueError("TakeDamageEvent requires at least one typed damage component")
+        if (event.final_damage is None
+                and len(event.damage_rolls) == len(event.damages)
+                and len(event.damages) > 1):
+            components = [(roll.total, damage.damage_type)
+                          for roll, damage in zip(event.damage_rolls, event.damages)]
+        else:
+            components = [(event.get_effective_damage(), event.damages[0].damage_type)]
+        return self.preview_damage_components(
+            components, event.normal_hit_point_damage_cap,
+            declared_damage=event.total_damage,
+            normal_hit_points_available=normal_hit_points_available,
+        )
 
     def preview_damage_components(
         self,

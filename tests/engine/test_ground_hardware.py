@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from dnd.actions import AttackObject, Move
+from dnd.actions import Attack, Move
 from dnd.actions_functional import get_available_actions, setup_standard_actions
 from dnd.blocks.base_item import BaseItem
 from dnd.blocks.health import HealthConfig, HitDiceConfig
@@ -64,8 +64,9 @@ def actor(game: Game, position: tuple[int, int]) -> Entity:
 
 def attack(attacker: Entity, item: BaseItem, damage: int = 8) -> Event:
     attacker.action_economy.reset_all_costs()
-    with fixed_dice_faces(damage):
-        event = AttackObject(source_entity_uuid=attacker.uuid, target_entity_uuid=item.uuid).apply()
+    with fixed_dice_faces(19, damage):
+        attacker.update_entity_senses()
+        event = Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=attacker.uuid, target_entity_uuid=item.uuid).apply()
     assert event is not None and not event.canceled
     return event
 

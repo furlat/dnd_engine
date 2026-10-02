@@ -16,6 +16,7 @@ from dnd.ai.contracts.semantics import (
     unknown_action_semantics,
 )
 from dnd.ai.contracts.immutable import FrozenDict
+from dnd.core.action_types import PositionSelection
 
 
 ActionBucket = Literal[
@@ -201,6 +202,7 @@ class ActionTarget(ControlModel):
 
     index: int = Field(description="Engine target index for execution.")
     target_uuid: Optional[str] = Field(default=None, description="Target entity or object UUID.")
+    target_kind: Literal["creature", "object"] = Field(default="creature", description="Native recipient kind; independent of faction.")
     target_name: Optional[str] = Field(default=None, description="Known target display name.")
     position: Optional[Tuple[int, int]] = Field(default=None, description="Target grid position.")
     distance: Optional[int] = Field(default=None, description="Distance in feet when supplied by the engine.")
@@ -272,6 +274,7 @@ class ActionSourceDefinition(ControlModel):
         default=None,
         description="Whether a multi-entity action may select the same target more than once.",
     )
+    position_selection: Optional[PositionSelection] = None
     is_item_use: bool = Field(default=False, description="Whether this affordance is provided by an item or object.")
     source_item_uuid: Optional[str] = Field(default=None, description="Item or object UUID providing the affordance.")
     weapon_slot: Optional[str] = Field(default=None, description="Weapon slot associated with this row.")
@@ -488,6 +491,11 @@ class ActionAffordance(ControlModel):
     def allow_same_target(self) -> Optional[bool]:
         """Return whether repeated target allocation is legal."""
         return self.source.allow_same_target
+
+    @property
+    def position_selection(self) -> Optional[PositionSelection]:
+        """Return the engine's authored position-allocation contract."""
+        return self.source.position_selection
 
     @property
     def is_item_use(self) -> bool:

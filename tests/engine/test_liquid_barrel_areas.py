@@ -5,7 +5,8 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import AttackObject, Jump
+from dnd.core.equipment_types import WeaponSlot
+from dnd.actions import Attack, Jump
 from dnd.blocks.base_item import BaseItem
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import build_directional_door, build_directional_wall
@@ -44,8 +45,9 @@ def barrel_and_attacker(world: Game, contents: str, *, position: tuple[int, int]
 
 
 def break_barrel(barrel: BaseItem, attacker: Entity) -> Event:
-    with fixed_dice_faces(8, *([20] * 10)):
-        result = AttackObject(source_entity_uuid=attacker.uuid, target_entity_uuid=barrel.uuid).apply()
+    with fixed_dice_faces(19, 8, *([20] * 10)):
+        attacker.update_entity_senses()
+        result = Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=attacker.uuid, target_entity_uuid=barrel.uuid).apply()
     assert result is not None and not result.canceled
     assert barrel.integrity is ItemIntegrity.DESTROYED
     return result
@@ -179,8 +181,9 @@ def test_outer_cells_have_real_effects_and_jump_can_clear_or_land_on_area(world:
 def test_grease_appearance_reaches_adjacent_grounded_attacker_with_no_caster_exemption(world: Game) -> None:
     barrel, attacker = barrel_and_attacker(world, "grease")
     cursor = EventQueue.event_cursor()
-    with fixed_dice_faces(8, 1):
-        result = AttackObject(source_entity_uuid=attacker.uuid, target_entity_uuid=barrel.uuid).apply()
+    with fixed_dice_faces(19, 8, 1):
+        attacker.update_entity_senses()
+        result = Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=attacker.uuid, target_entity_uuid=barrel.uuid).apply()
     assert result is not None and not result.canceled
     assert "Prone" in attacker.active_conditions
     save, = [event for event in completed(cursor) if isinstance(event, SavingThrowEvent)]

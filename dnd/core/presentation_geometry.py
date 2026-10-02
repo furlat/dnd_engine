@@ -7,7 +7,7 @@ consulting a live action, entity, grid, or registry.
 
 from typing import Annotated, Literal, TypeAlias, Union
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 
 Position: TypeAlias = tuple[int, int]
@@ -76,6 +76,79 @@ class CylinderPresentationGeometry(PresentationGeometryModel):
     height_feet: int = Field(gt=0)
 
 
+class WallSegment(PresentationGeometryModel):
+    """Wall centerline endpoints in native grid units; cell centers are integers."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+    form: Literal["segment"] = "segment"
+    start: tuple[float, float]
+    end: tuple[float, float]
+
+    @model_validator(mode="after")
+    def validate_segment(self) -> "WallSegment":
+        if self.start == self.end:
+            raise ValueError("A wall segment must have positive length")
+        return self
+
+
+class WallRing(PresentationGeometryModel):
+    """A circular wall centerline, distinct from a filled sphere footprint."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+    form: Literal["ring"] = "ring"
+    center: tuple[float, float]
+    radius_feet: float = Field(gt=0)
+
+
+class WallPolyline(PresentationGeometryModel):
+    """Ordered connected ground segments, including an explicit closing edge."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+    form: Literal["polyline"] = "polyline"
+    points: tuple[tuple[float, float], ...] = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def validate_path(self) -> "WallPolyline":
+        if any(first == second for first, second in zip(self.points, self.points[1:])):
+            raise ValueError("Consecutive wall vertices must differ")
+        return self
+
+
+class WallDome(PresentationGeometryModel):
+    """Hollow ground-anchored hemisphere; its projected interior is not solid."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+    form: Literal["dome"] = "dome"
+    center: tuple[float, float]
+    radius_feet: float = Field(gt=0, le=10)
+
+
+class WallAssemblyPresentationGeometry(PresentationGeometryModel):
+    """Passive construction geometry, distinct from Fire's accepted wall banks."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+    shape: Literal["wall_assembly"] = "wall_assembly"
+    path: Annotated[Union[WallSegment, WallRing, WallPolyline, WallDome], Field(discriminator="form")]
+    base_height_steps: StrictInt
+    width_feet: float = Field(gt=0)
+    height_feet: float = Field(gt=0)
+
+
+class WallPresentationGeometry(PresentationGeometryModel):
+    """Immutable wall placement, retaining physical rather than rasterized width."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+
+    shape: Literal["wall"] = "wall"
+    path: Annotated[Union[WallSegment, WallRing], Field(discriminator="form")]
+    base_height_steps: StrictInt = Field(description="Wall base elevation in native five-foot support steps.")
+    width_feet: float = Field(gt=0)
+    height_feet: float = Field(gt=0)
+    hot_side: Literal["left", "right", "inside", "outside"] | None = None
+
+
 AoEPresentationGeometry: TypeAlias = Annotated[
     Union[
         SpherePresentationGeometry,
@@ -83,6 +156,8 @@ AoEPresentationGeometry: TypeAlias = Annotated[
         LinePresentationGeometry,
         CubePresentationGeometry,
         CylinderPresentationGeometry,
+        WallPresentationGeometry,
+        WallAssemblyPresentationGeometry,
     ],
     Field(discriminator="shape"),
 ]
@@ -98,4 +173,10 @@ __all__ = [
     "Position",
     "PresentationGeometryModel",
     "SpherePresentationGeometry",
+    "WallPresentationGeometry",
+    "WallRing",
+    "WallSegment",
+    "WallAssemblyPresentationGeometry",
+    "WallDome",
+    "WallPolyline",
 ]

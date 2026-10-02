@@ -8,7 +8,7 @@ live session or its discovery templates.
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
-from dnd.actions_functional import execute_available_action, get_available_actions
+from dnd.actions_functional import execute_available_action, get_available_actions, get_extra_position_options
 from dnd.ai.runtime.controller import NativeAIController
 from dnd.content.characters.premades import (
     FIGHTER_PREMADE_ID, SORCERER_PREMADE_ID, create_premade_character,
@@ -169,6 +169,7 @@ def execute_player_action(
     target: AvailableTarget,
     *,
     extra_target_uuids: tuple[UUID, ...] = (),
+    extra_target_positions: tuple[tuple[int, int], ...] = (),
     prefer_safe: bool = True,
 ) -> Operation:
     """Submit the current human's exact discovered choice to the rules engine."""
@@ -178,10 +179,24 @@ def execute_player_action(
     start = EventQueue.event_cursor()
     execute_available_action(
         actor, action, target, extra_target_uuids=[str(identity) for identity in extra_target_uuids],
+        extra_target_positions=list(extra_target_positions),
         prefer_safe=prefer_safe,
     )
     session.encounter.check_deaths()
     return _operation(start)
+
+
+def player_position_options(
+    session: Session, actor_uuid: UUID, action: AvailableActionInfo,
+    target: AvailableTarget, selected: tuple[tuple[int, int], ...] = (),
+) -> tuple[tuple[int, int], ...]:
+    """Disclose the engine-admitted next vertices for one current human choice."""
+    actor = _current_player(session, actor_uuid)
+    if target not in action.valid_targets:
+        raise ValueError("selected target does not belong to the discovered action")
+    if action.position_selection is None or action.position_selection.kind != "path":
+        return ()
+    return tuple(get_extra_position_options(actor, action, target, list(selected)))
 
 
 def end_player_turn(session: Session, actor_uuid: UUID) -> Operation:

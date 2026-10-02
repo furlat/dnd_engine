@@ -25,7 +25,7 @@ from game.motion import bind_motion, sample_motion
 from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
 from tests.game.scenarios import attack_history
 from tests.game.player_helpers import player_history, visible_body, visible_contact
-from game.player_facts import AttackFact
+from game.player_facts import AttackFact, MovementFact
 
 
 @pytest.fixture(scope="module")
@@ -155,14 +155,15 @@ def test_real_goblin_opportunity_attack_uses_same_profile_and_preserves_pre_step
         pygame.quit()
 
 
-@pytest.mark.parametrize(("destination", "maximum_hp"), [
-    ((2, 3), 80),  # reaction on the first orthogonal edge
-    ((2, 2), 80),  # source's fixed lead time and diagonal remaining duration
-    ((3, 1), 80),  # complete an earlier step before binding the provoking edge
-    ((2, 3), 4),   # actual lethal reaction; the attempted edge never commits
+@pytest.mark.parametrize(("destination", "maximum_hp", "connector_profile"), [
+    ((2, 3), 80, False),  # reaction on the first orthogonal edge
+    ((2, 2), 80, False),  # source's fixed lead time and diagonal remaining duration
+    ((3, 1), 80, False),  # complete an earlier step before binding the provoking edge
+    ((2, 3), 4, False),   # actual lethal reaction; the attempted edge never commits
+    ((2, 3), 4, True),    # the window presentation must not vault a rejected step
 ])
 def test_walk_holds_at_the_provoking_edge_and_resumes_only_committed_steps(
-    data: AnimationData, destination: tuple[int, int], maximum_hp: int,
+    data: AnimationData, destination: tuple[int, int], maximum_hp: int, connector_profile: bool,
 ) -> None:
     random_state = random.getstate()
     try:
@@ -170,6 +171,11 @@ def test_walk_holds_at_the_provoking_edge_and_resumes_only_committed_steps(
                                   whole_movement=True, destination=destination, maximum_hp=maximum_hp)
         lineage = captured.lineages[0]
         player, (received,) = player_history(captured, role="hero" if maximum_hp == 4 else None)
+        if connector_profile:
+            assert isinstance(received.root.fact, MovementFact)
+            root = replace(received.root, fact=replace(received.root.fact, connector_presentation_key='window'))
+            received = replace(received,root=root,
+                events=tuple(root if row.uuid == root.uuid else row for row in received.events))
         timeline = bind_motion(player, received, data)
         assert timeline is not None and len(timeline.reactions) == 1
         reaction = timeline.reactions[0]
@@ -180,6 +186,8 @@ def test_walk_holds_at_the_provoking_edge_and_resumes_only_committed_steps(
         expected = tuple(start + (end - start) * fraction
                          for start, end in zip(step.from_position, step.to_position))
         held = sample_motion(timeline, data, reaction.start_ms)
+        if connector_profile:
+            assert visible_contact(held).body_lift_px == 0
         assert held.reaction is reaction.choreography and visible_contact(held).grid == pytest.approx(expected)
         assert held.reaction_elapsed_ms == 0
         assert held.displayed_vitals[0].hp == maximum_hp

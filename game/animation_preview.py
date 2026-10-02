@@ -28,7 +28,7 @@ from types import MappingProxyType
 import pygame
 
 from dnd.core.life_types import LifeState
-from game.animation import ActorContact, CastApplication, CastInput, CastTimeline, compile_cast, sample_cast
+from game.animation import ActorContact, ActorContact, CastApplication, CastInput, CastTimeline, compile_cast, sample_cast
 from game.animation_data import load_animation_data
 from game.animation_draw import AnimationMedia, RigLayer, draw_animation, load_animation_media
 from game.animation_types import StudioSpellDraft
@@ -108,7 +108,8 @@ def _draw(surface: pygame.Surface, timeline: CastTimeline, media: AnimationMedia
     surface.set_clip(stage_clip)
     caster, target = timeline.source.caster, timeline.source.applications[0].target
     labels = (f"Caster at {caster.grid}",
-              f"Target · {target.rig_id} · HP {sample.vitals[0].hp} · {sample.vitals[0].life_state.value}")
+              (f"Target · {target.rig_id} · HP {sample.vitals[0].hp} · {sample.vitals[0].life_state.value}"
+               if isinstance(target, ActorContact) else f"Object · {target.object_uuid}"))
     for x, label in zip((40, 500), labels):
         surface.blit(small_font.render(label, True, (182, 191, 204)), (x, 598))
 

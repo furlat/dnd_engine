@@ -37,6 +37,9 @@ import dnd.spells.illusion as illusion
 import dnd.spells.ice_knife as ice_knife
 import dnd.spells.necromancy as necromancy
 import dnd.spells.transmutation as transmutation
+import dnd.spells.walls as walls
+import dnd.spells.wall_fields as wall_fields
+import dnd.spells.wall_constructions as wall_constructions
 from dnd.spells.content_metadata import (
     SpellCatalogAoeShapeType,
     SpellCatalogAoeSpec,
@@ -248,6 +251,12 @@ SPELL_CONTENT_IDENTITY_SPECS: tuple[SpellContentIdentitySpec, ...] = (
     SpellContentIdentitySpec("Stoneskin", abjuration.Stoneskin, SRD_SPELL_PACK_ID, "spell.stoneskin", "abjuration", 4, 183, 740),
     SpellContentIdentitySpec("Greater Invisibility", illusion.GreaterInvisibility, SRD_SPELL_PACK_ID, "spell.greater_invisibility", "illusion", 4, 150, 750),
     SpellContentIdentitySpec("Ice Storm", evocation.IceStorm, SRD_SPELL_PACK_ID, "spell.ice_storm", "evocation", 4, 155, 760),
+    SpellContentIdentitySpec("Wind Wall", wall_fields.WindWall, SRD_SPELL_PACK_ID, "spell.wind_wall", "evocation", 3, 220, 690),
+    SpellContentIdentitySpec("Wall of Thorns", wall_fields.WallOfThorns, SRD_SPELL_PACK_ID, "spell.wall_of_thorns", "conjuration", 6, 210, 970),
+    SpellContentIdentitySpec("Wall of Ice", wall_constructions.WallOfIce, SRD_SPELL_PACK_ID, "spell.wall_of_ice", "evocation", 6, 195, 930),
+    SpellContentIdentitySpec("Wall of Stone", wall_constructions.WallOfStone, SRD_SPELL_PACK_ID, "spell.wall_of_stone", "evocation", 5, 205, 865),
+    SpellContentIdentitySpec("Wall of Force", wall_constructions.WallOfForce, SRD_SPELL_PACK_ID, "spell.wall_of_force", "evocation", 5, 195, 855),
+    SpellContentIdentitySpec("Wall of Fire", walls.WallOfFire, SRD_SPELL_PACK_ID, "spell.wall_of_fire", "evocation", 4, 190, 765),
     SpellContentIdentitySpec("Dimension Door", conjuration.DimensionDoor, SRD_SPELL_PACK_ID, "spell.dimension_door", "conjuration", 4, 135, 770),
     SpellContentIdentitySpec("Banishment", abjuration.Banishment, SRD_SPELL_PACK_ID, "spell.banishment", "abjuration", 4, 120, 780),
     SpellContentIdentitySpec("Guardian of Faith", conjuration.GuardianOfFaith, SRD_SPELL_PACK_ID, "spell.guardian_of_faith", "conjuration", 4, 150, 790),
@@ -610,6 +619,41 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     (evocation.IceStorm, _catalog(
         'ice_storm', '20ft cylinder: 2d8 bludg + 4d6 cold (DEX half), difficult terrain 1 round', 'position_aoe', 'ranged', 60, 'aoe_projectile',
         projectile='rain', area=_area('cylinder', radius_ft=20, height_ft=40), damage=(DamageType.BLUDGEONING, DamageType.COLD), saves=_saving_throws('dexterity'), tags=('ice', 'hail', 'storm'),
+    )),
+    (wall_fields.WindWall, _catalog(
+        'wind_wall', 'Continuous wind path; formation STR half, selective missile and gaseous passage', 'position', 'ranged', 120, 'aoe',
+        area=_area('wall', length_ft=50, width_ft=1, height_ft=15),
+        damage=(DamageType.BLUDGEONING,), saves=_saving_throws('strength'), concentration=True,
+        classes=('druid', 'ranger'), tags=('wind', 'wall', 'concentration'),
+    )),
+    (wall_fields.WallOfThorns, _catalog(
+        'wall_of_thorns', 'Opaque thorns; formation piercing, passage/end-turn slashing, DEX half', 'position', 'ranged', 120, 'aoe',
+        area=_area('wall', length_ft=60, width_ft=5, height_ft=10),
+        damage=(DamageType.PIERCING, DamageType.SLASHING), saves=_saving_throws('dexterity'), concentration=True,
+        classes=('druid',), tags=('thorns', 'wall', 'concentration'),
+    )),
+    (wall_constructions.WallOfIce, _catalog(
+        'wall_of_ice', 'Translucent destructible ice panels or hollow dome; breaks leave frigid air', 'position', 'ranged', 120, 'aoe',
+        area=_area('wall', length_ft=100, width_ft=1, height_ft=10),
+        damage=(DamageType.COLD,), saves=_saving_throws('dexterity', 'constitution'), concentration=True,
+        classes=('wizard',), tags=('ice', 'wall', 'concentration'),
+    )),
+    (wall_constructions.WallOfStone, _catalog(
+        'wall_of_stone', 'Supported connected stone panels; complete concentration makes them permanent', 'position', 'ranged', 120, 'aoe',
+        area=_area('wall', length_ft=100, width_ft=1, height_ft=10),
+        saves=_saving_throws('dexterity'), concentration=True,
+        classes=('druid', 'sorcerer', 'wizard'), tags=('stone', 'wall', 'concentration'),
+    )),
+    (wall_constructions.WallOfForce, _catalog(
+        'wall_of_force', 'Invisible physical flat wall or hollow dome; Disintegrate removes it completely', 'position', 'ranged', 120, 'aoe',
+        area=_area('wall', length_ft=100, width_ft=1, height_ft=10), concentration=True,
+        classes=('wizard',), tags=('force', 'wall', 'concentration'),
+    )),
+    (walls.WallOfFire, _catalog(
+        'wall_of_fire', 'Opaque flame wall with chosen hot side; appearance DEX half, contact and turn-end fire damage', 'position', 'ranged', 120, 'aoe',
+        area=_area('wall', length_ft=60, width_ft=1, height_ft=20),
+        damage=(DamageType.FIRE,), saves=_saving_throws('dexterity'), concentration=True,
+        classes=('druid', 'sorcerer', 'wizard'), tags=('fire', 'wall', 'concentration'),
     )),
     (conjuration.DimensionDoor, _catalog(
         'dimension_door', 'Teleport to a visible position within 500ft', 'position', 'ranged', 500, 'none',

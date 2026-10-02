@@ -77,7 +77,8 @@ SAFE_LEAF_MODULES = frozenset({
 NEUTRAL_VALUE_DEPENDENCIES = {
     "dnd.types.senses": frozenset({
         "dnd.types.world", "dnd.core.content.identities", "dnd.types.traps",
-        "dnd.core.presentation_geometry",
+        "dnd.core.presentation_geometry", "dnd.types.material_deposits",
+        "dnd.types.spell_suppression", "dnd.types.spatial_effects",
     }),
     "dnd.types.traps": frozenset({"dnd.core.creature_types", "dnd.types.abilities"}),
 }
@@ -1483,11 +1484,6 @@ def test_weapon_attack_events_have_one_metadata_snapshot_boundary() -> None:
             None,
             "create_weapon_attack_declaration_event",
         ),
-        (
-            "dnd.monsters.traits",
-            "NaturalAttack",
-            "_create_declaration_event",
-        ),
     }
     found: set[tuple[str, str | None, str | None]] = set()
     details: list[str] = []
@@ -1502,8 +1498,7 @@ def test_weapon_attack_events_have_one_metadata_snapshot_boundary() -> None:
             )
 
     assert found == allowed, (
-        "Equipped and unarmed weapon attacks must snapshot metadata through "
-        "create_weapon_attack_declaration_event; only NaturalAttack owns an "
-        "explicit non-equipment snapshot.\n"
+        "Equipped, unarmed and natural attacks must snapshot their declaration "
+        "through create_weapon_attack_declaration_event.\n"
         + "\n".join(details)
     )

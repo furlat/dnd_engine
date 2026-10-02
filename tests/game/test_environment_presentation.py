@@ -18,6 +18,7 @@ from game.animation_data import load_animation_data, resolve_player_layers
 from game.animation_draw import actor_draw_commands, load_actor_media
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
+from game.attack import BoundAttack
 from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media
 from game.combat import actor_contact
@@ -167,8 +168,9 @@ def test_witnessed_destruction_plays_actual_bank_then_persists_after_seek(raster
                 after, group, render = _render_head(raster, state, root)
                 assert not group.gaps
                 change, = (change for change in group.world_transitions if change.field == "destruction")
-                gesture, = group.body_actions
-                assert change.start_ms == gesture.effect_ms
+                attack, = group.nodes
+                assert isinstance(attack.bound, BoundAttack)
+                assert change.start_ms == attack.start_ms + attack.bound.timeline.contact_ms
                 assert fact.replacement_uuid is None
                 replacement = after.objects[fact.object_uuid]
                 assert replacement.item.integrity is ItemIntegrity.DESTROYED

@@ -313,6 +313,7 @@ class _DrinkHealingPotionAction(_PotionDrinkAction):
 class _HealingPotion(UsableItem):
     """Potion of Healing. Single use, consumable. Stacks up to 10."""
 
+    is_magical: bool = True
     name: str = Field(
         default="Potion of Healing",
         description="Display name for the healing potion.",
@@ -367,6 +368,17 @@ class _WeaponCoatCondition(BaseCondition):
         default=None,
         description="Weapon UUID that received the extra damage packet.",
     )
+    damage_contribution_uuid: Optional[UUID] = None
+    last_duration_interval: Optional[tuple[UUID, int]] = None
+
+    def progress_for_interval(self, interval: Optional[tuple[UUID, int]]) -> bool:
+        """Count an existing encounter round once despite changes of holder/location."""
+        if interval is not None:
+            if self.last_duration_interval == interval:
+                return False
+            self.last_duration_interval = interval
+        return self.progress()
+
     coat_damage_type: DamageType = Field(
         default=DamageType.FIRE,
         description="Damage type added by the coat.",
@@ -386,17 +398,12 @@ class _WeaponCoatCondition(BaseCondition):
             return [], [], [], [], declaration_event.cancel(
                 status_message="No target",
             )
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(
-                status_message="Target not found",
-            )
         if not self.coated_weapon_uuid:
             return [], [], [], [], declaration_event.cancel(
                 status_message="No weapon specified",
             )
         weapon = BaseBlock.get(self.coated_weapon_uuid)
-        if not weapon or not isinstance(weapon, Weapon):
+        if not isinstance(weapon, Weapon) or self.target_entity_uuid != weapon.uuid:
             return [], [], [], [], declaration_event.cancel(
                 status_message="Weapon not found",
             )
@@ -406,6 +413,7 @@ class _WeaponCoatCondition(BaseCondition):
             base_value=0,
             value_name=f"{self.name} Bonus",
         )
+        self.damage_contribution_uuid = bonus_mv.uuid
         weapon.extra_damage_dices.append(6)
         weapon.extra_damage_dices_numbers.append(1)
         weapon.extra_damage_bonus.append(bonus_mv)
@@ -420,22 +428,24 @@ class _WeaponCoatCondition(BaseCondition):
         )
         return [], [], [], [], effect
 
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up elemental dice from the coated weapon."""
+    def _release_owned_runtime_state(self, *, parent_event: Optional[Event] = None) -> None:
+        """Remove only this packet on ordinary cleanup or provisional rollback."""
         if self.coated_weapon_uuid:
             weapon = BaseBlock.get(self.coated_weapon_uuid)
             if weapon and isinstance(weapon, Weapon):
                 for index in range(len(weapon.extra_damage_type) - 1, -1, -1):
                     if (
-                        weapon.extra_damage_type[index]
-                        == self.coat_damage_type
+                        weapon.extra_damage_bonus[index].uuid
+                        == self.damage_contribution_uuid
                     ):
                         weapon.extra_damage_dices.pop(index)
                         weapon.extra_damage_dices_numbers.pop(index)
-                        weapon.extra_damage_bonus.pop(index)
+                        bonus = weapon.extra_damage_bonus.pop(index)
+                        bonus.remove_from_register()
                         weapon.extra_damage_type.pop(index)
                         break
-        return super()._remove(event)
+        self.damage_contribution_uuid = None
+        super()._release_owned_runtime_state(parent_event=parent_event)
 
 
 @_consumable_condition_identity(
@@ -634,13 +644,13 @@ class _ApplyWeaponCoatAction(BaseAction):
                 duration=self.coat_duration,
                 duration_type=DurationType.ROUNDS,
                 source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=weapon.uuid,
             )
         else:
             duration = Duration(
                 duration_type=DurationType.PERMANENT,
                 source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=weapon.uuid,
             )
 
         condition_type = (
@@ -654,29 +664,36 @@ class _ApplyWeaponCoatAction(BaseAction):
             )
         coat = condition_type(
             source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=weapon.uuid,
             coated_weapon_uuid=weapon.uuid,
+            last_duration_interval=entity.turn_duration_interval,
             coat_damage_type=self.coat_damage_type,
             duration=duration,
         )
         bind_runtime_behavior_child(
             coat,
             provider_binding=self.behavior_binding,
-            runtime_owner_uuid=entity.uuid,
+            runtime_owner_uuid=weapon.uuid,
         )
-        entity.add_condition(coat, parent_event=execution_event)
-
-        if self.use_concentration:
-            concentration = Concentrating(
+        concentration = (
+            Concentrating(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.source_entity_uuid,
                 spell_name=f"{coat.name} Weapon",
+            ) if self.use_concentration else None
+        )
+        try:
+            applied = weapon.add_condition(
+                coat, parent_event=execution_event,
+                required_condition=(entity, concentration) if concentration is not None else None,
             )
-            entity.add_condition(
-                concentration,
-                parent_event=execution_event,
-            )
-            concentration.add_linked_condition(entity.uuid, coat.uuid)
+        finally:
+            if concentration is not None and not concentration.applied:
+                entity._discard_uncommitted_condition_tree(concentration)
+        if applied is None or applied.canceled or not coat.applied:
+            return execution_event.cancel(status_message="Weapon coating could not be applied")
+        if concentration is not None:
+            concentration.add_linked_condition(weapon.uuid, coat.uuid)
 
         effect = execution_event.phase_to(
             EventPhase.EFFECT,
@@ -856,6 +873,7 @@ class _DrinkTrueSeeingPotionAction(_PotionDrinkAction):
 class _PotionOfGreaterInvisibility(UsableItem):
     """Potion of Greater Invisibility. Single use, consumable."""
 
+    is_magical: bool = True
     name: str = Field(
         default="Potion of Greater Invisibility",
         description="Display name for the potion.",
@@ -975,6 +993,7 @@ class _DrinkHastePotionAction(_PotionDrinkAction):
 class _PotionOfHaste(UsableItem):
     """Potion of Haste. Single use, consumable."""
 
+    is_magical: bool = True
     name: str = Field(
         default="Potion of Haste",
         description="Display name for the potion.",
@@ -1062,7 +1081,7 @@ def build_true_seeing_potion(source_entity_uuid: UUID) -> UsableItem:
     """Compose the recovery potion from the existing usable-item data."""
     return UsableItem(
         source_entity_uuid=source_entity_uuid, item_id="consumable.potion_true_seeing",
-        name="Potion of True Seeing", is_pickable=True, map_char="\u03b8",
+        name="Potion of True Seeing", is_magical=True, is_pickable=True, map_char="\u03b8",
         is_consumable=True, charges=1, max_charges=1, max_stack=5,
         stack_id="potion_of_true_seeing",
         use_action_templates=[_DrinkTrueSeeingPotionAction(

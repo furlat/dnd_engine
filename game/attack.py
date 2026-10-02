@@ -11,10 +11,11 @@ from typing import Mapping
 from uuid import UUID
 
 from dnd.core.dice import AttackOutcome
-from dnd.core.equipment_types import WeaponSet, WeaponSlot
+from dnd.core.equipment_types import WeaponSlot
 from dnd.core.life_types import LifeState
 from game.animation import (
-    ActorContact, BodySample, DamageTiming, GeometryProjectileSample, NumberSample, VitalsSample,
+    ActorContact, ObjectContact, BodySample, DamageTiming, GeometryProjectileSample, NumberSample, VitalsSample,
+    feedback_identity,
     body_clip, body_duration, body_elevation_steps, body_frame, compile_damage, facing_for_delta,
     projectile_curve_point, projectile_curve_tangent, projectile_endpoints, reference_point_contact,
     resolve_damage, sample_damage_body, sample_damage_number, rest_pose_offset,
@@ -25,8 +26,8 @@ from game.animation_types import (
     ActionFeedback, ActionProjectile, AnimationData, AttackRecipe, AttackVariant, ChildAttackPresentation, ElementColors, Facing8,
     LayerColors, RigLayer, StudioActorLayer, StudioDamage,
 )
-from game.combat import actor_contact
-from game.player_facts import ActionFact, AttackFact, DamageFact, LifeFact, PlayerLineage, PlayerNode, PlayerState, SpellFact
+from game.combat import actor_contact, object_contact
+from game.player_facts import ActionFact, AttackFact, DamageFact, ObjectDamageFact, LifeFact, PlayerLineage, PlayerNode, PlayerState, SpellFact
 from game.player_reduction import reduce_lineage
 from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
 
@@ -52,7 +53,7 @@ class AttackProjectileTimeline:
 class AttackTimeline:
     root_event_uuid: str
     source: ActorContact
-    target: ActorContact
+    target: ActorContact | ObjectContact
     data: AnimationData
     profile_id: str
     clip: str
@@ -91,6 +92,11 @@ class BoundAttack:
     owned_life_events: frozenset[UUID] = frozenset()
 
 
+def attack_actor_contacts(timeline: AttackTimeline) -> tuple[ActorContact, ...]:
+    return ((timeline.source, timeline.target) if isinstance(timeline.target, ActorContact)
+            else (timeline.source,))
+
+
 def select_attack_profile(recipe: AttackRecipe, event: AttackFact) -> AttackVariant | None:
     """Original highest-precedence selector using declaration-time facts.
 
@@ -106,7 +112,8 @@ def select_attack_profile(recipe: AttackRecipe, event: AttackFact) -> AttackVari
     candidates: list[AttackVariant] = []
     for candidate in recipe.variants:
         match = candidate.match
-        if ((match.delivery is None or match.delivery == delivery)
+        if ((match.sourceKinds is None or event.attack_source_kind in match.sourceKinds)
+                and (match.delivery is None or match.delivery == delivery)
                 and (match.weaponSlots is None or event.weapon_slot.value in match.weaponSlots)
                 and (match.outcomes is None or event.attack_outcome is not None
                      and _OUTCOMES[event.attack_outcome] in match.outcomes)
@@ -162,19 +169,20 @@ def _attack_layers(data: AnimationData, source: ActorContact, profile: AttackVar
     return tuple(layers), tuple(missing)
 
 
-def _semantic_projectile_endpoints(data: AnimationData, source: ActorContact, target: ActorContact,
+def _semantic_projectile_endpoints(data: AnimationData, source: ActorContact, target: ActorContact | ObjectContact,
                                    recipe: ActionProjectile, quadrant: int, *, include_height: bool,
                                    ) -> tuple[tuple[float, float], tuple[float, float]]:
     """AttackClip's semantic body anchors, which already use the tile center."""
     factor = data.rig.TILE_W / TILE_WIDTH
     start = project_world(source.grid, quadrant=quadrant,
                           elevation_steps=body_elevation_steps(source, data) if include_height else 0)
-    end = project_world(target.grid, quadrant=quadrant,
-                        elevation_steps=body_elevation_steps(target, data) if include_height else 0)
+    target_height = body_elevation_steps(target, data) if isinstance(target, ActorContact) else target.elevation_steps
+    end = project_world(target.grid, quadrant=quadrant, elevation_steps=target_height if include_height else 0)
     first = start[0] * factor + recipe.originX * source.visual_scale, start[1] * factor + recipe.originY * source.visual_scale
-    last = end[0] * factor, end[1] * factor + recipe.targetY * target.visual_scale
+    lift = recipe.targetY * target.visual_scale if isinstance(target, ActorContact) else 0
+    last = end[0] * factor, end[1] * factor + lift
     first, last = projectile_endpoints(first, last, recipe.sourceForwardPx, recipe.targetForwardPx)
-    dx, dy = rest_pose_offset(data, target, quadrant)
+    dx, dy = rest_pose_offset(data, target, quadrant) if isinstance(target, ActorContact) else (0, 0)
     return first, (last[0] + dx, last[1] + dy)
 
 
@@ -206,11 +214,12 @@ def attack_projectile_contact(timeline: AttackTimeline, effect: GeometryProjecti
     projectile = timeline.projectile
     assert projectile is not None
     source, target, progress = timeline.source, timeline.target, effect.progress
-    lift = (projectile.recipe.originY * source.visual_scale * (1 - progress)
-            + (projectile.recipe.targetY * target.visual_scale
-               + rest_pose_offset(timeline.data, target, quadrant)[1]) * progress)
+    target_lift = (projectile.recipe.targetY * target.visual_scale
+                   + rest_pose_offset(timeline.data, target, quadrant)[1]) if isinstance(target, ActorContact) else 0
+    target_height = body_elevation_steps(target, timeline.data) if isinstance(target, ActorContact) else target.elevation_steps
+    lift = projectile.recipe.originY * source.visual_scale * (1 - progress) + target_lift * progress
     height = (body_elevation_steps(source, timeline.data) * (1 - progress)
-              + body_elevation_steps(target, timeline.data) * progress
+              + target_height * progress
               - lift * TILE_WIDTH / timeline.data.rig.TILE_W / HEIGHT_STEP_PIXELS)
     return reference_point_contact(timeline.data, effect.point, height, quadrant), height
 
@@ -234,10 +243,10 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
     if profile.projectile is not None and (not profile.projectile.geometry.enabled
                                           or profile.projectile.geometry.primitive != "bolt"):
         return None
-    if (root.source_entity_uuid not in before.actors or root.target_entity_uuid is None
-            or root.target_entity_uuid not in before.actors):
+    source_actor = before.actors.get(root.source_entity_uuid)
+    target_actor = before.actors.get(root.target_entity_uuid) if root.target_kind == "creature" else None
+    if source_actor is None or root.target_kind == "creature" and target_actor is None:
         return None
-    source_actor, target_actor = before.actors[root.source_entity_uuid], before.actors[root.target_entity_uuid]
     rate = action_playback_rate(data, source_actor)
     if rate != 1:
         profile = profile.model_copy(update={"actor": profile.actor.model_copy(
@@ -245,7 +254,11 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
     facings = facings or {}
     contacts = contacts or {}
     source = contacts.get(str(source_actor.uuid)) or actor_contact(before, source_actor, data, facings.get(str(source_actor.uuid), "S"))
-    target = contacts.get(str(target_actor.uuid)) or actor_contact(before, target_actor, data, facings.get(str(target_actor.uuid), "S"))
+    target = ((contacts.get(str(target_actor.uuid)) or actor_contact(before, target_actor, data,
+               facings.get(str(target_actor.uuid), "S"))) if target_actor is not None else object_contact(before, root.target_entity_uuid,
+                   position=root.target_position, base_height_steps=root.target_base_height_steps))
+    if target is None:
+        return None
     facing = facing_for_delta((target.grid[0] - source.grid[0], target.grid[1] - source.grid[1]), data)
     source = replace(source, facing=facing)
     display_clip = profile.actor.clip
@@ -271,7 +284,8 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
     if profile.projectile is not None:
         first, last = _semantic_projectile_endpoints(data, source, target, profile.projectile, 0, include_height=False)
         planar = hypot(last[0] - first[0], last[1] - first[1])
-        height = (body_elevation_steps(target, data) - body_elevation_steps(source, data)) * HEIGHT_STEP_PIXELS * data.rig.TILE_W / TILE_WIDTH
+        target_height = body_elevation_steps(target, data) if isinstance(target, ActorContact) else target.elevation_steps
+        height = (target_height - body_elevation_steps(source, data)) * HEIGHT_STEP_PIXELS * data.rig.TILE_W / TILE_WIDTH
         duration = (max(profile.projectile.minimumTravelDurationMs,
                         hypot(planar, height) * 1000 / profile.projectile.speedPxPerSecond)
                     if hypot(planar, height) >= 1 else 0)
@@ -292,21 +306,24 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
 
     applied = [event.fact for event in lineage.events
                if isinstance(event.fact, DamageFact) and event.fact.stage == "applied" and primary_effect(event)]
-    if len(applied) > 1 or any(event.target_entity_uuid != target_actor.uuid for event in applied):
+    if len(applied) > 1 or any(event.target_entity_uuid != root.target_entity_uuid for event in applied):
         return None
     changes = [(event.uuid, event.fact) for event in lineage.events if isinstance(event.fact, LifeFact)
-               and event.fact.entity_uuid == target_actor.uuid and primary_effect(event)]
+               and event.fact.entity_uuid == root.target_entity_uuid and primary_effect(event)]
     life = changes[-1][1].new_state if changes else None
     fact = applied[0] if applied else None
-    damage = (resolve_damage(data, fact.damage_type.value, critical=root.attack_outcome is AttackOutcome.CRIT)
-              if fact is not None and fact.damage_type is not None else None)
-    timing = compile_damage(data, target, damage, contact, life) if damage is not None else None
+    object_damage = next((node.fact for node in lineage.events if isinstance(node.fact, ObjectDamageFact)
+                          and node.fact.object_uuid == root.target_entity_uuid and primary_effect(node)), None)
+    damage_type = fact.damage_type if fact is not None else object_damage.damage_type if object_damage is not None else None
+    damage = (resolve_damage(data, damage_type.value if damage_type is not None else None,
+                             critical=root.attack_outcome is AttackOutcome.CRIT)
+              if fact is not None or object_damage is not None else None)
+    timing = compile_damage(data, target, damage, contact, life) if damage is not None and isinstance(target, ActorContact) else None
     layers, missing = _attack_layers(data, source, profile, root)
-    appearances = {
-        contact.actor_uuid: resolve_player_layers(data, actor, rig_id=contact.rig_id,
-            active_weapon_set=(WeaponSet.RANGED if profile.projectile is not None else WeaponSet.MELEE)
-            if actor.uuid == source_actor.uuid else None) for actor, contact in ((source_actor, source), (target_actor, target))
-    }
+    appearances = {source.actor_uuid: resolve_player_layers(data, source_actor, rig_id=source.rig_id,
+                                                            active_weapon_set=root.weapon_set)}
+    if target_actor is not None and isinstance(target, ActorContact):
+        appearances[target.actor_uuid] = resolve_player_layers(data, target_actor, rig_id=target.rig_id)
     if child_presentation is not None:
         weapon = next((layer.category for layer in appearances[source.actor_uuid] if layer.slot == "weapon"), None)
         poses = [pose for pose in child_presentation.poses
@@ -327,7 +344,8 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
         # FloatingText.run returns immediately: a badge fade does not hold the
         # causal join. The enclosing historical head owns overlay retirement.
         complete_ms=max(body_end, timing.end_ms if timing is not None else contact), layers=layers,
-        damage=damage, damage_timing=timing, damage_total=fact.applied_damage if fact is not None else None,
+        damage=damage, damage_timing=timing, damage_total=(fact.applied_damage if fact is not None
+            else object_damage.applied_damage if object_damage is not None else None),
         # The owned life commit may normalize the packet's intermediate HP
         # (for example, entering DYING at zero). Present its HP/life together.
         resulting_hp=changes[-1][1].normal_hit_points if changes else fact.resulting_normal_hp if fact is not None else None,
@@ -355,7 +373,7 @@ def sample_attack(timeline: AttackTimeline, elapsed_ms: float) -> AttackSample:
         loop=not attacking or clip_name == "Idle"), timeline.facing, cast_layers=timeline.layers if attacking else ())
     timing, damage = timeline.damage_timing, timeline.damage
     started = timing is not None and t >= timing.start_ms
-    hp, life, flash = target.hp, target.life_state, None
+    hp, life, flash = (target.hp, target.life_state, None) if isinstance(target, ActorContact) else (None, None, None)
     if timing is not None and t >= timing.hp_ms:
         hp = timeline.resulting_hp if timeline.resulting_hp is not None else hp
         life = timeline.resulting_life_state or life
@@ -364,27 +382,33 @@ def sample_attack(timeline: AttackTimeline, elapsed_ms: float) -> AttackSample:
         end_ms=timing.end_ms if started and timing is not None else None,
         death_start_ms=timing.start_ms if started and timing is not None and life == LifeState.DEAD else None,
         resulting_life_state=life, life_start_ms=timing.hp_ms if timing is not None else None,
-        life_body=timing.life_body if timing is not None else None)
+        life_body=timing.life_body if timing is not None else None) if isinstance(target, ActorContact) else None
     numbers: list[NumberSample] = []
     if timing is not None and damage is not None:
         if (damage.hitFlash.enabled and timing.flash_ms <= t < timing.flash_ms + damage.hitFlash.durationMs
                 and t < timeline.complete_ms):
             flash = damage.hitFlash.color
-        number = sample_damage_number(data, target.actor_uuid, damage, timeline.damage_total,
+        number = sample_damage_number(data, feedback_identity(target), damage, timeline.damage_total,
                                       timing.number_ms, t, timeline.complete_ms)
+        if number is not None:
+            numbers.append(number)
+    if isinstance(target, ObjectContact) and damage is not None:
+        number = sample_damage_number(data, target.object_uuid, damage, timeline.damage_total,
+                                      timeline.contact_ms, t, timeline.complete_ms)
         if number is not None:
             numbers.append(number)
     feedback, style = timeline.feedback, data.badge_style
     if feedback is not None and timeline.contact_ms <= t < min(timeline.complete_ms, timeline.contact_ms + style.durationMs):
         progress = (t - timeline.contact_ms) / style.durationMs
         alpha = 1.0 if progress < style.fadeStartFraction else (1 - progress) / (1 - style.fadeStartFraction)
-        numbers.append(NumberSample(target.actor_uuid, None, feedback.text, feedback.color,
+        numbers.append(NumberSample(feedback_identity(target), None, feedback.text, feedback.color,
                                     progress, alpha, kind="badge"))
     projectiles: tuple[GeometryProjectileSample, ...] = ()
     projectile = timeline.projectile
     if projectile is not None and projectile.start_ms <= t < projectile.end_ms:
         progress = (t - projectile.start_ms) / (projectile.end_ms - projectile.start_ms)
         projectiles = (_bolt_sample(data, projectile.from_point, projectile.to_point, progress, projectile.recipe),)
-    return AttackSample((body, recipient), tuple(numbers),
-                        (VitalsSample(target.actor_uuid, hp, life, flash),), t >= timeline.complete_ms,
-                        projectiles)
+    vitals = ((VitalsSample(target.actor_uuid, hp, life, flash),)
+              if isinstance(target, ActorContact) and life is not None else ())
+    return AttackSample((body, recipient) if recipient is not None else (body,), tuple(numbers),
+                        vitals, t >= timeline.complete_ms, projectiles)

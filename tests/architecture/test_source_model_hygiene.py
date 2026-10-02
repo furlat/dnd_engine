@@ -46,6 +46,7 @@ ENCOUNTER_MODELS = {
     },
 }
 CLASS_FEATURE_DESCRIBED_MODEL_CLASSES = {
+    ROOT / "dnd" / "conditions.py": {"ExtraAttacksGranted"},
     ROOT / "dnd" / "classes" / "fighter.py": {
         "FightingStyleArchery",
         "FightingStyleDefense",
@@ -59,7 +60,6 @@ CLASS_FEATURE_DESCRIBED_MODEL_CLASSES = {
         "ActionSurge",
         "ActionSurgeFeature",
         "ImprovedCritical",
-        "ExtraAttacksGranted",
         "ExtraAttack",
         "ExtraAttackFeature",
         "Indomitable",
@@ -110,6 +110,7 @@ CLASS_FEATURE_DESCRIBED_MODEL_CLASSES = {
     ROOT / "dnd" / "classes" / "feats.py": {"LuckyFeature"},
 }
 CLASS_FEATURE_GOOGLE_DOCSTRING_CLASSES = {
+    ROOT / "dnd" / "conditions.py": {"ExtraAttacksGranted"},
     ROOT / "dnd" / "classes" / "fighter.py": {
         "FightingStyleArchery",
         "FightingStyleDefense",
@@ -123,7 +124,6 @@ CLASS_FEATURE_GOOGLE_DOCSTRING_CLASSES = {
         "ActionSurge",
         "ActionSurgeFeature",
         "ImprovedCritical",
-        "ExtraAttacksGranted",
         "ExtraAttack",
         "ExtraAttackFeature",
         "Indomitable",
@@ -307,6 +307,17 @@ SERVER_SESSION_GOOGLE_DOCSTRING_CLASSES = {
 def read_text(path: Path) -> str:
     """Read repository text with a consistent encoding."""
     return path.read_text(encoding="utf-8")
+
+
+def is_class_variable(statement: ast.AnnAssign) -> bool:
+    """Class-level execution policy is not a Pydantic model field."""
+    annotation = statement.annotation
+    if not isinstance(annotation, ast.Subscript):
+        return False
+    return (
+        isinstance(annotation.value, ast.Name) and annotation.value.id == "ClassVar"
+        or isinstance(annotation.value, ast.Attribute) and annotation.value.attr == "ClassVar"
+    )
 
 
 def is_field_call(value: ast.expr | None) -> bool:
@@ -546,7 +557,7 @@ def test_class_feature_models_use_described_pydantic_fields() -> None:
                     continue
 
                 field_name = statement.target.id
-                if field_name.startswith("_"):
+                if field_name.startswith("_") or is_class_variable(statement):
                     continue
 
                 if not is_field_call(statement.value):
@@ -585,7 +596,7 @@ def test_cleaned_class_feature_models_use_google_style_docstrings() -> None:
                     continue
 
                 field_name = statement.target.id
-                if field_name.startswith("_"):
+                if field_name.startswith("_") or is_class_variable(statement):
                     continue
 
                 if not any(line.startswith(f"{field_name}:") for line in doc_lines):

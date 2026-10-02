@@ -14,7 +14,7 @@ __all__ = [
     "WorldMaterializedState", "WorldInitializedEvent", "WorldModifiedEvent",
     "EntityCreatedEvent", "EntityLevelAddedEvent",
     "EntityLevelRemovedEvent",
-    "SpatialEffectChangeEvent", "SpatialEffectInteractionEvent",
+    "SpatialEffectChangeEvent", "SpatialEffectInteractionEvent", "AreaReachEvent",
     "D20Event", "SavingThrowEvent", "SkillCheckEvent",
     "RollModificationOperation", "RollModification", "DiceRollResultEvent",
     "DamageRollPacket",
@@ -68,6 +68,7 @@ from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SenseMode
 from dnd.types.traps import TrapState
 from dnd.types.residues import BodyReleaseResult, TileResidueState
 from dnd.types.spatial_effects import (
+    SpatialDamageSource,
     SpatialEffectChangeOperation,
     SpatialEffectInteractionIntensity,
     SpatialEffectInteractionOperation,
@@ -219,6 +220,7 @@ class EventType(str, Enum):
     SENSORY_UPDATE = "sensory_update"
     SPATIAL_EFFECT_CHANGED = "spatial_effect_changed"
     SPATIAL_EFFECT_INTERACTION = "spatial_effect_interaction"
+    AREA_REACHED = "area_reached"
     FIRE_EXPOSURE = "fire_exposure"
     EXPOSED_FLAME_IGNITED = "exposed_flame_ignited"
     WIND_EXPOSURE = "wind_exposure"
@@ -3496,6 +3498,20 @@ def _directional_neighbors(position: Tuple[int, int], directions: Optional[List[
     return neighbors
 
 
+class AreaReachEvent(Event):
+    """One causal expansion of a cast's original finite area, without timing."""
+
+    name: str = Field(default="Area Reached")
+    event_type: EventType = Field(default=EventType.AREA_REACHED, frozen=True)
+    stage_index: int = Field(ge=0)
+    newly_reached_positions: Tuple[Tuple[int, int], ...]
+    previous_reach_lineage_uuid: UUID | None = None
+    prerequisite_destruction_lineages: Tuple[UUID, ...] = ()
+
+    def get_affected_positions(self) -> Set[Tuple[int, int]]:
+        return set(self.newly_reached_positions)
+
+
 class SpatialEffectChangeEvent(Event):
     """Committed lifecycle fact for one independent spatial condition."""
 
@@ -3593,6 +3609,7 @@ class SpatialEffectInteractionEvent(Event):
     damage_type: Optional[DamageType] = None
     source_object_uuid: Optional[UUID] = None
     source_item_id: Optional[str] = None
+    occupancy_layer: Optional[OccupancyLayer] = None
 
     @model_validator(mode="after")
     def validate_interaction_positions(self) -> "SpatialEffectInteractionEvent":
@@ -5220,6 +5237,7 @@ class TakeDamageEvent(Event):
     )
     total_damage: int = Field(description="Total damage before any modifications")
     intercepted_by_condition_uuid: UUID | None = None
+    spatial_source: SpatialDamageSource | None = None
     damage_rolls: List[DiceRoll] = Field(default_factory=list, description="Individual damage rolls")
     damages: List['Damage'] = Field(default_factory=list, description="Damage specifications (types)")
     effect_id: Optional[str] = Field(
@@ -5371,6 +5389,7 @@ class DamageAppliedEvent(Event):
         default=None,
         description="Stable identity of the effect that caused the applied damage.",
     )
+    spatial_source: SpatialDamageSource | None = None
     resolution: Optional[DamageResolution] = Field(
         default=None,
         description="Complete resolution of the parent incoming damage packet.",

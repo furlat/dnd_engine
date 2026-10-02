@@ -1,0 +1,32 @@
+{
+  "archive": "/mnt/c/Users/tommaso/Downloads/Fantasy tileset - 2D Isometric V1.1.zip",
+  "family": "Ground H1",
+  "members": [
+    "Fantasy tileset - 2D Isometric/Environment/Ground H1_E.png",
+    "Fantasy tileset - 2D Isometric/Environment/Ground H1_N.png",
+    "Fantasy tileset - 2D Isometric/Environment/Ground H1_S.png",
+    "Fantasy tileset - 2D Isometric/Environment/Ground H1_W.png"
+  ],
+  "assets": [
+    {
+      "path": "game/assets/environment/ground-h1-e.png",
+      "bytes": 38140,
+      "sha256": "784ef767a29c6d48a2f449e5f51eaf94a5a3e2a17e9e682ace8c10c8bc0b6bb5"
+    },
+    {
+      "path": "game/assets/environment/ground-h1-n.png",
+      "bytes": 38151,
+      "sha256": "2dfd25589ba7729157d02cbc37f90e222b6b75fbb9898dbec16b61fffb9a1eb1"
+    },
+    {
+      "path": "game/assets/environment/ground-h1-s.png",
+      "bytes": 38087,
+      "sha256": "dc451d2b7df776786b81a8ba7ae316c6b4f0df237afdaaa964fc528b5ec6fca4"
+    },
+    {
+      "path": "game/assets/environment/ground-h1-w.png",
+      "bytes": 38028,
+      "sha256": "d8d7885141c7145c52e6665882dd38a02fd1f2d3c0853f3d62c4489b58ec2bce"
+    }
+  ]
+}

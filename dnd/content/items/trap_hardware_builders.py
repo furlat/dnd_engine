@@ -5,6 +5,7 @@ from types import MappingProxyType
 from uuid import UUID, uuid4
 
 from dnd.blocks.base_item import BaseItem
+from dnd.content.items.object_defenses import OBJECT_ARMOR_CLASS_BY_MATERIAL
 from dnd.core.creature_types import DamageType
 from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.item_types import ItemDestructionProfile
@@ -23,6 +24,7 @@ class TrapHardwareProfile:
     material: Material
     style: str
     hit_points: int = 18
+    armor_class: int | None = None
 
 
 TRAP_HARDWARE_PROFILES = MappingProxyType({
@@ -44,6 +46,8 @@ def build_trap_hardware(item_id: str, *, hit_points: int | None = None,
     name = f"{profile.style.title()} {profile.mechanism.replace('_', ' ')}"
     item = BaseItem(source_entity_uuid=source_entity_uuid or uuid4(), item_id=item_id,
         name=name, is_targetable=True, is_pickable=False,
+        armor_class=(profile.armor_class if profile.armor_class is not None
+                     else OBJECT_ARMOR_CLASS_BY_MATERIAL[profile.material]),
         destruction_profile=ItemDestructionProfile(name=f"Broken {name}"))
     item.health = item.create_item_health(item.uuid, hp)
     return item

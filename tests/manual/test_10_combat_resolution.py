@@ -8,13 +8,10 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition
-from dnd.core.base_object import BaseObject
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, EventType
-from dnd.core.gridmap import GridMap, get_map
+from dnd.core.gridmap import get_map
 from dnd.core.creature_types import Size
 from dnd.core.modifiers import (
     AutoHitModifier,
@@ -22,25 +19,32 @@ from dnd.core.modifiers import (
     CriticalModifier,
     CriticalStatus,
 )
-from dnd.core.values import BaseValue
 from dnd.conditions import Incapacitated, Prone
 from dnd.entity import Entity, EntityConfig
-from dnd.monsters.bestiary import create_goblin, create_skeleton
+from dnd.monsters.bestiary import create_goblin as _create_goblin, create_skeleton as _create_skeleton
+from dnd.game import Game
+from tests.engine.support import reset_combat_state
 from dnd.reactions import add_opportunity_attack_handler
 
 
 def reset_combat_tutorial_state() -> None:
     """Clear global state and create the tutorial combat arena."""
-    EventQueue.reset()
-    EventQueue.set_combat_log_callback(None)
-    BaseObject._registry.clear()
-    BaseBlock._registry.clear()
-    BaseCondition._registry.clear()
-    BaseValue._registry.clear()
-    Entity._entity_registry.clear()
-    Entity._entity_by_position.clear()
-    GridMap.reset()
+    reset_combat_state()
     get_map().create_rectangle(0, 0, 20, 20)
+
+
+def _deploy(entity: Entity) -> Entity:
+    entity.compose_entity()
+    Game().deploy_entity(entity, entity.position)
+    return entity
+
+
+def create_goblin(*args, **kwargs) -> Entity:
+    return _deploy(_create_goblin(*args, **kwargs))
+
+
+def create_skeleton(*args, **kwargs) -> Entity:
+    return _deploy(_create_skeleton(*args, **kwargs))
 
 
 def make_melee_attack_auto_hit(entity: Entity) -> UUID:
@@ -103,7 +107,7 @@ def create_strong_actor(
     )
     actor = Entity.create(source_entity_uuid=uuid4(), name=name, config=config)
     setup_standard_actions(actor)
-    return actor
+    return _deploy(actor)
 
 
 def test_first_combat_example_prints_visible_hit_damage_and_heal(capsys) -> None:

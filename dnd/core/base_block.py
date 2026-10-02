@@ -1,4 +1,5 @@
-from typing import Dict, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
+from dnd.core.action_types import ActionEconomyCostType
+from typing import AbstractSet, Dict, Optional, Any, List, Self, Set, ClassVar, Callable, Tuple
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
@@ -26,6 +27,8 @@ from dnd.types.senses import (
 )
 from dnd.types.world import LightLevel as LightLevel, MovementMode, OccupancyLayer
 from dnd.types.actor import EntityStatsState
+from dnd.types.physical_access import ContactPassage, PhysicalAccess
+from dnd.types.controls import ControlLink
 from dnd.types.world_placement import (
     BoundaryStructure,
     WorldPlacementKind,
@@ -33,6 +36,7 @@ from dnd.types.world_placement import (
 )
 
 from collections import defaultdict
+from contextvars import ContextVar
 
 ContextualConditionImmunity = Callable[['BaseBlock', Optional['BaseBlock'], Optional[dict]], bool]
 
@@ -147,6 +151,10 @@ class BaseBlock(BaseModel):
         return {cond: [name for name, _ in imms] for cond, imms in self.contextual_condition_immunities.items()}
 
     _registry: ClassVar[Dict[UUID, 'BaseBlock']] = {}
+    _accepted_condition_removals: ClassVar[ContextVar[Optional[Dict[
+        UUID, Tuple[Optional['BaseBlock'], BaseCondition, Event, bool]
+    ]]]] = ContextVar("accepted_condition_removals", default=None)
+
 
     model_config = ConfigDict(validate_assignment=False)
 
@@ -330,6 +338,19 @@ class BaseBlock(BaseModel):
         """Whether this block prevents ordinary optics through its cell center."""
         return False
 
+    def get_contact_passage(self) -> ContactPassage:
+        """Contact defaults to this provider's structural movement obstruction."""
+        structure = self.get_boundary_structure()
+        return structure.contact_passage if structure is not None else ContactPassage.STRUCTURAL
+
+    def get_supporting_object_uuid(self) -> Optional[UUID]:
+        """Physical attachment, independent of inventory ownership."""
+        return None
+
+    def get_melee_threat_access(self) -> tuple[PhysicalAccess, int]:
+        """Neutral fallback; actors expose their actual reaction attack capability."""
+        return PhysicalAccess.NATURAL, 5
+
     def blocks_propagation(self) -> bool:
         """Whether this block prevents physical propagation through its cell center."""
         return False
@@ -385,6 +406,14 @@ class BaseBlock(BaseModel):
         """Override in Entity to return Senses block for subjective perception."""
         return None
 
+    def is_object_known_to(self, observer_uuid: UUID) -> bool:
+        """Explicit authored knowledge; ordinary entities grant no object contact."""
+        return False
+
+    def get_item_control_link(self) -> Optional[ControlLink]:
+        """Return a handle's valid authored item connection, if it owns one."""
+        return None
+
     @property
     def is_active(self) -> bool:
         """Whether this block is active and should be included in interactions.
@@ -398,6 +427,12 @@ class BaseBlock(BaseModel):
         its neutral action-permission capability.
         """
         return True
+
+    def allows_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> bool:
+        return True
+
+    def record_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> None:
+        """Non-actor blocks have no action economy to record."""
 
     def can_afford_action_resource(
         self,
@@ -552,7 +587,7 @@ class BaseBlock(BaseModel):
         """
         return False
 
-    def on_grid_object_removed(self, position: Tuple[int, int], clear_location: bool = True) -> None:
+    def on_grid_object_removed(self, position: Tuple[int, int], clear_location: bool = True, parent_event: Optional[Event] = None) -> None:
         """React after this block is removed from GridMap object indexes.
 
         Args:
@@ -980,7 +1015,10 @@ class BaseBlock(BaseModel):
     ) -> None:
         """Close accepted removal effects without mutating condition state."""
         reason = canceled.status_message or "Dependent condition removal was canceled"
-        for _, _, effect, _ in reversed(prepared):
+        for _, condition, effect, _ in reversed(prepared):
+            if not condition.applied:
+                continue
+            condition.cancel_prepared_removal(reason)
             if not effect.canceled:
                 effect.cancel(status_message=reason)
             parent = (
@@ -1003,6 +1041,11 @@ class BaseBlock(BaseModel):
     ) -> None:
         """Commit a fully accepted condition graph child-first."""
         for owner, condition, removal_effect, expire in reversed(prepared):
+            if not condition.applied:
+                continue
+            accepted = BaseBlock._accepted_condition_removals.get()
+            if accepted is not None:
+                accepted.pop(condition.uuid, None)
             if owner is None:
                 if not condition.remove_from_runtime_owner(
                     expire=expire,
@@ -1061,20 +1104,26 @@ class BaseBlock(BaseModel):
             return None
         visited.add(condition.uuid)
 
-        declaration = EventQueue.publish_declaration(
-            condition._declare_removal_event(
-                expired=expire,
-                parent_event=parent_event,
-                consumed=consumed,
-            ),
-        )
-        if declaration.canceled:
-            return declaration
-
-        effect = condition.publish_removal_effect(declaration)
-        if effect.canceled:
-            return effect
-        prepared.append((condition_owner, condition, effect, expire))
+        accepted = cls._accepted_condition_removals.get()
+        reused = accepted.get(condition.uuid) if accepted is not None else None
+        if reused is not None:
+            effect = reused[2]
+            prepared.append(reused)
+        else:
+            declaration = EventQueue.publish_declaration(
+                condition._declare_removal_event(
+                    expired=expire, parent_event=parent_event, consumed=consumed,
+                ),
+            )
+            if declaration.canceled:
+                return declaration
+            effect = condition.publish_removal_effect(declaration)
+            if effect.canceled:
+                return effect
+            entry = (condition_owner, condition, effect, expire)
+            prepared.append(entry)
+            if accepted is not None:
+                accepted[condition.uuid] = entry
 
         for child_uuid in list(condition.sub_conditions):
             child = BaseCondition.get(child_uuid)
@@ -1178,7 +1227,8 @@ class BaseBlock(BaseModel):
 
         return None
 
-    def advance_duration(self, condition_name: str) -> bool:
+    def advance_duration(self, condition_name: str, *,
+                         interval: Optional[Tuple[UUID, int]] = None) -> bool:
         """Progress a block-owned condition duration without saving throws.
 
         Args:
@@ -1192,12 +1242,12 @@ class BaseBlock(BaseModel):
         condition = self.active_conditions.get(condition_name)
         if condition is None:
             return False
-        expired = condition.progress()
+        expired = condition.progress_for_interval(interval)
         if expired:
             self.remove_condition(condition_name, expire=True)
         return expired
 
-    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, parent_event: Optional[Event] = None)  -> Optional[Event]:
+    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, parent_event: Optional[Event] = None, *, required_condition: Optional[Tuple['BaseBlock', BaseCondition]] = None)  -> Optional[Event]:
         """Apply and index a condition when lifecycle is enabled.
 
         Args:
@@ -1206,6 +1256,7 @@ class BaseBlock(BaseModel):
             check_save_throw: Accepted for API symmetry; block-level condition
                 application does not perform saving throws.
             parent_event: Optional causal parent for the application.
+            required_condition: A sustainer that must succeed before replacement.
 
         Returns:
             Completion or cancellation event from condition application, or
@@ -1214,6 +1265,8 @@ class BaseBlock(BaseModel):
         Raises:
             ValueError: If the condition has no name.
         """
+        if required_condition is not None and required_condition[1].applied:
+            raise ValueError("Required condition must be a fresh application")
         if not self.allow_events_conditions:
             return None
         if condition.name is None:
@@ -1243,7 +1296,46 @@ class BaseBlock(BaseModel):
             self._discard_uncommitted_condition_tree(condition)
             raise
         if condition_applied and not condition_applied.canceled and condition.applied:
-            if condition.name in self.active_conditions:
+            if required_condition is not None:
+                prepared: List[Tuple[Optional[BaseBlock], BaseCondition, Event, bool]] = []
+                previous = self.active_conditions.get(condition.name)
+                canceled = None
+                if previous is not None:
+                    canceled = self._prepare_condition_removal_tree(
+                        previous, condition_owner=self, expire=False,
+                        parent_event=condition_applied, prepared=prepared, visited=set(),
+                    )
+                if canceled is None:
+                    required_owner, requirement = required_condition
+                    accepted = dict(self._accepted_condition_removals.get() or {})
+                    accepted.update((entry[1].uuid, entry) for entry in prepared)
+                    token = self._accepted_condition_removals.set(accepted)
+                    try:
+                        required_result = required_owner.add_condition(
+                            requirement, parent_event=condition_applied,
+                        )
+                    except BaseException:
+                        self._discard_uncommitted_condition_tree(condition)
+                        self._cancel_prepared_condition_removals(
+                            prepared, condition_applied.cancel(status_message="Required condition raised"),
+                        )
+                        raise
+                    finally:
+                        self._accepted_condition_removals.reset(token)
+                    if required_result is None or required_result.canceled or not requirement.applied:
+                        canceled = condition_applied.cancel(
+                            status_message="Required condition could not be maintained",
+                        )
+                if canceled is not None:
+                    self._discard_uncommitted_condition_tree(condition)
+                    self._cancel_prepared_condition_removals(prepared, canceled)
+                    return canceled
+                # Concentration may already have released a previous linked coat.
+                remaining = [entry for entry in prepared
+                             if entry[1].applied and (entry[0] is None or
+                                 entry[0].active_conditions_by_uuid.get(entry[1].uuid) is entry[1])]
+                self._commit_prepared_condition_removals(remaining)
+            elif condition.name in self.active_conditions:
                 if not self.remove_condition(
                     condition.name,
                     parent_event=condition_applied,

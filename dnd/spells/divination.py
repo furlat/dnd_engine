@@ -1,11 +1,12 @@
 """Divination spells that reveal information or grant special senses."""
 
 import random
-from typing import Any, Optional, List, Set, Tuple, cast as type_cast
+from typing import Any, Optional, List, Set, Tuple
 from uuid import UUID
 
 from pydantic import Field
 
+from dnd.core.action_types import EntityTargetPerception
 from dnd.core.base_actions import (
     ActionInformationOperation,
     ActionWorldEffectAnchor,
@@ -207,6 +208,8 @@ class TrueSeeing(SpellAction):
     valid_target_filter: str = Field(default="self_or_allies", description="Valid target filter key.")
     include_self: bool = Field(default=True, description="True Seeing may target its caster.")
 
+    entity_target_perception: EntityTargetPerception = EntityTargetPerception.TOUCH_CONTACT
+
     def get_world_effect_profile(self, actor: Any) -> ActionWorldEffectProfile:
         """Declare the granted truesight sense and possible discoveries.
 
@@ -238,32 +241,6 @@ class TrueSeeing(SpellAction):
                 ),
             ),
         )
-
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate touch range and visibility for True Seeing.
-
-        Args:
-            declaration_event: Spell declaration event.
-
-        Returns:
-            Execution-ready, canceled, or parent-validated spell event.
-        """
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not caster or not target:
-            return declaration_event.cancel(status_message="Caster or target not found")
-
-        contact = caster.senses.entities.get(target.uuid)
-        if target.uuid != caster.uuid and (contact is None or not contact.visual):
-            return declaration_event.cancel(status_message="Target not visible")
-
-        distance = self.get_target_distance(target.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Target out of touch range ({distance}ft)")
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Apply the True Seeing condition to the target.

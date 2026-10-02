@@ -1,5 +1,20 @@
 # Packaged creatures, native content and animation mapping
 
+**1 October deeper asset pass:** the [reviewed animation mappings](audits/FIXED_CHARACTER_ANIMATION_MAPPINGS_2026-10-01.md)
+now supply explicit selections and source evidence for all 150 retained
+nonanimal characters. The earlier geometry/filename inventory alone did not
+establish action semantics. Visible timing windows are documented; exact event
+markers, FPS, registration and final layer policy remain production calibration.
+
+**1 October implementation ownership correction:** the [unified presentation
+handoff](audits/FIXED_CHARACTER_RENDERER_INTEGRATION_2026-10-01.md) is the current
+architecture/authoring direction. The main production thread owns runtime
+integration. The art-led chat owns evidence and preparation; Luna coordination
+below is historical and has been revoked. Both modular and fixed families need
+one data-driven action/layout/timing projection. Fixed-character actions and
+gear are deliberately constrained during native content authoring to fit the
+inspected art, with explicit departures from SRD source profiles.
+
 **Current selection correction:** match the full SRD 5.1 creature catalogue first;
 SRD 5.2 is secondary and must use 5.1 rules. Adapt each selected profile to
 actual visible equipment, with explicit changed attacks/AC and retained source

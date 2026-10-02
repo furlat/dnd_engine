@@ -127,6 +127,20 @@
         "bodyClip": "Taunt",
         "bodyPlaybackSpeed": 1,
         "media": []
+      },
+      "connectorProfiles": {
+        "window": {
+          "animationId": "CrawlThroughWindow",
+          "bodyClip": "Rolling",
+          "durationMs": 450,
+          "arcHeightPx": 28,
+          "bodyLoops": false,
+          "passageBodyHeightPx": 12,
+          "passageScale": [0.6, 0.8],
+          "passageSocket": "body_center",
+          "passageHoldFraction": 0.12,
+          "bodyFrameKeys": [[0, 0], [0.28, 2], [0.48, 3], [0.52, 3], [0.72, 2], [1, 0]]
+        }
       }
     },
     "vital_effect": {

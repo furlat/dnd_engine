@@ -14,7 +14,7 @@ import pygame
 from dnd.core.life_types import LifeState
 from dnd.core.item_types import ItemIntegrity
 
-from game.animation import NumberSample
+from game.animation import ActorContact, NumberSample, feedback_identity
 from game.animation_draw import (
     AnimationDrawCommand, BodyRows, actor_draw_commands, actor_screen_bounds,
     arrange_feedback_commands, number_draw_commands,
@@ -114,12 +114,12 @@ def sample_playback_frame(
             local = group_elapsed - node.start_ms
             if isinstance(node.bound, BoundAttack):
                 timing = node.bound.timeline.damage_timing
-                if timing is not None and timing.start_ms <= local < timing.end_ms:
+                if isinstance(node.bound.timeline.target, ActorContact) and timing is not None and timing.start_ms <= local < timing.end_ms:
                     activities[node.bound.timeline.target.actor_uuid] = "hit"
             else:
                 for application in node.bound.timeline.applications:
                     start, end = application.damage_start_ms, application.damage_end_ms
-                    if start is not None and end is not None and start <= local < end:
+                    if isinstance(application.source.target, ActorContact) and start is not None and end is not None and start <= local < end:
                         activities[application.source.target.actor_uuid] = "hit"
         for hop in group.body_hops:
             if hop.start_ms <= group_elapsed < hop.end_ms:
@@ -149,7 +149,7 @@ def sample_playback_frame(
     overlays = tuple(command for track in feedback
                      for number in (sample_feedback(track, presentation_ms),) if number is not None
                      for command in number_draw_commands(data, (number,),
-                         {track.contact.actor_uuid: track.contact}, number_font, camera, badge_font=badge_font))
+                         {feedback_identity(track.contact): track.contact}, number_font, camera, badge_font=badge_font))
     hidden = group_sample.hidden_actors if group_sample is not None else frozenset()
     labels = tuple(NumberSample(actor.contact.actor_uuid, None, appearance.label.text,
                                 appearance.label.color, 0, appearance.alpha, kind="badge")

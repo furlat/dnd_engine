@@ -53,7 +53,7 @@ class AuthoredItemDefinition:
 
 @dataclass(frozen=True, slots=True)
 class WeaponDefinition:
-    """Cold mechanical facts for one mundane weapon identity."""
+    """Cold mechanical facts for one authored weapon identity."""
 
     item_id: str
     name: str
@@ -64,6 +64,7 @@ class WeaponDefinition:
     visual_item_name: Optional[str] = None
     visual_variant_id: Optional[str] = None
     equipped_visual_policy: EquippedVisualPolicy = EquippedVisualPolicy.VISIBLE
+    intrinsic: bool = False
     damage_die: Literal[4, 6, 8, 10, 12, 20] = 4
     damage_dice_count: int = 1
     damage_type: DamageType = DamageType.BLUDGEONING
@@ -71,6 +72,7 @@ class WeaponDefinition:
     range_kind: str = "reach"
     normal_range_feet: int = 5
     long_range_feet: Optional[int] = None
+    is_magical: bool = False
     attack_bonus: int = 0
     damage_bonus: int = 0
     attack_disadvantage: bool = False
@@ -100,6 +102,8 @@ class WearableDefinition:
     visual_item_name: Optional[str] = None
     visual_variant_id: Optional[str] = None
     equipped_visual_policy: EquippedVisualPolicy = EquippedVisualPolicy.VISIBLE
+    intrinsic: bool = False
+    is_magical: bool = False
     wearable_kind: str = "body_armor"
     armor_type: ArmorType = ArmorType.CLOTH
     body_part: BodyPart = BodyPart.BODY
@@ -511,6 +515,7 @@ _AUTHORED_WEAPONS = (
         ("arcane", "melee", "staff", "weapon"),
         visual_item_name="Quarterstaff",
         visual_variant_id="1000000f",
+        is_magical=True,
         damage_die=6,
         damage_type=DamageType.BLUDGEONING,
         properties=(WeaponProperty.VERSATILE,),
@@ -534,6 +539,7 @@ _AUTHORED_WEAPONS = (
         ("circus", "fire", "melee", "scimitar", "weapon"),
         visual_item_name="Scimitar",
         visual_variant_id="30000017",
+        is_magical=True,
         damage_die=6,
         damage_type=DamageType.SLASHING,
         properties=(WeaponProperty.FINESSE, WeaponProperty.LIGHT),
@@ -545,6 +551,7 @@ _AUTHORED_WEAPONS = (
         "weapon.circus.longsword_plus_one", "Longsword +1",
         "A magical longsword granting +1 to attack and damage rolls.",
         ("circus", "magic", "melee", "weapon"),
+        is_magical=True,
         damage_die=8,
         damage_type=DamageType.SLASHING,
         properties=(WeaponProperty.VERSATILE,),
@@ -555,6 +562,7 @@ _AUTHORED_WEAPONS = (
         "weapon.circus.soul_draining_morningstar", "Soul-Draining Morningstar",
         "A wicked morningstar carrying an additional pulse of necrotic damage.",
         ("circus", "melee", "necrotic", "weapon"),
+        is_magical=True,
         damage_die=8,
         damage_type=DamageType.PIERCING,
         extra_damage_die=4,
@@ -642,6 +650,7 @@ _AUTHORED_WEAPONS = (
         "weapon.creature.wolf_bite", "Bite",
         "The intrinsic bite of an SRD wolf.",
         ("creature_possession", "intrinsic", "natural", "srd", "weapon"),
+        intrinsic=True,
         damage_die=4,
         damage_dice_count=2,
         damage_type=DamageType.PIERCING,
@@ -650,6 +659,7 @@ _AUTHORED_WEAPONS = (
         "weapon.creature.dire_wolf_bite", "Bite",
         "The intrinsic bite of an SRD dire wolf.",
         ("creature_possession", "intrinsic", "natural", "srd", "weapon"),
+        intrinsic=True,
         damage_die=6,
         damage_dice_count=2,
         damage_type=DamageType.PIERCING,
@@ -658,6 +668,7 @@ _AUTHORED_WEAPONS = (
         "weapon.creature.zombie_slam", "Slam",
         "The intrinsic slam of an SRD zombie.",
         ("creature_possession", "intrinsic", "natural", "srd", "weapon"),
+        intrinsic=True,
         damage_die=6,
     ),
     WeaponDefinition(
@@ -672,6 +683,7 @@ _AUTHORED_WEAPONS = (
         "weapon.creature.ghoul_claws", "Claws",
         "The intrinsic claws of an SRD ghoul.",
         ("creature_possession", "intrinsic", "natural", "srd", "weapon"),
+        intrinsic=True,
         damage_die=4,
         damage_dice_count=2,
         damage_type=DamageType.SLASHING,
@@ -680,6 +692,7 @@ _AUTHORED_WEAPONS = (
         "weapon.creature.ghoul_bite", "Bite",
         "The intrinsic bite of an SRD ghoul.",
         ("creature_possession", "intrinsic", "natural", "srd", "weapon"),
+        intrinsic=True,
         damage_die=6,
         damage_dice_count=2,
         damage_type=DamageType.PIERCING,
@@ -689,6 +702,7 @@ _AUTHORED_WEAPONS = (
         "weapon.creature.dretch_bite", "Bite",
         "The intrinsic bite of an SRD dretch.",
         ("creature_possession", "intrinsic", "natural", "srd", "weapon"),
+        intrinsic=True,
         damage_die=6,
         damage_type=DamageType.PIERCING,
     ),
@@ -696,6 +710,7 @@ _AUTHORED_WEAPONS = (
         "weapon.creature.dretch_claws", "Claws",
         "The intrinsic claws of an SRD dretch.",
         ("creature_possession", "intrinsic", "natural", "srd", "weapon"),
+        intrinsic=True,
         damage_die=4,
         damage_dice_count=2,
         damage_type=DamageType.SLASHING,
@@ -1085,6 +1100,7 @@ _AUTHORED_WEARABLES = (
         ("apparel", "headgear", "arcane", "crown"),
         visual_item_name="Crown",
         wearable_kind="spellblade_crown", body_part=BodyPart.HEAD,
+        is_magical=True,
     ),
     WearableDefinition(
         "armor.armor_scraps", "Armor Scraps",
@@ -1123,6 +1139,7 @@ _AUTHORED_WEARABLES = (
         "armor.creature.wolf_natural", "Natural Armor",
         "The wolf's intrinsic hide provides fixed Armor Class 13.",
         ("armor", "creature_possession", "intrinsic", "natural", "srd"),
+        intrinsic=True,
         armor_type=ArmorType.LIGHT,
         armor_class=13,
         maximum_dexterity_bonus=0,
@@ -1131,6 +1148,7 @@ _AUTHORED_WEARABLES = (
         "armor.creature.dire_wolf_natural", "Natural Armor",
         "The dire wolf's intrinsic hide provides fixed Armor Class 14.",
         ("armor", "creature_possession", "intrinsic", "natural", "srd"),
+        intrinsic=True,
         armor_type=ArmorType.LIGHT,
         armor_class=14,
         maximum_dexterity_bonus=0,
@@ -1139,6 +1157,7 @@ _AUTHORED_WEARABLES = (
         "armor.creature.dretch_natural", "Natural Armor",
         "The dretch's intrinsic hide provides fixed Armor Class 11.",
         ("armor", "creature_possession", "intrinsic", "natural", "srd"),
+        intrinsic=True,
         armor_type=ArmorType.LIGHT,
         armor_class=11,
         maximum_dexterity_bonus=0,

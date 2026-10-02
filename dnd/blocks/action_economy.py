@@ -1,13 +1,13 @@
 """Action economy resources, turn costs, and spell slot values."""
 
-from typing import Optional, List, Tuple, Dict, Union, Sequence
+from typing import AbstractSet, Optional, List, Tuple, Dict, Union, Sequence
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, StrictInt
 from dnd.core.values import ModifiableValue
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.base_actions import CostType, spell_slot_cost_type
-from dnd.core.action_types import HasteActionPolicy, RestrictedActionGrant
+from dnd.core.action_types import ActionEconomyCostType, HasteActionPolicy, RestrictedActionGrant
 from dnd.core.feature_grants import AttackMultiplicityGrant
 
 from dnd.core.base_block import BaseBlock
@@ -362,6 +362,11 @@ class ActionEconomy(BaseBlock):
         UUID,
         AttackMultiplicityGrant,
     ] = PrivateAttr(default_factory=dict)
+    _attack_multiplicity_limits: Dict[UUID, int] = PrivateAttr(default_factory=dict)
+    _committed_attack_batches: set[UUID] = PrivateAttr(default_factory=set)
+    _action_bonus_exclusion_owners: set[UUID] = PrivateAttr(default_factory=set)
+    _committed_action_channels: set[ActionEconomyCostType] = PrivateAttr(default_factory=set)
+    _action_bonus_lock_modifiers: Dict[ActionEconomyCostType, UUID] = PrivateAttr(default_factory=dict)
     _normal_spell_slot_capacity_receipt: Optional[
         NormalSpellSlotCapacityReceipt
     ] = PrivateAttr(default=None)
@@ -478,6 +483,94 @@ class ActionEconomy(BaseBlock):
             ),
         )
         return winner.attacks_per_attack_action
+
+    def add_attack_multiplicity_limit(self, owner_uuid: UUID, maximum: int) -> None:
+        """Limit future Attack batches and discard credits when extra attacks stop."""
+        if maximum < 1:
+            raise ValueError("attacks per action must be at least one")
+        self._attack_multiplicity_limits[owner_uuid] = maximum
+        if maximum == 1:
+            resource = self.resources.get("extra_attacks")
+            if resource is not None:
+                resource.current = 0
+
+    def remove_attack_multiplicity_limit(self, owner_uuid: UUID) -> None:
+        """Release one effect's limit without restoring discarded attack credits."""
+        self._attack_multiplicity_limits.pop(owner_uuid, None)
+
+    def grant_attack_batch(self, lineage_uuid: UUID) -> int:
+        """Credit one committed ordinary Attack exactly once, before reactions."""
+        if lineage_uuid in self._committed_attack_batches:
+            return 0
+        first_batch = not self._committed_attack_batches
+        self._committed_attack_batches.add(lineage_uuid)
+        resource = self.resources.get("extra_attacks")
+        if resource is None:
+            return 0
+        attacks = min(
+            (self.resolve_attacks_per_attack_action(), *self._attack_multiplicity_limits.values()),
+        )
+        additional = max(0, attacks - 1)
+        if first_batch or additional == 0:
+            resource.current = additional
+        else:
+            resource.current += additional
+        return additional
+
+    def add_action_bonus_exclusion(self, owner_uuid: UUID) -> None:
+        """Make committed action and bonus-action channels mutually exclusive."""
+        self._action_bonus_exclusion_owners.add(owner_uuid)
+        self._sync_action_bonus_locks()
+
+    def remove_action_bonus_exclusion(self, owner_uuid: UUID) -> None:
+        """Remove one owner without releasing another active effect's exclusion."""
+        self._action_bonus_exclusion_owners.discard(owner_uuid)
+        self._sync_action_bonus_locks()
+
+    def allows_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> bool:
+        """Check action meaning independently of its ordinary or restricted funding."""
+        if not self._action_bonus_exclusion_owners:
+            return True
+        action = ActionEconomyCostType.ACTIONS
+        bonus = ActionEconomyCostType.BONUS_ACTIONS
+        return not (
+            action in channels and bonus in self._committed_action_channels
+            or bonus in channels and action in self._committed_action_channels
+            or action in channels and bonus in channels
+        )
+
+    def record_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> None:
+        """Record successfully committed action meaning once before execution dispatch."""
+        self._committed_action_channels.update(
+            channels & {ActionEconomyCostType.ACTIONS, ActionEconomyCostType.BONUS_ACTIONS},
+        )
+        self._sync_action_bonus_locks()
+
+    def _sync_action_bonus_locks(self) -> None:
+        """Project the active exclusion into the existing public budget channels."""
+        channels = {
+            ActionEconomyCostType.ACTIONS: self.actions,
+            ActionEconomyCostType.BONUS_ACTIONS: self.bonus_actions,
+        }
+        desired: set[ActionEconomyCostType] = set()
+        if self._action_bonus_exclusion_owners:
+            if ActionEconomyCostType.ACTIONS in self._committed_action_channels:
+                desired.add(ActionEconomyCostType.BONUS_ACTIONS)
+            if ActionEconomyCostType.BONUS_ACTIONS in self._committed_action_channels:
+                desired.add(ActionEconomyCostType.ACTIONS)
+        for channel, modifier_uuid in tuple(self._action_bonus_lock_modifiers.items()):
+            if channel not in desired:
+                channels[channel].self_static.remove_max_constraint(modifier_uuid)
+                del self._action_bonus_lock_modifiers[channel]
+        for channel in desired - self._action_bonus_lock_modifiers.keys():
+            self._action_bonus_lock_modifiers[channel] = channels[channel].self_static.add_max_constraint(
+                NumericalModifier(
+                    name="Action/bonus exclusion",
+                    value=0,
+                    source_entity_uuid=self.source_entity_uuid,
+                    target_entity_uuid=self.source_entity_uuid,
+                ),
+            )
 
     def get_attack_multiplicity_grants(
         self,
@@ -641,8 +734,14 @@ class ActionEconomy(BaseBlock):
 
     def on_turn_start(self) -> None:
         """Recharge resources that recharge on turn start."""
+        self._committed_attack_batches.clear()
+        self._committed_action_channels.clear()
+        self._sync_action_bonus_locks()
         for resource in self.resources.values():
             resource.recover_for(RechargeType.TURN_START)
+        extra_attacks = self.resources.get("extra_attacks")
+        if extra_attacks is not None:
+            extra_attacks.current = 0
 
     def spell_slot_value(self, level: int) -> ModifiableValue:
         """Get the ModifiableValue for a spell slot level."""

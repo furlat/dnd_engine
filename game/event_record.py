@@ -11,7 +11,7 @@ from typing import Annotated, Any
 from pydantic import BeforeValidator, PlainSerializer, TypeAdapter
 from game.recording_compat import recorded_area_policy
 
-from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent
+from dnd.actions import AttackEvent, JumpEvent, MovementEvent, TraverseConnectorEvent, ShoveEvent, SpellEvent
 from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import (
     ArmorEquipEvent, ArmorUnequipEvent, EquipmentEvent, ShieldEquipEvent,
@@ -24,7 +24,7 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.combat_log import CombatLogEntry
 from dnd.core.content.runtime import EffectiveHandlerPresentation
 from dnd.core.events import (
-    AttackD20RollResultEvent, D20Event, D20RollResultEvent, DamageAppliedEvent,
+    AreaReachEvent, AttackD20RollResultEvent, D20Event, D20RollResultEvent, DamageAppliedEvent,
     DamageRollResultEvent, DeathEvent, DeathSaveEvent, EncounterEndEvent,
     EncounterEvent, EncounterStartEvent, EntityCreatedEvent, Event, EventPhase,
     ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
@@ -40,8 +40,8 @@ from dnd.core.events import (
 # must first acquire a retained capture contract; they cannot decode by importing
 # arbitrary classes named by a file. Technical headers remain ordinary Event.
 EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
-    Event, ActionEvent, WorldInitializedEvent, WorldModifiedEvent, EntityCreatedEvent, ConditionStateChangedEvent,
-    AttackEvent, SpellEvent, MovementEvent, JumpEvent, ShoveEvent, CounterspellReactionEvent,
+    Event, ActionEvent, AreaReachEvent, WorldInitializedEvent, WorldModifiedEvent, EntityCreatedEvent, ConditionStateChangedEvent,
+    AttackEvent, SpellEvent, MovementEvent, JumpEvent, TraverseConnectorEvent, ShoveEvent, CounterspellReactionEvent,
     EquipmentEvent, WeaponEquipEvent, WeaponUnequipEvent, ArmorEquipEvent,
     ArmorUnequipEvent, ShieldEquipEvent, ShieldUnequipEvent, ItemLocationStateEvent,
     ItemChargeConsumptionEvent, ItemDestructionEvent,
@@ -65,11 +65,12 @@ ADDITIVE_FIELDS = {
     SpatialEffectChangeEvent: {"pressed", "previous_pressed"},
     ItemLocationStateEvent: {"replacement_item_uuid"},
     ActionEvent: {"resolved_area_positions"},
-    AttackEvent: {"resolved_area_positions", "intercepted_by_condition_uuid"},
-    SpellEvent: {"resolved_area_positions", "effect_id", "cast_origin", "effect_source_position", "suppressions", "area_propagation"},
+    AttackEvent: {"resolved_area_positions", "intercepted_by_condition_uuid", "target_kind",
+                  "target_position", "target_base_height_steps", "attack_source_kind", "natural_weapon", "additional_damages"},
+    SpellEvent: {"resolved_area_positions", "effect_id", "cast_origin", "effect_source_position", "suppressions", "area_propagation", "target_kind", "target_position", "target_base_height_steps"},
     ShoveEvent: {"resolved_area_positions"},
-    DamageAppliedEvent: {"body_release", "critical_hit", "impact_direction"},
-    TakeDamageEvent: {"intercepted_by_condition_uuid"},
+    DamageAppliedEvent: {"body_release", "critical_hit", "impact_direction", "spatial_source"},
+    TakeDamageEvent: {"intercepted_by_condition_uuid", "spatial_source"},
     HealEvent: {"source_condition_uuid"},
     EntityCreatedEvent: {"healing_blocked", "occupancy_layer", "temporary_hit_points_grant"},
     SensoryUpdateEvent: {"hazardous_cells_changed", "spatial_effects_changed", "spatial_effects_removed"},

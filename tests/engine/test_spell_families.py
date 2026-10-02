@@ -383,7 +383,7 @@ def test_eb_15_001_spell_catalog_groups_representative_families() -> None:
     reset_spell_family_state()
 
     representatives = {
-        "Fire Bolt": (FireBolt, 0, "evocation", TargetType.ENTITY),
+        "Fire Bolt": (FireBolt, 0, "evocation", TargetType.CREATURE_OR_OBJECT),
         "Magic Missile": (MagicMissile, 1, "evocation", TargetType.MULTI_ENTITY),
         "Fireball": (Fireball, 3, "evocation", TargetType.POSITION_AOE),
         "Mage Armor": (MageArmor, 1, "abjuration", TargetType.ENTITY),

@@ -1,3 +1,4 @@
+from dnd.core.attack_types import NaturalWeaponSpec
 from typing import AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, computed_field, field_validator
@@ -12,7 +13,7 @@ from dnd.core.creature_types import CreatureType, DamageType, Size
 from dnd.core.modifiers import NumericalModifier, ResistanceStatus
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.action_types import RestrictedActionGrant
+from dnd.core.action_types import ActionEconomyCostType, RestrictedActionGrant
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import (
     BehaviorBinding,
@@ -43,7 +44,10 @@ from dnd.core.equipment_types import (
 )
 from dnd.core.base_block import BaseBlock, MovementMode
 from dnd.types.world import OccupancyLayer
+from dnd.types.physical_access import PhysicalAccess
+from dnd.core.events import RangeType
 from dnd.types.actor import EntityStatsState
+from dnd.types.spatial_effects import SpatialDamageSource
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
 from dnd.blocks.health import (
@@ -244,6 +248,7 @@ class EntityConfig(BaseModel):
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
     size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
+    gaseous_body: bool = Field(default=False, description="Native body form affected by physical gas barriers.")
     has_ordinary_sight: bool = Field(
         default=True,
         description="Whether the entity can see visual phenomena without special senses."
@@ -387,6 +392,7 @@ class Entity(BaseBlock):
     weight: int = Field(default=150, description="Weight in pounds (default 150 for Medium humanoid)")
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
     size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
+    gaseous_body: bool = Field(default=False, description="Native body form affected by physical gas barriers.")
     is_deployed: bool = Field(
         default=False,
         description="Whether this Entity currently occupies a world Tile.",
@@ -448,6 +454,9 @@ class Entity(BaseBlock):
     jump_distance_multiplier: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="Jump Distance (Multiplier)", base_value=1),
         description="Multiplicative jump-distance value used by spell and condition effects."
+    )
+    turn_duration_interval: Optional[Tuple[UUID, int]] = Field(
+        default=None, exclude=True, description="Existing active encounter turn interval for item effect application.",
     )
     is_my_turn: bool = Field(default=False, description="True when it's this entity's turn")
     non_blocking: bool = Field(default=False, description="When True, entity does not block movement through its cell")
@@ -688,6 +697,7 @@ class Entity(BaseBlock):
 
     def _detach_from_world(self) -> None:
         """Remove present or suspended world ownership."""
+        self.turn_duration_interval = None
         if self.is_spatially_suspended:
             self.is_spatially_suspended = False
             return
@@ -1368,6 +1378,7 @@ class Entity(BaseBlock):
             weight=config.weight,
             creature_type=config.creature_type,
             size=config.size,
+            gaseous_body=config.gaseous_body,
             structural_base_size=config.size,
             has_ordinary_sight=config.has_ordinary_sight,
             requires_breathing=config.requires_breathing,
@@ -2300,6 +2311,9 @@ class Entity(BaseBlock):
             TurnStartEvent after all phases complete
         """
 
+        self.turn_duration_interval = ((encounter_uuid, round_number)
+                                       if encounter_uuid is not None else None)
+
         event = TurnStartEvent(
             source_entity_uuid=self.uuid,
             source_entity_name=self.name,
@@ -2326,10 +2340,12 @@ class Entity(BaseBlock):
 
         for item in self.equipment.get_all_equipped_items():
             for cond_name in list(item.active_conditions.keys()):
-                item.advance_duration(cond_name)
+                item.advance_duration(cond_name, interval=(encounter_uuid, round_number)
+                                      if encounter_uuid is not None else None)
         for item in self.inventory.items.values():
             for cond_name in list(item.active_conditions.keys()):
-                item.advance_duration(cond_name)
+                item.advance_duration(cond_name, interval=(encounter_uuid, round_number)
+                                      if encounter_uuid is not None else None)
 
         self.action_economy.reset_all_costs()
         self.action_economy.on_turn_start()
@@ -2402,6 +2418,7 @@ class Entity(BaseBlock):
         event = event.phase_to(EventPhase.COMPLETION)
 
         self.is_my_turn = False
+        self.turn_duration_interval = None
 
         return event
 
@@ -2465,7 +2482,7 @@ class Entity(BaseBlock):
         normalized_proficiency_bonus.update_normalizers(proficiency_bonus_multiplier_callable)
         return normalized_proficiency_bonus, saving_throw_bonus, ability_bonus
 
-    def _get_attack_bonuses(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, override_ability: Optional[AbilityName] = None) -> Tuple[ModifiableValue, ModifiableValue, List[ModifiableValue], List[ModifiableValue], Range]:
+    def _get_attack_bonuses(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> Tuple[ModifiableValue, ModifiableValue, List[ModifiableValue], List[ModifiableValue], Range]:
         """Return component values that make up a weapon attack bonus.
 
         Args:
@@ -2481,10 +2498,11 @@ class Entity(BaseBlock):
                 self.ability_scores,
                 weapon_slot,
                 override_ability,
+                natural_weapon=natural_weapon,
             )
         )
         proficiency_bonus = self.proficiency_bonus
-        weapon = self.equipment.get_weapon(weapon_slot)
+        weapon = None if natural_weapon else self.equipment.get_weapon(weapon_slot)
         if not self.creature_proficiencies.is_weapon_proficient(
             weapon.properties if weapon is not None else None,
             weapon.item_id if weapon is not None else None,
@@ -2692,7 +2710,7 @@ class Entity(BaseBlock):
             self.clear_target_entity()
         return ac_bonus
 
-    def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None) -> ModifiableValue:
+    def attack_bonus(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> ModifiableValue:
         """Build the entity's weapon attack bonus.
 
         Args:
@@ -2717,6 +2735,7 @@ class Entity(BaseBlock):
         ) = self._get_attack_bonuses(
             weapon_slot,
             override_ability=override_ability,
+            natural_weapon=natural_weapon,
         )
         bonuses = [weapon_bonus] + attack_bonuses + ability_bonuses
         source_attack_bonus = proficiency_bonus.combine_values(bonuses)
@@ -2725,6 +2744,7 @@ class Entity(BaseBlock):
                 self.ability_scores,
                 weapon_slot,
                 override_ability,
+                natural_weapon=natural_weapon,
             ),
             "range_type": weapon_range.type.value,
         })
@@ -2737,6 +2757,7 @@ class Entity(BaseBlock):
         self,
         weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
         override_ability: Optional[AbilityName] = None,
+        natural_weapon: Optional[NaturalWeaponSpec] = None,
     ) -> AttackRollBaseline:
         """Read actor-side weapon attack values without allocating engine objects.
 
@@ -2755,8 +2776,9 @@ class Entity(BaseBlock):
             self.ability_scores,
             weapon_slot,
             override_ability,
+            natural_weapon=natural_weapon,
         )
-        weapon = self.equipment.get_weapon(weapon_slot)
+        weapon = None if natural_weapon else self.equipment.get_weapon(weapon_slot)
         proficiency_score = (
             self.proficiency_bonus.normalized_score
             if self.creature_proficiencies.is_weapon_proficient(
@@ -2783,6 +2805,7 @@ class Entity(BaseBlock):
         self,
         weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
         override_ability: Optional[AbilityName] = None,
+        natural_weapon: Optional[NaturalWeaponSpec] = None,
     ) -> tuple[DamageRollProfile, ...]:
         """Read actor-side weapon damage formulas without transient damage objects.
 
@@ -2798,6 +2821,7 @@ class Entity(BaseBlock):
             weapon_slot,
             DamageRollProfile,
             override_ability,
+            natural_weapon=natural_weapon,
         )
         size_dice = self.get_size_damage_dice()
         if size_dice > 0 and profiles:
@@ -2853,7 +2877,7 @@ class Entity(BaseBlock):
         idx = size_order.index(self.size)
         return max(0, idx - 2)
 
-    def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None) -> List[Damage]:
+    def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> List[Damage]:
         """Build weapon damage packets for this entity.
 
         Args:
@@ -2868,7 +2892,7 @@ class Entity(BaseBlock):
         if target_entity_uuid is not None and target_entity_uuid != self.target_entity_uuid:
             self.set_target_entity(target_entity_uuid)
             should_clear_target = True
-        damages = self.equipment.get_damages(weapon_slot, self.ability_scores, override_ability=override_ability)
+        damages = self.equipment.get_damages(weapon_slot, self.ability_scores, override_ability=override_ability, natural_weapon=natural_weapon)
         size_dice = self.get_size_damage_dice()
         if size_dice > 0 and damages:
             primary_type = damages[0].damage_type
@@ -2957,6 +2981,7 @@ class Entity(BaseBlock):
             damages=damages,
             effect_id=effect_id,
             resolution=resolution,
+            spatial_source=parent_event.spatial_source,
             critical_hit=critical_hit,
             impact_direction=impact_direction,
             parent_event=parent_event.uuid,
@@ -2978,29 +3003,8 @@ class Entity(BaseBlock):
         Raises:
             ValueError: If the event carries no typed damage component.
         """
-        use_damage_components = (
-            event.final_damage is None
-            and len(event.damage_rolls) == len(event.damages)
-            and len(event.damages) > 1
-        )
-        if use_damage_components:
-            return self.health.preview_damage_components(
-                [
-                    (roll.total, damage.damage_type)
-                    for roll, damage in zip(event.damage_rolls, event.damages)
-                ],
-                event.normal_hit_point_damage_cap,
-                declared_damage=event.total_damage,
-                normal_hit_points_available=max(0, self.get_normal_hp()),
-            )
-        if not event.damages:
-            raise ValueError("TakeDamageEvent requires at least one typed damage component")
-        return self.health.preview_damage(
-            event.get_effective_damage(),
-            event.damages[0].damage_type,
-            event.normal_hit_point_damage_cap,
-            declared_damage=event.total_damage,
-            normal_hit_points_available=max(0, self.get_normal_hp()),
+        return self.health.preview_damage_event(
+            event, normal_hit_points_available=max(0, self.get_normal_hp()),
         )
 
     def receive_damage(
@@ -3014,6 +3018,7 @@ class Entity(BaseBlock):
         critical_hit: bool = False,
         effect_id: Optional[str] = None,
         impact_direction: tuple[float, float] | None = None,
+        spatial_source: SpatialDamageSource | None = None,
     ) -> int:
         """Apply damage through the engine event lifecycle.
 
@@ -3058,6 +3063,7 @@ class Entity(BaseBlock):
             damages=event_damages,
             effect_id=effect_id,
             parent_event=parent_event,
+            spatial_source=spatial_source,
             phase=EventPhase.DECLARATION
         )
 
@@ -3292,6 +3298,12 @@ class Entity(BaseBlock):
         """Return whether neutral condition transforms permit ordinary actions."""
         return self.action_economy.action_permission.normalized_score > 0
 
+    def allows_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> bool:
+        return self.action_economy.allows_action_channels(channels)
+
+    def record_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> None:
+        self.action_economy.record_action_channels(channels)
+
     def can_afford_action_resource(
         self,
         resource_name: str,
@@ -3323,6 +3335,21 @@ class Entity(BaseBlock):
         """
         return self.equipment.get_weapon_range(weapon_slot)
 
+    def get_weapon_physical_access(self, slot: WeaponSlot) -> PhysicalAccess:
+        weapon = self.equipment.get_weapon(slot)
+        if weapon is None:
+            return PhysicalAccess.NATURAL
+        if self.get_weapon_range(slot).type is RangeType.RANGE:
+            return PhysicalAccess.PROJECTILE
+        return (PhysicalAccess.LIGHT_WEAPON if WeaponProperty.LIGHT in weapon.properties
+                else PhysicalAccess.WEAPON)
+
+    def get_melee_threat_access(self) -> tuple[PhysicalAccess, int]:
+        attack_range = self.get_weapon_range(WeaponSlot.MELEE_MAIN)
+        if attack_range.type is not RangeType.REACH:
+            return PhysicalAccess.WEAPON, 0
+        return self.get_weapon_physical_access(WeaponSlot.MELEE_MAIN), attack_range.normal
+
     def is_threatened(self) -> bool:
         """
         Check if any enemy threatens this entity's position.
@@ -3340,7 +3367,7 @@ class Entity(BaseBlock):
                 continue
             other_entity = Entity.get(entity_uuid)
             if other_entity and self.is_enemy(other_entity):
-                if my_position in other_entity.senses.get_threathened_positions():
+                if my_position in other_entity.senses.get_threathened_positions(close_pressure=True):
                     return True
         return False
 
@@ -3364,7 +3391,7 @@ class Entity(BaseBlock):
                 continue
             domains.append((
                 reactor,
-                set(reactor.senses.get_threathened_positions()),
+                set(reactor.senses.get_threathened_positions(knowledge_observer_uuid=self.uuid)),
             ))
         return domains
 
@@ -4242,6 +4269,8 @@ class Entity(BaseBlock):
         Stack-aware: if add_item merges the item into an existing stack, skips
         location tracking and lifecycle hook (the item object was consumed).
         """
+        if item.intrinsic_owner_uuid is not None:
+            return False
         if not self.inventory.can_add(item):
             return False
         item_uuid = item.uuid
@@ -4280,6 +4309,9 @@ class Entity(BaseBlock):
         Returns:
             The dropped item, or None if not found in inventory.
         """
+        held = self.inventory.items.get(item_uuid)
+        if held is not None and held.intrinsic_owner_uuid is not None:
+            return None
         item = self.inventory.remove_item(item_uuid)
         if item is None:
             return None
@@ -4559,7 +4591,7 @@ class Entity(BaseBlock):
     def entity_actions(self) -> List[BaseAction]:
         """Actions that target other entities (Attack, multi-target spells)."""
         return [a for a in self.registered_actions
-                if a.effective_target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY)]
+                if a.effective_target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY, TargetType.CREATURE_OR_OBJECT)]
 
     @property
     def position_actions(self) -> List[BaseAction]:
@@ -4654,6 +4686,7 @@ class Entity(BaseBlock):
             origin_root_id=behavior_binding.origin_root_id,
             configured_action_ref=template.configured_action_ref,
             target_type=target_type,
+            position_selection=template.get_position_selection(),
             availability_status=availability_status,
             valid_targets=valid_targets,
             can_afford=can_afford,
@@ -4670,6 +4703,7 @@ class Entity(BaseBlock):
             target_effect_profile=template.get_target_effect_profile(self),
             world_effect_profile=template.get_world_effect_profile(self),
             action_category=template.action_category,
+            performs_attack=template.performs_attack,
             base_template_name=base_template_name,
             spell_level=getattr(template, "spell_level", None) if template.is_spell else None,
             cast_at_level=getattr(template, "cast_at_level", None) if template.is_spell else None,
@@ -4821,15 +4855,57 @@ class Entity(BaseBlock):
             rules_valid_count += 1
             if not targeted_template.check_costs():
                 continue
-            target_entity = Entity.get(target_uuid)
+            target_entity = BaseBlock.get(target_uuid)
+            if isinstance(target_entity, BaseItem):
+                action_range = targeted_template.get_range()
+                access = targeted_template.get_physical_access()
+                if action_range is not None and access is not None:
+                    contact = get_map().attack_object_contact(self.uuid, target_uuid,
+                        range_feet=action_range.long or action_range.normal, access=access,
+                        subjective=True, origin=targeted_template.get_target_origin())
+                    if contact is not None:
+                        target_pos = contact
             valid_targets.append(AvailableTarget(
                 index=len(valid_targets),
                 target_uuid=target_uuid,
+                target_kind="object" if isinstance(target_entity, BaseItem) else "creature",
                 position=target_pos,
                 target_name=target_entity.name if target_entity else None,
                 distance=template.get_target_distance(target_pos)
             ))
         return valid_targets, rules_valid_count
+
+    def _with_touch_targets(
+        self, template: BaseAction, target_pool: Dict[UUID, Tuple[int, int]], *,
+        include_dead: bool,
+    ) -> Dict[UUID, Tuple[int, int]]:
+        """Add admitted contact recipients without polluting perceived-pool caches."""
+        candidates = template.get_touch_target_candidates()
+        if not candidates:
+            return target_pool
+        pool = dict(target_pool)
+        for identity, position in candidates.items():
+            other = Entity.get(identity)
+            if other is None or (identity == self.uuid and not template.include_self):
+                continue
+            if not include_dead and not self._has_positive_normal_hp_for_discovery(other):
+                continue
+            pool[identity] = position
+        return pool
+
+    def _with_object_targets(
+        self, template: BaseAction, pool: Dict[UUID, Tuple[int, int]],
+    ) -> Dict[UUID, Tuple[int, int]]:
+        """Merge perceived attackable items without changing cached creature pools."""
+        if template.effective_target_type is not TargetType.CREATURE_OR_OBJECT:
+            return pool
+        result = dict(pool)
+        result.update({identity: contact.position
+            for identity, contact in self.senses.objects.items()
+            if isinstance(item := BaseBlock.get(identity), BaseItem)
+            and item.is_active and (template.object_target_policy == "active"
+                or item.is_targetable and item.is_breakable())})
+        return result
 
     def _compute_aoe_at_position(
         self,
@@ -5275,6 +5351,8 @@ class Entity(BaseBlock):
                         template.valid_target_filter, include_dead,
                         template.include_self, potential_targets, target_pool_cache
                     )
+                    target_pool = self._with_object_targets(template, target_pool)
+                    target_pool = self._with_touch_targets(template, target_pool, include_dead=include_dead)
                 if timing:
                     record_action_timing(
                         f"available_actions.entity_actions.target_pool.{template_label}_ms",
@@ -5304,32 +5382,17 @@ class Entity(BaseBlock):
                 damage_types: List[str] = []
                 attack_source_item_uuid: Optional[UUID] = None
 
-                weapon_slot_attr = getattr(template, 'weapon_slot', None)
-                if weapon_slot_attr is not None:
-                    weapon_slot_str = weapon_slot_attr.value if isinstance(weapon_slot_attr, WeaponSlot) else str(weapon_slot_attr)
-                    weapon_metadata = self.equipment.get_weapon_metadata(weapon_slot_attr)
-                    if weapon_metadata is not None:
-                        equipped_weapon = self.equipment.get_weapon(
-                            weapon_slot_attr,
-                        )
-                        if equipped_weapon is None:
-                            raise ValueError(
-                                "weapon metadata exists without an equipped "
-                                f"weapon in slot {weapon_slot_attr}",
-                            )
-                        attack_source_item_uuid = equipped_weapon.uuid
-                        weapon_name, damage_types = weapon_metadata
-                        if template_name.startswith("Extra Attack"):
-                            display_name = f"Extra Attack ({weapon_name})"
-                        else:
-                            grant_display = (
-                                template.get_restricted_action_display_name()
-                            )
-                            display_name = (
-                                f"{grant_display}: {weapon_name}"
-                                if grant_display is not None
-                                else weapon_name
-                            )
+                attack_source = template.get_attack_source_metadata()
+                if attack_source is not None:
+                    weapon_slot_str = attack_source.weapon_slot.value
+                    weapon_name = attack_source.name
+                    damage_types = [kind.value for kind in attack_source.damage_types]
+                    attack_source_item_uuid = attack_source.item_uuid
+                    grant_display = template.get_restricted_action_display_name()
+                    if grant_display is not None:
+                        display_name = f"{grant_display}: {weapon_name}"
+                    elif display_name.startswith("Attack_"):
+                        display_name = weapon_name
                 if timing:
                     record_action_timing(
                         f"available_actions.entity_actions.weapon_metadata.{template_label}_ms",
@@ -5945,10 +6008,8 @@ class Entity(BaseBlock):
             for step in path[1:]:
                 step_cost = step_cost_cache.get(step)
                 if step_cost is None:
-                    tile = grid.get_tile(*step)
-                    step_cost = tile.get_movement_cost(movement_mode) if tile else 1.0
-                    if movement_mode == MovementMode.WALKING and self.ignore_difficult_terrain:
-                        step_cost = min(step_cost, 1.0)
+                    step_cost = grid.movement_cell_cost_units(step, movement_mode,
+                        ignore_difficult_terrain=self.ignore_difficult_terrain)
                     if (
                         movement_mode == MovementMode.SWIMMING
                         and self.swimming_speed <= 0
@@ -6059,13 +6120,8 @@ class Entity(BaseBlock):
         grid = get_map()
         total_cost = 0.0
         for step in path[1:]:
-            tile = grid.get_tile(*step)
-            if tile:
-                step_cost = tile.get_movement_cost(movement_mode)
-            else:
-                step_cost = 1.0
-            if movement_mode == MovementMode.WALKING and self.ignore_difficult_terrain:
-                step_cost = min(step_cost, 1.0)
+            step_cost = grid.movement_cell_cost_units(step, movement_mode,
+                ignore_difficult_terrain=self.ignore_difficult_terrain)
             if (
                 movement_mode == MovementMode.SWIMMING
                 and self.swimming_speed <= 0
@@ -6157,7 +6213,7 @@ class Entity(BaseBlock):
                         deep=True,
                         update={"end_position": pos},
                     )
-                    if not targeted_template.validate_requirements_for_discovery():
+                    if not targeted_template.validate_requirements_for_discovery(allow_partial_position=True):
                         continue
                     rules_valid_count += 1
                     if not targeted_template.check_costs():
@@ -6428,6 +6484,7 @@ class Entity(BaseBlock):
         elif template.target_type in (
             TargetType.ENTITY,
             TargetType.MULTI_ENTITY,
+            TargetType.CREATURE_OR_OBJECT,
         ):
             result.entity_actions.append(action_info)
         elif template.target_type in (
@@ -6482,7 +6539,7 @@ class Entity(BaseBlock):
                 continue
             if not obj.should_include_in_available_object_actions():
                 continue
-            if grid.manual_object_contact(self.uuid, obj_uuid) is None:
+            if grid.manual_object_contact(self.uuid, obj_uuid, subjective=True) is None:
                 continue
             for use_template in obj.get_use_actions(self.uuid):
                 use_sources.append(
@@ -6558,11 +6615,13 @@ class Entity(BaseBlock):
                     item_stack_count=stack_count_field,
                 ))
 
-            elif use_template.target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY):
+            elif use_template.target_type in (TargetType.ENTITY, TargetType.MULTI_ENTITY, TargetType.CREATURE_OR_OBJECT):
                 target_pool = self._compute_target_pool(
                     use_template.valid_target_filter, include_dead,
                     use_template.include_self, potential_targets, target_pool_cache
                 )
+                target_pool = self._with_object_targets(use_template, target_pool)
+                target_pool = self._with_touch_targets(use_template, target_pool, include_dead=include_dead)
                 valid_targets, rules_valid_count = self._validate_entity_targets(
                     use_template,
                     target_pool,
@@ -6736,7 +6795,7 @@ class Entity(BaseBlock):
                         update={"end_position": pos},
                     )
                     if (
-                        targeted_template.validate_requirements_for_discovery()
+                        targeted_template.validate_requirements_for_discovery(allow_partial_position=True)
                         and targeted_template.check_costs()
                     ):
                         use_valid_positions_los.append(AvailableTarget(

@@ -48,6 +48,7 @@ def dispatch_available_action(
     action_info: AvailableActionInfo,
     target: AvailableTarget,
     extra_target_uuids: tuple[str, ...] = (),
+    extra_target_positions: tuple[tuple[int, int], ...] = (),
     prefer_safe: bool = True,
     movement_guard: Optional[MovementContinuationGuard] = None,
     record_timing: Optional[ActionDispatchTimingRecorder] = None,
@@ -82,6 +83,7 @@ def dispatch_available_action(
                 action_info,
                 target,
                 extra_target_uuids=list(extra_target_uuids) or None,
+                extra_target_positions=list(extra_target_positions) or None,
                 prefer_safe=prefer_safe,
             )
     finally:

@@ -140,6 +140,7 @@ class DoorObject(UsableItem):
     """Door that surfaces exactly the action valid for its current state."""
 
     name: str = Field(default="Door", description="Display name for the test door.")
+    armor_class: int = Field(default=15, ge=0)
     is_pickable: bool = Field(default=False, description="Doors are fixed environment objects.")
     map_char: str = Field(default="\u03c0", description="Map glyph for the test door.")
     blocks_movement: bool = Field(default=True, description="Closed doors block movement.")
@@ -343,7 +344,7 @@ class ToggleLeverAction(BaseAction):
             if not actions:
                 return effect.cancel(status_message="Linked item cannot change state")
             action = actions[0].instantiate() if actions[0].template else actions[0]
-            result = action.apply(parent_event=effect)
+            result = action.apply_from_control(lever.uuid, parent_event=effect)
             if result is None or result.canceled or control_value(target) != desired_value:
                 return effect.cancel(status_message="Linked item did not change state")
         if lever.is_active:
@@ -362,6 +363,9 @@ class ControlLever(UsableItem):
 
     def get_linked_item(self) -> WallTorch | DirectionalDoor | None:
         return linked_item(self.link)
+
+    def get_item_control_link(self) -> Optional[LeverLink]:
+        return self.link if self.get_linked_item() is not None else None
 
     def to_item_presentation_state(self, *, stack_count: Optional[int] = None) -> ItemPresentationState:
         return super().to_item_presentation_state(stack_count=stack_count).model_copy(

@@ -7,6 +7,7 @@ from uuid import uuid4
 from unittest.mock import patch
 
 from dnd.actions_functional import execute_available_action, execute_use_action, get_available_actions, register_spell, setup_standard_actions
+from dnd.blocks.base_item import BaseItem
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
@@ -16,6 +17,7 @@ from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.content.items.environment_item_builders import build_authored_door, build_directional_wall
 from dnd.controller import HumanController
+from dnd.spatial.area_conditions import SpatialCondition
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import BodyPart, WeaponSlot
@@ -158,7 +160,7 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
             observer_uuid=caster.uuid, battlefield_id=battlefield)
         before, _ = reduce_interval(None, initial)
 
-        def perform(actor: Entity, behavior: str, *, recipient: Entity | None = None,
+        def perform(actor: Entity, behavior: str, *, recipient: Entity | BaseItem | None = None,
                     position: tuple[int, int] | None = None, dice: tuple[int, ...] | None = None,
                     fresh: bool = False, canceled: bool = False) -> Event:
             def outcome(low: int, high: int) -> int:
@@ -189,6 +191,7 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
             assert door is not None
             perform(caster, 'spell.' + program, position=(9, 9))
             zone, = get_map().get_spatial_conditions()
+            assert isinstance(zone, SpatialCondition)
             identity, occupied = zone.uuid, set(zone.affected_positions)
             assert (6, 9) in occupied, 'The initial cloud must spread around the doorway'
             for action in ('Close Door', 'Open Door', 'Close Door'):
@@ -198,8 +201,8 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
             # Ordinary attacks and turns break the actual door, rather than
             # setting its integrity or fabricating a destruction event.
             while door.integrity is not ItemIntegrity.DESTROYED:
-                perform(caster, 'action.attack_object', position=door.position,
-                    dice=(6,) * 20, fresh=True)
+                perform(caster, 'action.attack', recipient=door,
+                    dice=(19, 6), fresh=True)
                 assert zone.affected_positions == occupied
             perform(caster, 'action.drop_concentration')
         elif program == 'sanctuary':

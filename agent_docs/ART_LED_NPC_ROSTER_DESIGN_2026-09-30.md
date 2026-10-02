@@ -1,5 +1,27 @@
 # Art-led NPC roster: design and evidence
 
+**1 October inspected animation mappings:** [per-character source mapping study](audits/FIXED_CHARACTER_ANIMATION_MAPPINGS_2026-10-01.md)
+and [mapping data](audits/FIXED_CHARACTER_ANIMATION_MAPPINGS_2026-10-01.json)
+cover all 150 retained nonanimal characters, with basic/combat selections,
+actual frame counts, visible timing windows, paired-layer issues and review
+evidence. Exact native event markers, FPS and registration remain uncalibrated.
+
+**1 October production handoff:** the [unified renderer and content-authoring
+handoff](audits/FIXED_CHARACTER_RENDERER_INTEGRATION_2026-10-01.md) records the
+user's direction: project modular and fixed asset families through one
+data-driven presentation contract, then explicitly constrain each fixed
+character's authored gear/actions to fit its actual visuals. The main production
+thread owns implementation; this chat supplies source evidence, roster design
+and offline preparation. Missing visual coverage must not silently alter
+canonical SRD rules or discard already-recorded legal actions.
+The user requested repository documentation only: do not send or dispatch this
+handoff to the busy production thread; leave it available for later pickup.
+
+
+**1 October root image-only revision:** [180-row gear/animation review](audits/PACK_ROSTER_IMAGE_ONLY_GEAR_REVIEW_2026-10-01.md) is the current gear authority. Earlier assigned-weapon verification claims are withdrawn. Animals/dinosaurs are excluded from this revision. Witchdoctor sword/shield/poison, Berserker Longsword+Shortsword and Nomad axe/shield are corrected. Full strong enemy and Devil teams remain design proposals; weapon-derived changes/CR are provisional.
+
+
+
 Date: 30 September 2026; revised 1 October. Status: fantasy roster curation,
 Devil and stronger HD Enemy proposals integrated into the review gallery;
 balance remains provisional.
@@ -55,9 +77,7 @@ stronger stats, corrected shieldless Spear Warden, profile filtering and both
 team sections. The subsequent all-pack gear scan remains owned by the gallery
 chat and does not make this revision a claim of perfect weapon identification.
 
-## Barbarian weapon correction — 2026-10-01
 
-A full eight-facing Idle and Attack1–3 rescan found the earlier south-only weapon reads were unreliable. The Barbarian table/gallery now corrects 1Ogre from unarmed to a curved-blade Scimitar best-fit, 3Nomad from Scimitar to Spear plus shield, and 6Barbarian from unarmed to Spear. Greatsword/Greataxe, both Shortbows, and caster Quarterstaffs remain supported. 8Witchdoctor has a shield-like off-hand prop whose exact item and spell-hand consequences stay unresolved. Direction boards are included in the illustration gallery. These are content proposals only.
 
 ## Intended result and source fidelity
 
@@ -67,7 +87,11 @@ source page, explicit gear/body changes, retained signatures and local gaps.
 A selected block supplies all source stats, defenses, senses, movement, traits,
 actions and spellcasting except for the changes expressly named in its row.
 A missing animation is a presentation gap, not permission to delete an SRD
-attack. Source CR is a benchmark; edited loadouts are not certified at that CR.
+attack silently. The user's later direction permits deliberately constrained
+fixed-character variants: changed or removed source actions and equipment must
+be declared in native content authoring, with the corresponding visual coverage
+and balance reviewed. Canonical source creatures and modular loadouts remain
+separate choices. Source CR is a benchmark; edited loadouts are not certified at that CR.
 No encounter-strength cap was requested: Lich and other high-CR selections
 retain their source strength rather than being silently weakened.
 
@@ -415,3 +439,7 @@ This work includes material from the System Reference Document 5.2
 (“SRD 5.2”) by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd.
 The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International
 License, available at https://creativecommons.org/licenses/by/4.0/legalcode.
+
+## Fixed characters versus modular core creatures
+
+Human direction,1 October2026: ordinary humanoids/skeletons already use modular sprites. These fixed-art fighters/casters are special characters. Fixed Goblins/Orcs/Devils/Zombies must cover core SRD creatures plus special variants. [150 individual authoring cards](audits/PACK_ROSTER_INDIVIDUAL_AUTHORING_DIRECTIONS_2026-10-01.md) preserve15 explicit core faction rows and give every retained non-animal candidate gear/power/signature/team/counterplay treatment. Source CRs are benchmarks, not validated final CRs. No runtime implementation.

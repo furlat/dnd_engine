@@ -112,6 +112,8 @@ class Inventory(BaseBlock):
         A compatible existing stack bypasses the slot check because no new item
         entry is required when the incoming stack fully merges.
         """
+        if item.intrinsic_owner_uuid is not None:
+            return False
         remainder_count = self._stack_remainder_count(item)
         needs_new_stack = remainder_count > 0
         if self.max_slots is not None and needs_new_stack and self.item_count >= self.max_slots:
@@ -131,6 +133,8 @@ class Inventory(BaseBlock):
             if item.stack_id is not None
         }
         for item in candidates:
+            if item.intrinsic_owner_uuid is not None:
+                raise ValueError("Intrinsic anatomy cannot be installed in inventory")
             if item.uuid in seen_uuids:
                 raise ValueError(f"duplicate initial item UUID {item.uuid}")
             seen_uuids.add(item.uuid)

@@ -279,6 +279,9 @@ def test_grease_preserves_initial_entry_turn_stand_and_cleanup_rules() -> None:
     assert entrant.is_my_turn is False
     with fixed_dice_faces(*([10] * 4)):
         Entity.update_entity_position(entrant, (5, 6))
+    assert not has_condition(entrant, "Prone")
+    with fixed_dice_faces(*([10] * 4)):
+        Entity.update_entity_position(entrant, (4, 5))
     assert has_condition(entrant, "Prone")
     assert entrant.action_economy.movement.normalized_score == 30
 

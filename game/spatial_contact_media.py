@@ -3,12 +3,14 @@
 from typing import Literal, Mapping
 from math import atan2, pi, sqrt
 from uuid import UUID
+from types import MappingProxyType
 
 from dnd.core.events import SpatialChangeType
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.types.world import OccupancyLayer
+from dnd.types.senses import PerceivedSpatialEffect
 from game.animation import ActorContact
-from game.animation_types import AnimationData, StudioMediaTrack, Facing8
+from game.animation_types import AnimationData, StudioMediaTrack, Facing8, ContactSweep
 from game.combat import BoundCast, actor_contact, actor_is_visible
 from game.player_facts import DamageFact, PlayerNode, PlayerState, SpatialFact
 from game.stationary_media import StationaryMediaCue
@@ -56,11 +58,13 @@ def ground_contact_is_authored(state: PlayerState, fact: SpatialFact, data: Anim
 
 
 def bind_spatial_contacts(state: PlayerState, event: PlayerNode, data: AnimationData,
-                          at_ms: float, contacts: Mapping[str, ActorContact]) -> tuple[StationaryMediaCue, ...]:
+                          at_ms: float, contacts: Mapping[str, ActorContact],
+                          created_effects: Mapping[UUID, tuple[PerceivedSpatialEffect, ...]] = MappingProxyType({})) -> tuple[StationaryMediaCue, ...]:
     """Known area identity never makes an unseen floor contact visible."""
     senses, fact = state.senses, event.fact
     if senses is None:
         return ()
+    sweep = bind_damage_sweep(state, event, data, at_ms, created_effects)
     trigger: Literal["ground_entry", "damage"]
     if isinstance(fact, SpatialFact) and ground_contact_is_authored(state, fact, data):
         identity, position, effect_id, trigger = fact.entity_uuid, fact.position, None, "ground_entry"
@@ -68,7 +72,7 @@ def bind_spatial_contacts(state: PlayerState, event: PlayerNode, data: Animation
           and fact.applied_damage is not None and fact.applied_damage > 0 and fact.effect_id is not None):
         identity, position, effect_id, trigger = fact.target_entity_uuid, None, fact.effect_id, "damage"
     else:
-        return ()
+        return sweep
     actor = state.actors.get(identity) if identity is not None else None
     if actor is None or not actor_is_visible(state, actor):
         return ()
@@ -89,4 +93,59 @@ def bind_spatial_contacts(state: PlayerState, event: PlayerNode, data: Animation
         # actual damage packet. The victim's disclosed contact owns this media.
         cues[track.id] = StationaryMediaCue(event.uuid, track, position, state.tiles[cell].elevation_steps,
             contact.facing, at_ms+track.startOffsetMs, data)
-    return tuple(cues.values())
+    return (*sweep, *cues.values())
+
+
+def damage_sweep_recipe(state: PlayerState, fact: DamageFact,
+                        data: AnimationData,
+                        created_effects: Mapping[UUID, tuple[PerceivedSpatialEffect, ...]] = MappingProxyType({})) -> ContactSweep | None:
+    """Resolve only a witnessed positive packet's authored contact presentation."""
+    senses = state.senses
+    if (fact.stage != "applied"
+            or not fact.applied_damage or fact.applied_damage <= 0
+            or fact.spatial_source is None or senses is None):
+        return None
+    source = fact.spatial_source
+    effect = next((row for row in (senses.spatial_effects.get(source.spatial_effect_uuid),
+        *created_effects.get(source.spatial_effect_uuid, ()))
+        if row is not None and source.position in row.positions), None)
+    if effect is None:
+        return None
+    binding = data.spatial_media.get(effect.content_ref.content_id)
+    sweep = binding.damageSweeps.get(source.exposure) if binding is not None else None
+    if sweep is None:
+        return None
+    same_contact = source.position == source.target_position
+    if same_contact != (source.exposure == "contact"):
+        return None
+    dx, dy = (source.target_position[i]-source.position[i] for i in (0, 1))
+    if dx and dy:
+        return None  # Delivered cardinal banks cannot represent an oblique sweep.
+    return sweep
+
+
+def bind_damage_sweep(state: PlayerState, event: PlayerNode, data: AnimationData,
+                      at_ms: float,
+                      created_effects: Mapping[UUID, tuple[PerceivedSpatialEffect, ...]] = MappingProxyType({})) -> tuple[StationaryMediaCue, ...]:
+    """Compile a witnessed applied contact; never infer a source from nearby fields."""
+    fact = event.fact
+    if not isinstance(fact, DamageFact) or (sweep := damage_sweep_recipe(state, fact, data, created_effects)) is None:
+        return ()
+    source = fact.spatial_source
+    assert source is not None
+    dx, dy = (source.target_position[i]-source.position[i] for i in (0, 1))
+    directions = {"E": (1, 0), "S": (0, 1), "W": (-1, 0), "N": (0, -1)}
+    bank = max(sweep.directions, key=lambda bank: dx*directions[bank.direction][0]+dy*directions[bank.direction][1])
+    cues = []
+    for index, node in enumerate(sweep.nodes):
+        position = (source.position[0]+node.fraction*dx, source.position[1]+node.fraction*dy)
+        variant = bank.variants[node.variant]
+        layers: tuple[tuple[Literal["behind_body", "front_body"], str], ...] = (
+            ("behind_body", variant.rearAssetId), ("front_body", variant.frontAssetId))
+        for side, asset_id in layers:
+            track = StudioMediaTrack(id=f"contact-sweep:{index}:{side}", assetId=asset_id,
+                attachment="area_ground", scale=sweep.scale, depth=side, viewFacing="E")
+            cues.append(StationaryMediaCue(event.uuid, track, position, source.base_height_steps,
+                "E", at_ms+node.delayMs, data, native_pixels=True,
+                fade_out_ms=(sweep.fadeStartMs, sweep.fadeEndMs)))
+    return tuple(cues)

@@ -38,6 +38,8 @@ class StationaryMediaCue:
     start_ms: float
     data: AnimationData
     depth_offset_cells: float = 0
+    native_pixels: bool = False
+    fade_out_ms: tuple[float, float] | None = None
 
     def __post_init__(self) -> None:
         if limitations := stationary_media_limitations(self.track):
@@ -45,7 +47,8 @@ class StationaryMediaCue:
 
     @property
     def end_ms(self) -> float:
-        return self.start_ms + media_track_duration(self.data, self.track)
+        duration = media_track_duration(self.data, self.track)
+        return self.start_ms + (min(duration, self.fade_out_ms[1]) if self.fade_out_ms else duration)
 
 
 def stationary_media_draw_commands(cues: tuple[StationaryMediaCue, ...], elapsed_ms: float,
@@ -55,6 +58,11 @@ def stationary_media_draw_commands(cues: tuple[StationaryMediaCue, ...], elapsed
         if not cue.start_ms <= elapsed_ms < cue.end_ms:
             continue
         data, track = cue.data, cue.track
+        alpha = track.alpha
+        if cue.fade_out_ms is not None:
+            begin, end = cue.fade_out_ms
+            progress = min(1., max(0., (elapsed_ms-cue.start_ms-begin)/(end-begin)))
+            alpha *= 1 - progress*progress*(3-2*progress)
         facing = view_facing(track.viewFacing or cue.facing, camera.quadrant, data)
         frame = media_track_frame(data, track, elapsed_ms-cue.start_ms, facing)
         anchor = project_screen(cue.position, camera, elevation_steps=cue.elevation_steps)
@@ -67,8 +75,8 @@ def stationary_media_draw_commands(cues: tuple[StationaryMediaCue, ...], elapsed
         if track.depth in ("behind_body", "front_body"):
             key = (*key[:3], key[3]+(-1 if track.depth == "behind_body" else 1), key[4])
         for image, destination, blend in registered_media_blits(data, track.assetId, track.assetPhase,
-                frame, facing, scale=track.scale*TILE_WIDTH/data.rig.TILE_W*camera.zoom,
-                anchor=anchor, rows={}, alpha=track.alpha):
+                frame, facing, scale=track.scale*(1 if cue.native_pixels else TILE_WIDTH/data.rig.TILE_W)*camera.zoom,
+                anchor=anchor, rows={}, alpha=alpha):
             commands.append(DrawCommand(key, image, destination, blend,
                 (str(cue.event_uuid), cue.position, track.assetId, "current", None, "authored",
                  "stationary_media", cue.elevation_steps, track.id, frame)))

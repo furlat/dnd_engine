@@ -1,15 +1,12 @@
-"""Window family content scaffold; not registered as playable items yet.
-
-These identities describe the ten confirmed Fantasy families. Physical profiles,
-parent destruction and traversal must be completed before adding live builders.
-Artwork bindings belong to presentation data, not these definitions.
-"""
+"""Fixed window identities and coarse physical profiles, independent of artwork."""
 
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
 
 from dnd.content.items.authored_item_definitions import AuthoredItemDefinition
+from dnd.core.creature_types import Size
+from dnd.types.materials import Material
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,10 +15,21 @@ class WindowDefinition:
 
     wall: AuthoredItemDefinition
     insert: AuthoredItemDefinition | None
+    wall_material: Material = Material.STONE
+    wall_hit_points: int = 27
+    insert_material: Material = Material.WOOD
+    insert_hit_points: int = 12
+    insert_blocks_optics: bool = False
+    maximum_size: Size = Size.MEDIUM
+    height_steps: int = 2
+    wall_armor_class: int | None = None
+    insert_armor_class: int | None = None
 
 
-def _grilled_window(code: str) -> WindowDefinition:
+def _grilled_window(code: str, *, material: Material = Material.STONE, maximum_size: Size = Size.MEDIUM) -> WindowDefinition:
     return WindowDefinition(
+        wall_material=material, wall_hit_points=18 if material is Material.WOOD else 27,
+        maximum_size=maximum_size, insert_material=Material.METAL if code in ("a4", "a5") else Material.WOOD,
         wall=AuthoredItemDefinition(
             item_id=f"environment.window.fantasy_{code}.wall",
             name=f"Window wall {code.upper()}",
@@ -38,9 +46,9 @@ def _grilled_window(code: str) -> WindowDefinition:
 
 
 WINDOW_DEFINITIONS: Mapping[str, WindowDefinition] = MappingProxyType({
-    "environment.window.fantasy_a4": _grilled_window("a4"),
-    "environment.window.fantasy_a5": _grilled_window("a5"),
-    "environment.window.fantasy_c4": _grilled_window("c4"),
+    "environment.window.fantasy_a4": _grilled_window("a4", maximum_size=Size.SMALL),
+    "environment.window.fantasy_a5": _grilled_window("a5", maximum_size=Size.SMALL),
+    "environment.window.fantasy_c4": _grilled_window("c4", material=Material.WOOD),
     "environment.window.fantasy_d16": _grilled_window("d16"),
     "environment.window.fantasy_d7": _grilled_window("d7"),
     "environment.window.fantasy_f16": _grilled_window("f16"),
@@ -52,10 +60,11 @@ WINDOW_DEFINITIONS: Mapping[str, WindowDefinition] = MappingProxyType({
             description="A wall with an empty window opening; no insert fills the aperture.",
             tags=("environment", "window_frame", "empty_aperture"),
         ),
-        insert=None,
+        insert=None, wall_material=Material.WOOD, wall_hit_points=18,
     ),
-    "environment.window.fantasy_g8": _grilled_window("g8"),
+    "environment.window.fantasy_g8": _grilled_window("g8", material=Material.WOOD),
     "environment.window.fantasy_g9": WindowDefinition(
+        wall_material=Material.WOOD, wall_hit_points=18, insert_blocks_optics=True,
         wall=AuthoredItemDefinition(
             item_id="environment.window.fantasy_g9.wall",
             name="Shuttered window wall G9",

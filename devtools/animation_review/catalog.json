@@ -10956,5 +10956,2313 @@
       "program": "insect_plague",
       "environment": "door-cycle"
     }
+  },
+  {
+    "id": "window-a4",
+    "title": "Window A4 \u00b7 break insert, cross, break wall",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native object attacks, state-checked crossing at double movement cost, and destruction of the remaining parent wall.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_a4"
+    }
+  },
+  {
+    "id": "window-a5",
+    "title": "Window A5 \u00b7 break insert, cross, break wall",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native object attacks, state-checked crossing at double movement cost, and destruction of the remaining parent wall.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_a5"
+    }
+  },
+  {
+    "id": "window-c4",
+    "title": "Window C4 \u00b7 break insert, cross, break wall",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native object attacks, state-checked crossing at double movement cost, and destruction of the remaining parent wall.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_c4"
+    }
+  },
+  {
+    "id": "window-d16",
+    "title": "Window D16 \u00b7 break insert, cross, break wall",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native object attacks, state-checked crossing at double movement cost, and destruction of the remaining parent wall.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_d16"
+    }
+  },
+  {
+    "id": "window-d7",
+    "title": "Window D7 \u00b7 break insert, cross, break wall",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native object attacks, state-checked crossing at double movement cost, and destruction of the remaining parent wall.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_d7"
+    }
+  },
+  {
+    "id": "window-f16",
+    "title": "Window F16 \u00b7 break insert, cross, break wall",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native object attacks, state-checked crossing at double movement cost, and destruction of the remaining parent wall.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_f16"
+    }
+  },
+  {
+    "id": "window-f7",
+    "title": "Window F7 \u00b7 break insert, cross, break wall",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native object attacks, state-checked crossing at double movement cost, and destruction of the remaining parent wall.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_f7"
+    }
+  },
+  {
+    "id": "window-g7",
+    "title": "Window G7 \u00b7 break insert, cross, break wall",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native object attacks, state-checked crossing at double movement cost, and destruction of the remaining parent wall.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_g7"
+    }
+  },
+  {
+    "id": "window-g8",
+    "title": "Window G8 \u00b7 break insert, cross, break wall",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native object attacks, state-checked crossing at double movement cost, and destruction of the remaining parent wall.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_g8"
+    }
+  },
+  {
+    "id": "window-g9",
+    "title": "Window G9 \u00b7 break insert, cross, break wall",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native object attacks, state-checked crossing at double movement cost, and destruction of the remaining parent wall.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_g9"
+    }
+  },
+  {
+    "id": "window-d7-parent",
+    "title": "Window D7 \u00b7 parent collapse with intact insert",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native parent-wall destruction cascades to its attached insert once; ordinary movement then crosses the breach.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_d7",
+      "program": "parent"
+    }
+  },
+  {
+    "id": "window-g9-parent",
+    "title": "Window G9 \u00b7 parent collapse with intact insert",
+    "tags": [
+      "windows",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native parent-wall destruction cascades to its attached insert once; ordinary movement then crosses the breach.",
+    "scenario": {
+      "kind": "window",
+      "family": "environment.window.fantasy_g9",
+      "program": "parent"
+    }
+  },
+  {
+    "id": "content-clay-oven-break",
+    "title": "Clay oven \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.clay_oven"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-clay-stove-break",
+    "title": "Clay stove \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.clay_stove"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-lidded-vessel-break",
+    "title": "Lidded vessel \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.lidded_vessel"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-parked-cart-break",
+    "title": "Parked cart \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.parked_cart"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-loaded-wagon-break",
+    "title": "Loaded wagon \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loaded_wagon"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-timber-pile-break",
+    "title": "Timber pile \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.timber_pile"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-wheelbarrow-break",
+    "title": "Wheelbarrow \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.wheelbarrow"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-covered-market-counter-break",
+    "title": "Covered market counter \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.covered_market_counter"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-covered-handcart-break",
+    "title": "Covered handcart \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.covered_handcart"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-pale-market-stall-break",
+    "title": "Pale market stall \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.pale_market_stall"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-training-dummy-break",
+    "title": "Training dummy \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.training_dummy"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-grindstone-break",
+    "title": "Grindstone \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.grindstone"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-red-produce-stall-break",
+    "title": "Red produce stall \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.red_produce_stall"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-rough-market-stall-break",
+    "title": "Rough market stall \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.rough_market_stall"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-green-market-stall-break",
+    "title": "Green market stall \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.green_market_stall"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-produce-tub-break",
+    "title": "Produce tub \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.produce_tub"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-hide-drying-rack-break",
+    "title": "Hide drying rack \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.hide_drying_rack"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-feed-trough-break",
+    "title": "Feed trough \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.feed_trough"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-notice-board-break",
+    "title": "Notice board \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.notice_board"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-wooden-crib-break",
+    "title": "Wooden crib \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.wooden_crib"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-small-wooden-table-break",
+    "title": "Small wooden table \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.small_wooden_table"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-red-covered-table-break",
+    "title": "Red covered table \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.red_covered_table"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-pale-covered-table-break",
+    "title": "Pale covered table \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.pale_covered_table"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-short-red-banner-break",
+    "title": "Short red banner \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.short_red_banner"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-tall-red-banner-break",
+    "title": "Tall red banner \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.tall_red_banner"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-wooden-signpost-break",
+    "title": "Wooden signpost \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.wooden_signpost"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-framed-notice-board-break",
+    "title": "Framed notice board \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.framed_notice_board"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-archery-target-break",
+    "title": "Archery target \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.archery_target"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-felled-log-break",
+    "title": "Felled log \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.felled_log"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-workshop-apparatus-break",
+    "title": "Workshop apparatus \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.workshop_apparatus"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-alchemy-bench-break",
+    "title": "Alchemy bench \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.alchemy_bench"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-anvil-break",
+    "title": "Anvil \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.anvil"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-cannonball-pile-break",
+    "title": "Cannonball pile \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.cannonball_pile"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-unlit-crucible-break",
+    "title": "Unlit crucible \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.unlit_crucible"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-grave-marker-break",
+    "title": "Grave marker \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.grave_marker"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-slender-monument-break",
+    "title": "Slender monument \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.slender_monument"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-hay-bale-break",
+    "title": "Hay bale \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.hay_bale"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-hay-bales-stacked-break",
+    "title": "Hay bales stacked \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.hay_bales_stacked"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-hay-bales-upright-break",
+    "title": "Hay bales upright \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.hay_bales_upright"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-hay-bales-leaning-break",
+    "title": "Hay bales leaning \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.hay_bales_leaning"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-unlit-candlesticks-break",
+    "title": "Unlit candlesticks \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The attacker walks through the remains after the finite break.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.unlit_candlesticks"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-spent-ashes-break",
+    "title": "Spent ashes \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.spent_ashes"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-red-rug-break",
+    "title": "Red rug \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.red_rug"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-pale-rug-break",
+    "title": "Pale rug \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.pale_rug"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-loose-straw-1-break",
+    "title": "Loose straw 1 \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-content-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_1"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-loose-straw-2-break",
+    "title": "Loose straw 2 \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_2"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-loose-straw-3-break",
+    "title": "Loose straw 3 \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_3"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-loose-straw-4-break",
+    "title": "Loose straw 4 \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_4"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-loose-straw-5-break",
+    "title": "Loose straw 5 \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_5"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-loose-straw-6-break",
+    "title": "Loose straw 6 \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_6"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-loose-straw-7-break",
+    "title": "Loose straw 7 \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_7"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-cold-fire-pit-break",
+    "title": "Cold fire pit \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native movement across the passable floor prop, attacks, destruction and persistent remains. Both subjective observers and four camera views.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.cold_fire_pit"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-loose-floorboards-break",
+    "title": "Loose floorboards \u00b7 damage, break and passage",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired"
+    ],
+    "description": "Real native movement across the passable floor prop, attacks, destruction and persistent remains. Both subjective observers and four camera views.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_floorboards"
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-red-rug-break-raised",
+    "title": "Red rug \u00b7 damage, break and passage \u00b7 raised floor",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-floor-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.red_rug",
+      "elevation": 2
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "content-loose-straw-1-break-raised",
+    "title": "Loose straw 1 \u00b7 damage, break and passage \u00b7 raised floor",
+    "tags": [
+      "environment",
+      "environment-content-20261001",
+      "prop-destruction",
+      "mechanics",
+      "paired",
+      "environment-floor-review"
+    ],
+    "description": "Real native placement and attacks; one destruction event and persistent remains. The actor crosses the intact floor covering in both directions before damage, then walks across its remains.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_1",
+      "elevation": 2
+    },
+    "tail_duration_ms": 1200,
+    "framing": "actors"
+  },
+  {
+    "id": "prop-access-clay-oven",
+    "title": "Clay Oven \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.clay_oven",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-clay-stove",
+    "title": "Clay Stove \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.clay_stove",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-lidded-vessel",
+    "title": "Lidded Vessel \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.lidded_vessel",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-parked-cart",
+    "title": "Parked Cart \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.parked_cart",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-loaded-wagon",
+    "title": "Loaded Wagon \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loaded_wagon",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-timber-pile",
+    "title": "Timber Pile \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.timber_pile",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-wheelbarrow",
+    "title": "Wheelbarrow \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.wheelbarrow",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-covered-market-counter",
+    "title": "Covered Market Counter \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.covered_market_counter",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-covered-handcart",
+    "title": "Covered Handcart \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.covered_handcart",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-pale-market-stall",
+    "title": "Pale Market Stall \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.pale_market_stall",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-training-dummy",
+    "title": "Training Dummy \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.training_dummy",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-grindstone",
+    "title": "Grindstone \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.grindstone",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-red-produce-stall",
+    "title": "Red Produce Stall \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.red_produce_stall",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-rough-market-stall",
+    "title": "Rough Market Stall \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.rough_market_stall",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-green-market-stall",
+    "title": "Green Market Stall \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.green_market_stall",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-produce-tub",
+    "title": "Produce Tub \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.produce_tub",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-hide-drying-rack",
+    "title": "Hide Drying Rack \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.hide_drying_rack",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-feed-trough",
+    "title": "Feed Trough \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.feed_trough",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-notice-board",
+    "title": "Notice Board \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.notice_board",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-wooden-crib",
+    "title": "Wooden Crib \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.wooden_crib",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-small-wooden-table",
+    "title": "Small Wooden Table \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.small_wooden_table",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-red-covered-table",
+    "title": "Red Covered Table \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.red_covered_table",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-pale-covered-table",
+    "title": "Pale Covered Table \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.pale_covered_table",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-short-red-banner",
+    "title": "Short Red Banner \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.short_red_banner",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-tall-red-banner",
+    "title": "Tall Red Banner \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.tall_red_banner",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-wooden-signpost",
+    "title": "Wooden Signpost \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.wooden_signpost",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-framed-notice-board",
+    "title": "Framed Notice Board \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.framed_notice_board",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-archery-target",
+    "title": "Archery Target \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.archery_target",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-felled-log",
+    "title": "Felled Log \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.felled_log",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-workshop-apparatus",
+    "title": "Workshop Apparatus \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.workshop_apparatus",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-alchemy-bench",
+    "title": "Alchemy Bench \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.alchemy_bench",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-anvil",
+    "title": "Anvil \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.anvil",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-cannonball-pile",
+    "title": "Cannonball Pile \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.cannonball_pile",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-unlit-crucible",
+    "title": "Unlit Crucible \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.unlit_crucible",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-grave-marker",
+    "title": "Grave Marker \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.grave_marker",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-slender-monument",
+    "title": "Slender Monument \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.slender_monument",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-hay-bale",
+    "title": "Hay Bale \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.hay_bale",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-hay-bales-stacked",
+    "title": "Hay Bales Stacked \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.hay_bales_stacked",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-hay-bales-upright",
+    "title": "Hay Bales Upright \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.hay_bales_upright",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-hay-bales-leaning",
+    "title": "Hay Bales Leaning \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.hay_bales_leaning",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-unlit-candlesticks",
+    "title": "Unlit Candlesticks \u00b7 obstruction, detour and break",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native movement and ranged-attack validation, a legal detour, object damage/destruction, then shooting and walking across the cleared footprint. Invalid commands produce no invented attack animation. Original H1 paving; same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.unlit_candlesticks",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-spent-ashes",
+    "title": "Spent Ashes \u00b7 walk over, break and walk over again",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Passable floor dressing: real native movement across its intact state, object damage and destruction, then a shot and another crossing. It blocks neither walking nor sight/light/physical shots. Original H1 paving; the same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.spent_ashes",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-red-rug",
+    "title": "Red Rug \u00b7 walk over, break and walk over again",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Passable floor dressing: real native movement across its intact state, object damage and destruction, then a shot and another crossing. It blocks neither walking nor sight/light/physical shots. Original H1 paving; the same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.red_rug",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-pale-rug",
+    "title": "Pale Rug \u00b7 walk over, break and walk over again",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Passable floor dressing: real native movement across its intact state, object damage and destruction, then a shot and another crossing. It blocks neither walking nor sight/light/physical shots. Original H1 paving; the same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.pale_rug",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-loose-straw-1",
+    "title": "Loose Straw 1 \u00b7 walk over, break and walk over again",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Passable floor dressing: real native movement across its intact state, object damage and destruction, then a shot and another crossing. It blocks neither walking nor sight/light/physical shots. Original H1 paving; the same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_1",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-loose-straw-2",
+    "title": "Loose Straw 2 \u00b7 walk over, break and walk over again",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Passable floor dressing: real native movement across its intact state, object damage and destruction, then a shot and another crossing. It blocks neither walking nor sight/light/physical shots. Original H1 paving; the same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_2",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-loose-straw-3",
+    "title": "Loose Straw 3 \u00b7 walk over, break and walk over again",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Passable floor dressing: real native movement across its intact state, object damage and destruction, then a shot and another crossing. It blocks neither walking nor sight/light/physical shots. Original H1 paving; the same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_3",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-loose-straw-4",
+    "title": "Loose Straw 4 \u00b7 walk over, break and walk over again",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Passable floor dressing: real native movement across its intact state, object damage and destruction, then a shot and another crossing. It blocks neither walking nor sight/light/physical shots. Original H1 paving; the same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_4",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-loose-straw-5",
+    "title": "Loose Straw 5 \u00b7 walk over, break and walk over again",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Passable floor dressing: real native movement across its intact state, object damage and destruction, then a shot and another crossing. It blocks neither walking nor sight/light/physical shots. Original H1 paving; the same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_5",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-loose-straw-6",
+    "title": "Loose Straw 6 \u00b7 walk over, break and walk over again",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Passable floor dressing: real native movement across its intact state, object damage and destruction, then a shot and another crossing. It blocks neither walking nor sight/light/physical shots. Original H1 paving; the same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_6",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-loose-straw-7",
+    "title": "Loose Straw 7 \u00b7 walk over, break and walk over again",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Passable floor dressing: real native movement across its intact state, object damage and destruction, then a shot and another crossing. It blocks neither walking nor sight/light/physical shots. Original H1 paving; the same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.loose_straw_7",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-cold-fire-pit",
+    "title": "Cold Fire Pit \u00b7 walk over, break and walk over again",
+    "tags": [
+      "prop-access",
+      "environment",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Passable floor dressing: real native movement across its intact state, object damage and destruction, then a shot and another crossing. It blocks neither walking nor sight/light/physical shots. Original H1 paving; the same recorded events in all cameras.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.cold_fire_pit",
+      "access": "bow"
+    }
+  },
+  {
+    "id": "prop-access-clay-stove-spell",
+    "title": "Clay stove \u00b7 Fire Bolt obstruction and clearance",
+    "tags": [
+      "prop-access",
+      "environment",
+      "spell",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Actual Fire Bolt is rejected through the intact stove before spending an action, succeeds from a clear angle, then succeeds through the destroyed stove. Movement follows the same physical obstacle.",
+    "scenario": {
+      "kind": "prop-destruction",
+      "item_id": "environment.furniture.clay_stove",
+      "access": "fire-bolt"
+    }
+  },
+  {
+    "id": "shared-attack-bow-melee",
+    "title": "Bow then sword on the same object",
+    "tags": [
+      "shared-object-attacks",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Two discovered normal Attack commands target the same crate: a bow shot followed by the equipped longsword. Source equipment and recipient impact come from native events.",
+    "framing": "actors",
+    "tail_duration_ms": 1800,
+    "scenario": {
+      "kind": "object-attack",
+      "program": "bow-melee"
+    }
+  },
+  {
+    "id": "shared-attack-bow-unarmed",
+    "title": "Bow then bare hands on the same object",
+    "tags": [
+      "shared-object-attacks",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "A real bow shot is followed by an unarmed normal Attack on the crate. The retained source kind removes the bow from the hand pose without removing the bow from equipment.",
+    "framing": "actors",
+    "tail_duration_ms": 1800,
+    "scenario": {
+      "kind": "object-attack",
+      "program": "bow-unarmed"
+    }
+  },
+  {
+    "id": "shared-attack-fire-bolt",
+    "title": "Fire Bolt contacts a destructible object",
+    "tags": [
+      "shared-object-attacks",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Discovered Fire Bolt targets the actual crate surface. Its projectile and ordinary object damage share one recorded impact; no creature recipient or blood is invented.",
+    "framing": "actors",
+    "tail_duration_ms": 1800,
+    "scenario": {
+      "kind": "object-attack",
+      "program": "fire-bolt"
+    }
+  },
+  {
+    "id": "shared-attack-fireball-breach",
+    "title": "Fireball breaks two doors and reaches the creature beyond",
+    "tags": [
+      "shared-object-attacks",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "A native Fireball expands from its original centre through two breakable doors between three partitioned rooms. Successive recorded reach stages wait for each door clearance; the creature beyond is damaged once.",
+    "framing": "actors",
+    "tail_duration_ms": 1800,
+    "scenario": {
+      "kind": "object-attack",
+      "program": "fireball-breach"
+    }
+  },
+  {
+    "id": "wall-fire-x",
+    "title": "Wall of Fire \u00b7 X axis, crossing and concentration clear",
+    "tags": [
+      "wall-of-fire",
+      "ordered-points",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native discovered endpoints, hot-side exposure and flame crossing; original cardinal front/back banks. Ring/diagonal art, fine XYZ occlusion and certified 20-foot visual height remain pending.",
+    "scenario": {
+      "kind": "wall-spell",
+      "axis": "x",
+      "raised": false,
+      "retain_field": false
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "wall-fire-y",
+    "title": "Wall of Fire \u00b7 Y axis, crossing and concentration clear",
+    "tags": [
+      "wall-of-fire",
+      "ordered-points",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native discovered endpoints, hot-side exposure and flame crossing; original cardinal front/back banks. Ring/diagonal art, fine XYZ occlusion and certified 20-foot visual height remain pending.",
+    "scenario": {
+      "kind": "wall-spell",
+      "axis": "y",
+      "raised": false,
+      "retain_field": false
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "wall-fire-raised",
+    "title": "Wall of Fire \u00b7 raised support, crossing and clear",
+    "tags": [
+      "wall-of-fire",
+      "ordered-points",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native discovered endpoints, hot-side exposure and flame crossing; original cardinal front/back banks. Ring/diagonal art, fine XYZ occlusion and certified 20-foot visual height remain pending.",
+    "scenario": {
+      "kind": "wall-spell",
+      "axis": "x",
+      "raised": true,
+      "retain_field": false
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "wall-fire-held",
+    "title": "Wall of Fire \u00b7 maintained loop",
+    "tags": [
+      "wall-of-fire",
+      "ordered-points",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native discovered endpoints, hot-side exposure and flame crossing; original cardinal front/back banks. Ring/diagonal art, fine XYZ occlusion and certified 20-foot visual height remain pending.",
+    "scenario": {
+      "kind": "wall-spell",
+      "axis": "x",
+      "raised": false,
+      "retain_field": true
+    },
+    "tail_duration_ms": 5000
+  },
+  {
+    "id": "wall-fire-heat-x",
+    "title": "Wall of Fire \u00b7 X wall and hot-side ignition accent",
+    "tags": [
+      "wall-of-fire",
+      "ordered-points",
+      "four-corners",
+      "paired-observers",
+      "hot-side-contact",
+      "surface-ignition"
+    ],
+    "description": "Fresh native ordered cast: the hot-side damage event discloses the wall contact and victim. Three brief native-size flame onsets sweep across that gap and fade; they create no burning terrain. Target then crosses into the safe side and concentration clears. Original four camera banks at 32 FPS.",
+    "scenario": {
+      "kind": "wall-spell",
+      "axis": "x",
+      "raised": false,
+      "retain_field": false
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "wall-fire-heat-y",
+    "title": "Wall of Fire \u00b7 Y wall and hot-side ignition accent",
+    "tags": [
+      "wall-of-fire",
+      "ordered-points",
+      "four-corners",
+      "paired-observers",
+      "hot-side-contact",
+      "surface-ignition"
+    ],
+    "description": "Fresh native ordered cast: the hot-side damage event discloses the wall contact and victim. Three brief native-size flame onsets sweep across that gap and fade; they create no burning terrain. Target then crosses into the safe side and concentration clears. Original four camera banks at 32 FPS.",
+    "scenario": {
+      "kind": "wall-spell",
+      "axis": "y",
+      "raised": false,
+      "retain_field": false
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "wall-fire-heat-multiple",
+    "title": "Wall of Fire \u00b7 two hot-side victims and one safe-side observer",
+    "tags": [
+      "wall-of-fire",
+      "ordered-points",
+      "four-corners",
+      "paired-observers",
+      "hot-side-contact",
+      "surface-ignition",
+      "multiple-targets",
+      "safe-side"
+    ],
+    "description": "Native ordered wall. Hot near and Hot far stand one/two cells onto the hot side; Safe stays on the opposite side. Both hot victims take native turn-end damage after the transient flame sweep reaches them. Safe takes none. Every view respects its own recorded sight.",
+    "scenario": {
+      "kind": "wall-spell",
+      "axis": "x",
+      "raised": false,
+      "retain_field": false,
+      "multiple_targets": true
+    },
+    "tail_duration_ms": 1900
+  },
+  {
+    "id": "wall-fire-angle-diagonal",
+    "title": "Wall of Fire \u00b7 North\u2013south screen line",
+    "tags": [
+      "wall-of-fire",
+      "modular-angle",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native ordered endpoints and admitted flame cells. Existing upright flame modules are placed along the line without rotating the sprite. Inspect width and seams in all four cameras.",
+    "scenario": {
+      "kind": "wall-spell",
+      "axis": "diagonal",
+      "retain_field": true
+    },
+    "tail_duration_ms": 3500
+  },
+  {
+    "id": "wall-fire-angle-oblique",
+    "title": "Wall of Fire \u00b7 Oblique modular line",
+    "tags": [
+      "wall-of-fire",
+      "modular-angle",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native ordered endpoints and admitted flame cells. Existing upright flame modules are placed along the line without rotating the sprite. Inspect width and seams in all four cameras.",
+    "scenario": {
+      "kind": "wall-spell",
+      "axis": "oblique",
+      "retain_field": true
+    },
+    "tail_duration_ms": 3500
+  },
+  {
+    "id": "wall-fire-formation-multiple",
+    "title": "Wall of Fire \u00b7 two victims caught in formation",
+    "tags": [
+      "wall-of-fire",
+      "multiple-targets",
+      "formation-damage",
+      "safe-side",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Both victims occupy native flame cells when the wall appears; both receive damage from the same cast lineage. Safe is outside the flame and on its cold side. Later end-turn exposures remain separate native turns.",
+    "scenario": {
+      "kind": "wall-spell",
+      "axis": "x",
+      "multiple_targets": true,
+      "formation_targets": true
+    },
+    "tail_duration_ms": 1900
+  },
+  {
+    "id": "wall-fire-ring-inside",
+    "title": "Wall of Fire \u00b7 ring hot inside \u00b7 cast, heat, crossing, clear",
+    "tags": [
+      "wall-of-fire",
+      "wall-ring",
+      "four-corners",
+      "native-events"
+    ],
+    "description": "Discovered native fixed20ft ring cast; formation contact, hot/safe turn-end exposures, movement and concentration removal. Whole-ring artwork only admits complete observed shell; partial views report ownership limitation.",
+    "scenario": {
+      "kind": "wall-spell",
+      "ring_hot_side": "inside"
+    }
+  },
+  {
+    "id": "wall-fire-ring-outside",
+    "title": "Wall of Fire \u00b7 ring hot outside \u00b7 cast, heat, crossing, clear",
+    "tags": [
+      "wall-of-fire",
+      "wall-ring",
+      "four-corners",
+      "native-events"
+    ],
+    "description": "Discovered native fixed20ft ring cast; formation contact, hot/safe turn-end exposures, movement and concentration removal. Whole-ring artwork only admits complete observed shell; partial views report ownership limitation.",
+    "scenario": {
+      "kind": "wall-spell",
+      "ring_hot_side": "outside"
+    }
   }
 ]

@@ -71,7 +71,8 @@ def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact |
                               if not (event.item_destroyed and identity == event.item_uuid))
             return replace(actor, items=items, equipment=equipment)
         case AttackEvent() if event.attack_outcome is not None:
-            selected = (WeaponSet.RANGED if event.weapon_slot in
+            selected = (WeaponSet.NONE if event.attack_source_kind != "equipped" else
+                        WeaponSet.RANGED if event.weapon_slot in
                         (WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF) else WeaponSet.MELEE)
             return replace(actor, active_weapon_set=selected)
         case DamageAppliedEvent():

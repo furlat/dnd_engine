@@ -2,7 +2,7 @@
 
 from math import cos, sin
 
-from game.animation import BodySample, CastTimeline, view_facing
+from game.animation import ActorContact, BodySample, CastTimeline, feedback_identity, view_facing
 from game.cast_media import cast_media_placement
 from game.projection import Camera
 
@@ -28,16 +28,16 @@ def cast_media_bounds(timeline: CastTimeline) -> tuple[Bounds, ...]:
             pivot = (asset.anchorsByFacing or {}).get(facing, asset.anchor)
             contacts = targets if track.attachment.startswith("target_") else (source.caster,)
             for contact in contacts:
-                if track.onMiss == "omit" and any(application.target.actor_uuid == contact.actor_uuid
+                if track.onMiss == "omit" and any(feedback_identity(application.target) == feedback_identity(contact)
                         and application.hit is False for application in source.applications):
                     continue
                 poses: list[BodySample | None] = [None]
                 sockets = recipe.cast.sourceSockets
-                if (track.attachment == "source_hand" and track.startOffsetMs < 0
+                if (isinstance(contact, ActorContact) and track.attachment == "source_hand" and track.startOffsetMs < 0
                         and sockets is not None and sockets.preparation is not None):
                     poses.extend(BodySample(contact.actor_uuid, recipe.cast.actionClip, frame, timeline.facing)
                                  for frame in range(len(sockets.preparation[facing])))
-                if track.attachment == "target_body" and track.bodyOffsetsByFacing is not None:
+                if isinstance(contact, ActorContact) and track.attachment == "target_body" and track.bodyOffsetsByFacing is not None:
                     viewed_body = view_facing(contact.facing, quadrant, data)
                     poses.extend(BodySample(contact.actor_uuid, data.damage_context.bodyClip, frame, contact.facing)
                                  for frame in range(len(track.bodyOffsetsByFacing[viewed_body])))

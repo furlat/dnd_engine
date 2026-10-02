@@ -98,6 +98,70 @@ def explicit_spatial_composition(binding: SpatialMediaBinding,
     return binding.model_copy(update={"layers": tuple(layers)})
 
 
+def validate_wall_modules(binding: SpatialMediaBinding,
+                          assets: Mapping[str, AuthoredProjectileAsset],
+                          storage: Mapping[str, ProjectileStorage]) -> None:
+    """Reject incomplete selected wall banks at initialization, without reading pixels."""
+    signatures = [(tuple((axis.axis, axis.spacingCells, axis.maxAngleDegrees, axis.positiveMaskNormal)
+                         for axis in layer.wallAxes),
+                   (layer.wallRing.radiusFeet, layer.wallRing.widthFeet) if layer.wallRing is not None else None)
+                  for layer in binding.layers if layer.composition == "wall_modules"]
+    if signatures and any(signature != signatures[0] for signature in signatures[1:]):
+        raise ValueError("paired wall layers must share axis spacing, angular admission and mask normals")
+    for layer in binding.layers:
+        if layer.composition != "wall_modules":
+            continue
+        banks = tuple(variant for axis in layer.wallAxes for variant in axis.variants)
+        if layer.wallRing is not None:
+            banks = (*banks, layer.wallRing)
+        for variant in banks:
+            for identity in (variant.assetId, variant.applicationAssetId):
+                asset = assets.get(identity)
+                source = storage.get(identity)
+                if asset is None or source is None or binding.assetPhase not in source.phases:
+                    raise ValueError(f"Wall module lacks registered media: {identity}/{binding.assetPhase}")
+                phase = {"cast": asset.phases.cast, "travel": asset.phases.travel,
+                         "impact": asset.phases.impact}[binding.assetPhase]
+                if phase is None or (phase.fps or asset.fps) != binding.fps:
+                    raise ValueError(f"Wall module phase clock differs: {identity}")
+                if identity == variant.assetId and binding.holdStartFrame + binding.holdFrames > phase.frames:
+                    raise ValueError(f"Wall module hold exceeds delivered frames: {identity}")
+                for part in source.phases[binding.assetPhase].layers:
+                    if part.partsByFacing is None or any(
+                            facing not in part.partsByFacing or len(part.partsByFacing[facing]) != phase.frames
+                            for facing in ("E", "S", "W", "N")):
+                        raise ValueError(f"Wall module requires complete native camera banks: {identity}")
+                    if binding.safeSideTint is not None and any(
+                            not {"positive", "negative"} <= set(crop.colorMasks)
+                            for frames in part.partsByFacing.values() for frame in frames for crop in frame):
+                        raise ValueError(f"Wall safe-side tint requires both registered mask signs: {identity}")
+
+
+def validate_contact_sweeps(binding: SpatialMediaBinding,
+                            assets: Mapping[str, AuthoredProjectileAsset],
+                            storage: Mapping[str, ProjectileStorage]) -> None:
+    """Validate finite selected contact banks without opening production artwork."""
+    for sweep in binding.damageSweeps.values():
+        clocks = set()
+        for bank in sweep.directions:
+            for variant in bank.variants:
+                for identity in (variant.rearAssetId, variant.frontAssetId):
+                    asset, source = assets.get(identity), storage.get(identity)
+                    if asset is None or source is None or "impact" not in source.phases:
+                        raise ValueError(f"Contact sweep lacks registered impact media: {identity}")
+                    phase = asset.phases.impact
+                    if phase is None or phase.loop or sweep.fadeEndMs > phase.frames*1000/(phase.fps or asset.fps):
+                        raise ValueError(f"Contact sweep requires a finite phase containing its fade: {identity}")
+                    clocks.add((phase.frames, phase.fps or asset.fps))
+                    for layer in source.phases["impact"].layers:
+                        if layer.partsByFacing is None or any(
+                                facing not in layer.partsByFacing or len(layer.partsByFacing[facing]) != phase.frames
+                                for facing in ("E", "S", "W", "N")):
+                            raise ValueError(f"Contact sweep requires four complete native camera banks: {identity}")
+        if len(clocks) != 1:
+            raise ValueError("Contact sweep paired banks must share one finite clock")
+
+
 def validate_composition(draft: StudioSpellDraft, storage: Mapping[str, ProjectileStorage]) -> None:
     """Check the selected in-memory contract; never inspect or validate media files."""
     uses = [(track.assetId, track.assetPhase, track.composition) for track in draft.media]

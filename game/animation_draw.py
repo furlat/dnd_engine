@@ -18,13 +18,13 @@ import pygame
 from dnd.core.life_types import LifeState
 from dnd.core.events import WorldTileState
 from game.animation import (
-    ActorContact, BodySample, CastSample, CastTimeline, GeometryProjectileSample, NumberSample,
+    ActorContact, ObjectContact, BodySample, CastSample, CastTimeline, GeometryProjectileSample, NumberSample, feedback_identity, cast_actor_contacts,
     ProjectileSample, body_clip, body_elevation_steps, body_rig, project_geometry_projectile, project_projectile,
     projectile_registration, projectile_phase_scale, projectile_contact, view_facing, cast_deliveries, actor_rest_pose,
 )
 from game.animation_types import AnimationData, BodyRig, DepthMode, ElementColors, Facing8, PaletteTreatment, ParticleMediaAsset, StudioActorLayer, RigLayer as RigLayer
 from game.action_media import ActionStripCue, ActionStripSample
-from game.attack import AttackSample, AttackTimeline, attack_projectile_contact, project_attack_projectile
+from game.attack import AttackSample, AttackTimeline, attack_actor_contacts, attack_projectile_contact, project_attack_projectile
 from game.condition_animation import ConditionAppearance, condition_body_pose, condition_contact
 from game.condition_types import ConditionLiveCopies
 from game.body_effects import distort_body, ghost_body
@@ -282,7 +282,9 @@ def load_attack_media(timeline: AttackTimeline, appearances: Mapping[str, tuple[
                 raise ValueError(f"literal attack layer has no rig slot: {layer.slot}")
             if layer.sourceSheet not in data.resources:
                 raise ValueError(f"missing literal attack layer resource: {layer.sourceSheet}")
-    target_clips = {actor_rest_pose(data, timeline.target) or "Idle", "Idle"}
+    target_clips = {"Idle"}
+    if isinstance(timeline.target, ActorContact):
+        target_clips.add(actor_rest_pose(data, timeline.target) or "Idle")
     if timeline.damage_timing is not None:
         target_clips.add(data.death_context.bodyClip if timeline.resulting_life_state is LifeState.DEAD
                          else data.damage_context.bodyClip)
@@ -296,8 +298,8 @@ def load_attack_media(timeline: AttackTimeline, appearances: Mapping[str, tuple[
     loaded = load_actor_media(data, (
         (timeline.source, appearances[timeline.source.actor_uuid], ("Idle", timeline.clip)),
         (timeline.source, source_layers, (timeline.clip,)),
-        (timeline.target, appearances[timeline.target.actor_uuid],
-         tuple(target_clips)),
+        *(((timeline.target, appearances[timeline.target.actor_uuid], tuple(target_clips)),)
+            if isinstance(timeline.target, ActorContact) else ()),
     ), body_rows=cache)
     load_cast_rows(data, timeline.source, timeline.clip, timeline.facing, timeline.layers, cache)
     return loaded
@@ -314,18 +316,19 @@ def load_animation_media(timeline: CastTimeline,
     projectile = timeline.recipe.projectile
     if projectile is not None and projectile.sprite is not None and projectile.sprite.blendMode == "screen":
         raise ValueError("screen blend requires a separate pixel parity proof")
-    targets = {application.target.actor_uuid: application.target for application in source.applications}
+    targets = {application.target.actor_uuid: application.target for application in source.applications
+               if isinstance(application.target, ActorContact)}
     if set(appearances) != {source.caster.actor_uuid, *targets}:
         raise ValueError("reference media requires one complete appearance per disclosed actor")
     caster_clips = {"Idle", cast.actionClip} | ({cast.recovery.bodyClip} if cast.recovery.enabled else set())
     target_clips = {identity: {actor_rest_pose(data, target) or "Idle", "Idle"}
                     for identity, target in targets.items()}
     for application in timeline.applications:
-        if application.damage_start_ms is not None:
+        if isinstance(application.source.target, ActorContact) and application.damage_start_ms is not None:
             target_clips[application.source.target.actor_uuid].add(
                 data.death_context.bodyClip if application.source.resulting_life_state is LifeState.DEAD
                 else data.damage_context.bodyClip)
-        if application.life_body is not None:
+        if isinstance(application.source.target, ActorContact) and application.life_body is not None:
             target_clips[application.source.target.actor_uuid].add(application.life_body.clip)
     body_requests = _actor_media_requests(data, (
         (replace(source.caster, facing=timeline.facing), appearances[source.caster.actor_uuid], tuple(caster_clips)),
@@ -350,7 +353,8 @@ def load_animation_media(timeline: CastTimeline,
                     (cast.weaponGlow, cast.aura, *(cast.effects or ()), cast.slash), cache)
     for application in timeline.applications:
         damage = application.damage
-        if damage is None or not damage.hitFlash.enabled or damage.hitFlash.palette is None:
+        if (damage is None or not damage.hitFlash.enabled or damage.hitFlash.palette is None
+                or not isinstance(application.source.target, ActorContact)):
             continue
         target = application.source.target
         clip = (data.death_context.bodyClip if target.life_state is LifeState.DEAD
@@ -553,10 +557,27 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
         alpha = pygame.surfarray.pixels_alpha(image)
         alpha[:] = np.rint(alpha * body_opacity)
         del alpha
-    image = pygame.transform.scale(image, (max(1, round(image.width * scale * contact.visual_scale_x)),
-                                           max(1, round(image.height * scale))))
-    root_y = ground[1] + rig.origin_y_from_ground * scale
+    body_scale = (1, 1) if only_shadow else body.scale
+    image = pygame.transform.scale(image, (max(1, round(image.width * scale * contact.visual_scale_x * body_scale[0])),
+                                           max(1, round(image.height * scale * body_scale[1]))))
+    # Tuck around the authored passage point, keeping it on the trajectory.
+    # The support shadow is drawn separately and never receives this squash.
+    root_y = ground[1] + (rig.origin_y_from_ground * body_scale[1]
+                         - body.scale_anchor_height_px * (1 - body_scale[1])) * scale
     destination = (round(ground[0] - image.width / 2), round(root_y - image.height))
+    registration = (0.0, 0.0)
+    if not only_shadow and body.registration_socket is not None:
+        poses = rig.pose_sockets.get(body.registration_socket, {}).get(body.clip)
+        if poses is not None:
+            point = poses[viewed_body.facing][body.frame]
+            registration = (
+                (rig.cell_width / 2 - point.x)
+                      * scale * contact.visual_scale_x * body_scale[0] * body.registration_weight,
+                (rig.cell_height - rig.origin_y_from_ground
+                      - body.scale_anchor_height_px - point.y)
+                      * scale * body_scale[1] * body.registration_weight,
+            )
+            destination = (round(destination[0] + registration[0]), round(destination[1] + registration[1]))
     if condition is not None:
         if condition.layers and not only_shadow:
             image, destination = compose_condition_layers(image, destination, ground, viewed_body.facing,
@@ -564,7 +585,10 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
                 condition.layers, body_rows, data=data, quadrant=camera.quadrant,
                 floor_ground=project_screen(contact.grid, camera, elevation_steps=contact.elevation_steps),
                 activity=condition.activity,
-                attachment_anchors=pose_attachment_anchors(rig, viewed_body, ground, scale, contact.visual_scale_x),
+                attachment_anchors=pose_attachment_anchors(rig, viewed_body,
+                    (ground[0] + registration[0], ground[1] + registration[1]
+                     - body.scale_anchor_height_px * (1 - body_scale[1]) * scale),
+                    scale * body_scale[1], contact.visual_scale_x * body_scale[0] / body_scale[1]),
                 life_state=contact.life_state)
         image.set_alpha(round(condition.alpha * 255))
     return image, destination
@@ -616,12 +640,12 @@ def projectile_layer_blits(timeline: CastTimeline, effect: ProjectileSample,
     return tuple(result)
 
 
-def _number_blit(number: NumberSample, contact: ActorContact, font: pygame.font.Font,
+def _number_blit(number: NumberSample, contact: ActorContact | ObjectContact, font: pygame.font.Font,
                  data: AnimationData, camera: Camera) -> tuple[pygame.Surface, tuple[int, int]]:
     factor = TILE_WIDTH / data.rig.TILE_W * camera.zoom
     style = data.badge_style if number.kind == "badge" else data.number_style
-    rig = body_rig(data, contact)
-    ground = project_screen(contact.grid, camera, elevation_steps=body_elevation_steps(contact, data))
+    height = body_elevation_steps(contact, data) if isinstance(contact, ActorContact) else contact.elevation_steps
+    ground = project_screen(contact.grid, camera, elevation_steps=height)
     label = number.label if number.kind == "badge" else f"{number.value} {number.label}".rstrip()
     fill = font.render(label, False, _rgb(number.color))
     stroke = font.render(label, False, _rgb(style.strokeColor))
@@ -632,8 +656,9 @@ def _number_blit(number: NumberSample, contact: ActorContact, font: pygame.font.
     text.blit(fill, (radius, radius))
     text = pygame.transform.scale(text, (max(1, round(text.width * factor)), max(1, round(text.height * factor))))
     text.set_alpha(round(number.alpha * 255))
-    bottom = ground[1] + ((rig.origin_y_from_ground - style.anchorLiftPx) * contact.visual_scale
-                          - style.risePx * number.progress) * factor
+    anchor = ((body_rig(data, contact).origin_y_from_ground - style.anchorLiftPx) * contact.visual_scale
+              if isinstance(contact, ActorContact) else -style.anchorLiftPx)
+    bottom = ground[1] + (anchor - style.risePx * number.progress) * factor
     return text, (round(ground[0] - text.width / 2), round(bottom - text.height))
 
 
@@ -713,7 +738,7 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
             image, destination, 0,
             (contact.actor_uuid, contact.grid, contact.rig_id, "current", None, "authored",
              role, height, body.clip, body.frame),
-            role=role, owner=contact.actor_uuid,
+            role=role, owner=contact.actor_uuid, support_height_steps=contact.elevation_steps,
         ))
     if condition is not None and condition.live_copies is not None:
         copies = condition.live_copies
@@ -781,8 +806,9 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
                             ) -> tuple[AnimationDrawCommand, ...]:
     """Join sampled actors and effects to the map's existing painter ordering."""
     data, source = timeline.data, timeline.source
-    contacts = {source.caster.actor_uuid: source.caster,
-                **{application.target.actor_uuid: application.target for application in source.applications}}
+    contacts = {contact.actor_uuid: contact for contact in cast_actor_contacts(source)}
+    feedback_contacts = {source.caster.actor_uuid: source.caster,
+                         **{feedback_identity(application.target): application.target for application in source.applications}}
     flashes = {vital.actor_uuid: vital.flash for vital in sample.vitals}
     commands: list[AnimationDrawCommand] = []
     if source.emitter is not None and sample.device_frame is not None:
@@ -851,12 +877,12 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
         ) for image, destination, blend in layers)
     if sample.delivery_enabled:
         commands.extend(cast_media_draw_commands(timeline, sample, camera, media.area, media.projectile_rows))
-    commands.extend(number_draw_commands(data, sample.numbers, contacts, media.font, camera))
+    commands.extend(number_draw_commands(data, sample.numbers, feedback_contacts, media.font, camera))
     return tuple(commands)
 
 
 def number_draw_commands(data: AnimationData, numbers: tuple[NumberSample, ...],
-                         contacts: Mapping[str, ActorContact], font: pygame.font.Font,
+                         contacts: Mapping[str, ActorContact | ObjectContact], font: pygame.font.Font,
                          camera: Camera, *, badge_font: pygame.font.Font | None = None,
                          ) -> tuple[AnimationDrawCommand, ...]:
     """The same authored feedback drawer for spell and weapon consequences."""
@@ -868,15 +894,16 @@ def number_draw_commands(data: AnimationData, numbers: tuple[NumberSample, ...],
         selected_font = badge_font if number.kind == "badge" else font
         assert selected_font is not None
         image, destination = _number_blit(number, contact, selected_font, data, camera)
-        height = body_elevation_steps(contact, data)
+        height = body_elevation_steps(contact, data) if isinstance(contact, ActorContact) else contact.elevation_steps
+        identity = feedback_identity(contact)
         key = painter_key(contact.grid, elevation_steps=height,
                           quadrant=camera.quadrant, role="actor",
-                          identity=(contact.actor_uuid, number.application_id or ""))
+                          identity=(identity, number.application_id or ""))
         commands.append(AnimationDrawCommand(
             (210, *key[1:]), image, destination, 0,
-            (contact.actor_uuid, contact.grid, number.label, "current", None, "authored",
+            (identity, contact.grid, number.label, "current", None, "authored",
              "floating_number", height, number.value, number.progress, number.application_id),
-            role="floating_number", owner=contact.actor_uuid,
+            role="floating_number", owner=identity,
         ))
     return tuple(commands)
 
@@ -950,7 +977,7 @@ def attack_draw_commands(timeline: AttackTimeline, sample: AttackSample,
                          condition_appearances: Mapping[str, ConditionAppearance] | None = None,
                          include_bodies: bool = True,
                          ) -> tuple[AnimationDrawCommand, ...]:
-    contacts = {contact.actor_uuid: contact for contact in (timeline.source, timeline.target)}
+    contacts = {contact.actor_uuid: contact for contact in attack_actor_contacts(timeline)}
     flashes = {vital.actor_uuid: vital.flash for vital in sample.vitals}
     commands = tuple(command for body in sample.bodies for command in actor_draw_commands(
         timeline.data, body, contacts[body.actor_uuid], appearances[body.actor_uuid], media, camera,
@@ -965,8 +992,8 @@ def attack_draw_commands(timeline: AttackTimeline, sample: AttackSample,
             timeline.projectile.recipe.depthMode, timeline.root_event_uuid, camera,
         ) for reference in sample.projectiles
           for effect in (project_attack_projectile(timeline, reference, camera.quadrant),))
-    return (*commands, *projectile_commands, *number_draw_commands(timeline.data, sample.numbers, contacts, font, camera,
-                                             badge_font=badge_font))
+    return (*commands, *projectile_commands, *number_draw_commands(timeline.data, sample.numbers,
+            {**contacts, feedback_identity(timeline.target): timeline.target}, font, camera, badge_font=badge_font))
 
 
 def draw_animation(surface: pygame.Surface, timeline: CastTimeline, sample: CastSample,
@@ -977,8 +1004,9 @@ def draw_animation(surface: pygame.Surface, timeline: CastTimeline, sample: Cast
             surface.blit(command.surface, command.destination, special_flags=command.blend)
         return
     data, source = timeline.data, timeline.source
-    contacts = {source.caster.actor_uuid: source.caster,
-                **{application.target.actor_uuid: application.target for application in source.applications}}
+    contacts = {contact.actor_uuid: contact for contact in cast_actor_contacts(source)}
+    feedback_contacts = {source.caster.actor_uuid: source.caster,
+                         **{feedback_identity(application.target): application.target for application in source.applications}}
     flashes = {vital.actor_uuid: vital.flash for vital in sample.vitals}
     draws: list[tuple[float, pygame.Surface, tuple[int, int], int]] = []
     for body in sample.bodies:
@@ -1013,5 +1041,5 @@ def draw_animation(surface: pygame.Surface, timeline: CastTimeline, sample: Cast
     for _, image, destination, blend in sorted(draws, key=lambda item: item[0]):
         surface.blit(image, destination, special_flags=blend)
     for number in sample.numbers:
-        image, destination = _number_blit(number, contacts[number.actor_uuid], media.font, data, camera)
+        image, destination = _number_blit(number, feedback_contacts[number.actor_uuid], media.font, data, camera)
         surface.blit(image, destination)

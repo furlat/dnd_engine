@@ -9,11 +9,12 @@ Contains all rage/frenzy related code:
 - Frenzy system (Berserker path)
 """
 
+from dnd.core.action_types import RestrictedActionKind
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_object import BaseObject
 from dnd.core.base_actions import (
-    ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
+    BaseAction, ActionEvent, Cost, TargetType, BaseCost
 )
 from dnd.core.events import (
     Event, EventPhase, EventType,
@@ -33,15 +34,15 @@ from dnd.core.modifiers import (
 from dnd.blocks.equipment import ArmorEquipEvent, Armor
 from dnd.blocks.action_economy import RechargeType
 from dnd.entity import Entity
+from dnd.conditions import HasAttacked
 from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_action_economy_cost_applier,
     entity_resource_cost_evaluator,
-    Attack, AttackEvent, build_weapon_attack_outcome_profile,
-    create_weapon_attack_declaration_event,
+    Attack, AttackEvent,
 )
 from pydantic import Field
-from typing import Any, Optional, List, Tuple, cast
+from typing import Any, ClassVar, Optional, List, Tuple, cast
 from uuid import UUID
 
 
@@ -182,7 +183,8 @@ def rage_maintenance_processor(event: Event, source_entity_uuid: UUID) -> Option
     if raging.persistent_rage:
         return None
 
-    has_attacked = "HasAttacked" in entity.active_conditions
+    attack_marker = entity.active_conditions.get("HasAttacked")
+    has_attacked = isinstance(attack_marker, HasAttacked) and attack_marker.attacked_hostile_creature
     has_taken_damage = "HasTakenDamage" in entity.active_conditions
 
     if not has_attacked and not has_taken_damage:
@@ -917,121 +919,52 @@ def _release_failed_frenzied_graph(
         )
 
 
-class FrenziedStrike(BaseAction):
-    """Bonus-action melee attack available during Berserker frenzy.
+class FrenziedStrike(Attack):
+    """A normal melee weapon attack paid by the Frenzied bonus action.
 
     Attributes:
-        name: Action name displayed for the Berserker bonus-action attack.
-        description: Short rules-facing summary of Frenzied Strike.
-        target_type: Frenzied Strike targets a visible entity in weapon reach.
-        weapon_slot: Weapon slot used to resolve the bonus-action melee attack.
-        action_category: Marks Frenzied Strike as an attack action for action discovery and reactions.
-        costs: Bonus-action cost rebuilt after model initialization.
+        name: Display name for the frenzied attack.
+        description: Rules-facing summary of the frenzied attack.
+        weapon_slot: Equipped melee weapon slot used by the attack.
+        costs: Bonus-action cost, independent of ordinary attack credits.
     """
-    name: str = Field(
-        default="Frenzied Strike",
-        description="Action name displayed for the Berserker bonus-action attack.",
-    )
-    description: str = Field(
-        default="Make a bonus action melee attack while frenzied",
-        description="Short rules-facing summary of Frenzied Strike.",
-    )
-    target_type: TargetType = Field(
-        default=TargetType.ENTITY,
-        description="Frenzied Strike targets a visible entity in weapon reach.",
-    )
-    weapon_slot: WeaponSlot = Field(
-        default=WeaponSlot.MELEE_MAIN,
-        description="Weapon slot used to resolve the bonus-action melee attack.",
-    )
-    action_category: ActionCategory = Field(
-        default=ActionCategory.ATTACK,
-        description="Marks Frenzied Strike as an attack action for action discovery and reactions.",
-    )
 
-    costs: List[Cost] = Field(
-        default_factory=list,
-        description="Bonus-action cost rebuilt after model initialization.",
-    )
+    restricted_action_kinds: ClassVar[frozenset[RestrictedActionKind]] = frozenset()
+    ordinary_off_hand_default: ClassVar[bool] = False
+    declaration_name: ClassVar[str | None] = "Frenzied Strike"
+    append_weapon_to_name: ClassVar[bool] = True
+    name: str = Field(default="Frenzied Strike", description="Display name for the frenzied attack.")
+    description: str = Field(default="Make a bonus action melee attack while frenzied", description="Rules-facing summary of the frenzied attack.")
+    weapon_slot: WeaponSlot = Field(default=WeaponSlot.MELEE_MAIN, description="Equipped melee weapon slot used by the attack.")
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(
+            name="Frenzied Strike",
+            cost_type="bonus_actions",
+            cost=1,
+            evaluator=entity_action_economy_cost_evaluator,
+        ),
+    ], description="Bonus-action cost, independent of ordinary attack credits.")
 
-    def model_post_init(self, __context: Any) -> None:
-        super().model_post_init(__context)
-        self.costs = [
-            Cost(
-                name="Frenzied Strike",
-                cost_type="bonus_actions",
-                cost=1,
-                evaluator=entity_action_economy_cost_evaluator
-            )
-        ]
-
-    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
-        """Return the same actor-baseline weapon profile as a normal attack."""
-        return build_weapon_attack_outcome_profile(actor, self.weapon_slot)
-
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        """Create the declaration event for frenzied strike."""
-        return create_weapon_attack_declaration_event(
-            action_name="Frenzied Strike",
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            weapon_slot=self.weapon_slot,
-            costs=self.costs,
-            parent_event=parent_event,
-            use_register=use_register,
-            append_weapon_to_name=True,
+    def validate_source_requirements_for_discovery(self) -> bool:
+        entity = Entity.get(self.source_entity_uuid)
+        return (
+            entity is not None
+            and "Frenzied" in entity.active_conditions
+            and self.weapon_slot in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF)
+            and entity.equipment.get_weapon(self.weapon_slot) is not None
+            and super().validate_source_requirements_for_discovery()
         )
 
-    def validate_requirements_for_discovery(self) -> bool:
-        """Check non-cost Frenzied Strike requirements for discovery."""
+    def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return False
-
-        weapon = entity.equipment._get_weapon_by_slot(self.weapon_slot)
-        if weapon is None:
-            return False
-
-        return super().validate_requirements_for_discovery()
-
-    def _validate(self, declaration_event: Event) -> Optional[Event]:
-        """Validate the frenzied strike."""
-        entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if "Frenzied" not in entity.active_conditions:
+        if entity is None or "Frenzied" not in entity.active_conditions:
             return declaration_event.cancel(status_message="Must be in a frenzy")
-
-        if not self.target_entity_uuid:
-            return declaration_event.cancel(status_message="No target specified")
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return declaration_event.cancel(status_message="Target not found")
-
-        contact = entity.senses.entities.get(self.target_entity_uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not visible")
-
-        attack_event = cast(AttackEvent, declaration_event)
-        range_validated = Attack.validate_range(attack_event, self.source_entity_uuid)
-        if range_validated is None or range_validated.canceled:
-            return range_validated
-
-        return range_validated.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message="Frenzied Strike validated"
-        )
-
-    def _apply(self, execution_event: Event) -> Optional[Event]:
-        """Execute the frenzied strike attack."""
-        attack_event = cast(AttackEvent, execution_event)
-        return Attack.attack_consequences(attack_event, self.source_entity_uuid)
-
-    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
-        """Apply bonus action cost."""
-        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
+        if (
+            self.weapon_slot not in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF)
+            or entity.equipment.get_weapon(self.weapon_slot) is None
+        ):
+            return declaration_event.cancel(status_message="Frenzied Strike requires a melee weapon")
+        return super()._validate(declaration_event)
 
 
 class Frenzy(BaseAction):

@@ -8,7 +8,7 @@ from typing import Literal, Mapping
 import pygame
 import numpy as np
 
-from game.animation_types import AnimationData, Facing8, ProjectileSprite
+from game.animation_types import AnimationData, Facing8, ProjectileSprite, MaskedMediaTint
 from game.projectile_media import projectile_frame_layers
 
 
@@ -42,6 +42,7 @@ def registered_media_samples(data: AnimationData, asset_id: str,
                            facing: Facing8, *, scale: float, anchor: tuple[float, float],
                            rows: Mapping[tuple[str, int], pygame.Surface],
                            alpha: float = 1.0, rotation: float = 0.0, zoom: float = 1.0,
+                           masked_tint: MaskedMediaTint | None = None,
                            ) -> tuple[RegisteredMediaSample, ...]:
     """Scale is the final pixel factor; rotation is clockwise screen radians.
 
@@ -52,7 +53,7 @@ def registered_media_samples(data: AnimationData, asset_id: str,
     pivot = (asset.anchorsByFacing or {}).get(facing, asset.anchor)
     asset_pivot = pivot.x * asset.frame.width, pivot.y * asset.frame.height
     layers = projectile_frame_layers(data, asset, phase, frame, facing,
-                                    registered_material(asset_id, alpha), rows)
+                                    registered_material(asset_id, alpha), rows, masked_tint=masked_tint)
     result = []
     for layer in layers:
         image = layer.image

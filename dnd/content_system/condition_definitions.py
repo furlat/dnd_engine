@@ -33,6 +33,9 @@ import dnd.spells.evocation as evocation
 import dnd.spells.illusion as illusion
 import dnd.spells.necromancy as necromancy
 import dnd.spells.transmutation as transmutation
+import dnd.spells.walls as walls
+import dnd.spells.wall_fields as wall_fields
+import dnd.spells.wall_constructions as wall_constructions
 import dnd.tile_conditions as tile_conditions
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_actions import BaseAction
@@ -312,6 +315,13 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(evocation.DivineWordEffect, ContentDefinitionKind.CONDITION, "condition.spell.divine_word"),
     _srd(evocation.GuidingBoltMarked, ContentDefinitionKind.CONDITION, "condition.spell.guiding_bolt.marked"),
     _srd(evocation.GustOfWindZone, ContentDefinitionKind.CONDITION, "condition.spell.gust_of_wind.zone"),
+    _srd(wall_fields.WallOfThornsZone, ContentDefinitionKind.CONDITION, "condition.spell.wall_of_thorns.zone"),
+    _srd(wall_fields.WindWallZone, ContentDefinitionKind.CONDITION, "condition.spell.wind_wall.zone"),
+    _srd(wall_constructions.WallOfIceZone, ContentDefinitionKind.CONDITION, "condition.spell.wall_of_ice.zone"),
+    _srd(wall_constructions.WallOfStoneZone, ContentDefinitionKind.CONDITION, "condition.spell.wall_of_stone.zone"),
+    _srd(wall_constructions.WallOfForceZone, ContentDefinitionKind.CONDITION, "condition.spell.wall_of_force.zone"),
+    _srd(wall_constructions.FrigidAirZone, ContentDefinitionKind.CONDITION, "condition.spell.wall_of_ice.frigid_air"),
+    _srd(walls.WallOfFireZone, ContentDefinitionKind.CONDITION, "condition.spell.wall_of_fire.zone"),
     _srd(evocation.IceStormTerrain, ContentDefinitionKind.CONDITION, "condition.spell.ice_storm.terrain"),
     _srd(evocation.LightEffect, ContentDefinitionKind.CONDITION, "condition.spell.light"),
     _srd(evocation.PrismaticRestrained, ContentDefinitionKind.CONDITION, "condition.spell.prismatic_spray.restrained"),

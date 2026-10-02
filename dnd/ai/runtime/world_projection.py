@@ -62,6 +62,7 @@ def project_tile(
                 base_height_steps=obj.placement.base_height_steps,
                 top_height_steps=obj.placement.top_height_steps,
                 blocked_channels=structure.blocked_channels,
+                contact_passage=structure.contact_passage,
             )
             for channel in WorldEdgeChannel:
                 if channel is WorldEdgeChannel.MOVEMENT and senses is not None and identity not in senses.objects:
@@ -101,6 +102,8 @@ def project_object(
         "blocks_propagation_field": item.blocks_propagation,
         "is_pickable": item.is_pickable, "is_usable": item.is_usable,
         "stack_count": item.stack_count,
+        "contact_passage": item.contact_passage.value,
+        "supported_by_uuid": str(item.supported_by_uuid) if item.supported_by_uuid is not None else None,
     }
     if item.is_open is not None:
         state["is_open"] = item.is_open

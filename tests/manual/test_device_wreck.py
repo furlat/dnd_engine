@@ -2,7 +2,7 @@
 
 import pytest
 
-from dnd.actions import AttackObject
+from dnd.actions import Attack
 from dnd.actions_functional import execute_use_action, get_available_actions
 from dnd.blocks.base_item import BaseItem, ItemLocationStateEvent
 from dnd.content.items.authored_item_builders import build_authored_item
@@ -13,6 +13,7 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.events import EventPhase, EventQueue, ItemDestructionEvent, SensoryUpdateEvent, TakeDamageEvent
 from dnd.core.gridmap import get_map
+from dnd.core.world_edges import ElevationSurfaceKind
 from dnd.core.item_types import ItemIntegrity, ItemLocation
 from dnd.entity import Entity
 from dnd.spells.enchantment import Sleep
@@ -29,6 +30,10 @@ from tests.manual.test_131_inventory_use_actions_legacy_contract import (
 ))
 def test_object_attacks_leave_body_specific_inert_wreck_discoverable_later(body, spell_type) -> None:
     reset_item_arena()
+    # The attacker stands on the same raised support as the elevated cannon.
+    for position in ((4, 10), (5, 10)):
+        get_map().set_tile_elevation(position, height=2,
+            surface_kind=ElevationSurfaceKind.ORDINARY, slope_axis=None)
     caster = create_caster((4, 10))
     weapon = build_authored_item("weapon.longsword", caster.uuid)
     caster.loot_item(weapon)
@@ -41,17 +46,19 @@ def test_object_attacks_leave_body_specific_inert_wreck_discoverable_later(body,
     Entity.update_all_entities_senses()
     cursor = EventQueue.event_cursor()
     caster.action_economy.reset_all_costs()
-    with fixed_dice_faces(4):
-        hit = AttackObject(source_entity_uuid=caster.uuid, target_entity_uuid=device.uuid).apply()
-    assert hit is not None and not hit.canceled
+    with fixed_dice_faces(19, 4):
+        caster.update_entity_senses()
+        hit = Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=caster.uuid, target_entity_uuid=device.uuid).apply()
+    assert hit is not None and not hit.canceled, hit.status_message if hit is not None else "No result"
     assert device.get_hp() == 8 and get_map().get_object_placement(device.uuid) == original
     assert not any(isinstance(event, ItemDestructionEvent)
                    for _, event in EventQueue.iter_events_since(cursor))
 
     caster.action_economy.reset_all_costs()
     cursor = EventQueue.event_cursor()
-    with fixed_dice_faces(8):
-        lethal = AttackObject(source_entity_uuid=caster.uuid, target_entity_uuid=device.uuid).apply()
+    with fixed_dice_faces(19, 8):
+        caster.update_entity_senses()
+        lethal = Attack(weapon_slot=WeaponSlot.MELEE_MAIN, source_entity_uuid=caster.uuid, target_entity_uuid=device.uuid).apply()
     assert lethal is not None and not lethal.canceled
     completed = [event for _, event in EventQueue.iter_events_since(cursor)
                  if event.phase is EventPhase.COMPLETION]

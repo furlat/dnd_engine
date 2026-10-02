@@ -35,7 +35,7 @@ from game.presentation import capture_interval, reduce_interval
 from game.projection import Camera, HEIGHT_STEP_PIXELS
 from game.replay import ObserverCapture, capture_history
 from game.scene import load_scene_media, scene_actors
-from tests.game.door_destruction_scenarios import attack_object, review_actor
+from tests.game.door_destruction_scenarios import attack_item, review_actor
 from tests.game.liquid_barrel_scenarios import liquid_barrel_history
 from tests.game.test_environment_presentation import _saved
 from tests.game.test_liquid_barrel_replay import SPILL_CELLS, SURFACE_IDS, RESIDUE_IDS
@@ -167,7 +167,7 @@ def changed_deposit_history(*, liquid="water", cold=False, remove=False, frozen=
         initialization = capture_interval(name="Before liquid discharge", start_cursor=0, end_cursor=cursor,
             observer_uuid=traveler.uuid, battlefield_id=battlefield)
         before, _ = reduce_interval(None, initialization)
-        attack_object(traveler, barrel, 8, additional_dice=(20,))
+        attack_item(traveler, barrel, 8, additional_dice=(20,))
         barrel.retire()
         if frozen or remove:
             water, = get_map().get_spatial_conditions_at((5, 4))

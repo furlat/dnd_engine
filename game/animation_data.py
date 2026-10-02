@@ -28,7 +28,7 @@ from game.animation_types import (
 )
 from game.condition_types import load_condition_recipes
 from game.condition_media import load_condition_media
-from game.authoring_conversion import explicit_attachments, explicit_composition, explicit_spatial_composition, validate_composition
+from game.authoring_conversion import explicit_attachments, explicit_composition, explicit_spatial_composition, validate_composition, validate_wall_modules, validate_contact_sweeps
 from game.player_facts import PlayerActor, VisualItem
 from game.world_animation import prop_animation
 from game.portal_art import load_portal_art
@@ -299,7 +299,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     # The imported environment rows have no actor track. This
     # local authored revision uses the same Studio action schema and is shared
     # by the explicit object-action aliases below.
-    for filename in ("object-interaction-recipe.json", "object-attack-recipe.json"):
+    for filename in ("object-interaction-recipe.json",):
         interaction_recipe = BodyActionRecipe.model_validate_json(_read(data_root / filename))
         body_action_recipes[interaction_recipe.definitionRef.content_id] = interaction_recipe
     body_action_bindings = TypeAdapter(FrozenMap[BodyActionBinding]).validate_json(
@@ -326,7 +326,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         draft_versions[ref] = drafts_file.version
         identities.add(ref.identity_key)
     if authored_bundles is None:
-        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions")
+        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media")
                                  if (data_root.parent / name).is_dir())
     bundle_resources: dict[str, Path] = {}
     projectile_storage: dict[str, ProjectileStorage] = {}
@@ -442,6 +442,12 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     creature_rigs = {identity: bindings.root_rig for identity in bindings.root_creature_content_refs}
     _additional_rigs(rig_files, data_root, rigs, resources, creature_rigs)
     world_bindings = json.loads(_read(DATA_ROOT.parent / "world_bindings.json"))
+    spatial_media = {identity: explicit_spatial_composition(
+        SpatialMediaBinding.model_validate_json(json.dumps(row)), projectile_storage)
+        for identity, row in world_bindings.get("spatial_media", {}).items()}
+    for binding in spatial_media.values():
+        validate_wall_modules(binding, projectile_assets, projectile_storage)
+        validate_contact_sweeps(binding, projectile_assets, projectile_storage)
     world_animations = {identity: prop_animation(row["transition"])
         for identity, row in world_bindings["props"].items() if "transition" in row}
     world_animations.update({identity: prop_animation(row)
@@ -493,10 +499,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         )),
         context_source_json=context_source,
         world_animations=MappingProxyType(world_animations),
-        spatial_media=MappingProxyType({identity: explicit_spatial_composition(SpatialMediaBinding.model_validate({**row,
-            "layers": tuple({**layer, "offsetCells": tuple(layer.get("offsetCells", (0, 0)))}
-                            for layer in row["layers"])}), projectile_storage)
-            for identity, row in world_bindings.get("spatial_media", {}).items()}),
+        spatial_media=MappingProxyType(spatial_media),
         deposit_media=MappingProxyType(TypeAdapter(dict[str, DepositMediaBinding]).validate_json(
             json.dumps(world_bindings.get("deposit_media", {})))),
         action_media_assets=MappingProxyType({asset.assetId: asset for asset in (

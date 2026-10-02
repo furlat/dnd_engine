@@ -78,7 +78,9 @@ def _record_area(*, doorway: bool):
         choice, destination = next((action, target) for action in available.all_actions
             if action.behavior_id == "spell.fireball" for target in action.valid_targets
             if target.position == center)
-        with fixed_dice_faces(*([10, 2, 2, 2, 2, 2, 2, 2, 2] * len(actors))):
+        # The open door also receives native Fireball damage, without a save.
+        # Keep this disclosure fixture independent of recipient roll ordering.
+        with fixed_dice_faces(*([2] * (9 * (len(actors) + 1)))):
             result = execute_available_action(actors["caster"], choice, destination)
         assert isinstance(result, SpellEvent) and not result.canceled
         sequences = {}

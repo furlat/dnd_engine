@@ -100,6 +100,27 @@ def partition_world_depth(command: DrawCommand, depth: np.ndarray,
     return pieces
 
 
+def _floor_below_contacts(command: DrawCommand, depth: np.ndarray,
+                         commands: list[DrawCommand]) -> np.ndarray:
+    """Bodies and contact shadows sit above their own support's covering."""
+    bounds = command.surface.get_rect(topleft=command.destination)
+    result = np.broadcast_to(depth, command.surface.get_size()).copy()
+    for peer in commands:
+        if (peer.role not in ("actor", "actor_shadow") or peer.key[0] != command.key[0]
+                or peer.support_height_steps != command.support_height_steps):
+            continue
+        rectangle = peer.surface.get_rect(topleft=peer.destination)
+        overlap = bounds.clip(rectangle)
+        if not overlap.width or not overlap.height:
+            continue
+        image = peer.surface.subsurface(overlap.move(-rectangle.left, -rectangle.top))
+        visible = pygame.surfarray.array_alpha(image) != 0
+        region = (slice(overlap.left - bounds.left, overlap.right - bounds.left),
+                  slice(overlap.top - bounds.top, overlap.bottom - bounds.top))
+        result[region] = np.where(visible, np.minimum(result[region], peer.key[1]), result[region])
+    return result
+
+
 def split_world_depth(commands: list[DrawCommand]) -> list[DrawCommand]:
     """Consume aligned ground depths after other composition, before painter sort."""
     groups: dict[tuple[str, ...], list[int]] = {}
@@ -108,6 +129,8 @@ def split_world_depth(commands: list[DrawCommand]) -> list[DrawCommand]:
             groups.setdefault(command.world_depth_group, []).append(index)
     group_cuts: dict[tuple[str, ...], list[float]] = {}
     for group, indices in groups.items():
+        if all(commands[index].role == "environment_floor" for index in indices):
+            indices.sort(key=lambda index: commands[index].key)
         bounds = [commands[index].surface.get_rect(topleft=commands[index].destination) for index in indices]
         group_cuts[group] = [peer.key[1] for peer in commands
             if peer.world_depth_group != group and peer.key[0] == commands[indices[0]].key[0]
@@ -118,6 +141,8 @@ def split_world_depth(commands: list[DrawCommand]) -> list[DrawCommand]:
         if depth is None:
             result.append(command)
             continue
+        if command.role == "environment_floor":
+            depth = _floor_below_contacts(command, depth, commands)
         group = command.world_depth_group
         if group is not None:
             indices = groups[group]

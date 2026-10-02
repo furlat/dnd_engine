@@ -2,9 +2,23 @@
 
 from enum import Enum
 from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
 
 
 AreaPropagation = Literal["line_of_effect", "connected"]
+
+
+class SpatialDamageSource(BaseModel):
+    """Actual spatial contact behind damage, independent of visual media."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    spatial_effect_uuid: UUID
+    position: tuple[int, int]
+    target_position: tuple[int, int]
+    base_height_steps: int
+    exposure: Literal["contact", "radiated_heat"]
 
 
 class SpatialEffectLayer(str, Enum):
@@ -96,6 +110,7 @@ class SpatialEffectTransitionAction(str, Enum):
 
 
 __all__ = [
+    "SpatialDamageSource",
     "SpatialEffectAnchorKind",
     "SpatialEffectBlockingPolicy",
     "SpatialEffectChangeOperation",

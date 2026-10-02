@@ -44,6 +44,19 @@ class ActorContact:
     condition_scale: float = 1.0
 
 
+@dataclass(frozen=True, slots=True)
+class ObjectContact:
+    """A received object impact point; no actor, body rig or creature vitals."""
+
+    object_uuid: str
+    grid: tuple[float, float]
+    elevation_steps: float
+
+
+def feedback_identity(contact: ActorContact | ObjectContact) -> str:
+    return contact.actor_uuid if isinstance(contact, ActorContact) else contact.object_uuid
+
+
 def body_elevation_steps(contact: ActorContact, data: AnimationData) -> float:
     """Body attachment height; lift is unscaled rig pixels above support."""
     return contact.elevation_steps + contact.body_lift_px * TILE_WIDTH / data.rig.TILE_W / HEIGHT_STEP_PIXELS
@@ -78,7 +91,7 @@ class CastApplication:
     """One retained application; repeated recipients keep distinct identities."""
 
     application_id: str | None
-    target: ActorContact
+    target: ActorContact | ObjectContact
     damage_applied: bool
     damage_total: int | None
     resulting_hp: int | None
@@ -109,6 +122,11 @@ class CastInput:
     area_radius_feet: float = 0
     area_propagation: Literal["line_of_effect", "connected"] = "line_of_effect"
     protections: tuple[tuple[UUID, PerceivedSpatialEffect], ...] = ()
+
+
+def cast_actor_contacts(source: CastInput) -> tuple[ActorContact, ...]:
+    return (source.caster, *(application.target for application in source.applications
+                            if isinstance(application.target, ActorContact)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,7 +202,7 @@ def delivery_identity(delivery: ApplicationTimeline | GroundDeliveryTimeline) ->
     return delivery.source.application_id if isinstance(delivery, ApplicationTimeline) else None
 
 
-def delivery_target(delivery: ApplicationTimeline | GroundDeliveryTimeline) -> ActorContact | GroundContact:
+def delivery_target(delivery: ApplicationTimeline | GroundDeliveryTimeline) -> ActorContact | ObjectContact | GroundContact:
     return delivery.source.target if isinstance(delivery, ApplicationTimeline) else delivery.target
 
 
@@ -197,6 +215,10 @@ class BodySample:
     hide_weapon: bool = False
     cast_layers: tuple[StudioActorLayer, ...] = ()
     hidden_slots: tuple[str, ...] = ()
+    scale: tuple[float, float] = (1, 1)
+    scale_anchor_height_px: float = 0
+    registration_socket: str | None = None
+    registration_weight: float = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -448,7 +470,7 @@ def view_facing(facing: Facing8, quadrant: int, data: AnimationData) -> Facing8:
     return order[(order.index(facing) + 2 * quadrant) % len(order)]
 
 
-def _anchored_points(caster: ActorContact, target_contact: ActorContact | GroundContact, recipe: StudioSpellDraft,
+def _anchored_points(caster: ActorContact, target_contact: ActorContact | ObjectContact | GroundContact, recipe: StudioSpellDraft,
                      data: AnimationData, facing: Facing8,
                      origin: tuple[float, float], target: tuple[float, float],
                      *, local_scales: tuple[float, float] = (1, 1),
@@ -1071,11 +1093,13 @@ def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
             if rule.cellsByFacing is not None:
                 arrival += rule.cellsByFacing[facing].get(f"{int(offset[0])}_{int(offset[1])}", 0)
         damage = resolve_damage(data, application.damage_type, recipe.damage) if application.damage_applied else None
-        timing = compile_damage(data, recipient, damage, arrival, application.resulting_life_state) if damage else None
+        timing = (compile_damage(data, recipient, damage, arrival, application.resulting_life_state)
+                  if damage is not None and isinstance(recipient, ActorContact) else None)
         applications.append(ApplicationTimeline(application, facing,
             _iso(source.caster.grid, data), _iso(recipient.grid, data), release, arrival, 0, (), damage,
             timing.start_ms if timing else None, timing.end_ms if timing else None,
-            timing.hp_ms if timing else None, timing.flash_ms if timing else None, timing.number_ms if timing else None,
+            timing.hp_ms if timing else None, timing.flash_ms if timing else None,
+            timing.number_ms if timing else arrival if damage is not None else None,
             timing.life_body if timing else None))
         identity = application.application_id
         anchors.append(Anchor("impact", arrival, identity))
@@ -1160,7 +1184,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
         raise ValueError("cast applications require distinct retained identities")
     if source.caster.life_state != LifeState.ALIVE:
         raise ValueError("a terminal caster requires a different admitted action")
-    for contact in (source.caster, *(application.target for application in source.applications)):
+    for contact in cast_actor_contacts(source):
         if (not all(isfinite(value) for value in (*contact.grid, contact.visual_scale, contact.visual_scale_x,
                                                  contact.elevation_steps, contact.body_lift_px))
                 or contact.visual_scale <= 0 or contact.visual_scale_x <= 0):
@@ -1259,12 +1283,12 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
             tuple(intervals))
     counts: dict[str, int] = {}
     for application in source.applications:
-        counts[application.target.actor_uuid] = counts.get(application.target.actor_uuid, 0) + 1
+        counts[feedback_identity(application.target)] = counts.get(feedback_identity(application.target), 0) + 1
     indices: dict[str, int] = {}
     applications: list[ApplicationTimeline] = []
     for index, application in enumerate(source.applications):
         target = application.target
-        if source.caster.actor_uuid == target.actor_uuid and ground_delivery is None:
+        if source.caster.actor_uuid == feedback_identity(target) and ground_delivery is None:
             raise ValueError("self delivery is outside the selected projectile family")
         if not isfinite(application.travel_apex_steps) or application.travel_apex_steps < 0:
             raise ValueError("travel apex requires a finite nonnegative world height")
@@ -1276,7 +1300,8 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
             raise ValueError("damage values require a disclosed damage application")
         if application.damage_total is not None and application.damage_total <= 0:
             raise ValueError("DamageApplied requires a positive disclosed total, or None when undisclosed")
-        body_clip(data, target, "Idle")
+        if isinstance(target, ActorContact):
+            body_clip(data, target, "Idle")
         facing = facing_for_delta((target.grid[0] - source_grid[0], target.grid[1] - source_grid[1]), data)
         first, last = _anchored_points(source.caster, target, recipe, data, facing,
                                       _iso(source.caster.grid, data), _iso(target.grid, data), reference_clock=True)
@@ -1284,14 +1309,14 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
             raise ValueError("coincident projectile endpoints require the separate source zero-travel case")
         first, last = projectile_endpoints(first, last,
             projectile.sourceAnchor.axisPx if projectile.sourceSockets is None else 0,
-            projectile.targetAnchor.axisPx)
-        dx, dy = rest_pose_offset(data, target)
+            projectile.targetAnchor.axisPx if isinstance(target, ActorContact) else 0)
+        dx, dy = rest_pose_offset(data, target) if isinstance(target, ActorContact) else (0, 0)
         last = last[0] + dx, last[1] + dy
         if emitter is not None:
             offset = device_muzzle_offset(emitter, 0)
             base = _iso(source_grid, data)
             first = base[0] + offset[0] * data.rig.TILE_W / TILE_WIDTH, base[1] + offset[1] * data.rig.TILE_W / TILE_WIDTH
-        height = (body_elevation_steps(target, data) - source_height) * HEIGHT_STEP_PIXELS / TILE_WIDTH * data.rig.TILE_W
+        height = ((body_elevation_steps(target, data) if isinstance(target, ActorContact) else target.elevation_steps) - source_height) * HEIGHT_STEP_PIXELS / TILE_WIDTH * data.rig.TILE_W
         duration = max(projectile.minimumTravelDurationMs,
                        hypot(last[0] - first[0], last[1] - first[1], height) * 1000 / projectile.speedPxPerSecond)
         if projectile.targetLocal is not None:
@@ -1309,8 +1334,8 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
             if projectile.impact.enabled:
                 intervals.append(_phase(data, recipe, projectile.impact, "impact",
                                         0 if projectile.targetLocal is not None else arrival))
-        count, occurrence = counts[target.actor_uuid], indices.get(target.actor_uuid, 0)
-        indices[target.actor_uuid] = occurrence + 1
+        count, occurrence = counts[feedback_identity(target)], indices.get(feedback_identity(target), 0)
+        indices[feedback_identity(target)] = occurrence + 1
         curvature = 0.0
         if projectile.trajectory.type == "bezier":
             spread = (occurrence / (count - 1) * 2 - 1
@@ -1319,17 +1344,19 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
         damage = resolve_damage(data, application.damage_type, recipe.damage) if application.damage_applied else None
         damage_start = damage_end = hp_ms = flash_ms = number_ms = None
         life_body = None
-        if target.life_state == LifeState.DEAD:
+        if isinstance(target, ActorContact) and target.life_state == LifeState.DEAD:
             body_clip(data, target, data.death_context.bodyClip)
-        if damage is not None:
+        if damage is not None and isinstance(target, ActorContact):
             previous = next((row.source.resulting_life_state for row in reversed(applications)
-                             if row.source.target.actor_uuid == target.actor_uuid
+                             if feedback_identity(row.source.target) == target.actor_uuid
                              and row.source.resulting_life_state is not None), target.life_state)
             timing = compile_damage(data, replace(target, life_state=previous), damage,
                                     arrival, application.resulting_life_state)
             damage_start, damage_end = timing.start_ms, timing.end_ms
             hp_ms, flash_ms, number_ms = timing.hp_ms, timing.flash_ms, timing.number_ms
             life_body = timing.life_body
+        elif damage is not None:
+            number_ms = arrival
         applications.append(ApplicationTimeline(application, facing, first, last, start, arrival, curvature,
                                                  tuple(intervals), damage, damage_start, damage_end, hp_ms, flash_ms, number_ms,
                                                  life_body))
@@ -1340,7 +1367,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
         if application.damage_start_ms is None or application.damage_end_ms is None:
             continue
         following = [other.damage_start_ms for other in applications
-                     if other.source.target.actor_uuid == application.source.target.actor_uuid
+                     if feedback_identity(other.source.target) == feedback_identity(application.source.target)
                      and other.damage_start_ms is not None
                      and application.damage_start_ms < other.damage_start_ms < application.damage_end_ms]
         if following:
@@ -1418,9 +1445,10 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
                         timeline.facing, casting and cast.equipment.kind == "hidden", cast_layers)
     bodies = [caster] if cast.enabled else []
     vitals: list[VitalsSample] = []
-    targets = {application.source.target.actor_uuid: application.source.target for application in timeline.applications}
+    targets = {application.source.target.actor_uuid: application.source.target for application in timeline.applications
+               if isinstance(application.source.target, ActorContact)}
     for actor_id, target_contact in targets.items():
-        applications = [application for application in timeline.applications if application.source.target.actor_uuid == actor_id]
+        applications = [application for application in timeline.applications if feedback_identity(application.source.target) == actor_id]
         hp, life = target_contact.hp, target_contact.life_state
         for application in sorted(applications, key=lambda row: row.hp_ms if row.hp_ms is not None else float("inf")):
             if application.hp_ms is not None and t >= application.hp_ms:
@@ -1503,7 +1531,7 @@ def sample_cast(timeline: CastTimeline, elapsed_ms: float) -> CastSample:
         identity = application.source.application_id
         damage = application.damage
         if damage is not None:
-            number = sample_damage_number(data, application.source.target.actor_uuid, damage,
+            number = sample_damage_number(data, feedback_identity(application.source.target), damage,
                 application.source.damage_total, application.number_ms, t, timeline.complete_ms, identity)
             if number is not None:
                 numbers.append(number)

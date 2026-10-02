@@ -103,6 +103,14 @@ class EnvironmentPropSource(_EnvironmentSource):
     state_field: Literal["is_open"] | None = None
     intact: dict[str, str]
     destructions: dict[str, str]
+    destructions_without_attachments: dict[str, str] = Field(default_factory=dict)
+    omit_with_destroyed_parent: bool = False
+    selection_masks_by_pose: dict[str, ImageRegionSource] = Field(default_factory=dict)
+    aperture_masks_by_pose: dict[str, ImageRegionSource] = Field(default_factory=dict)
+    occludes_actor_face: bool = False
+    # Normal/tangent cells and height steps, relative to the authored wall anchor.
+    passage_point: tuple[FiniteFloat, FiniteFloat, NonNegativeFloat] | None = None
+    flat_ground: bool = False
 
 
 class EnvironmentDocument(_EnvironmentSource):
@@ -159,6 +167,13 @@ class EnvironmentPropArt:
     state_field: Literal["is_open"] | None
     intact: Mapping[str, EnvironmentBank]
     destructions: Mapping[str, EnvironmentBank]
+    destructions_without_attachments: Mapping[str, EnvironmentBank] = field(default_factory=lambda: MappingProxyType({}))
+    omit_with_destroyed_parent: bool = False
+    selection_masks_by_pose: Mapping[str, ImageRegion] = field(default_factory=lambda: MappingProxyType({}))
+    aperture_masks_by_pose: Mapping[str, ImageRegion] = field(default_factory=lambda: MappingProxyType({}))
+    occludes_actor_face: bool = False
+    passage_point: tuple[float, float, float] | None = None
+    flat_ground: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +209,7 @@ def select_environment_destruction(
     art: EnvironmentArt, item_id: str, *, door_open: bool | None = None,
     swing: str | None = None, mechanism_state: str | None = None,
     outcome: str | None = None,
+    intact_supported_items: bool = False,
 ) -> EnvironmentBank | None:
     """Select only an explicitly delivered entry from recorded native state."""
     wreck = art.wrecks.get(item_id)
@@ -205,6 +221,8 @@ def select_environment_destruction(
     prop = art.props.get(item_id)
     if prop is not None:
         state = prop_state_key(prop, door_open)
+        if not intact_supported_items and state is not None and state in prop.destructions_without_attachments:
+            return prop.destructions_without_attachments[state]
         return prop.destructions.get(state) if state is not None else None
     door = art.doors.get(item_id)
     if door is None or door_open is None or outcome is None:
@@ -263,6 +281,15 @@ def environment_art_from_document(document: Mapping[str, object], asset_root: Pa
     props = {identity: EnvironmentPropArt(row.state_field,
         MappingProxyType({state: banks[key] for state, key in row.intact.items()}),
         MappingProxyType({state: banks[key] for state, key in row.destructions.items()}),
+        MappingProxyType({state: banks[key] for state, key in row.destructions_without_attachments.items()}),
+        row.omit_with_destroyed_parent,
+        MappingProxyType({pose: ImageRegion(asset_root / region.path, region.rect)
+                          for pose, region in row.selection_masks_by_pose.items()}),
+        MappingProxyType({pose: ImageRegion(asset_root / region.path, region.rect)
+                          for pose, region in row.aperture_masks_by_pose.items()}),
+        row.occludes_actor_face,
+        row.passage_point,
+        row.flat_ground,
     ) for identity, row in source.props.items()}
     return EnvironmentArt(MappingProxyType(banks), MappingProxyType(doors),
                           MappingProxyType(traps), MappingProxyType(wrecks), MappingProxyType(props))

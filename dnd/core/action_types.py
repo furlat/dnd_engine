@@ -7,8 +7,33 @@ servers, and replay tooling can depend on it without reversing ownership.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol, runtime_checkable
+from typing import Annotated, Literal, Protocol, TypeAlias, Union, runtime_checkable
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class SinglePositionSelection(BaseModel):
+    """One selected position, such as a ring's center."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["single"] = "single"
+
+
+class PositionPathSelection(BaseModel):
+    """Ordered vertices with an authored segment/length budget."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+    kind: Literal["path"] = "path"
+    max_length_feet: float = Field(gt=0)
+    max_segments: int = Field(default=1, ge=1)
+    allow_origin_start: bool = False
+    origin_start_offset_cells: int = Field(default=0, ge=0)
+
+
+PositionSelection: TypeAlias = Annotated[
+    Union[SinglePositionSelection, PositionPathSelection], Field(discriminator="kind"),
+]
 
 
 class ActionPresentationKind(str, Enum):
@@ -16,6 +41,13 @@ class ActionPresentationKind(str, Enum):
 
     DEFAULT = "default"
     DRINK = "drink"
+
+
+class EntityTargetPerception(str, Enum):
+    """Authored admission of entity recipients, independent of visual effects."""
+
+    PERCEIVED = "perceived"
+    TOUCH_CONTACT = "touch_contact"
 
 
 class RestrictedActionKind(str, Enum):
@@ -90,6 +122,10 @@ class RestrictedActionGrantProvider(Protocol):
 __all__ = [
     "ActionEconomyCostType",
     "ActionPresentationKind",
+    "EntityTargetPerception",
+    "PositionSelection",
+    "PositionPathSelection",
+    "SinglePositionSelection",
     "HasteActionPolicy",
     "RestrictedActionGrant",
     "RestrictedActionGrantProvider",

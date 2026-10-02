@@ -175,7 +175,7 @@ def test_device_range_and_recorded_origin_are_independent_of_operator(spell_type
 
 
 @pytest.mark.parametrize("operator_position, target_position, reason", (
-    ((1, 10), (8, 10), "stand beside"),
+    ((1, 10), (8, 10), "Item is out of reach"),
     ((5, 10), (8, 10), "stand beside"),
     ((6, 10), (8, 10), "outside the device firing sector"),
     ((4, 10), (9, 12), "outside the device firing sector"),
@@ -192,11 +192,15 @@ def test_direct_device_commands_recheck_position_sector_and_range_without_spendi
     Entity.update_all_entities_senses()
     hp_before, slots_before = get_hp(target), slot_values(caster)
     action_name = cannon.get_use_actions(caster.uuid)[0].get_discovery_template_name()
-    result = execute_use_action(caster, cannon.uuid, action_name,
-                                AvailableTarget(index=0, position=target_position))
-    assert result is not None and result.canceled
-    assert result.status_message is not None
-    assert reason in result.status_message
+    selection = AvailableTarget(index=0, position=target_position)
+    if reason == "Item is out of reach":
+        with pytest.raises(ValueError, match=reason):
+            execute_use_action(caster, cannon.uuid, action_name, selection)
+    else:
+        result = execute_use_action(caster, cannon.uuid, action_name, selection)
+        assert result is not None and result.canceled
+        assert result.status_message is not None
+        assert reason in result.status_message
     assert cannon.charges == 2
     assert caster.action_economy.actions.normalized_score == 1
     assert slot_values(caster) == slots_before
@@ -398,6 +402,7 @@ def test_device_primary_range_overrides_reach_real_spell_effects(
     device.place_on_grid((3, 5))
     Entity.update_all_entities_senses()
     force_spell_attack_hit(caster)
+    assert grant.name is not None
     info = item_action(caster, device.uuid, grant.name)
     selected = next(row for row in info.valid_targets if row.target_uuid == target.uuid)
     assert selected.distance == range_feet

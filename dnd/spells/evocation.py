@@ -7,14 +7,13 @@ Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
           MassCureWounds, HealSpell, MassHeal
 """
 import random
-import time
 from typing import Any, Literal, Optional, List, Set, Tuple
 from uuid import UUID
 
+from dnd.types.physical_access import PhysicalAccess
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
 
-from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_actions import (
     ActionCategory,
     ActionEvent,
@@ -31,8 +30,9 @@ from dnd.core.base_actions import (
     OutcomeApplicationScope,
     TargetType,
 )
+from dnd.blocks.base_item import BaseItem
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.base_conditions import BaseCondition, Duration, SpellProtectionRegistry
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import bind_runtime_action_before_admission
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
@@ -41,6 +41,8 @@ from dnd.core.dice import AttackOutcome
 from typing import cast as type_cast
 from dnd.core.equipment_types import ArmorType, WeaponSlot
 from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, SpatialEffectInteractionEvent
+from dnd.spatial.ignition import ignite_surface_contacts
+from dnd.types.world import OccupancyLayer
 from dnd.types.abilities import AbilityName
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.modifiers import (
@@ -53,6 +55,10 @@ from dnd.core.gridmap import get_map
 from dnd.core.presentation_geometry import LinePresentationGeometry
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.blocks.equipment import Weapon as WeaponItem, Shield as ShieldItem
+from dnd.blocks.base_item import BaseItem
+from dnd.core.events import AreaReachEvent, ItemDestructionEvent
+from dnd.types.spell_suppression import SpellSuppression
+from dnd.types.world import WorldEdgeChannel
 
 from dnd.entity import Entity
 from dnd.actions import (
@@ -114,16 +120,21 @@ class FireBolt(SpellAction):
     Make a ranged spell attack. On hit, target takes 1d10 fire damage.
     Damage scales with caster level: 2d10 at 5th, 3d10 at 11th, 4d10 at 17th.
     """
+    @property
+    def performs_attack(self) -> bool:
+        return True
+
     name: str = Field(default="Fire Bolt", description="Display name for the fire bolt spell.")
     description: str = Field(default="Hurl a mote of fire at a target", description="Rules-facing summary for the fire bolt spell.")
     spell_level: int = Field(default=0, description="Spell slot level required to cast fire bolt; cantrips use 0.")
     spell_school: str = Field(default="evocation", description="D&D school of magic used to classify fire bolt.")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for fire bolt.")
+    target_type: TargetType = Field(default=TargetType.CREATURE_OR_OBJECT, description="Targeting mode used by action discovery and validation for fire bolt.")
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
         description="Range contract used when validating targets for fire bolt.",
     )
     projectile_type: Optional[str] = Field(default="bolt", description="Projectile visualization hint for fire bolt.")
+    physical_access: Optional[PhysicalAccess] = PhysicalAccess.PROJECTILE
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.FIRE, description="Primary damage type for VFX")
 
     def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
@@ -140,19 +151,9 @@ class FireBolt(SpellAction):
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range and line of sight."""
 
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
+        los_event = self.validate_single_recipient(declaration_event)
         if los_event is None or los_event.canceled:
             return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        distance = self.get_target_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)")
 
         return los_event.phase_to(
             new_phase=EventPhase.EXECUTION,
@@ -163,10 +164,16 @@ class FireBolt(SpellAction):
         """Execute the spell attack."""
 
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
 
-        if not caster or not target:
+        if not caster or not isinstance(target, (Entity, BaseItem)):
             return execution_event.cancel(status_message="Caster or target not found")
+
+        if isinstance(target, BaseItem) and (not target.is_active or not target.is_targetable
+                or not target.is_breakable() or get_map().get_object_placement(target.uuid) is None):
+            return execution_event.cancel(status_message="Object is no longer a damageable placed target")
+        if (error := self.physical_access_error()) is not None:
+            return execution_event.cancel(status_message=error)
 
         resolution = self.resolve_spell_attack(caster, target, execution_event.uuid)
         attack_bonus = resolution.attack_bonus
@@ -184,11 +191,27 @@ class FireBolt(SpellAction):
             status_message=f"Attack rolled {dice_roll.total} vs AC {target_ac.normalized_score}: {outcome.value}"
         )
 
+        if effect_event.canceled:
+            return effect_event
+        if isinstance(target, BaseItem) and (not target.is_active or not target.is_targetable
+                or not target.is_breakable() or get_map().get_object_placement(target.uuid) is None):
+            return effect_event.cancel(status_message="Object is no longer a damageable placed target")
+        if (error := self.physical_access_error()) is not None:
+            return effect_event.cancel(status_message=error)
+
         if outcome in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]:
             return effect_event.with_updates(
                 status_message=f"{self.name} missed"
             )
 
+        contact = effect_event.target_position if isinstance(target, BaseItem) else target.position
+        if contact is not None:
+            contact_layer = target.get_occupancy_layer() if isinstance(target, Entity) else OccupancyLayer.GROUND
+            if isinstance(target, BaseItem):
+                tile = get_map().get_tile(*contact)
+                if tile is not None and effect_event.target_base_height_steps != tile.height:
+                    contact_layer = OccupancyLayer.AIR
+            ignite_surface_contacts(effect_event, (contact,), occupancy_layer=contact_layer)
         num_dice = self._get_cantrip_dice_count(self.caster_level)
         is_crit = outcome == AttackOutcome.CRIT
 
@@ -206,12 +229,13 @@ class FireBolt(SpellAction):
         damage_dice = fire_damage.get_dice(attack_outcome=outcome, crit_extra_dice=crit_extra)
         damage_roll = damage_dice.roll
 
-        target.receive_damage(
-            amount=damage_roll.total,
-            damage_type=DamageType.FIRE,
-            source_entity_uuid=caster.uuid,
-            parent_event=effect_event.uuid
-        )
+        if isinstance(target, BaseItem):
+            target.receive_damage(damage_roll.total, DamageType.FIRE, caster.uuid,
+                parent_event=effect_event, damage_rolls=[damage_roll], damages=[fire_damage])
+        else:
+            target.receive_damage(amount=damage_roll.total, damage_type=DamageType.FIRE,
+                source_entity_uuid=caster.uuid, parent_event=effect_event.uuid,
+                damage_rolls=[damage_roll], damages=[fire_damage])
 
         return effect_event.with_updates(
             damages=[fire_damage],
@@ -283,6 +307,10 @@ class RayOfFrost(SpellAction):
 
     Damage scales: 2d8 at 5th, 3d8 at 11th, 4d8 at 17th.
     """
+    @property
+    def performs_attack(self) -> bool:
+        return True
+
     name: str = Field(default="Ray of Frost", description="Display name for the ray of frost spell.")
     description: str = Field(default="Ranged spell attack, 1d8 cold, target speed -10ft", description="Rules-facing summary for the ray of frost spell.")
     spell_level: int = Field(default=0, description="Spell slot level required to cast ray of frost; cantrips use 0.")
@@ -671,6 +699,10 @@ class ScorchingRay(SpellAction):
 
     At Higher Levels: Create one additional ray for each slot level above 2nd.
     """
+    @property
+    def performs_attack(self) -> bool:
+        return True
+
     name: str = Field(default="Scorching Ray", description="Display name for the scorching ray spell.")
     description: str = Field(default="3 rays, each 2d6 fire, ranged spell attack per ray", description="Rules-facing summary for the scorching ray spell.")
     spell_level: int = Field(default=2, description="Spell slot level required to cast scorching ray; cantrips use 0.")
@@ -874,6 +906,126 @@ class Fireball(SpellAction):
         deposit_area_residue(effect_event.resolved_area_positions or (), ASHEN_RESIDUE,
                              parent_event=effect_event)
 
+    def _apply_target_applications(
+        self, execution_event: ActionEvent, effect_event: ActionEvent,
+        target_uuids: List[UUID],
+    ) -> ActionEvent:
+        """Resolve finite blast reach, actual destruction, then newly exposed targets."""
+        if self.effective_target_type is not TargetType.POSITION_AOE:
+            return super()._apply_target_applications(
+                execution_event, effect_event, target_uuids,
+            )
+        if not isinstance(execution_event, SpellEvent) or not isinstance(effect_event, SpellEvent):
+            raise TypeError("Fireball requires spell events")
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None or self.aoe_shape is None or self.end_position is None:
+            return effect_event.cancel(status_message="Fireball has no caster or area")
+        source_position = execution_event.effect_source_position or execution_event.source_position
+        if source_position is None:
+            return effect_event.cancel(status_message="Fireball has no recorded source position")
+        shape = self.aoe_shape.model_copy(deep=True, update={"target": self.end_position})
+        origin = shape.get_origin(source_position)
+        envelope = shape.geometric_positions(source_position)
+        grid = get_map()
+        visited: Set[UUID] = set()
+        displayed_positions: Set[Tuple[int, int]] = set()
+        suppressions: dict[UUID, Set[Tuple[int, int]]] = {}
+        total_damage = 0
+        application_index = 0
+        stage_index = 0
+        previous_stage: UUID | None = None
+        prerequisites: Tuple[UUID, ...] = ()
+
+        while True:
+            history = EventQueue.get_event_history(effect_event.uuid)
+            if history and history[-1].canceled:
+                return type_cast(ActionEvent, history[-1])
+            shape.compute_objective(source_position)
+            reached = shape.affected_positions & envelope
+            contacts = grid.area_object_contacts(reached, geometric_positions=envelope, origin=origin)
+            creatures = self._filter_targets_by_faction(caster, list(shape.affected_entity_uuids))
+            candidates = {identity for identity in creatures
+                if (self.include_self or identity != caster.uuid)
+                and (self.include_dead or ((block := BaseBlock.get(identity)) is not None and block.is_active))}
+            candidates.update(identity for identity in contacts
+                if isinstance(item := BaseBlock.get(identity), BaseItem)
+                and item.is_targetable and item.is_breakable())
+            candidates.difference_update(visited)
+            excluded = SpellProtectionRegistry.get_excluded_positions(source_position, self.spell_level)
+            allowed = reached - excluded
+            newly_reached = allowed - displayed_positions
+            for suppression in SpellProtectionRegistry.get_suppressions(source_position, self.spell_level, reached):
+                suppressions.setdefault(suppression.provider_uuid, set()).update(suppression.positions)
+            if stage_index and not newly_reached and not candidates:
+                break
+            stage = AreaReachEvent(source_entity_uuid=caster.uuid,
+                source_entity_name=caster.name, parent_event=effect_event.uuid,
+                stage_index=stage_index, newly_reached_positions=tuple(sorted(newly_reached)),
+                previous_reach_lineage_uuid=previous_stage,
+                prerequisite_destruction_lineages=prerequisites)
+            stage = stage.phase_to(EventPhase.EXECUTION)
+            if not stage.canceled:
+                stage = stage.phase_to(EventPhase.EFFECT)
+            if stage.canceled:
+                return effect_event.cancel(status_message="Fireball area expansion interrupted")
+            displayed_positions.update(newly_reached)
+
+            def target_order(identity: UUID) -> tuple[int, Tuple[int, int], str, str]:
+                block = BaseBlock.get(identity)
+                depth = 0
+                parent = block.supported_by_uuid if isinstance(block, BaseItem) else None
+                while parent is not None:
+                    depth += 1
+                    owner = BaseBlock.get(parent)
+                    parent = owner.supported_by_uuid if isinstance(owner, BaseItem) else None
+                return (depth, contacts.get(identity, block.position if block else origin),
+                        block.name or "" if block else "", str(identity))
+
+            barriers = set()
+            for identity in contacts:
+                block = BaseBlock.get(identity)
+                if block is None:
+                    continue
+                structure = block.get_boundary_structure()
+                if block.blocks_propagation() or (structure is not None
+                        and WorldEdgeChannel.PROPAGATION in structure.blocked_channels):
+                    barriers.add(identity)
+            cursor = EventQueue.event_cursor()
+            revision = grid.propagation_revision
+            for identity in sorted(candidates, key=target_order):
+                visited.add(identity)
+                recipient = BaseBlock.get(identity)
+                if recipient is None or (isinstance(recipient, BaseItem) and not recipient.is_breakable()):
+                    continue  # The parent may already have destroyed its insert.
+                placement = grid.get_object_placement(identity)
+                application = execution_event.with_updates(
+                    target_kind="object" if isinstance(recipient, BaseItem) else "creature",
+                    target_position=contacts.get(identity, recipient.position),
+                    target_base_height_steps=placement.base_height_steps if placement else None,
+                )
+                total_damage += self._apply_target_batch(application, [identity],
+                    parent_event=stage, application_index_offset=application_index)
+                application_index += 1
+                history = EventQueue.get_event_history(effect_event.uuid)
+                if history and history[-1].canceled:
+                    stage.cancel(status_message="Parent cast interrupted")
+                    return type_cast(ActionEvent, history[-1])
+            ignite_surface_contacts(stage, newly_reached)
+            stage = stage.phase_to(EventPhase.COMPLETION)
+            previous_stage = stage.lineage_uuid
+            prerequisites = tuple(event.lineage_uuid for _, event in EventQueue.iter_events_since(cursor)
+                if isinstance(event, ItemDestructionEvent) and event.phase is EventPhase.COMPLETION
+                and event.target_entity_uuid in barriers)
+            if grid.propagation_revision == revision:
+                break
+            stage_index += 1
+
+        return effect_event.with_updates(total_targets=application_index, total_damage=total_damage,
+            resolved_area_positions=tuple(sorted(displayed_positions)),
+            suppressions=tuple(SpellSuppression(provider_uuid=identity, positions=tuple(sorted(positions)))
+                for identity, positions in sorted(suppressions.items(), key=lambda pair: str(pair[0]))),
+            status_message=f"Fireball affected {application_index} targets for {total_damage} total damage")
+
     def get_damage_dice_count(self) -> int:
         """8d6 base + 1d6 per level above 3rd."""
         upcast_bonus = max(0, self.cast_at_level - self.spell_level)
@@ -919,96 +1071,44 @@ class Fireball(SpellAction):
         return type_cast(Optional[SpellEvent], parent_result)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Apply fireball damage to current target (called once per target by convolution)."""
-        timing = action_timing_enabled()
-
-        def start_phase() -> float:
-            return time.perf_counter() if timing else 0.0
-
-        def record_phase(phase: str, started_at: float) -> None:
-            if timing:
-                record_action_timing(f"spell.fireball.{phase}_ms", started_at)
-
-        started = start_phase()
-
+        """Resolve one exposed recipient; objects receive no creature save."""
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not caster or not target:
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or not isinstance(target, (Entity, BaseItem)):
             return execution_event.cancel(status_message="Caster or target not found")
-        record_phase("resolve_entities", started)
-
-        started = start_phase()
-        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-        record_phase("spell_save_dc", started)
-
-        started = start_phase()
-        save_request = caster.create_saving_throw_request(
-            target_entity_uuid=target.uuid,
-            ability_name="dexterity",
-            dc=dc,
-            parent_event=execution_event.uuid
-        )
-        record_phase("create_saving_throw_request", started)
-
-        started = start_phase()
-        _, save_roll, success = target.saving_throw(save_request)
-        record_phase("saving_throw", started)
-
-        save_bonus = save_roll.bonus
-
-        started = start_phase()
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            save_ability="dexterity",
-            save_dc=dc,
-            save_success=success,
-            save_roll=save_roll,
-            save_bonus=save_bonus,
-            target_entity_name=target.name,
-            status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
-        )
-        record_phase("effect_event", started)
-
-        started = start_phase()
-        num_dice = self.get_damage_dice_count()
-        damage_bonus = caster.get_spell_damage_bonus()
-
-        fire_damage = Damage(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid,
-            damage_dice=6,
-            dice_numbers=num_dice,
-            damage_bonus=damage_bonus,
-            damage_type=DamageType.FIRE
-        )
-
-        damage_dice = fire_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
-
+        if isinstance(target, BaseItem):
+            if not target.is_breakable() or get_map().get_object_placement(target.uuid) is None:
+                return execution_event.cancel(status_message="Object is no longer a damageable placed target")
+            success = False
+            effect_event = execution_event.phase_to(EventPhase.EFFECT)
+        else:
+            dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+            save_request = caster.create_saving_throw_request(target_entity_uuid=target.uuid,
+                ability_name="dexterity", dc=dc, parent_event=execution_event.uuid)
+            _, save_roll, success = target.saving_throw(save_request)
+            effect_event = execution_event.phase_to(EventPhase.EFFECT,
+                save_ability="dexterity", save_dc=dc, save_success=success,
+                save_roll=save_roll, save_bonus=save_roll.bonus,
+                target_entity_name=target.name,
+                status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}")
+        if effect_event.canceled:
+            return effect_event
+        fire_damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+            damage_dice=6, dice_numbers=self.get_damage_dice_count(),
+            damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.FIRE)
+        damage_roll = fire_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
         final_damage = damage_roll.total // 2 if success else damage_roll.total
-        record_phase("damage_roll", started)
-
         if final_damage > 0:
-            started = start_phase()
-            target.receive_damage(
-                amount=final_damage,
-                damage_type=DamageType.FIRE,
-                source_entity_uuid=caster.uuid,
-                parent_event=effect_event.uuid
-            )
-            record_phase("receive_damage", started)
-
+            if isinstance(target, BaseItem):
+                target.receive_damage(final_damage, DamageType.FIRE, caster.uuid,
+                    parent_event=effect_event, damage_rolls=[damage_roll], damages=[fire_damage])
+            else:
+                target.receive_damage(final_damage, DamageType.FIRE, caster.uuid,
+                    parent_event=effect_event.uuid, damage_rolls=[damage_roll], damages=[fire_damage])
         save_text = " (saved for half)" if success else ""
-        started = start_phase()
-        completion_event = effect_event.with_updates(
-            damages=[fire_damage],
-            damage_rolls=[damage_roll],
+        return effect_event.with_updates(damages=[fire_damage], damage_rolls=[damage_roll],
             total_damage=final_damage,
-            status_message=f"Fireball deals {final_damage} fire damage to {target.name}{save_text}"
-        )
-        record_phase("completion_event", started)
-        return completion_event
+            status_message=f"Fireball deals {final_damage} fire damage to {target.name}{save_text}")
 
 
 @srd_spell_identity(
@@ -1031,6 +1131,7 @@ class BurningHands(SpellAction):
 
     At Higher Levels: +1d6 damage per slot level above 1st.
     """
+    aoe_require_targets: bool = False
     name: str = Field(default="Burning Hands", description="Display name for the burning hands spell.")
     description: str = Field(default="15ft cone of fire dealing 3d6 fire damage (DEX save half)", description="Rules-facing summary for the burning hands spell.")
     spell_level: int = Field(default=1, description="Spell slot level required to cast burning hands; cantrips use 0.")
@@ -1045,6 +1146,14 @@ class BurningHands(SpellAction):
     valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for burning hands.")
 
     base_damage_dice: int = Field(default=3, description="Base number of damage dice rolled by burning hands.")
+
+    def _finalize_aoe(self, effect_event: ActionEvent) -> None:
+        assert isinstance(effect_event, SpellEvent)
+        origin = effect_event.effect_source_position or effect_event.source_position
+        if origin is None:
+            return
+        excluded = SpellProtectionRegistry.get_excluded_positions(origin, self.spell_level)
+        ignite_surface_contacts(effect_event, set(effect_event.resolved_area_positions or ()) - excluded)
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         if self.effective_target_type is TargetType.POSITION_AOE:
@@ -2205,6 +2314,10 @@ class ShockingGrasp(SpellAction):
 
     Damage scales: 2d8 at 5th, 3d8 at 11th, 4d8 at 17th.
     """
+    @property
+    def performs_attack(self) -> bool:
+        return True
+
     name: str = Field(default="Shocking Grasp", description="Display name for the shocking grasp spell.")
     description: str = Field(default="Melee spell attack, 1d8 lightning, advantage vs metal armor, no reactions", description="Rules-facing summary for the shocking grasp spell.")
     spell_level: int = Field(default=0, description="Spell slot level required to cast shocking grasp; cantrips use 0.")
@@ -2470,6 +2583,10 @@ class GuidingBolt(SpellAction):
 
     At Higher Levels: +1d6 damage per slot level above 1st.
     """
+    @property
+    def performs_attack(self) -> bool:
+        return True
+
     name: str = Field(default="Guiding Bolt", description="Display name for the guiding bolt spell.")
     description: str = Field(default="Ranged spell attack, 4d6 radiant, next attack has advantage", description="Rules-facing summary for the guiding bolt spell.")
     spell_level: int = Field(default=1, description="Spell slot level required to cast guiding bolt; cantrips use 0.")
@@ -2605,6 +2722,10 @@ class EldritchBlast(SpellAction):
     Make a ranged spell attack. On hit, target takes 1d10 force damage.
     Separate beams scale with caster level: two at 5th, three at 11th, four at 17th.
     """
+    @property
+    def performs_attack(self) -> bool:
+        return True
+
     name: str = Field(default="Eldritch Blast", description="Display name for the eldritch blast spell.")
     description: str = Field(default="A beam of crackling force energy", description="Rules-facing summary for the eldritch blast spell.")
     spell_level: int = Field(default=0, description="Spell slot level required to cast eldritch blast; cantrips use 0.")
@@ -3802,17 +3923,21 @@ class TrueStrike(SpellAction):
     Weapon attack using spellcasting ability instead of STR/DEX.
     Cantrip scaling: +1d6 radiant at levels 5, 11, 17.
 
-    Delegates to Attack.attack_consequences with override_ability.
-    Temporarily adds cantrip radiant dice as extra attack damage.
+    Delegates to a cost-free child Attack with an ability override and
+    attack-local radiant damage packets.
 
     Register two variants per caster: TrueStrike(Melee) and TrueStrike(Ranged)
     using weapon_slot field. Each variant uses the weapon's range for targeting.
     """
+    @property
+    def performs_attack(self) -> bool:
+        return True
+
     name: str = Field(default="True Strike", description="Display name for the true strike spell.")
     description: str = Field(default="Weapon attack using spellcasting ability, +radiant damage at higher levels", description="Rules-facing summary for the true strike spell.")
     spell_level: int = Field(default=0, description="Spell slot level required to cast true strike; cantrips use 0.")
     spell_school: str = Field(default="evocation", description="D&D school of magic used to classify true strike.")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for true strike.")
+    target_type: TargetType = Field(default=TargetType.CREATURE_OR_OBJECT, description="Targeting mode used by action discovery and validation for true strike.")
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.REACH, normal=5),
         description="Range contract used when validating targets for true strike.",
@@ -3823,9 +3948,29 @@ class TrueStrike(SpellAction):
     include_self: bool = Field(default=False, description="Whether true strike can include the caster among valid targets.")
     valid_target_filter: str = Field(default="enemies", description="Relationship filter used when collecting valid targets for true strike.")
 
+    def get_attack_source_metadata(self):
+        source = Entity.get(self.source_entity_uuid)
+        return source.equipment.snapshot_attack_source_metadata(self.weapon_slot) if source else None
+
+    def get_range(self) -> Range:
+        source = Entity.get(self.source_entity_uuid)
+        weapon_range = source.get_weapon_range(self.weapon_slot) if source else self.spell_range
+        if self.alt_range is not None:
+            return weapon_range.model_copy(update={"normal": self.alt_range, "long": None})
+        return weapon_range
+
+    @property
+    def effective_range(self) -> int:
+        weapon_range = self.get_range()
+        return weapon_range.long or weapon_range.normal
+
+    def get_physical_access(self) -> Optional[PhysicalAccess]:
+        source = Entity.get(self.source_entity_uuid)
+        return source.get_weapon_physical_access(self.weapon_slot) if source is not None else None
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate: weapon exists in slot, target in LOS."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
+        los_event = self.validate_single_recipient(declaration_event)
         if los_event is None or los_event.canceled:
             return los_event
 
@@ -3846,42 +3991,22 @@ class TrueStrike(SpellAction):
         """Execute True Strike — fires Attack with override_ability + cantrip radiant."""
 
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
         ability_name: AbilityName = type_cast(AbilityName, caster.spellcasting.spellcasting_ability or "intelligence")
 
         extra_dice = self._get_cantrip_dice_count(self.caster_level) - 1
-        if extra_dice > 0:
-            eq = caster.equipment
-            eq.extra_attack_damage_dices.append(6)
-            eq.extra_attack_damage_dices_numbers.append(extra_dice)
-            eq.extra_attack_damage_bonus.append(ModifiableValue(name="True Strike Radiant Bonus", source_entity_uuid=caster.uuid))
-            eq.extra_attack_damage_type.append(DamageType.RADIANT)
-
-        try:
-            attack = Attack(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=target.uuid,
-                weapon_slot=self.weapon_slot,
-                override_ability=ability_name,
-                costs=[],
-                template=False
-            )
-            bind_runtime_action_before_admission(
-                attack, current_binding=attack.behavior_binding,
-                runtime_owner_uuid=caster.uuid,
-            )
-            attack_result = attack.apply(parent_event=execution_event)
-        finally:
-
-            if extra_dice > 0:
-                eq = caster.equipment
-                eq.extra_attack_damage_dices.pop()
-                eq.extra_attack_damage_dices_numbers.pop()
-                eq.extra_attack_damage_bonus.pop()
-                eq.extra_attack_damage_type.pop()
+        additional = [Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+            damage_dice=6, dice_numbers=extra_dice, damage_type=DamageType.RADIANT,
+            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0))] if extra_dice > 0 else []
+        attack = Attack(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+            weapon_slot=self.weapon_slot, override_ability=ability_name,
+            additional_damages=additional, costs=[], template=False)
+        bind_runtime_action_before_admission(attack, current_binding=attack.behavior_binding,
+            runtime_owner_uuid=caster.uuid)
+        attack_result = attack.apply(parent_event=execution_event)
 
         return execution_event.phase_to(
             new_phase=EventPhase.EFFECT,

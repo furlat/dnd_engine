@@ -27,46 +27,319 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
-**October 1 — move on to windows.** The user ended cloud iteration and asked for
-coordination with environment thread `01a0b501-8a27-7413-ba24-4a36e5b140d2`.
-Window opening/closing is canceled. Current scope: targetable and breakable
-windows, with crawling/climbing through selected apertures. The artist is
-finishing the Fantasy window masks, window-only and parent-wall destruction,
-and separate selection highlights; Desert remains deferred. Requested the exact
-family/state/traversal decisions and ready-versus-draft production handoff.
-Do not infer traversal, light or attack rules from sprite dimensions, and do not
-restart clouds or the obsolete openable-window work while coordinating this.
+**October 2 — accepted existing-gear repair implemented.** The human approved
+intrinsic anatomy ownership, Assassin's Dagger weapon scoping, item-owned coating
+cleanup/transfer/clock continuity and explicit magical wearable identity.
+[Implementation and validation record](agent_docs/GEAR_BUG_FIX_PREPLAN_2026-10-02.md)
+contains the native ownership/event changes and 33 new public regressions.
+Coatings survive unequip/drop/pickup, retain remaining duration and their original
+concentration sustainer. Failed replacement preserves the previous enhancement;
+shared removal events occur once. Anti-slop and ECS/anti-OOP reviewers approve.
+Final complete engine suite: **1,931 passed**; equipment/replay, architecture-policy
+and item progression checks: **61 passed**. Five content evidence/paused-server
+architecture failures are documented separately;
+no unrelated expectations or backend were changed. Wider item factory and roster
+content remain outside this repair.
 
-**October 1 — window content scaffold.** The ten Fantasy families now have
-passive native definitions in `dnd/content/items/window_definitions.py`: ten
-parent walls and nine inserts, with no fictional insert for empty G7. They are
-not yet registered as playable items. The artist delivered the completed,
-human-approved destruction/highlight set. The focused
-[window plan](agent_docs/WINDOWS_IMPLEMENTATION_PLAN_2026-10-01.md) separates
-content authoring from the missing parent cascade, physical reach and
-state-gated traversal. Native profiles/clearance are not inferred from art.
-The nine-column preview atlas has uneven source sample times; preserve those
-times or use full native-rate renders during production packing.
-Both independent reviewers approved the scaffold/plan with explicit touch-spell
-reach coverage added. Ten families/nineteen IDs validate; focused typing is clean.
-The user confirmed simple window traversal at double normal movement cost;
-the plan records this as a multiplier, not a fixed fee.
-Attack passage must follow the existing spatial-provider/query pattern and be
-requester/attack-relative, like sense-dependent visibility. The user proposed
-Light melee weapons through a cleared opening; this predicate and nonweapon
-contact cases are being reasoned through. Do not implement a blanket movement
-test, a globally cached attack permission or window-specific attack subclasses.
+**October 2 — current checkpoint: item-first full-roster study complete.** The
+human chose gear first, then ability-derived conditions/effects, then all 150
+characters. [Item inventory and composition study](agent_docs/GEAR_INVENTORY_AND_COMPOSITION_2026-10-02.md)
+records 289 canonical item builders, 46 cold weapons/64 wearables and 77 visual
+categories/205 variants. Private `.runtime/gear-study-20261002/index.html` contains
+all150 candidate rows, inspected sampled roster/modular plates and explicit
+existing/missing/native-versus-visual decisions. Complete builder IDs are separate
+from the110 cold weapon/wearable details. Both anti-slop and ECS reviewers approve
+the corrected study/design; no runtime code/art changes. Existing gear tests53pass,
+but intrinsic removal, dagger weapon scoping, coat contribution ownership/lifetime,
+magical wearable flag and ranged hand reservation gaps remain documented, not
+fixed. Proposed composition preserves one canonical builder table and typed
+item-owned effect contributions. Next step is agreed bounded gear implementation;
+firearm rules and individual bound/conjured/loss representation remain decisions.
+Review served at `http://127.0.0.1:8768/gear-study-20261002/index.html`.
 
-**October 1 — attack and opportunity-action audit completed.** The
-[detailed companion](agent_docs/WINDOW_ATTACK_ACCESS_AUDIT_2026-10-01.md) covers
-normal/class/natural attacks, wrapper costs, reaction timing, threat previews,
-ranged pressure, touch spells, direct object uses and retained spatial policy.
-Both anti-slop and anti-OOP reviewers approved it. Existing OA already resolves
-before departure for Move, Jump and TraverseConnector; preserve that ordering.
-Threat geometry currently uses adjacency and propagation without selected weapon
-context, so changing only ordinary Attack validation is insufficient. Baseline:
-sixteen selected combat/cost tests pass. No runtime change was made in this audit;
-window attack access and traversal are still planned, not implemented.
+**October 2 — active lane: complete fixed-art roster port plan.** The human
+requires all150 retained characters, artwork-matched gear/abilities, derived
+conditions and every normal action/animation through shared modular/custom
+presentation. No pilot/subset substitute. Scenario/map redesign is deferred.
+Wall art waits for the artist's complete batch. The [full-port plan](agent_docs/FIXED_ASSETS_AND_SCENARIOS_PLAN_2026-10-02.md)
+and private offline intake account for all150 rows and1,034 selected clip records;
+native kits, timing/state coverage and imports are not yet implemented or approved
+by that evidence. Both independent anti-slop and ECS reviewers approve this exact
+plan. Native ability choices and baked gear-loss representation remain explicit
+per-entry decisions. No production code/artwork changed during this study.
+
+**October 2 — remaining-wall backend batch implemented and independently reviewed.**
+Thorns, Wind, Ice, Stone and Force now use native spatial conditions, ordinary
+construction items and event transitions. Ice is see-through, with local panel
+breaks or a shared 120 HP whole-dome shatter and exact-shell frigid air. Stone
+supports displacement/enclosure reaction escape, local panel breaks and permanence.
+Wind records actual ordinary-missile interception contacts. Disintegrate requires
+actual sight, handles eligible world objects and retires complete Force owners.
+Creation/removal vetoes preserve ownership and collision without orphan air.
+Full engine validation: **1,897 passed**; focused regression checks: **92 passed**;
+replay/point-selection checks: **73 passed**. Independent anti-slop and ECS reviews
+approve this bounded backend lane. See the [implementation checkpoint](agent_docs/REMAINING_WALLS_IMPLEMENTATION_2026-10-02.md)
+for the five separate frozen-content/paused-server architecture failures and explicit
+coverage gaps. New wall artwork remains pending; this is not visual acceptance.
+Prismatic and general multi-Z remain deferred. Accepted Fire/cloud/window
+rendering is unchanged by this lane.
+
+**October 2 — formation fire precedes injury for straight and circular walls.**
+Exact received stationary contacts use the existing paired flame growth and
+900 ms injury delay. HP, reaction and blood remain together; simultaneous
+formation victims remain simultaneous. Same-lineage creation snapshots supply
+only actually disclosed contact cells. Intermediate observations of that exact
+created shell keep the formation clock, preventing an older partial footprint
+from hiding the ring after injury; other sensory fields, owners and world updates
+keep their existing clocks. Both independent reviewers approve. Wall checks:
+**72 passed**; scoped typing: **zero errors/warnings**. Original saved inputs are
+replayed in the [corrected gallery](http://127.0.0.1:8767/runs/20261001T222228Z-fe210c/index.html).
+No new artwork or native rules were added. Partial-ring ownership delivery has
+arrived from the artist but remains separate pending production integration.
+
+**October 1 — fixed circular Fire gameplay integration.** Approved matched-height
+ring sources/masks are preserved privately and registered as passive optional
+wall banks. Native radius is fixed10ft by human acceptance. Complete received
+shell/no suppression gates whole-ring drawing; a center observer sees16/16cells,
+while offset/outside observers cannot render the whole bank. Both heat choices
+now have genuine native cast, formation contact, hot/safe end-turn, movement and
+concentration-removal recordings. Shared injury clocks preserve heat arrival before
+reaction/blood. Native/replay checks:70passed; scoped typing:zeroerrors/warnings.
+Both independent reviewers approve. Partial ring ownership companion requested;
+no new visibility policy or cloud/window renderer change. See
+[bounded plan](agent_docs/WALL_RING_GAMEPLAY_2026-10-01.md).
+
+
+**October 1 — diagonal wall banks installed; full-wall comparison ready.** Full pinned
+RGBA/masks remain in `sources/wall-diagonal-20261001/`; 16 phase registrations add
+31,891,557 RGBA bytes and 3,903,128 mask bytes. Four paired authored axes use
+.75-cell spacing and original pivots/clocks. Native/replay checks: **67 passed**;
+scoped typing: **zero errors/warnings**. ECS review caught unordered axis validation;
+ordered paired signatures now preserve selection ties. The user visually accepted the smaller camera-relative bank; typed production
+mapping remains pending. A diagonal variant parity collapse is corrected using
+canonical arc ordinals, preserving paired layers, masks and shared clocks.
+
+The actual diagonal recording exposes a remaining placement-admission issue:
+its 28.3-foot native wall receives near-face cells, while centerline-only admission
+draws modules over about 7.1 feet. The full-wall comparison therefore includes an
+explicit authoritative-shell art diagnostic through the actual game compositor,
+alongside unchanged subjective recordings. This is not a visibility-rule fix or
+full-length gameplay acceptance. Circular Fire rules already exist; genuine ring
+art and physical inner/outer masks have been requested from the Godot author.
+
+
+**October 1 — wall heat presentation completed.** Received positive hot-side
+contacts drive the shared retained media channel. Flame nodes precede injury by
+900 ms; HP, reaction and blood share that injury clock. Native side/height masks
+tint only the safe flame base, preserving original alpha and physical side across
+all four cameras. Eight [clips](http://127.0.0.1:8767/runs/20261001T200529Z-0edc67/index.html)
+include two hot-side recipients and one unharmed safe-side recipient. Relevant
+wall/native checks: **63 passed**; shared media/wire/dependency checks: **64 passed**
+after reduced fixtures included required wall/contact registrations. Scoped typing:
+**zero errors/warnings**. Both independent reviewers approve. The
+[surface transition plan](agent_docs/SURFACE_TRANSITIONS_IMPLEMENTATION_PLAN_2026-10-01.md)
+is reviewed but awaits human rule acceptance. User corrected the angle requirement: position existing upright modules along
+any straight line. Diagnostic diagonal/oblique clips exposed unacceptable module seams from
+opposing cameras. User now requests eight native directions plus small angular
+correction; missing diagonal modules and matching masks have been requested.
+The nearest-cardinal diagnostic placement is excluded from production pending
+that handoff. Simultaneous two-victim formation damage has its own native clip.
+
+**October 1 — fire contact and native wall-source checkpoint completed.** Fire
+Bolt hits, empty Burning Hands cones, Fireball breach stages and Wall of Fire's
+initial flame shell now ignite admitted existing Oil/Web through the shared
+cancelable interaction event. Misses, airborne ground contacts, blocked/protected
+cells and the hot-side heat band preserve their materials. Positive wall damage
+retains an exact typed contact; saved player facts disclose it only with recorded
+source/recipient sight. Old damage recordings remain readable. Full engine:
+**1,864 passed**; replay/media/wire: **46 passed**; dependency boundaries: **21 passed**;
+scoped production typing: **zero errors/warnings**. Both independent reviewers
+approve. No artwork or cloud/window rendering changed. Later material placement
+into maintained flames and other elemental producers remain follow-ups. See the
+[implementation record](agent_docs/FIRE_CONTACT_AND_SURFACE_IGNITION_2026-10-01.md)
+and requested [Luna BG3/DOS2 comparison](agent_docs/audits/SURFACE_ELEMENTAL_BG3_DOS2_COMPARISON_2026-10-01.md).
+
+**October 1 — delivered Wall of Fire media integrated.** Cardinal X/Y banks now
+render through authored spatial module bindings, original pivots and shared
+formation/hold/removal clocks. Complete originals remain private; 82 shared atlas
+pages add 31,027,806 bytes. Native ordered casts replay from saved player packets
+without consulting the engine. Six new replay checks and 267 relevant regression
+checks pass; scoped production typing reports zero errors/warnings. Eight
+[review clips](http://127.0.0.1:8767/runs/20261001T180350Z-5ce5e7/index.html)
+cover both axes, raised support, damage, concentration removal and retained hold
+from both observers in four cameras. Rings, diagonals, fine XYZ clipping and
+calibrated twenty-foot visual height remain explicit artwork gaps. No cloud or
+window rendering changed. Other SRD walls remain pending.
+
+**October 1 — ordered wall point selection checkpoint completed.** Pygame and AI
+now forward ordered points through existing native discovery and execution. Native
+queries admit subsequent vertices before costs; controller caching is bounded by
+the current choices and prefix. Click/P adds, Enter confirms, Backspace removes;
+Space still pauses. Invalid AI point allocations receive typed rejection.
+Affected checks: **82 passed**; scoped production typing: **zero errors/warnings**.
+Both anti-slop and ECS reviewers approve. This is not a new full engine-suite run.
+The [implementation/checkpoint record](agent_docs/WALLS_AND_POINT_SELECTION_IMPLEMENTATION_2026-10-01.md)
+preserves reviewed remaining wall mechanics and the received Fire artwork handoff.
+Fire XYZ/ring coverage and production integration remain pending; Godot rendering
+is paused by the human. No cloud/window rendering or artwork was changed here.
+The user requested stopping at a checkpoint while another agent diagnoses crashes.
+
+**October 1 — first native spell delivery completed.** Darkvision and True Seeing
+use shared, guarded five-foot contact targeting; Grease's outside-area fixture is
+corrected without changing the spell. Wall of Fire is native registered content
+with one-point first-cell shorthand, explicit independent endpoints, ring/heat
+side authoring, concentration, spatial triggers and retained support/geometry.
+Explicit endpoints can include the caster; shorthand excludes its caster/device
+origin. Both anti-slop and ECS reviews approve. Full engine: **1,841 passed**;
+focused spell lane: **145 passed**; native typing: **zero errors**. The broader
+architecture/wire/area-replay run reports **90 passed, 5 failed**, matching prior
+frozen content inventory and retired-server findings. See the
+[bounded delivery record](agent_docs/SPELL_FIRST_DELIVERY_2026-10-01.md).
+Wall art is pending; Pygame/AI multi-position selection is completed above. Other wall spells
+remain follow-ups. Regroup on creature/scenario content before that second chunk.
+
+**October 1 — next work split after test review.** The user requested consultation
+with **Art-led NPC roster and rig authoring**, followed by spells first and a
+separate creature/scenario revamp. The consultation is complete; no production
+work was dispatched to that chat. The [scope record](agent_docs/SPELL_REPAIRS_AND_CONTENT_REVAMP_2026-10-01.md)
+captures current scenario findings, Grease/touch targeting, queued Wall of Fire
+and missing SRD walls, then the 150-character fixed-art study and shared modular/
+fixed presentation integration. Study readiness is not production approval.
+Retired scenario IDs need not be restored, icon completeness belongs to the
+frontend/UI discussion, and multi-Z remains deferred. This checkpoint adds no
+new spell, rendering or roster implementation.
+
+**October 1 — shared attack/object implementation.** `AttackObject` and its live
+presentation recipe are removed. Ordinary attack sources now select eligible
+objects through the shared roll, cost, range and typed damage route. Authored
+object AC and same-cast Fireball structural breach implement the explicitly
+accepted rules. Received reach stages drive clearance, visibility and one
+continuous explosion; source equipment drives the visible bow/sword/hands.
+The complete `tests/engine` rerun passed **1,775 tests**, including the economy
+and object rules. The full-project run finished **6,161 passed, 338 failed,
+146 errors**; results are tracked in the
+[suite triage](agent_docs/audits/ATTACK_FULL_SUITE_TRIAGE_2026-10-01.md).
+Final in-plan attack serialization and cold timeline checks passed **29 tests**;
+target-override/breach checks passed **49 tests**, and target/log isolation checks
+passed **4 tests**. Remaining repository-wide findings are
+documented in the [integrity review](agent_docs/APP_INTEGRITY_REVIEW_2026-10-01.md)
+for discussion before additional repairs. The user correctly reiterated that
+the old server is retired: its import/DTO/persistence failures are not current
+game acceptance requirements. Current character creation and item-record tests
+pass, but end-to-end playable character save/resume is not connected. Do not
+equate the native pass with a green full-project suite. See the
+[implementation record](agent_docs/ATTACKS_AND_DESTRUCTIBLE_OBJECTS_IMPLEMENTATION_2026-10-01.md)
+for independent reviews, preservation tests and the eight saved-event clips.
+Do not resume environment/cloud work or change the user's Git state implicitly.
+
+**October 1 — environment physical authoring corrected.** The 52 usable props
+now have deliberate movement, shot/propagation and optical settings; solid
+furniture rejects entry/shots, four opaque bodies also block sight/light, and
+11 floor dressings remain passable. Parked cart, loaded wagon and felled log now
+occupy two cells with authored per-camera anchor registration; their rotations,
+far-end targeting and same-UUID wreck clearance use existing native support.
+Covered tables share the artist-corrected anchor through every animation frame.
+An explicit spell physical-access declaration closes the reproduced Fire Bolt
+bypass through sight-open solids without inferring rules from VFX metadata.
+The [new gameplay review](http://127.0.0.1:8767/environment-content-20261001/gameplay/index.html)
+contains 106 saved-event clips (52 props plus a Fire Bolt comparison, both
+observers, four cameras), using real H1 paving. Final prop/native/rendering tests:
+174 passed, plus two authored-shot replay checks; both anti-slop and ECS reviews
+approved. B13 loose_floorboards is
+still a source hold: inconsistent raised-panel views cannot be certified as a
+flat floor decal. Its legacy ID/art are preserved but excluded from the current
+review selection. See the environment completion record for validation details.
+
+**Historical audit, before the correction:** **October 1 — environment occupancy audit resumed.** Multi-cell center-object
+support already exists (112 multicell/prop checks pass), but all 53 new profiles
+were authored as one cell with sight/light/propagation passing through. Native
+probes confirm 41 physical blockers, 12 nonoccupying floor props and 21 difficult
+wrecks. The [per-object review](http://127.0.0.1:8767/environment-content-20261001/occupancy/index.html)
+separates 36 provisional single-cell candidates, four height/optics reviews, and
+13 footprint/registration holds. This qualification supersedes blanket readiness
+claims for the earlier batch. Hold disposition affects the review selection;
+existing definitions and art are preserved, with no new gameplay changes. See
+the environment completion record for exact identities and measured channels.
+
+**October 1 — window attack clipping and dedicated crawl.** Behind-wall actor
+sprites now use the physical side of the finite boundary, including unpainted
+space below its base; ground shadows cannot leak onto the opposite support.
+Matching solid wall props now consume their authored actor-occlusion flag.
+The real window aperture remains transparent. Window traversal uses the separate
+`CrawlThroughWindow` authored connector animation: a 450 ms approach/tuck/
+exit sequence using selected source poses, a sill-height hold, and a temporary
+squeeze. Ordinary Jump is unchanged. The existing rig socket format now includes
+measured body centres for the modular Rolling source frames, so baked pose drift
+does not pull the crawling body away from the window. Current validation and
+the replay link are recorded below in the window implementation record.
+Latest [window review](http://127.0.0.1:8767/runs/20261001T101914Z-682806/index.html)
+uses original Ground H1 paving and the shorter 450 ms crawl. The procedural
+grid was rejected and its renderer code removed.
+
+**October 1 — duplicate standing window wall corrected.** The dense insert
+destruction export had the entire parent wall composited behind every frame.
+Its persistent final frame therefore left a standing duplicate after the real
+parent collapsed. Repacked original fragment renders replace only the 36 insert
+sheets; parent media, rendering logic and native events are unchanged. Importing
+now requires explicitly identified insert-only component exports. The native
+break-insert/cross/break-parent pixel regression failed for all nine insert
+families before replacement and passes in all four cameras afterward. All 24
+window presentation checks pass; scoped typing is clean. The original six saved
+inputs are replayed in the
+[corrected window review](http://127.0.0.1:8767/runs/20261001T092718Z-b0a6ce/index.html).
+The user has narrowed the following environment-content work to genuine one-tile
+objects; larger objects are deferred, and the review floor must clearly show
+tile boundaries. Reviews now use the original Fantasy Ground H1 square paving
+artwork instead of D1 rubble; generated diagnostic floors are explicitly rejected.
+The content-footprint follow-up remains deferred.
+
+**October 1 — passive environment content integrated.** Following the completed
+window work, the recovered artist handoff supplied 53 additional native props:
+market furniture, parked carts, workshop pieces, monuments, hay, rugs and floor
+debris. All use existing item damage/destruction and same-UUID wrecks; no new
+mechanic or special effect was invented. Floor props have independent native
+walking/occupancy flags and explicit ground rendering, including raised support,
+shadows and overlapping translucent layers. Full source exports are private and
+preserved; production adds 306 packed files (38.2 MB). The
+[implementation record](agent_docs/ENVIRONMENT_CONTENT_COMPLETION_2026-10-01.md)
+records source authority, both approvals, remaining holds and validation. The
+[complete review](http://127.0.0.1:8767/environment-content-20261001/index.html)
+contains every intact/wreck state and 32 representative saved-event clips.
+The remaining 20 floor candidates need the documented occupancy/traversal,
+liquid/light or device choices; mounted art needs proper support registration.
+Do not silently turn them into generic solid props. Clouds and the separate NPC
+roster remain outside this task.
+
+**October 1 — fixed windows implemented.** Ten Fantasy families/nineteen ordinary
+item IDs are registered. Parent walls and attached inserts are independently
+targetable and breakable; parent destruction cascades once. Placement/removal
+preflight the complete assembly before changing spatial registrations. Grilles
+pass sight/light/projectiles but block contact; G9's shutter blocks those channels
+until broken. Cleared apertures admit hand contact and Light melee weapons,
+with shared requester-relative spatial queries covering attacks, touch spells,
+object uses, threats and opportunity attacks. Cleared-window traversal reuses
+PASSAGE connectors at twice destination movement cost: A4/A5 Small or smaller,
+other eight Medium or smaller. Parent destruction removes its connector.
+
+The [approved plan](agent_docs/WINDOWS_IMPLEMENTATION_PLAN_2026-10-01.md) and
+[attack audit](agent_docs/WINDOW_ATTACK_ACCESS_AUDIT_2026-10-01.md) remain the scope.
+No opening/closing, Desert, multi-Z, clouds or NPC roster changes belong here.
+Approved four-view artwork is packed privately with exact pivots. The complete
+24 FPS destruction delivery now uses 61 frames (37 for G9 insert), replacing
+sparse held samples while preserving the 416.7ms physical clearance. Recorded attachment snapshots select full-parent versus
+already-cleared destruction; the full-parent animation incorporates the intact
+insert from impact while physical clearance waits for the authored frame.
+Separate target masks and an authored connector vault consume received facts.
+Finite actor occlusion uses received boundary faces and separate authored window
+apertures, including matching solid siblings. Transparency outside the aperture
+does not admit actor pixels; moving shadows use their ground depth for clipping.
+Window crossing now follows an authored per-family passage point; the rolling
+body rises through the opening and lands at the recorded destination. Its
+ground shadow and paused/resumed clip phase remain coherent.
+Native validation: 96 combat, costs, traversal and assembly tests pass; final
+presentation, UI, recording and import-boundary suite passes 84 tests; the final
+24-clip review and independent approvals are linked in the plan.
+
 
 **Current September 30 handoff:** the full art-led NPC roster and fixed-pack
 study now belongs to **Art-led NPC roster and rig authoring**, thread

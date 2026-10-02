@@ -151,6 +151,7 @@ class DestructionContact:
     body_uuid: UUID
     duration_ms: float
     bank_id: str | None = None
+    incorporated_items: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

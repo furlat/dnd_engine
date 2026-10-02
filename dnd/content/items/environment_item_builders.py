@@ -13,6 +13,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
 from dnd.core.item_types import DoorSwing, ItemDestructionProfile
 from dnd.content.items.door_profiles import DOOR_PROFILES
+from dnd.content.items.object_defenses import OBJECT_ARMOR_CLASS_BY_MATERIAL
 from dnd.core.events import (
     Event,
     EventPhase,
@@ -174,6 +175,7 @@ def build_directional_wall(
         name=display_name,
         blocked_channels=blocked_channels,
         material=material,
+        armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[material],
     )
 
 
@@ -200,6 +202,7 @@ def build_directional_door(
         name=display_name,
         blocked_channels=blocked_channels,
         is_open=is_open,
+        armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[Material.WOOD],
     )
 
 
@@ -208,6 +211,7 @@ def build_wall_torch() -> WallTorch:
     item = WallTorch(
         source_entity_uuid=uuid4(),
         item_id="environment.wall_torch",
+        armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[Material.WOOD],
         is_targetable=True,
         destruction_profile=ItemDestructionProfile(name="Broken Wall Torch"),
     )
@@ -220,6 +224,7 @@ def build_standing_torch() -> StandingTorch:
     item = StandingTorch(
         source_entity_uuid=uuid4(),
         item_id="environment.standing_torch",
+        armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[Material.WOOD],
         is_targetable=True,
         destruction_profile=ItemDestructionProfile(name="Broken Standing Torch"),
     )
@@ -287,6 +292,7 @@ def build_spell_device(
     scroll_cast_level: int = 1,
     hit_points: int = 32,
     concentration_capacity: int = 2,
+    armor_class: int = 19,
 ) -> SpellGrantingItem:
     """Compose a fixed body identity with independently authored spell grants."""
     device = SpellGrantingItem(
@@ -300,6 +306,7 @@ def build_spell_device(
         is_consumable=False,
         is_targetable=True,
         concentration_capacity=concentration_capacity,
+        armor_class=armor_class,
         destruction_profile=ItemDestructionProfile(name=f"Broken {name}"),
         use_action_templates=list(spell_templates),
     )
@@ -322,6 +329,8 @@ def build_authored_door(item_id: str, *, swing: DoorSwing = DoorSwing.OUTWARD,
     owner = source_entity_uuid or uuid4()
     door = DirectionalDoor(source_entity_uuid=owner, item_id=item_id,
         health=BaseItem.create_item_health(owner, hp),
+        armor_class=(profile.armor_class if profile.armor_class is not None
+                     else OBJECT_ARMOR_CLASS_BY_MATERIAL[profile.material]),
         name=profile.name, material=profile.material, mechanism=profile.mechanism,
         swing=swing, is_open=is_open, vertical_extent_steps=profile.vertical_extent_steps,
         blocked_channels=profile.closed_channels, is_targetable=True,
@@ -374,6 +383,7 @@ def build_trap_lever(
         item_id=item_id,
         is_targetable=True,
         destruction_profile=ItemDestructionProfile(name="Broken Trap Lever"),
+        armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[Material.METAL],
         charges=charges,
         allow_activation=allow_activation,
         use_action_templates=[],
@@ -396,6 +406,7 @@ def build_control_lever(link: LeverLink, *, is_engaged: bool = False) -> Control
         item_id="environment.control_lever",
         is_targetable=True,
         destruction_profile=ItemDestructionProfile(name="Broken Control Lever"),
+        armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[Material.METAL],
         link=link,
         is_engaged=is_engaged,
     )
@@ -418,6 +429,7 @@ def build_storage_chest(
         name=display_name,
         is_targetable=True,
         destruction_profile=ItemDestructionProfile(name=f"Broken {display_name}"),
+        armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[Material.WOOD],
         is_open=is_open,
         use_action_templates=[],
     )
@@ -478,6 +490,7 @@ def build_liquid_barrel(item_id: str, source_entity_uuid: UUID, *, radius_cells:
         is_pickable=False,
         is_targetable=True,
         health=BaseItem.create_item_health(source_entity_uuid, 12),
+        armor_class=OBJECT_ARMOR_CLASS_BY_MATERIAL[Material.WOOD],
         destruction_profile=ItemDestructionProfile(
             name=f"Broken {profile.name} Barrel",
             description=f"A shattered barrel that has spilled its {profile.name.lower()}."),

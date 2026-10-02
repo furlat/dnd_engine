@@ -1,5 +1,6 @@
 """Direct item builders kept separate from the cold definition ledger."""
 
+from functools import partial
 from types import MappingProxyType
 from typing import Callable, Mapping, Optional
 from uuid import UUID
@@ -24,12 +25,14 @@ from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
     bind_runtime_behavior_child,
 )
+from dnd.core.base_actions import ActionEvent
 from dnd.core.events import (
     Damage,
     DamageRollResultEvent,
     Event,
     EventHandler,
     EventPhase,
+    EventQueue,
     EventType,
     Range,
     RangeType,
@@ -63,6 +66,8 @@ from dnd.content.items.environment_item_builders import (
     build_wall_torch,
 )
 from dnd.content.items.door_profiles import DOOR_PROFILES
+from dnd.content.items.window_definitions import WINDOW_DEFINITIONS
+from dnd.content.items.window_builders import build_window_component
 from dnd.content.items.trap_hardware_builders import TRAP_HARDWARE_PROFILES, build_trap_hardware
 from dnd.content.items.ground_hardware_builders import GROUND_HARDWARE_PROFILES, build_ground_hardware
 from dnd.content.items.world_prop_builders import WORLD_PROP_PROFILES, build_world_prop
@@ -103,11 +108,16 @@ ItemBuilder = Callable[[UUID, int], BaseItem]
 def _unseen_strike_processor(
     event: Event,
     source_entity_uuid: UUID,
+    *,
+    item_uuid: UUID,
 ) -> Optional[Event]:
     """Append Assassin's Dagger damage when the target cannot see its user."""
     if not isinstance(event, DamageRollResultEvent):
         return None
     if event.source_entity_uuid != source_entity_uuid:
+        return None
+    attack = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event else None
+    if not isinstance(attack, ActionEvent) or attack.event_type != EventType.ATTACK or attack.source_item_uuid != item_uuid:
         return None
     target = (
         Entity.get(event.target_entity_uuid)
@@ -158,7 +168,7 @@ class _DirectAssassinDagger(Weapon):
                 event_phase=EventPhase.EFFECT,
                 event_source_entity_uuid=entity_uuid,
             )],
-            event_processor=_unseen_strike_processor,
+            event_processor=partial(_unseen_strike_processor, item_uuid=self.uuid),
         )
         bind_runtime_behavior_child(
             handler,
@@ -377,6 +387,9 @@ def _build_weapon(
     weapon = weapon_type(
         source_entity_uuid=source_entity_uuid,
         item_id=definition.item_id,
+        is_magical=definition.is_magical,
+        intrinsic_owner_uuid=source_entity_uuid if definition.intrinsic else None,
+        is_pickable=not definition.intrinsic,
         name=definition.name,
         description=definition.description,
         tags=list(definition.tags),
@@ -453,6 +466,9 @@ def _build_wearable(
     common = {
         "source_entity_uuid": source_entity_uuid,
         "item_id": definition.item_id,
+        "is_magical": definition.is_magical,
+        "intrinsic_owner_uuid": source_entity_uuid if definition.intrinsic else None,
+        "is_pickable": not definition.intrinsic,
         "name": definition.name,
         "description": definition.description,
         "tags": list(definition.tags),
@@ -643,7 +659,16 @@ def _build_fireball_cannon(_source_entity_uuid: UUID) -> BaseItem:
     return build_fireball_cannon()
 
 
+def _window_component_builder(family: str, *, insert: bool) -> ItemBuilder:
+    definition = WINDOW_DEFINITIONS[family].insert if insert else WINDOW_DEFINITIONS[family].wall
+    assert definition is not None
+    return _single_item_builder(definition.item_id, lambda source: build_window_component(
+        family, insert=insert, source_entity_uuid=source))
+
+
 DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
+    **{p.wall.item_id: _window_component_builder(family, insert=False) for family, p in WINDOW_DEFINITIONS.items()},
+    **{p.insert.item_id: _window_component_builder(family, insert=True) for family, p in WINDOW_DEFINITIONS.items() if p.insert is not None},
     **{item_id: _chest_definition_builder(definition) for item_id, definition in CHEST_DEFINITIONS.items()},
     **{item_id: _door_profile_builder(item_id) for item_id in DOOR_PROFILES},
     **{item_id: _trap_hardware_builder(item_id) for item_id in TRAP_HARDWARE_PROFILES},

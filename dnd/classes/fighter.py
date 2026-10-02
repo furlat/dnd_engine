@@ -13,15 +13,16 @@ Level 15: Champion - Superior Critical
 Level 18: Champion - Survivor (DEFERRED)
 """
 
-from typing import Any, Dict
+from typing import Any, ClassVar, Dict
+from dnd.core.action_types import RestrictedActionKind
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
-    ActionOutcomeProfile, BaseAction, ActionEvent, Cost, TargetType, BaseCost, ActionCategory
+    BaseAction, ActionEvent, Cost, TargetType, BaseCost
 )
 from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
 from dnd.core.events import (
-    Event, EventPhase, EventType, EventQueue,
+    Event, EventPhase, EventType,
     Trigger, EventHandler, DamageRollResultEvent, RangeType, SavingThrowEvent
 )
 from dnd.core.equipment_types import ArmorType, WeaponProperty, WeaponSlot
@@ -29,7 +30,8 @@ from dnd.core.dice import DiceRoll, Dice, RollType, AttackOutcome
 from dnd.core.modifiers import NumericalModifier, AdvantageModifier, AdvantageStatus, ContextualNumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.blocks.equipment import Weapon, Shield
-from dnd.blocks.action_economy import RechargeType
+from dnd.blocks.action_economy import RechargeType, ResourceCapacityPolicy
+from dnd.core.feature_grants import AttackMultiplicityGrant
 from dnd.entity import Entity, determine_attack_outcome
 from dnd.actions import (
     entity_action_economy_cost_evaluator,
@@ -37,11 +39,9 @@ from dnd.actions import (
     entity_resource_cost_evaluator,
     AttackEvent,
     Attack,
-    build_weapon_attack_outcome_profile,
-    create_weapon_attack_declaration_event,
 )
 from pydantic import Field
-from typing import Any, Optional, List, Tuple, cast
+from typing import Optional, List, Tuple
 from uuid import UUID, uuid4
 import random
 
@@ -1138,188 +1138,35 @@ class ImprovedCritical(BaseCondition):
         return outs, [], [], [], effect_event
 
 
-class ExtraAttacksGranted(BaseCondition):
-    """Internal marker for extra attacks granted during the current turn.
+class ExtraAttack(Attack):
+    """A normal selected attack paid from an earned Extra Attack batch.
 
     Attributes:
-        name: Internal marker condition name for Extra Attack resource grants this turn.
-        description: Short lifecycle summary for the Extra Attack grant marker.
-        condition_category: Marks ExtraAttacksGranted as an internal lifecycle condition.
+        name: Display name for the additional attack.
+        description: Rules-facing summary of the additional attack.
+        weapon_slot: Equipped weapon slot used by the selected attack.
+        costs: One earned attack credit, without another action payment.
+        discover_equipped_weapon_slots: Whether discovery expands this template over equipped slots.
     """
-    name: str = Field(
-        default="ExtraAttacksGranted",
-        description="Internal marker condition name for Extra Attack resource grants this turn.",
-    )
-    description: str = Field(
-        default="Extra attacks have been granted this turn",
-        description="Short lifecycle summary for the Extra Attack grant marker.",
-    )
-    condition_category: ConditionCategory = Field(
-        default=ConditionCategory.INTERNAL,
-        description="Marks ExtraAttacksGranted as an internal lifecycle condition.",
-    )
 
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]],
-        List[UUID],
-        List[UUID],
-        List[UUID],
-        Optional[Event]
-    ]:
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message="Marked as ExtraAttacksGranted"
-        )
-        return [], [], [], [], effect_event
-
-
-def extra_attack_resource_processor(
-    event: Event,
-    source_entity_uuid: UUID
-) -> Optional[Event]:
-    """
-    Fighter-specific processor: manages extra_attacks resource for Extra Attack.
-
-    This processor handles Action Surge compatibility:
-    - First Attack action this turn: Set extra_attacks = num_extra_attacks
-    - Subsequent Attack actions (via Action Surge): ADD num_extra_attacks
-
-    This ensures that each Attack action grants the full number of extra attacks,
-    even when Action Surge grants additional actions mid-turn.
-
-    Triggers on ATTACK at EXECUTION phase (for action-cost attacks only).
-    Uses ExtraAttacksGranted marker (not HasAttacked) to track first vs subsequent.
-    """
-    if event.source_entity_uuid != source_entity_uuid:
-        return None
-
-    if event.canceled:
-        return None
-
-    entity = Entity.get(source_entity_uuid)
-    if not entity:
-        return None
-
-    if not EventQueue.is_first_at_phase(event):
-        return None
-
-    if not isinstance(event, ActionEvent) or not event.costs:
-        return None
-
-    action_cost_attack = any(
-        c.cost_type == "actions" and c.cost > 0
-        for c in event.costs
-    )
-    if not action_cost_attack:
-        return None
-
-    extra_attack_resource = entity.action_economy.resources.get("extra_attacks")
-    attacks_per_action = (
-        entity.action_economy.resolve_attacks_per_attack_action()
-    )
-    if attacks_per_action > 1:
-        num_extra = attacks_per_action - 1
-    else:
-        extra_attack_feature = entity.active_conditions.get("Extra Attack")
-        if not isinstance(extra_attack_feature, ExtraAttackFeature):
-            return None
-        num_extra = extra_attack_feature.extra_attacks
-
-    if not extra_attack_resource:
-        return None
-
-    if "ExtraAttacksGranted" not in entity.active_conditions:
-        extra_attack_resource.current = num_extra
-
-        marker = ExtraAttacksGranted(
-            source_entity_uuid=source_entity_uuid,
-            target_entity_uuid=source_entity_uuid
-        )
-        marker.duration.duration_type = DurationType.ROUNDS
-        marker.duration.duration = 1
-        entity.add_condition(marker, parent_event=event)
-    else:
-        extra_attack_resource.current += num_extra
-
-    return None
-
-
-def create_extra_attack_resource_handler(
-    source_entity_uuid: UUID,
-    *,
-    handler_uuid: UUID | None = None,
-) -> EventHandler:
-    """Create an EventHandler that manages extra_attacks resource for Fighter."""
-    return EventHandler(
-        uuid=handler_uuid if handler_uuid is not None else uuid4(),
-        name="Extra Attack Resource",
-        source_entity_uuid=source_entity_uuid,
-        trigger_conditions=[
-            Trigger(
-                event_type=EventType.ATTACK,
-                event_phase=EventPhase.EXECUTION
-            )
-        ],
-        event_processor=extra_attack_resource_processor
-    )
-
-
-class ExtraAttack(BaseAction):
-    """Fighter action that spends the extra-attacks resource for another attack.
-
-    Attributes:
-        name: Action name displayed for Fighter extra attacks.
-        description: Short rules-facing summary of the Extra Attack action.
-        target_type: Extra Attack targets a visible entity in weapon reach or range.
-        weapon_slot: Weapon slot used to resolve the additional attack.
-        action_category: Marks Extra Attack as an attack action for discovery and reactions.
-        costs: Extra-attack resource cost rebuilt after model initialization.
-        discover_equipped_weapon_slots: Whether the structural template expands
-            into one discovery row per equipped weapon.
-    """
-    name: str = Field(default="Extra Attack", description="Action name displayed for Fighter extra attacks.")
-    description: str = Field(
-        default="Make an additional weapon attack",
-        description="Short rules-facing summary of the Extra Attack action.",
-    )
-    target_type: TargetType = Field(
-        default=TargetType.ENTITY,
-        description="Extra Attack targets a visible entity in weapon reach or range.",
-    )
-    weapon_slot: WeaponSlot = Field(
-        default=WeaponSlot.MELEE_MAIN,
-        description="Weapon slot used to resolve the additional attack.",
-    )
-    action_category: ActionCategory = Field(
-        default=ActionCategory.ATTACK,
-        description="Marks Extra Attack as an attack action for discovery and reactions.",
-    )
-
-    costs: List[Cost] = Field(
-        default_factory=list,
-        description="Extra-attack resource cost rebuilt after model initialization.",
-    )
-    discover_equipped_weapon_slots: bool = Field(
-        default=False,
-        description=(
-            "Whether one structural family template expands into current "
-            "equipped-weapon discovery variants."
+    restricted_action_kinds: ClassVar[frozenset[RestrictedActionKind]] = frozenset()
+    ordinary_off_hand_default: ClassVar[bool] = False
+    declaration_name: ClassVar[str | None] = "Extra Attack"
+    append_weapon_to_name: ClassVar[bool] = True
+    name: str = Field(default="Extra Attack", description="Display name for the additional attack.")
+    description: str = Field(default="Make an additional weapon attack", description="Rules-facing summary of the additional attack.")
+    weapon_slot: WeaponSlot = Field(default=WeaponSlot.MELEE_MAIN, description="Equipped weapon slot used by the selected attack.")
+    costs: List[Cost] = Field(default_factory=lambda: [
+        Cost(
+            name="Extra Attack",
+            cost_type="actions",
+            cost=0,
+            resource_name="extra_attacks",
+            resource_cost=1,
+            resource_evaluator=entity_resource_cost_evaluator,
         ),
-    )
-
-    def model_post_init(self, __context: Any) -> None:
-        super().model_post_init(__context)
-        self.costs = [
-            Cost(
-                name="Extra Attack",
-                cost_type="actions",
-                cost=0,
-                resource_name="extra_attacks",
-                resource_cost=1,
-                evaluator=None,
-                resource_evaluator=entity_resource_cost_evaluator
-            )
-        ]
+    ], description="One earned attack credit, without another action payment.")
+    discover_equipped_weapon_slots: bool = Field(default=False, description="Whether discovery expands this template over equipped slots.")
 
     def get_discovery_variants(self, entity: Any) -> List[BaseAction]:
         """Expand a structural family template over the current weapon set."""
@@ -1335,7 +1182,7 @@ class ExtraAttack(BaseAction):
             WeaponSlot.RANGED_OFF,
         ):
             weapon = entity.equipment._get_weapon_by_slot(slot)
-            if weapon is None or isinstance(weapon, Shield):
+            if isinstance(weapon, Shield) or weapon is None and slot is not WeaponSlot.MELEE_MAIN:
                 continue
             variants.append(
                 self.model_copy(
@@ -1354,75 +1201,20 @@ class ExtraAttack(BaseAction):
             )
         return variants
 
-    def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
-        """Return the same actor-baseline weapon profile as a normal attack."""
-        return build_weapon_attack_outcome_profile(actor, self.weapon_slot)
-
     def validate_source_requirements_for_discovery(self) -> bool:
-        """Require the attack-earned batch before exposing target legality."""
+        """Require a committed ordinary Attack before exposing the earned batch."""
         entity = Entity.get(self.source_entity_uuid)
         return (
-            isinstance(entity, Entity)
+            entity is not None
             and "ExtraAttacksGranted" in entity.active_conditions
+            and super().validate_source_requirements_for_discovery()
         )
 
-    def _create_declaration_event(self, parent_event: Optional[Event] = None, use_register: bool = True) -> Optional[Event]:
-        """Create the declaration event for the extra attack action."""
-        return create_weapon_attack_declaration_event(
-            action_name="Extra Attack",
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            weapon_slot=self.weapon_slot,
-            costs=self.costs,
-            parent_event=parent_event,
-            use_register=use_register,
-            append_weapon_to_name=True,
-        )
-
-    def _validate(self, declaration_event: Event) -> Optional[Event]:
-        """Validate the extra attack action."""
+    def _validate(self, declaration_event: AttackEvent) -> Optional[AttackEvent]:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        if "ExtraAttacksGranted" not in entity.active_conditions:
-            return declaration_event.cancel(
-                status_message="Must attack first before using Extra Attack"
-            )
-
-        if not self.target_entity_uuid:
-            return declaration_event.cancel(status_message="No target specified")
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return declaration_event.cancel(status_message="Target not found")
-
-        contact = entity.senses.entities.get(self.target_entity_uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not visible")
-
-        attack_event = cast(AttackEvent, declaration_event)
-        range_validated = Attack.validate_range(attack_event, self.source_entity_uuid)
-        if range_validated is None or range_validated.canceled:
-            return range_validated
-
-        ranged_conditions = Attack.check_ranged_conditions(range_validated, self.source_entity_uuid)
-        if ranged_conditions is None or ranged_conditions.canceled:
-            return ranged_conditions
-
-        return ranged_conditions.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Extra Attack validated"
-        )
-
-    def _apply(self, execution_event) -> Optional[Event]:
-        """Apply the extra attack - execute the actual attack logic."""
-        attack_event = cast(AttackEvent, execution_event)
-        return Attack.attack_consequences(attack_event, self.source_entity_uuid)
-
-    def _apply_costs(self, execution_event) -> Optional[Event]:
-        """Apply the costs (consume extra_attacks resource)."""
-        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
+        if entity is None or "ExtraAttacksGranted" not in entity.active_conditions:
+            return declaration_event.cancel(status_message="Must attack first before using Extra Attack")
+        return super()._validate(declaration_event)
 
 
 class ExtraAttackFeature(BaseCondition):
@@ -1464,16 +1256,26 @@ class ExtraAttackFeature(BaseCondition):
 
         handler_uuids: List[UUID] = []
 
-        target.action_economy.add_resource(
-            name="extra_attacks",
+        target.action_economy.add_attack_multiplicity_grant(
+            AttackMultiplicityGrant(
+                grant_id=self.uuid,
+                provider_id="class_feature.extra_attack",
+                attacks_per_attack_action=self.extra_attacks + 1,
+                acquisition_ordinal=1,
+            ),
+        )
+        target.action_economy.add_resource_contribution(
+            "extra_attacks",
+            self.uuid,
             maximum=self.extra_attacks,
-            recharge_type=RechargeType.TURN_START
+            recharge_type=RechargeType.TURN_START,
+            capacity_policy=ResourceCapacityPolicy.MAXIMUM,
         )
 
         for slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF,
                      WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF]:
             weapon = target.equipment._get_weapon_by_slot(slot)
-            if weapon and not isinstance(weapon, Shield):
+            if not isinstance(weapon, Shield) and (weapon is not None or slot is WeaponSlot.MELEE_MAIN):
                 extra_attack = ExtraAttack(
                     source_entity_uuid=target.uuid,
                     weapon_slot=slot,
@@ -1489,16 +1291,6 @@ class ExtraAttackFeature(BaseCondition):
                 )
                 target.register_action(extra_attack)
 
-        handler = create_extra_attack_resource_handler(target.uuid)
-        handler.behavior_binding = BehaviorBinding(
-            behavior_id="class_feature.extra_attack",
-            provided_by_id="class_feature.extra_attack",
-            origin_root_id="class.fighter",
-            runtime_owner_uuid=target.uuid,
-        )
-        target.add_event_handler(handler)
-        handler_uuids.append(handler.uuid)
-
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
             status_message=f"Granted Extra Attack ({self.extra_attacks} extra) to {target.name}"
@@ -1512,7 +1304,8 @@ class ExtraAttackFeature(BaseCondition):
         """
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
-            target.action_economy.remove_resource("extra_attacks")
+            target.action_economy.remove_attack_multiplicity_grant(self.uuid)
+            target.action_economy.remove_resource_contribution("extra_attacks", self.uuid)
 
             for slot in [WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF,
                          WeaponSlot.RANGED_MAIN, WeaponSlot.RANGED_OFF]:

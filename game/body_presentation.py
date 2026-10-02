@@ -3,13 +3,13 @@
 from dataclasses import dataclass, replace
 from typing import Mapping
 
-from game.animation import BodySample, sample_idle_body
+from game.animation import cast_actor_contacts, BodySample, sample_idle_body
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, Facing8
 from game.choreography import BoundChoreography, ChoreographySample, MotionTimeline, MotionSample, sample_choreography, sample_motion
 from game.player_facts import PlayerState
 from game.condition_animation import condition_contact, condition_transition_appearances, resolve_condition_appearance
-from game.attack import BoundAttack
+from game.attack import attack_actor_contacts, BoundAttack
 from game.scene import SceneActor, available_clips, scene_actors
 from game.visual_position import VisualPosition, placed_contact
 from game.body_pose_types import ActorPose as ActorPose
@@ -105,9 +105,8 @@ def sample_body_presentation(before: PlayerState, after: PlayerState | None, dat
     clip_loadouts: set[str] = set()
     if group_sample is not None:
         for index, entry in enumerate(group_sample.clips):
-            contacts = ((entry.node.bound.timeline.source, entry.node.bound.timeline.target) if isinstance(entry.node.bound, BoundAttack)
-                        else (entry.node.bound.timeline.source.caster,
-                              *(row.target for row in entry.node.bound.timeline.source.applications)))
+            contacts = (attack_actor_contacts(entry.node.bound.timeline) if isinstance(entry.node.bound, BoundAttack)
+                        else cast_actor_contacts(entry.node.bound.timeline.source))
             for body in entry.sample.bodies:
                 rank = body.clip != "Idle", entry.node.start_ms, index
                 if body.actor_uuid not in ranks or rank > ranks[body.actor_uuid]:
@@ -120,10 +119,6 @@ def sample_body_presentation(before: PlayerState, after: PlayerState | None, dat
                         entry.node.bound.appearances[body.actor_uuid],
                         resolve_condition_appearance(retained.conditions, data.condition_recipes, data.condition_media))
         for body in group_sample.bodies:
-            if complete and body.clip == "Idle" and body.actor_uuid in placed:
-                actor = next((row for row in actors if row.contact.actor_uuid == body.actor_uuid), None)
-                if actor is not None:
-                    body = sample_idle_body(data, actor.contact, presentation_ms)
             bodies[body.actor_uuid] = body
             clip_loadouts.discard(body.actor_uuid)
     if movement_sample is not None and movement_sample.contact is not None:
@@ -132,6 +127,15 @@ def sample_body_presentation(before: PlayerState, after: PlayerState | None, dat
             body = sample_idle_body(data, contact, presentation_ms) if complete else movement_sample.body
             if body is not None:
                 bodies[contact.actor_uuid] = body
+    if complete:
+        # Completed attacks/casts share the ordinary scene's idle clock, just
+        # like completed movement and body gestures. Keep the settled facing.
+        for actor in actors:
+            identity = actor.contact.actor_uuid
+            body = bodies.get(identity)
+            if body is not None and body.clip == "Idle":
+                bodies[identity] = sample_idle_body(data,
+                    replace(actor.contact, facing=body.facing), presentation_ms)
     resulting_facings.update((identity, body.facing) for identity, body in bodies.items())
     # A bound finite clip already owns its admitted recipient contact. Preserve
     # that contact while its hit/death finishes even when its final observation

@@ -131,6 +131,499 @@
     "interior-stone-bench": {
       "metadata": "candidates-stone-objects-v11-contact/misc-c9/impact-a/metadata.json",
       "scale": 1.0078740157480315
+    },
+    "content-clay-oven": {
+      "metadata": "candidates-v5-vessels-contact-r3/misc-a5/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 5
+    },
+    "content-clay-stove": {
+      "metadata": "candidates-v5-vessels-contact-r3/misc-a6/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 5
+    },
+    "content-lidded-vessel": {
+      "metadata": "candidates-v5-family-review-r2/misc-a7/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 5
+    },
+    "content-parked-cart": {
+      "metadata": "candidates-wood-v7-contact-only/misc-b5/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        160.25,
+        255.485
+      ],
+      "pivots_by_pose": {
+        "e": [
+          160.25,
+          255.485
+        ],
+        "s": [
+          223.75,
+          255.485
+        ],
+        "w": [
+          223.75,
+          287.235
+        ],
+        "n": [
+          160.25,
+          287.235
+        ]
+      }
+    },
+    "content-loaded-wagon": {
+      "metadata": "candidates-wood-v6-contact/misc-b6/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        160.25,
+        255.485
+      ],
+      "pivots_by_pose": {
+        "e": [
+          160.25,
+          255.485
+        ],
+        "s": [
+          223.75,
+          255.485
+        ],
+        "w": [
+          223.75,
+          287.235
+        ],
+        "n": [
+          160.25,
+          287.235
+        ]
+      }
+    },
+    "content-timber-pile": {
+      "metadata": "candidates-wood-v7-contact-only/misc-b8/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-wheelbarrow": {
+      "metadata": "candidates-wood-v7-settle-final-r2/misc-b9/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        192.0,
+        271.36
+      ],
+      "pivots_by_pose": {
+        "e": [
+          192.0,
+          271.36
+        ],
+        "s": [
+          192.0,
+          271.36
+        ],
+        "w": [
+          192.0,
+          271.36
+        ],
+        "n": [
+          192.0,
+          271.36
+        ]
+      }
+    },
+    "content-covered-market-counter": {
+      "metadata": "candidates-wood-v7-contact-r3/misc-b10/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        192.0,
+        271.36
+      ],
+      "pivots_by_pose": {
+        "e": [
+          192.0,
+          271.36
+        ],
+        "s": [
+          192.0,
+          271.36
+        ],
+        "w": [
+          192.0,
+          271.36
+        ],
+        "n": [
+          192.0,
+          271.36
+        ]
+      }
+    },
+    "content-covered-handcart": {
+      "metadata": "candidates-wood-v7-contact-r3/misc-b11/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        192.0,
+        271.36
+      ],
+      "pivots_by_pose": {
+        "e": [
+          192.0,
+          271.36
+        ],
+        "s": [
+          192.0,
+          271.36
+        ],
+        "w": [
+          192.0,
+          271.36
+        ],
+        "n": [
+          192.0,
+          271.36
+        ]
+      }
+    },
+    "content-pale-market-stall": {
+      "metadata": "candidates-v5/misc-b14/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        192.0,
+        271.36
+      ],
+      "pivots_by_pose": {
+        "e": [
+          192.0,
+          271.36
+        ],
+        "s": [
+          192.0,
+          271.36
+        ],
+        "w": [
+          192.0,
+          271.36
+        ],
+        "n": [
+          192.0,
+          271.36
+        ]
+      }
+    },
+    "content-training-dummy": {
+      "metadata": "candidates-wood-v7-b15-final/misc-b15/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-grindstone": {
+      "metadata": "candidates-wood-v7-contact-only/misc-b16/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 10
+    },
+    "content-red-produce-stall": {
+      "metadata": "candidates-open-contact-v6/misc-b17/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        192.0,
+        271.36
+      ],
+      "pivots_by_pose": {
+        "e": [
+          192.0,
+          271.36
+        ],
+        "s": [
+          192.0,
+          271.36
+        ],
+        "w": [
+          192.0,
+          271.36
+        ],
+        "n": [
+          192.0,
+          271.36
+        ]
+      }
+    },
+    "content-rough-market-stall": {
+      "metadata": "candidates-open-contact-v6/misc-b18/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        192.0,
+        271.36
+      ],
+      "pivots_by_pose": {
+        "e": [
+          192.0,
+          271.36
+        ],
+        "s": [
+          192.0,
+          271.36
+        ],
+        "w": [
+          192.0,
+          271.36
+        ],
+        "n": [
+          192.0,
+          271.36
+        ]
+      }
+    },
+    "content-green-market-stall": {
+      "metadata": "candidates-open-contact-v6/misc-b19/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        192.0,
+        271.36
+      ],
+      "pivots_by_pose": {
+        "e": [
+          192.0,
+          271.36
+        ],
+        "s": [
+          192.0,
+          271.36
+        ],
+        "w": [
+          192.0,
+          271.36
+        ],
+        "n": [
+          192.0,
+          271.36
+        ]
+      }
+    },
+    "content-produce-tub": {
+      "metadata": "candidates-wood-v7-produce-final-r2/misc-b20/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-hide-drying-rack": {
+      "metadata": "candidates-open-contact-v6/misc-b21/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-feed-trough": {
+      "metadata": "candidates-v5/misc-b23/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-notice-board": {
+      "metadata": "candidates-wood-v7-contact-only/misc-b24/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-wooden-crib": {
+      "metadata": "candidates-wood-v7-contact-only/misc-b27/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-small-wooden-table": {
+      "metadata": "candidates-open-contact-v6/misc-b28/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-red-covered-table": {
+      "metadata": "candidates-wood-v6-r2/misc-b37/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        192,
+        204.5
+      ]
+    },
+    "content-pale-covered-table": {
+      "metadata": "candidates-wood-v7-b38-final-r4/misc-b38/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        192,
+        204.5
+      ]
+    },
+    "content-short-red-banner": {
+      "metadata": "candidates-v5/misc-b44/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 4
+    },
+    "content-tall-red-banner": {
+      "metadata": "candidates-open-contact-v6/misc-b45/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 4
+    },
+    "content-wooden-signpost": {
+      "metadata": "candidates-wood-v7-settle-final-r2/misc-b52/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-framed-notice-board": {
+      "metadata": "candidates-wood-v7-contact-only/misc-b54/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-archery-target": {
+      "metadata": "candidates-wood-v7-contact-only/misc-b57/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-felled-log": {
+      "metadata": "candidates-logs-v7/misc-b58/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6,
+      "ground_pivot": [
+        160.25,
+        255.485
+      ],
+      "pivots_by_pose": {
+        "e": [
+          160.25,
+          255.485
+        ],
+        "s": [
+          223.75,
+          255.485
+        ],
+        "w": [
+          223.75,
+          287.235
+        ],
+        "n": [
+          160.25,
+          287.235
+        ]
+      }
+    },
+    "content-workshop-apparatus": {
+      "metadata": "candidates-open-contact-v6/misc-b60/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-alchemy-bench": {
+      "metadata": "candidates-wood-v7-b61-final-r2/misc-b61/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-anvil": {
+      "metadata": "candidates-stone-objects-v11-contact/misc-c2/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-cannonball-pile": {
+      "metadata": "candidates-balls-source-v12-contact/misc-c4/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-unlit-crucible": {
+      "metadata": "candidates-crucible-settled-v12-contact/misc-c8/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 10
+    },
+    "content-grave-marker": {
+      "metadata": "candidates-stone-settled-v9-contact/grave-marker/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 10
+    },
+    "content-slender-monument": {
+      "metadata": "candidates-stone-settled-v9-contact/slender-monument/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 10
+    },
+    "content-hay-bale": {
+      "metadata": "candidates-straw-v6-contact/misc-e1/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 4
+    },
+    "content-hay-bales-stacked": {
+      "metadata": "candidates-straw-v7-contact/misc-e2/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 4
+    },
+    "content-hay-bales-upright": {
+      "metadata": "candidates-straw-v7-contact/misc-e3/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 4
+    },
+    "content-hay-bales-leaning": {
+      "metadata": "candidates-straw-v7-contact/misc-e4/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 4
+    },
+    "content-unlit-candlesticks": {
+      "metadata": "native-breakables/candlesticks/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 6
+    },
+    "content-spent-ashes": {
+      "metadata": "candidates-straw-v6-contact/misc-a1/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
+    },
+    "content-red-rug": {
+      "metadata": "candidates-v5-r2/misc-b39/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
+    },
+    "content-pale-rug": {
+      "metadata": "candidates-v5-r2/misc-b40/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
+    },
+    "content-loose-straw-1": {
+      "metadata": "candidates-straw-v7-contact/misc-e5/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
+    },
+    "content-loose-straw-2": {
+      "metadata": "candidates-straw-v6-contact/misc-e6/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
+    },
+    "content-loose-straw-3": {
+      "metadata": "candidates-straw-v6-contact/misc-e7/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
+    },
+    "content-loose-straw-4": {
+      "metadata": "candidates-straw-v6-contact/misc-e8/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
+    },
+    "content-loose-straw-5": {
+      "metadata": "candidates-straw-v6-contact/misc-e9/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
+    },
+    "content-loose-straw-6": {
+      "metadata": "candidates-straw-v6-contact/misc-e10/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
+    },
+    "content-loose-straw-7": {
+      "metadata": "candidates-straw-v6-contact/misc-e11/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
+    },
+    "content-cold-fire-pit": {
+      "metadata": "candidates-firepit-v8/fireplace/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
+    },
+    "content-loose-floorboards": {
+      "metadata": "candidates-wood-v6-family-r3/misc-b13/impact-a/metadata.json",
+      "scale": 1.0078740157480315,
+      "state_change_frame": 0
     }
   }
 }

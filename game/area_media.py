@@ -33,6 +33,7 @@ class AreaMedia:
     supports: tuple[WorldTileState, ...] = ()
     masks: dict[tuple, pygame.Surface] = field(default_factory=dict)
     compositions: dict[tuple, "_AreaMasks"] = field(default_factory=dict)
+    admitted: tuple[tuple[int, int], ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +49,8 @@ class BoundarySprite:
     image: pygame.Surface
     destination: tuple[int, int]
     key: tuple[int, float, float, int, tuple[str, ...]]
+    actor_aperture: pygame.Surface | None = None
+    actor_occludes: bool = False
 
 
 @dataclass(frozen=True, slots=True)

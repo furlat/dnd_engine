@@ -3848,6 +3848,347 @@
       },
       "removalFadeMs": 600,
       "removalEasing": "smoothstep"
+    },
+    "spatial_effect.spell.wall_of_fire": {
+      "layers": [
+        {
+          "assetId": "wall.wall_v35_d0_v0.back.hold",
+          "applicationAssetId": "wall.wall_v35_d0_v0.back.apply",
+          "side": "rear",
+          "composition": "wall_modules",
+          "wallAxes": [
+            {
+              "axis": "x",
+              "variants": [
+                {
+                  "assetId": "wall.wall_v35_d0_v0.back.hold",
+                  "applicationAssetId": "wall.wall_v35_d0_v0.back.apply"
+                },
+                {
+                  "assetId": "wall.wall_v35_d0_v1.back.hold",
+                  "applicationAssetId": "wall.wall_v35_d0_v1.back.apply"
+                }
+              ],
+              "spacingCells": 0.75,
+              "maxAngleDegrees": 22.5,
+              "positiveMaskNormal": [
+                0,
+                1
+              ]
+            },
+            {
+              "axis": "y",
+              "variants": [
+                {
+                  "assetId": "wall.wall_v35_d1_v0.back.hold",
+                  "applicationAssetId": "wall.wall_v35_d1_v0.back.apply"
+                },
+                {
+                  "assetId": "wall.wall_v35_d1_v1.back.hold",
+                  "applicationAssetId": "wall.wall_v35_d1_v1.back.apply"
+                }
+              ],
+              "spacingCells": 0.75,
+              "maxAngleDegrees": 22.5,
+              "positiveMaskNormal": [
+                1,
+                0
+              ]
+            },
+            {
+              "axis": "diagonal_positive",
+              "spacingCells": 0.75,
+              "maxAngleDegrees": 22.5,
+              "positiveMaskNormal": [
+                -0.7071067811865476,
+                0.7071067811865476
+              ],
+              "variants": [
+                {
+                  "assetId": "wall.wall_diag_v1_pp_v0.back.hold",
+                  "applicationAssetId": "wall.wall_diag_v1_pp_v0.back.apply"
+                },
+                {
+                  "assetId": "wall.wall_diag_v1_pp_v1.back.hold",
+                  "applicationAssetId": "wall.wall_diag_v1_pp_v1.back.apply"
+                }
+              ]
+            },
+            {
+              "axis": "diagonal_negative",
+              "spacingCells": 0.75,
+              "maxAngleDegrees": 22.5,
+              "positiveMaskNormal": [
+                0.7071067811865476,
+                0.7071067811865476
+              ],
+              "variants": [
+                {
+                  "assetId": "wall.wall_diag_v1_pm_v0.back.hold",
+                  "applicationAssetId": "wall.wall_diag_v1_pm_v0.back.apply"
+                },
+                {
+                  "assetId": "wall.wall_diag_v1_pm_v1.back.hold",
+                  "applicationAssetId": "wall.wall_diag_v1_pm_v1.back.apply"
+                }
+              ]
+            }
+          ],
+          "wallRing": {
+            "assetId": "wall.wall_ring_matched_v3.back.hold",
+            "applicationAssetId": "wall.wall_ring_matched_v3.back.apply",
+            "radiusFeet": 10,
+            "widthFeet": 1
+          }
+        },
+        {
+          "assetId": "wall.wall_v35_d0_v0.front.hold",
+          "applicationAssetId": "wall.wall_v35_d0_v0.front.apply",
+          "side": "front",
+          "composition": "wall_modules",
+          "wallAxes": [
+            {
+              "axis": "x",
+              "variants": [
+                {
+                  "assetId": "wall.wall_v35_d0_v0.front.hold",
+                  "applicationAssetId": "wall.wall_v35_d0_v0.front.apply"
+                },
+                {
+                  "assetId": "wall.wall_v35_d0_v1.front.hold",
+                  "applicationAssetId": "wall.wall_v35_d0_v1.front.apply"
+                }
+              ],
+              "spacingCells": 0.75,
+              "maxAngleDegrees": 22.5,
+              "positiveMaskNormal": [
+                0,
+                1
+              ]
+            },
+            {
+              "axis": "y",
+              "variants": [
+                {
+                  "assetId": "wall.wall_v35_d1_v0.front.hold",
+                  "applicationAssetId": "wall.wall_v35_d1_v0.front.apply"
+                },
+                {
+                  "assetId": "wall.wall_v35_d1_v1.front.hold",
+                  "applicationAssetId": "wall.wall_v35_d1_v1.front.apply"
+                }
+              ],
+              "spacingCells": 0.75,
+              "maxAngleDegrees": 22.5,
+              "positiveMaskNormal": [
+                1,
+                0
+              ]
+            },
+            {
+              "axis": "diagonal_positive",
+              "spacingCells": 0.75,
+              "maxAngleDegrees": 22.5,
+              "positiveMaskNormal": [
+                -0.7071067811865476,
+                0.7071067811865476
+              ],
+              "variants": [
+                {
+                  "assetId": "wall.wall_diag_v1_pp_v0.front.hold",
+                  "applicationAssetId": "wall.wall_diag_v1_pp_v0.front.apply"
+                },
+                {
+                  "assetId": "wall.wall_diag_v1_pp_v1.front.hold",
+                  "applicationAssetId": "wall.wall_diag_v1_pp_v1.front.apply"
+                }
+              ]
+            },
+            {
+              "axis": "diagonal_negative",
+              "spacingCells": 0.75,
+              "maxAngleDegrees": 22.5,
+              "positiveMaskNormal": [
+                0.7071067811865476,
+                0.7071067811865476
+              ],
+              "variants": [
+                {
+                  "assetId": "wall.wall_diag_v1_pm_v0.front.hold",
+                  "applicationAssetId": "wall.wall_diag_v1_pm_v0.front.apply"
+                },
+                {
+                  "assetId": "wall.wall_diag_v1_pm_v1.front.hold",
+                  "applicationAssetId": "wall.wall_diag_v1_pm_v1.front.apply"
+                }
+              ]
+            }
+          ],
+          "wallRing": {
+            "assetId": "wall.wall_ring_matched_v3.front.hold",
+            "applicationAssetId": "wall.wall_ring_matched_v3.front.apply",
+            "radiusFeet": 10,
+            "widthFeet": 1
+          }
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 1,
+      "removalFadeMs": 650,
+      "removalEasing": "smoothstep",
+      "damageSweeps": {
+        "radiated_heat": {
+          "directions": [
+            {
+              "direction": "E",
+              "variants": [
+                {
+                  "rearAssetId": "surface-contact.growth_v36_d0_v0.back",
+                  "frontAssetId": "surface-contact.growth_v36_d0_v0.front"
+                },
+                {
+                  "rearAssetId": "surface-contact.growth_v36_d0_v1.back",
+                  "frontAssetId": "surface-contact.growth_v36_d0_v1.front"
+                }
+              ]
+            },
+            {
+              "direction": "S",
+              "variants": [
+                {
+                  "rearAssetId": "surface-contact.growth_v36_d1_v0.back",
+                  "frontAssetId": "surface-contact.growth_v36_d1_v0.front"
+                },
+                {
+                  "rearAssetId": "surface-contact.growth_v35_d1_v1.back",
+                  "frontAssetId": "surface-contact.growth_v35_d1_v1.front"
+                }
+              ]
+            },
+            {
+              "direction": "W",
+              "variants": [
+                {
+                  "rearAssetId": "surface-contact.growth_v35_d2_v0.back",
+                  "frontAssetId": "surface-contact.growth_v35_d2_v0.front"
+                },
+                {
+                  "rearAssetId": "surface-contact.growth_v35_d2_v1.back",
+                  "frontAssetId": "surface-contact.growth_v35_d2_v1.front"
+                }
+              ]
+            },
+            {
+              "direction": "N",
+              "variants": [
+                {
+                  "rearAssetId": "surface-contact.growth_v35_d3_v0.back",
+                  "frontAssetId": "surface-contact.growth_v35_d3_v0.front"
+                },
+                {
+                  "rearAssetId": "surface-contact.growth_v35_d3_v1.back",
+                  "frontAssetId": "surface-contact.growth_v35_d3_v1.front"
+                }
+              ]
+            }
+          ],
+          "nodes": [
+            {
+              "fraction": 0,
+              "delayMs": 0,
+              "variant": 0
+            },
+            {
+              "fraction": 0.5,
+              "delayMs": 180,
+              "variant": 1
+            },
+            {
+              "fraction": 1,
+              "delayMs": 360,
+              "variant": 0
+            }
+          ],
+          "scale": 1,
+          "fadeStartMs": 850,
+          "fadeEndMs": 1450,
+          "contactDelayMs": 900
+        },
+        "contact": {
+          "directions": [
+            {
+              "direction": "E",
+              "variants": [
+                {
+                  "rearAssetId": "surface-contact.growth_v36_d0_v0.back",
+                  "frontAssetId": "surface-contact.growth_v36_d0_v0.front"
+                },
+                {
+                  "rearAssetId": "surface-contact.growth_v36_d0_v1.back",
+                  "frontAssetId": "surface-contact.growth_v36_d0_v1.front"
+                }
+              ]
+            },
+            {
+              "direction": "S",
+              "variants": [
+                {
+                  "rearAssetId": "surface-contact.growth_v36_d1_v0.back",
+                  "frontAssetId": "surface-contact.growth_v36_d1_v0.front"
+                },
+                {
+                  "rearAssetId": "surface-contact.growth_v35_d1_v1.back",
+                  "frontAssetId": "surface-contact.growth_v35_d1_v1.front"
+                }
+              ]
+            },
+            {
+              "direction": "W",
+              "variants": [
+                {
+                  "rearAssetId": "surface-contact.growth_v35_d2_v0.back",
+                  "frontAssetId": "surface-contact.growth_v35_d2_v0.front"
+                },
+                {
+                  "rearAssetId": "surface-contact.growth_v35_d2_v1.back",
+                  "frontAssetId": "surface-contact.growth_v35_d2_v1.front"
+                }
+              ]
+            },
+            {
+              "direction": "N",
+              "variants": [
+                {
+                  "rearAssetId": "surface-contact.growth_v35_d3_v0.back",
+                  "frontAssetId": "surface-contact.growth_v35_d3_v0.front"
+                },
+                {
+                  "rearAssetId": "surface-contact.growth_v35_d3_v1.back",
+                  "frontAssetId": "surface-contact.growth_v35_d3_v1.front"
+                }
+              ]
+            }
+          ],
+          "nodes": [
+            {
+              "fraction": 0,
+              "delayMs": 0,
+              "variant": 0
+            }
+          ],
+          "scale": 1,
+          "fadeStartMs": 850,
+          "fadeEndMs": 1450,
+          "contactDelayMs": 900
+        }
+      },
+      "safeSideTint": {
+        "color": 7133070,
+        "strength": 0.6
+      }
     }
   },
   "liquid_surfaces": {

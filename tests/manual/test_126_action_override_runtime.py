@@ -450,7 +450,7 @@ def test_target_count_routing_and_cleanup_follow_effective_target_type() -> None
 
     restored = find_action(caster, "Fire Bolt")
     assert template.get_multi_target_count() is None
-    assert restored.target_type is TargetType.ENTITY
+    assert restored.target_type is TargetType.CREATURE_OR_OBJECT
 
     template.aoe_shape = Sphere(
         source_entity_uuid=caster.uuid,
@@ -476,7 +476,7 @@ def test_target_count_routing_and_cleanup_follow_effective_target_type() -> None
     )
 
     clear_action_overrides(caster, aoe_modified)
-    assert template.effective_target_type is TargetType.ENTITY
+    assert template.effective_target_type is TargetType.CREATURE_OR_OBJECT
 
 
 def test_extra_resource_cost_gates_discovery_execution_and_is_consumed() -> None:

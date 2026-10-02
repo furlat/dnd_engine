@@ -23,6 +23,7 @@ from game.spatial_media_lifetime import SpatialMediaLifetime
 from game.spatial_field_media import field_media_commands, spatial_origin
 from game.world_animation import WorldTransitionSample
 from game.maintained_media import maintained_media_alpha, maintained_media_frame, maintained_removal_duration
+from game.wall_media import wall_media_draw_commands
 
 
 @lru_cache(maxsize=8)
@@ -85,6 +86,10 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
         lifetime = lifetimes.get(identity)
         start = lifetime.applied_ms if lifetime is not None else None
         removed = lifetime.removed_ms if lifetime is not None else None
+        if any(layer.composition == "wall_modules" for layer in binding.layers):
+            commands.extend(wall_media_draw_commands(effect, identity, data, binding,
+                presentation_ms, camera, start, removed))
+            continue
         resolved_protections = {row.provider_uuid: row for row in (*previous_suppressions, *effect.suppressions)}
         protections = tuple(suppression for suppression in resolved_protections.values()
             if suppression.provider_content_ref is not None

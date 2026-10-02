@@ -1226,12 +1226,14 @@ class GlobeZone(AreaCondition):
 
             if event.target_entity_uuid:
                 target = Entity.get(event.target_entity_uuid)
-                if target and target.position in globe.affected_positions:
+                target_position = (event.target_position if event.target_kind == "object"
+                    else target.position if target else None)
+                if target_position is not None and target_position in globe.affected_positions:
                     return event.cancel(
                         status_message=f"Globe of Invulnerability blocks L{base_level} spell",
                         outcome_code="spell.globe_of_invulnerability.blocked",
                         suppressions=(*event.suppressions, SpellSuppression(
-                            provider_uuid=globe.uuid, positions=(target.position,))),
+                            provider_uuid=globe.uuid, positions=(target_position,))),
                     )
 
             return None
@@ -2881,7 +2883,9 @@ class SanctuaryEffect(BaseCondition):
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
             if isinstance(event, SpellEvent):
-                if event.target_type not in (TargetType.ENTITY, TargetType.MULTI_ENTITY):
+                if event.target_type not in (
+                    TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT, TargetType.MULTI_ENTITY,
+                ):
                     return None
                 if warded_uuid not in event.harmful_target_entity_uuids:
                     return None

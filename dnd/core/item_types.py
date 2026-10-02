@@ -6,9 +6,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.world_placement import BoundaryStructure, WorldPlacementSpec
 from dnd.types.residues import ObjectResidueState
 from dnd.types.traps import TrapState
+from dnd.types.physical_access import ContactPassage
 
 class ItemRarity(str, Enum):
     """Stable rarity labels carried by item definitions and presentation facts."""
@@ -83,6 +85,7 @@ class ItemRemnantState(BaseModel):
     door_open: bool | None = None
     door_swing: DoorSwing | None = None
     mechanism_state: TrapState | None = None
+    intact_supported_items: tuple[UUID, ...] = ()
 
 
 class ItemDestructionProfile(BaseModel):
@@ -95,6 +98,7 @@ class ItemDestructionProfile(BaseModel):
     outcome: str | None = None
     placement_spec: WorldPlacementSpec | None = None
     boundary_structure: BoundaryStructure | None = None
+    contact_passage: ContactPassage = ContactPassage.STRUCTURAL
     blocks_movement: bool = False
     blocks_optics: bool = False
     blocks_propagation: bool = False
@@ -162,6 +166,10 @@ class ItemPresentationState(BaseModel):
     concentration_capacity: int = Field(default=0, ge=0)
     concentration_slots: tuple[ItemConcentrationSlot, ...] = ()
     boundary_structure: Optional[BoundaryStructure] = None
+    construction_geometry: AoEPresentationGeometry | None = None
+    known_to_creator: bool = False
+    supported_by_uuid: Optional[UUID] = None
+    contact_passage: ContactPassage = ContactPassage.STRUCTURAL
     surface_residues: tuple[ObjectResidueState, ...] = ()
     linked_spatial_condition_uuid: Optional[UUID] = None
     is_open: Optional[bool] = None

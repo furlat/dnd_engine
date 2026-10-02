@@ -69,7 +69,22 @@ class SpatialCondition(BaseCondition):
     optical_obscurement: Optional[OpticalObscurement] = None
     blocks_physical_optics: bool = False
     has_visible_presence: bool = False
+    movement_expenditure_extra: float = Field(default=0, ge=0,
+        description="Owned movement expenditure independent of difficult-terrain immunity.")
+
+    def movement_extra_cost_at(self, position: Tuple[int, int], mode: MovementMode) -> float:
+        return (self.movement_expenditure_extra
+                if position in self.affected_positions and mode is not MovementMode.BURROWING else 0)
     deposit_source: MaterialDepositSource | None = None
+
+    def blocks_crossing_between(self, start: Tuple[int, int], end: Tuple[int, int],
+                                channel: str, requester_uuid: Optional[UUID],
+                                mode: MovementMode, terminal_provider_uuid: Optional[UUID] = None) -> bool:
+        return False
+
+    def missile_deflection_contact(self, start: Tuple[int, int], end: Tuple[int, int],
+                                   missile_size: str) -> Tuple[float, float] | None:
+        return None
 
     _activation_positions: Optional[Set[Tuple[int, int]]] = PrivateAttr(
         default=None,
@@ -1070,6 +1085,10 @@ class AreaCondition(SpatialCondition):
         del entity, parent_event
         raise NotImplementedError
 
+    def get_trigger_positions(self, kind: SpatialEffectTriggerKind) -> Set[Tuple[int, int]]:
+        """Return this trigger's subregion before its turn allowance is consumed."""
+        return set(self.affected_positions)
+
     def _occupancy_admits_trigger(
         self,
         kind: SpatialEffectTriggerKind,
@@ -1080,12 +1099,14 @@ class AreaCondition(SpatialCondition):
         if isinstance(event, SpatialChangeEvent) and kind in {
             SpatialEffectTriggerKind.ENTER, SpatialEffectTriggerKind.LEAVE,
         }:
-            return self.admits_occupancy_transition(event)
+            position = event.position
+            return (position in self.get_trigger_positions(kind)
+                    and self.admits_occupancy_transition(event))
         entity = Entity.get(target_entity_uuid)
         return (
             isinstance(entity, Entity)
             and entity.is_deployed
-            and entity.position in self.affected_positions
+            and entity.position in self.get_trigger_positions(kind)
             and self.affects_occupancy_layer(entity.get_occupancy_layer())
         )
 
@@ -1173,7 +1194,7 @@ class AreaCondition(SpatialCondition):
             if positional:
                 EventQueue.add_spatial_handler(
                     handler,
-                    set(self.affected_positions),
+                    self.get_trigger_positions(kind),
                     event_type,
                     EventPhase.EFFECT,
                 )

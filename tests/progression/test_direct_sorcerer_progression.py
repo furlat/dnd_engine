@@ -20,6 +20,7 @@ from dnd.content.characters.sorcerer_grants import (
 )
 from dnd.classes import sorcerer
 from dnd.core.base_block import BaseBlock
+from dnd.core.base_actions import TargetType
 from dnd.core.base_object import BaseObject
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.core.dice import fixed_dice_faces
@@ -27,8 +28,11 @@ from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventTy
 from dnd.core.progression import FULL_CASTER_SPELL_SLOTS
 from dnd.core.values import BaseValue, ModifiableValue
 from dnd.entity import Entity, EntityConfig
+from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.conjuration import Darkness
+from dnd.spells.evocation import FireBolt
+from tests.engine.support import create_test_entity
 from dnd.types.character_progression import (
     AppliedClassLevel,
     CharacterClass,
@@ -159,6 +163,39 @@ def _registry_ids() -> tuple[frozenset[object], ...]:
         frozenset(BaseValue._registry),
         frozenset(ModifiableValue._registry),
     )
+
+
+def test_twinned_fire_bolt_preserves_two_creature_targets_after_object_admission() -> None:
+    caster = _entity()
+    caster.compose_entity()
+    for level in range(1, 4):
+        apply_sorcerer_level(caster, _level(level))
+    game = Game()
+    game.deploy_entity(caster, (1, 1))
+    targets = [
+        create_test_entity(name=f"Target {index}", config=EntityConfig(position=position))
+        for index, position in enumerate(((3, 1), (3, 2)))
+    ]
+    Entity.update_all_entities_senses()
+    twinned = next(action for action in caster.registered_actions if isinstance(action, sorcerer.TwinnedSpell))
+    fire_bolt = next(action for action in caster.registered_actions if isinstance(action, FireBolt))
+    before_hp = [target.get_hp() for target in targets]
+    before_points = caster.action_economy.resources["sorcery_points"].current
+    activated = twinned.instantiate().apply()
+    assert activated is not None and not activated.canceled
+    assert fire_bolt.effective_target_type is TargetType.MULTI_ENTITY
+    with fixed_dice_faces(19, 1, 19, 1):
+        result = fire_bolt.instantiate(
+            target_entity_uuid=targets[0].uuid,
+            extra_target_entity_uuids=[targets[1].uuid],
+        ).apply()
+    assert result is not None and not result.canceled
+    assert all(target.get_hp() < before for target, before in zip(targets, before_hp, strict=True))
+    assert caster.action_economy.actions.normalized_score == 0
+    assert caster.action_economy.resources["sorcery_points"].current == before_points - 1
+    assert "MetamagicActive" not in caster.active_conditions
+    assert fire_bolt.effective_target_type is TargetType.CREATURE_OR_OBJECT
+    game.close()
 
 
 def test_direct_sorcerer_definition_and_resolver_cover_exact_twenty_rows() -> None:

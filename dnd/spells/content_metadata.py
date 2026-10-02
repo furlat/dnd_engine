@@ -53,6 +53,7 @@ SpellCatalogAoeShapeType = Literal[
     "line",
     "cube",
     "cylinder",
+    "wall",
 ]
 SpellCatalogDelivery = Literal[
     "self",
@@ -118,7 +119,7 @@ class SpellCatalogAoeSpec(BaseModel):
             expected = (None, self.length_ft, None, None)
         elif self.shape == "line":
             expected = (None, self.length_ft, self.width_ft, None)
-        elif self.shape == "cube":
+        elif self.shape in {"cube", "wall"}:
             expected = (None, self.length_ft, self.width_ft, self.height_ft)
         else:
             expected = (self.radius_ft, None, None, self.height_ft)
@@ -130,12 +131,12 @@ class SpellCatalogAoeSpec(BaseModel):
             self.length_ft is None or self.width_ft is None
         ):
             raise ValueError("line area requires length and width")
-        if self.shape == "cube" and (
+        if self.shape in {"cube", "wall"} and (
             self.length_ft is None
             or self.width_ft is None
             or self.height_ft is None
         ):
-            raise ValueError("cube area requires length, width, and height")
+            raise ValueError("cube/wall area requires length, width, and height")
         if self.shape == "cylinder" and (
             self.radius_ft is None or self.height_ft is None
         ):

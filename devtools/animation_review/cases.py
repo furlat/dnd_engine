@@ -94,6 +94,12 @@ class EquipmentCase(BaseModel):
     attacks: bool = True
 
 
+class ObjectAttackCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["object-attack"]
+    program: Literal["bow-melee", "bow-unarmed", "fire-bolt", "fireball-breach"]
+
+
 class DiscoveryCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["discovery"]
@@ -222,6 +228,17 @@ class GlobeCase(BaseModel):
     retain_field: bool = False
 
 
+class WallSpellCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["wall-spell"]
+    axis: Literal["x", "y", "diagonal", "oblique"] = "x"
+    raised: bool = False
+    retain_field: bool = False
+    multiple_targets: bool = False
+    formation_targets: bool = False
+    ring_hot_side: Literal["inside", "outside"] | None = None
+
+
 class PersistentSpellCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["persistent-spell"]
@@ -314,6 +331,13 @@ class PortalCase(BaseModel):
     arrival_spikes: bool = False
 
 
+class WindowCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["window"]
+    family: str
+    program: Literal["insert-cross-wall", "parent"] = "insert-cross-wall"
+
+
 class DoorCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["door"]
@@ -336,6 +360,8 @@ class PropDestructionCase(BaseModel):
     kind: Literal["prop-destruction"]
     item_id: str
     opened: bool = False
+    elevation: Literal[0, 2] = 0
+    access: Literal["none", "bow", "fire-bolt"] = "none"
 
 
 class LiquidBarrelCase(BaseModel):
@@ -413,7 +439,7 @@ class ReviewCase(BaseModel):
     framing: Literal["scene", "actors"] = "scene"
     initial_facings: tuple[ReviewFacing, ...] = ()
     scenario: Annotated[AttackCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | CreatureCase | EquipmentCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
+                        | CreatureCase | EquipmentCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)

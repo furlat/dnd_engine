@@ -160,8 +160,13 @@ def spell_handoff_history(
                 dice=((1,) if miss else (15,4))+(2,2,1,20))
         else:
             for index in range(2 if repeat else 1):
+                # Door fixtures exercise an intact boundary, including its real
+                # damage receipt. Objects roll damage without a creature save;
+                # uniform faces avoid coupling this scene to recipient ordering.
+                faces = (tuple([2] * (9 * (len(actors) + 1))) if environment != "open"
+                    else tuple([1, *([2] * 8), 20, *([2] * 8)] * len(actors)))
                 result = perform(caster, "spell.fireball", position=center,
-                    dice=tuple([1, *([2] * 8), 20, *([2] * 8)] * len(actors)), fresh=index > 0)
+                    dice=faces, fresh=index > 0)
                 assert isinstance(result, SpellEvent) and result.resolved_area_positions is not None
                 if empty:
                     assert result.total_targets == 0
