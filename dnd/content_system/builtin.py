@@ -33,6 +33,9 @@ BUILT_IN_SOURCES: tuple[ContentSource, ...] = (
     ContentSource.model_validate_json(
         SRD_5_1_SOURCE_PATH.read_text(encoding="utf-8"),
     ),
+    ContentSource.model_validate_json(
+        (REPOSITORY_ROOT / "content_data" / "sources" / "srd_5_2_cc.json").read_text(encoding="utf-8"),
+    ),
     _NEURODRAGON_SOURCE,
     ContentSource.model_validate_json(
         (REPOSITORY_ROOT / "content_data" / "sources" / "ice_knife_legacy.json").read_text(encoding="utf-8"),

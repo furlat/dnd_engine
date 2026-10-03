@@ -30,6 +30,8 @@ from dnd.core.condition_types import (
     ConditionTag,
     DurationType,
     HazardFilter,
+    InvoluntarySustainLoss,
+    SustainLossPolicy,
 )
 from dnd.core.saving_throw_types import (
     SavingThrowContext,
@@ -45,6 +47,7 @@ from dnd.types.residues import TileResidueState
 from dnd.types.residues import ObjectResidueState
 from dnd.core.item_types import ItemConcentrationSlot, ItemEffectPresentationState, ItemPresentationState
 from dnd.types.residue_fear import PaidEntryRetreat
+from dnd.types.summoning import SummonOrigin, TerminalOwnerRelease
 
 
 class Duration(BaseObject):
@@ -299,6 +302,47 @@ class BaseCondition(BaseObject):
         """Return passive contacted-face membership for an inert object residue."""
         return None
 
+    sustain_loss_policy: SustainLossPolicy = SustainLossPolicy.ORDINARY
+
+    def snapshot_summon_origin(self) -> SummonOrigin | None:
+        return None
+
+    def prepares_own_replacement(self) -> bool:
+        """Specialized owners may admit an ownership transfer instead of full removal."""
+        return False
+
+    def sustained_links_for_slot(self, slot_uuid: UUID | None) -> tuple[tuple[UUID, UUID], ...]:
+        if slot_uuid is not None:
+            return ()
+        return tuple(self.linked_conditions)
+
+    def release_sustain_slot(self, slot_uuid: UUID | None, *, parent_event: Event) -> bool:
+        """Only sustained owners implement exact slot/root removal."""
+        return False
+
+    def terminal_release_for_expiration(self) -> TerminalOwnerRelease | None:
+        """Return exact mandatory expiry context only for a terminal owner."""
+        return None
+
+    def terminal_release_for_sustain_loss(
+        self, loss: InvoluntarySustainLoss,
+    ) -> TerminalOwnerRelease | None:
+        """Existence owners may name their exact mandatory terminal release."""
+        return None
+
+    def commit_prepared_application(self, effect_event: Event) -> None:
+        """Commit already admitted mechanics without publishing membership."""
+        if self.applied:
+            return
+        self._commit_application(effect_event)
+        self.applied = True
+
+    def _commit_application(self, effect_event: Event) -> None:
+        """Existing conditions need no extra commit beyond their prepared artifacts."""
+
+    def publish_prepared_application(self) -> None:
+        """Publish native consequences retained by a specialized commit hook."""
+
     def on_membership_changed(self, event: Event) -> None:
         """Publish dependent state after the owner commits add/remove indexes."""
 
@@ -439,10 +483,15 @@ class BaseCondition(BaseObject):
         expire: bool = False,
         parent_event: Optional[Event] = None,
         prepared_removal_effect: Optional[Event] = None,
+        publish: bool = True,
     ) -> bool:
         """Remove an independently owned condition; ordinary conditions opt out."""
-        del expire, parent_event, prepared_removal_effect
+        del expire, parent_event, prepared_removal_effect, publish
         return False
+
+    def publish_runtime_owner_removal(self, effect: Event) -> None:
+        """Independent owners publish the specific removal they committed."""
+        raise RuntimeError("Condition has no independent runtime removal owner")
 
     def discard_from_runtime_owner(self) -> bool:
         """Discard an uncommitted independent condition; ordinary conditions opt out."""
@@ -834,18 +883,29 @@ class BaseCondition(BaseObject):
 
     def discard_uncommitted_runtime_state(self) -> None:
         """Release provisional mechanics without publishing removal events."""
-        self._release_owned_runtime_state()
-        self._release_owned_duration()
+        errors: list[BaseException] = []
+        for cleanup in (self._release_owned_runtime_state, self._release_owned_duration):
+            try:
+                cleanup()
+            except BaseException as error:
+                errors.append(error)
         self.applied = True
         try:
-            self.remove_condition_modifiers()
-            self.remove_event_handlers()
-            self.remove_spatial_handlers()
+            for cleanup in (self.remove_condition_modifiers, self.remove_event_handlers, self.remove_spatial_handlers):
+                try:
+                    cleanup()
+                except BaseException as error:
+                    errors.append(error)
         finally:
             self.applied = False
         self.modifers_uuids.clear()
-        self._release_condition_links()
+        try:
+            self._release_condition_links()
+        except BaseException as error:
+            errors.append(error)
         self.remove_from_register()
+        if errors:
+            raise BaseExceptionGroup("Provisional condition cleanup failed", errors)
 
     def _post_removal_stats(self) -> Dict[str, Any]:
         """Return resulting stats to inject into the COMPLETION event after modifiers are removed.
@@ -871,6 +931,14 @@ class BaseCondition(BaseObject):
         return event
 
     def apply(self, parent_event: Optional[Event] = None, declaration_event: Optional[Event] = None) -> Optional[Event]:
+        """Ordinary prepare/commit wrapper used by independent condition owners."""
+        effect = self.prepare_application(parent_event, declaration_event)
+        if effect is not None and not effect.canceled:
+            self.commit_prepared_application(effect)
+            self.publish_prepared_application()
+        return effect
+
+    def prepare_application(self, parent_event: Optional[Event] = None, declaration_event: Optional[Event] = None) -> Optional[Event]:
         """Apply condition mechanics through the accepted effect boundary.
 
         Args:
@@ -938,7 +1006,6 @@ class BaseCondition(BaseObject):
             if spatial_handler_uuid not in self.spatial_handler_uuids:
                 self.spatial_handler_uuids.append(spatial_handler_uuid)
 
-        self.applied = True
         if not effect_event:
             self.discard_uncommitted_runtime_state()
             return execution_event.cancel(
@@ -955,15 +1022,30 @@ class BaseCondition(BaseObject):
 
         return effect_event
 
+    def prepared_removal_occupancies(self) -> tuple[tuple[int, int], ...]:
+        """Cells this admitted removal restores or occupies before publication."""
+        return ()
+
+    def validate_prepared_removal(self) -> bool:
+        """Revalidate native owner admission immediately before authority commits."""
+        return True
+
     def cancel_prepared_removal(self, reason: str) -> None:
         """Release provisional native removal phases after a graph veto."""
         del reason
+
+    def prepare_removal_state(self, event: Event) -> Event:
+        """Admit native cleanup before either voluntary or mandatory commitment."""
+        return event
 
     def publish_removal_effect(
         self,
         declaration_event: Event,
     ) -> Event:
         """Publish vetoable removal phases before releasing condition state."""
+        declaration_event = self.prepare_removal_state(declaration_event)
+        if declaration_event.canceled:
+            return declaration_event
         execution_event = declaration_event.phase_to(
             EventPhase.EXECUTION,
             update={"condition": self},

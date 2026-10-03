@@ -20,7 +20,7 @@ from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.runtime import HandlerDispatchOutcome
 from dnd.core.events import (
     AreaReachEvent,
-    DamageAppliedEvent, DeathSaveEvent, EncounterEvent, EntityCreatedEvent, ItemDestructionEvent,
+    DamageAppliedEvent, DeathSaveEvent, EncounterEvent, EntityCreatedEvent, EntityFactionChangedEvent, ItemDestructionEvent,
     Event, ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, LifeStateChangeEvent,
     RoundEvent, SensoryUpdateEvent, SpatialChangeEvent, SpatialChangeType, SpatialEffectChangeEvent,
     MovementTrajectory, StepMovementEvent, TakeDamageEvent, TemporaryHitPointsChangedEvent, TurnEvent, WorldInitializedEvent, SavingThrowEvent,
@@ -37,7 +37,7 @@ from game.player_facts import (
     MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage,
     PlayerNode, PlayerObject, PlayerObservation, PlayerSequence, PlayerState,
     PlayerWorld, SensoryFact, ShoveFact, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
-    VersionRow, VisualItem, VisualLoadout, WorldUpdate, TemporaryHitPointsFact, SavingThrowFact,
+    VersionRow, VisualItem, VisualLoadout, WorldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact,
 )
 from game.presentation import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
 from game.replay import RecordedSequence
@@ -88,7 +88,8 @@ def _public_actor(actor: ActorState, observer: UUID) -> PlayerActor:
         temporary_hp_grant=actor.temporary_hp_grant,
         armor_class=actor.armor_class, conditions=actor.conditions,
         resolved_size=actor.resolved_size, structural_base_size=actor.structural_base_size,
-        last_visual_position=actor.last_visual_position,
+        last_visual_position=actor.last_visual_position, faction=actor.faction,
+        manifestation=actor.summon_origin.manifestation if actor.summon_origin is not None else None,
         occupancy_layer=(actor.occupancy_layer
                          if actor.uuid == observer or actor.last_visual_position is not None else None),
         controlled_items=actor.items if actor.uuid == observer else None)
@@ -418,6 +419,11 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
             return (None if event.entity_uuid not in known or not _identified(event, event.entity_uuid, observer)
                     else TemporaryHitPointsFact(entity_uuid=event.entity_uuid,
                         resulting_temporary_hp=event.resulting_temporary_hp, grant=event.grant))
+        case EntityFactionChangedEvent():
+            located = (event.entity_uuid == observer or str(observer) in
+                       event.located_entity_observer_uuids.get(str(event.entity_uuid), set()))
+            return (FactionFact(entity_uuid=event.entity_uuid, faction_after=event.faction_after)
+                    if event.entity_uuid in known and _identified(event, event.entity_uuid, observer) and located else None)
         case LifeStateChangeEvent():
             return (None if event.entity_uuid not in known or not _identified(event, event.entity_uuid, observer) else LifeFact(
                 entity_uuid=event.entity_uuid, previous_state=event.previous_state, new_state=event.new_state,
@@ -452,23 +458,29 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 and _forced_allowed(parent, observer)
                 or isinstance(parent, StepMovementEvent) and parent.source_entity_uuid == event.entity_uuid
                 and _step_allowed(parent, observer))
+            departed_contact = (declaration_senses.entities.get(event.entity_uuid)
+                if declaration_senses is not None and event.entity_uuid is not None else None)
+            witnessed_departure = (event.change_type is SpatialChangeType.ENTITY_LEFT
+                and event.terminal_release is not None and departed_contact is not None
+                and departed_contact.visual and departed_contact.position == event.position)
             located_arrival = (event.change_type is SpatialChangeType.ENTITY_ENTERED
                 and str(observer) in event.located_entity_observer_uuids.get(str(event.entity_uuid), set()))
-            if identified_entity is None or not (own_position or parent_geometry or located_arrival
+            if identified_entity is None or not (own_position or parent_geometry or located_arrival or witnessed_departure
                                                 or _position_allowed(event, event.position, observer)):
                 return None
             departure = (event.position if event.change_type is SpatialChangeType.ENTITY_LEFT
                          else event.old_position)
             arrival = (event.position if event.change_type is SpatialChangeType.ENTITY_ENTERED
                        else event.old_position)
-            departure_allowed = own_position or parent_geometry or (
+            departure_allowed = own_position or parent_geometry or witnessed_departure or (
                 departure is not None and _position_allowed(event, departure, observer))
             arrival_allowed = own_position or parent_geometry or located_arrival or (
                 arrival is not None and _position_allowed(event, arrival, observer))
             return SpatialFact(change_type=event.change_type, entity_uuid=identified_entity, position=event.position,
                 commit_event_uuid=event.commit_event_uuid,
                 previous_occupancy_layer=event.previous_occupancy_layer if departure_allowed else None,
-                occupancy_layer=event.occupancy_layer if arrival_allowed else None)
+                occupancy_layer=event.occupancy_layer if arrival_allowed else None,
+                terminal_departure=event.change_type is SpatialChangeType.ENTITY_LEFT and event.terminal_release is not None)
         case TurnEvent():
             return TurnFact(event_type=event.event_type, entity_uuid=event.entity_uuid
                 if _identified(event, event.entity_uuid, observer) else None, round_number=event.round_number)
@@ -684,6 +696,8 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
         if (isinstance(declared, MechanismActivationEvent)
                 or isinstance(declared, (AttackEvent, SpellEvent)) and declared.target_kind == "object"
                 or isinstance(declared, SpellEvent) and declared.area_geometry is not None
+                or isinstance(declared, SpatialChangeEvent) and declared.terminal_release is not None
+                and declared.change_type is SpatialChangeType.ENTITY_LEFT
                 or isinstance(declared, SpatialEffectChangeEvent)
                 and declared.operation is SpatialEffectChangeOperation.REMOVED):
             delivery_starts.setdefault(version.lineage_uuid, version.source_index)

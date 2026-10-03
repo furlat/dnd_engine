@@ -29,7 +29,7 @@ class AIDecisionBudget:
 
     maximum_decisions_per_turn: int
     maximum_consecutive_canceled_actions: int
-    turn_key: tuple[str, int, int] | None = None
+    turn_key: tuple[str, UUID | tuple[int, int]] | None = None
     turn_decisions: int = 0
     consecutive_canceled_actions: int = 0
     decision_sequence: int = 0
@@ -46,7 +46,7 @@ class AIDecisionBudget:
     def limit_reached(self) -> bool:
         return self.turn_decisions >= self.maximum_decisions_per_turn
 
-    def reset_for_turn(self, turn_key: tuple[str, int, int]) -> bool:
+    def reset_for_turn(self, turn_key: tuple[str, UUID | tuple[int, int]]) -> bool:
         """Reset turn-scoped counters and report whether the turn changed."""
         if self.turn_key == turn_key:
             return False
@@ -88,9 +88,9 @@ class AIDecisionBudget:
 def assignment_turn_key(
     entity: Entity,
     context: TurnContext,
-) -> tuple[str, int, int]:
+) -> tuple[str, UUID | tuple[int, int]]:
     """Build the authoritative turn identity used by every AI executor."""
-    return (str(entity.uuid), context.round_number, context.turn_index)
+    return (str(entity.uuid), context.turn_execution_id or (context.round_number, context.turn_index))
 
 
 def require_controlled_entities(

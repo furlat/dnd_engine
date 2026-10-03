@@ -1,0 +1,663 @@
+{
+  "rig_id": "smallscale.ostrich",
+  "creature_content_refs": [
+    "content.neurodragon:creature:creature.ostrich@1"
+  ],
+  "rig": {
+    "cell_width": 64,
+    "cell_height": 64,
+    "origin_y_from_ground": 22,
+    "facing_rows": {
+      "E": 0,
+      "SE": 1,
+      "S": 2,
+      "SW": 3,
+      "W": 4,
+      "NW": 5,
+      "N": 6,
+      "NE": 7
+    },
+    "slot_order": [
+      "shadow",
+      "body"
+    ],
+    "slot_categories": {
+      "shadow": [
+        "OstrichShadow"
+      ],
+      "body": [
+        "Ostrich"
+      ]
+    },
+    "clips": {
+      "Idle": {
+        "source_clip": "Idle",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Ostrich": "/rigs/ostrich/body/Idle.png",
+          "OstrichShadow": "/rigs/ostrich/shadow/Idle.png"
+        }
+      },
+      "Run": {
+        "source_clip": "Run",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Ostrich": "/rigs/ostrich/body/Run.png",
+          "OstrichShadow": "/rigs/ostrich/shadow/Run.png"
+        }
+      },
+      "TakeDamage": {
+        "source_clip": "TakeDamage",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Ostrich": "/rigs/ostrich/body/TakeDamage.png",
+          "OstrichShadow": "/rigs/ostrich/shadow/TakeDamage.png"
+        }
+      },
+      "Die": {
+        "source_clip": "Die",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Ostrich": "/rigs/ostrich/body/Die.png",
+          "OstrichShadow": "/rigs/ostrich/shadow/Die.png"
+        }
+      },
+      "Attack1": {
+        "source_clip": "Attack1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Ostrich": "/rigs/ostrich/body/Attack1.png",
+          "OstrichShadow": "/rigs/ostrich/shadow/Attack1.png"
+        }
+      }
+    },
+    "body_anchor": {
+      "x": 32.0,
+      "y": 34
+    },
+    "rest_pose_anchors": {
+      "Die": {
+        "E": {
+          "x": 24,
+          "y": 40
+        },
+        "SE": {
+          "x": 26,
+          "y": 36
+        },
+        "S": {
+          "x": 32,
+          "y": 34
+        },
+        "SW": {
+          "x": 38,
+          "y": 36
+        },
+        "W": {
+          "x": 40,
+          "y": 40
+        },
+        "NW": {
+          "x": 38,
+          "y": 44
+        },
+        "N": {
+          "x": 32,
+          "y": 46
+        },
+        "NE": {
+          "x": 26,
+          "y": 44
+        }
+      }
+    },
+    "body_contexts": [
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "loop"
+        }
+      },
+      {
+        "role": "movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "shove",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Attack1",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "contact",
+              "frame": 6
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "TakeDamage",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "brace",
+              "frame": 5
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "equipment",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "healing",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "save_avoidance",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_entry",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_hold",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "final_rest",
+          "restFrame": 14
+        }
+      },
+      {
+        "role": "condition_exit",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "reversed": true
+        }
+      }
+    ],
+    "shadow_alpha": 1
+  },
+  "resources": {
+    "/rigs/ostrich/body/Idle.png": "game/assets/rigs/ostrich/body/Idle.png",
+    "/rigs/ostrich/body/Run.png": "game/assets/rigs/ostrich/body/Run.png",
+    "/rigs/ostrich/body/TakeDamage.png": "game/assets/rigs/ostrich/body/TakeDamage.png",
+    "/rigs/ostrich/body/Die.png": "game/assets/rigs/ostrich/body/Die.png",
+    "/rigs/ostrich/body/Attack1.png": "game/assets/rigs/ostrich/body/Attack1.png",
+    "/rigs/ostrich/shadow/Idle.png": "game/assets/rigs/ostrich/shadow/Idle.png",
+    "/rigs/ostrich/shadow/Run.png": "game/assets/rigs/ostrich/shadow/Run.png",
+    "/rigs/ostrich/shadow/TakeDamage.png": "game/assets/rigs/ostrich/shadow/TakeDamage.png",
+    "/rigs/ostrich/shadow/Die.png": "game/assets/rigs/ostrich/shadow/Die.png",
+    "/rigs/ostrich/shadow/Attack1.png": "game/assets/rigs/ostrich/shadow/Attack1.png"
+  },
+  "provenance": {
+    "files": {
+      "/rigs/ostrich/body/Idle.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Ostrich/Idle_Shadowless.png",
+        "bytes": 16202,
+        "sha256": "49434f956c00fc5a4e6d88b95b5e2d7575084a8e82fb2a01b5917bcfb268e4ec"
+      },
+      "/rigs/ostrich/body/Run.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Ostrich/Run_Shadowless.png",
+        "bytes": 26100,
+        "sha256": "7492e143756f7cfb362e9c7b8e575d1e1544d7c2a0064678c05a290bcd6f628c"
+      },
+      "/rigs/ostrich/body/TakeDamage.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Ostrich/TakeDamage_Shadowless.png",
+        "bytes": 29732,
+        "sha256": "d626997b1c3dea8a9c451d052d7ddf0d2aef0c7369c1c4fbdb1665c9a398115f"
+      },
+      "/rigs/ostrich/body/Die.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Ostrich/Die_Shadowless.png",
+        "bytes": 38740,
+        "sha256": "344700679696523cd88121ace86395775a2b0441e87ce19a1d86d839b7f2361d"
+      },
+      "/rigs/ostrich/body/Attack1.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Ostrich/Attack1_Shadowless.png",
+        "bytes": 33519,
+        "sha256": "673f34dfe49e06f0d156591fd21fc999ba391b4d562c3ad955bb7ee4c0ed5fcc"
+      },
+      "/rigs/ostrich/shadow/Idle.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Ostrich/Idle_Shadowless.png",
+          "bytes": 16202,
+          "sha256": "49434f956c00fc5a4e6d88b95b5e2d7575084a8e82fb2a01b5917bcfb268e4ec"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Ostrich/Idle.png",
+          "bytes": 39064,
+          "sha256": "d5223218418c9db9bbf49e1ee09ab274c16a2f6b103bf657348dd534ee20016e"
+        },
+        "bytes": 7802,
+        "sha256": "e4ccd8af7fabc37e006365bcbb1a9864640ae9ae0ca7e502ba56ba92d9098de7"
+      },
+      "/rigs/ostrich/shadow/Run.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Ostrich/Run_Shadowless.png",
+          "bytes": 26100,
+          "sha256": "7492e143756f7cfb362e9c7b8e575d1e1544d7c2a0064678c05a290bcd6f628c"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Ostrich/Run.png",
+          "bytes": 60342,
+          "sha256": "3a9cfcc3d159b08ffde4d135dfb0b4485f8aa27b7f06df76bbbb0e5f4e41c705"
+        },
+        "bytes": 16870,
+        "sha256": "af5c4f2a50b50a182159664528ea9bd37b7b8352ad9efb8e68c520b767f241a4"
+      },
+      "/rigs/ostrich/shadow/TakeDamage.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Ostrich/TakeDamage_Shadowless.png",
+          "bytes": 29732,
+          "sha256": "d626997b1c3dea8a9c451d052d7ddf0d2aef0c7369c1c4fbdb1665c9a398115f"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Ostrich/TakeDamage.png",
+          "bytes": 66239,
+          "sha256": "efa43a7a3677b1df0eccbc9bf1bca1c914037bf12f1449586658cef7d1aa7d9d"
+        },
+        "bytes": 18971,
+        "sha256": "e0a82a8e4e9f8438e81dde1a0fc857cacabe89aa2d8c333ac4febe480b7ce927"
+      },
+      "/rigs/ostrich/shadow/Die.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Ostrich/Die_Shadowless.png",
+          "bytes": 38740,
+          "sha256": "344700679696523cd88121ace86395775a2b0441e87ce19a1d86d839b7f2361d"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Ostrich/Die.png",
+          "bytes": 73222,
+          "sha256": "42ddad0b636d12a1b61d563883bfb2c533f7af800c139240391ccb838fe406b2"
+        },
+        "bytes": 16051,
+        "sha256": "7caacdc2c9f0547719415c6af650b7501c2e428e0bd68a074339171bca3cc0aa"
+      },
+      "/rigs/ostrich/shadow/Attack1.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Ostrich/Attack1_Shadowless.png",
+          "bytes": 33519,
+          "sha256": "673f34dfe49e06f0d156591fd21fc999ba391b4d562c3ad955bb7ee4c0ed5fcc"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Ostrich/Attack1.png",
+          "bytes": 73593,
+          "sha256": "e1ea69aec85b19d9ed1de2b4afc171ace7ed4e0738f26a2dd17c1a359af70b35"
+        },
+        "bytes": 21309,
+        "sha256": "fd4b4128b0ce25ca00201aac9177c45f191387143e798785738cee2d35044b97"
+      }
+    },
+    "archive": {
+      "name": "2D Animals mega Pack 1 V2.zip",
+      "bytes": 422875110,
+      "sha256": "459cc2a196d2c8f45432b017c19f132eeb228246f1a0cb8ca49fef169576aa5a"
+    },
+    "summoning_body_review": {
+      "date": "2026-10-03",
+      "source_variant": "Ostrich",
+      "direction_evidence": "Named original Idle frames exactly match all eight atlas rows.",
+      "timing": "15 original samples at authored 12 FPS. The PNG packs provide no FPS, pivot or event markers. Contact/recovery frames below are reviewed execution choices.",
+      "ground_pivot": {
+        "x": 32.0,
+        "y": 42,
+        "evidence": "Authored from paired Idle shadow footprint and all eight support views; image bounds are not the ground plane."
+      },
+      "shadow_policy": "Recoverable original shadow pixels from exact With shadow + Shadowless pairs; original alpha is preserved at rig shadow_alpha 1. Opaque body pixels match the source composite exactly and hide an unrecoverable region, left transparent rather than invented. Recomposition with the original opaque body reproduces all visible source RGBA and all alpha exactly. Shadow is independent of body/Fey palette and body lift.",
+      "attacks": {
+        "ostrich_beak": {
+          "source_clip": "Attack1",
+          "contact_frame": 6,
+          "recover_frame": 11,
+          "motion": "Neck and beak extend forward at 6."
+        }
+      },
+      "outcomes": "Hit, miss, critical, opportunity and native Multiattack children select the same explicit anatomical row. One emitted attack fact owns one contact; art turns and repeated swipes create no extra native hits. Separate AttackVfx tracks are explicitly empty.",
+      "movement": "Run owns the gait only. Native recorded path/height owns displacement. Jump uses Run as an explicitly normalized airborne gallop adaptation. Window uses Run with its own frame keys and existing connector passage scale.",
+      "flight": "No flying native capability is granted by this binding.",
+      "prone": "Intact non-exploding fall, explicit frame-14 living rest pose, reverse stand-up. Death continues to use the compatible shared death owner; summoned departure is separate.",
+      "ordinary_actions": "Body action, recovery, equipment, healing and optional save-avoidance gestures explicitly disabled with neutral Idle. Existing native effects, feedback and child joins remain authoritative. Shove uses the primary physical strike; forced movement uses TakeDamage brace 5.",
+      "unarmed": "Rig-scoped unarmed physical-strike adaptation uses the inspected primary motion; this grants no native action.",
+      "validation_scope": "Original strip/direction/support inspection and typed binding checks; full live native fight, historical replay, height/occlusion and Fey material acceptance are separate packet-5 integration checks."
+    }
+  }
+}

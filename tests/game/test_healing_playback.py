@@ -13,7 +13,7 @@ from dnd.core.life_types import LifeState
 from game.animation_draw import LoadedBodyRows
 from game.animation_data import load_animation_data
 from game.animation_types import AnimationData, HealingContext, MovementMediaTrack
-from game.choreography import bind_choreography
+from game.choreography import bind_choreography, sample_choreography
 from game.choreography_draw import load_choreography_media
 from game.combat import actor_contact
 from game.feedback import choreography_feedback, sample_feedback
@@ -136,7 +136,7 @@ def test_native_heal_commits_at_entry_while_recovery_and_feedback_finish_indepen
 
 
 @pytest.mark.parametrize("dying", [False, True])
-def test_selected_healing_feedback_controls_and_unsupported_body_media_are_explicit(
+def test_selected_healing_feedback_body_and_unsupported_media_are_explicit(
     data: AnimationData, dying: bool,
 ) -> None:
     captured = healing_history(dying=dying)
@@ -162,12 +162,17 @@ def test_selected_healing_feedback_controls_and_unsupported_body_media_are_expli
         "feedbackDurationMs": 1250, "media": [media.model_dump(mode="json")],
     })))
     group = bind_choreography(before, lineage, changed)
-    assert {detail for _, detail in group.gaps} == {
-        "Healing bodyClip 'Taunt' is not bound", "Healing media tracks are not bound"}
+    assert {detail for _, detail in group.gaps} == {"Healing media tracks are not bound"}
+    cue, = group.healing
+    assert cue.body_context is not None and cue.body_context.actor.clip == "Taunt"
+    assert cue.contact is not None
+    body = next(body for body in sample_choreography(group, 0).bodies
+                if body.actor_uuid == cue.contact.actor_uuid)
+    assert body.clip == ("Die" if dying else "Taunt")
     track, = (track for track in choreography_feedback(group, changed, 0) if track.kind == "number")
     assert track.duration_ms == 1250 and sample_feedback(track, 1000) is not None
     assert sample_feedback(track, 1250) is None
-    assert group.complete_ms == ordinary.complete_ms
+    assert cue.end_ms is not None and group.complete_ms == max(ordinary.complete_ms, cue.end_ms)
 
 
 def test_healing_gallery_records_native_entry_and_decorative_tail_in_all_corners(tmp_path: Path) -> None:

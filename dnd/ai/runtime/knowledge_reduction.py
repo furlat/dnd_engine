@@ -104,7 +104,9 @@ class AIKnowledge:
         if isinstance(event, EntityCreatedEvent):
             actor = actor_from_birth(event)
             previous = self.pending_conditions.pop(event.entity_uuid, {})
-            self.actors[event.entity_uuid] = replace(actor, conditions=tuple(previous.values()))
+            conditions = {row.condition_uuid: row for row in actor.conditions}
+            conditions.update(previous)
+            self.actors[event.entity_uuid] = replace(actor, conditions=tuple(conditions.values()))
             self._refresh_entity(event.entity_uuid)
             if event.entity_uuid in self.senses:
                 self._refresh_observer(event.entity_uuid)

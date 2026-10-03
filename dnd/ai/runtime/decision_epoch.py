@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import time
 from types import MappingProxyType
 from typing import Any, Callable, Mapping, Optional
+from uuid import UUID
 
 from dnd.actions_functional import get_available_actions
 from dnd.action_timing import reset_action_timing_recorder, set_action_timing_recorder
@@ -132,6 +133,7 @@ def build_decision_epoch(
     turn_index: int,
     observation_cursor: int,
     reason: DecisionEpochReason = DecisionEpochReason.SNAPSHOT,
+    turn_execution_id: UUID | None = None,
     record_timing: Optional[Callable[[str, float], None]] = None,
 ) -> Optional[DecisionEpochBuild]:
     """Build public rows and private authority for one authorized live actor."""
@@ -167,7 +169,7 @@ def build_decision_epoch(
     started = time.perf_counter()
     epoch_id = (
         f"{epoch_namespace}:actor={actor.uuid}:round={round_number}:"
-        f"turn={turn_index}:obs={observation_cursor}:reason={reason.value}"
+        f"turn={turn_execution_id or turn_index}:obs={observation_cursor}:reason={reason.value}"
     )
     _record_timing(record_timing, "build_epoch_id_ms", started)
     started = time.perf_counter()
@@ -179,6 +181,7 @@ def build_decision_epoch(
         actor_uuid=str(actor.uuid),
         round_number=round_number,
         turn_index=turn_index,
+        turn_execution_id=str(turn_execution_id) if turn_execution_id is not None else None,
         economy=economy,
         affordances=affordances,
     )

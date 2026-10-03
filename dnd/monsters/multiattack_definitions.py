@@ -72,9 +72,11 @@ def _declaration(
     source_anchor: str,
     steps: tuple[tuple[WeaponSlot, int], ...],
     sort_order: int,
+    pack_id: str = _PACK_ID,
+    provenance: ContentProvenance | None = None,
 ) -> ContentDeclaration:
     ref = ContentRef(
-        pack_id=_PACK_ID,
+        pack_id=pack_id,
         definition_kind=ContentDefinitionKind.ACTION,
         content_id=content_id,
         content_version=1,
@@ -88,14 +90,14 @@ def _declaration(
             ContentDescriptorSpec(
                 display_name=display_name,
                 description=(
-                    "Exact ordered attack sequence authored by this SRD "
+                    "Exact ordered attack sequence authored by this "
                     "creature stat block."
                 ),
                 tags=(
                     "action",
                     "configured_action",
                     "multiattack",
-                    "srd_5_1",
+                    "srd_5_1" if pack_id == _PACK_ID else "neurodragon",
                 ),
                 visibility=ContentVisibility.PUBLIC,
                 presentation=ContentPresentation(
@@ -110,7 +112,7 @@ def _declaration(
                 ),
             ),
         ),
-        provenance=ContentProvenance(
+        provenance=provenance or ContentProvenance(
             primary_source_id=_SOURCE_ID,
             source_anchor=source_anchor,
             relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
@@ -256,3 +258,39 @@ __all__ = [
     "SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS",
     "SRD_MULTIATTACK_CONFIGURATIONS_BY_CONTENT_ID",
 ]
+
+
+# Ordinary adapted beasts/devils, independent of the summoning catalog.
+BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS = tuple(
+    _declaration(
+        content_id=f"action.monster.multiattack.{key}",
+        display_name=f"{name} Multiattack", icon_key="ui.filter-attacks",
+        source_anchor=anchor, steps=steps, sort_order=100 + index,
+        pack_id="content.neurodragon",
+        provenance=ContentProvenance(
+            primary_source_id="neurodragon.original_b2b3930",
+            source_anchor=anchor,
+            relation=(ContentProvenanceRelation.COMPATIBLE_ADAPTATION if adapted_source
+                      else ContentProvenanceRelation.ORIGINAL_CONTENT),
+            adapted_from_source_id=adapted_source,
+            fidelity=ContentFidelity.COMPLETE, review_status=ContentReviewStatus.REVIEWED,
+            notes="Approved ordinary body-attack sequence; shared single-target Multiattack executor.",
+        ),
+    )
+    for index, (key, name, anchor, adapted_source, steps) in enumerate((
+        ("brown_bear", "Brown Bear", "SRD 5.1 p.369; approved body slot adaptation", "wotc.srd_5_1_cc",
+            ((WeaponSlot.MELEE_OFF, 1), (WeaponSlot.MELEE_MAIN, 1))),
+        ("polar_bear", "Polar Bear", "SRD 5.1 p.386; approved body slot adaptation", "wotc.srd_5_1_cc",
+            ((WeaponSlot.MELEE_OFF, 1), (WeaponSlot.MELEE_MAIN, 1))),
+        ("stegosaurus", "Stegosaurus", "SRD 5.2 p.341 Ankylosaurus; approved piercing-tail adaptation", "wotc.srd_5_2_cc",
+            ((WeaponSlot.MELEE_MAIN, 2),)),
+        ("huntsman_wing_devil", "Huntsman Wing Devil", "Authored Devils C05, 2026-10-01", None,
+            ((WeaponSlot.MELEE_MAIN, 2),)),
+        ("fellwing_devil", "Fellwing Devil", "Authored Devils C04, 2026-10-01", None,
+            ((WeaponSlot.MELEE_MAIN, 2), (WeaponSlot.MELEE_OFF, 1))),
+    ))
+)
+BODY_MULTIATTACK_CONFIGURATIONS_BY_ID = MappingProxyType({
+    row.ref.content_id.removeprefix("action.monster.multiattack."): row
+    for row in BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS
+})

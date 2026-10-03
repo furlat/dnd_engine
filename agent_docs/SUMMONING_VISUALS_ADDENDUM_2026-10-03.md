@@ -4,6 +4,16 @@ Date: 2026-10-03. Companion evidence/acceptance ledger to the
 [sole implementation plan](SUMMONING_BACKEND_PLAN_2026-10-03.md), especially
 section 10.2. No production or artwork changes are made by this document.
 
+The human-requested [ready-to-deliver VFX handoff](SUMMONING_VFX_HANDOFF_2026-10-03.md)
+now specifies the later art delivery and current native lifecycle contracts.
+The existing-art implementation now includes all 24 body bindings, natural
+attack profiles, shared summon/dismiss gestures, original separated shadows and
+the retained Fey palette/alpha material. The final 38-clip native gallery and
+independent acceptance are linked in the implementation ledger. New arrival/
+departure particles and optional accents remain the later VFX delivery.
+Sections B–E below retain the original planning inventory; current implementation
+and verification status is in the [implementation ledger](SUMMONING_IMPLEMENTATION_2026-10-03.md).
+
 **The human delivers any later VFX brief personally. No message, handoff or
 production request to the VFX thread is authorized.** The list below is scoped
 to the selected 24 creatures and three summoning spells. It does not reopen the
@@ -123,7 +133,7 @@ it must never choose an unrelated movement because of an automatic human profile
 | Elephant | Trunk Sweep | Attack1 inspected | New rig/profile; no invented tusk attack instead of depicted trunk motion |
 | Triceratops | Gore | Attack1 inspected | New rig/profile/markers |
 | Mammoth | Gore | Attack2 inspected | New rig/profile/markers |
-| Tyrannosaurus | Bite OR Tail | Attack1 inspected; Attack1–4 available | Select/calibrate Tail separately; no visual grapple or implied extra attack |
+| Raptor (vendor T-Rex artwork, human reassignment) | Bite OR Tail | Existing Attack1/Attack2 | Original1.55 scale; independent contact markers, no visual grapple or implied extra attack |
 | Dretch | Bite, Claws; existing Multiattack | Installed Demon Beast 1 Attack 1/2/3 mappings | Revalidate under explicit body usage; secondary Claws is not a human off-hand swing |
 | Corrosive Demon | Same native attacks as Dretch | Installed Demon Beast 2; current body-response/residue data | Same mapping checks; keep independent actual corrosive feedback |
 | Dread Demon | Same native attacks as Dretch | Installed Demon Beast 3; current dread/fear data | Same mapping checks; keep actual residue/fear outcomes |

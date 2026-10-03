@@ -55,6 +55,7 @@ class TurnContext(BaseObject):
     entity_uuid: UUID = Field(description="UUID of the entity whose turn it is.")
     round_number: int = Field(default=1, description="Current encounter round number.")
     turn_index: int = Field(default=0, description="Position in initiative order.")
+    turn_execution_id: Optional[UUID] = Field(default=None, description="Stable native turn identity; independent of initiative position.")
     actions_remaining: int = Field(default=1, description="Action count remaining.")
     bonus_actions_remaining: int = Field(default=1, description="Bonus action count remaining.")
     reactions_remaining: int = Field(default=1, description="Reaction count remaining.")

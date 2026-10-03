@@ -76,7 +76,7 @@ def armed_reactor(game: Game, position: tuple[int, int], *, paralyzing: bool = F
     if paralyzing:
         reactor.add_condition(GhoulClawsParalysisFeature(
             source_entity_uuid=reactor.uuid, target_entity_uuid=reactor.uuid,
-            weapon_names=("Longsword",),
+            weapon_item_ids=("weapon.longsword",),
         ))
     add_opportunity_attack_handler(reactor)
     reactor.compose_entity()

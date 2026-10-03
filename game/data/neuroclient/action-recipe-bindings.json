@@ -68,5 +68,13 @@
   "action.environment.escape_jaw.acrobatics": {
     "source_recipe": "action.spell.web.escape",
     "action_feedback": null
+  },
+  "action.monster.multiattack": {
+    "source_recipe": "action.monster.multiattack.knight",
+    "action_feedback": null
+  },
+  "action.summon.dismiss": {
+    "source_recipe": "reaction.spell.counterspell",
+    "action_feedback": null
   }
 }

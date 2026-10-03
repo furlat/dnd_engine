@@ -1,10 +1,22 @@
 # Summoning and first creature roster — unified implementation plan
 
-Date: 2026-10-03. Status: proposed implementation; current independent verdicts
-are recorded against this document's single SHA256 in the
-[review receipt](audits/SUMMONING_PLAN_REVIEW_RECEIPT_2026-10-03.md).
-Only planning/source inspection/review is authorized now. Earlier approvals of
-the separate lifecycle and creature documents do not approve these new bytes.
+Date: 2026-10-03. Status: implementation authorized by the human after the
+[plan review](audits/SUMMONING_PLAN_REVIEW_RECEIPT_2026-10-03.md). The accepted
+pre-implementation SHA256 was `d2c83849488ebe40a2fe01ca36cc09fdd9fcede13724207e82d22739545f375b`.
+During implementation the human reassigned the vendor T-Rex artwork to a Raptor
+and approved bounded enlargement of other large beasts using existing passive
+appearance scale, subject to visual inspection. Those amendments are included
+below; implementation receipts live in
+[the current checkpoint](SUMMONING_IMPLEMENTATION_2026-10-03.md).
+
+**Current final-phase amendment:** after reviewing the initial gallery, the human
+requested [these bounded corrections and Fly/summoning visual integrations](SUMMONING_FLY_FINAL_PHASE_PLAN_2026-10-03.md).
+The summoning artwork is explicitly accepted; Fly is the only added spell visual.
+That linked amendment is part of this unified delivery and supplies the current
+remaining implementation/acceptance work. It is at a planning checkpoint, not an
+assertion that the new integrations are already complete.
+The [final-phase anti-slop and anti-OOP/ECS review receipts](audits/SUMMONING_FLY_FINAL_PHASE_PLAN_REVIEWS_2026-10-03.md)
+approve the exact revised design; implementation acceptance remains pending.
 
 This is the sole implementation plan for this batch. It owns the gameplay
 choices, all 24 creature/art assignments, native lifecycle, ordinary attack
@@ -48,7 +60,7 @@ Steed do not require concentration; Animate Dead/Create Undead have persistent
 existence and separate control. These examples explain the separation, without
 adding deferred spells to this lane.
 
-### Proposed gameplay defaults, pending implementation approval
+### Approved gameplay defaults
 
 | Entry | Lifetime | Concentration sustains | Loss outcome |
 | --- | --- | --- | --- |
@@ -62,7 +74,7 @@ ten-round proposal. Duration pauses outside encounters because Game has no world
 clock; explicit departure causes still work. No desktop timer. Nonconcentration
 creation is a native backend capability/test, not another authored spell.
 
-Other proposed defaults: one chosen creature per cast; action casting; 60-foot
+Other approved defaults: one chosen creature per cast; action casting; 60-foot
 visible legal placement; no recursive summoning by these summons. These are
 stated game adaptations. Packs remain a pending alternative requiring revised
 batch admission, not a silently approved choice. Multiple casters and existing
@@ -82,8 +94,8 @@ remain exclusively in the canonical creature definition.
 
 | Spell | Proposed choice count by slot |
 | --- | --- |
-| Conjure Animals | 3: 7; 4: 10; 5: 13; 6: 15; 7: 16; 8: 17; 9: 18 |
-| Conjure Fey | 6: 15; 7: 16; 8: 17; 9: 18; same canonical beasts with spirit manifestation |
+| Conjure Animals | 3: 7; 4: 10; 5: 14; 6: 16; 7: 17; 8–9: 18 |
+| Conjure Fey | 6: 16; 7: 17; 8–9: 18; same canonical beasts with spirit manifestation |
 | Conjure Fiend | 3: 2; 4: 4; 5: 5; 6–9: 6 |
 
 Ordinary placement and summoning use the same installed materializer. Fey's type
@@ -159,7 +171,7 @@ incoming instance's type/manifestation/lifecycle, not its base recipe.
 | 15 | elephant / Elephant | 6 | 6 | — | Animals: Elephant; Attack1 | New binding; heavy trunk sweep and knockdown |
 | 16 | triceratops / Triceratops | 7 | 7 | — | Dinosaurs: Triceratops; Attack1 | New binding; very heavy horn attack and knockdown |
 | 17 | mammoth / Mammoth | 8 | 8 | — | Animals: Mammoth; Attack2 | New binding; high-HP tusk frontliner and knockdown |
-| 18 | tyrannosaurus / Tyrannosaurus | 9 | 9 | — | Dinosaurs: T-Rex; Attack1 | New binding; powerful Bite or reach Tail action, no holding/grapple |
+| 18 | raptor / Raptor | 5 | 6 | — | Dinosaurs: vendor T-Rex reassigned by human; Attack1 | Existing Allosaurus numerical baseline; Bite or Tail, reach5; original appearance scale1.55 |
 | 19 | dretch / Dretch | — | — | 3 | Demons: Demon Beast 1 | Existing smallscale.demonbeast01; preserve native kit |
 | 20 | claw_mote_devil / Claw Mote Devil | — | — | 3 | Demons: Imp 5 | New binding; C27 intrinsic claw, ordinary actions, no invented wings/gear |
 | 21 | corrosive_demon / Corrosive Demon | — | — | 4 | Demons: Demon Beast 2 | Existing smallscale.demonbeast02; native corrosive blood |
@@ -167,8 +179,8 @@ incoming instance's type/manifestation/lifecycle, not its base recipe.
 | 23 | huntsman_wing_devil / Huntsman Wing Devil | — | — | 5 | Demons: Demon Beast 5 | New binding; C05 two claws, Devil's Sight and grounded flight |
 | 24 | fellwing_devil / Fellwing Devil | — | — | 6 | Demons: Demon Beast 4 | New binding; C04 two claws plus gore, Magic Resistance and grounded flight |
 
-Conjure Animals offers 7 choices at level 3, then 10/13/15/16/17/18 at
-levels 4/5/6/7/8/9. Conjure Fey offers 15 choices at level 6, then 16/17/18.
+Conjure Animals offers 7 choices at level 3, then 10/14/16/17/18/18 at
+levels 4/5/6/7/8/9. Conjure Fey offers 16 choices at level 6, then 17/18/18.
 Conjure Fiend offers 2 choices at level 3, then 4/5/6 at levels 4/5/6. Slots
 7–9 retain those six choices; this batch invents no extra boss, scale multiplier
 or recursive summons to fill every cell. Corrosive/Dread share a Dretch chassis;
@@ -209,11 +221,13 @@ that every source ability must be implemented into this bounded lane.
   3d8+6 dice, changed to bludgeoning; DC12 Strength save versus Prone. Mammoth
   Gore uses source 4d8+7 piercing and DC18 Prone. Triceratops Gore uses source
   4d8+6 piercing and DC13 Prone. No automatic charge/stomp chain in this batch.
-- Tyrannosaurus has ordinary Bite (4d12+7 piercing) OR Tail (3d8+7 bludgeoning),
-  source reach10 and passive stats. Omit grapple/restrain/holding and the source
-  split-target Multiattack. This avoids both deferred grappling and a new
-  multi-target action policy; it is recorded as an adaptation, not full SRD T-Rex.
-- Blue Raptor and Stegosaurus borrow the named 5.2 numerical baselines only,
+- Raptor replaces the initially proposed Tyrannosaurus at the human's request.
+  Use the already selected Allosaurus numerical baseline: Large,51HP,AC13,
+  speed60,STR19/DEX13/CON17/INT2/WIS12/CHA5, proficiency2, Perception expertise.
+  Ordinary Bite (2d10+4 piercing) OR depicted Tail (1d8+4 bludgeoning), both reach5;
+  no grapple, holding, bonus action or new rider. Animals unlock5; Fey unlock6.
+  Preserve the original1.55 appearance scale and vendor asset paths.
+- Blue Raptor, Raptor and Stegosaurus borrow the named 5.2 numerical baselines only,
   using the exact 5.1-style action/save semantics specified here. Retain edition
   attribution; never silently mix in unlisted 5.2 rules.
 - C04/C05/C27 use the explicit authored stats/attacks in the Devil study. C04/C05
@@ -266,7 +280,7 @@ Use one shared usage query in the existing owners:
   the exact intrinsic item/attack identity. The existing ordinary attack route
   still owns range, cover/access, target type, costs, rolls, damage and events.
 - Main position remains the existing opportunity-attack/threat choice. Primary
-  attacks: Wolf/Hound/Tyrannosaurus=Bite; Boar=Tusk; Stag/Bison=Ram;
+  attacks: Wolf/Hound/Raptor=Bite; Boar=Tusk; Stag/Bison=Ram;
   Jaguar/Lion/Tiger/Blue Raptor/Brown Bear/Polar Bear=Claws; Ostrich=Beak;
   Rhinoceros/Triceratops/Mammoth=Gore; Elephant=Trunk Sweep;
   Stegosaurus=Tail; C04/C05/C27=Claws. Existing Dretch variants retain their
@@ -913,7 +927,10 @@ independent of rendering. One acceptance ledger covers all 24 rows: canonical
 construction, allowed forms/slot boundaries, real attacks/AI, complete rig/action
 bindings and lifecycle coverage. Shared lifecycle permutations can use representative
 bodies; this must not silently omit constructing, attacking with or validating
-another row. No new summoning-effect artwork is required.
+another row. No new summoning-effect artwork is required. Explicit presentation-only scale
+values for large beast artwork may be calibrated through the existing Appearance
+component; native size and one-anchor placement stay unchanged. Check the enlarged
+original pixels in native movement/attack recordings, reducing scale if quality suffers.
 
 | Area | Required public cases |
 | --- | --- |

@@ -1,6 +1,7 @@
 """Explicit native scenario composition for new review captures."""
 
 from dnd.core.life_types import LifeState
+from devtools.animation_review.summoning_cases import summoning_history
 from devtools.animation_review.control_cases import control_spell_history
 from game.combat_demo import capture_combat_demo
 from game.replay import CapturedHistory
@@ -70,7 +71,7 @@ from tests.game.movement_scenarios import flight_history
 from game.presentation import reduce_interval
 
 from devtools.animation_review.cases import (
-    AreaSpellCase, CallLightningCase, CantripCase, AttackCase, DamageResolutionCase, ConstructionCase, FlightCase, ItemPowerCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DeviceCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,
+    SummoningCase, AreaSpellCase, CallLightningCase, CantripCase, AttackCase, DamageResolutionCase, ConstructionCase, FlightCase, ItemPowerCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DeviceCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,
     MechanismCase, PortalCase, WindowCase, DoorCase, TrapHardwareCase, PropDestructionCase, ObjectAttackCase, LiquidBarrelCase, EnvironmentCase, EnvironmentControlCase, EquipmentCase, ItemTransferCase, ForcedMovementCase, GroundContactCase, HealingCase, LifecycleCase, MovementCase,
     ParalysisCase, ParalysisLifecycleCase, PendingSpellCase, PersistentSpellCase, WallSpellCase, GlobeCase, InterruptionCase, ControlSpellCase, ProjectileLifeCase, ReviewCase, SpellHandoffCase, SupportCase, HealingBatchCase, SupportConditionCase, TrueStrikeCase, TeleportCase, TrapCase, VisibilityCase, WebCase,
 )
@@ -79,6 +80,9 @@ from devtools.animation_review.cases import (
 def produce(case: ReviewCase) -> CapturedHistory:
     """Run real rules once, then hand only retained values to the recorder."""
     match case.scenario:
+        case SummoningCase() as scenario:
+            return summoning_history(form=scenario.form, family=scenario.family, slot=scenario.slot,
+                flight=scenario.flight, release_control=scenario.release_control, program=scenario.program)
         case DamageResolutionCase() as scenario:
             native = (unseen_source_damage(temporary_hp=5, undisclosed_owner=True)[0]
                       if scenario.program == "hidden" else resolution_history(scenario.program))

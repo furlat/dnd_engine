@@ -169,7 +169,7 @@ def _condition_encounter(
         if paralysis_rider:
             reactor.add_condition(GhoulClawsParalysisFeature(
                 source_entity_uuid=reactor.uuid, target_entity_uuid=reactor.uuid,
-                weapon_names=("Longsword",),
+                weapon_item_ids=("weapon.longsword",),
             ))
         add_opportunity_attack_handler(reactor)
         mover.compose_entity()

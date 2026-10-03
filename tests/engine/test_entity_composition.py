@@ -590,12 +590,14 @@ def test_eb_06_014_repeated_standard_action_setup_replaces_handlers() -> None:
     second_global_handler_names = sorted(handler.name for handler in second_global_handlers)
 
     assert len(first_global_handlers) == 5
-    assert len(first_local_handler_names) == 3
+    assert len(first_local_handler_names) == 5
+    assert first_local_handler_names == first_global_handler_names
     assert first_global_handler_names.count(f"WeaponEquipHandler_{entity.uuid}") == 1
     assert first_global_handler_names.count(f"WeaponUnequipHandler_{entity.uuid}") == 1
 
     assert len(second_global_handlers) == 5
-    assert len(second_local_handler_names) == 3
+    assert len(second_local_handler_names) == 5
+    assert second_local_handler_names == second_global_handler_names
     assert second_global_handler_names.count(f"WeaponEquipHandler_{entity.uuid}") == 1
     assert second_global_handler_names.count(f"WeaponUnequipHandler_{entity.uuid}") == 1
     assert second_local_handler_names.count("HasAttacked Tracker") == 1

@@ -1,6 +1,7 @@
 """Concrete action implementations for combat, movement, spells, and objects."""
 
 import time
+from dataclasses import dataclass
 from contextlib import nullcontext
 from types import MappingProxyType
 
@@ -22,6 +23,7 @@ from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
 from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, MovementTrajectory
 from dnd.types.abilities import AbilityName
 from dnd.types.spell_suppression import SpellSuppression
+from dnd.types.summoning import SummonApplication
 from dnd.core.elevation import support_distance_feet
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.effect_types import EffectOrigin
@@ -82,7 +84,7 @@ from dnd.core.aoe import (
 )
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.naming import normalize_spell_id
-from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.core.base_block import BaseBlock, MovementMode, PreparedConditionApplication
 from dnd.types.world import OccupancyLayer
 from dnd.core.base_block import LightLevel
 from dnd.action_timing import record_action_elapsed, record_action_timing
@@ -1955,7 +1957,10 @@ class Attack(BaseAction):
             and self.weapon_slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF)
             and "costs" not in self.model_fields_set
         ):
-            self.costs = [Cost(name="Off-Hand Attack Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)]
+            owner = Entity.get(self.source_entity_uuid)
+            weapon = owner.equipment.get_weapon(self.weapon_slot) if owner else None
+            if weapon is None or not weapon.is_body_attack:
+                self.costs = [Cost(name="Off-Hand Attack Cost", cost_type="bonus_actions", cost=1, evaluator=entity_action_economy_cost_evaluator)]
         return self
 
     def get_outcome_profile(self, actor: Any) -> Optional[ActionOutcomeProfile]:
@@ -4101,6 +4106,7 @@ class SpellEvent(ActionEvent):
     """Event payload for spell casting and spell effect logs."""
 
     target_kind: Literal["creature", "object"] = "creature"
+    summon_application: SummonApplication | None = None
     target_position: Optional[tuple[int, int]] = None
     target_base_height_steps: Optional[int] = None
     name: str = Field(default="Spell Cast", description="A spell cast event")
@@ -4537,6 +4543,14 @@ class SpellAttackResolution(BaseModel):
     is_threatened: bool = Field(
         description="Whether ranged-attack disadvantage was applied because a visible hostile threatened the caster.",
     )
+
+
+@dataclass
+class PreparedSpellConcentration:
+    owner: BaseBlock
+    condition: Concentrating
+    application: PreparedConditionApplication | None
+    parent_event: Event
 
 
 class SpellAction(BaseAction):
@@ -4996,31 +5010,71 @@ class SpellAction(BaseAction):
             return "Device concentration capacity is full"
         return None
 
+    def prepare_concentration(self, parent_event: Event) -> PreparedSpellConcentration | Event | None:
+        """Prepare this cast's optional sustainer without replacing the live graph."""
+        if not self.concentration:
+            return None
+        owner = self.get_concentration_owner()
+        if owner is None:
+            return parent_event.cancel(status_message="Concentration owner no longer exists")
+        current = owner.active_conditions_by_uuid.get(self.cast_concentrating_uuid) if self.cast_concentrating_uuid else None
+        if isinstance(current, Concentrating):
+            return PreparedSpellConcentration(owner, current, None, parent_event)
+        condition = self._new_concentration(owner, parent_event)
+        application = owner.prepare_condition_application(condition, parent_event=parent_event)
+        if not isinstance(application, PreparedConditionApplication):
+            return application or parent_event.cancel(status_message="Concentration was not admitted")
+        return PreparedSpellConcentration(owner, condition, application, parent_event)
+
+    def commit_prepared_concentration(self, prepared: PreparedSpellConcentration,
+                                     target_owner: BaseBlock, effect: BaseCondition) -> None:
+        prepared.condition.add_linked_condition(target_owner.uuid, effect.uuid)
+        if prepared.application is not None:
+            prepared.owner.commit_condition_application(prepared.application)
+        self.cast_concentrating_uuid = prepared.condition.uuid
+
+    @staticmethod
+    def publish_prepared_concentration(prepared: PreparedSpellConcentration) -> None:
+        if prepared.application is not None:
+            prepared.owner.publish_condition_application(prepared.application)
+        else:
+            prepared.condition.publish_owner_state(prepared.parent_event)
+
     def apply_owned_condition(self, event: SpellEvent, effect: BaseCondition) -> SpellEvent:
-        """Admit one native effect and link its exact identity to concentration."""
+        """Admit both memberships and the exact sustain link before completion."""
         target = Entity.get(effect.target_entity_uuid) if effect.target_entity_uuid else None
         if target is None:
             return event.cancel(status_message="Spell recipient no longer exists")
         if event.canceled:
             target._discard_uncommitted_condition_tree(effect)
             return event
-        owner = self.get_concentration_owner() if self.concentration else None
-        concentration = (owner.active_conditions_by_uuid.get(self.cast_concentrating_uuid)
-            if owner is not None and self.cast_concentrating_uuid is not None else None)
-        requirement = None
-        if self.concentration and not isinstance(concentration, Concentrating):
-            if owner is None:
-                return event.cancel(status_message="Concentration owner no longer exists")
-            concentration = self._new_concentration(owner, event)
-            requirement = (owner, concentration)
-        result = target.add_condition(effect, parent_event=event, required_condition=requirement)
-        if result is None or result.canceled or not effect.applied:
-            if requirement is not None and not requirement[1].applied:
-                requirement[0]._discard_uncommitted_condition_tree(requirement[1])
-            return event.cancel(status_message="Spell effect was not admitted")
-        if isinstance(concentration, Concentrating):
-            self.cast_concentrating_uuid = concentration.uuid
-            concentration.add_linked_condition(target.uuid, effect.uuid)
+        with BaseBlock.condition_removal_scope():
+            application = target.prepare_condition_application(effect, parent_event=event)
+            if not isinstance(application, PreparedConditionApplication):
+                return event.cancel(status_message="Spell effect was not admitted")
+            try:
+                concentration = self.prepare_concentration(event)
+            except BaseException:
+                target.cancel_condition_application(application, "Concentration admission raised")
+                raise
+            if isinstance(concentration, Event):
+                target.cancel_condition_application(application, "Concentration was not admitted")
+                return event.cancel(status_message="Concentration was not admitted")
+            if concentration is not None:
+                self.commit_prepared_concentration(concentration, target, effect)
+            target.commit_condition_application(application)
+            errors: list[BaseException] = []
+            if concentration is not None:
+                try:
+                    self.publish_prepared_concentration(concentration)
+                except BaseException as error:
+                    errors.append(error)
+            try:
+                target.publish_condition_application(application)
+            except BaseException as error:
+                errors.append(error)
+            if errors:
+                raise BaseExceptionGroup("Committed spell condition publication failed", errors)
         return event
 
     def _new_concentration(self, owner: Entity | BaseItem, parent_event: Event) -> "Concentrating":

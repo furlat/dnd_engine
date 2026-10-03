@@ -173,7 +173,7 @@ def test_interrupted_jump_lands_on_its_reached_cell_after_real_opportunity_attac
     setup_standard_actions(reactor)
     reactor.add_condition(GhoulClawsParalysisFeature(
         source_entity_uuid=reactor.uuid, target_entity_uuid=reactor.uuid,
-        weapon_names=("Longsword",),
+        weapon_item_ids=("weapon.longsword",),
     ))
     add_opportunity_attack_handler(reactor)
     reactor.compose_entity()

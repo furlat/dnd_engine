@@ -42,7 +42,8 @@ from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, StrictInt, field_serializer, model_validator
 from typing import Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
 from dnd.core.values import ModifiableValue
-from dnd.types.actor import TemporaryHitPointsGrant
+from dnd.types.actor import TemporaryHitPointsGrant, ConditionState
+from dnd.types.summoning import SummonOrigin, SummonSelection, TerminalOwnerRelease
 
 from dnd.core.combat_log import (
     CombatLogEntry,
@@ -816,6 +817,8 @@ class EntityCreatedEvent(Event):
     event_type: EventType = Field(default=EventType.ENTITY_CREATED, frozen=True)
     occupancy_layer: Optional[OccupancyLayer] = None
     entity_uuid: UUID
+    summon_origin: SummonOrigin | None = None
+    initial_condition_states: tuple[ConditionState, ...] = ()
     entity_kind_id: str
     entity_name: str
     entity_description: Optional[str] = None
@@ -889,6 +892,27 @@ class EntityCreatedEvent(Event):
     inventory_item_uuids: Tuple[UUID, ...] = ()
     equipment: Tuple[Tuple[str, UUID], ...] = ()
     active_weapon_set: WeaponSet
+
+
+class EntityFactionChangedEvent(Event):
+    """One committed allegiance change, independent of its cause."""
+
+    name: str = "Entity Faction Changed"
+    event_type: EventType = Field(default=EventType.ENTITY_FACTION_CHANGED, frozen=True)
+    entity_uuid: UUID
+    previous_faction: str | None
+    faction_after: str | None
+
+
+class SummonAdmissionEvent(Event):
+    """Unregistered validation proposal answered by the explicit world binding."""
+
+    name: str = "Summon Admission"
+    event_type: EventType = Field(default=EventType.SUMMON_ADMISSION, frozen=True)
+    selection: SummonSelection
+    subjective: bool
+    binding_uuid: UUID | None = None
+    use_register: bool = False
 
 
 class _EntityLevelFact(Event):
@@ -1889,6 +1913,25 @@ class EventQueue:
                 current_event = cls._record_handler_result(result)
 
         return current_event
+
+    @classmethod
+    def invoke_admitted_system_effect(cls, binding_uuid: UUID, event: EventT) -> EventT:
+        """Invoke one direct system owner after ordinary effect admission ends.
+
+        This uses the existing handler registry and dispatch evidence. It does
+        not publish a second command or redispatch the effect's veto handlers.
+        """
+        if event.phase is not EventPhase.EFFECT or event.canceled or event.uuid not in cls._events_by_uuid:
+            raise ValueError("System commitment requires a registered, admitted effect")
+        handler = cls._event_handlers.get(binding_uuid)
+        if (handler is None or not handler.enabled
+                or handler.content_kind is not RuntimeBehaviorKind.SYSTEM
+                or handler.trigger_conditions or handler.source_entity_uuid != binding_uuid):
+            return cast(EventT, event.cancel(status_message="Bound system is no longer available"))
+        result = cls._invoke_handler(handler, event)
+        if result is None or type(result) is not type(event) or result.lineage_uuid != event.lineage_uuid:
+            raise RuntimeError("Bound system must return its admitted event lineage")
+        return cast(EventT, result)
 
     @classmethod
     def publish_handler_cancellation(cls, event: EventT) -> EventT:
@@ -3512,6 +3555,7 @@ class SpatialChangeEvent(Event):
     commit_event_uuid: Optional[UUID] = Field(
         default=None, description="Existing event version published at the spatial membership commit.",
     )
+    terminal_release: TerminalOwnerRelease | None = None
     previous_occupancy_layer: Optional[OccupancyLayer] = Field(
         default=None, description="Creature layer before the location commit, including LEFT facts.",
     )
@@ -3683,7 +3727,8 @@ class SpatialChangeEvent(Event):
                     directional_directions: Optional[List[str]] = None,
                     directional_channels: Optional[List[str]] = None,
                        previous_occupancy_layer: Optional[OccupancyLayer] = None,
-                       occupancy_layer: Optional[OccupancyLayer] = None) -> 'SpatialChangeEvent':
+                       occupancy_layer: Optional[OccupancyLayer] = None,
+                       terminal_release: TerminalOwnerRelease | None = None) -> 'SpatialChangeEvent':
         """Create an event for an entity leaving a cell.
 
         Event starts at DECLARATION phase to allow full lifecycle:
@@ -3715,6 +3760,7 @@ class SpatialChangeEvent(Event):
             source_entity_uuid=source_entity_uuid or entity_uuid,
             event_type=EventType.SPATIAL_ENTITY_LEFT,
             change_type=SpatialChangeType.ENTITY_LEFT,
+            terminal_release=terminal_release,
             position=position,
             entity_uuid=entity_uuid,
             previous_occupancy_layer=previous_occupancy_layer,

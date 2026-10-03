@@ -4,8 +4,10 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
 from dnd.core.base_conditions import BaseCondition
-from dnd.core.condition_types import HazardFilter
-from dnd.core.item_types import ItemPresentationState
+from dnd.core.condition_types import (
+    HazardFilter, InvoluntarySustainLoss, SustainLossPolicy,
+)
+from dnd.core.item_types import ItemPresentationState, ItemReleaseReason
 from dnd.core.content.runtime import (
     bind_runtime_behavior,
     bind_runtime_handler_before_admission,
@@ -38,9 +40,98 @@ from dnd.types.world_placement import (
 )
 
 from collections import defaultdict
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Iterator, Protocol
+from dnd.types.actor import ConditionState
+from dnd.types.summoning import TerminalOwnerRelease
 from contextvars import ContextVar
 
 ContextualConditionImmunity = Callable[['BaseBlock', Optional['BaseBlock'], Optional[dict]], bool]
+
+
+@dataclass(frozen=True)
+class ConditionRemovalReceipt:
+    """One committed removal, delivered after its complete graph settles."""
+
+    owner_uuid: UUID
+    condition_uuid: UUID
+    removal_event_uuid: UUID
+    terminal_release: TerminalOwnerRelease | None = None
+    involuntary_loss: InvoluntarySustainLoss | None = None
+
+
+class ConditionRemovalParticipant(Protocol):
+    """Explicit native owner admission around the existing condition graph."""
+
+    def prepare_condition_removal(self, owner_uuid: UUID | None, condition_uuid: UUID,
+                                  event: Event, terminal_release: TerminalOwnerRelease | None,
+                                  involuntary_loss: InvoluntarySustainLoss | None) -> bool: ...
+
+    def validate_condition_removal(self, condition_uuid: UUID) -> bool: ...
+
+    def commit_condition_removal(self, owner_uuid: UUID, condition_uuid: UUID) -> None: ...
+
+    def cancel_condition_removal(self, condition_uuid: UUID, reason: str) -> None: ...
+
+
+@dataclass
+class ConditionPublication:
+    condition: BaseCondition
+    effect: Event
+    condition_state: ConditionState
+    resulting_stats: EntityStatsState | None
+    resulting_tile: WorldTileState | None
+    resulting_item: ItemPresentationState | None
+    post_removal_stats: dict[str, Any]
+    independent_owner: bool = False
+
+
+@dataclass
+class CommittedConditionRemovals:
+    removals: list[ConditionPublication] = field(default_factory=list)
+    linked_owners: list[tuple[BaseCondition, "BaseBlock", ConditionState, EntityStatsState | None, Event]] = field(default_factory=list)
+    published: bool = False
+
+
+@dataclass
+class PreparedConditionRemovals:
+    entries: list[tuple["BaseBlock | None", BaseCondition, Event, bool]]
+    terminal_release: TerminalOwnerRelease | None = None
+    committed_result: CommittedConditionRemovals | None = None
+    canceled: bool = False
+
+
+@dataclass
+class PreparedConditionApplication:
+    owner: "BaseBlock"
+    condition: BaseCondition
+    effect: Event
+    replacements: list[tuple["BaseBlock | None", BaseCondition, Event, bool]] = field(default_factory=list)
+    required: "PreparedConditionApplication | None" = None
+    removal_commit: CommittedConditionRemovals | None = None
+    committed: bool = False
+    published: bool = False
+    canceled: bool = False
+    completion: Event | None = None
+    publication: ConditionPublication | None = None
+
+
+@dataclass
+class PreparedInitialConditions:
+    owner_uuid: UUID
+    applications: tuple[PreparedConditionApplication, ...]
+    committed: bool = False
+    published: bool = False
+
+
+@dataclass
+class _ConditionRemovalScope:
+    receipts: list[ConditionRemovalReceipt] = field(default_factory=list)
+    completions: list[ConditionPublication] = field(default_factory=list)
+
+
+ConditionGraphSettledHook = Callable[[tuple[ConditionRemovalReceipt, ...]], None]
 
 
 class BaseBlock(BaseModel):
@@ -157,6 +248,87 @@ class BaseBlock(BaseModel):
         UUID, Tuple[Optional['BaseBlock'], BaseCondition, Event, bool]
     ]]]] = ContextVar("accepted_condition_removals", default=None)
 
+
+    _removal_scope: ClassVar[ContextVar[_ConditionRemovalScope | None]] = ContextVar("condition_removal_scope", default=None)
+    _terminal_release: ClassVar[ContextVar[TerminalOwnerRelease | None]] = ContextVar("condition_terminal_release", default=None)
+    _involuntary_loss: ClassVar[ContextVar[InvoluntarySustainLoss | None]] = ContextVar("condition_involuntary_loss", default=None)
+    _graph_settled_hooks: ClassVar[dict[UUID, ConditionGraphSettledHook]] = {}
+    _removal_participants: ClassVar[dict[UUID, ConditionRemovalParticipant]] = {}
+
+    @classmethod
+    def register_condition_removal_participant(cls, participant: ConditionRemovalParticipant) -> UUID:
+        key = uuid4()
+        cls._removal_participants[key] = participant
+        return key
+
+    @classmethod
+    def remove_condition_removal_participant(cls, key: UUID) -> None:
+        cls._removal_participants.pop(key, None)
+
+    @classmethod
+    def _cancel_native_condition_removal(cls, condition: BaseCondition, reason: str) -> None:
+        errors: list[BaseException] = []
+        for participant in tuple(cls._removal_participants.values()):
+            try:
+                participant.cancel_condition_removal(condition.uuid, reason)
+            except BaseException as error:
+                errors.append(error)
+        try:
+            condition.cancel_prepared_removal(reason)
+        except BaseException as error:
+            errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Native condition removal cancellation failed", errors)
+
+    @classmethod
+    def register_condition_graph_settled_hook(cls, callback: ConditionGraphSettledHook) -> UUID:
+        key = uuid4()
+        cls._graph_settled_hooks[key] = callback
+        return key
+
+    @classmethod
+    def remove_condition_graph_settled_hook(cls, key: UUID) -> None:
+        cls._graph_settled_hooks.pop(key, None)
+
+    @classmethod
+    @contextmanager
+    def condition_removal_scope(cls, *, terminal_release: TerminalOwnerRelease | None = None) -> Iterator[None]:
+        """Settle native owners before sealing their removal event lineages."""
+        outer = cls._removal_scope.get() is None
+        scope = cls._removal_scope.get() or _ConditionRemovalScope()
+        token = cls._removal_scope.set(scope)
+        admissions = cls._accepted_condition_removals.get()
+        admission_token = cls._accepted_condition_removals.set(admissions if admissions is not None else {})
+        release_token = cls._terminal_release.set(terminal_release or cls._terminal_release.get())
+        failure: BaseException | None = None
+        try:
+            yield
+        except BaseException as error:
+            failure = error
+        finally:
+            cls._terminal_release.reset(release_token)
+            cls._removal_scope.reset(token)
+            cls._accepted_condition_removals.reset(admission_token)
+        failures: list[BaseException] = []
+        if failure is not None:
+            failures.append(failure)
+        if outer and scope.receipts:
+            receipts = tuple(scope.receipts)
+            for callback in tuple(cls._graph_settled_hooks.values()):
+                try:
+                    callback(receipts)
+                except BaseException as error:
+                    failures.append(error)
+        if outer:
+            for publication in scope.completions:
+                try:
+                    cls._complete_condition_removal(publication)
+                except BaseException as error:
+                    failures.append(error)
+        if len(failures) == 1:
+            raise failures[0]
+        if failures:
+            raise BaseExceptionGroup("Condition operation and settled cleanup failed", failures)
 
     model_config = ConfigDict(validate_assignment=False)
 
@@ -357,19 +529,23 @@ class BaseBlock(BaseModel):
         """Whether this block prevents physical propagation through its cell center."""
         return False
 
-    def set_stealth_dc(self, value: Optional[int], parent_event: Optional[UUID] = None) -> None:
-        """Set stealth DC and notify observers."""
+    def set_stealth_dc(self, value: Optional[int], parent_event: Optional[UUID] = None, *, publish: bool = True) -> bool:
+        """Commit stealth; condition membership may defer its native observation."""
         if self.stealth_dc == value:
-            return
+            return False
         self.stealth_dc = value
-        self._notify_perceivability_changed(parent_event=parent_event)
+        if publish:
+            self._notify_perceivability_changed(parent_event=parent_event)
+        return True
 
-    def set_invisible(self, value: bool, parent_event: Optional[UUID] = None) -> None:
-        """Set invisibility flag and notify observers."""
+    def set_invisible(self, value: bool, parent_event: Optional[UUID] = None, *, publish: bool = True) -> bool:
+        """Commit invisibility; a condition may publish its change after membership."""
         if self.is_invisible is value:
-            return
+            return False
         self.is_invisible = value
-        self._notify_perceivability_changed(parent_event=parent_event)
+        if publish:
+            self._notify_perceivability_changed(parent_event=parent_event)
+        return True
 
     def _notify_perceivability_changed(self, parent_event: Optional[UUID] = None) -> None:
         """Fire a SPATIAL_PERCEIVABILITY_CHANGED event at this block's position.
@@ -432,6 +608,10 @@ class BaseBlock(BaseModel):
         Non-entity blocks are permitted by default. Entity overrides this using
         its neutral action-permission capability.
         """
+        return True
+
+    def has_runtime_agency(self) -> bool:
+        """Whether this live owner may initiate any action, including reactions."""
         return True
 
     def allows_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> bool:
@@ -560,7 +740,8 @@ class BaseBlock(BaseModel):
         self.clear_target_entity()
         self.clear_context()
 
-    def remove_contained_item(self, item_uuid: UUID) -> None:
+    def remove_contained_item(self, item_uuid: UUID, *, parent_event: Event | None = None,
+                              reason: ItemReleaseReason = ItemReleaseReason.TRANSFERRED) -> bool:
         """Remove a contained item by UUID.
 
         Args:
@@ -568,7 +749,51 @@ class BaseBlock(BaseModel):
 
         The base implementation is a no-op. Inventory overrides this hook.
         """
-        pass
+        return False
+
+    def owned_child_blocks(self) -> tuple['BaseBlock', ...]:
+        """Return direct composition edges, including explicitly owned typed lists."""
+        return tuple(self.blocks.values())
+
+    @classmethod
+    def prepared_condition_terminal_release(cls, condition_uuid: UUID) -> TerminalOwnerRelease | None:
+        """Return the mandatory owner only for an already admitted condition."""
+        release = cls._terminal_release.get()
+        accepted = cls._accepted_condition_removals.get()
+        if release is None or not release.mandatory or accepted is None or condition_uuid not in accepted:
+            return None
+        return release
+
+    def permits_terminal_retirement(self, release: TerminalOwnerRelease) -> bool:
+        """Ordinary world blocks are never implicitly owned by a departing actor."""
+        return False
+
+    def owned_values(self) -> tuple[ModifiableValue, ...]:
+        """Return exact values whose local channels belong to this block."""
+        return tuple(self.values.values())
+
+    def owned_block_tree(self, *, excluded_uuids: frozenset[UUID] = frozenset()) -> tuple['BaseBlock', ...]:
+        """Snapshot exact composition edges, never mutable source-identity matches."""
+        pending: list[BaseBlock] = [self]
+        result: dict[UUID, BaseBlock] = {}
+        while pending:
+            block = pending.pop()
+            if block.uuid in result or block.uuid in excluded_uuids:
+                continue
+            result[block.uuid] = block
+            pending.extend(block.owned_child_blocks())
+        return tuple(result.values())
+
+    def release_runtime_ownership(self) -> None:
+        """Release this exact block after its conditions and possessions were settled."""
+        if self.active_conditions_by_uuid:
+            raise RuntimeError("Cannot release a block with active conditions")
+        for handler in tuple(self.event_handlers.values()):
+            self.remove_event_handler(handler)
+            handler.remove_from_register()
+        for value in {value.uuid: value for value in self.owned_values()}.values():
+            value.retire_owned_state()
+        BaseBlock.unregister(self.uuid)
 
     def on_owned_item_destroyed(
         self,
@@ -936,7 +1161,8 @@ class BaseBlock(BaseModel):
         condition.remove_from_register()
 
     def remove_condition(self, condition_name: str, expire: bool = False,
-                         parent_event: Optional[Event] = None, *, consumed: bool = False) -> bool:
+                         parent_event: Optional[Event] = None, *, consumed: bool = False,
+                         terminal_release: TerminalOwnerRelease | None = None) -> bool:
         """Remove a condition with full cross-block tree traversal.
 
         Handles sub-conditions (same block), linked_conditions (other blocks),
@@ -959,10 +1185,12 @@ class BaseBlock(BaseModel):
             expire=expire,
             parent_event=parent_event,
             consumed=consumed,
+            terminal_release=terminal_release,
         )
 
     def remove_condition_by_uuid(self, condition_uuid: UUID,
-                                 parent_event: Optional[Event] = None) -> bool:
+                                 parent_event: Optional[Event] = None, *,
+                                 terminal_release: TerminalOwnerRelease | None = None) -> bool:
         """Remove a condition by UUID.
 
         Args:
@@ -978,43 +1206,113 @@ class BaseBlock(BaseModel):
             return self.remove_condition(
                 condition.name,
                 parent_event=parent_event,
+                terminal_release=terminal_release,
             )
         return False
 
+    @classmethod
+    def prepare_owned_condition_removals(
+        cls, owners: tuple["BaseBlock", ...], *, parent_event: Event | None,
+        terminal_release: TerminalOwnerRelease | None = None,
+        excluded_condition_uuids: frozenset[UUID] = frozenset(),
+    ) -> PreparedConditionRemovals | None:
+        """Prepare the exact ending aggregate's remaining condition memberships."""
+        if terminal_release is not None and any(
+            owner.uuid != terminal_release.entity_uuid
+            and owner.source_entity_uuid != terminal_release.entity_uuid
+            for owner in owners
+        ):
+            raise ValueError("Terminal release cannot remove an unrelated owner's conditions")
+        prepared = PreparedConditionRemovals([], terminal_release)
+        visited = set(excluded_condition_uuids)
+        try:
+            with cls.condition_removal_scope(terminal_release=terminal_release):
+                for owner in owners:
+                    for condition in tuple(owner.active_conditions_by_uuid.values()):
+                        canceled = cls._prepare_condition_removal_tree(
+                            condition, condition_owner=owner, expire=False,
+                            parent_event=parent_event, prepared=prepared.entries, visited=visited,
+                            mandatory=terminal_release is not None and terminal_release.mandatory,
+                        )
+                        if canceled is not None:
+                            cls._cancel_prepared_condition_removals(prepared.entries, canceled)
+                            return None
+        except BaseException as failure:
+            try:
+                cls.cancel_owned_condition_removals(prepared, "Owned condition removal admission raised")
+            except BaseException as cleanup:
+                raise BaseExceptionGroup("Owned removal admission and cancellation failed", [failure, cleanup]) from failure
+            raise
+        return prepared
+
+    @classmethod
+    def commit_owned_condition_removals(cls, prepared: PreparedConditionRemovals) -> None:
+        if prepared.canceled:
+            raise ValueError("Canceled removals cannot commit")
+        if prepared.committed_result is not None:
+            return
+        if cls._removal_scope.get() is None:
+            raise RuntimeError("Prepared removal commitment requires condition_removal_scope")
+        with cls.condition_removal_scope(terminal_release=prepared.terminal_release):
+            prepared.committed_result = cls._commit_prepared_condition_removals(prepared.entries, publish=False)
+
+    @classmethod
+    def publish_owned_condition_removals(cls, prepared: PreparedConditionRemovals) -> None:
+        if prepared.committed_result is None:
+            raise ValueError("Condition removals were not committed")
+        cls._publish_committed_condition_removals(prepared.committed_result)
+
+    @classmethod
+    def cancel_owned_condition_removals(cls, prepared: PreparedConditionRemovals, reason: str) -> None:
+        if prepared.committed_result is not None:
+            raise RuntimeError("Committed removals cannot be canceled")
+        if prepared.canceled:
+            return
+        prepared.canceled = True
+        errors: list[BaseException] = []
+        for _, condition, effect, _ in reversed(prepared.entries):
+            if condition.applied:
+                try:
+                    BaseBlock._cancel_native_condition_removal(condition, reason)
+                except BaseException as error:
+                    errors.append(error)
+                try:
+                    effect.cancel(status_message=reason)
+                except BaseException as error:
+                    errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Prepared removal cleanup failed", errors)
+
     def _remove_condition_tree(self, condition: BaseCondition, expire: bool = False,
-                               parent_event: Optional[Event] = None, *, consumed: bool = False) -> bool:
-        """Remove one complete owned condition graph atomically.
-
-        Every removal phase is accepted before mechanics change. The prepared
-        graph is then committed in reverse order so descendants finish before
-        their owners while indexes remain authoritative until each node's own
-        state has been released.
-
-        Args:
-            condition: Root condition to remove.
-            expire: Whether this removal is an expiration path.
-            parent_event: Optional parent event for cleanup event lineage.
-        """
-        prepared: List[
-            Tuple[Optional[BaseBlock], BaseCondition, Event, bool]
-        ] = []
-        canceled = BaseBlock._prepare_condition_removal_tree(
-            condition,
-            condition_owner=self,
-            expire=expire,
-            parent_event=parent_event,
-            prepared=prepared,
-            visited=set(),
-            consumed=consumed,
-        )
-        if canceled is not None:
-            BaseBlock._cancel_prepared_condition_removals(
-                prepared,
-                canceled,
-            )
-            return False
-        BaseBlock._commit_prepared_condition_removals(prepared)
-        return True
+                               parent_event: Optional[Event] = None, *, consumed: bool = False,
+                               terminal_release: TerminalOwnerRelease | None = None) -> bool:
+        """Admit and commit one complete graph, then settle its consequences."""
+        if terminal_release is not None and (
+            terminal_release.entity_uuid != self.uuid
+            or terminal_release.existence_condition_uuid != condition.uuid
+        ):
+            raise ValueError("Terminal release does not identify this exact existence owner")
+        with self.condition_removal_scope(terminal_release=terminal_release):
+            prepared: list[tuple[BaseBlock | None, BaseCondition, Event, bool]] = []
+            try:
+                canceled = self._prepare_condition_removal_tree(
+                    condition, condition_owner=self, expire=expire,
+                    parent_event=parent_event, prepared=prepared, visited=set(),
+                    consumed=consumed,
+                    mandatory=terminal_release is not None and terminal_release.mandatory,
+                )
+                if canceled is not None:
+                    self._cancel_prepared_condition_removals(prepared, canceled)
+                    return False
+                if not self.validate_prepared_condition_removals(prepared):
+                    self.cancel_owned_condition_removals(PreparedConditionRemovals(prepared),
+                        "Condition removal destinations conflict or changed")
+                    return False
+            except BaseException:
+                self.cancel_owned_condition_removals(PreparedConditionRemovals(prepared), "Condition removal admission raised")
+                raise
+            self._commit_prepared_condition_removals(prepared)
+            return True
 
     @staticmethod
     def _cancel_prepared_condition_removals(
@@ -1025,32 +1323,41 @@ class BaseBlock(BaseModel):
     ) -> None:
         """Close accepted removal effects without mutating condition state."""
         reason = canceled.status_message or "Dependent condition removal was canceled"
+        errors: list[BaseException] = []
         for _, condition, effect, _ in reversed(prepared):
             if not condition.applied:
                 continue
-            condition.cancel_prepared_removal(reason)
-            if not effect.canceled:
-                effect.cancel(status_message=reason)
-            parent = (
-                EventQueue.get_event_by_uuid(effect.parent_event)
-                if effect.parent_event is not None
-                else None
-            )
-            if (
-                parent is not None
-                and parent.event_type is EventType.CONDITION_REMOVAL
-                and not parent.canceled
-            ):
-                parent.cancel(status_message=reason)
+            try:
+                BaseBlock._cancel_native_condition_removal(condition, reason)
+            except BaseException as error:
+                errors.append(error)
+            parent = EventQueue.get_event_by_uuid(effect.parent_event) if effect.parent_event is not None else None
+            for event in (effect, parent):
+                if event is not effect and event is not None and event.event_type is not EventType.CONDITION_REMOVAL:
+                    continue
+                if event is not None and not event.canceled:
+                    try:
+                        event.cancel(status_message=reason)
+                    except BaseException as error:
+                        errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Prepared removal cleanup failed", errors)
 
-    @staticmethod
+    @classmethod
     def _commit_prepared_condition_removals(
-        prepared: List[
-            Tuple[Optional['BaseBlock'], BaseCondition, Event, bool]
-        ],
-    ) -> None:
-        """Commit a fully accepted condition graph child-first."""
-        linked_owners = {}
+        cls, prepared: list[tuple["BaseBlock | None", BaseCondition, Event, bool]],
+        *, publish: bool = True,
+    ) -> CommittedConditionRemovals:
+        """Commit accepted children before parents; publication may follow birth."""
+        if cls._removal_scope.get() is None:
+            if not publish:
+                raise RuntimeError("Unpublished removals require an outer condition_removal_scope")
+            with cls.condition_removal_scope():
+                return cls._commit_prepared_condition_removals(prepared, publish=True)
+        if not cls.validate_prepared_condition_removals(prepared):
+            raise RuntimeError("Prepared condition removal no longer matches native state")
+        result = CommittedConditionRemovals()
+        linked_owners: dict[UUID, tuple[BaseCondition, BaseBlock, ConditionState, EntityStatsState | None, Event]] = {}
         for _, condition, event, _ in prepared:
             if condition.parent_link is None:
                 continue
@@ -1063,53 +1370,123 @@ class BaseBlock(BaseModel):
         for owner, condition, removal_effect, expire in reversed(prepared):
             if not condition.applied:
                 continue
-            accepted = BaseBlock._accepted_condition_removals.get()
+            accepted = cls._accepted_condition_removals.get()
             if accepted is not None:
                 accepted.pop(condition.uuid, None)
             if owner is None:
                 if not condition.remove_from_runtime_owner(
-                    expire=expire,
-                    parent_event=removal_effect,
+                    expire=expire, parent_event=removal_effect,
                     prepared_removal_effect=removal_effect,
+                    publish=False,
                 ):
-                    raise RuntimeError(
-                        "Accepted independent condition removal failed",
-                    )
+                    raise RuntimeError("Accepted independent condition removal failed")
+                result.removals.append(ConditionPublication(condition, removal_effect,
+                    condition.snapshot_state(), None, None, None, {}, independent_owner=True))
                 continue
-
             removed = condition.cleanup_own_state(
-                expire=expire,
-                parent_event=removal_effect,
-                removal_effect=removal_effect,
+                expire=expire, parent_event=removal_effect, removal_effect=removal_effect,
             )
             if removed is None or removed.canceled:
-                raise RuntimeError(
-                    "Accepted condition removal failed during owned-state cleanup"
-                )
-
+                raise RuntimeError("Accepted condition removal failed during owned-state cleanup")
             owner._discard_condition_indexes(condition)
+            for participant in tuple(cls._removal_participants.values()):
+                participant.commit_condition_removal(owner.uuid, condition.uuid)
             if condition.parent_link is not None:
                 _, parent_condition_uuid = condition.parent_link
                 parent_condition = BaseCondition.get(parent_condition_uuid)
                 if isinstance(parent_condition, BaseCondition):
                     parent_condition.unlink_condition(condition.uuid, parent_event=removed)
-
             condition.remove_from_register()
-            condition.on_membership_changed(removed)
-            removed.phase_to(
-                EventPhase.COMPLETION,
-                condition_state=condition.snapshot_state(),
-                resulting_stats=owner.snapshot_entity_stats(),
-                resulting_tile=owner.snapshot_world_tile(),
-                resulting_item=owner.snapshot_item_state(),
-                **condition._post_removal_stats(),
-            )
+            scope = cls._removal_scope.get()
+            assert scope is not None
+            scope.receipts.append(ConditionRemovalReceipt(
+                owner_uuid=owner.uuid, condition_uuid=condition.uuid,
+                removal_event_uuid=removed.uuid, terminal_release=cls._terminal_release.get(),
+                involuntary_loss=cls._involuntary_loss.get(),
+            ))
+            result.removals.append(ConditionPublication(
+                condition, removed, condition.snapshot_state(), owner.snapshot_entity_stats(),
+                owner.snapshot_world_tile(), owner.snapshot_item_state(), condition._post_removal_stats(),
+            ))
+        result.linked_owners = list(linked_owners.values())
+        if publish:
+            cls._publish_committed_condition_removals(result)
+        return result
 
-        for parent, owner, previous_state, previous_stats, event in linked_owners.values():
+    @classmethod
+    def validate_prepared_condition_removals(
+        cls, prepared: list[tuple["BaseBlock | None", BaseCondition, Event, bool]],
+    ) -> bool:
+        """Reject conflicting native return destinations before any owner changes."""
+        occupied: set[tuple[int, int]] = set()
+        for _, condition, _, _ in prepared:
+            if not condition.applied:
+                continue
+            if not condition.validate_prepared_removal():
+                return False
+            if any(not participant.validate_condition_removal(condition.uuid)
+                   for participant in tuple(cls._removal_participants.values())):
+                return False
+            positions = set(condition.prepared_removal_occupancies())
+            if occupied & positions:
+                return False
+            occupied.update(positions)
+        return True
+
+    @staticmethod
+    def _complete_condition_removal(row: ConditionPublication) -> None:
+        if row.independent_owner:
+            row.condition.publish_runtime_owner_removal(row.effect)
+            return
+        row.effect.phase_to(EventPhase.COMPLETION, condition_state=row.condition_state,
+            resulting_stats=row.resulting_stats, resulting_tile=row.resulting_tile,
+            resulting_item=row.resulting_item, **row.post_removal_stats)
+
+    @classmethod
+    def _publish_committed_condition_removals(cls, committed: CommittedConditionRemovals) -> None:
+        """Publish each committed removal once, attempting all despite an observer failure."""
+        if committed.published:
+            return
+        committed.published = True
+        errors: list[BaseException] = []
+        for row in committed.removals:
+            if row.independent_owner:
+                try:
+                    scope = cls._removal_scope.get()
+                    if scope is None:
+                        cls._complete_condition_removal(row)
+                    else:
+                        scope.completions.append(row)
+                except BaseException as error:
+                    errors.append(error)
+                continue
+            if not row.effect.use_register:
+                try:
+                    row.effect = EventQueue.publish_committed_phase(row.effect)
+                except BaseException as error:
+                    errors.append(error)
+            try:
+                row.condition.on_membership_changed(row.effect)
+            except BaseException as error:
+                errors.append(error)
+            try:
+                scope = cls._removal_scope.get()
+                if scope is None:
+                    cls._complete_condition_removal(row)
+                else:
+                    scope.completions.append(row)
+            except BaseException as error:
+                errors.append(error)
+        for parent, owner, previous_state, previous_stats, event in committed.linked_owners:
             if (parent.applied and owner.active_conditions_by_uuid.get(parent.uuid) is parent
                     and (parent.snapshot_state() != previous_state
                          or owner.snapshot_entity_stats() != previous_stats)):
-                parent.publish_owner_state(event)
+                try:
+                    parent.publish_owner_state(event)
+                except BaseException as error:
+                    errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Committed condition removal publication failed", errors)
 
     @classmethod
     def _prepare_condition_removal_tree(
@@ -1124,6 +1501,7 @@ class BaseBlock(BaseModel):
         ],
         visited: Set[UUID],
         consumed: bool = False,
+        mandatory: bool = False,
     ) -> Optional[Event]:
         """Accept one graph's removal phases without mutating mechanics."""
         if condition.uuid in visited:
@@ -1136,16 +1514,37 @@ class BaseBlock(BaseModel):
             effect = reused[2]
             prepared.append(reused)
         else:
-            declaration = EventQueue.publish_declaration(
-                condition._declare_removal_event(
-                    expired=expire, parent_event=parent_event, consumed=consumed,
-                ),
-            )
-            if declaration.canceled:
-                return declaration
-            effect = condition.publish_removal_effect(declaration)
-            if effect.canceled:
-                return effect
+            try:
+                if mandatory:
+                    effect = condition._declare_removal_event(
+                        expired=expire, parent_event=parent_event, consumed=consumed,
+                    ).model_copy(update={"phase": EventPhase.EFFECT})
+                    effect = condition.prepare_removal_state(effect)
+                else:
+                    declaration = EventQueue.publish_declaration(
+                        condition._declare_removal_event(
+                            expired=expire, parent_event=parent_event, consumed=consumed,
+                        ),
+                    )
+                    if declaration.canceled:
+                        cls._cancel_native_condition_removal(condition, "Condition removal rejected")
+                        return declaration
+                    effect = condition.publish_removal_effect(declaration)
+                if effect.canceled:
+                    cls._cancel_native_condition_removal(condition, "Condition removal rejected")
+                    return effect
+                for participant in tuple(cls._removal_participants.values()):
+                    if not participant.prepare_condition_removal(
+                        condition_owner.uuid if condition_owner is not None else None,
+                        condition.uuid, effect, cls._terminal_release.get(), cls._involuntary_loss.get(),
+                    ):
+                        cls._cancel_native_condition_removal(condition, "Native owner removal rejected")
+                        if mandatory:
+                            raise RuntimeError("Mandatory native owner retirement was not admitted")
+                        return effect.cancel(status_message="Native owner removal rejected")
+            except BaseException:
+                cls._cancel_native_condition_removal(condition, "Condition removal admission raised")
+                raise
             entry = (condition_owner, condition, effect, expire)
             prepared.append(entry)
             if accepted is not None:
@@ -1175,6 +1574,7 @@ class BaseBlock(BaseModel):
                     parent_event=effect,
                     prepared=prepared,
                     visited=visited,
+                    mandatory=mandatory,
                 )
                 if canceled is not None:
                     return canceled
@@ -1200,6 +1600,7 @@ class BaseBlock(BaseModel):
                     parent_event=effect,
                     prepared=prepared,
                     visited=visited,
+                    mandatory=mandatory,
                 )
                 if canceled is not None:
                     return canceled
@@ -1221,6 +1622,7 @@ class BaseBlock(BaseModel):
                 )
                 and parent_condition.applied
                 and parent_condition.uuid not in visited
+                and not mandatory
             ):
                 policy = parent_condition.child_removal_policy
                 remaining_children = sum(
@@ -1318,89 +1720,200 @@ class BaseBlock(BaseModel):
 
     def _apply_declared_condition(self, condition: BaseCondition, declaration_event: Event, *,
                                   required_condition: Optional[Tuple['BaseBlock', BaseCondition]] = None) -> Optional[Event]:
-        """Commit admitted membership through one replacement/removal boundary.
+        """Ordinary caller gates remain intact; all membership uses the shared seam."""
+        with self.condition_removal_scope():
+            prepared = self.prepare_condition_application(
+                condition, declaration_event=declaration_event,
+                required_condition=required_condition,
+            )
+            if not isinstance(prepared, PreparedConditionApplication):
+                return prepared
+            self.commit_condition_application(prepared)
+            return self.publish_condition_application(prepared)
 
-        Callers retain their own declaration, immunity, save and provenance gates.
-        """
-        name = condition.name
-        if name is None:
+    def prepare_condition_application(
+        self, condition: BaseCondition, *, declaration_event: Event | None = None,
+        parent_event: Event | None = None,
+        required_condition: tuple['BaseBlock', BaseCondition] | None = None,
+    ) -> PreparedConditionApplication | Event | None:
+        """Admit membership/replacement while retaining the previous live graph."""
+        if not self.allow_events_conditions:
+            return None
+        if condition.name is None:
             raise ValueError("BaseCondition name is not set")
+        if condition.applied:
+            raise ValueError("Prepared applications require a fresh condition")
+        prepared: PreparedConditionApplication | None = None
         try:
-            condition_applied = condition.apply(
-                declaration_event=declaration_event,
-            )
-        except BaseException:
-            self._discard_uncommitted_condition_tree(condition)
-            raise
-        if condition_applied and not condition_applied.canceled and condition.applied:
-            if required_condition is not None:
-                prepared: List[Tuple[Optional[BaseBlock], BaseCondition, Event, bool]] = []
-                previous = self.active_conditions.get(name)
-                canceled = None
-                if previous is not None:
-                    canceled = self._prepare_condition_removal_tree(
-                        previous, condition_owner=self, expire=False,
-                        parent_event=condition_applied, prepared=prepared, visited=set(),
-                    )
-                if canceled is None:
-                    required_owner, requirement = required_condition
-                    accepted = dict(self._accepted_condition_removals.get() or {})
-                    accepted.update((entry[1].uuid, entry) for entry in prepared)
-                    token = self._accepted_condition_removals.set(accepted)
-                    try:
-                        required_result = required_owner.add_condition(
-                            requirement, parent_event=condition_applied,
-                        )
-                    except BaseException:
-                        self._discard_uncommitted_condition_tree(condition)
-                        self._cancel_prepared_condition_removals(
-                            prepared, condition_applied.cancel(status_message="Required condition raised"),
-                        )
-                        raise
-                    finally:
-                        self._accepted_condition_removals.reset(token)
-                    if required_result is None or required_result.canceled or not requirement.applied:
-                        canceled = condition_applied.cancel(
-                            status_message="Required condition could not be maintained",
-                        )
+            if condition.target_entity_uuid is None:
+                condition.set_target_entity(self.uuid)
+            if declaration_event is None:
+                bind_runtime_behavior(condition, current_binding=condition.behavior_binding,
+                                      runtime_owner_uuid=self.uuid)
+                declaration_event = EventQueue.publish_declaration(condition.declare_event(parent_event))
+            if declaration_event.canceled:
+                self._discard_uncommitted_condition_tree(condition)
+                return declaration_event
+            effect = condition.prepare_application(declaration_event=declaration_event)
+            if effect is None or effect.canceled:
+                self._discard_uncommitted_condition_tree(condition)
+                return effect
+            prepared = PreparedConditionApplication(self, condition, effect)
+            previous = self.active_conditions.get(condition.name)
+            if previous is not None and not condition.prepares_own_replacement():
+                canceled = self._prepare_condition_removal_tree(previous, condition_owner=self,
+                    expire=False, parent_event=effect, prepared=prepared.replacements, visited=set())
                 if canceled is not None:
-                    self._discard_uncommitted_condition_tree(condition)
-                    self._cancel_prepared_condition_removals(prepared, canceled)
+                    self.cancel_condition_application(prepared, canceled.status_message or "Replacement rejected")
                     return canceled
-                # Concentration may already have released a previous linked coat.
-                remaining = [entry for entry in prepared
-                             if entry[1].applied and (entry[0] is None or
-                                 entry[0].active_conditions_by_uuid.get(entry[1].uuid) is entry[1])]
-                self._commit_prepared_condition_removals(remaining)
-            elif name in self.active_conditions:
-                if not self.remove_condition(
-                    name,
-                    parent_event=condition_applied,
-                ):
+            if required_condition is not None:
+                owner, requirement = required_condition
+                accepted = dict(self._accepted_condition_removals.get() or {})
+                accepted.update((entry[1].uuid, entry) for entry in prepared.replacements)
+                token = self._accepted_condition_removals.set(accepted)
+                try:
+                    required = owner.prepare_condition_application(requirement, parent_event=effect)
+                finally:
+                    self._accepted_condition_removals.reset(token)
+                if not isinstance(required, PreparedConditionApplication):
+                    self.cancel_condition_application(prepared, "Required condition was not admitted")
+                    return effect.cancel(status_message="Required condition was not admitted")
+                prepared.required = required
+            return prepared
+        except BaseException as error:
+            try:
+                if prepared is None:
                     self._discard_uncommitted_condition_tree(condition)
-                    return condition_applied.cancel(
-                        status_message=(
-                            f"Condition {condition.name} could not replace "
-                            "the active condition"
-                        ),
-                    )
-            self.active_conditions[name] = condition
-            self.active_conditions_by_uuid[condition.uuid] = condition
-            self.active_conditions_by_source[condition.source_entity_uuid].append(name)
-            condition.on_membership_changed(condition_applied)
-            completed_event = condition_applied.phase_to(
-                EventPhase.COMPLETION,
-                condition_state=condition.snapshot_state(),
-                resulting_stats=self.snapshot_entity_stats(),
-                resulting_tile=self.snapshot_world_tile(),
-                resulting_item=self.snapshot_item_state(),
-            )
-            condition.applied_source_event_cursor = EventQueue.event_cursor()
-            return completed_event
-        elif condition_applied and condition_applied.canceled:
-            self._discard_uncommitted_condition_tree(condition)
+                else:
+                    self.cancel_condition_application(prepared, "Condition admission raised")
+            except BaseException as cleanup_error:
+                raise BaseExceptionGroup("Condition admission and cleanup failed", [error, cleanup_error]) from None
+            raise
 
-        return condition_applied
+    def cancel_condition_application(self, prepared: PreparedConditionApplication, reason: str) -> None:
+        if prepared.owner is not self:
+            raise ValueError("Prepared application belongs to another owner")
+        if prepared.committed:
+            raise RuntimeError("Committed applications cannot be rolled back")
+        if prepared.canceled:
+            return
+        prepared.canceled = True
+        errors: list[BaseException] = []
+        if prepared.required is not None:
+            try:
+                prepared.required.owner.cancel_condition_application(prepared.required, reason)
+            except BaseException as error:
+                errors.append(error)
+        try:
+            self._discard_uncommitted_condition_tree(prepared.condition)
+        except BaseException as error:
+            errors.append(error)
+        try:
+            self.cancel_owned_condition_removals(PreparedConditionRemovals(prepared.replacements), reason)
+        except BaseException as error:
+            errors.append(error)
+        try:
+            prepared.effect.cancel(status_message=reason)
+        except BaseException as error:
+            errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Condition admission cleanup failed", errors)
+
+    def commit_condition_application(self, prepared: PreparedConditionApplication) -> None:
+        """Commit already accepted state; caller's outer scope owns settlement."""
+        if prepared.owner is not self or prepared.canceled:
+            raise ValueError("Invalid prepared condition application")
+        if prepared.committed:
+            return
+        if self._removal_scope.get() is None:
+            raise RuntimeError("Prepared condition commitment requires condition_removal_scope")
+        if (not prepared.condition.validate_prepared_removal()
+                or not self.validate_prepared_condition_removals(prepared.replacements)):
+            raise RuntimeError("Prepared condition replacement no longer matches native state")
+        if prepared.required is not None:
+            prepared.required.owner.commit_condition_application(prepared.required)
+        remaining = [row for row in prepared.replacements if row[1].applied and (
+            row[0] is None or row[0].active_conditions_by_uuid.get(row[1].uuid) is row[1])]
+        prepared.removal_commit = self._commit_prepared_condition_removals(remaining, publish=False)
+        prepared.condition.commit_prepared_application(prepared.effect)
+        name = prepared.condition.name
+        assert name is not None
+        self.active_conditions[name] = prepared.condition
+        self.active_conditions_by_uuid[prepared.condition.uuid] = prepared.condition
+        self.active_conditions_by_source[prepared.condition.source_entity_uuid].append(name)
+        prepared.publication = ConditionPublication(
+            prepared.condition, prepared.effect, prepared.condition.snapshot_state(),
+            self.snapshot_entity_stats(), self.snapshot_world_tile(), self.snapshot_item_state(), {},
+        )
+        prepared.committed = True
+
+    def publish_condition_application(self, prepared: PreparedConditionApplication) -> Event:
+        if prepared.owner is not self or not prepared.committed:
+            raise ValueError("Only the committed owner may publish an application")
+        if prepared.published:
+            return prepared.completion or prepared.effect
+        prepared.published = True
+        errors: list[BaseException] = []
+        if prepared.required is not None:
+            try:
+                prepared.required.owner.publish_condition_application(prepared.required)
+            except BaseException as error:
+                errors.append(error)
+        if prepared.removal_commit is not None:
+            try:
+                self._publish_committed_condition_removals(prepared.removal_commit)
+            except BaseException as error:
+                errors.append(error)
+        try:
+            prepared.condition.publish_prepared_application()
+        except BaseException as error:
+            errors.append(error)
+        try:
+            prepared.condition.on_membership_changed(prepared.effect)
+        except BaseException as error:
+            errors.append(error)
+        try:
+            publication = prepared.publication
+            assert publication is not None
+            prepared.completion = prepared.effect.phase_to(
+                EventPhase.COMPLETION, condition_state=publication.condition_state,
+                resulting_stats=publication.resulting_stats, resulting_tile=publication.resulting_tile,
+                resulting_item=publication.resulting_item,
+            )
+            prepared.condition.applied_source_event_cursor = EventQueue.event_cursor()
+        except BaseException as error:
+            errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Committed condition application publication failed", errors)
+        return prepared.completion or prepared.effect
+
+    def release_involuntary_sustain(self, loss: InvoluntarySustainLoss) -> bool:
+        """Required links cannot retain authority after an actual involuntary loss."""
+        sustainer = self.active_conditions_by_uuid.get(loss.sustaining_condition_uuid)
+        parent = EventQueue.get_event_by_uuid(loss.parent_event_uuid)
+        if sustainer is None or parent is None:
+            return False
+        links = sustainer.sustained_links_for_slot(loss.slot_uuid)
+        with self.condition_removal_scope():
+            loss_token = self._involuntary_loss.set(loss)
+            try:
+                for owner_uuid, condition_uuid in links:
+                    owner = BaseBlock.get(owner_uuid)
+                    condition = BaseCondition.get(condition_uuid)
+                    if (owner is None or not isinstance(condition, BaseCondition)
+                            or not condition.applied
+                            or condition.sustain_loss_policy is not SustainLossPolicy.REQUIRED):
+                        continue
+                    terminal = condition.terminal_release_for_sustain_loss(loss)
+                    with self.condition_removal_scope(terminal_release=terminal):
+                        prepared: list[tuple[BaseBlock | None, BaseCondition, Event, bool]] = []
+                        self._prepare_condition_removal_tree(condition, condition_owner=owner,
+                            expire=False, parent_event=parent, prepared=prepared,
+                            visited={sustainer.uuid}, mandatory=True)
+                        self._commit_prepared_condition_removals(prepared)
+                return sustainer.release_sustain_slot(loss.slot_uuid, parent_event=parent)
+            finally:
+                self._involuntary_loss.reset(loss_token)
 
     def add_static_condition_immunity(self, condition_name: str, immunity_name: Optional[str] = None) -> None:
         """Add a static condition immunity when lifecycle is enabled.

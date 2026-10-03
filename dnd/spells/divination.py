@@ -4,7 +4,7 @@ import random
 from typing import Any, Optional, List, Set, Tuple
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 from dnd.core.action_types import EntityTargetPerception
 from dnd.core.base_actions import (
@@ -31,45 +31,35 @@ class SeeInvisibilityEffect(BaseCondition):
     name: str = Field(default="See Invisibility", description="Condition name.")
     description: str = Field(default="You can see invisible creatures and objects", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
-    _granted_sense_type: Optional[SensesType] = None
+    _granted_sense_mode: SenseMode | None = PrivateAttr(default=None)
+    _sense_changed: bool = PrivateAttr(default=False)
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Add see-invisible sensing to the target.
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Sense recipient missing")
+        return [], [], [], [], event.phase_to(EventPhase.EFFECT, update={"condition": self})
 
-        Args:
-            declaration_event: Condition application declaration event.
+    def _commit_application(self, event: Event) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            raise RuntimeError("Admitted sense recipient disappeared")
+        self._granted_sense_mode = SenseMode(sense_type=SensesType.SEE_INVISIBLE, range_feet=0)
+        target.senses.sense_modes.append(self._granted_sense_mode)
+        self._sense_changed = True
 
-        Returns:
-            Empty modifier and handler lists plus the effect event.
-        """
-        if not self.target_entity_uuid:
-            return [], [], [], [], None
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], None
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None and self._granted_sense_mode is not None:
+            target.senses.sense_modes = [mode for mode in target.senses.sense_modes if mode is not self._granted_sense_mode]
+            self._granted_sense_mode = None
+            self._sense_changed = True
 
-        target.senses.sense_modes.append(SenseMode(sense_type=SensesType.SEE_INVISIBLE, range_feet=0))
-        self._granted_sense_type = SensesType.SEE_INVISIBLE
-        target._notify_perceivability_changed()
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self}
-        ) if declaration_event else None
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Remove the granted see-invisible sense mode."""
-        if self._granted_sense_type is not None and self.target_entity_uuid:
-            target = Entity.get(self.target_entity_uuid)
-            if target:
-                target.senses.sense_modes = [
-                    sm for sm in target.senses.sense_modes
-                    if sm.sense_type != self._granted_sense_type
-                ]
-                target._notify_perceivability_changed()
-        return super()._remove(event)
+    def on_membership_changed(self, event: Event) -> None:
+        changed, self._sense_changed = self._sense_changed, False
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if changed and target is not None:
+            target._notify_perceivability_changed(parent_event=event.uuid)
 
 
 class SeeInvisibility(SpellAction):
@@ -152,47 +142,35 @@ class TrueSeeingEffect(BaseCondition):
     name: str = Field(default="True Seeing", description="Condition name.")
     description: str = Field(default="You have truesight out to 120 feet", description="Condition description.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags.")
-    _granted_sense_type: Optional[SensesType] = None
-    _granted_range: int = 120
+    _granted_sense_mode: SenseMode | None = PrivateAttr(default=None)
+    _sense_changed: bool = PrivateAttr(default=False)
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Add truesight sensing to the target.
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Sense recipient missing")
+        return [], [], [], [], event.phase_to(EventPhase.EFFECT, update={"condition": self})
 
-        Args:
-            declaration_event: Condition application declaration event.
+    def _commit_application(self, event: Event) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            raise RuntimeError("Admitted sense recipient disappeared")
+        self._granted_sense_mode = SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=120)
+        target.senses.sense_modes.append(self._granted_sense_mode)
+        self._sense_changed = True
 
-        Returns:
-            Empty modifier and handler lists plus the effect event.
-        """
-        if not self.target_entity_uuid:
-            return [], [], [], [], None
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], None
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None and self._granted_sense_mode is not None:
+            target.senses.sense_modes = [mode for mode in target.senses.sense_modes if mode is not self._granted_sense_mode]
+            self._granted_sense_mode = None
+            self._sense_changed = True
 
-        target.senses.sense_modes.append(SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=120))
-        self._granted_sense_type = SensesType.TRUESIGHT
-        target._notify_perceivability_changed(parent_event=declaration_event.uuid)
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self}
-        ) if declaration_event else None
-
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Remove the granted truesight sense mode."""
-        if self._granted_sense_type is not None and self.target_entity_uuid:
-            target = Entity.get(self.target_entity_uuid)
-            if target:
-                target.senses.sense_modes = [
-                    sm for sm in target.senses.sense_modes
-                    if not (sm.sense_type == self._granted_sense_type
-                            and sm.range_feet == self._granted_range)
-                ]
-                target._notify_perceivability_changed(parent_event=event.uuid if event is not None else None)
-        return super()._remove(event)
+    def on_membership_changed(self, event: Event) -> None:
+        changed, self._sense_changed = self._sense_changed, False
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if changed and target is not None:
+            target._notify_perceivability_changed(parent_event=event.uuid)
 
 
 class TrueSeeing(SpellAction):

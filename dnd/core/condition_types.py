@@ -1,6 +1,9 @@
 """Dependency-neutral condition classification and lifecycle enums."""
 
+from dataclasses import dataclass
 from enum import Enum
+from uuid import UUID
+
 
 
 class HazardFilter(str, Enum):
@@ -54,3 +57,24 @@ class DurationType(str, Enum):
     PERMANENT = "permanent"
     UNTIL_LONG_REST = "until_long_rest"
     ON_CONDITION = "on_condition"
+
+
+class SustainLossPolicy(str, Enum):
+    """Whether involuntary loss must release this exact sustained branch."""
+
+    ORDINARY = "ordinary"
+    REQUIRED = "required"
+
+
+class SustainLossCause(str, Enum):
+    FAILED_SAVE = "failed_save"
+    ZERO_HP = "zero_hp"
+    DEATH = "death"
+
+
+@dataclass(frozen=True)
+class InvoluntarySustainLoss:
+    cause: SustainLossCause
+    sustaining_condition_uuid: UUID
+    parent_event_uuid: UUID
+    slot_uuid: UUID | None = None

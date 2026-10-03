@@ -9,7 +9,7 @@ import pygame
 from dnd.core.life_types import LifeState
 from dnd.types.world import WorldEdgeChannel
 from game.area_media import AreaMedia, AreaSolid
-from game.animation import cast_actor_contacts, ActorContact, CastSample, actor_rest_pose
+from game.animation import cast_actor_contacts, ActorContact, CastSample, actor_rest_pose, BodySample
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, RigLayer
 from game.animation_draw import (
@@ -20,7 +20,7 @@ from game.animation_draw import (
 from game.attack import AttackSample, BoundAttack, attack_actor_contacts
 from game.choreography import BoundChoreography, ChoreographySample
 from game.combat import BoundCast
-from game.condition_animation import ConditionAppearance
+from game.condition_animation import ConditionAppearance, condition_body_pose
 from game.condition_draw import load_condition_layers
 from game.motion import MotionTimeline
 from game.projection import Camera
@@ -45,12 +45,12 @@ def load_choreography_media(bound: BoundChoreography, *,
     attacks: dict[UUID, BodyRows] = {}
     casts: dict[UUID, AnimationMedia] = {}
     strips = load_action_strip_media(bound.strips)
-    poses: dict[str, set[str]] = {}
+    poses: dict[str, list[ConditionAppearance]] = {}
     for condition in bound.conditions:
         for appearance in (condition.before_appearance, condition.after_appearance):
             load_condition_layers(appearance.layers, body_rows)
-            if appearance.body_pose is not None:
-                poses.setdefault(str(condition.target_uuid), set()).add(appearance.body_pose)
+            if appearance.body_pose is not None or appearance.frozen_pose is not None:
+                poses.setdefault(str(condition.target_uuid), []).append(appearance)
     for node in bound.nodes:
         if isinstance(node.bound, BoundAttack):
             timeline = node.bound.timeline
@@ -67,7 +67,9 @@ def load_choreography_media(bound: BoundChoreography, *,
         # Include intermediate condition poses, even if another child removes
         # that condition before the complete lineage settles.
         load_actor_media(timeline.data, tuple(
-            (contact, node.bound.appearances[contact.actor_uuid], tuple(poses[contact.actor_uuid]))
+            (contact, node.bound.appearances[contact.actor_uuid], tuple(condition_body_pose(timeline.data,
+                BodySample(contact.actor_uuid, "Idle", 0, contact.facing), contact, appearance).clip
+                for appearance in poses[contact.actor_uuid]))
             for contact in contacts if contact.actor_uuid in poses
         ), body_rows=body_rows, all_facings=True)
     # These bodies use the ordinary scene drawer. Their retained appearances
@@ -87,18 +89,23 @@ def load_choreography_media(bound: BoundChoreography, *,
 
     for equipment in bound.equipment:
         cue = equipment.bound
-        clips = ((cue.timeline.recipe.bodyClip,) if cue.timeline.recipe.bodyEnabled else ())
+        selected = cue.timeline.body_context
+        clips = ((selected.actor.clip,) if selected is not None and selected.actor.enabled else ())
         load(cue.timeline.actor, (*clips, "Idle"), cue.timeline.data,
              (cue.appearances[cue.timeline.actor.actor_uuid], cue.replacement))
     for condition in bound.conditions:
         if condition.body is not None:
             cue = condition.body
-            load(cue.contact, (cue.clip, "Idle"), cue.data)
+            clips = tuple(condition_body_pose(cue.data, BodySample(cue.contact.actor_uuid, "Idle", 0, cue.contact.facing),
+                cue.contact, appearance).clip for appearance in poses.get(cue.contact.actor_uuid, ()))
+            load(cue.contact, (cue.clip, "Idle", *clips), cue.data)
     for body_action in bound.body_actions:
-        if body_action.enabled:
-            recovery = body_action.recovery
-            clips = (body_action.clip, "Idle", *((recovery.bodyClip,) if recovery and recovery.enabled else ()))
+        recovery = body_action.recovery_body
+        clips = (*((body_action.clip, "Idle") if body_action.enabled else ()),
+                 *((recovery.actor.clip,) if recovery and recovery.actor.enabled else ()))
+        if clips:
             load(body_action.contact, clips, body_action.data)
+        if body_action.enabled:
             load_cast_rows(body_action.data, body_action.contact, body_action.clip,
                 body_action.contact.facing, body_action.cast_layers, body_rows)
     for shove in bound.shoves:
@@ -106,9 +113,12 @@ def load_choreography_media(bound: BoundChoreography, *,
     for hop in bound.body_hops:
         load(hop.contact, (hop.body_clip, "Idle"), hop.data)
     for forced in bound.forced_movement:
-        recovery = forced.data.forced_movement_context.recovery
-        clips = (forced.clip, "Idle", *((recovery.bodyClip,) if recovery.enabled else ()))
+        recovery = forced.recovery_body
+        clips = (forced.clip, "Idle", *((recovery.actor.clip,) if recovery and recovery.actor.enabled else ()))
         load(forced.actor, clips, forced.data)
+    for healing in bound.healing:
+        if healing.contact is not None and healing.body_context is not None and healing.body_context.actor.enabled and healing.data is not None:
+            load(healing.contact, (healing.body_context.actor.clip, "Idle"), healing.data)
     for damage in bound.damage:
         clips = {"Idle", damage.data.death_context.bodyClip if damage.resulting_life_state is LifeState.DEAD
                  else damage.data.damage_context.bodyClip}
@@ -147,8 +157,10 @@ def load_motion_media(timeline: MotionTimeline, data: AnimationData, *,
         data, timeline.actor_state, rig_id=timeline.actor.rig_id))
     clip = timeline.clip if timeline.clip in available_clips(mover, data) else "Idle"
     if timeline.legs:
+        recovery = timeline.recovery_body
+        clips = (clip, *((recovery.actor.clip,) if recovery and recovery.actor.enabled else ()))
         load_actor_media(data, tuple(
-            (actor.contact, actor.layers, (clip,)) for actor in (*appearances, mover)
+            (actor.contact, actor.layers, clips) for actor in (*appearances, mover)
             if actor.contact.actor_uuid == timeline.actor.actor_uuid
         ), body_rows=body_rows, all_facings=True)
     return {reaction.choreography.root_uuid: load_choreography_media(

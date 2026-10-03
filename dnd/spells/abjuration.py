@@ -27,6 +27,7 @@ from dnd.core.base_actions import (
     spell_slot_cost_type,
     Cost,
 )
+from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, OutcomeProtection, SpellProtectionRegistry, SpellProtection
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
@@ -63,7 +64,7 @@ from dnd.core.equipment_types import UnarmoredAc
 
 from dnd.core.dice import AttackOutcome, Dice
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SpellInterruptionLogData
-from dnd.entity import Entity
+from dnd.entity import Entity, PreparedSpatialReturn
 from dnd.actions import SpellAction, SpellEvent, AttackEvent, entity_action_economy_cost_evaluator
 from dnd.creature_transforms import (
     apply_incapacitated_transform,
@@ -1389,6 +1390,8 @@ class BanishedCondition(BaseCondition):
         default=ConditionAgencyDenial.FULL_TURN,
         description="Banishment removes the target's turn agency.",
     )
+    _prepared_return: PreparedSpatialReturn | None = PrivateAttr(default=None)
+
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not isinstance(target, Entity):
@@ -1415,7 +1418,9 @@ class BanishedCondition(BaseCondition):
         *,
         parent_event: Optional[Event] = None,
     ) -> None:
-        """Compensate suspension when application never became authoritative."""
+        """Compensate only uncommitted application, never committed removal."""
+        if self.applied:
+            return
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if not isinstance(target, Entity) or not target.is_spatially_suspended:
             return
@@ -1440,49 +1445,47 @@ class BanishedCondition(BaseCondition):
                 "Banishment compensation failed before restoring objective presence"
             ) from error
 
-    def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
-        """Return entity to original position when banishment ends."""
+    def prepare_removal_state(self, declaration_event: Event) -> Event:
+        release = BaseBlock._terminal_release.get()
+        if release is not None and release.entity_uuid == self.target_entity_uuid:
+            return declaration_event
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            grid = get_map()
-            pos = target.position
+        if target is not None and target.is_spatially_suspended:
+            self._prepared_return = target.prepare_spatial_return(parent_event=declaration_event.uuid)
+        return declaration_event
 
-            occupants = grid.get_entities_at(pos) - {target.uuid}
-            if occupants:
-                for occ_uuid in sorted(occupants, key=str):
-                    occ = Entity.get(occ_uuid)
-                    if occ:
-                        for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)]:
-                            adj = (pos[0] + dx, pos[1] + dy)
-                            if grid.is_walkable_for(adj[0], adj[1], occ_uuid):
-                                Entity.update_entity_position(
-                                    occ,
-                                    adj,
-                                    parent_event=(
-                                        removal_event.uuid
-                                        if removal_event else None
-                                    ),
-                                )
-                                break
-                    break
+    def cancel_prepared_removal(self, reason: str) -> None:
+        self._prepared_return = None
 
-            if target.is_spatially_suspended:
-                try:
-                    target.restore_spatial_presence(
-                        pos,
-                        parent_event=removal_event.uuid if removal_event else None,
-                    )
-                except PositionPublicationError:
-                    if not (
-                        target.is_deployed
-                        and not target.is_spatially_suspended
-                        and grid.get_entity_position(target.uuid) == pos
-                        and target.uuid in grid.get_entities_at(pos)
-                    ):
-                        raise
+    def prepared_removal_occupancies(self) -> tuple[tuple[int, int], ...]:
+        prepared = self._prepared_return
+        if prepared is None:
+            return ()
+        return (prepared.position, *(destination for _, _, destination in prepared.displaced))
 
-        return super()._remove(removal_event)
+    def validate_prepared_removal(self) -> bool:
+        prepared = self._prepared_return
+        return prepared is None or prepared.entity.validate_spatial_return(prepared)
 
+    def _remove(self, removal_event: Event | None = None) -> Event | None:
+        if self._prepared_return is not None:
+            self._prepared_return.entity.commit_spatial_return(self._prepared_return)
+        return removal_event
+
+    def on_membership_changed(self, event: Event) -> None:
+        if self.applied:
+            return
+        prepared, self._prepared_return = self._prepared_return, None
+        if prepared is not None:
+            try:
+                prepared.entity.publish_spatial_return(prepared)
+            except PositionPublicationError:
+                # Preserve the established Banishment return contract: observer
+                # failures do not turn an authoritative return into a retry.
+                if not (prepared.committed and prepared.entity.is_deployed
+                        and not prepared.entity.is_spatially_suspended
+                        and get_map().get_entity_position(prepared.entity.uuid) == prepared.position):
+                    raise
 
 class Banishment(SpellAction):
     """Banish one failed-save target and link it to concentration.
@@ -3225,8 +3228,13 @@ class AntimagicSuppression(BaseCondition):
         )
         return [], [], [], [], effect_event
 
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Re-add the suppressed condition when the marker is removed."""
+    def on_membership_changed(self, event: Event) -> None:
+        """Restore only after the complete removal authority has committed."""
+        if self.applied:
+            return
+        release = BaseBlock._terminal_release.get()
+        if release is not None and release.entity_uuid == self.target_entity_uuid:
+            return
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         cond = self.suppressed_condition
         if target and target.is_active and not cond.duration.is_expired:
@@ -3234,7 +3242,7 @@ class AntimagicSuppression(BaseCondition):
                 _, parent_cond_uuid = self.saved_parent_link
                 parent_cond = BaseObject.get(parent_cond_uuid)
                 if not isinstance(parent_cond, BaseCondition) or not parent_cond.applied:
-                    return super()._remove(event)
+                    return
 
             cond.modifers_uuids.clear()
             cond.event_handlers_uuids.clear()
@@ -3250,7 +3258,7 @@ class AntimagicSuppression(BaseCondition):
                 if isinstance(parent_cond, BaseCondition) and parent_cond.applied:
                     parent_cond.add_linked_condition(target.uuid, cond.uuid)
 
-        return super()._remove(event)
+        return
 
 
 ANTIMAGIC_FIELD_ZONE_CONTENT_REF = ContentRef(
@@ -3342,7 +3350,9 @@ class AntimagicFieldZone(AreaCondition):
     ) -> None:
         """Release suppression and protection state owned by this field."""
         SpellProtectionRegistry.unregister(self.uuid)
-        self._unsuppress_all_entities(parent_event=parent_event)
+        if not self.applied:
+            self._unsuppress_all_entities(parent_event=parent_event)
+        self.suppression_markers.clear()
         super()._release_owned_runtime_state(parent_event=parent_event)
 
     def _apply_appearance_effect(
@@ -3410,6 +3420,8 @@ class AntimagicFieldZone(AreaCondition):
                 if entity.uuid not in self.suppression_markers:
                     self.suppression_markers[entity.uuid] = []
                 self.suppression_markers[entity.uuid].append(marker.uuid)
+                self.add_linked_condition(entity.uuid, marker.uuid)
+                marker.parent_link = (self.uuid, self.uuid)
 
     def _unsuppress_entity(self, entity_uuid: UUID, parent_event: Optional[Event] = None) -> None:
         """Remove all suppression markers from an entity, restoring conditions."""

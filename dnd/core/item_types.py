@@ -27,6 +27,14 @@ class ItemResourceChange(str, Enum):
     RECHARGE = "recharge"
 
 
+class ItemReleaseReason(str, Enum):
+    """Why an existing container releases one exact item identity."""
+
+    TRANSFERRED = "transferred"
+    RETIRED = "retired"
+    OWNER_DEPARTED = "owner_departed"
+
+
 class ItemRarity(str, Enum):
     """Stable rarity labels carried by item definitions and presentation facts."""
 

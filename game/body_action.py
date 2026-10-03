@@ -10,9 +10,11 @@ from typing import Mapping
 from uuid import UUID
 
 from dnd.core.events import EventType
-from game.animation import ActorContact, BodySample, body_clip, body_duration, body_frame, facing_for_delta
+from game.animation import (ActorContact, BodySample, body_context, context_duration, context_anchor_ms,
+                            resolve_body_context, sample_context_body, sample_idle_body, facing_for_delta)
 from game.animation_types import (ActionFeedback, AnimationData, BodyActionRecipe, Facing8,
                                   StudioActorLayer, StudioCondition, StudioRecovery, StudioSpellDraft)
+from game.animation_types import BodyContext, ContentBodyQualifier, ActionFrameAnchor
 from game.combat import actor_contact, actor_is_visible
 from game.player_facts import ActionFact, ConditionChangeFact, PlayerNode, PlayerState, SpellFact
 from game.animation_rates import action_playback_rate
@@ -50,6 +52,8 @@ class BodyActionCue:
     interaction_object_uuid: UUID | None = None
     relocates: bool = False
     cast_layers: tuple[StudioActorLayer, ...] = ()
+    body_context: BodyContext | None = None
+    recovery_body: BodyContext | None = None
 
 
 def body_cast_limitations(draft: StudioSpellDraft) -> tuple[str, ...]:
@@ -155,38 +159,49 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
                 contact = replace(contact, facing=facing_for_delta(
                     (target.grid[0] - contact.grid[0], target.grid[1] - contact.grid[1]), data))
         gaps.extend(body_action_limitations(action))
-    speed *= action_playback_rate(data, actor)
-    metadata = body_clip(data, contact, clip)
-    if enabled and effect_frame >= metadata.frames:
-        raise ValueError(f"unreachable body action effect frame {effect_frame} in {clip}")
-    body_end = start_ms + (body_duration(metadata, speed) if enabled else 0)
-    effect_ms = start_ms + (effect_frame * 1000 / (metadata.fps * speed) if enabled else 0)
+    if draft is not None:
+        qualifier = ContentBodyQualifier(contentRef=draft.definitionRef)
+    else:
+        assert action is not None
+        qualifier = ContentBodyQualifier(contentRef=action.definitionRef)
+    selected = resolve_body_context(data, contact, "body_action", qualifier, body_context(
+        clip, speed, enabled=enabled, anchors=(ActionFrameAnchor(name="effect", frame=effect_frame),)))
+    selected = selected.model_copy(update={"actor": selected.actor.model_copy(update={
+        "playbackSpeed": selected.actor.playbackSpeed * action_playback_rate(data, actor)})})
+    recovery_body = resolve_body_context(data, contact, "body_action_recovery", qualifier, body_context(
+        recovery.bodyClip if recovery else "Idle", recovery.bodyPlaybackSpeed if recovery else 1,
+        enabled=recovery.enabled if recovery else False))
+    clip, speed, enabled = selected.actor.clip, selected.actor.playbackSpeed, selected.actor.enabled
+    body_end = start_ms + context_duration(data, contact, selected)
+    effect_ms = start_ms + context_anchor_ms(data, contact, selected, "effect")
     cue = BodyActionCue(event.uuid, contact, data, recipe_id, clip, speed, start_ms, effect_ms,
         body_end, body_end, body_end, enabled, hidden_slots, hide_weapon,
         recovery, condition, feedback, tuple(gaps), interaction_object_uuid,
-        behavior_id in data.relocation_actions, cast_layers)
+        behavior_id in data.relocation_actions, cast_layers, selected, recovery_body)
     return join_body_action(cue, data, body_end)
 
 
 def join_body_action(cue: BodyActionCue, data: AnimationData, child_end_ms: float) -> BodyActionCue:
     """Both original leaves await the body and its children before restoring slots."""
     join = max(cue.body_end_ms, child_end_ms)
-    recovery_duration = (body_duration(body_clip(data, cue.contact, cue.recovery.bodyClip),
-                                      cue.recovery.bodyPlaybackSpeed)
-                         if cue.recovery is not None and cue.recovery.enabled else 0)
+    recovery_duration = context_duration(data, cue.contact, cue.recovery_body) if cue.recovery_body is not None else 0
     return replace(cue, join_ms=join, complete_ms=join + recovery_duration)
 
 
 def sample_body_action(cue: BodyActionCue, data: AnimationData, elapsed_ms: float) -> BodySample | None:
-    if not cue.enabled or elapsed_ms < cue.start_ms or elapsed_ms >= cue.complete_ms:
+    if elapsed_ms < cue.start_ms or elapsed_ms >= cue.complete_ms:
         return None
     during_body = elapsed_ms < cue.body_end_ms
-    clip, start, speed = (cue.clip, cue.start_ms, cue.playback_speed) if during_body else ("Idle", cue.body_end_ms, 1)
-    if cue.recovery is not None and cue.recovery.enabled and elapsed_ms >= cue.join_ms:
-        clip, start, speed = cue.recovery.bodyClip, cue.join_ms, cue.recovery.bodyPlaybackSpeed
-    metadata = body_clip(data, cue.contact, clip)
-    return BodySample(cue.contact.actor_uuid, clip,
-        body_frame(elapsed_ms - start, metadata.fps * speed, metadata.frames, loop=clip == "Idle"),
-        cue.contact.facing, during_body and cue.hide_weapon_during_body,
+    if cue.recovery_body is not None and cue.recovery_body.actor.enabled and elapsed_ms >= cue.join_ms:
+        body = sample_context_body(data, cue.contact, cue.recovery_body, elapsed_ms - cue.join_ms)
+    elif not cue.enabled:
+        return None
+    elif during_body:
+        selected = cue.body_context or body_context(cue.clip, cue.playback_speed)
+        body = sample_context_body(data, cue.contact, selected, elapsed_ms - cue.start_ms)
+    else:
+        body = sample_idle_body(data, cue.contact, elapsed_ms - cue.body_end_ms)
+    return replace(body,
+        hide_weapon=during_body and cue.hide_weapon_during_body,
         cast_layers=cue.cast_layers if during_body else (),
         hidden_slots=cue.hidden_slots if elapsed_ms < cue.join_ms else ())

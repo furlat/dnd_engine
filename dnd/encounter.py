@@ -14,8 +14,11 @@ __all__ = [
 ]
 from uuid import UUID
 from datetime import UTC, datetime
-from pydantic import Field, computed_field
+from pydantic import Field, PrivateAttr, computed_field
 from enum import Enum
+from dataclasses import dataclass
+from contextlib import contextmanager
+from collections.abc import Iterator
 import logging
 
 from dnd.core.base_object import BaseObject
@@ -168,6 +171,7 @@ class CombatantState(BaseObject):
 
     Attributes:
         entity_uuid: UUID of the entity in the encounter.
+        joined_after_uuid: Existing combatant anchoring a newly joined creature, when any.
         controller_uuid: UUID of the controller assigned to the entity.
         initiative_roll: Natural d20 result used for initiative.
         initiative_bonus: Modifier added to the initiative roll.
@@ -180,6 +184,8 @@ class CombatantState(BaseObject):
     """
 
     entity_uuid: UUID = Field(description="UUID of the entity in the encounter.")
+    joined_after_uuid: UUID | None = Field(default=None,
+        description="Existing combatant anchoring this creature's insertion, when any.")
     controller_uuid: UUID = Field(description="UUID of the controller assigned to the entity.")
     initiative_roll: int = Field(default=0, description="Natural d20 result used for initiative.")
     initiative_bonus: int = Field(default=0, description="Modifier added to the initiative roll.")
@@ -221,6 +227,16 @@ class CombatantState(BaseObject):
         return entity.is_encounter_alive
 
 
+@dataclass(slots=True)
+class PreparedCombatantJoin:
+    encounter: 'Encounter'
+    entity: Entity
+    controller: Controller
+    combatant: CombatantState
+    after_uuid: UUID | None
+    committed: bool = False
+
+
 class Encounter(BaseObject):
     """Manage tactical combat turn flow and combat-log capture.
 
@@ -243,6 +259,9 @@ class Encounter(BaseObject):
     _encounter_registry: ClassVar[Dict[UUID, 'Encounter']] = {}
     _active_encounter: ClassVar[Optional['Encounter']] = None
     _combat_log_listeners: ClassVar[List[Callable[['Encounter', int, CombatLogEntry, Event], None]]] = []
+    _pending_leaves: Dict[UUID, Event | None] = PrivateAttr(default_factory=dict)
+    _membership_execution_depth: int = PrivateAttr(default=0)
+    _departed_turn_successor: bool = PrivateAttr(default=False)
 
     name: str = Field(default="Encounter", description="Display name of the encounter.")
     combatants: Dict[UUID, CombatantState] = Field(
@@ -365,6 +384,127 @@ class Encounter(BaseObject):
         combatant = self.combatants.get(entity_uuid)
         return combatant.controller if combatant else None
 
+    def prepare_combatant_join(self, entity: Entity, controller: Controller, *,
+                               after_uuid: UUID | None) -> PreparedCombatantJoin:
+        """Admit one live join without rerolling or publishing initiative."""
+        if (self.state is not EncounterState.ACTIVE or (after_uuid is not None and after_uuid not in self.combatants)
+                or after_uuid in self._pending_leaves or entity.uuid in self.combatants):
+            raise ValueError("Live join requires a present anchor and a new combatant")
+        anchor = self.combatants[after_uuid] if after_uuid is not None else None
+        combatant = CombatantState(source_entity_uuid=entity.uuid, entity_uuid=entity.uuid,
+            controller_uuid=controller.uuid, initiative_bonus=entity.initiative.normalized_score,
+            initiative_total=anchor.initiative_total if anchor is not None else 0, joined_after_uuid=after_uuid)
+        if anchor is None:
+            self._roll_combatant_initiative(combatant)
+        return PreparedCombatantJoin(self, entity, controller, combatant, after_uuid)
+
+    def validate_combatant_join(self, prepared: PreparedCombatantJoin) -> None:
+        if prepared.encounter is not self:
+            raise ValueError("Combatant join belongs to another encounter")
+        if prepared.committed:
+            return
+        if (self.state is not EncounterState.ACTIVE
+                or (prepared.after_uuid is not None and prepared.after_uuid not in self.initiative_order)
+                or prepared.after_uuid in self._pending_leaves
+                or prepared.entity.uuid in self.combatants
+                or Entity.get(prepared.entity.uuid) is not prepared.entity
+                or Controller.get(prepared.controller.uuid) is not prepared.controller):
+            raise ValueError("Admitted combatant join is no longer available")
+
+    def commit_combatant_join(self, prepared: PreparedCombatantJoin) -> None:
+        self.validate_combatant_join(prepared)
+        if prepared.committed:
+            return
+        if not prepared.entity.creation_committed or not prepared.entity.is_deployed:
+            raise ValueError("Live combatant must have committed birth and presence")
+        active_uuid = (self.initiative_order[self.current_turn_index]
+                       if self.initiative_order else None)
+        if prepared.after_uuid is None:
+            incoming_order = (prepared.combatant.initiative_total, prepared.combatant.initiative_bonus)
+            index = next((index for index, identity in enumerate(self.initiative_order)
+                if (self.combatants[identity].initiative_total, self.combatants[identity].initiative_bonus)
+                < incoming_order), len(self.initiative_order))
+        else:
+            index = self.initiative_order.index(prepared.after_uuid) + 1
+            while (index < len(self.initiative_order)
+                   and self.combatants[self.initiative_order[index]].joined_after_uuid == prepared.after_uuid):
+                index += 1
+        self.combatants[prepared.entity.uuid] = prepared.combatant
+        self.initiative_order.insert(index, prepared.entity.uuid)
+        if active_uuid is not None:
+            self.current_turn_index = self.initiative_order.index(active_uuid)
+        prepared.committed = True
+
+    def cancel_combatant_join(self, prepared: PreparedCombatantJoin) -> None:
+        if prepared.encounter is not self or prepared.committed:
+            raise ValueError("Only an uncommitted combatant join may be canceled")
+        prepared.combatant.remove_from_register()
+
+    def release_inactive_combatant(self, entity_uuid: UUID) -> None:
+        """Release an ended encounter's reference without retiring its living actor."""
+        if self.state is EncounterState.ACTIVE:
+            raise ValueError("Active combatants must leave at an execution boundary")
+        combatant = self.combatants.pop(entity_uuid, None)
+        if combatant is not None:
+            combatant.remove_from_register()
+        self.initiative_order = [identity for identity in self.initiative_order if identity != entity_uuid]
+
+    def request_combatant_leave(self, entity_uuid: UUID, *, parent_event: Event | None = None) -> None:
+        """Revoke departing agency now; edit initiative at the next native boundary."""
+        if entity_uuid not in self.combatants or entity_uuid in self._pending_leaves:
+            return
+        self._pending_leaves[entity_uuid] = parent_event
+        entity = Entity.get(entity_uuid)
+        if entity is not None:
+            entity.revoke_runtime_agency()
+
+    @contextmanager
+    def membership_execution(self) -> Iterator[None]:
+        """Keep initiative stable through one native action or turn callback."""
+        self._membership_execution_depth += 1
+        try:
+            yield
+        finally:
+            self._membership_execution_depth -= 1
+            self.finish_combatant_leaves()
+
+    def finish_combatant_leaves(self) -> None:
+        if self._membership_execution_depth or not self._pending_leaves:
+            return
+        pending = self._pending_leaves
+        self._pending_leaves = {}
+        previous_order = tuple(self.initiative_order)
+        active_uuid = (previous_order[self.current_turn_index]
+                       if previous_order and self.current_turn_index < len(previous_order) else None)
+        errors: list[BaseException] = []
+        if active_uuid is not None and active_uuid in pending and self.turn_state is TurnState.IN_PROGRESS:
+            parent = pending[active_uuid]
+            try:
+                TurnEndEvent(source_entity_uuid=active_uuid, entity_uuid=active_uuid,
+                    encounter_uuid=self.uuid, round_number=self.round_number,
+                    turn_index=self.current_turn_index, phase=EventPhase.COMPLETION,
+                    parent_event=parent.uuid if parent is not None else None)
+            except BaseException as error:
+                errors.append(error)
+            finally:
+                self.turn_state = TurnState.ENDED
+                self._end_turn_execution()
+        for entity_uuid in pending:
+            combatant = self.combatants.pop(entity_uuid, None)
+            if combatant is not None:
+                combatant.remove_from_register()
+        self.initiative_order = [uuid for uuid in previous_order if uuid not in pending]
+        if active_uuid is not None and active_uuid in self.initiative_order:
+            self.current_turn_index = self.initiative_order.index(active_uuid)
+        elif active_uuid is not None:
+            self.current_turn_index = sum(uuid not in pending
+                for uuid in previous_order[:previous_order.index(active_uuid)])
+            self._departed_turn_successor = True
+        if self.state is EncounterState.ACTIVE:
+            self._check_encounter_end()
+        if errors:
+            raise BaseExceptionGroup("Departed turn publication failed", errors)
+
     def set_controller_for(self, entity_uuid: UUID, controller: Controller) -> UUID:
         """Replace the controller assigned to one combatant.
 
@@ -385,6 +525,15 @@ class Encounter(BaseObject):
         combatant.controller_uuid = controller.uuid
         return previous_controller_uuid
 
+    @staticmethod
+    def _roll_combatant_initiative(combatant: CombatantState) -> None:
+        entity = combatant.entity
+        if entity is None:
+            return
+        roll = Dice(count=1, value=20, bonus=entity.initiative, roll_type=RollType.CHECK).roll
+        combatant.initiative_roll = roll.results if isinstance(roll.results, int) else roll.results[0]
+        combatant.initiative_total = roll.total
+
     def roll_initiative(self) -> None:
         """
         Roll initiative for all combatants and establish turn order.
@@ -394,14 +543,7 @@ class Encounter(BaseObject):
         2. Random (the earlier roll wins)
         """
         for combatant in self.combatants.values():
-            entity = combatant.entity
-            if not entity:
-                continue
-            dice = Dice(count=1, value=20, bonus=entity.initiative, roll_type=RollType.CHECK)
-            roll = dice.roll
-            roll_result = roll.results if isinstance(roll.results, int) else roll.results[0]
-            combatant.initiative_roll = roll_result
-            combatant.initiative_total = roll.total
+            self._roll_combatant_initiative(combatant)
 
         sorted_combatants = sorted(
             self.combatants.values(),
@@ -413,14 +555,16 @@ class Encounter(BaseObject):
 
     def get_current_entity(self) -> Optional[Entity]:
         """Get the entity whose turn it is."""
-        if not self.initiative_order or self.state != EncounterState.ACTIVE:
+        if (not self.initiative_order or self.state != EncounterState.ACTIVE
+                or self.current_turn_index >= len(self.initiative_order)):
             return None
         entity_uuid = self.initiative_order[self.current_turn_index]
         return Entity.get(entity_uuid)
 
     def get_current_combatant(self) -> Optional[CombatantState]:
         """Get the combatant state for current turn."""
-        if not self.initiative_order or self.state != EncounterState.ACTIVE:
+        if (not self.initiative_order or self.state != EncounterState.ACTIVE
+                or self.current_turn_index >= len(self.initiative_order)):
             return None
         entity_uuid = self.initiative_order[self.current_turn_index]
         return self.combatants.get(entity_uuid)
@@ -581,29 +725,32 @@ class Encounter(BaseObject):
         self._begin_turn_execution()
 
         try:
-            entity.on_turn_start(
-                encounter_uuid=self.uuid,
-                round_number=self.round_number,
-                turn_index=self.current_turn_index,
-            )
-            self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
-            self._refresh_turn_start_senses(entity)
+            with self.membership_execution():
+                entity.on_turn_start(
+                    encounter_uuid=self.uuid,
+                    round_number=self.round_number,
+                    turn_index=self.current_turn_index,
+                )
+                if entity.uuid in self._pending_leaves:
+                    return None
+                self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
+                self._refresh_turn_start_senses(entity)
 
-            if controller:
-                controller.on_turn_start(entity, self._build_turn_context(entity))
+                if controller:
+                    controller.on_turn_start(entity, self._build_turn_context(entity))
 
-            entity.on_turn_end(
-                encounter_uuid=self.uuid,
-                round_number=self.round_number,
-                turn_index=self.current_turn_index,
-            )
+                entity.on_turn_end(
+                    encounter_uuid=self.uuid,
+                    round_number=self.round_number,
+                    turn_index=self.current_turn_index,
+                )
 
-            if controller:
-                controller.on_turn_end(entity, self._build_turn_context(entity))
+                if controller and entity.uuid not in self._pending_leaves:
+                    controller.on_turn_end(entity, self._build_turn_context(entity))
 
-            combatant.has_acted_this_round = True
-            combatant.turn_count += 1
-            self.turn_state = TurnState.ENDED
+                combatant.has_acted_this_round = True
+                combatant.turn_count += 1
+                self.turn_state = TurnState.ENDED
         finally:
             self._end_turn_execution()
         return self._skip_to_next_turn()
@@ -638,6 +785,12 @@ class Encounter(BaseObject):
         if self.state != EncounterState.ACTIVE:
             return None
 
+        self.finish_combatant_leaves()
+        if self.state is not EncounterState.ACTIVE:
+            return None
+        if self._departed_turn_successor:
+            self._advance_turn_slot()
+
         if self.turn_state == TurnState.IN_PROGRESS:
             raise ValueError("Turn already in progress, call end_turn first")
 
@@ -659,18 +812,21 @@ class Encounter(BaseObject):
         self._begin_turn_execution()
 
         try:
-            event = entity.on_turn_start(
-                encounter_uuid=self.uuid,
-                round_number=self.round_number,
-                turn_index=self.current_turn_index
-            )
-            self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
+            with self.membership_execution():
+                event = entity.on_turn_start(
+                    encounter_uuid=self.uuid,
+                    round_number=self.round_number,
+                    turn_index=self.current_turn_index
+                )
+                if entity.uuid in self._pending_leaves:
+                    return None
+                self.current_turn_started_source_event_cursor = EventQueue.event_cursor()
 
-            self._refresh_turn_start_senses(entity)
+                self._refresh_turn_start_senses(entity)
 
-            if controller:
-                context = self._build_turn_context(entity)
-                controller.on_turn_start(entity, context)
+                if controller:
+                    context = self._build_turn_context(entity)
+                    controller.on_turn_start(entity, context)
         except Exception:
             self._end_turn_execution()
             self.turn_state = TurnState.NOT_STARTED
@@ -700,6 +856,7 @@ class Encounter(BaseObject):
         2. Notify controller
         3. Update combatant state
         """
+        self.finish_combatant_leaves()
         if self.state != EncounterState.ACTIVE:
             return None
 
@@ -714,19 +871,20 @@ class Encounter(BaseObject):
             return None
 
         try:
-            event = entity.on_turn_end(
-                encounter_uuid=self.uuid,
-                round_number=self.round_number,
-                turn_index=self.current_turn_index
-            )
+            with self.membership_execution():
+                event = entity.on_turn_end(
+                    encounter_uuid=self.uuid,
+                    round_number=self.round_number,
+                    turn_index=self.current_turn_index
+                )
 
-            if controller:
-                context = self._build_turn_context(entity)
-                controller.on_turn_end(entity, context)
+                if controller and entity.uuid not in self._pending_leaves:
+                    context = self._build_turn_context(entity)
+                    controller.on_turn_end(entity, context)
 
-            combatant.has_acted_this_round = True
-            combatant.turn_count += 1
-            self.turn_state = TurnState.ENDED
+                combatant.has_acted_this_round = True
+                combatant.turn_count += 1
+                self.turn_state = TurnState.ENDED
         finally:
             self._end_turn_execution()
 
@@ -755,7 +913,12 @@ class Encounter(BaseObject):
 
     def _advance_turn_slot(self) -> None:
         """Commit the next initiative slot without starting its turn."""
-        self.current_turn_index += 1
+        if self.state is not EncounterState.ACTIVE:
+            return
+        if self._departed_turn_successor:
+            self._departed_turn_successor = False
+        else:
+            self.current_turn_index += 1
 
         if self.current_turn_index >= len(self.initiative_order):
             self._advance_round()
@@ -769,7 +932,7 @@ class Encounter(BaseObject):
         Returns True if entity has any action economy remaining.
         """
         entity = self.get_current_entity()
-        if not entity:
+        if not entity or not entity.can_take_actions():
             return False
 
         ae = entity.action_economy
@@ -788,6 +951,7 @@ class Encounter(BaseObject):
             entity_uuid=entity.uuid,
             round_number=self.round_number,
             turn_index=self.current_turn_index,
+            turn_execution_id=self.current_turn_execution_id,
             actions_remaining=ae.actions.normalized_score,
             bonus_actions_remaining=ae.bonus_actions.normalized_score,
             reactions_remaining=ae.reactions.normalized_score,
@@ -960,7 +1124,7 @@ class Encounter(BaseObject):
             List of DeathEvent for any combatants that died
         """
         death_events = []
-        for combatant in self.combatants.values():
+        for combatant in tuple(self.combatants.values()):
             entity = combatant.entity
             if entity is None:
                 continue
@@ -1097,7 +1261,10 @@ class Encounter(BaseObject):
             if not controller.can_continue_turn(entity, context):
                 break
 
-            step = controller.execute_next_action(entity, context)
+            with self.membership_execution():
+                step = controller.execute_next_action(entity, context)
+            if self.get_current_entity() is not entity:
+                return None
             if step.end_turn:
                 break
             _event = step.event
@@ -1169,6 +1336,9 @@ class Encounter(BaseObject):
     def _advance_one_controller_action_boundary(self) -> AdvanceResult:
         """Implement one autonomous decision or expose a wait boundary."""
         log_start = len(self.combat_log)
+        self.finish_combatant_leaves()
+        if self.state is EncounterState.ACTIVE and self._departed_turn_successor:
+            self._advance_turn_slot()
         if self.state is EncounterState.ENDED:
             return AdvanceResult(
                 source_entity_uuid=self.uuid,
@@ -1283,7 +1453,8 @@ class Encounter(BaseObject):
                 log_start_index=log_start,
             )
 
-        step = controller.execute_next_action(entity, context)
+        with self.membership_execution():
+            step = controller.execute_next_action(entity, context)
         if step.event is not None:
             deaths = self.check_deaths()
             if deaths and self.state is not EncounterState.ACTIVE:
@@ -1441,8 +1612,8 @@ class Encounter(BaseObject):
         if not entity:
             raise ValueError(f"Entity {entity_uuid} not found")
 
-        event = execute_by_index(entity, template_name, target_index or 0)
-
-        _ = self.check_deaths()
+        with self.membership_execution():
+            event = execute_by_index(entity, template_name, target_index or 0)
+            _ = self.check_deaths()
 
         return event

@@ -1,0 +1,14 @@
+{
+  "source_id": "wotc.srd_5_2_cc",
+  "source_family": "srd_5_2_cc",
+  "title": "System Reference Document 5.2",
+  "source_version": "5.2",
+  "rules_baseline": "2024",
+  "license_id": "CC-BY-4.0",
+  "canonical_uri": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.pdf",
+  "document_digest": "cf18e1f88a360646940b6fada63fd1bd04c1c02581ca668a9115c2f4577bf8aa",
+  "attribution_text": "This work includes material from the System Reference Document 5.2 (\"SRD 5.2\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+  "notices": [
+    "Selected dinosaur numerical baselines adapted under the explicitly authored 5.1-style mechanics; no wholesale 2024 rules adoption."
+  ]
+}

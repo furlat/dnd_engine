@@ -3,8 +3,8 @@
 from dataclasses import dataclass, replace
 from uuid import UUID
 
-from game.animation import ActorContact, BodySample, body_clip
-from game.animation_types import AnimationData, SaveHop
+from game.animation import ActorContact, BodySample, body_clip, body_context, resolve_body_context, context_frame
+from game.animation_types import AnimationData, SaveHop, BodyContext, ContentBodyQualifier, RoleDefault
 from game.player_facts import ForcedMovementFact, MechanismActivationFact, PlayerNode, SavingThrowFact
 
 
@@ -20,6 +20,7 @@ class BodyHopCue:
     start_ms: float
     end_ms: float
     data: AnimationData
+    body_context: BodyContext | None = None
 
 
 def bind_save_hop(activation: PlayerNode, children: tuple[PlayerNode, ...],
@@ -43,10 +44,13 @@ def bind_save_hop(activation: PlayerNode, children: tuple[PlayerNode, ...],
         return None
     landing = replace(contact, grid=movement.fact.end_position,
         elevation_steps=landing_elevation_steps, body_lift_px=0)
-    metadata = body_clip(data, contact, recipe.body_clip)
-    return BodyHopCue(save.uuid, movement.uuid, contact, landing, recipe.body_clip, metadata.frames,
+    draft = data.drafts.get(recipe.effect_id)
+    qualifier = ContentBodyQualifier(contentRef=draft.definitionRef) if draft is not None else RoleDefault()
+    selected = resolve_body_context(data, contact, "save_avoidance", qualifier, body_context(recipe.body_clip))
+    metadata = body_clip(data, contact, selected.actor.clip if selected.actor.enabled else "Idle")
+    return BodyHopCue(save.uuid, movement.uuid, contact, landing, selected.actor.clip if selected.actor.enabled else "Idle", metadata.frames,
         recipe.height_px,
-        contact_ms - recipe.duration_ms / 2, contact_ms + recipe.duration_ms / 2, data)
+        contact_ms - recipe.duration_ms / 2, contact_ms + recipe.duration_ms / 2, data, selected)
 
 
 def sample_body_hop(cue: BodyHopCue, elapsed_ms: float) -> tuple[BodySample, ActorContact] | None:
@@ -57,6 +61,9 @@ def sample_body_hop(cue: BodyHopCue, elapsed_ms: float) -> tuple[BodySample, Act
     if progress == 1:
         return BodySample(cue.landing.actor_uuid, "Idle", 0, cue.landing.facing), cue.landing
     frame = min(cue.frames - 1, int(progress * cue.frames))
+    if cue.body_context is not None:
+        frame = (context_frame(cue.body_context, body_clip(cue.data, cue.contact, cue.body_clip),
+                               elapsed_ms - cue.start_ms, progress=progress) if cue.body_context.actor.enabled else 0)
     arc = 4 * progress * (1 - progress)
     contact = replace(cue.contact,
         grid=(cue.contact.grid[0]+(cue.landing.grid[0]-cue.contact.grid[0])*progress,

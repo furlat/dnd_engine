@@ -1,0 +1,700 @@
+{
+  "rig_id": "smallscale.brownbear",
+  "creature_content_refs": [
+    "content.neurodragon:creature:creature.brown_bear@1"
+  ],
+  "rig": {
+    "cell_width": 64,
+    "cell_height": 64,
+    "origin_y_from_ground": 20,
+    "facing_rows": {
+      "E": 0,
+      "SE": 1,
+      "S": 2,
+      "SW": 3,
+      "W": 4,
+      "NW": 5,
+      "N": 6,
+      "NE": 7
+    },
+    "slot_order": [
+      "shadow",
+      "body"
+    ],
+    "slot_categories": {
+      "shadow": [
+        "BrownBearShadow"
+      ],
+      "body": [
+        "BrownBear"
+      ]
+    },
+    "clips": {
+      "Idle": {
+        "source_clip": "Idle",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BrownBear": "/rigs/brownbear/body/Idle.png",
+          "BrownBearShadow": "/rigs/brownbear/shadow/Idle.png"
+        }
+      },
+      "Run": {
+        "source_clip": "Run",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BrownBear": "/rigs/brownbear/body/Run.png",
+          "BrownBearShadow": "/rigs/brownbear/shadow/Run.png"
+        }
+      },
+      "TakeDamage": {
+        "source_clip": "TakeDamage",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BrownBear": "/rigs/brownbear/body/TakeDamage.png",
+          "BrownBearShadow": "/rigs/brownbear/shadow/TakeDamage.png"
+        }
+      },
+      "Die": {
+        "source_clip": "Die",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BrownBear": "/rigs/brownbear/body/Die.png",
+          "BrownBearShadow": "/rigs/brownbear/shadow/Die.png"
+        }
+      },
+      "Attack2": {
+        "source_clip": "Attack2",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BrownBear": "/rigs/brownbear/body/Attack2.png",
+          "BrownBearShadow": "/rigs/brownbear/shadow/Attack2.png"
+        }
+      },
+      "Attack3": {
+        "source_clip": "Attack3",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BrownBear": "/rigs/brownbear/body/Attack3.png",
+          "BrownBearShadow": "/rigs/brownbear/shadow/Attack3.png"
+        }
+      }
+    },
+    "body_anchor": {
+      "x": 32.0,
+      "y": 36
+    },
+    "rest_pose_anchors": {
+      "Die": {
+        "E": {
+          "x": 31,
+          "y": 42
+        },
+        "SE": {
+          "x": 28,
+          "y": 41
+        },
+        "S": {
+          "x": 27,
+          "y": 39
+        },
+        "SW": {
+          "x": 27,
+          "y": 36
+        },
+        "W": {
+          "x": 32,
+          "y": 35
+        },
+        "NW": {
+          "x": 35,
+          "y": 37
+        },
+        "N": {
+          "x": 36,
+          "y": 40
+        },
+        "NE": {
+          "x": 35,
+          "y": 42
+        }
+      }
+    },
+    "body_contexts": [
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "loop"
+        }
+      },
+      {
+        "role": "movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "shove",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Attack2",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "contact",
+              "frame": 6
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "TakeDamage",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "brace",
+              "frame": 5
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "equipment",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "healing",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "save_avoidance",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_entry",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_hold",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "final_rest",
+          "restFrame": 14
+        }
+      },
+      {
+        "role": "condition_exit",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "reversed": true
+        }
+      }
+    ],
+    "shadow_alpha": 1
+  },
+  "resources": {
+    "/rigs/brownbear/body/Idle.png": "game/assets/rigs/brownbear/body/Idle.png",
+    "/rigs/brownbear/body/Run.png": "game/assets/rigs/brownbear/body/Run.png",
+    "/rigs/brownbear/body/TakeDamage.png": "game/assets/rigs/brownbear/body/TakeDamage.png",
+    "/rigs/brownbear/body/Die.png": "game/assets/rigs/brownbear/body/Die.png",
+    "/rigs/brownbear/body/Attack2.png": "game/assets/rigs/brownbear/body/Attack2.png",
+    "/rigs/brownbear/body/Attack3.png": "game/assets/rigs/brownbear/body/Attack3.png",
+    "/rigs/brownbear/shadow/Idle.png": "game/assets/rigs/brownbear/shadow/Idle.png",
+    "/rigs/brownbear/shadow/Run.png": "game/assets/rigs/brownbear/shadow/Run.png",
+    "/rigs/brownbear/shadow/TakeDamage.png": "game/assets/rigs/brownbear/shadow/TakeDamage.png",
+    "/rigs/brownbear/shadow/Die.png": "game/assets/rigs/brownbear/shadow/Die.png",
+    "/rigs/brownbear/shadow/Attack2.png": "game/assets/rigs/brownbear/shadow/Attack2.png",
+    "/rigs/brownbear/shadow/Attack3.png": "game/assets/rigs/brownbear/shadow/Attack3.png"
+  },
+  "provenance": {
+    "files": {
+      "/rigs/brownbear/body/Idle.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/Idle_Shadowless.png",
+        "bytes": 21393,
+        "sha256": "8a71fc408c3b7ce192efc4000fec025edef450a360ef70dec207ccc43b01cb5e"
+      },
+      "/rigs/brownbear/body/Run.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/Run_Shadowless.png",
+        "bytes": 49594,
+        "sha256": "d225681e7c27c47fa649672177dd50d0741050781f27c1b6b15bf36fe5a1e221"
+      },
+      "/rigs/brownbear/body/TakeDamage.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/TakeDamage_Shadowless.png",
+        "bytes": 52890,
+        "sha256": "e812c90beecf9b9643aa5fc5f9b7629a198f8e1b626dbf81c855ed7fdcb79b27"
+      },
+      "/rigs/brownbear/body/Die.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/Die_Shadowless.png",
+        "bytes": 57530,
+        "sha256": "1ee024317d6b19540855cf1ec23ef6834998988dff1bf3d9671afbf3694e1c35"
+      },
+      "/rigs/brownbear/body/Attack2.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/Attack2_Shadowless.png",
+        "bytes": 62899,
+        "sha256": "3a298f60980fe33b5992c2153b7e504e11c343b9b2552a168363e9347848e401"
+      },
+      "/rigs/brownbear/body/Attack3.png": {
+        "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/Attack3_Shadowless.png",
+        "bytes": 52568,
+        "sha256": "1f5c4e09e08a4538b5723fea2e93b963fd875a3a6ff3ff6ec44bab771643fd02"
+      },
+      "/rigs/brownbear/shadow/Idle.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/Idle_Shadowless.png",
+          "bytes": 21393,
+          "sha256": "8a71fc408c3b7ce192efc4000fec025edef450a360ef70dec207ccc43b01cb5e"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Brown Bear/Idle.png",
+          "bytes": 44900,
+          "sha256": "e6b3f2c87708bca3340c755c814f7213adfe8152b56fe038b30def1bcf76128a"
+        },
+        "bytes": 9674,
+        "sha256": "0f32257cdfb07bf63a970797122d93e9c7d6fc42e2bc5945eba9f9981e61a007"
+      },
+      "/rigs/brownbear/shadow/Run.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/Run_Shadowless.png",
+          "bytes": 49594,
+          "sha256": "d225681e7c27c47fa649672177dd50d0741050781f27c1b6b15bf36fe5a1e221"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Brown Bear/Run.png",
+          "bytes": 94646,
+          "sha256": "3af56fe56f4e497c29a7592b90a621e1423c7296e0116a88f668dedf8010189d"
+        },
+        "bytes": 28962,
+        "sha256": "c33923bd791c4a21df17ea9f2ef1f5fae7f3fb5b23ca7df06b2230082eac57a8"
+      },
+      "/rigs/brownbear/shadow/TakeDamage.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/TakeDamage_Shadowless.png",
+          "bytes": 52890,
+          "sha256": "e812c90beecf9b9643aa5fc5f9b7629a198f8e1b626dbf81c855ed7fdcb79b27"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Brown Bear/TakeDamage.png",
+          "bytes": 94049,
+          "sha256": "dcb34ad4897622d79ff30c639c8f1e8e244d8b685377f3b64462b3f9bc004fbc"
+        },
+        "bytes": 24337,
+        "sha256": "171a99c135177014bd1a55a352073325e95314f2db156293eda40c6d4adb7b14"
+      },
+      "/rigs/brownbear/shadow/Die.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/Die_Shadowless.png",
+          "bytes": 57530,
+          "sha256": "1ee024317d6b19540855cf1ec23ef6834998988dff1bf3d9671afbf3694e1c35"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Brown Bear/Die.png",
+          "bytes": 98901,
+          "sha256": "55c1b3451c2bb1906f4a4eebeface8c634c89f13fdbb57545aae60703855aa6c"
+        },
+        "bytes": 23705,
+        "sha256": "1df8accba3390e805dedb238829b7783adcd6337cb6500fe26d40b35e9a8a7a9"
+      },
+      "/rigs/brownbear/shadow/Attack2.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/Attack2_Shadowless.png",
+          "bytes": 62899,
+          "sha256": "3a298f60980fe33b5992c2153b7e504e11c343b9b2552a168363e9347848e401"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Brown Bear/Attack2.png",
+          "bytes": 106859,
+          "sha256": "ba5db49d081cda028b029404bb67888e5f0d1077f7275777ed7d7c2b328e7681"
+        },
+        "bytes": 22823,
+        "sha256": "414e93f0d25ba3feb3800ae7fd801cd3f4c97936fad5d0feb098f700ff5712ee"
+      },
+      "/rigs/brownbear/shadow/Attack3.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Brown Bear/Attack3_Shadowless.png",
+          "bytes": 52568,
+          "sha256": "1f5c4e09e08a4538b5723fea2e93b963fd875a3a6ff3ff6ec44bab771643fd02"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Brown Bear/Attack3.png",
+          "bytes": 95839,
+          "sha256": "e560ce0087e0e114a3b0bc56bfc1bffc75b577dc8c93c1b33c5e45b4d7a7ed56"
+        },
+        "bytes": 26068,
+        "sha256": "a454c6c8cdb2bf473facdac4eaf6df37443a78ce9d3c999da517475c102365de"
+      }
+    },
+    "archive": {
+      "name": "2D Animals mega Pack 1 V2.zip",
+      "bytes": 422875110,
+      "sha256": "459cc2a196d2c8f45432b017c19f132eeb228246f1a0cb8ca49fef169576aa5a"
+    },
+    "summoning_body_review": {
+      "date": "2026-10-03",
+      "source_variant": "Brown Bear",
+      "direction_evidence": "Named original Idle frames exactly match all eight atlas rows.",
+      "timing": "15 original samples at authored 12 FPS. The PNG packs provide no FPS, pivot or event markers. Contact/recovery frames below are reviewed execution choices.",
+      "ground_pivot": {
+        "x": 32.0,
+        "y": 44,
+        "evidence": "Authored from paired Idle shadow footprint and all eight support views; image bounds are not the ground plane."
+      },
+      "shadow_policy": "Recoverable original shadow pixels from exact With shadow + Shadowless pairs; original alpha is preserved at rig shadow_alpha 1. Opaque body pixels match the source composite exactly and hide an unrecoverable region, left transparent rather than invented. Recomposition with the original opaque body reproduces all visible source RGBA and all alpha exactly. Shadow is independent of body/Fey palette and body lift.",
+      "attacks": {
+        "brown_bear_claws": {
+          "source_clip": "Attack2",
+          "contact_frame": 6,
+          "recover_frame": 12,
+          "motion": "Upright forelimb sweep reaches forward at 6."
+        },
+        "brown_bear_bite": {
+          "source_clip": "Attack3",
+          "contact_frame": 7,
+          "recover_frame": 11,
+          "motion": "Low head/jaw lunge reaches forward at 7."
+        }
+      },
+      "outcomes": "Hit, miss, critical, opportunity and native Multiattack children select the same explicit anatomical row. One emitted attack fact owns one contact; art turns and repeated swipes create no extra native hits. Separate AttackVfx tracks are explicitly empty.",
+      "movement": "Run owns the gait only. Native recorded path/height owns displacement. Jump uses Run as an explicitly normalized airborne gallop adaptation. Window uses Run with its own frame keys and existing connector passage scale.",
+      "flight": "No flying native capability is granted by this binding.",
+      "prone": "Intact non-exploding fall, explicit frame-14 living rest pose, reverse stand-up. Death continues to use the compatible shared death owner; summoned departure is separate.",
+      "ordinary_actions": "Body action, recovery, equipment, healing and optional save-avoidance gestures explicitly disabled with neutral Idle. Existing native effects, feedback and child joins remain authoritative. Shove uses the primary physical strike; forced movement uses TakeDamage brace 5.",
+      "unarmed": "Rig-scoped unarmed physical-strike adaptation uses the inspected primary motion; this grants no native action.",
+      "validation_scope": "Original strip/direction/support inspection and typed binding checks; full live native fight, historical replay, height/occlusion and Fey material acceptance are separate packet-5 integration checks."
+    }
+  }
+}

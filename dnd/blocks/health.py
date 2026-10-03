@@ -5,7 +5,6 @@ from dnd.core.damage import DamageComponentResolution, DamageResolution
 from dnd.core.life_types import LifeState
 from dnd.core.values import ModifiableValue
 from dnd.core.creature_types import DamageType
-from dnd.core.base_object import BaseObject
 from dnd.core.modifiers import (
     NumericalModifier,
     ResistanceStatus,
@@ -18,23 +17,6 @@ from functools import cached_property
 from dnd.core.base_block import BaseBlock
 from dnd.core.events import EventPhase, EventQueue, TakeDamageEvent, TemporaryHitPointsChangedEvent
 from dnd.types.actor import TemporaryHitPointsGrant
-
-
-def _unregister_hit_dice_value(value: ModifiableValue) -> None:
-    """Unregister one hit-die value's locally owned object tree."""
-    owned_channels = (
-        value.self_static,
-        value.to_target_static,
-        value.self_contextual,
-        value.to_target_contextual,
-    )
-    for channel in owned_channels:
-        for modifier_uuid in channel.get_all_modifier_uuids():
-            BaseObject.unregister(modifier_uuid)
-        channel.remove_all_modifiers()
-        channel.remove_from_register()
-    value.reset_from_target()
-    value.remove_from_register()
 
 
 class HitDiceConfig(BaseModel):
@@ -388,6 +370,9 @@ class Health(BaseBlock):
         """Return the total number of available hit dice."""
         return sum(hit_dice.available_hit_dice for hit_dice in self.hit_dices)
 
+    def owned_child_blocks(self) -> tuple[BaseBlock, ...]:
+        return (*super().owned_child_blocks(), *self.hit_dices)
+
     def get_hit_dice(self, hit_dice_index: int = 0) -> HitDice:
         """Return a hit-dice block by index.
 
@@ -418,8 +403,8 @@ class Health(BaseBlock):
             if hit_dice.uuid != hit_dice_uuid:
                 continue
             del self.hit_dices[index]
-            _unregister_hit_dice_value(hit_dice.hit_dice_value)
-            _unregister_hit_dice_value(hit_dice.hit_dice_count)
+            hit_dice.hit_dice_value.retire_owned_state()
+            hit_dice.hit_dice_count.retire_owned_state()
             HitDice.unregister(hit_dice.uuid)
             return True
         return False

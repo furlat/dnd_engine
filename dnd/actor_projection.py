@@ -9,7 +9,7 @@ from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEv
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.creature_types import Size
-from dnd.core.events import DamageAppliedEvent, EntityCreatedEvent, Event, EventType, HealEvent, LifeStateChangeEvent, SpatialChangeEvent, SpatialChangeType, TemporaryHitPointsChangedEvent
+from dnd.core.events import DamageAppliedEvent, EntityCreatedEvent, EntityFactionChangedEvent, Event, EventType, HealEvent, LifeStateChangeEvent, SpatialChangeEvent, SpatialChangeType, TemporaryHitPointsChangedEvent
 from dnd.core.item_types import ItemLocation
 from dnd.core.life_types import LifeState
 from dnd.types.actor_facts import ActorState, ConditionFact
@@ -33,6 +33,11 @@ def actor_from_birth(birth: EntityCreatedEvent) -> ActorState:
         occupancy_layer=birth.occupancy_layer,
         temporary_hp_grant=birth.temporary_hit_points_grant,
         resolved_size=Size(birth.size), structural_base_size=Size(birth.structural_base_size),
+        summon_origin=birth.summon_origin,
+        conditions=tuple(ConditionFact(event_uuid=birth.uuid,
+            condition_uuid=state.condition_uuid, name=state.name, category=state.category,
+            behavior_id=None, resulting_max_hp=None, resulting_ac=None, state=state)
+            for state in birth.initial_condition_states),
     )
 
 
@@ -47,7 +52,7 @@ def actor_fact_owner(event: Event) -> UUID | None:
             return event.target_entity_uuid
         case Event(event_type=EventType.CONDITION_APPLICATION | EventType.CONDITION_REMOVAL | EventType.CONDITION_STATE_CHANGED):
             return event.target_entity_uuid
-        case LifeStateChangeEvent() | TemporaryHitPointsChangedEvent():
+        case LifeStateChangeEvent() | TemporaryHitPointsChangedEvent() | EntityFactionChangedEvent():
             return event.entity_uuid
         case SpatialChangeEvent(change_type=SpatialChangeType.ENTITY_ENTERED | SpatialChangeType.ENTITY_LEFT):
             return event.entity_uuid
@@ -59,6 +64,8 @@ def actor_fact_owner(event: Event) -> UUID | None:
 def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact | None = None) -> ActorState:
     """Apply native after-values; do not execute damage, hooks or equipment rules."""
     match event:
+        case EntityFactionChangedEvent():
+            return replace(actor, faction=event.faction_after)
         case ItemHoldingsReleasedEvent():
             return replace(actor,
                 items=tuple(item for item in actor.items if item.item_uuid != event.item_uuid),

@@ -8,7 +8,8 @@ from pydantic import Field
 from dnd.core.base_block import BaseBlock
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import ItemLocation
+from dnd.core.item_types import ItemLocation, ItemReleaseReason
+from dnd.core.events import Event
 
 
 @dataclass(frozen=True)
@@ -318,9 +319,10 @@ class Inventory(BaseBlock):
         """Find all items with a given tag."""
         return [item for item in self.items.values() if tag in item.tags]
 
-    def remove_contained_item(self, item_uuid: UUID) -> None:
+    def remove_contained_item(self, item_uuid: UUID, *, parent_event: Event | None = None,
+                              reason: ItemReleaseReason = ItemReleaseReason.TRANSFERRED) -> bool:
         """Remove item from inventory items dict."""
-        self.items.pop(item_uuid, None)
+        return self.items.pop(item_uuid, None) is not None
 
     def get_all_use_actions(self, owner_uuid: UUID) -> list:
         """Aggregate use actions from all usable items in this inventory."""

@@ -325,6 +325,9 @@ class SpellcastingBlock(BaseBlock):
                 raise ValueError("Extra spell damage lists must all have same length")
         return self
 
+    def owned_values(self) -> tuple[ModifiableValue, ...]:
+        return (*super().owned_values(), *self.extra_spell_damage_bonus)
+
     def add_source(
         self,
         source_id: UUID,

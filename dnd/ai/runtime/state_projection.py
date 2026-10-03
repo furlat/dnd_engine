@@ -76,6 +76,7 @@ class SubjectiveAIStateProjector:
             epoch_namespace=self._assignment_id,
             round_number=context.round_number,
             turn_index=context.turn_index,
+            turn_execution_id=context.turn_execution_id,
             observation_cursor=world.observation_cursor,
             reason=reason,
         )

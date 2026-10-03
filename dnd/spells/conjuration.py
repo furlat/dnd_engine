@@ -7,7 +7,7 @@ from dnd.types.physical_access import PhysicalAccess
 from typing import Any, Dict, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
 
 from dnd.core.base_actions import (
@@ -2163,111 +2163,31 @@ class SpiritGuardiansSlowed(BaseCondition):
 
 
 class SpiritGuardiansSlowSource(SpatialConditionMembershipSource):
-    """One exact Spirit Guardians source leasing the shared public slow."""
+    """One exact Spirit Guardians source sharing the native public slow child."""
 
     slow_manifestation_uuid: Optional[UUID] = Field(default=None, exclude=True)
-    owns_manifestation: bool = Field(default=False, exclude=True)
 
     def create_manifestation(self, target: Entity) -> BaseCondition:
-        return SpiritGuardiansSlowed(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=target.uuid,
-            tags={ConditionTag.MAGICAL},
-        )
+        return SpiritGuardiansSlowed(source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target.uuid, tags={ConditionTag.MAGICAL})
 
-    def _other_sources(self, target: Entity) -> List["SpiritGuardiansSlowSource"]:
-        return [
-            condition
-            for condition in target.active_conditions_by_uuid.values()
-            if (
-                isinstance(condition, SpiritGuardiansSlowSource)
-                and condition.uuid != self.uuid
-            )
-        ]
-
-    def _apply(
-        self,
-        execution_event: Event,
-    ) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Event]:
-        target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid is not None
-            else None
-        )
-        if not isinstance(target, Entity):
-            return [], [], [], [], execution_event.cancel(
-                status_message="Spirit Guardians slow target is unavailable",
-            )
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Event]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Spirit Guardians slow target is unavailable")
         if target.ignore_magical_speed_reduction:
-            return [], [], [], [], execution_event.cancel(
-                status_message=f"{target.name} ignores magical speed reduction",
-            )
-        for source in self._other_sources(target):
-            manifestation_uuid = source.slow_manifestation_uuid
-            if (
-                manifestation_uuid is not None
-                and isinstance(
-                    target.active_conditions_by_uuid.get(manifestation_uuid),
-                    SpiritGuardiansSlowed,
-                )
-            ):
-                self.slow_manifestation_uuid = manifestation_uuid
-                return [], [], [], [], execution_event.phase_to(
-                    EventPhase.EFFECT,
-                    update={"condition": self},
-                )
-
-        existing = next(
-            (
-                condition
-                for condition in target.active_conditions_by_uuid.values()
-                if isinstance(condition, SpiritGuardiansSlowed)
-            ),
-            None,
-        )
-        if existing is None:
-            existing = self.create_manifestation(target)
-            applied = target.add_condition(existing, parent_event=execution_event)
+            return [], [], [], [], event.cancel(status_message=f"{target.name} ignores magical speed reduction")
+        manifestation = next((condition for condition in target.active_conditions_by_uuid.values()
+                              if isinstance(condition, SpiritGuardiansSlowed)), None)
+        if manifestation is None:
+            manifestation = self.create_manifestation(target)
+            manifestation.parent_condition = self.uuid
+            applied = target.add_condition(manifestation, parent_event=event)
             if applied is None or applied.canceled:
-                return [], [], [], [], execution_event.cancel(
-                    status_message="Spirit Guardians slow was rejected",
-                )
-            self.owns_manifestation = True
-        self.slow_manifestation_uuid = existing.uuid
-        return [], [], [], [], execution_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self},
-        )
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid is not None
-            else None
-        )
-        if not isinstance(target, Entity):
-            return event
-        others = self._other_sources(target)
-        if others:
-            if self.owns_manifestation:
-                inheritor = min(others, key=lambda condition: str(condition.uuid))
-                inheritor.owns_manifestation = True
-                inheritor.slow_manifestation_uuid = self.slow_manifestation_uuid
-            self.owns_manifestation = False
-            return event
-        manifestation_uuid = self.slow_manifestation_uuid
-        if (
-            self.owns_manifestation
-            and manifestation_uuid is not None
-            and manifestation_uuid in target.active_conditions_by_uuid
-        ):
-            target.remove_condition_by_uuid(
-                manifestation_uuid,
-                parent_event=event,
-            )
-        self.owns_manifestation = False
-        self.slow_manifestation_uuid = None
-        return event
+                return [], [], [], [], event.cancel(status_message="Spirit Guardians slow was rejected")
+        self.add_shared_subcondition(manifestation)
+        self.slow_manifestation_uuid = manifestation.uuid
+        return [], [], [], [], event.phase_to(EventPhase.EFFECT, update={"condition": self})
 
 
 SPIRIT_GUARDIANS_ZONE_CONTENT_REF = ContentRef(
@@ -4873,6 +4793,8 @@ class ProduceFlameEffect(BaseCondition):
     spellcasting_source_id: UUID | None = None
     light_source_uuid: UUID | None = None
 
+    _removed_light: SpatialChangeEvent | None = PrivateAttr(default=None)
+
     def _apply(self, event: Event):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
@@ -4894,9 +4816,15 @@ class ProduceFlameEffect(BaseCondition):
                 owner.unregister_action_by_uuid(action_uuid)
         self.granted_action_uuids.clear()
         if self.light_source_uuid is not None:
-            get_map().remove_light_source(self.light_source_uuid, parent_event=parent_event.uuid if parent_event else None)
+            self._removed_light = get_map().remove_light_source(self.light_source_uuid,
+                parent_event=parent_event.uuid if parent_event else None, publish_event=not self.applied)
             self.light_source_uuid = None
         super()._release_owned_runtime_state(parent_event=parent_event)
+
+    def on_membership_changed(self, event: Event) -> None:
+        removed, self._removed_light = self._removed_light, None
+        if removed is not None:
+            get_map()._fire_committed_spatial_event(removed)
 
 
 def _hurl_flame(spell: SpellAction, event: SpellEvent) -> SpellEvent:

@@ -6,15 +6,16 @@ UsableItem provides actions via get_use_actions() with charge tracking.
 """
 
 from typing import Optional, List, Literal, Tuple, cast
+from dataclasses import dataclass
 from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, model_validator
 
-from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.core.base_block import BaseBlock, MovementMode, PreparedConditionRemovals
 from dnd.core.item_properties import ItemProperty
 from dnd.items.property_composition import ItemPropertyContribution, install_item_properties, release_item_properties
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import DiceRoll
-from dnd.core.gridmap import get_map
+from dnd.core.gridmap import CommittedObjectRemovals, get_map
 from dnd.core.events import (
     Damage,
     Event,
@@ -42,7 +43,9 @@ from dnd.core.item_types import (
     ItemPresentationState,
     ItemRarity,
     ItemResourceChange,
+    ItemReleaseReason,
 )
+from dnd.types.summoning import TerminalOwnerRelease
 from dnd.blocks.health import Health, HealthConfig, HitDiceConfig
 from dnd.core.base_actions import BaseAction
 from dnd.core.content.identities import validate_namespaced_id
@@ -50,6 +53,27 @@ from dnd.core.content.runtime import (
     RuntimeBehaviorKind,
     bind_runtime_behavior_child,
 )
+
+
+@dataclass
+class PreparedItemRetirement:
+    item: 'BaseItem'
+    parent_event: Event | None
+    conditions: PreparedConditionRemovals
+    blocks: tuple[BaseBlock, ...]
+    supported: tuple['PreparedItemRetirement', ...]
+    floor_removals: list[tuple[BaseBlock, WorldObjectPlacement, Event | None]]
+    committed: bool = False
+    publication: 'ItemRetirementPublication | None' = None
+    canceled: bool = False
+
+
+@dataclass
+class ItemRetirementPublication:
+    floor: CommittedObjectRemovals | None
+    location: 'ItemLocationStateEvent | None'
+    light_changes: tuple[SpatialChangeEvent, ...] = ()
+    published: bool = False
 
 
 class ItemHoldingsReleasedEvent(Event):
@@ -708,37 +732,204 @@ class BaseItem(BaseBlock):
             self.publish_location_state(ItemLocation.INVENTORY, owner_uuid=self.owner_uuid,
                 container_uuid=self.stored_in_uuid, parent_event=parent_event)
 
-    def retire(self, parent_event: Optional[Event] = None) -> None:
-        """Consume, despawn or clear the item; this does not trigger breakage."""
-        if BaseBlock.get(self.uuid) is None:
+    def permits_terminal_retirement(self, release: TerminalOwnerRelease) -> bool:
+        return self.intrinsic_owner_uuid == release.entity_uuid
+
+    def prepare_retirement(self, parent_event: Event | None = None, *,
+                           terminal_release: TerminalOwnerRelease | None = None
+                           ) -> PreparedItemRetirement | None:
+        """Admit exact owned cleanup before changing item or container membership."""
+        if BaseBlock.get(self.uuid) is not self:
+            return None
+        if terminal_release is not None and not self.permits_terminal_retirement(terminal_release):
+            raise ValueError("Terminal item retirement requires its exact native owner")
+        blocks = self.owned_block_tree()
+        conditions = BaseBlock.prepare_owned_condition_removals(blocks,
+            parent_event=parent_event, terminal_release=terminal_release)
+        if conditions is None:
+            return None
+        prepared = PreparedItemRetirement(self, parent_event, conditions, blocks, (), [])
+        try:
+            for item in self.supported_items():
+                child = item.prepare_retirement(parent_event)
+                if child is None:
+                    self.cancel_retirement(prepared)
+                    return None
+                prepared.supported = (*prepared.supported, child)
+            grid = get_map()
+            if grid.get_object_position(self.uuid) is not None:
+                admitted = grid.prepare_object_removals((self.uuid,),
+                    parent_event.uuid if parent_event is not None else None, clear_object_location=False,
+                    terminal_release=terminal_release)
+                if admitted is None:
+                    self.cancel_retirement(prepared)
+                    return None
+                prepared.floor_removals = admitted
+        except BaseException as failure:
+            try:
+                self.cancel_retirement(prepared)
+            except BaseException as cleanup:
+                raise BaseExceptionGroup("Item retirement admission and cancellation failed", [failure, cleanup]) from failure
+            raise
+        return prepared
+
+    def cancel_retirement(self, prepared: PreparedItemRetirement) -> None:
+        if prepared.item is not self or prepared.committed:
+            raise ValueError("Invalid item retirement cancellation")
+        if prepared.canceled:
             return
+        prepared.canceled = True
+        errors: list[BaseException] = []
+        try:
+            BaseBlock.cancel_owned_condition_removals(prepared.conditions, "Item retirement canceled")
+        except BaseException as error:
+            errors.append(error)
+        try:
+            get_map().cancel_object_removals(prepared.floor_removals, "Item retirement canceled")
+        except BaseException as error:
+            errors.append(error)
+        for child in prepared.supported:
+            try:
+                child.item.cancel_retirement(child)
+            except BaseException as error:
+                errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Item retirement cancellation failed", errors)
+
+    def commit_retirement(self, prepared: PreparedItemRetirement, *, publish: bool = True) -> None:
+        """Consume an admitted item without physical breakage or silently ignoring veto."""
+        if prepared.item is not self:
+            raise ValueError("Item retirement token belongs to another item")
+        if prepared.canceled:
+            raise ValueError("Canceled item retirement cannot commit")
+        if prepared.committed:
+            return
+        if BaseBlock.get(self.uuid) is not self:
+            raise RuntimeError("Admitted item disappeared before retirement")
+        if not publish and (self.owner_uuid is not None or self.stored_in_uuid is not None):
+            raise ValueError("Unpublished item retirement supports unowned world objects only")
+        parent_event = prepared.parent_event
         previous_owner_uuid = self.owner_uuid
         previous_owner = BaseBlock.get(previous_owner_uuid) if previous_owner_uuid is not None else None
-        grid = get_map()
-        if grid.get_object_position(self.uuid) is not None and not grid.remove_object(
-                self.uuid, parent_event=parent_event.uuid if parent_event is not None else None):
+        errors: list[BaseException] = []
+        publication = ItemRetirementPublication(None, None)
+        prepared.publication = publication
+        with BaseBlock.condition_removal_scope(terminal_release=prepared.conditions.terminal_release):
+            BaseBlock.commit_owned_condition_removals(prepared.conditions)
+            prepared.committed = True
+            grid = get_map()
+            if prepared.floor_removals:
+                try:
+                    publication.floor = grid.commit_object_removals(prepared.floor_removals,
+                        clear_object_location=False, publish=publish,
+                        parent_event=parent_event.uuid if parent_event is not None else None)
+                except BaseException as error:
+                    errors.append(error)
+            for child in prepared.supported:
+                try:
+                    child.item.commit_retirement(child, publish=publish)
+                except BaseException as error:
+                    errors.append(error)
+            if self.stored_in_uuid is not None:
+                container = BaseBlock.get(self.stored_in_uuid)
+                if container is not None:
+                    try:
+                        container.remove_contained_item(self.uuid, parent_event=parent_event,
+                            reason=ItemReleaseReason.RETIRED)
+                    except BaseException as error:
+                        errors.append(error)
+            self.owner_uuid = None
+            self.stored_in_uuid = None
+            self.tile_uuid = None
+            self.is_equipped = False
+            self.equipped_slot = None
+            if publish:
+                try:
+                    owner_published = (previous_owner.on_owned_item_destroyed(self, parent_event=parent_event)
+                        if previous_owner is not None else False)
+                    if not owner_published:
+                        self.publish_location_state(ItemLocation.DESTROYED, owner_uuid=previous_owner_uuid,
+                            stack_count=0, parent_event=parent_event)
+                except BaseException as error:
+                    errors.append(error)
+            else:
+                publication.location = ItemLocationStateEvent(source_entity_uuid=self.source_entity_uuid,
+                    parent_event=parent_event.uuid if parent_event is not None else None,
+                    item_state=self.to_item_presentation_state(stack_count=0), location=ItemLocation.DESTROYED,
+                    phase=EventPhase.COMPLETION, use_register=False)
+            light_changes: list[SpatialChangeEvent] = []
+            for block in prepared.blocks:
+                previous_light = ({position: tile.resolved_light_level for position, tile in grid.get_all_tiles().items()}
+                    if not publish and block.get_attached_light_sources() else {})
+                try:
+                    grid.cleanup_block_light_sources(block.uuid,
+                        publish_event=publish,
+                        parent_event=parent_event.uuid if parent_event is not None else None)
+                except BaseException as error:
+                    errors.append(error)
+                if previous_light:
+                    changed = [position for position, before in previous_light.items()
+                        if (tile := grid.get_tile(*position)) is not None and tile.resolved_light_level != before]
+                    light = grid.snapshot_light_change(changed,
+                        parent_event=parent_event.uuid if parent_event is not None else None)
+                    if light is not None:
+                        light_changes.append(light)
+                block.release_runtime_ownership()
+            publication.light_changes = tuple(light_changes)
+            if publish:
+                try:
+                    self.publish_retirement(prepared)
+                except BaseException as error:
+                    errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Item retirement publication failed after commitment", errors)
+
+    def publish_retirement(self, prepared: PreparedItemRetirement) -> None:
+        """Deliver already committed world-item cleanup without re-entering mechanics."""
+        publication = prepared.publication
+        if prepared.item is not self or not prepared.committed or publication is None:
+            raise ValueError("Item retirement must commit before publication")
+        if publication.published:
             return
-        for item in self.supported_items():
-            item.retire(parent_event)
-        grid.cleanup_block_light_sources(self.uuid,
-            parent_event=parent_event.uuid if parent_event is not None else None)
-        for condition_name in tuple(self.active_conditions):
-            self.remove_condition(condition_name, parent_event=parent_event)
-        if self.stored_in_uuid is not None:
-            container = BaseBlock.get(self.stored_in_uuid)
-            if container is not None:
-                container.remove_contained_item(self.uuid)
-        self.owner_uuid = None
-        self.stored_in_uuid = None
-        self.tile_uuid = None
-        self.is_equipped = False
-        self.equipped_slot = None
-        owner_published = (previous_owner.on_owned_item_destroyed(self, parent_event=parent_event)
-            if previous_owner is not None else False)
-        if not owner_published:
-            self.publish_location_state(ItemLocation.DESTROYED, owner_uuid=previous_owner_uuid,
-                stack_count=0, parent_event=parent_event)
-        BaseBlock._registry.pop(self.uuid, None)
+        publication.published = True
+        errors: list[BaseException] = []
+        try:
+            BaseBlock.publish_owned_condition_removals(prepared.conditions)
+        except BaseException as error:
+            errors.append(error)
+        if publication.floor is not None:
+            try:
+                get_map().publish_object_removals(publication.floor)
+            except BaseException as error:
+                errors.append(error)
+        for child in prepared.supported:
+            try:
+                child.item.publish_retirement(child)
+            except BaseException as error:
+                errors.append(error)
+        for change in publication.light_changes:
+            try:
+                get_map()._fire_committed_spatial_event(change)
+            except BaseException as error:
+                errors.append(error)
+        if publication.location is not None:
+            try:
+                EventQueue.register(publication.location)
+            except BaseException as error:
+                errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Committed item retirement publication failed", errors)
+
+    def retire(self, parent_event: Event | None = None) -> bool:
+        """Return whether exact consumption/despawn committed; never trigger breakage."""
+        if BaseBlock.get(self.uuid) is None:
+            return True
+        with BaseBlock.condition_removal_scope():
+            prepared = self.prepare_retirement(parent_event)
+            if prepared is None:
+                return False
+            self.commit_retirement(prepared)
+        return True
 
     def _on_destroy(self, parent_event: Optional[Event]) -> None:
         """Subclass override hook with the accepted destruction cause."""

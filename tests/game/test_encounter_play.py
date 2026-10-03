@@ -81,7 +81,7 @@ def test_authored_workshop_plays_a_discovered_lever_action_in_the_same_frame_pum
         random.setstate(state)
     assert result.player_commands == 2 and result.latest == result.historical
     assert result.historical.round_number == 2
-    assert not result.presentation_gaps
+    assert not result.presentation_gaps, result.presentation_gaps
     assert any(isinstance(lineage.root.fact, ActionFact) for lineage in result.lineages)
     assert len(result.latest.actors) == 5
     assert any(obj.item.is_engaged for obj in result.latest.objects.values())

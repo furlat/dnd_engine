@@ -110,6 +110,24 @@
           "DemonBeast02": "/rigs/demonbeast02/body/Attack 1.png",
           "DemonBeast02Shadow": "/rigs/demonbeast02/shadow/Attack 1.png"
         }
+      },
+      "Attack3": {
+        "source_clip": "Attack 3",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast02": "/rigs/demonbeast02/body/Attack 3.png",
+          "DemonBeast02Shadow": "/rigs/demonbeast02/shadow/Attack 3.png"
+        }
+      },
+      "CrouchWalk": {
+        "source_clip": "Crouch walk",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast02": "/rigs/demonbeast02/body/Crouch walk.png",
+          "DemonBeast02Shadow": "/rigs/demonbeast02/shadow/Crouch walk.png"
+        }
       }
     },
     "body_anchor": {
@@ -151,7 +169,26 @@
           "y": 81
         }
       }
-    }
+    },
+    "body_contexts": [
+      {"role": "movement","qualifier": {"kind": "default"},"body": {"actor": {"enabled": true,"clip": "Run","playbackSpeed": 1,"hiddenSlots": [],"media": []},"playback": "loop"}},
+      {"role": "movement_recovery","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "movement","qualifier": {"kind": "movement","movement_mode": "walking","trajectory": "direct_arc","connector_presentation_key": null},"body": {"actor": {"enabled": true,"clip": "Rolling","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.25,3],[0.7,10],[1,14]]}},
+      {"role": "movement","qualifier": {"kind": "movement","movement_mode": "walking","trajectory": "connector_transfer","connector_presentation_key": "window"},"body": {"actor": {"enabled": true,"clip": "CrouchWalk","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.28,3],[0.48,7],[0.52,7],[0.72,11],[1,14]]}},
+      {"role": "movement","qualifier": {"kind": "movement","movement_mode": null,"trajectory": "direct_arc","connector_presentation_key": null},"body": {"actor": {"enabled": true,"clip": "Rolling","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.25,3],[0.7,10],[1,14]]}},
+      {"role": "movement","qualifier": {"kind": "movement","movement_mode": null,"trajectory": "connector_transfer","connector_presentation_key": "window"},"body": {"actor": {"enabled": true,"clip": "CrouchWalk","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.28,3],[0.48,7],[0.52,7],[0.72,11],[1,14]]}},
+      {"role": "shove","qualifier": {"kind": "default"},"body": {"actor": {"enabled": true,"clip": "Attack2","playbackSpeed": 1,"hiddenSlots": [],"media": []},"anchors": [{"name": "contact","frame": 6}]}},
+      {"role": "forced_movement","qualifier": {"kind": "default"},"body": {"actor": {"enabled": true,"clip": "TakeDamage","playbackSpeed": 1,"hiddenSlots": [],"media": []},"anchors": [{"name": "brace","frame": 5}]}},
+      {"role": "forced_movement_recovery","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "body_action","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "body_action_recovery","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "equipment","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "healing","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "save_avoidance","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "condition_entry","qualifier": {"kind": "content","contentRef": {"pack_id": "core.rules","definition_kind": "condition","content_id": "condition.prone","content_version": 1,"definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"}},"body": {"actor": {"enabled": true,"clip": "Die","playbackSpeed": 1.5,"hiddenSlots": [],"media": []}}},
+      {"role": "condition_hold","qualifier": {"kind": "content","contentRef": {"pack_id": "core.rules","definition_kind": "condition","content_id": "condition.prone","content_version": 1,"definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"}},"body": {"actor": {"enabled": true,"clip": "Die","playbackSpeed": 1,"hiddenSlots": [],"media": []},"playback": "final_rest","restFrame": 14}},
+      {"role": "condition_exit","qualifier": {"kind": "content","contentRef": {"pack_id": "core.rules","definition_kind": "condition","content_id": "condition.prone","content_version": 1,"definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"}},"body": {"actor": {"enabled": true,"clip": "Die","playbackSpeed": 1.5,"hiddenSlots": [],"media": []},"reversed": true}}
+    ]
   },
   "resources": {
     "/rigs/demonbeast02/body/Idle.png": "game/assets/rigs/demonbeast02/body/Idle.png",
@@ -169,62 +206,141 @@
     "/rigs/demonbeast02/body/Attack 2.png": "game/assets/rigs/demonbeast02/body/Attack 2.png",
     "/rigs/demonbeast02/shadow/Attack 2.png": "game/assets/rigs/demonbeast02/shadow/Attack 2.png",
     "/rigs/demonbeast02/body/Attack 3.png": "game/assets/rigs/demonbeast02/body/Attack 3.png",
-    "/rigs/demonbeast02/shadow/Attack 3.png": "game/assets/rigs/demonbeast02/shadow/Attack 3.png"
+    "/rigs/demonbeast02/shadow/Attack 3.png": "game/assets/rigs/demonbeast02/shadow/Attack 3.png",
+    "/rigs/demonbeast02/body/Crouch walk.png": "game/assets/rigs/demonbeast02/body/Crouch walk.png",
+    "/rigs/demonbeast02/shadow/Crouch walk.png": "game/assets/rigs/demonbeast02/shadow/Crouch walk.png"
   },
   "provenance": {
     "archive": {
-      "name": "2D Demons - TopDown assetpack v1.1.zip"
+      "name": "2D Demons - TopDown assetpack v1.1.zip",
+      "bytes": 247182280,
+      "sha256": "ec1f2826df865c37df1404832deb7856a0283ce4a1692a3e7adfc3bb69eacbf4"
     },
     "files": {
       "/rigs/demonbeast02/body/Idle.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Idle.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Idle.png",
+        "bytes": 93780,
+        "sha256": "087115b054543bd79c138d5fa20fdc72778f5c7ce5b90d66c9dbbbb9af493b2f"
       },
       "/rigs/demonbeast02/shadow/Idle.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Idle.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Idle.png",
+        "bytes": 21965,
+        "sha256": "8d8c7ceb9dde6ee505cb6775eda342bdb84c66eb583f68ca9c9c09d033c04e1c"
       },
       "/rigs/demonbeast02/body/Run.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Run.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Run.png",
+        "bytes": 117571,
+        "sha256": "a4650805496b9ddb42514333580f1dfb20e020824d2731034a4eb86b6ba8210d"
       },
       "/rigs/demonbeast02/shadow/Run.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Run.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Run.png",
+        "bytes": 29388,
+        "sha256": "be82e7e29c7cc60c353c0f01ebe4d7d109b9fc413a97e5df31bd0a0d5ae8f188"
       },
       "/rigs/demonbeast02/body/TakeDamage 1.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/TakeDamage 1.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/TakeDamage 1.png",
+        "bytes": 114643,
+        "sha256": "68e5cccde2474719914cfd51c085413bc1203b7e9e9cd14f6e74f8720f4e5968"
       },
       "/rigs/demonbeast02/shadow/TakeDamage 1.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/TakeDamage 1.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/TakeDamage 1.png",
+        "bytes": 28315,
+        "sha256": "ff150729c64a965b6f25674d9e1d8b4f4ef72f55a98cb88fbcef30b1cc78f49f"
       },
       "/rigs/demonbeast02/body/Die 1.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Die 1.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Die 1.png",
+        "bytes": 114977,
+        "sha256": "ae9765f527d3ccb880693f1cf269cec2a6a8e500f933a9cc7c5abf5c36b8ccbb"
       },
       "/rigs/demonbeast02/shadow/Die 1.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Die 1.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Die 1.png",
+        "bytes": 31354,
+        "sha256": "fee5ab332926690d43aab384c56f802176e1315f934d755880fa7852db371782"
       },
       "/rigs/demonbeast02/body/Roll 1.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Roll 1.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Roll 1.png",
+        "bytes": 137665,
+        "sha256": "dc4b079ba1e1331f79e1caef4fa4faa192b5578c2f43ff03cdb17561dcb95275"
       },
       "/rigs/demonbeast02/shadow/Roll 1.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Roll 1.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Roll 1.png",
+        "bytes": 31967,
+        "sha256": "c6b025906179819db0bf41b9f9be5f84de3715bc52515423f31a6f1af13cd5f0"
       },
       "/rigs/demonbeast02/body/Attack 1.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Attack 1.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Attack 1.png",
+        "bytes": 135246,
+        "sha256": "36ab106b5f3cc871d60cae58db6fa52184b724afaea3ac137dde8434e870c567"
       },
       "/rigs/demonbeast02/shadow/Attack 1.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Attack 1.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Attack 1.png",
+        "bytes": 31967,
+        "sha256": "903e8b77a54bb8bc824d992533b3b4c56be842d700d6a7236253458c9987be37"
       },
       "/rigs/demonbeast02/body/Attack 2.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Attack 2.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Attack 2.png",
+        "bytes": 133285,
+        "sha256": "7c537f7c2506dc539f8ab267580e454cf78ee4a59ab7e04c86138da6827c8928"
       },
       "/rigs/demonbeast02/shadow/Attack 2.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Attack 2.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Attack 2.png",
+        "bytes": 29454,
+        "sha256": "ee8e7c6e99bbff454a666539d352f7fe97f6371fcb477fd4c861453f35bd542b"
       },
       "/rigs/demonbeast02/body/Attack 3.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Attack 3.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Attack 3.png",
+        "bytes": 138115,
+        "sha256": "f30ce6a433b7bdb57c2452031247df403de0d298d2848635e82a19634cb14269"
       },
       "/rigs/demonbeast02/shadow/Attack 3.png": {
-        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Attack 3.png"
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Attack 3.png",
+        "bytes": 31000,
+        "sha256": "4ae20db044898e61fa084b46978315f8e415df5de7f85d3ccd03c52bb237e05f"
+      },
+      "/rigs/demonbeast02/body/Crouch walk.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Crouch walk.png",
+        "bytes": 104382,
+        "sha256": "4e2f3284a04575b447e19cd0a5f20ef69153de4481a38761da42452ca0386018"
+      },
+      "/rigs/demonbeast02/shadow/Crouch walk.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 2/Shadows/Crouch walk.png",
+        "bytes": 24481,
+        "sha256": "952fa35a35e2e3b2db003c88f975866c1760fc06be021f440d882c195874bd86"
       }
     },
-    "notes": "Selected original body/shadow sheets. Native blood profile belongs to creature composition, not this rig."
+    "notes": "Selected original body/shadow sheets. Native blood profile belongs to creature composition, not this rig.",
+    "summoning_body_review": {
+      "date": "2026-10-03",
+      "source_variant": "Demon Beast 2",
+      "direction_evidence": "Same eight-row convention as installed Demon Beast 1/2/3; reviewed Idle/body silhouettes.",
+      "timing": "15 original samples at authored 12 FPS. The PNG packs provide no FPS, pivot or event markers. Contact/recovery frames below are reviewed execution choices.",
+      "ground_pivot": {
+        "x": 64.0,
+        "y": 83,
+        "evidence": "Retained existing rig pivot."
+      },
+      "shadow_policy": "Original separate shadow sheets at existing fixed-rig alpha 0.5.",
+      "attacks": {
+        "dretch_bite": {
+          "source_clip": "Attack 2",
+          "contact_frame": 6,
+          "recover_frame": 11,
+          "motion": "Generic body/head lunge adapted to the retained Dretch Bite; not a vendor anatomical label."
+        },
+        "dretch_claws": {
+          "source_clip": "Attack 3",
+          "contact_frame": 6,
+          "recover_frame": 11,
+          "motion": "Cross-body claw extension at 6."
+        }
+      },
+      "outcomes": "Hit, miss, critical, opportunity and native Multiattack children select the same explicit anatomical row. One emitted attack fact owns one contact; art turns and repeated swipes create no extra native hits. Separate AttackVfx tracks are explicitly empty.",
+      "movement": "Run owns the gait only. Native recorded path/height owns displacement. Jump uses Rolling as an explicitly normalized pack jump/roll adaptation. Window uses CrouchWalk with its own frame keys and existing connector passage scale.",
+      "flight": "No flying native capability is granted by this binding.",
+      "prone": "Intact non-exploding fall, explicit frame-14 living rest pose, reverse stand-up. Death continues to use the compatible shared death owner; summoned departure is separate.",
+      "ordinary_actions": "Body action, recovery, equipment, healing and optional save-avoidance gestures explicitly disabled with neutral Idle. Existing native effects, feedback and child joins remain authoritative. Shove uses the primary physical strike; forced movement uses TakeDamage brace 5.",
+      "unarmed": "Rig-scoped unarmed physical-strike adaptation uses the inspected primary motion; this grants no native action.",
+      "validation_scope": "Original strip/direction/support inspection and typed binding checks; full live native fight, historical replay, height/occlusion and Fey material acceptance are separate packet-5 integration checks."
+    }
   }
 }

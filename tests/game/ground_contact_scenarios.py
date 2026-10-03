@@ -63,7 +63,7 @@ def ground_contact_history(
                 ),))
                 actor.add_condition(GhoulClawsParalysisFeature(
                     source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid,
-                    weapon_names=("Longsword",),
+                    weapon_item_ids=("weapon.longsword",),
                 ))
                 add_opportunity_attack_handler(actor)
             actor.compose_entity()

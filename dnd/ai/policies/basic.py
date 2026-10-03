@@ -244,14 +244,14 @@ class _BasicRowFact:
 class BasicActorMemory:
     """Bounded per-turn policy facts for one controlled actor."""
 
-    turn_key: tuple[int, int] | None = None
+    turn_key: str | tuple[int, int] | None = None
     visited_positions: tuple[tuple[int, int], ...] = ()
     completed_nonrepeatable_semantic_ids: tuple[str, ...] = ()
     completed_movement_semantic_ids: tuple[str, ...] = ()
     blocked_row_ids: tuple[str, ...] = ()
     current_rows: dict[str, _BasicRowFact] = field(default_factory=dict)
 
-    def reset_for_turn(self, turn_key: tuple[int, int]) -> None:
+    def reset_for_turn(self, turn_key: str | tuple[int, int]) -> None:
         """Drop prior-turn suppression while preserving actor isolation."""
         self.turn_key = turn_key
         self.visited_positions = ()
@@ -341,7 +341,7 @@ def reduce_basic_state(
     if epoch is None:
         return
     actor_memory = memory.actor(epoch.actor_uuid)
-    turn_key = (epoch.round_number, epoch.turn_index)
+    turn_key = epoch.turn_execution_id or (epoch.round_number, epoch.turn_index)
     if actor_memory.turn_key != turn_key:
         actor_memory.reset_for_turn(turn_key)
     actor = state.known_entities.get(epoch.actor_uuid)

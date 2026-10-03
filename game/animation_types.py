@@ -19,9 +19,12 @@ from pydantic import (
 )
 
 from dnd.core.content.identities import ContentRef
+from dnd.types.event_facts import MovementTrajectory
+from dnd.types.world import MovementMode
+from dnd.types.summoning import SummonManifestation
 from dnd.core.condition_types import ConditionTag
 from dnd.core.item_types import ItemEffectPresentationState
-from game.condition_types import ConditionBodyAnimation, ConditionRecipe
+from game.condition_types import ConditionBodyAnimation, ConditionRecipe, ConditionBodyRamp
 from game.condition_media import ConditionLayerMedia
 from game.device_art import DeviceArt
 from game.portal_art import PortalArt
@@ -83,6 +86,13 @@ class PaletteTreatment(AuthoredRecord):
     gamma: Positive = .65
     noiseSheet: Identifier | None = None
     untinted: bool = False
+
+
+class BodyMaterial(AuthoredRecord):
+    """A retained manifestation selects palette replacement and body opacity."""
+
+    palette: ConditionBodyRamp
+    alpha: Annotated[float, Field(ge=0, le=1)]
 
 
 class StudioActorLayer(AuthoredRecord):
@@ -701,12 +711,115 @@ class BodyClip(AuthoredRecord):
 PoseSockets = FrozenMap[FrozenMap[FacingMap[tuple[Point, ...]]]]
 
 
+class ActionActor(AuthoredRecord):
+    enabled: bool
+    clip: Identifier
+    playbackSpeed: Positive
+    hiddenSlots: tuple[str, ...]
+    media: tuple[JsonValue, ...]
+
+
+class ActionFrameAnchor(AuthoredRecord):
+    name: Identifier
+    frame: BodyFrame
+
+
+BodyContextRole = Literal[
+    "movement", "movement_recovery", "shove", "forced_movement", "forced_movement_recovery",
+    "body_action", "body_action_recovery", "equipment", "condition_entry", "condition_hold",
+    "condition_exit", "healing", "save_avoidance",
+]
+
+
+class RoleDefault(AuthoredRecord):
+    kind: Literal["default"] = "default"
+
+
+class ContentBodyQualifier(AuthoredRecord):
+    kind: Literal["content"] = "content"
+    contentRef: ContentRef
+
+
+class MovementBodyQualifier(AuthoredRecord):
+    kind: Literal["movement"] = "movement"
+    movement_mode: MovementMode | None
+    trajectory: MovementTrajectory
+    connector_presentation_key: Identifier | None
+
+
+BodyContextQualifier = Annotated[
+    RoleDefault | ContentBodyQualifier | MovementBodyQualifier, Field(discriminator="kind"),
+]
+
+
+class BodyContext(AuthoredRecord):
+    """Only body selection and frame playback; native paths and joins stay outside."""
+
+    actor: ActionActor
+    anchors: tuple[ActionFrameAnchor, ...] = ()
+    playback: Literal["once", "loop", "final_rest"] = "once"
+    reversed: bool = False
+    frameKeys: tuple[tuple[Annotated[float, Field(ge=0, le=1)], BodyFrame], ...] = ()
+    restFrame: BodyFrame | None = None
+
+    @model_validator(mode="after")
+    def validate_playback(self) -> BodyContext:
+        if len({anchor.name for anchor in self.anchors}) != len(self.anchors):
+            raise ValueError("body context has duplicate frame anchors")
+        if self.frameKeys:
+            times = tuple(key[0] for key in self.frameKeys)
+            if self.playback != "once" or times[0] != 0 or times[-1] != 1 or any(a >= b for a, b in zip(times, times[1:])):
+                raise ValueError("body frame keys require once playback and increasing times from 0 to 1")
+        if self.restFrame is not None and self.reversed:
+            raise ValueError("an explicit final-rest frame cannot also reverse playback")
+        if (self.restFrame is not None) != (self.playback == "final_rest"):
+            raise ValueError("final-rest playback requires exactly one explicit rest frame")
+        return self
+
+
+class RigBodyContextBinding(AuthoredRecord):
+    role: BodyContextRole
+    qualifier: BodyContextQualifier
+    body: BodyContext
+
+    @model_validator(mode="after")
+    def validate_context(self) -> RigBodyContextBinding:
+        movement = self.role in ("movement", "movement_recovery")
+        content_roles = {"shove", "body_action", "body_action_recovery", "condition_entry",
+                         "condition_hold", "condition_exit", "save_avoidance"}
+        if (isinstance(self.qualifier, MovementBodyQualifier) and not movement
+                or isinstance(self.qualifier, ContentBodyQualifier) and self.role not in content_roles):
+            raise ValueError("body qualifier does not belong to this context role")
+        if self.body.actor.hiddenSlots or self.body.actor.media:
+            raise ValueError("rig body contexts cannot mutate hidden slots or media")
+        optional = {"movement_recovery", "forced_movement_recovery", "body_action", "body_action_recovery",
+                    "equipment", "healing", "save_avoidance"}
+        if not self.body.actor.enabled and self.role not in optional:
+            raise ValueError(f"required {self.role} body cannot be disabled")
+        required = {"shove": {"contact"}, "forced_movement": {"brace"},
+                    "body_action": {"effect"}, "equipment": {"commit"}}
+        names = {anchor.name for anchor in self.body.anchors}
+        supported = required.get(self.role, set())
+        if names != supported and (self.body.actor.enabled or names):
+            raise ValueError(f"{self.role} requires exactly its supported body markers")
+        playback = self.body.playback
+        if self.role == "condition_hold":
+            if playback != "final_rest":
+                raise ValueError("condition hold requires an explicit final-rest frame")
+        elif playback == "final_rest" or playback == "loop" and self.role != "movement":
+            raise ValueError(f"unsupported {self.role} playback: {playback}")
+        if self.body.frameKeys and self.role not in ("movement", "save_avoidance"):
+            raise ValueError("frame keys belong to normalized travel body contexts")
+        return self
+
+
 class BodyRig(AuthoredRecord):
     """Passive body layout/capabilities, shared by timing and pixel sampling."""
 
     cell_width: Annotated[int, Field(ge=1)]
     cell_height: Annotated[int, Field(ge=1)]
     origin_y_from_ground: float
+    shadow_alpha: Annotated[float, Field(ge=0, le=1)] = 0.5
     body_anchor: Point | None = None
     rest_pose_anchors: FrozenMap[FacingMap[Point]] = Field(default_factory=dict)
     # Socket / semantic clip / viewed facing / sampled frame, in full-cell pixels.
@@ -715,6 +828,7 @@ class BodyRig(AuthoredRecord):
     slot_order: tuple[str, ...]
     slot_categories: FrozenMap[tuple[str, ...]]
     clips: FrozenMap[BodyClip]
+    body_contexts: tuple[RigBodyContextBinding, ...] = ()
 
     @field_serializer("rest_pose_anchors")
     def serialize_rest_pose_anchors(self, value: Mapping[str, Mapping[Facing8, Point]]) -> dict[str, dict[Facing8, Point]]:
@@ -743,12 +857,30 @@ class BodyRig(AuthoredRecord):
         for clip in self.clips.values():
             if not clip.sheets or not set(clip.sheets) <= categories:
                 raise ValueError("body clip sheets must use declared rig categories")
+        if "ground_depth" in self.pose_sockets and "Idle" not in self.pose_sockets["ground_depth"]:
+            raise ValueError("ground depth points require an Idle reference")
         for clips in self.pose_sockets.values():
             for name, rows in clips.items():
                 if name not in self.clips or set(rows) != facings:
                     raise ValueError("pose sockets require an existing clip and all eight facings")
                 if any(len(points) != self.clips[name].frames for points in rows.values()):
                     raise ValueError("pose sockets require one point per body frame")
+        keys: set[tuple[str, str]] = set()
+        for binding in self.body_contexts:
+            key = binding.role, binding.qualifier.model_dump_json()
+            if key in keys:
+                raise ValueError(f"duplicate rig body context: {binding.role}")
+            keys.add(key)
+            body = binding.body
+            if body.actor.enabled:
+                clip = self.clips.get(body.actor.clip)
+                if clip is None:
+                    raise ValueError(f"{binding.role}: missing body clip {body.actor.clip}")
+                frames = [*(row.frame for row in body.anchors), *(frame for _, frame in body.frameKeys)]
+                if body.restFrame is not None:
+                    frames.append(body.restFrame)
+                if any(frame >= clip.frames for frame in frames):
+                    raise ValueError(f"{binding.role}: unreachable body frame in {body.actor.clip}")
         return self
 
 
@@ -1124,19 +1256,6 @@ class BoltStyle(AuthoredRecord):
     headAlpha: Annotated[float, Field(gt=0, le=1)]
 
 
-class ActionActor(AuthoredRecord):
-    enabled: bool
-    clip: Identifier
-    playbackSpeed: Positive
-    hiddenSlots: tuple[str, ...]
-    media: tuple[JsonValue, ...]
-
-
-class ActionFrameAnchor(AuthoredRecord):
-    name: Identifier
-    frame: BodyFrame
-
-
 class AttackProfileMatch(AuthoredRecord):
     kind: Literal["attack"]
     delivery: Literal["melee", "projectile"] | None
@@ -1148,6 +1267,7 @@ class AttackProfileMatch(AuthoredRecord):
     # Current gear uses stable item identities; imported Studio refs remain readable.
     sourceItemIds: tuple[str, ...] | None = None
     sourceKinds: tuple[Literal["equipped", "unarmed", "natural"], ...] | None = None
+    rigIds: tuple[Identifier, ...] | None = None
 
 
 class AttackVfxLayer(AuthoredRecord):
@@ -1597,3 +1717,4 @@ class AnimationData:
     deposit_media: Mapping[str, DepositMediaBinding] = field(default_factory=dict)
     concentration_media: Mapping[str, SpatialMediaBinding] = field(default_factory=dict)
     construction_media: Mapping[str, ConstructionMediaBinding] = field(default_factory=dict)
+    body_materials: Mapping[SummonManifestation, BodyMaterial] = field(default_factory=dict)

@@ -5,17 +5,16 @@ from uuid import UUID
 
 import pygame
 
-from dnd.core.life_types import LifeState
 from dnd.core.condition_types import ConditionCategory
-from game.animation import actor_rest_pose, sample_idle_body
+from game.animation import sample_idle_body
 from game.animation_data import resolve_player_layers
 from game.animation_draw import (
     AnimationDrawCommand, BodyRows, LoadedBodyRows, actor_draw_commands, actor_screen_bounds,
     load_actor_media, place_feedback_rect,
 )
 from game.animation_types import AnimationData, Facing8
-from game.combat import actor_contact
-from game.condition_animation import ConditionAppearance, resolve_condition_appearance
+from game.combat import actor_contact, actor_is_visible
+from game.condition_animation import ConditionAppearance, resolve_condition_appearance, condition_body_pose
 from game.condition_draw import load_condition_layers
 from game.player_facts import PlayerState
 from game.projection import Camera, project_screen
@@ -33,9 +32,7 @@ def scene_actors(target: PlayerState, data: AnimationData,
         return ()
     result = []
     for actor in target.actors.values():
-        perceived = target.senses.entities.get(actor.uuid)
-        if (actor.uuid != target.observer_uuid and (perceived is None or not perceived.visual)
-                and not (actor.life_state == LifeState.DEAD and actor.last_visual_position is not None)):
+        if not actor_is_visible(target, actor):
             continue
         contact = actor_contact(target, actor, data, facings.get(str(actor.uuid), "S"))
         position = positions.get(contact.actor_uuid) if positions else None
@@ -61,7 +58,7 @@ def load_scene_media(actors: tuple[SceneActor, ...], data: AnimationData, *,
     load_condition_layers(tuple(layer for actor in actors for layer in actor.condition.layers), body_rows)
     return load_actor_media(data, tuple(
         (actor.contact, actor.layers,
-         (actor_rest_pose(data, actor.contact) or "Idle",))
+         (condition_body_pose(data, sample_idle_body(data, actor.contact, 0), actor.contact, actor.condition).clip,))
         for actor in actors
     ), body_rows=body_rows, all_facings=True)
 

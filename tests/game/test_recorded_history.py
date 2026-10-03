@@ -7,12 +7,14 @@ from uuid import uuid4
 
 import pytest
 
+from dnd.blocks.equipment import (EquipmentEvent, WeaponEquipEvent, WeaponUnequipEvent,
+    ArmorEquipEvent, ArmorUnequipEvent, ShieldEquipEvent, ShieldUnequipEvent)
 from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent
 from dnd.spells.abjuration import CounterspellReactionEvent
 from dnd.core.base_actions import ActionEvent
 from dnd.core.dice import DiceRoll
-from dnd.core.events import DamageAppliedEvent, EventPhase, EventQueue, StepMovementEvent, TakeDamageEvent
+from dnd.core.events import DamageAppliedEvent, EventType, EventPhase, EventQueue, StepMovementEvent, TakeDamageEvent
 from dnd.core.creature_types import DamageType
 from dnd.core.life_types import LifeState
 from dnd.core.equipment_types import WeaponSlot
@@ -363,3 +365,25 @@ def test_native_archive_before_grant_and_resolved_speed_preserves_unknown_facts(
     assert public.senses.position == before.senses.position
     assert EventQueue.event_cursor() == 0
     assert BaseObject._registry == {} and not Entity.get_all_entities()
+
+
+@pytest.mark.parametrize("model,field", (
+    (SpellEvent, "summon_application"),
+    *((model, "release_reason") for model in (EquipmentEvent, WeaponEquipEvent, WeaponUnequipEvent,
+        ArmorEquipEvent, ArmorUnequipEvent, ShieldEquipEvent, ShieldUnequipEvent)),
+))
+def test_pre_summoning_optional_fields_remain_absent_through_passive_archive_roundtrip(model, field):
+    reset_engine_runtime()
+    extra = ({"event_type": EventType.WEAPON_EQUIP, "slot": WeaponSlot.MELEE_MAIN, "item_uuid": uuid4()}
+             if field == "release_reason" else {})
+    event = model(source_entity_uuid=uuid4(), phase=EventPhase.COMPLETION, use_register=False, **extra)
+    current = encode_event(event)
+    assert current[field] is None
+    assert encode_event(decode_event(current)) == current
+    old = {key: value for key, value in current.items() if key != field}
+    before_rolls = dict(DiceRoll._registry)
+    restored = decode_event(old)
+    assert encode_event(restored) == old
+    assert decode_event(encode_event(restored)) == restored
+    assert EventQueue.event_cursor() == 0 and not BaseObject._registry
+    assert DiceRoll._registry == before_rolls

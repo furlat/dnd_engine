@@ -26,6 +26,7 @@ from dnd.types.world import MovementMode
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.entity import Entity
 from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, Shove, PickUp, Drop, SpellAction
+from dnd.summoning.actions import DismissSummon
 from dnd.conditions import (
     create_has_attacked_handler,
     create_has_taken_damage_handler,
@@ -80,7 +81,8 @@ def setup_standard_actions(entity: Entity) -> None:
     Args:
         entity: Entity that receives standard action templates and handlers.
     """
-    entity.registered_actions = []
+    for action in tuple(entity.registered_actions):
+        entity.unregister_action_by_uuid(action.uuid)
     _remove_standard_action_handlers(entity)
 
     for action, behavior_id in (
@@ -106,6 +108,7 @@ def setup_standard_actions(entity: Entity) -> None:
         (Shove(source_entity_uuid=entity.uuid, template=True), "action.shove"),
         (PickUp(source_entity_uuid=entity.uuid, template=True), "action.pick_up"),
         (Drop(source_entity_uuid=entity.uuid, template=True), "action.core.drop"),
+        (DismissSummon(source_entity_uuid=entity.uuid, template=True), "action.summon.dismiss"),
     ):
         action.behavior_binding = BehaviorBinding(
             behavior_id=behavior_id,
@@ -205,8 +208,8 @@ def _setup_weapon_event_handlers(entity: Entity) -> None:
         trigger_conditions=[Trigger(event_type=EventType.WEAPON_UNEQUIP, event_phase=EventPhase.EFFECT)],
         event_processor=_on_weapon_unequip
     )
-    EventQueue.add_event_handler(equip_handler)
-    EventQueue.add_event_handler(unequip_handler)
+    entity.add_event_handler(equip_handler)
+    entity.add_event_handler(unequip_handler)
 
 
 def update_weapon_template(entity: Entity, slot: WeaponSlot) -> None:

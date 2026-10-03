@@ -22,8 +22,10 @@ from game.animation import (
     DamageTiming, ActorContact, BodySample, BodyTransition, CastSample, VitalsSample, body_clip, body_duration, body_frame,
     sample_cast, sample_damage_body, sample_equipment, facing_for_delta, sample_idle_body, resolve_damage,
     media_track_duration, actor_rest_pose, compile_life_body, sample_body_transition,
+    body_context, resolve_body_context, context_duration, context_frame, sample_context_body,
 )
-from game.animation_types import AnimationData, Facing8, LifecycleFeedback, StudioCondition
+from game.animation_types import (AnimationData, Facing8, LifecycleFeedback, StudioCondition,
+                                  BodyContext, MovementBodyQualifier, MovementRecovery, RoleDefault)
 from game.residue_media import ResidueReveal
 from game.mechanism_projectile import (MechanismProjectileCue, mechanism_projectile_duration,
     mechanism_projectile_target)
@@ -49,7 +51,7 @@ from game.forced_movement import (
 from game.player_facts import (
     ActionFact, AreaReachFact, AttackFact, ConditionChangeFact, DamageFact, DeathSaveFact, EquipmentFact, ForcedMovementFact,
     HealFact, ItemChargeFact, LifeFact, MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerActor, PlayerFact, PlayerLineage, PlayerNode, PlayerObservation, PlayerState,
-    SensoryFact, ShoveFact, SpellFact, SpatialEffectStateFact, MechanismActivationFact, PortalTransferFact, SavingThrowFact, SpatialFact, StepFact, TemporaryHitPointsFact, TurnFact,
+    SensoryFact, ShoveFact, SpellFact, SpatialEffectStateFact, MechanismActivationFact, PortalTransferFact, SavingThrowFact, SpatialFact, StepFact, TemporaryHitPointsFact, TurnFact, FactionFact,
 )
 from game.world_animation import (
     DestructionContact, WorldTransition, world_transitions, world_transition_end, merge_world_transitions, surface_reveal_delay,
@@ -64,6 +66,28 @@ from game.spatial_contact_media import bind_spatial_contacts, ground_contact_is_
 from game.construction_media import construction_duration, construction_media_limitation
 from game.construction_transitions import construction_creation_transitions
 from game.wall_media import wall_media_limitation
+
+
+def _has_standalone_state(fact: PlayerFact | None, effect_ms: float | None) -> bool:
+    return (isinstance(fact, (TemporaryHitPointsFact, FactionFact))
+            or isinstance(fact, SpatialFact) and fact.terminal_departure and effect_ms is None)
+
+
+def _child_timing(fact: PlayerFact | None, at: float, parent_end: float,
+                  injury_at: float | None, state_at: float | None,
+                  portal: PortalTransferCue | None, sequence_at: float | None) -> tuple[float, float | None]:
+    """Existing contact/arrival anchors, with ordered generic-action groups."""
+    effect_at = (injury_at if injury_at is not None and (
+        isinstance(fact, TemporaryHitPointsFact) or isinstance(fact, DamageFact) and fact.stage == "applied")
+        else state_at)
+    start = max(at, parent_end) if isinstance(fact, MovementFact) else at
+    if portal is not None and portal.arrival is not None and not isinstance(fact, (SpatialFact, SensoryFact)):
+        start = max(start, portal.settled_ms)
+        effect_at = start
+    if sequence_at is not None:
+        start = max(start, sequence_at)
+        effect_at = start
+    return start, effect_at
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +108,10 @@ class ActionSample:
 class HealingCue:
     event: PlayerNode
     start_ms: float
+    contact: ActorContact | None = None
+    body_context: BodyContext | None = None
+    end_ms: float | None = None
+    data: AnimationData | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,6 +324,9 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     order = {event.uuid: index for index, event in enumerate(lineage.events)}
     nodes: list[ActionNode] = []
     pending_conditions: list[tuple[float, PlayerNode, StudioCondition | None]] = []
+    memberships = {identity: actor.conditions for identity, actor in before.actors.items()}
+    conditions: list[ConditionTimeline] = []
+    joined_actors: set[UUID] = set()
     reaction_condition_times: dict[UUID, float] = {}
     healing: list[HealingCue] = []
     lifecycle: list[LifecycleCue] = []
@@ -371,6 +402,93 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 reaction_media.append(bind_reaction_media(cue.event_uuid, event.uuid, incoming,
                     media, reaction.reaction.succeeded, effect_ms + delay, cutoff_ms))
         return delay
+
+    by_uuid = {event.uuid: event for event in lineage.events}
+
+    def owned_by(identity: UUID, parent: UUID) -> bool:
+        event = by_uuid[identity]
+        while event.parent_lineage is not None and event.parent_lineage in by_lineage:
+            event = by_lineage[event.parent_lineage]
+            if event.uuid == parent:
+                return True
+        return False
+
+    def finish_conditions(root: UUID | None = None) -> float:
+        selected = [row for row in pending_conditions
+                    if root is None or row[1].uuid == root or owned_by(row[1].uuid, root)]
+        pending_conditions[:] = [row for row in pending_conditions if row not in selected]
+        end = 0.
+        for at, event, override in sorted(selected, key=lambda row: (row[0], order[row[1].uuid])):
+            fact = event.fact
+            assert isinstance(fact, ConditionChangeFact)
+            transition = compile_condition(data.condition_recipes, event, facts[event.uuid],
+                memberships[fact.target_entity_uuid], start_ms=at, badge_style=data.badge_style, override=override,
+                media=data.condition_media, media_activated=fact.condition.condition_uuid in activated_conditions)
+            actor = before.actors.get(fact.target_entity_uuid)
+            if actor is not None and actor_is_visible(before, actor):
+                contact = (contacts or {}).get(str(actor.uuid)) or actor_contact(
+                    before, actor, data, (facings or {}).get(str(actor.uuid), "S"))
+                transition = bind_condition_body(transition, data.condition_recipes.get(fact.condition.behavior_id or ""),
+                                                 data, contact)
+            conditions.append(transition)
+            # The same received condition commit also owns its recorded AC/max-HP
+            # after-values; membership-only sampling must not leave those stale.
+            state_nodes.append((transition.start_ms, event))
+            memberships[fact.target_entity_uuid] = transition.after_membership
+            end = max(end, transition.complete_ms)
+            gaps.extend((event.uuid, detail) for detail in transition.unsupported)
+
+        return end
+
+    def join_actor_subtrees(root: UUID | None = None) -> float:
+        end = 0.
+        for event_uuid, index, is_body in reversed(actor_order):
+            if event_uuid in joined_actors or root is not None and event_uuid != root and not owned_by(event_uuid, root):
+                continue
+            joined_actors.add(event_uuid)
+            child_ends = [condition.complete_ms for condition in conditions
+                          if owned_by(condition.event_uuid, event_uuid)]
+            child_ends.extend(child.start_ms + child.bound.timeline.complete_ms for child in nodes
+                              if owned_by(child.event_uuid, event_uuid))
+            child_ends.extend(child.complete_ms for child in body_actions
+                              if owned_by(child.event_uuid, event_uuid))
+            child_ends.extend(cue.death_end_ms for cue in lifecycle if cue.death_end_ms is not None
+                              and owned_by(cue.event.uuid, event_uuid))
+            child_ends.extend(cue.body_end_ms for cue in lifecycle if cue.body_end_ms is not None
+                              and owned_by(cue.event.uuid, event_uuid))
+            child_ends.extend(cue.start_ms + cue.bound.timeline.complete_ms for cue in equipment
+                              if owned_by(cue.event_uuid, event_uuid))
+            child_ends.extend(cue.complete_ms for cue in forced_movement if owned_by(cue.event_uuid, event_uuid))
+            child_ends.extend(cue.timing.end_ms for cue in damage if owned_by(cue.event_uuid, event_uuid))
+            child_ends.extend(cue.end_ms for cue in healing if cue.end_ms is not None
+                              and owned_by(cue.event.uuid, event_uuid))
+            child_ends.extend(cue.start_ms + cue.timeline.complete_ms for cue in movements
+                              if owned_by(cue.event_uuid, event_uuid))
+            child_ends.extend(cue.end_ms for cue in strips if owned_by(cue.event_uuid, event_uuid))
+            child_ends.extend(cue.end_ms for cue in body_hops if owned_by(cue.event_uuid, event_uuid))
+            child_ends.extend(cue.end_ms for cue in condition_responses.values() if owned_by(cue.event_uuid, event_uuid))
+            if not child_ends:
+                continue
+            if is_body:
+                body_actions[index] = join_body_action(body_actions[index], data, max(child_ends))
+                end = max(end, body_actions[index].complete_ms)
+                continue
+            node = nodes[index]
+            child_end = max(child_ends) - node.start_ms
+            timeline = node.bound.timeline
+            if isinstance(node.bound, BoundCast):
+                original = node.bound.timeline
+                shift = max(0, child_end - original.recovery_start_ms)
+                timeline = replace(original, recovery_start_ms=original.recovery_start_ms + shift,
+                    complete_ms=original.complete_ms + shift,
+                    anchors=tuple(replace(anchor, at_ms=anchor.at_ms + shift)
+                                  if anchor.name in ("recover", "complete") else anchor for anchor in original.anchors))
+                nodes[index] = replace(node, bound=replace(node.bound, timeline=timeline))
+            else:
+                timeline = replace(node.bound.timeline, complete_ms=max(node.bound.timeline.complete_ms, child_end))
+                nodes[index] = replace(node, bound=replace(node.bound, timeline=timeline))
+            end = max(end, node.start_ms + timeline.complete_ms)
+        return end
 
     def visit(event: PlayerNode, at: float, owner: ActionNode | None = None,
               override: StudioCondition | None = None,
@@ -924,7 +1042,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 if response is not None:
                     condition_responses[response.event_uuid, response.owner_uuid] = response
                     end = max(end, response.end_ms)
-        if isinstance(fact, TemporaryHitPointsFact):
+        if _has_standalone_state(fact, state_at_effect):
             state_nodes.append((state_at_effect if state_at_effect is not None else at, event))
         if isinstance(fact, DamageFact) and fact.stage == "applied":
             placement = result_placements.get(event.uuid)
@@ -987,7 +1105,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 except (ValueError, NotImplementedError) as error:
                     gaps.append((event.uuid, str(error)))
         if isinstance(fact, HealFact) and not fact.was_blocked:
-            healing.append(HealingCue(event, at))
+            healing_cue = HealingCue(event, at)
             state_nodes.append((at, event))
             if fact.actual_healing > 0 and fact.source_condition_uuid is not None:
                 prior = _before_event(before, lineage, event)
@@ -1000,8 +1118,16 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                         condition_responses[response.event_uuid, response.owner_uuid] = response
                         end = max(end, response.end_ms)
             context = data.healing_context
-            if context.bodyClip != "none":
-                gaps.append((event.uuid, f"Healing bodyClip {context.bodyClip!r} is not bound"))
+            prior = _before_event(before, lineage, event)
+            healed = prior.actors.get(fact.target_entity_uuid)
+            if healed is not None and (str(healed.uuid) in placed_contacts or actor_is_visible(prior, healed)):
+                contact = placed_contacts.get(str(healed.uuid)) or actor_contact(prior, healed, data)
+                selected = resolve_body_context(data, contact, "healing", RoleDefault(),
+                    body_context(context.bodyClip, context.bodyPlaybackSpeed, enabled=context.bodyClip != "none"))
+                duration = context_duration(data, contact, selected)
+                healing_cue = HealingCue(event, at, contact, selected, at + duration, data)
+                end = max(end, at + duration)
+            healing.append(healing_cue)
             if context.media:
                 gaps.append((event.uuid, "Healing media tracks are not bound"))
         if isinstance(fact, (DeathSaveFact, LifeFact)):
@@ -1081,22 +1207,21 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                     and fact.position == parent.fact.end_position):
                 portal_arrival = next((cue for cue in portals if cue.event_uuid == parent.uuid), None)
         commit_milestones[event.lineage_uuid] = state_at_effect if state_at_effect is not None else at
+        sequence_children = isinstance(fact, ActionFact) and body_action is not None
+        sequence_at = child_at
         for identity in event.children_lineages:
             child = by_lineage[identity]
-            # Injury-owned world changes (such as deposited residue) commit at
-            # contact. Existing condition gestures keep their authored timing.
-            effect_at = (injury_at if injury_at is not None and (
-                         isinstance(child.fact, TemporaryHitPointsFact)
-                         or isinstance(child.fact, DamageFact) and child.fact.stage == "applied")
-                         else state_at_effect)
-            child_start = max(child_at, end) if isinstance(child.fact, MovementFact) else child_at
-            if (portal_arrival is not None and portal_arrival.arrival is not None
-                    and not isinstance(child.fact, (SpatialFact, SensoryFact))):
-                # The receiver is disclosed as emergence begins. Its grounded
-                # arrival consequences play once that same body has settled.
-                child_start = max(child_start, portal_arrival.settled_ms)
-                effect_at = child_start
-            end = max(end, visit(child, child_start, owner, override, displacement, interaction_actor, effect_at, landed_contact))
+            child_start, effect_at = _child_timing(child.fact, child_at, end, injury_at,
+                state_at_effect, portal_arrival, sequence_at if sequence_children else None)
+            child_end = visit(child, child_start, owner, override, displacement, interaction_actor, effect_at, landed_contact)
+            if sequence_children:
+                child_end = max(child_end, finish_conditions(child.uuid), join_actor_subtrees(child.uuid))
+                # Child commands finish before the next command. State facts
+                # share their action's effect anchor: a hatch opening and the
+                # resulting fall must not become two sequential actions.
+                if isinstance(child.fact, (ActionFact, AttackFact, SpellFact, MovementFact, ShoveFact, EquipmentFact)):
+                    sequence_at = child_end
+            end = max(end, child_end)
         return end
 
     complete = visit(lineage.root, 0)
@@ -1137,82 +1262,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 if recipe is not None and recipe.activation is not None:
                     complete = max(complete, at + max((effect.startOffsetMs + effect.durationMs
                         for effect in recipe.activation.effects), default=0))
-    memberships = {identity: actor.conditions for identity, actor in before.actors.items()}
-    conditions: list[ConditionTimeline] = []
-    for at, event, override in sorted(pending_conditions, key=lambda row: (row[0], order[row[1].uuid])):
-        fact = event.fact
-        assert isinstance(fact, ConditionChangeFact)
-        transition = compile_condition(data.condition_recipes, event, facts[event.uuid],
-            memberships[fact.target_entity_uuid], start_ms=at, badge_style=data.badge_style, override=override,
-            media=data.condition_media, media_activated=fact.condition.condition_uuid in activated_conditions)
-        actor = before.actors.get(fact.target_entity_uuid)
-        if actor is not None and actor_is_visible(before, actor):
-            contact = (contacts or {}).get(str(actor.uuid)) or actor_contact(
-                before, actor, data, (facings or {}).get(str(actor.uuid), "S"))
-            transition = bind_condition_body(transition, data.condition_recipes.get(fact.condition.behavior_id or ""),
-                                             data, contact)
-        conditions.append(transition)
-        # The same received condition commit also owns its recorded AC/max-HP
-        # after-values; membership-only sampling must not leave those stale.
-        state_nodes.append((transition.start_ms, event))
-        memberships[fact.target_entity_uuid] = transition.after_membership
-        complete = max(complete, transition.complete_ms)
-        gaps.extend((event.uuid, detail) for detail in transition.unsupported)
-
-    by_uuid = {event.uuid: event for event in lineage.events}
-
-    def owned_by(identity: UUID, parent: UUID) -> bool:
-        event = by_uuid[identity]
-        while event.parent_lineage is not None and event.parent_lineage in by_lineage:
-            event = by_lineage[event.parent_lineage]
-            if event.uuid == parent:
-                return True
-        return False
-
-    # Postorder joins: an authored recovery follows the whole delivery subtree,
-    # including a nested cast or a condition transition longer than hit recovery.
-    # These are offsets inside this one head, never extra queued roots.
-    for event_uuid, index, is_body in reversed(actor_order):
-        child_ends = [condition.complete_ms for condition in conditions
-                      if owned_by(condition.event_uuid, event_uuid)]
-        child_ends.extend(child.start_ms + child.bound.timeline.complete_ms for child in nodes
-                          if owned_by(child.event_uuid, event_uuid))
-        child_ends.extend(child.complete_ms for child in body_actions
-                          if owned_by(child.event_uuid, event_uuid))
-        child_ends.extend(cue.death_end_ms for cue in lifecycle if cue.death_end_ms is not None
-                          and owned_by(cue.event.uuid, event_uuid))
-        child_ends.extend(cue.body_end_ms for cue in lifecycle if cue.body_end_ms is not None
-                          and owned_by(cue.event.uuid, event_uuid))
-        child_ends.extend(cue.start_ms + cue.bound.timeline.complete_ms for cue in equipment
-                          if owned_by(cue.event_uuid, event_uuid))
-        child_ends.extend(cue.complete_ms for cue in forced_movement if owned_by(cue.event_uuid, event_uuid))
-        child_ends.extend(cue.timing.end_ms for cue in damage if owned_by(cue.event_uuid, event_uuid))
-        child_ends.extend(cue.start_ms + cue.timeline.complete_ms for cue in movements
-                          if owned_by(cue.event_uuid, event_uuid))
-        child_ends.extend(cue.end_ms for cue in strips if owned_by(cue.event_uuid, event_uuid))
-        child_ends.extend(cue.end_ms for cue in body_hops if owned_by(cue.event_uuid, event_uuid))
-        child_ends.extend(cue.end_ms for cue in condition_responses.values() if owned_by(cue.event_uuid, event_uuid))
-        if not child_ends:
-            continue
-        if is_body:
-            body_actions[index] = join_body_action(body_actions[index], data, max(child_ends))
-            complete = max(complete, body_actions[index].complete_ms)
-            continue
-        node = nodes[index]
-        child_end = max(child_ends) - node.start_ms
-        timeline = node.bound.timeline
-        if isinstance(node.bound, BoundCast):
-            original = node.bound.timeline
-            shift = max(0, child_end - original.recovery_start_ms)
-            timeline = replace(original, recovery_start_ms=original.recovery_start_ms + shift,
-                complete_ms=original.complete_ms + shift,
-                anchors=tuple(replace(anchor, at_ms=anchor.at_ms + shift)
-                              if anchor.name in ("recover", "complete") else anchor for anchor in original.anchors))
-            nodes[index] = replace(node, bound=replace(node.bound, timeline=timeline))
-        else:
-            timeline = replace(node.bound.timeline, complete_ms=max(node.bound.timeline.complete_ms, child_end))
-            nodes[index] = replace(node, bound=replace(node.bound, timeline=timeline))
-        complete = max(complete, node.start_ms + timeline.complete_ms)
+    complete = max(complete, finish_conditions(), join_actor_subtrees())
     # Compile state once at the existing causal anchors. Frame sampling selects
     # a retained value; it never folds event streams or invokes native mechanics.
     for reaction in reactions:
@@ -1357,7 +1407,8 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
         # Binding may know a participant first revealed by this action. Keep
         # that body out of playback until its matching observation is admitted.
         unrevealed = {body.actor_uuid for body in sample.bodies
-            if ((prior := bound.before.actors.get(UUID(body.actor_uuid))) is None
+            if ((departed := displayed.actors.get(UUID(body.actor_uuid))) is not None and not departed.present)
+            or ((prior := bound.before.actors.get(UUID(body.actor_uuid))) is None
                 or not actor_is_visible(bound.before, prior))
             and ((current := displayed.actors.get(UUID(body.actor_uuid))) is None
                 or not actor_is_visible(displayed, current))}
@@ -1455,6 +1506,11 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
         body = sample_condition_body(timeline, elapsed_ms, displayed.actors[timeline.target_uuid].life_state)
         if body is not None:
             bodies[body.actor_uuid] = body
+    for cue in bound.healing:
+        if (cue.contact is not None and cue.body_context is not None and cue.body_context.actor.enabled
+                and cue.end_ms is not None and cue.start_ms <= elapsed_ms < cue.end_ms and cue.data is not None):
+            bodies.setdefault(cue.contact.actor_uuid,
+                sample_context_body(cue.data, cue.contact, cue.body_context, elapsed_ms - cue.start_ms))
     for cue in bound.movements:
         if elapsed_ms < cue.start_ms:
             continue
@@ -1569,6 +1625,27 @@ class MotionTimeline:
     contact_media: tuple[StationaryMediaCue, ...] = ()
     animation_id: str | None = None
     body_frame_keys: tuple[tuple[float, int], ...] = ()
+    body_context: BodyContext | None = None
+    recovery_body: BodyContext | None = None
+    recovery_start_ms: float | None = None
+
+
+def _resolve_motion_body(timeline: MotionTimeline, data: AnimationData, movement: MovementFact,
+                         recovery: MovementRecovery) -> MotionTimeline:
+    qualifier = MovementBodyQualifier(movement_mode=movement.movement_mode, trajectory=movement.trajectory,
+                                      connector_presentation_key=movement.connector_presentation_key)
+    selected = resolve_body_context(data, timeline.actor, "movement", qualifier, body_context(
+        timeline.clip, timeline.playback_speed, loop=timeline.body_loops).model_copy(
+            update={"frameKeys": timeline.body_frame_keys}))
+    recovered = resolve_body_context(data, timeline.actor, "movement_recovery", qualifier, body_context(
+        recovery.bodyClip, recovery.bodyPlaybackSpeed, enabled=recovery.enabled))
+    recovery_start = timeline.complete_ms
+    duration = (context_duration(data, timeline.settled_contact, recovered)
+                if timeline.legs and timeline.settled_contact is not None else 0.)
+    return replace(timeline, clip=selected.actor.clip, playback_speed=selected.actor.playbackSpeed,
+        body_loops=selected.playback == "loop", body_frame_keys=selected.frameKeys,
+        body_context=selected, recovery_body=recovered, recovery_start_ms=recovery_start,
+        complete_ms=recovery_start + duration)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1760,7 +1837,7 @@ def _bind_jump(target: PlayerState, lineage: PlayerLineage, jump: MovementFact,
     transitions = merge_world_transitions(world_transitions(target, states), launch_transitions,
         tuple(replace(change, start_ms=change.start_ms + reaction.start_ms)
               for reaction in reactions for change in reaction.choreography.world_transitions))
-    return MotionTimeline(launch, legs, context.jumpClip, 1, arc, elapsed,
+    return _resolve_motion_body(MotionTimeline(launch, legs, context.jumpClip, 1, arc, elapsed,
                           tuple(reactions), settled, target, target.actors[jump.source_entity_uuid],
                           settled_lift_px=settled.body_lift_px if settled is not None else 0, body_loops=False,
                           states=tuple(states), world_transitions=transitions,
@@ -1768,7 +1845,7 @@ def _bind_jump(target: PlayerState, lineage: PlayerLineage, jump: MovementFact,
                               start_ms=change.start_ms + reaction.start_ms,
                               end_ms=change.end_ms + reaction.start_ms)
                               for reaction in reactions for change in reaction.choreography.residue_reveals),
-                          contact_media=tuple(contact_media))
+                          contact_media=tuple(contact_media)), data, jump, context.jumpRecovery)
 
 
 def _visible_contact(state: PlayerState, actor_uuid: UUID, data: AnimationData,
@@ -2023,7 +2100,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
     transitions = merge_world_transitions(world_transitions(target, states),
         tuple(replace(change, start_ms=change.start_ms + reaction.start_ms)
               for reaction in reactions for change in reaction.choreography.world_transitions))
-    return MotionTimeline(actor, tuple(legs), connector_profile.bodyClip if connector_profile is not None else context.walkClip,
+    return _resolve_motion_body(MotionTimeline(actor, tuple(legs), connector_profile.bodyClip if connector_profile is not None else context.walkClip,
                           1 if connector_profile is not None else context.walkPlaybackSpeed,
                           arc_height, elapsed, tuple(reactions), settled, target,
                           staged.actors[root.source_entity_uuid], settled_lift, body_loops=connector_profile.bodyLoops if connector_profile is not None else True, states=tuple(states),
@@ -2034,7 +2111,8 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
                               for reaction in reactions for change in reaction.choreography.residue_reveals),
                           contact_media=tuple(contact_media),
                           animation_id=connector_profile.animationId if connector_profile is not None else None,
-                          body_frame_keys=connector_profile.bodyFrameKeys if connector_profile is not None else ())
+                          body_frame_keys=connector_profile.bodyFrameKeys if connector_profile is not None else ()),
+                          data, root, context.walkRecovery)
 
 
 def passage_weight(phase: float, hold_fraction: float) -> float:
@@ -2100,6 +2178,13 @@ def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: flo
         body = bodies[-1] if bodies else sample_idle_body(data, contact, elapsed)
         return MotionSample(contact, body, active.lift_px, False, active.choreography,
                             elapsed - active.start_ms, tuple(vitals.values()), displayed, active_sample)
+    if (timeline.recovery_body is not None and timeline.recovery_body.actor.enabled
+            and timeline.recovery_start_ms is not None and timeline.recovery_start_ms <= elapsed < timeline.complete_ms
+            and timeline.settled_contact is not None):
+        contact = timeline.settled_contact
+        return MotionSample(contact, sample_context_body(data, contact, timeline.recovery_body,
+            elapsed - timeline.recovery_start_ms), contact.body_lift_px, False,
+            displayed_vitals=tuple(vitals.values()), displayed=displayed)
     leg = next((leg for leg in timeline.legs if leg.start_ms <= elapsed < leg.end_ms), None)
     if (complete and timeline.settled_contact is not None and timeline.legs
             and timeline.legs[-1].end_ms == timeline.complete_ms):
@@ -2120,7 +2205,11 @@ def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: flo
         contact = replace(timeline.settled_contact, facing=facing)
     selected = clip or timeline.clip
     metadata = body_clip(data, contact, selected)
-    if not timeline.body_loops and selected == timeline.clip:
+    if timeline.body_context is not None and selected == timeline.clip:
+        phase = leg.curve_from + (leg.curve_to - leg.curve_from) * progress
+        frame = context_frame(timeline.body_context, metadata, (elapsed - leg.body_start_ms) * leg.speed_scale,
+                              progress=phase if not timeline.body_loops else None)
+    elif not timeline.body_loops and selected == timeline.clip:
         phase = leg.curve_from + (leg.curve_to - leg.curve_from) * progress
         if timeline.body_frame_keys:
             frame = timeline.body_frame_keys[-1][1]

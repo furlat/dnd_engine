@@ -162,6 +162,7 @@ def _actor_state_changed(
 
 def _actor_state_key(fact: ObservationEntityFact) -> tuple[object, ...]:
     return (
+        fact.faction,
         fact.hp,
         fact.normal_hp,
         fact.temporary_hp,

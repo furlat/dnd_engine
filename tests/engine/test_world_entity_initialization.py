@@ -328,6 +328,9 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
         "structural_base_size": entity.structural_base_size.value,
         "weight": entity.weight,
         "faction": entity.faction,
+        "summon_origin": None,
+        "initial_condition_states": tuple(condition.snapshot_state()
+            for condition in entity.active_conditions.values()),
         "creature_content_ref": (
             entity.content_ref.identity_key
             if entity.content_ref is not None

@@ -79,7 +79,7 @@ def test_serialized_child_attack_keeps_weapon_and_outcome_with_one_authored_over
         assert literal.slot == "weaponGlow"
         assert literal.sourceSheet == "/support-spells/true_strike/" + (
             "Ranged1-Attack3-charge.png" if ranged else "Melee3-Attack6-charge.png")
-        assert timeline.release_ms == (pytest.approx(8 * 1000 / 12) if ranged else None)
+        assert timeline.release_ms == (pytest.approx(10 * 1000 / 12) if ranged else None)
         if not ranged:
             assert timeline.contact_ms == pytest.approx(7 * 1000 / 12)
         target = root.root.fact.target_entity_uuid

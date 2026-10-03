@@ -29,6 +29,10 @@ from dnd.monsters.configured_srd_creatures import (
     CONFIGURED_SRD_CREATURE_WARDROBE_GRANTS_BY_ID,
 )
 from dnd.monsters.srd_roster import SRD_CREATURE_DECLARATIONS
+from dnd.monsters.multiattack_definitions import (
+    BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS,
+    SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS,
+)
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -526,7 +530,9 @@ def _tuple_literal_rows(tree: ast.Module, assignment_name: str) -> tuple[ast.Tup
 
 
 def _static_structural_owners() -> dict[str, dict[str, str]]:
-    expected = _semantic_ids_for_mode("typed_definition")
+    # CR-0 is frozen historical evidence; later authored definitions are checked
+    # against their live collection below, without inventing legacy entries.
+    expected = {row.ref.content_id for row in SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS}
     owners: dict[str, dict[str, str]] = {}
     direct_collections = {
         "dnd/monsters/multiattack_definitions.py": "SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS",
@@ -1390,8 +1396,17 @@ def test_every_structural_definition_has_one_exact_authored_owner() -> None:
         for identity, declaration in declarations.items()
         if declaration.mode.value == "typed_definition"
     }
-    assert len(structural_identities) == 11
+    historical = {row.ref.identity_key for row in SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS}
+    current_body = {row.ref.identity_key for row in BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS}
+    assert len(historical) == 11
+    assert len(current_body) == len(BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS) == 5
+    assert not historical & current_body
+    assert structural_identities == historical | current_body
     manifest_rows = _definition_manifest_rows()
-    assert set(manifest_rows) >= structural_identities
-    for identity in sorted(structural_identities):
+    assert set(manifest_rows) >= historical
+    for identity in sorted(historical):
         _validate_static_owner(identity, "structural_definition")
+    for row in BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS:
+        assert declarations[row.ref.identity_key] is row
+        assert sum(candidate.ref.identity_key == row.ref.identity_key
+                   for candidate in BUILT_IN_DECLARATION_INVENTORY) == 1

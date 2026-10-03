@@ -544,6 +544,12 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
                 copy_recipe: ConditionLiveCopies | None = None, copy_slot: int = 0,
                 body_opacity: float = 1.,
                 ) -> tuple[pygame.Surface, tuple[int, int]]:
+    material = data.body_materials.get(contact.manifestation) if contact.manifestation is not None else None
+    if material is not None and only_shadow is not True:
+        treatment = condition or ConditionAppearance()
+        condition = replace(treatment, alpha=treatment.alpha * material.alpha,
+            body_ramp=treatment.body_ramp or material.palette,
+            ramp_strength=treatment.ramp_strength if treatment.body_ramp is not None else 1.)
     factor = TILE_WIDTH / data.rig.TILE_W * camera.zoom
     rig = body_rig(data, contact)
     height = contact.elevation_steps if only_shadow else body_elevation_steps(contact, data)
@@ -747,6 +753,22 @@ def geometry_draw_command(data: AnimationData, effect: GeometryProjectileSample,
              "projectile", height, effect.phase, None, effect.application_id))
 
 
+def actor_painter_key(data: AnimationData, body: BodySample, contact: ActorContact,
+                      camera: Camera, *, role: str, height: float,
+                      identity: str | tuple[str, ...]) -> tuple[int, float, float, int, tuple[str, ...]]:
+    """Sort a baked ground displacement without moving its pixels or native contact."""
+    key = painter_key(contact.grid, elevation_steps=height,
+                      quadrant=camera.quadrant, role=role, identity=identity)
+    points = body_rig(data, contact).pose_sockets.get("ground_depth")
+    if points is None or body.clip not in points:
+        return key
+    facing = view_facing(body.facing, camera.quadrant, data)
+    point, origin = points[body.clip][facing][body.frame], points["Idle"][facing][0]
+    scale = contact.visual_scale * TILE_WIDTH / data.rig.TILE_W
+    return (key[0], key[1] + (point.y - origin.y) * scale,
+            key[2] + (point.x - origin.x) * scale * contact.visual_scale_x, key[3], key[4])
+
+
 def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorContact,
                         layers: tuple[RigLayer, ...], body_rows: BodyRows, camera: Camera,
                         *, flash: int | PaletteTreatment | None = None,
@@ -767,8 +789,8 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
                        if condition is not None and condition.distortion is not None and not shadow else condition),
         )
         commands.append(AnimationDrawCommand(
-            painter_key(contact.grid, elevation_steps=height,
-                        quadrant=camera.quadrant, role=role, identity=contact.actor_uuid),
+            actor_painter_key(data, body, contact, camera, role=role, height=height,
+                              identity=contact.actor_uuid),
             image, destination, 0,
             (contact.actor_uuid, contact.grid, contact.rig_id, "current", None, "authored",
              role, height, body.clip, body.frame),
@@ -787,8 +809,8 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
                 ghost=(copies.recipe.palette, copies.recipe.paletteMaximum), copy_recipe=copies.recipe, copy_slot=slot,
                 body_opacity=copies.recipe.opacity * opacity)
             height = body_elevation_steps(copy_contact, data)
-            commands.append(AnimationDrawCommand(painter_key(location, elevation_steps=height,
-                quadrant=camera.quadrant, role="actor", identity=(contact.actor_uuid, "copy", str(slot))),
+            commands.append(AnimationDrawCommand(actor_painter_key(data, body, copy_contact, camera,
+                role="actor", height=height, identity=(contact.actor_uuid, "copy", str(slot))),
                 image, destination, 0, (contact.actor_uuid, location, contact.rig_id, "current", None, "authored",
                                        "body_copy", height, body.clip, body.frame, slot),
                 role="body_copy", owner=contact.actor_uuid))
@@ -805,8 +827,8 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
                     alpha=condition.alpha * contour.opacity * condition.distortion_strength),
                     ghost=(recipe.palette, recipe.paletteMaximum))
             height = body_elevation_steps(contour_contact, data)
-            commands.append(AnimationDrawCommand(painter_key(location, elevation_steps=height,
-                quadrant=camera.quadrant, role="actor", identity=(contact.actor_uuid, "contour", str(index))),
+            commands.append(AnimationDrawCommand(actor_painter_key(data, body, contour_contact, camera,
+                role="actor", height=height, identity=(contact.actor_uuid, "contour", str(index))),
                 image, destination, 0, (contact.actor_uuid, location, contact.rig_id, "current", None, "authored",
                                        "body_contour", height, body.clip, body.frame, index),
                 role="body_contour", owner=contact.actor_uuid))
@@ -825,8 +847,8 @@ def body_trail_draw_command(trail: BodyTrailPose, data: AnimationData, body_rows
                                               alpha=condition.alpha * trail.opacity),
         ghost=(distortion.palette, distortion.paletteMaximum))
     height = body_elevation_steps(actor.contact, data)
-    return AnimationDrawCommand(painter_key(actor.contact.grid, elevation_steps=height,
-        quadrant=camera.quadrant, role="actor", identity=(body.actor_uuid, "trail", str(trail.age_ms))),
+    return AnimationDrawCommand(actor_painter_key(data, body, actor.contact, camera,
+        role="actor", height=height, identity=(body.actor_uuid, "trail", str(trail.age_ms))),
         image, destination, 0, (body.actor_uuid, actor.contact.grid, actor.contact.rig_id, "current", None,
                                "authored", "body_trail", height, body.clip, body.frame, trail.age_ms),
         role="body_trail", owner=body.actor_uuid)
@@ -1058,7 +1080,7 @@ def draw_animation(surface: pygame.Surface, timeline: CastTimeline, sample: Cast
     for body in sample.bodies:
         contact = contacts[body.actor_uuid]
         # A lifted detached-stage body still leaves its shadow on support.
-        for shadow in (True, False) if contact.body_lift_px else (None,):
+        for shadow in (True, False) if contact.body_lift_px or contact.manifestation in data.body_materials else (None,):
             image, destination = _actor_blit(
                 body, contact, media.appearances[body.actor_uuid], media.body_rows, data, camera,
                 flashes.get(body.actor_uuid), only_shadow=shadow,

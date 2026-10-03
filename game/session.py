@@ -25,6 +25,7 @@ from dnd.game import Game
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
+from dnd.summoning.system import SummoningSystem, bind_summoning
 from dnd.scenarios.battlefield_catalog import BuiltBattlefield, build_battlefield
 from dnd.scenarios.encounter_assembler import assemble_encounter_recipe
 from dnd.scenarios.encounter_catalog import encounter_recipe
@@ -40,6 +41,7 @@ class Session:
     player_uuids: tuple[UUID, ...]
     enemy_controller: NativeAIController
     births: tuple[EntityCreatedEvent, ...]
+    summoning: SummoningSystem | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +108,8 @@ def create_session(
     encounter.start_encounter()
     births = tuple(event for _, event in EventQueue.iter_events_since(0)
                    if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
-    return Session(game, encounter, battlefield, (fighter.uuid, sorcerer.uuid), enemy_controller, births)
+    return Session(game, encounter, battlefield, (fighter.uuid, sorcerer.uuid), enemy_controller, births,
+                   bind_summoning(game, encounter))
 
 
 def _create_authored_session(encounter_id: str) -> Session:
@@ -134,7 +137,8 @@ def _create_authored_session(encounter_id: str) -> Session:
     encounter.start_encounter()
     births = tuple(event for _, event in EventQueue.iter_events_since(0)
                    if isinstance(event, EntityCreatedEvent) and event.entity_uuid in game.entities)
-    return Session(game, encounter, assembled.battlefield, tuple(player.uuid for player in players), controller, births)
+    return Session(game, encounter, assembled.battlefield, tuple(player.uuid for player in players), controller, births,
+                   bind_summoning(game, encounter))
 
 
 def _current_player(session: Session, actor_uuid: UUID) -> Entity:

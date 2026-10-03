@@ -4166,6 +4166,8 @@ class LightEffect(BaseCondition):
     description: str = Field(default="Object sheds bright light in a 20-foot radius and dim light for an additional 20 feet", description="Rules-facing summary for the light effect condition.")
     light_source_uuid: Optional[UUID] = Field(default=None, description="Light source UUID created and cleaned up by light effect.")
 
+    _removed_light: SpatialChangeEvent | None = PrivateAttr(default=None)
+
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="No target")
@@ -4189,12 +4191,17 @@ class LightEffect(BaseCondition):
         )
         return [], [], [], [], effect_event
 
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        if self.light_source_uuid:
-            grid = get_map()
-            grid.remove_light_source(self.light_source_uuid, parent_event=event.uuid if event is not None else None)
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        if self.light_source_uuid is not None:
+            self._removed_light = get_map().remove_light_source(self.light_source_uuid,
+                parent_event=parent_event.uuid if parent_event else None, publish_event=not self.applied)
             self.light_source_uuid = None
-        return super()._remove(event)
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+    def on_membership_changed(self, event: Event) -> None:
+        removed, self._removed_light = self._removed_light, None
+        if removed is not None:
+            get_map()._fire_committed_spatial_event(removed)
 
 
 class Light(SpellAction):
@@ -4379,10 +4386,13 @@ class ContinualFlameCondition(SpatialCondition):
         parent_event: Optional[Event] = None,
     ) -> None:
         if self._light_source_uuid is not None:
-            get_map().remove_light_source(
+            change = get_map().remove_light_source(
                 self._light_source_uuid,
                 parent_event=(parent_event.uuid if parent_event is not None else None),
+                publish_event=self._removal_publication is None,
             )
+            if change is not None and self._removal_publication is not None:
+                self._removal_publication.light_changes.append(change)
             self._light_source_uuid = None
         super()._release_owned_runtime_state(parent_event=parent_event)
 
@@ -5226,6 +5236,8 @@ class FireShieldEffect(BaseCondition):
     light_source_uuid: UUID | None = None
     retaliated_lineages: set[UUID] = Field(default_factory=set, exclude=True)
 
+    _removed_light: SpatialChangeEvent | None = PrivateAttr(default=None)
+
     def _apply(self, event: Event):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
@@ -5286,9 +5298,15 @@ class FireShieldEffect(BaseCondition):
                 owner.unregister_action_by_uuid(action_uuid)
         self.granted_action_uuids.clear()
         if self.light_source_uuid is not None:
-            get_map().remove_light_source(self.light_source_uuid, parent_event=parent_event.uuid if parent_event else None)
+            self._removed_light = get_map().remove_light_source(self.light_source_uuid,
+                parent_event=parent_event.uuid if parent_event else None, publish_event=not self.applied)
             self.light_source_uuid = None
         super()._release_owned_runtime_state(parent_event=parent_event)
+
+    def on_membership_changed(self, event: Event) -> None:
+        removed, self._removed_light = self._removed_light, None
+        if removed is not None:
+            get_map()._fire_committed_spatial_event(removed)
 
 
 class FireShield(SpellAction):

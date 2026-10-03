@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from math import atan2, cos, floor, hypot, isfinite, pi, sin
-from typing import Literal
+from typing import Literal, overload
 from uuid import UUID
 
 from dnd.core.life_types import LifeState
+from dnd.types.summoning import SummonManifestation
 from dnd.core.effect_types import ResolutionRef
 from game.player_facts import PlayerNode
 from dnd.core.condition_types import ConditionTag
@@ -22,6 +23,7 @@ from game.animation_types import (
     DamageDeath, EquipmentTransitionContext, Facing8, FloatingNumber, HitFlash, PaletteTreatment,
     StudioActorLayer, StudioDamage, StudioProjectile, StudioProjectilePhase, StudioSpellDraft,
     MediaTimePoint, StudioMediaTrack,
+    ActionActor, ActionFrameAnchor, BodyContext, BodyContextQualifier, BodyContextRole, RoleDefault,
 )
 from game.projection import HEIGHT_STEP_PIXELS, TILE_HEIGHT, TILE_WIDTH, inverse_rotate_position, project_world
 from game.device_art import DeviceEmission, device_frame, device_muzzle_offset
@@ -44,6 +46,7 @@ class ActorContact:
     body_lift_px: float = 0.0
     rest_pose: str | None = None
     condition_scale: float = 1.0
+    manifestation: SummonManifestation | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,6 +239,7 @@ class BodyTransition:
     frames: int
     reversed: bool
     data: AnimationData
+    body_context: BodyContext | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,6 +252,7 @@ class EquipmentTimeline:
     data: AnimationData
     commit_ms: float
     complete_ms: float
+    body_context: BodyContext | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -351,6 +356,68 @@ def body_duration(clip: BodyClip, speed: float) -> float:
     return (clip.frames - 1) * 1000 / (clip.fps * speed)
 
 
+def body_context(clip: str, speed: float = 1., *, enabled: bool = True,
+                 anchors: tuple[ActionFrameAnchor, ...] = (), loop: bool = False,
+                 reversed: bool = False) -> BodyContext:
+    """Adapt an existing shared body recipe without adding media or slot policy."""
+    return BodyContext(actor=ActionActor(enabled=enabled, clip=clip, playbackSpeed=speed,
+        hiddenSlots=(), media=()), anchors=anchors, playback="loop" if loop else "once", reversed=reversed)
+
+
+@overload
+def resolve_body_context(data: AnimationData, contact: ActorContact, role: BodyContextRole,
+                         qualifier: BodyContextQualifier, default: BodyContext) -> BodyContext: ...
+
+
+@overload
+def resolve_body_context(data: AnimationData, contact: ActorContact, role: BodyContextRole,
+                         qualifier: BodyContextQualifier, default: None = None) -> BodyContext | None: ...
+
+
+def resolve_body_context(data: AnimationData, contact: ActorContact, role: BodyContextRole,
+                         qualifier: BodyContextQualifier, default: BodyContext | None = None) -> BodyContext | None:
+    """One exact qualifier, then one role default, then the existing shared recipe."""
+    bindings = tuple(row for row in body_rig(data, contact).body_contexts if row.role == role)
+    exact = next((row.body for row in bindings if row.qualifier == qualifier), None)
+    fallback = next((row.body for row in bindings if isinstance(row.qualifier, RoleDefault)), None)
+    return exact or fallback or default
+
+
+def context_duration(data: AnimationData, contact: ActorContact, body: BodyContext) -> float:
+    return body_duration(body_clip(data, contact, body.actor.clip), body.actor.playbackSpeed) if body.actor.enabled else 0.
+
+
+def context_anchor_ms(data: AnimationData, contact: ActorContact, body: BodyContext, name: str) -> float:
+    if not body.actor.enabled:
+        return 0.
+    clip = body_clip(data, contact, body.actor.clip)
+    frame = next(row.frame for row in body.anchors if row.name == name)
+    _require_frame(clip, frame, name)
+    return (clip.frames - 1 - frame if body.reversed else frame) * 1000 / (clip.fps * body.actor.playbackSpeed)
+
+
+def context_frame(body: BodyContext, metadata: BodyClip, age_ms: float, *, progress: float | None = None) -> int:
+    if body.restFrame is not None:
+        return body.restFrame
+    if progress is not None and body.playback != "loop":
+        phase = min(1., max(0., progress))
+        frame = min(metadata.frames - 1, int(phase * metadata.frames))
+        for (start, first), (end, last) in zip(body.frameKeys, body.frameKeys[1:]):
+            if phase <= end:
+                frame = round(first + (last - first) * (phase - start) / (end - start))
+                break
+    else:
+        frame = body_frame(age_ms, metadata.fps * body.actor.playbackSpeed, metadata.frames, loop=body.playback == "loop")
+    return metadata.frames - 1 - frame if body.reversed else frame
+
+
+def sample_context_body(data: AnimationData, contact: ActorContact, body: BodyContext, age_ms: float) -> BodySample:
+    if not body.actor.enabled:
+        return sample_idle_body(data, contact, max(0., age_ms))
+    metadata = body_clip(data, contact, body.actor.clip)
+    return BodySample(contact.actor_uuid, body.actor.clip, context_frame(body, metadata, age_ms), contact.facing)
+
+
 def life_body_pose(data: AnimationData, state: LifeState) -> str | None:
     if state is LifeState.DEAD:
         return data.death_context.bodyClip
@@ -365,10 +432,11 @@ def actor_rest_pose(data: AnimationData, contact: ActorContact) -> str | None:
 
 
 def compile_body_transition(data: AnimationData, contact: ActorContact,
-                            animation: ConditionBodyAnimation) -> BodyTransition:
-    clip = body_clip(data, contact, animation.bodyClip)
-    return BodyTransition(contact, animation.bodyClip, clip.fps * animation.bodyPlaybackSpeed,
-                          clip.frames, animation.reversed, data)
+                            animation: ConditionBodyAnimation, *, body: BodyContext | None = None) -> BodyTransition:
+    selected = body or body_context(animation.bodyClip, animation.bodyPlaybackSpeed, reversed=animation.reversed)
+    clip = body_clip(data, contact, selected.actor.clip)
+    return BodyTransition(contact, selected.actor.clip, clip.fps * selected.actor.playbackSpeed,
+                          clip.frames, selected.reversed, data, selected)
 
 
 def sample_body_transition(cue: BodyTransition, age_ms: float) -> BodySample | None:
@@ -409,13 +477,18 @@ def compile_equipment(data: AnimationData, root_event_uuid: str, actor: ActorCon
     if recipe.media:
         raise NotImplementedError("equipment transition media is outside the selected body-only context")
     duration = commit = 0.0
-    if recipe.bodyEnabled:
-        clip = body_clip(data, actor, recipe.bodyClip)
-        duration = body_duration(clip, recipe.bodyPlaybackSpeed)
+    selected = resolve_body_context(data, actor, "equipment", RoleDefault(), body_context(
+        recipe.bodyClip, recipe.bodyPlaybackSpeed, enabled=recipe.bodyEnabled,
+        anchors=(ActionFrameAnchor(name="commit", frame=recipe.commitFrame),)))
+    if selected.actor.enabled:
+        clip = body_clip(data, actor, selected.actor.clip)
+        duration = context_duration(data, actor, selected)
         # SwitchWeaponClip commits on the authored frame, with a final commit
         # after body completion if a mapped clip never reaches that frame.
-        commit = min(duration, recipe.commitFrame * 1000 / (clip.fps * recipe.bodyPlaybackSpeed))
-    return EquipmentTimeline(root_event_uuid, actor, recipe, data, commit, duration)
+        frame = next(row.frame for row in selected.anchors if row.name == "commit")
+        commit = min(duration, (clip.frames - 1 - frame if selected.reversed else frame)
+                     * 1000 / (clip.fps * selected.actor.playbackSpeed))
+    return EquipmentTimeline(root_event_uuid, actor, recipe, data, commit, duration, selected)
 
 
 def sample_idle_body(data: AnimationData, actor: ActorContact, elapsed_ms: float) -> BodySample:
@@ -436,12 +509,8 @@ def sample_equipment(timeline: EquipmentTimeline, elapsed_ms: float) -> Equipmen
     actor, recipe, data = timeline.actor, timeline.recipe, timeline.data
     if elapsed_ms >= timeline.complete_ms:
         return EquipmentSample(sample_idle_body(data, actor, elapsed_ms - timeline.complete_ms), True, True)
-    metadata = body_clip(data, actor, recipe.bodyClip)
-    body = BodySample(
-        actor.actor_uuid, recipe.bodyClip,
-        body_frame(elapsed_ms, metadata.fps * recipe.bodyPlaybackSpeed, metadata.frames, loop=False),
-        actor.facing,
-    )
+    selected = timeline.body_context or body_context(recipe.bodyClip, recipe.bodyPlaybackSpeed, enabled=recipe.bodyEnabled)
+    body = sample_context_body(data, actor, selected, elapsed_ms)
     return EquipmentSample(body, elapsed_ms >= timeline.commit_ms, False)
 
 

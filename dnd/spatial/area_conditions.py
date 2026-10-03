@@ -2,10 +2,11 @@
 
 from typing import Callable, Dict, List, Optional, Set, Tuple
 from uuid import UUID
+from dataclasses import dataclass, field
 
 from pydantic import Field, PrivateAttr, StrictInt, model_validator
 
-from dnd.core.base_block import BaseBlock, LightLevel, MovementMode
+from dnd.core.base_block import BaseBlock, LightLevel, MovementMode, PreparedConditionRemovals
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.condition_types import DurationType, HazardFilter
 from dnd.core.item_types import ItemIntegrity
@@ -43,6 +44,15 @@ from dnd.types.spatial_effects import (
 )
 
 
+@dataclass
+class SpatialRemovalPublication:
+    effect: SpatialEffectChangeEvent
+    condition_effect: Event
+    tile_changes: list[SpatialChangeEvent] = field(default_factory=list)
+    light_changes: list[SpatialChangeEvent] = field(default_factory=list)
+    published: bool = False
+
+
 class SpatialCondition(BaseCondition):
     """One condition that directly owns its world footprint and mechanics."""
 
@@ -72,6 +82,7 @@ class SpatialCondition(BaseCondition):
     has_visible_presence: bool = False
     movement_expenditure_extra: float = Field(default=0, ge=0,
         description="Owned movement expenditure independent of difficult-terrain immunity.")
+    _removal_publication: SpatialRemovalPublication | None = PrivateAttr(default=None)
 
     def movement_extra_cost_at(self, position: Tuple[int, int], mode: MovementMode) -> float:
         return (self.movement_expenditure_extra
@@ -338,6 +349,7 @@ class SpatialCondition(BaseCondition):
 
     def _commit_activation_footprint(self, parent_event: Event) -> None:
         """Swap preflighted Tile membership before installing mechanics."""
+        self._removal_publication = None
         if self._activation_positions is None:
             raise RuntimeError("Spatial condition has no prepared footprint")
         grid = get_map()
@@ -636,6 +648,7 @@ class SpatialCondition(BaseCondition):
         previous_trap_state: Optional[TrapState] = None,
         pressed: Optional[bool] = None,
         previous_pressed: Optional[bool] = None,
+        publish: bool = True,
     ) -> SpatialEffectChangeEvent:
         """Publish the non-vetoable phases that directly cause a spatial change."""
         declaration = SpatialEffectChangeEvent(
@@ -658,6 +671,8 @@ class SpatialCondition(BaseCondition):
             affected_positions=tuple(sorted(affected_positions)),
             previous_positions=tuple(sorted(previous_positions)),
         )
+        if not publish:
+            return declaration.model_copy(update={"phase": EventPhase.EFFECT})
         execution = declaration.phase_to(EventPhase.EXECUTION)
         effect = execution.phase_to(EventPhase.EFFECT)
         EventQueue.publish_preflighted(declaration)
@@ -726,6 +741,7 @@ class SpatialCondition(BaseCondition):
         expire: bool = False,
         parent_event: Optional[Event] = None,
         prepared_removal_effect: Optional[Event] = None,
+        publish: bool = True,
     ) -> bool:
         """Remove this independent owner, or commit its accepted removal."""
         if prepared_removal_effect is None:
@@ -733,15 +749,16 @@ class SpatialCondition(BaseCondition):
                 expire=expire,
                 parent_event=parent_event,
             )
-        if not isinstance(prepared_removal_effect, SpatialEffectChangeEvent):
-            raise TypeError(
-                "Prepared spatial removal must be a spatial-change effect",
-            )
-        condition_effect = (
-            EventQueue.get_event_by_uuid(prepared_removal_effect.parent_event)
-            if prepared_removal_effect.parent_event is not None
-            else None
-        )
+        if prepared_removal_effect.event_type is EventType.CONDITION_REMOVAL:
+            condition_effect = prepared_removal_effect
+            prepared_removal_effect = self._open_change(self._removal_operation,
+                previous_positions=set(self.affected_positions), affected_positions=set(),
+                parent_event=condition_effect, publish=False)
+        elif isinstance(prepared_removal_effect, SpatialEffectChangeEvent):
+            condition_effect = (EventQueue.get_event_by_uuid(prepared_removal_effect.parent_event)
+                if prepared_removal_effect.parent_event is not None else None)
+        else:
+            raise TypeError("Prepared spatial removal must identify a condition or spatial removal")
         if (
             condition_effect is None
             or condition_effect.event_type is not EventType.CONDITION_REMOVAL
@@ -751,6 +768,7 @@ class SpatialCondition(BaseCondition):
                 "Prepared spatial removal is missing its condition effect",
             )
 
+        self._removal_publication = SpatialRemovalPublication(prepared_removal_effect, condition_effect)
         removed = self.cleanup_own_state(
             expire=expire,
             parent_event=prepared_removal_effect,
@@ -766,9 +784,34 @@ class SpatialCondition(BaseCondition):
                 parent.unlink_condition(self.uuid, parent_event=removed)
             self.parent_link = None
         self.remove_from_register()
-        self._complete_change(prepared_removal_effect)
-        condition_effect.phase_to(EventPhase.COMPLETION)
+        if publish:
+            self.publish_runtime_owner_removal(prepared_removal_effect)
         return True
+
+    def publish_runtime_owner_removal(self, effect: Event) -> None:
+        publication = self._removal_publication
+        if publication is None or effect.uuid not in (publication.effect.uuid, publication.condition_effect.uuid):
+            raise ValueError("Spatial removal publication does not match its commitment")
+        if publication.published:
+            return
+        publication.published = True
+        errors: list[BaseException] = []
+        grid = get_map()
+        for change in (*publication.tile_changes, *publication.light_changes):
+            try:
+                grid._fire_committed_spatial_event(change)
+            except BaseException as error:
+                errors.append(error)
+        try:
+            self._complete_change(publication.effect)
+        except BaseException as error:
+            errors.append(error)
+        try:
+            publication.condition_effect.phase_to(EventPhase.COMPLETION)
+        except BaseException as error:
+            errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Committed spatial removal publication failed", errors)
 
     def publish_removal_effect(
         self,
@@ -822,11 +865,23 @@ class SpatialCondition(BaseCondition):
                 prepared=prepared,
                 visited=set(),
             )
+        except BaseException as error:
+            try:
+                BaseBlock.cancel_owned_condition_removals(PreparedConditionRemovals(prepared),
+                    "Spatial removal admission raised")
+            except BaseException as cleanup_error:
+                raise BaseExceptionGroup("Spatial removal and admission cleanup failed",
+                    [error, cleanup_error]) from None
+            raise
         finally:
             self._removal_operation = prior_operation
             self._removal_previous_positions = prior_positions
         if canceled is not None:
             BaseBlock._cancel_prepared_condition_removals(prepared, canceled)
+            return False
+        if not BaseBlock.validate_prepared_condition_removals(prepared):
+            BaseBlock.cancel_owned_condition_removals(PreparedConditionRemovals(prepared),
+                "Spatial removal destinations conflict or changed")
             return False
         BaseBlock._commit_prepared_condition_removals(prepared)
         return True
@@ -1282,13 +1337,17 @@ class AreaCondition(SpatialCondition):
                 and before != tile.get_movement_cost(MovementMode.WALKING)
             ):
                 grid.invalidate_spatial_caches({"movement"})
-                grid.publish_tile_mechanics_changed(
+                change = grid.snapshot_tile_mechanics_change(
                     position,
                     source_entity_uuid=self.source_entity_uuid,
                     parent_event=(
                         parent_event.uuid if parent_event is not None else None
                     ),
                 )
+                if self._removal_publication is not None:
+                    self._removal_publication.tile_changes.append(change)
+                else:
+                    grid._fire_committed_spatial_event(change)
 
     def _apply_light_positions(
         self,
@@ -1318,11 +1377,18 @@ class AreaCondition(SpatialCondition):
         owned = set(positions) & self._light_positions
         if not owned:
             return
-        get_map().remove_light_modifier(
+        grid = get_map()
+        changed = grid.remove_light_modifier(
             self.uuid,
             owned,
             parent_event=(parent_event.uuid if parent_event is not None else None),
+            publish=self._removal_publication is None,
         )
+        if self._removal_publication is not None:
+            change = grid.snapshot_light_change(list(changed),
+                parent_event=parent_event.uuid if parent_event is not None else None)
+            if change is not None:
+                self._removal_publication.light_changes.append(change)
         self._light_positions -= owned
 
     def _occupants_at(self, positions: Set[Tuple[int, int]]) -> List[Entity]:

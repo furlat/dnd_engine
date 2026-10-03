@@ -12,6 +12,7 @@ from dnd.core.life_types import LifeState
 from dnd.types.event_facts import WorldTileState
 from dnd.types.actor import ConditionState, EntityStatsState, TemporaryHitPointsGrant
 from dnd.types.world import OccupancyLayer
+from dnd.types.summoning import SummonOrigin
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,3 +60,4 @@ class ActorState:
     temporary_hp_grant: TemporaryHitPointsGrant | None = None
     resolved_size: Size | None = None
     structural_base_size: Size | None = None
+    summon_origin: SummonOrigin | None = None

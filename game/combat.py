@@ -59,7 +59,7 @@ class BoundEquipment:
 
 def actor_is_visible(target: PlayerState, actor: PlayerActor) -> bool:
     """Whether retained observation currently supplies this actor's visual pose."""
-    if target.senses is None:
+    if target.senses is None or not actor.present:
         return False
     perceived = target.senses.entities.get(actor.uuid)
     return (actor.uuid == target.observer_uuid or perceived is not None and perceived.visual
@@ -101,6 +101,7 @@ def actor_contact(target: PlayerState, actor: PlayerActor, data: AnimationData, 
         elevation_steps=support.elevation_steps,
         rig_id=rig_id,
         rest_pose=condition.body_pose,
+        manifestation=actor.manifestation,
     )
 
 

@@ -37,6 +37,7 @@ import dnd.spells.walls as walls
 import dnd.spells.wall_fields as wall_fields
 import dnd.spells.wall_constructions as wall_constructions
 import dnd.tile_conditions as tile_conditions
+import dnd.summoning.conditions as summoning_conditions
 from dnd.core.base_conditions import BaseCondition
 from dnd.core.base_actions import BaseAction
 from dnd.core.content.descriptors import (
@@ -126,6 +127,8 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     ConditionBehaviorIdentitySpec,
     ...,
 ] = (
+    _original(monster_traits.HitSaveRiderFeature, ContentDefinitionKind.TRAIT, "trait.attack_hit_save_rider"),
+    _original(monster_traits.KeenPerceptionFeature, ContentDefinitionKind.TRAIT, "trait.keen_perception"),
     _srd(monster_traits.MagicResistance,ContentDefinitionKind.TRAIT,"trait.magic_resistance"),
     _srd(monster_traits.InnateFlight,ContentDefinitionKind.TRAIT,"trait.innate_flight"),
     _srd(monster_traits.LifeDrainReduction,ContentDefinitionKind.CONDITION,"condition.wight.life_drain"),
@@ -372,6 +375,8 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     # Original map-authored conditions.
     _original(tile_conditions.SpikeTrapCondition, ContentDefinitionKind.CONDITION, "condition.tile.spike_trap"),
     _original(tile_conditions.ZoneMarkerCondition, ContentDefinitionKind.CONDITION, "condition.tile.zone_marker"),
+    _original(summoning_conditions.Summoned, ContentDefinitionKind.CONDITION, "condition.summoned"),
+    _original(summoning_conditions.SummonControl, ContentDefinitionKind.CONDITION, "condition.summon_control"),
 )
 
 

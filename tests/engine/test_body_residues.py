@@ -298,7 +298,7 @@ def test_authored_bestiary_composition_installs_its_body_response(world: Game, f
 @pytest.mark.parametrize("recipe,release_id", (
     (CORROSIVE_DEMON_RECIPE, "body.corrosive_blood"),
     (DREAD_DEMON_RECIPE, "body.dread_blood"),
-    (SRD_CREATURE_RECIPES_BY_ID["dretch"], None),
+    (SRD_CREATURE_RECIPES_BY_ID["dretch"], "body.blood"),
 ))
 def test_explicit_demon_variants_preserve_canonical_dretch(world: Game, recipe, release_id: str | None) -> None:
     creature = materialize_creature(

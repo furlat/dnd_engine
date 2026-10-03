@@ -14,7 +14,7 @@ from dnd.types.senses import reduce_senses_snapshot
 from game.player_facts import (
     AttackFact, ConditionChangeFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, LifeFact,
     PlayerFact, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
-    PlayerState, SensoryFact, SpatialFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact,
+    PlayerState, SensoryFact, SpatialFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact, FactionFact,
 )
 
 
@@ -67,7 +67,7 @@ def index_player_lineage(lineage: PlayerLineage) -> PlayerCausalIndex:
 # These received families have ordinary state presentation, without a separate
 # actor cue. This describes the reducer below; it is not a second dispatcher.
 STATE_PRESENTATION_KINDS = frozenset({
-    "temporary_hit_points", "spatial", "turn", "sensory", "item_charge",
+    "temporary_hit_points", "spatial", "turn", "sensory", "item_charge", "faction",
 })
 
 
@@ -90,6 +90,9 @@ def apply_world_update(target: PlayerState, update: WorldUpdate) -> None:
 
 
 def _observe(target: PlayerState, observation: PlayerObservation) -> None:
+    previous = target.actors.get(observation.actor.uuid)
+    if previous is not None and not previous.present:
+        return  # A later retained observation cannot resurrect a terminal lifetime.
     target.actors[observation.actor.uuid] = observation.actor
     if observation.contact is not None and target.senses is not None:
         target.senses.entities[observation.actor.uuid] = observation.contact
@@ -131,7 +134,17 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
 
 def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
     match fact:
+        case FactionFact():
+            actor = target.actors.get(fact.entity_uuid)
+            if actor is not None:
+                target.actors[actor.uuid] = replace(actor, faction=fact.faction_after)
         case SpatialFact():
+            if fact.terminal_departure and fact.entity_uuid is not None and fact.entity_uuid in target.actors:
+                actor = target.actors[fact.entity_uuid]
+                target.actors[actor.uuid] = replace(actor, present=False, last_visual_position=None, occupancy_layer=None)
+                if target.senses is not None:
+                    target.senses.entities.pop(actor.uuid, None)
+                return
             actor = target.actors.get(fact.entity_uuid) if fact.entity_uuid is not None else None
             if actor is not None and fact.occupancy_layer is not None:
                 target.actors[actor.uuid] = replace(actor, occupancy_layer=fact.occupancy_layer)
@@ -160,7 +173,7 @@ def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
             if fact.observer_position_changed and target.observer_uuid in target.actors:
                 target.actors[target.observer_uuid] = replace(target.actors[target.observer_uuid], last_visual_position=fact.observer_position)
             for identity, contact in fact.entity_contacts_changed.items():
-                if contact.visual and identity in target.actors:
+                if contact.visual and identity in target.actors and target.actors[identity].present:
                     target.actors[identity] = replace(target.actors[identity], last_visual_position=contact.position)
         case AttackFact():
             actor = target.actors.get(fact.source_entity_uuid)

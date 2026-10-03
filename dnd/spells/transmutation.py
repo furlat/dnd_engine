@@ -79,7 +79,7 @@ from dnd.core.aoe import AoEShape, Cube
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.conditions import Dashing, Restrained, Concentrating, ConcentrationActionMarker
-from dnd.creature_transforms import apply_incapacitated_transform
+from dnd.creature_transforms import apply_incapacitated_transform, remove_modifier_ownership
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
 from dnd.spatial.area_conditions import AreaCondition
 from dnd.types.spatial_effects import (
@@ -672,6 +672,28 @@ class HasteEffect(BaseCondition):
         dex_mod_uuid = dex_save.bonus.self_static.add_advantage_modifier(dex_adv)
         outs.append((dex_save.bonus.uuid, dex_mod_uuid))
 
+        try:
+            effect_event = declaration_event.phase_to(
+                EventPhase.EFFECT,
+                update={"condition": self},
+                status_message=f"Applied Haste to {target.name}",
+                resulting_ac=target.ac_bonus().normalized_score
+            )
+        except BaseException:
+            remove_modifier_ownership(outs)
+            raise
+        return outs, [], [], [], effect_event
+
+    def _post_removal_stats(self) -> Dict[str, Any]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target and isinstance(target, Entity):
+            return {"resulting_ac": target.ac_bonus().normalized_score}
+        return {}
+
+    def _commit_application(self, effect_event: Event) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            raise RuntimeError("Prepared Haste owner disappeared")
         allowed_kinds = (
             frozenset({RestrictedActionKind.STANDARD_ACTION})
             if (
@@ -702,29 +724,20 @@ class HasteEffect(BaseCondition):
             )
         )
 
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self},
-            status_message=f"Applied Haste to {target.name}",
-            resulting_ac=target.ac_bonus().normalized_score
-        )
-        return outs, [], [], [], effect_event
-
-    def _post_removal_stats(self) -> Dict[str, Any]:
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target and isinstance(target, Entity):
-            return {"resulting_ac": target.ac_bonus().normalized_score}
-        return {}
+        if target is not None:
+            target.action_economy.remove_restricted_action_grant("haste", self.uuid)
 
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Apply the one-round Haste Lethargy effect when Haste ends."""
+    def on_membership_changed(self, event: Event) -> None:
+        """Lethargy is a consequence of committed removal, never failed admission."""
+        if self.applied:
+            return
+        release = BaseBlock._terminal_release.get()
+        if release is not None and release.entity_uuid == self.target_entity_uuid:
+            return
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if isinstance(target, Entity):
-            target.action_economy.remove_restricted_action_grant(
-                "haste",
-                self.uuid,
-            )
-        if self.apply_lethargy and isinstance(target, Entity) and target.is_active:
+        if self.apply_lethargy and target is not None and target.is_active:
             lethargy = HasteLethargyEffect(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=self.target_entity_uuid,
@@ -732,8 +745,6 @@ class HasteEffect(BaseCondition):
             lethargy.duration.duration_type = DurationType.ROUNDS
             lethargy.duration.duration = 1
             target.add_condition(lethargy, parent_event=event)
-        return super()._remove(event)
-
 
 class Haste(SpellAction):
     """Grant Haste to one visible target and link it to concentration.
@@ -818,39 +829,35 @@ class DarkvisionEffect(BaseCondition):
 
     name: str = Field(default="Darkvision", description="Condition name.")
     description: str = Field(default="You can see in darkness within 60 feet", description="Condition description.")
-    _granted_sense_type: Optional[SensesType] = PrivateAttr(default=None)
-    _granted_range: int = PrivateAttr(default=60)
+    _granted_sense_mode: SenseMode | None = PrivateAttr(default=None)
+    _sense_changed: bool = PrivateAttr(default=False)
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        if not self.target_entity_uuid:
-            return [], [], [], [], None
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], None
+    def _apply(self, event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Sense recipient missing")
+        return [], [], [], [], event.phase_to(EventPhase.EFFECT, update={"condition": self})
 
-        target.senses.sense_modes.append(SenseMode(sense_type=SensesType.DARKVISION, range_feet=60))
-        self._granted_sense_type = SensesType.DARKVISION
-        target._notify_perceivability_changed()
+    def _commit_application(self, event: Event) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            raise RuntimeError("Admitted sense recipient disappeared")
+        self._granted_sense_mode = SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
+        target.senses.sense_modes.append(self._granted_sense_mode)
+        self._sense_changed = True
 
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self}
-        ) if declaration_event else None
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None and self._granted_sense_mode is not None:
+            target.senses.sense_modes = [mode for mode in target.senses.sense_modes if mode is not self._granted_sense_mode]
+            self._granted_sense_mode = None
+            self._sense_changed = True
 
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Remove the granted darkvision sense mode."""
-        if self._granted_sense_type is not None and self.target_entity_uuid:
-            target = Entity.get(self.target_entity_uuid)
-            if target:
-                target.senses.sense_modes = [
-                    sm for sm in target.senses.sense_modes
-                    if not (sm.sense_type == self._granted_sense_type
-                            and sm.range_feet == self._granted_range)
-                ]
-                target._notify_perceivability_changed()
-        return super()._remove(event)
+    def on_membership_changed(self, event: Event) -> None:
+        changed, self._sense_changed = self._sense_changed, False
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if changed and target is not None:
+            target._notify_perceivability_changed(parent_event=event.uuid)
 
 
 class DarkvisionSpell(SpellAction):

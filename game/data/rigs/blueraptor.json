@@ -1,0 +1,700 @@
+{
+  "rig_id": "smallscale.blueraptor",
+  "creature_content_refs": [
+    "content.neurodragon:creature:creature.blue_raptor@1"
+  ],
+  "rig": {
+    "cell_width": 64,
+    "cell_height": 64,
+    "origin_y_from_ground": 20,
+    "facing_rows": {
+      "E": 0,
+      "SE": 1,
+      "S": 2,
+      "SW": 3,
+      "W": 4,
+      "NW": 5,
+      "N": 6,
+      "NE": 7
+    },
+    "slot_order": [
+      "shadow",
+      "body"
+    ],
+    "slot_categories": {
+      "shadow": [
+        "BlueRaptorShadow"
+      ],
+      "body": [
+        "BlueRaptor"
+      ]
+    },
+    "clips": {
+      "Idle": {
+        "source_clip": "Raptor Idle",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BlueRaptor": "/rigs/blueraptor/body/Raptor Idle.png",
+          "BlueRaptorShadow": "/rigs/blueraptor/shadow/Raptor Idle.png"
+        }
+      },
+      "Run": {
+        "source_clip": "Raptor run",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BlueRaptor": "/rigs/blueraptor/body/Raptor run.png",
+          "BlueRaptorShadow": "/rigs/blueraptor/shadow/Raptor run.png"
+        }
+      },
+      "TakeDamage": {
+        "source_clip": "Raptor TakeDamage",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BlueRaptor": "/rigs/blueraptor/body/Raptor TakeDamage.png",
+          "BlueRaptorShadow": "/rigs/blueraptor/shadow/Raptor TakeDamage.png"
+        }
+      },
+      "Die": {
+        "source_clip": "Raptor Die",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BlueRaptor": "/rigs/blueraptor/body/Raptor Die.png",
+          "BlueRaptorShadow": "/rigs/blueraptor/shadow/Raptor Die.png"
+        }
+      },
+      "Attack1": {
+        "source_clip": "Raptor Attack1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BlueRaptor": "/rigs/blueraptor/body/Raptor Attack1.png",
+          "BlueRaptorShadow": "/rigs/blueraptor/shadow/Raptor Attack1.png"
+        }
+      },
+      "Attack2": {
+        "source_clip": "Raptor Attack2",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "BlueRaptor": "/rigs/blueraptor/body/Raptor Attack2.png",
+          "BlueRaptorShadow": "/rigs/blueraptor/shadow/Raptor Attack2.png"
+        }
+      }
+    },
+    "body_anchor": {
+      "x": 32.0,
+      "y": 38
+    },
+    "rest_pose_anchors": {
+      "Die": {
+        "E": {
+          "x": 32,
+          "y": 40
+        },
+        "SE": {
+          "x": 33,
+          "y": 40
+        },
+        "S": {
+          "x": 33,
+          "y": 41
+        },
+        "SW": {
+          "x": 33,
+          "y": 42
+        },
+        "W": {
+          "x": 31,
+          "y": 42
+        },
+        "NW": {
+          "x": 30,
+          "y": 41
+        },
+        "N": {
+          "x": 31,
+          "y": 41
+        },
+        "NE": {
+          "x": 31,
+          "y": 40
+        }
+      }
+    },
+    "body_contexts": [
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "loop"
+        }
+      },
+      {
+        "role": "movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "shove",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Attack1",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "contact",
+              "frame": 6
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "TakeDamage",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "brace",
+              "frame": 5
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "equipment",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "healing",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "save_avoidance",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_entry",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_hold",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "final_rest",
+          "restFrame": 14
+        }
+      },
+      {
+        "role": "condition_exit",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "reversed": true
+        }
+      }
+    ],
+    "shadow_alpha": 1
+  },
+  "resources": {
+    "/rigs/blueraptor/body/Raptor Idle.png": "game/assets/rigs/blueraptor/body/Raptor Idle.png",
+    "/rigs/blueraptor/body/Raptor run.png": "game/assets/rigs/blueraptor/body/Raptor run.png",
+    "/rigs/blueraptor/body/Raptor TakeDamage.png": "game/assets/rigs/blueraptor/body/Raptor TakeDamage.png",
+    "/rigs/blueraptor/body/Raptor Die.png": "game/assets/rigs/blueraptor/body/Raptor Die.png",
+    "/rigs/blueraptor/body/Raptor Attack1.png": "game/assets/rigs/blueraptor/body/Raptor Attack1.png",
+    "/rigs/blueraptor/body/Raptor Attack2.png": "game/assets/rigs/blueraptor/body/Raptor Attack2.png",
+    "/rigs/blueraptor/shadow/Raptor Idle.png": "game/assets/rigs/blueraptor/shadow/Raptor Idle.png",
+    "/rigs/blueraptor/shadow/Raptor run.png": "game/assets/rigs/blueraptor/shadow/Raptor run.png",
+    "/rigs/blueraptor/shadow/Raptor TakeDamage.png": "game/assets/rigs/blueraptor/shadow/Raptor TakeDamage.png",
+    "/rigs/blueraptor/shadow/Raptor Die.png": "game/assets/rigs/blueraptor/shadow/Raptor Die.png",
+    "/rigs/blueraptor/shadow/Raptor Attack1.png": "game/assets/rigs/blueraptor/shadow/Raptor Attack1.png",
+    "/rigs/blueraptor/shadow/Raptor Attack2.png": "game/assets/rigs/blueraptor/shadow/Raptor Attack2.png"
+  },
+  "provenance": {
+    "files": {
+      "/rigs/blueraptor/body/Raptor Idle.png": {
+        "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor Idle_Shadowless.png",
+        "bytes": 29018,
+        "sha256": "04fadea7de778f13e757ca5e84322d4a155aef60dda36deba7fd485015d50c34"
+      },
+      "/rigs/blueraptor/body/Raptor run.png": {
+        "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor run_Shadowless.png",
+        "bytes": 33545,
+        "sha256": "fcf198f0c33b22ce7432d60beefbecd1e0ba932699dcf4f87ef38141671f5736"
+      },
+      "/rigs/blueraptor/body/Raptor TakeDamage.png": {
+        "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor TakeDamage_Shadowless.png",
+        "bytes": 44179,
+        "sha256": "456fbb11d6bddc47512384e9bf01cc226a326eaac4088a6accfadd6b3a25c9f9"
+      },
+      "/rigs/blueraptor/body/Raptor Die.png": {
+        "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor Die_Shadowless.png",
+        "bytes": 59936,
+        "sha256": "99743344d23a6c8d74b48144be7f7088856710cb46c8079233b5bed88b42435e"
+      },
+      "/rigs/blueraptor/body/Raptor Attack1.png": {
+        "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor Attack1_Shadowless.png",
+        "bytes": 46010,
+        "sha256": "b544090c6fb75b6be9aac8de698397a34b4b21c818ad4aae1cfff1f4f8270429"
+      },
+      "/rigs/blueraptor/body/Raptor Attack2.png": {
+        "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor Attack2_Shadowless.png",
+        "bytes": 49404,
+        "sha256": "4e350791bba04e7ad92b29680632043f243ff7ef083c4fb096f78c2741c292d8"
+      },
+      "/rigs/blueraptor/shadow/Raptor Idle.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor Idle_Shadowless.png",
+          "bytes": 29018,
+          "sha256": "04fadea7de778f13e757ca5e84322d4a155aef60dda36deba7fd485015d50c34"
+        },
+        "combined": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/With shadow/Blue Raptor/Raptor Idle.png",
+          "bytes": 68300,
+          "sha256": "aabfcd59198f98a0ea0ec4315f16275b712329974a4505363a9b489a80a9a88a"
+        },
+        "bytes": 24200,
+        "sha256": "f558272667411ddc32c520e0d9b9a2d1acb0a79fa2d04bfa280a7885412e1b29"
+      },
+      "/rigs/blueraptor/shadow/Raptor run.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor run_Shadowless.png",
+          "bytes": 33545,
+          "sha256": "fcf198f0c33b22ce7432d60beefbecd1e0ba932699dcf4f87ef38141671f5736"
+        },
+        "combined": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/With shadow/Blue Raptor/Raptor run.png",
+          "bytes": 70982,
+          "sha256": "4c3aa8c896050a997f1183b8c96ff83643f1edfe9f8694e65e0620b17fde3ada"
+        },
+        "bytes": 24310,
+        "sha256": "59693cece4e5043c112a1b57a8237df98883c362d86848877d843e7cc23087e9"
+      },
+      "/rigs/blueraptor/shadow/Raptor TakeDamage.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor TakeDamage_Shadowless.png",
+          "bytes": 44179,
+          "sha256": "456fbb11d6bddc47512384e9bf01cc226a326eaac4088a6accfadd6b3a25c9f9"
+        },
+        "combined": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/With shadow/Blue Raptor/Raptor TakeDamage.png",
+          "bytes": 89732,
+          "sha256": "43fb25a25f1c2d72f10ba7a97ae441bbf556c47ce8055e69d452b66d57d55c77"
+        },
+        "bytes": 29109,
+        "sha256": "0bb717b549528997adac563194d412740333dd97c1397ee07d86d5ea87283715"
+      },
+      "/rigs/blueraptor/shadow/Raptor Die.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor Die_Shadowless.png",
+          "bytes": 59936,
+          "sha256": "99743344d23a6c8d74b48144be7f7088856710cb46c8079233b5bed88b42435e"
+        },
+        "combined": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/With shadow/Blue Raptor/Raptor Die.png",
+          "bytes": 110689,
+          "sha256": "0fa57e644f7607b6311a1205913eed77e7cbbb6c9afee4b9aa30664dd4f2ae25"
+        },
+        "bytes": 32982,
+        "sha256": "c06fe0a412c5cb5de588f71c86a6e6a6098b086d0caeffbeead75510405ad2f4"
+      },
+      "/rigs/blueraptor/shadow/Raptor Attack1.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor Attack1_Shadowless.png",
+          "bytes": 46010,
+          "sha256": "b544090c6fb75b6be9aac8de698397a34b4b21c818ad4aae1cfff1f4f8270429"
+        },
+        "combined": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/With shadow/Blue Raptor/Raptor Attack1.png",
+          "bytes": 98578,
+          "sha256": "d2b4f29b036463c5b1ad9fb171a4f99c07ec9fc9e3f363664679f80760a97b31"
+        },
+        "bytes": 35289,
+        "sha256": "aaba312554a1b3cd746784ac1eb73c6d047fabc1f0c594b1301a4abb49a55044"
+      },
+      "/rigs/blueraptor/shadow/Raptor Attack2.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Blue Raptor/Raptor Attack2_Shadowless.png",
+          "bytes": 49404,
+          "sha256": "4e350791bba04e7ad92b29680632043f243ff7ef083c4fb096f78c2741c292d8"
+        },
+        "combined": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/With shadow/Blue Raptor/Raptor Attack2.png",
+          "bytes": 102444,
+          "sha256": "3cb9be37853d2645de7b1b39de3bb5cfa7ec5cce7bb6c2d67100567519a25f74"
+        },
+        "bytes": 36012,
+        "sha256": "b07a29e251da469afb042996fe8cb21aea5847ecbf2e0a328bafff591830aab7"
+      }
+    },
+    "archive": {
+      "name": "2D Dinosaurs Pack 1.rar",
+      "bytes": 191565078,
+      "sha256": "04c0f1904ec6056ac1632fc9b92e156b3b7fae19cf4ccd81aae516a1ecbc24c3"
+    },
+    "summoning_body_review": {
+      "date": "2026-10-03",
+      "source_variant": "Blue Raptor",
+      "direction_evidence": "Named original Idle frames exactly match all eight atlas rows.",
+      "timing": "15 original samples at authored 12 FPS. The PNG packs provide no FPS, pivot or event markers. Contact/recovery frames below are reviewed execution choices.",
+      "ground_pivot": {
+        "x": 32.0,
+        "y": 44,
+        "evidence": "Authored from paired Idle shadow footprint and all eight support views; image bounds are not the ground plane."
+      },
+      "shadow_policy": "Recoverable original shadow pixels from exact With shadow + Shadowless pairs; original alpha is preserved at rig shadow_alpha 1. Opaque body pixels match the source composite exactly and hide an unrecoverable region, left transparent rather than invented. Recomposition with the original opaque body reproduces all visible source RGBA and all alpha exactly. Shadow is independent of body/Fey palette and body lift.",
+      "attacks": {
+        "blue_raptor_claws": {
+          "source_clip": "Raptor Attack1",
+          "contact_frame": 6,
+          "recover_frame": 11,
+          "motion": "Forward forelimb/body thrust at 6, using the approved primary strip."
+        },
+        "blue_raptor_bite": {
+          "source_clip": "Raptor Attack2",
+          "contact_frame": 7,
+          "recover_frame": 11,
+          "motion": "Head rises then jaws extend at 7."
+        }
+      },
+      "outcomes": "Hit, miss, critical, opportunity and native Multiattack children select the same explicit anatomical row. One emitted attack fact owns one contact; art turns and repeated swipes create no extra native hits. Separate AttackVfx tracks are explicitly empty.",
+      "movement": "Run owns the gait only. Native recorded path/height owns displacement. Jump uses Run as an explicitly normalized airborne gallop adaptation. Window uses Run with its own frame keys and existing connector passage scale.",
+      "flight": "No flying native capability is granted by this binding.",
+      "prone": "Intact non-exploding fall, explicit frame-14 living rest pose, reverse stand-up. Death continues to use the compatible shared death owner; summoned departure is separate.",
+      "ordinary_actions": "Body action, recovery, equipment, healing and optional save-avoidance gestures explicitly disabled with neutral Idle. Existing native effects, feedback and child joins remain authoritative. Shove uses the primary physical strike; forced movement uses TakeDamage brace 5.",
+      "unarmed": "Rig-scoped unarmed physical-strike adaptation uses the inspected primary motion; this grants no native action.",
+      "validation_scope": "Original strip/direction/support inspection and typed binding checks; full live native fight, historical replay, height/occlusion and Fey material acceptance are separate packet-5 integration checks."
+    }
+  }
+}

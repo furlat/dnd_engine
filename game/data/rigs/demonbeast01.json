@@ -110,6 +110,24 @@
           "DemonBeast01": "/rigs/demonbeast01/body/Attack 1.png",
           "DemonBeast01Shadow": "/rigs/demonbeast01/shadow/Attack 1.png"
         }
+      },
+      "Attack3": {
+        "source_clip": "Attack 3",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast01": "/rigs/demonbeast01/body/Attack 3.png",
+          "DemonBeast01Shadow": "/rigs/demonbeast01/shadow/Attack 3.png"
+        }
+      },
+      "CrouchWalk": {
+        "source_clip": "Crouch walk",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast01": "/rigs/demonbeast01/body/Crouch walk.png",
+          "DemonBeast01Shadow": "/rigs/demonbeast01/shadow/Crouch walk.png"
+        }
       }
     },
     "body_anchor": {
@@ -151,7 +169,26 @@
           "y": 78
         }
       }
-    }
+    },
+    "body_contexts": [
+      {"role": "movement","qualifier": {"kind": "default"},"body": {"actor": {"enabled": true,"clip": "Run","playbackSpeed": 1,"hiddenSlots": [],"media": []},"playback": "loop"}},
+      {"role": "movement_recovery","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "movement","qualifier": {"kind": "movement","movement_mode": "walking","trajectory": "direct_arc","connector_presentation_key": null},"body": {"actor": {"enabled": true,"clip": "Rolling","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.25,3],[0.7,10],[1,14]]}},
+      {"role": "movement","qualifier": {"kind": "movement","movement_mode": "walking","trajectory": "connector_transfer","connector_presentation_key": "window"},"body": {"actor": {"enabled": true,"clip": "CrouchWalk","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.28,3],[0.48,7],[0.52,7],[0.72,11],[1,14]]}},
+      {"role": "movement","qualifier": {"kind": "movement","movement_mode": null,"trajectory": "direct_arc","connector_presentation_key": null},"body": {"actor": {"enabled": true,"clip": "Rolling","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.25,3],[0.7,10],[1,14]]}},
+      {"role": "movement","qualifier": {"kind": "movement","movement_mode": null,"trajectory": "connector_transfer","connector_presentation_key": "window"},"body": {"actor": {"enabled": true,"clip": "CrouchWalk","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.28,3],[0.48,7],[0.52,7],[0.72,11],[1,14]]}},
+      {"role": "shove","qualifier": {"kind": "default"},"body": {"actor": {"enabled": true,"clip": "Attack2","playbackSpeed": 1,"hiddenSlots": [],"media": []},"anchors": [{"name": "contact","frame": 6}]}},
+      {"role": "forced_movement","qualifier": {"kind": "default"},"body": {"actor": {"enabled": true,"clip": "TakeDamage","playbackSpeed": 1,"hiddenSlots": [],"media": []},"anchors": [{"name": "brace","frame": 5}]}},
+      {"role": "forced_movement_recovery","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "body_action","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "body_action_recovery","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "equipment","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "healing","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "save_avoidance","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
+      {"role": "condition_entry","qualifier": {"kind": "content","contentRef": {"pack_id": "core.rules","definition_kind": "condition","content_id": "condition.prone","content_version": 1,"definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"}},"body": {"actor": {"enabled": true,"clip": "Die","playbackSpeed": 1.5,"hiddenSlots": [],"media": []}}},
+      {"role": "condition_hold","qualifier": {"kind": "content","contentRef": {"pack_id": "core.rules","definition_kind": "condition","content_id": "condition.prone","content_version": 1,"definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"}},"body": {"actor": {"enabled": true,"clip": "Die","playbackSpeed": 1,"hiddenSlots": [],"media": []},"playback": "final_rest","restFrame": 14}},
+      {"role": "condition_exit","qualifier": {"kind": "content","contentRef": {"pack_id": "core.rules","definition_kind": "condition","content_id": "condition.prone","content_version": 1,"definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"}},"body": {"actor": {"enabled": true,"clip": "Die","playbackSpeed": 1.5,"hiddenSlots": [],"media": []},"reversed": true}}
+    ]
   },
   "resources": {
     "/rigs/demonbeast01/body/Idle.png": "game/assets/rigs/demonbeast01/body/Idle.png",
@@ -169,7 +206,9 @@
     "/rigs/demonbeast01/body/Attack 2.png": "game/assets/rigs/demonbeast01/body/Attack 2.png",
     "/rigs/demonbeast01/shadow/Attack 2.png": "game/assets/rigs/demonbeast01/shadow/Attack 2.png",
     "/rigs/demonbeast01/body/Attack 3.png": "game/assets/rigs/demonbeast01/body/Attack 3.png",
-    "/rigs/demonbeast01/shadow/Attack 3.png": "game/assets/rigs/demonbeast01/shadow/Attack 3.png"
+    "/rigs/demonbeast01/shadow/Attack 3.png": "game/assets/rigs/demonbeast01/shadow/Attack 3.png",
+    "/rigs/demonbeast01/body/Crouch walk.png": "game/assets/rigs/demonbeast01/body/Crouch walk.png",
+    "/rigs/demonbeast01/shadow/Crouch walk.png": "game/assets/rigs/demonbeast01/shadow/Crouch walk.png"
   },
   "provenance": {
     "archive": {
@@ -257,8 +296,51 @@
         "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 1/Shadows/Attack 3.png",
         "bytes": 32427,
         "sha256": "d18ab5b01c0a92a9ebf7f4347206b1d12082290922a865bd1183ada156649ff1"
+      },
+      "/rigs/demonbeast01/body/Crouch walk.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 1/Crouch walk.png",
+        "bytes": 97392,
+        "sha256": "3d4f9483582748fdf115b345aa7ccdec2fc0c50a59f06411cc057ebc40981bd4"
+      },
+      "/rigs/demonbeast01/shadow/Crouch walk.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 1/Shadows/Crouch walk.png",
+        "bytes": 24221,
+        "sha256": "0dc7d6769775e59228eac98fd174b321bfcc4f9e12f8e46e6063e88525867250"
       }
     },
-    "adaptation": "Demon Beast 1 is a reviewed visual adaptation for the bounded canonical Dretch, not a vendor identification. Native bite/critical/claw gestures map to Attack 1/2/3; there is no ranged mapping. Fifteen meaningful 128 px columns, eight visually reviewed E, SE, S, SW, W, NW, N, NE rows. The PNG-only package declares no FPS/pivot. 12 fps and support pixel (64,83), origin_y_from_ground 45, are execution adaptations informed by the separate idle shadow centroid (~63.5,82.6). Separate shadow alpha 0.5 reuses the fixed-rig appearance policy. No effects, block variants or full package imported."
+    "adaptation": "Demon Beast 1 is a reviewed visual adaptation for the bounded canonical Dretch, not a vendor identification. Historical Attack1/2/5/6 aliases remain available; current rig-scoped Bite and Claws profiles select Attack 2 and Attack 3 respectively with their reviewed frame-6 contacts; there is no ranged mapping. Fifteen meaningful 128 px columns, eight visually reviewed E, SE, S, SW, W, NW, N, NE rows. The PNG-only package declares no FPS/pivot. 12 fps and support pixel (64,83), origin_y_from_ground 45, are execution adaptations informed by the separate idle shadow centroid (~63.5,82.6). Separate shadow alpha 0.5 reuses the fixed-rig appearance policy. No effects, block variants or full package imported.",
+    "summoning_body_review": {
+      "date": "2026-10-03",
+      "source_variant": "Demon Beast 1",
+      "direction_evidence": "Same eight-row convention as installed Demon Beast 1/2/3; reviewed Idle/body silhouettes.",
+      "timing": "15 original samples at authored 12 FPS. The PNG packs provide no FPS, pivot or event markers. Contact/recovery frames below are reviewed execution choices.",
+      "ground_pivot": {
+        "x": 64.0,
+        "y": 83,
+        "evidence": "Retained existing rig pivot."
+      },
+      "shadow_policy": "Original separate shadow sheets at existing fixed-rig alpha 0.5.",
+      "attacks": {
+        "dretch_bite": {
+          "source_clip": "Attack 2",
+          "contact_frame": 6,
+          "recover_frame": 11,
+          "motion": "Existing generic body/head lunge adapted to Bite; no literal vendor Bite strip exists."
+        },
+        "dretch_claws": {
+          "source_clip": "Attack 3",
+          "contact_frame": 6,
+          "recover_frame": 11,
+          "motion": "Cross-body claw extension at 6."
+        }
+      },
+      "outcomes": "Hit, miss, critical, opportunity and native Multiattack children select the same explicit anatomical row. One emitted attack fact owns one contact; art turns and repeated swipes create no extra native hits. Separate AttackVfx tracks are explicitly empty.",
+      "movement": "Run owns the gait only. Native recorded path/height owns displacement. Jump uses Rolling as an explicitly normalized pack jump/roll adaptation. Window uses CrouchWalk with its own frame keys and existing connector passage scale.",
+      "flight": "No flying native capability is granted by this binding.",
+      "prone": "Intact non-exploding fall, explicit frame-14 living rest pose, reverse stand-up. Death continues to use the compatible shared death owner; summoned departure is separate.",
+      "ordinary_actions": "Body action, recovery, equipment, healing and optional save-avoidance gestures explicitly disabled with neutral Idle. Existing native effects, feedback and child joins remain authoritative. Shove uses the primary physical strike; forced movement uses TakeDamage brace 5.",
+      "unarmed": "Rig-scoped unarmed physical-strike adaptation uses the inspected primary motion; this grants no native action.",
+      "validation_scope": "Original strip/direction/support inspection and typed binding checks; full live native fight, historical replay, height/occlusion and Fey material acceptance are separate packet-5 integration checks."
+    }
   }
 }

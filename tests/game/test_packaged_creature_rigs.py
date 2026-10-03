@@ -28,9 +28,11 @@ def test_fixed_creature_identity_maps_native_attack_and_preserves_all_direction_
     assert (rig.cell_width, rig.cell_height) == (cell, cell)
     assert rig.clips[attack].source_clip == source
     assert {"Idle", "Run", "TakeDamage", "Die", attack} <= rig.clips.keys()
-    # There are no independent gear layers inside a baked body. Only the
-    # Demon package supplies separate shadow media; the others are shadowless.
-    assert rig.slot_order == (("shadow", "body") if filename == "demonbeast01" else ("body",))
+    # Baked bodies have no independent gear. Wolf shadows recover the exact
+    # visible pixels from the original body/composite pair, including alpha.
+    assert rig.slot_order == (("body",) if filename == "skeletonarcher05" else ("shadow", "body"))
+    if "shadow" in rig.slot_order:
+        assert rig.shadow_alpha == (1 if filename == "greywolf" else 0.5)
     for url, record in document["provenance"]["files"].items():
         payload = data.resources[url].read_bytes()
         assert (len(payload), hashlib.sha256(payload).hexdigest()) == (record["bytes"], record["sha256"])

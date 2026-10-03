@@ -188,6 +188,7 @@ class SpatialRestraintSource(SpatialConditionMembershipSource):
         other_sources = self._other_sources(target)
         if manifestation is None:
             manifestation = self.create_manifestation(target)
+            manifestation.parent_condition = self.uuid
             applied = target.add_condition(
                 manifestation,
                 parent_event=execution_event,
@@ -199,6 +200,7 @@ class SpatialRestraintSource(SpatialConditionMembershipSource):
             self.restraint_manifestation_uuid = manifestation.uuid
         elif any(source.restraint_manifestation_uuid == manifestation.uuid for source in other_sources):
             self.restraint_manifestation_uuid = manifestation.uuid
+        self.add_shared_subcondition(manifestation)
 
         for action_type in self.escape_action_types:
             action = action_type(
@@ -217,28 +219,12 @@ class SpatialRestraintSource(SpatialConditionMembershipSource):
             update={"condition": self},
         )
 
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid is not None
-            else None
-        )
-        if not isinstance(target, Entity):
-            return event
-        for action_uuid in self.escape_action_uuids:
-            target.unregister_action_by_uuid(action_uuid)
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            for action_uuid in self.escape_action_uuids:
+                target.unregister_action_by_uuid(action_uuid)
         self.escape_action_uuids.clear()
-        if not self._other_sources(target):
-            manifestation_uuid = self.restraint_manifestation_uuid
-            if (
-                manifestation_uuid is not None
-                and manifestation_uuid in target.active_conditions_by_uuid
-            ):
-                target.remove_condition_by_uuid(
-                    manifestation_uuid,
-                    parent_event=event,
-                )
-        return event
 
 
 def preserve_spatial_restraint(event: Event) -> None:
@@ -261,9 +247,11 @@ def preserve_spatial_restraint(event: Event) -> None:
     if not sources:
         return
     replacement = sources[0].create_manifestation(target)
+    replacement.parent_condition = sources[0].uuid
     applied = target.add_condition(replacement, parent_event=event)
     if applied is not None and not applied.canceled:
         for source in sources:
+            source.add_shared_subcondition(replacement)
             source.restraint_manifestation_uuid = replacement.uuid
 
 

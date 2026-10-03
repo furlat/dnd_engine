@@ -30,6 +30,7 @@ from dnd.core.equipment_types import BodyPart, EquipmentSlot, WeaponSlot
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.skills import SkillConfig, SkillSetConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
+from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
 from dnd.core.base_block import SenseMode, SensesType
 from dnd.classes.barbarian import RecklessAttack
 from dnd.core.content.dependencies import (
@@ -184,7 +185,7 @@ class _SrdCreatureFacts(BaseModel):
 
 def _configure_commoner(context: CreatureBuildContext) -> Entity:
     """Create an SRD Commoner."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A noncombatant pressed into danger.",
         abilities=(10, 10, 10, 10, 10, 10),
@@ -205,7 +206,7 @@ def _configure_commoner(context: CreatureBuildContext) -> Entity:
 
 def _configure_bandit(context: CreatureBuildContext) -> Entity:
     """Create an SRD Bandit."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A lightly armored raider with melee and crossbow pressure.",
         abilities=(11, 12, 12, 10, 10, 10),
@@ -236,7 +237,7 @@ def _configure_bandit(context: CreatureBuildContext) -> Entity:
 
 def _configure_cultist(context: CreatureBuildContext) -> Entity:
     """Create an SRD Cultist."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A zealot with a scimitar and social skill pressure.",
         abilities=(11, 12, 10, 10, 11, 10),
@@ -264,7 +265,7 @@ def _configure_cultist(context: CreatureBuildContext) -> Entity:
 
 def _configure_guard(context: CreatureBuildContext) -> Entity:
     """Create an SRD Guard."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A defensive sentry with shielded spear pressure.",
         abilities=(13, 12, 12, 10, 11, 10),
@@ -295,7 +296,7 @@ def _configure_guard(context: CreatureBuildContext) -> Entity:
 
 def _configure_tribal_warrior(context: CreatureBuildContext) -> Entity:
     """Create an SRD Tribal Warrior."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A light skirmisher that pressures pack-melee scenarios.",
         abilities=(13, 11, 12, 8, 11, 8),
@@ -322,7 +323,7 @@ def _configure_tribal_warrior(context: CreatureBuildContext) -> Entity:
 
 def _configure_kobold(context: CreatureBuildContext) -> Entity:
     """Create an SRD Kobold."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A fragile darkvision skirmisher.",
         abilities=(7, 15, 9, 8, 7, 8),
@@ -353,7 +354,7 @@ def _configure_kobold(context: CreatureBuildContext) -> Entity:
 
 def _configure_acolyte(context: CreatureBuildContext) -> Entity:
     """Create an SRD Acolyte-style low priest."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A junior divine caster useful for low-CR support tests.",
         abilities=(10, 10, 10, 10, 14, 11),
@@ -379,7 +380,7 @@ def _configure_acolyte(context: CreatureBuildContext) -> Entity:
 
 def _configure_scout(context: CreatureBuildContext) -> Entity:
     """Create an SRD Scout."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A perception-heavy ranged scout.",
         abilities=(11, 14, 12, 11, 13, 11),
@@ -420,7 +421,7 @@ def _configure_scout(context: CreatureBuildContext) -> Entity:
 
 def _configure_thug(context: CreatureBuildContext) -> Entity:
     """Create an SRD Thug."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A durable low-CR bruiser with crossbow fallback.",
         abilities=(15, 11, 14, 10, 10, 11),
@@ -457,7 +458,7 @@ def _configure_thug(context: CreatureBuildContext) -> Entity:
 
 def _configure_spy(context: CreatureBuildContext) -> Entity:
     """Create an SRD Spy."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A mobile infiltrator with shortsword and hand-crossbow pressure.",
         abilities=(10, 15, 10, 12, 14, 16),
@@ -490,7 +491,7 @@ def _configure_spy(context: CreatureBuildContext) -> Entity:
 
 def _configure_berserker(context: CreatureBuildContext) -> Entity:
     """Create an SRD Berserker."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A high-HP axe charger for melee pressure tests.",
         abilities=(16, 12, 17, 9, 11, 9),
@@ -517,7 +518,7 @@ def _configure_berserker(context: CreatureBuildContext) -> Entity:
 
 def _configure_bandit_captain(context: CreatureBuildContext) -> Entity:
     """Create an SRD Bandit Captain."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A durable duelist leader with melee and thrown-dagger pressure.",
         abilities=(15, 16, 14, 14, 11, 14),
@@ -563,7 +564,7 @@ def _configure_bandit_captain(context: CreatureBuildContext) -> Entity:
 
 def _configure_priest(context: CreatureBuildContext) -> Entity:
     """Create an SRD Priest."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A divine support caster with healing, radiant pressure, and aura options.",
         abilities=(10, 10, 12, 13, 16, 13),
@@ -602,7 +603,7 @@ def _configure_priest(context: CreatureBuildContext) -> Entity:
 
 def _configure_cult_fanatic(context: CreatureBuildContext) -> Entity:
     """Create an SRD Cult Fanatic."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A low-mid control caster with dagger fallback.",
         abilities=(11, 14, 12, 10, 13, 14),
@@ -644,7 +645,7 @@ def _configure_cult_fanatic(context: CreatureBuildContext) -> Entity:
 
 def _configure_knight(context: CreatureBuildContext) -> Entity:
     """Create an SRD Knight."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A plate-armored heavy melee combatant.",
         abilities=(16, 11, 14, 11, 11, 15),
@@ -682,7 +683,7 @@ def _configure_knight(context: CreatureBuildContext) -> Entity:
 
 def _configure_veteran(context: CreatureBuildContext) -> Entity:
     """Create an SRD Veteran."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A disciplined martial enemy with melee and heavy-crossbow modes.",
         abilities=(16, 13, 14, 10, 11, 10),
@@ -727,7 +728,7 @@ def _configure_veteran(context: CreatureBuildContext) -> Entity:
 
 def _configure_mage(context: CreatureBuildContext) -> Entity:
     """Create an SRD Mage."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A high-slot arcane caster for resource and counterspell pressure.",
         abilities=(9, 14, 11, 17, 12, 11),
@@ -764,7 +765,7 @@ def _configure_mage(context: CreatureBuildContext) -> Entity:
 
 def _configure_orc(context: CreatureBuildContext) -> Entity:
     """Create an SRD Orc."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A strong darkvision charger with axe and javelin pressure.",
         abilities=(16, 12, 16, 7, 11, 10),
@@ -798,7 +799,7 @@ def _configure_orc(context: CreatureBuildContext) -> Entity:
 
 def _configure_hobgoblin(context: CreatureBuildContext) -> Entity:
     """Create an SRD Hobgoblin."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A heavily armored goblinoid soldier with sword and bow.",
         abilities=(13, 12, 12, 10, 10, 9),
@@ -835,7 +836,7 @@ def _configure_hobgoblin(context: CreatureBuildContext) -> Entity:
 
 def _configure_bugbear(context: CreatureBuildContext) -> Entity:
     """Create an SRD Bugbear."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A stealthy goblinoid bruiser.",
         abilities=(15, 14, 13, 8, 11, 9),
@@ -874,7 +875,7 @@ def _configure_bugbear(context: CreatureBuildContext) -> Entity:
 
 def _configure_gnoll(context: CreatureBuildContext) -> Entity:
     """Create an SRD Gnoll."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A shielded savage with spear and longbow choices.",
         abilities=(14, 12, 11, 6, 10, 7),
@@ -912,7 +913,7 @@ def _configure_gnoll(context: CreatureBuildContext) -> Entity:
 
 def _configure_ogre(context: CreatureBuildContext) -> Entity:
     """Create an SRD Ogre."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A large giant with high HP and heavy bludgeoning pressure.",
         abilities=(19, 8, 16, 5, 7, 7),
@@ -948,7 +949,7 @@ def _configure_ogre(context: CreatureBuildContext) -> Entity:
 
 def _configure_wolf(context: CreatureBuildContext) -> Entity:
     """Create an SRD Wolf."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A fast beast with natural bite pressure.",
         abilities=(12, 15, 12, 3, 12, 6),
@@ -959,6 +960,8 @@ def _configure_wolf(context: CreatureBuildContext) -> Entity:
         movement=40,
         skills={"perception": True, "stealth": True},
     )
+    entity.appearance.visual_scale = 1.3
+    install_body_response(entity, BLOOD_BODY_RESPONSE)
     register_keen_hearing_and_smell(entity)
     register_pack_tactics(entity)
     register_wolf_bite_prone_rider(entity)
@@ -967,7 +970,7 @@ def _configure_wolf(context: CreatureBuildContext) -> Entity:
 
 def _configure_dire_wolf(context: CreatureBuildContext) -> Entity:
     """Create an SRD Dire Wolf."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A large fast beast for melee-pack and pursuit tests.",
         abilities=(17, 15, 15, 3, 12, 7),
@@ -988,7 +991,7 @@ def _configure_dire_wolf(context: CreatureBuildContext) -> Entity:
 
 def _configure_zombie(context: CreatureBuildContext) -> Entity:
     """Create an SRD Zombie."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A slow undead body that stresses pursuit and poison immunity.",
         abilities=(13, 6, 16, 3, 6, 5),
@@ -1007,7 +1010,7 @@ def _configure_zombie(context: CreatureBuildContext) -> Entity:
 
 def _configure_ogre_zombie(context: CreatureBuildContext) -> Entity:
     """Create an SRD Ogre Zombie."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A large undead bruiser with huge HP and slow cognition.",
         abilities=(19, 6, 18, 3, 6, 5),
@@ -1035,7 +1038,7 @@ def _configure_ogre_zombie(context: CreatureBuildContext) -> Entity:
 
 def _configure_ghoul(context: CreatureBuildContext) -> Entity:
     """Create an SRD Ghoul."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A fast undead attacker with bite and claw modes.",
         abilities=(13, 15, 10, 7, 10, 6),
@@ -1055,7 +1058,7 @@ def _configure_ghoul(context: CreatureBuildContext) -> Entity:
 
 def _configure_dretch(context: CreatureBuildContext) -> Entity:
     """Compose Dretch combat facts; Fetid Cloud and telepathy remain absent."""
-    entity = _create_srd_entity(
+    entity = create_creature_entity(
         context=context,
         description="A small demon with bite, claws and elemental defenses; Fetid Cloud and telepathy are not implemented.",
         abilities=(11, 11, 12, 5, 8, 3),
@@ -1069,6 +1072,9 @@ def _configure_dretch(context: CreatureBuildContext) -> Entity:
         immunities=(DamageType.POISON,),
         resistances=(DamageType.COLD, DamageType.FIRE, DamageType.LIGHTNING),
     )
+    # The authored demon sprite already supplies its proportions.
+    entity.appearance.visual_scale = 1.0
+    install_body_response(entity, BLOOD_BODY_RESPONSE)
     entity.add_condition_immunity("Poisoned", immunity_name="Dretch")
     _register_configured_multiattack(entity, "action.monster.multiattack.dretch")
     return entity
@@ -1538,7 +1544,7 @@ SRD_CREATURE_RECIPES_BY_ID = MappingProxyType({
 })
 
 
-def _create_srd_entity(
+def create_creature_entity(
     *,
     context: CreatureBuildContext,
     description: str,
@@ -1556,8 +1562,13 @@ def _create_srd_entity(
     darkvision: bool = False,
     immunities: tuple[DamageType, ...] = (),
     resistances: tuple[DamageType, ...] = (),
+    hit_points: int | None = None,
 ) -> Entity:
-    """Create a configured entity using shared SRD roster defaults."""
+    """Compose an ordinary creature; an authored HP total uses the existing bonus.
+
+    Existing SRD roots retain their current player-style hit-die policy. New
+    stat blocks can preserve their printed average without changing that policy.
+    """
     entity_uuid = context.runtime_entity_uuid
     strength, dexterity, constitution, intelligence, wisdom, charisma = abilities
     skill_config = {
@@ -1580,6 +1591,9 @@ def _create_srd_entity(
             ),
             skill_set=SkillSetConfig(**skill_config),
             health=HealthConfig(
+                max_hit_points_bonus=(0 if hit_points is None else hit_points - (
+                    hit_die_value + (hit_die_count - 1) * (hit_die_value // 2 + 1)
+                    + hit_die_count * ((constitution - 10) // 2))),
                 hit_dices=[
                     HitDiceConfig(
                         hit_dice_value=hit_die_value,

@@ -30,7 +30,7 @@ from dnd.core.content.runtime import EffectiveHandlerPresentation
 from dnd.core.events import (
     AreaReachEvent, AttackD20RollResultEvent, D20Event, D20RollResultEvent, DamageAppliedEvent,
     DamageRollResultEvent, DeathEvent, DeathSaveEvent, EncounterEndEvent,
-    EncounterEvent, EncounterStartEvent, EntityCreatedEvent, Event, EventPhase,
+    EncounterEvent, EncounterStartEvent, EntityCreatedEvent, EntityFactionChangedEvent, Event, EventPhase,
     ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
     ItemDestructionEvent, LifeStateChangeEvent, ReviveEvent, RoundEndEvent, RoundEvent, RoundStartEvent,
     SavingThrowD20RollResultEvent, SavingThrowEvent, SensoryUpdateEvent,
@@ -44,7 +44,7 @@ from dnd.core.events import (
 # must first acquire a retained capture contract; they cannot decode by importing
 # arbitrary classes named by a file. Technical headers remain ordinary Event.
 EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
-    Event, ActionEvent, AreaReachEvent, WorldInitializedEvent, WorldModifiedEvent, EntityCreatedEvent, ConditionStateChangedEvent,
+    Event, ActionEvent, AreaReachEvent, WorldInitializedEvent, WorldModifiedEvent, EntityCreatedEvent, EntityFactionChangedEvent, ConditionStateChangedEvent,
     AttackEvent, SpellEvent, MovementEvent, JumpEvent, TraverseConnectorEvent, ShoveEvent, CounterspellReactionEvent,
     EquipmentEvent, WeaponEquipEvent, WeaponUnequipEvent, ArmorEquipEvent,
     ArmorUnequipEvent, ShieldEquipEvent, ShieldUnequipEvent, ItemLocationStateEvent,
@@ -71,19 +71,26 @@ GRANTS = TypeAdapter(dict[str, set[str]])
 # not acquire facts that only newer native producers record.
 ADDITIVE_FIELDS = {
     ItemResourceChangeEvent: {"resource_change"},
+    EquipmentEvent: {"release_reason"},
+    WeaponEquipEvent: {"release_reason"},
+    WeaponUnequipEvent: {"release_reason"},
+    ArmorEquipEvent: {"release_reason"},
+    ArmorUnequipEvent: {"release_reason"},
+    ShieldEquipEvent: {"release_reason"},
+    ShieldUnequipEvent: {"release_reason"},
     SpatialEffectChangeEvent: {"pressed", "previous_pressed"},
     ItemLocationStateEvent: {"replacement_item_uuid"},
     ActionEvent: {"resolved_area_positions"},
     AttackEvent: {"resolved_area_positions", "intercepted_by_condition_uuid", "target_kind",
                   "target_position", "target_base_height_steps", "attack_source_kind", "natural_weapon", "additional_damages", "attack_is_magical", "projectile_deflection_position"},
-    SpellEvent: {"resolved_area_positions", "effect_id", "cast_origin", "effect_source_position", "suppressions", "area_propagation", "target_kind", "target_position", "target_base_height_steps"},
+    SpellEvent: {"summon_application", "resolved_area_positions", "effect_id", "cast_origin", "effect_source_position", "suppressions", "area_propagation", "target_kind", "target_position", "target_base_height_steps"},
     ShoveEvent: {"resolved_area_positions"},
     DamageAppliedEvent: {"body_release", "critical_hit", "impact_direction", "spatial_source"},
     TakeDamageEvent: {"intercepted_by_condition_uuid", "spatial_source", "effect_origin"},
     HealEvent: {"source_condition_uuid"},
-    EntityCreatedEvent: {"healing_blocked", "occupancy_layer", "temporary_hit_points_grant"},
+    EntityCreatedEvent: {"healing_blocked", "occupancy_layer", "temporary_hit_points_grant", "summon_origin", "initial_condition_states"},
     SensoryUpdateEvent: {"observed_changes", "hazardous_cells_changed", "spatial_effects_changed", "spatial_effects_removed"},
-    SpatialChangeEvent: {"commit_event_uuid", "tile_state", "tile_present", "object_state", "previous_occupancy_layer", "occupancy_layer"},
+    SpatialChangeEvent: {"commit_event_uuid", "tile_state", "tile_present", "object_state", "previous_occupancy_layer", "occupancy_layer", "terminal_release"},
     MovementEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
     JumpEvent: {"movement_mode", "start_layer", "end_layer", "resolved_area_positions"},
     StepMovementEvent: {"movement_mode", "from_layer", "to_layer", "resolved_speed_feet"},

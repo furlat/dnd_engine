@@ -99,7 +99,7 @@ def attack_actor_contacts(timeline: AttackTimeline) -> tuple[ActorContact, ...]:
             else (timeline.source,))
 
 
-def select_attack_profile(recipe: AttackRecipe, event: AttackFact) -> AttackVariant | None:
+def select_attack_profile(recipe: AttackRecipe, event: AttackFact, rig_id: str | None = None) -> AttackVariant | None:
     """Original highest-precedence selector using declaration-time facts.
 
     Current engine facts use direct authored species/behavior IDs. Existing
@@ -114,7 +114,8 @@ def select_attack_profile(recipe: AttackRecipe, event: AttackFact) -> AttackVari
     candidates: list[AttackVariant] = []
     for candidate in recipe.variants:
         match = candidate.match
-        if ((match.sourceKinds is None or event.attack_source_kind in match.sourceKinds)
+        if ((match.rigIds is None or rig_id in match.rigIds)
+                and (match.sourceKinds is None or event.attack_source_kind in match.sourceKinds)
                 and (match.delivery is None or match.delivery == delivery)
                 and (match.weaponSlots is None or event.weapon_slot.value in match.weaponSlots)
                 and (match.outcomes is None or event.attack_outcome is not None
@@ -250,27 +251,33 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
     if root.behavior_id is None or root.behavior_id not in data.attack_recipes:
         return None
     recipe = data.attack_recipes[root.behavior_id]
-    profile = select_attack_profile(recipe, root)
+    source_actor = before.actors.get(root.source_entity_uuid)
+    target_actor = before.actors.get(root.target_entity_uuid) if root.target_kind == "creature" else None
+    if source_actor is None or root.target_kind == "creature" and target_actor is None:
+        return None
+    facings = facings or {}
+    contacts = contacts or {}
+    source = contacts.get(str(source_actor.uuid)) or actor_contact(before, source_actor, data, facings.get(str(source_actor.uuid), "S"))
+    profile = select_attack_profile(recipe, root, source.rig_id)
     if (profile is None or not profile.actor.enabled
             or profile.actor.hiddenSlots or profile.actor.media):
         return None
     if profile.projectile is not None and (not profile.projectile.geometry.enabled
                                           or profile.projectile.geometry.primitive != "bolt"):
         return None
-    source_actor = before.actors.get(root.source_entity_uuid)
-    target_actor = before.actors.get(root.target_entity_uuid) if root.target_kind == "creature" else None
-    if source_actor is None or root.target_kind == "creature" and target_actor is None:
-        return None
     rate = action_playback_rate(data, source_actor)
     if rate != 1:
         profile = profile.model_copy(update={"actor": profile.actor.model_copy(
             update={"playbackSpeed": profile.actor.playbackSpeed*rate})})
-    facings = facings or {}
-    contacts = contacts or {}
-    source = contacts.get(str(source_actor.uuid)) or actor_contact(before, source_actor, data, facings.get(str(source_actor.uuid), "S"))
-    target = ((contacts.get(str(target_actor.uuid)) or actor_contact(before, target_actor, data,
-               facings.get(str(target_actor.uuid), "S"))) if target_actor is not None else object_contact(before, root.target_entity_uuid,
-                   position=root.target_position, base_height_steps=root.target_base_height_steps))
+    if target_actor is not None:
+        target = contacts.get(str(target_actor.uuid)) or actor_contact(before, target_actor, data,
+            facings.get(str(target_actor.uuid), "S"))
+        # Placed contacts can predate earlier children in the same action.
+        # Keep that placement, but each attack owns its retained recipient state.
+        target = replace(target, hp=target_actor.normal_hp, life_state=target_actor.life_state)
+    else:
+        target = object_contact(before, root.target_entity_uuid,
+            position=root.target_position, base_height_steps=root.target_base_height_steps)
     if target is None:
         return None
     facing = facing_for_delta((target.grid[0] - source.grid[0], target.grid[1] - source.grid[1]), data)

@@ -1852,10 +1852,12 @@ class BaseAction(BaseObject):
 
     def _source_cannot_take_actions(self, costs: Sequence["Cost"]) -> bool:
         """Return whether the source's neutral permission gate denies actions."""
-        if self.allow_while_incapacitated:
-            return False
         source = BaseBlock.get(self.source_entity_uuid)
         if source is None:
+            return False
+        if not source.has_runtime_agency():
+            return True
+        if self.allow_while_incapacitated:
             return False
         if source.can_take_actions():
             return False

@@ -18,9 +18,13 @@
       "NE": 7
     },
     "slot_order": [
+      "shadow",
       "body"
     ],
     "slot_categories": {
+      "shadow": [
+        "GreyWolfShadow"
+      ],
       "body": [
         "GreyWolf"
       ]
@@ -31,7 +35,8 @@
         "frames": 15,
         "fps": 12,
         "sheets": {
-          "GreyWolf": "/rigs/greywolf/body/Idle.png"
+          "GreyWolf": "/rigs/greywolf/body/Idle.png",
+          "GreyWolfShadow": "/rigs/greywolf/shadow/Idle.png"
         }
       },
       "Run": {
@@ -39,7 +44,8 @@
         "frames": 15,
         "fps": 12,
         "sheets": {
-          "GreyWolf": "/rigs/greywolf/body/Run.png"
+          "GreyWolf": "/rigs/greywolf/body/Run.png",
+          "GreyWolfShadow": "/rigs/greywolf/shadow/Run.png"
         }
       },
       "TakeDamage": {
@@ -47,7 +53,8 @@
         "frames": 15,
         "fps": 12,
         "sheets": {
-          "GreyWolf": "/rigs/greywolf/body/TakeDamage.png"
+          "GreyWolf": "/rigs/greywolf/body/TakeDamage.png",
+          "GreyWolfShadow": "/rigs/greywolf/shadow/TakeDamage.png"
         }
       },
       "Die": {
@@ -55,7 +62,8 @@
         "frames": 15,
         "fps": 12,
         "sheets": {
-          "GreyWolf": "/rigs/greywolf/body/Die.png"
+          "GreyWolf": "/rigs/greywolf/body/Die.png",
+          "GreyWolfShadow": "/rigs/greywolf/shadow/Die.png"
         }
       },
       "Attack1": {
@@ -63,7 +71,8 @@
         "frames": 15,
         "fps": 12,
         "sheets": {
-          "GreyWolf": "/rigs/greywolf/body/Attack1.png"
+          "GreyWolf": "/rigs/greywolf/body/Attack1.png",
+          "GreyWolfShadow": "/rigs/greywolf/shadow/Attack1.png"
         }
       },
       "Attack2": {
@@ -71,7 +80,8 @@
         "frames": 15,
         "fps": 12,
         "sheets": {
-          "GreyWolf": "/rigs/greywolf/body/Attack2.png"
+          "GreyWolf": "/rigs/greywolf/body/Attack2.png",
+          "GreyWolfShadow": "/rigs/greywolf/shadow/Attack2.png"
         }
       },
       "Attack6": {
@@ -79,7 +89,8 @@
         "frames": 15,
         "fps": 12,
         "sheets": {
-          "GreyWolf": "/rigs/greywolf/body/Attack1.png"
+          "GreyWolf": "/rigs/greywolf/body/Attack1.png",
+          "GreyWolfShadow": "/rigs/greywolf/shadow/Attack1.png"
         }
       }
     },
@@ -122,7 +133,402 @@
           "y": 35
         }
       }
-    }
+    },
+    "body_contexts": [
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "loop"
+        }
+      },
+      {
+        "role": "movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "shove",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Attack2",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "contact",
+              "frame": 5
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "TakeDamage",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "brace",
+              "frame": 5
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "equipment",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "healing",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "save_avoidance",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_entry",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_hold",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "final_rest",
+          "restFrame": 14
+        }
+      },
+      {
+        "role": "condition_exit",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "reversed": true
+        }
+      }
+    ],
+    "shadow_alpha": 1
   },
   "resources": {
     "/rigs/greywolf/body/Idle.png": "game/assets/rigs/greywolf/body/Idle.png",
@@ -130,7 +536,13 @@
     "/rigs/greywolf/body/TakeDamage.png": "game/assets/rigs/greywolf/body/TakeDamage.png",
     "/rigs/greywolf/body/Die.png": "game/assets/rigs/greywolf/body/Die.png",
     "/rigs/greywolf/body/Attack1.png": "game/assets/rigs/greywolf/body/Attack1.png",
-    "/rigs/greywolf/body/Attack2.png": "game/assets/rigs/greywolf/body/Attack2.png"
+    "/rigs/greywolf/body/Attack2.png": "game/assets/rigs/greywolf/body/Attack2.png",
+    "/rigs/greywolf/shadow/Idle.png": "game/assets/rigs/greywolf/shadow/Idle.png",
+    "/rigs/greywolf/shadow/Run.png": "game/assets/rigs/greywolf/shadow/Run.png",
+    "/rigs/greywolf/shadow/TakeDamage.png": "game/assets/rigs/greywolf/shadow/TakeDamage.png",
+    "/rigs/greywolf/shadow/Die.png": "game/assets/rigs/greywolf/shadow/Die.png",
+    "/rigs/greywolf/shadow/Attack1.png": "game/assets/rigs/greywolf/shadow/Attack1.png",
+    "/rigs/greywolf/shadow/Attack2.png": "game/assets/rigs/greywolf/shadow/Attack2.png"
   },
   "provenance": {
     "archive": {
@@ -168,8 +580,125 @@
         "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/Attack2_Shadowless.png",
         "bytes": 56049,
         "sha256": "00db2535c78b0b328412dba31d57f00910fc0ab2c96f79715b900e7a0e847b32"
+      },
+      "/rigs/greywolf/shadow/Idle.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/Idle_Shadowless.png",
+          "bytes": 17554,
+          "sha256": "e4689d67fa140307393df75f747c1022b46e1ece42ed537449157613c2bea5cd"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Grey Wolf/Idle.png",
+          "bytes": 41902,
+          "sha256": "391e5eaa350d28463582bd7212bb71fea6f64ac6d0cf9d8990bd7f61b1583088"
+        },
+        "bytes": 9019,
+        "sha256": "e14b971b96c33c4e5a09868c28d3f4167b96c17978487af3db567e911359d02e"
+      },
+      "/rigs/greywolf/shadow/Run.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/Run_Shadowless.png",
+          "bytes": 38047,
+          "sha256": "24cf3fe7fc84b7971d9b5b85a26f9b954b9b1016cd54941e2618e85c0d9e30eb"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Grey Wolf/Run.png",
+          "bytes": 76208,
+          "sha256": "dcbae10a6b0dac72ced32267a94da8fa537c3266938f8868937f0986c0a0d277"
+        },
+        "bytes": 21280,
+        "sha256": "b92e1637a7275916719e66d78d76520a765133b161a6a5bbe7ef69b5c66f2c65"
+      },
+      "/rigs/greywolf/shadow/TakeDamage.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/TakeDamage_Shadowless.png",
+          "bytes": 50651,
+          "sha256": "82f54ba4cbe48ee597a9b7086b5d487094f6f9d2b3e91c95a0d7535f02a834d5"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Grey Wolf/TakeDamage.png",
+          "bytes": 92177,
+          "sha256": "e939e95629408f7780fb6d7ff911ba3fabdd032c780d1f946bd7d20b695dfb06"
+        },
+        "bytes": 22988,
+        "sha256": "1086968d4db22b6bad8b11f8d136955094b3ca48705341d06249a19c76585ae3"
+      },
+      "/rigs/greywolf/shadow/Die.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/Die_Shadowless.png",
+          "bytes": 56658,
+          "sha256": "609a0457964d76ca3ffc33fa7badc321ae75dc91adf6a9ca06f9bd9cbba7fa8d"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Grey Wolf/Die.png",
+          "bytes": 108146,
+          "sha256": "3a737048720cd835695e0dd4913849944e70ab9df26c5acc92d194ac76eed4d7"
+        },
+        "bytes": 30278,
+        "sha256": "a4ed16ab6d3dc4c4704c3c34c3a7e8c15558e7a3fb492d72c758fd7d4c4b6bea"
+      },
+      "/rigs/greywolf/shadow/Attack1.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/Attack1_Shadowless.png",
+          "bytes": 55035,
+          "sha256": "0e9ba298bf2246ec355c69f402938247c96b7c7df90da83a347abba7d96165c9"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Grey Wolf/Attack1.png",
+          "bytes": 102341,
+          "sha256": "632e6c758b967814de0e45085d0af97e92c574493f0688cb20e9d31fe1f6ccea"
+        },
+        "bytes": 29866,
+        "sha256": "1a943fbbd5e0cfecefaab8a2c2de39a7c753ed37b72f35b895279b8cc46208b7"
+      },
+      "/rigs/greywolf/shadow/Attack2.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/Shadowless/Grey Wolf/Attack2_Shadowless.png",
+          "bytes": 56049,
+          "sha256": "00db2535c78b0b328412dba31d57f00910fc0ab2c96f79715b900e7a0e847b32"
+        },
+        "combined": {
+          "archive_member": "2D Animals mega Pack 1/Spritesheets/With shadow/Grey Wolf/Attack2.png",
+          "bytes": 102707,
+          "sha256": "a3b53785b8e13c354103b02581779091f32f1575b054ab36213bfdd5848e2cb3"
+        },
+        "bytes": 23478,
+        "sha256": "b238a7fa978cb8aebb9feb4b215140a2b05a3099793c05a7736c3ff428cf03b4"
       }
     },
-    "adaptation": "Grey Wolf maps to the exact native Wolf content identity. Root piercing Attack6 and ordinary Attack1 use the authored bite Attack1; critical Attack2 uses Attack2. No ranged/casting/jump mapping is invented. Fifteen meaningful 64 px columns per selected sheet; named direction Idle PNGs match the corresponding With shadow atlas rows byte-for-byte in E, SE, S, SW, W, NW, N, NE order. 12 fps and support pixel (32,42), origin_y_from_ground 22, are reviewed execution choices, not vendor metadata. Shadowless body remains unchanged; no separate shadow media is supplied. Smaller sheet cells remain rig geometry, independent of native creature size."
+    "adaptation": "Grey Wolf maps to the exact native Wolf content identity. Historical Attack6/Attack1 aliases remain available; the current rig-scoped Wolf Bite profile deliberately selects Attack2 with its reviewed frame-5 contact for every outcome. No ranged/casting/jump mapping is invented. Fifteen meaningful 64 px columns per selected sheet; named direction Idle PNGs match the corresponding With shadow atlas rows byte-for-byte in E, SE, S, SW, W, NW, N, NE order. 12 fps and support pixel (32,42), origin_y_from_ground 22, are reviewed execution choices, not vendor metadata. Shadowless body remains unchanged; no separate shadow media is supplied. Smaller sheet cells remain rig geometry, independent of native creature size.",
+    "summoning_body_review": {
+      "date": "2026-10-03",
+      "source_variant": "Grey Wolf",
+      "direction_evidence": "Named original Idle frames exactly match all eight atlas rows.",
+      "timing": "15 original samples at authored 12 FPS. The PNG packs provide no FPS, pivot or event markers. Contact/recovery frames below are reviewed execution choices.",
+      "ground_pivot": {
+        "x": 32.0,
+        "y": 42,
+        "evidence": "Retained existing rig pivot."
+      },
+      "shadow_policy": "Recoverable original shadow pixels from exact With shadow + Shadowless pairs; original alpha is preserved at rig shadow_alpha 1. Opaque body pixels match the source composite exactly and hide an unrecoverable region, left transparent rather than invented. Recomposition with the original opaque body reproduces all visible source RGBA and all alpha exactly. Shadow is independent of body/Fey palette and body lift.",
+      "attacks": {
+        "wolf_bite": {
+          "source_clip": "Attack2",
+          "contact_frame": 5,
+          "recover_frame": 12,
+          "motion": "Forward airborne bite at 5, then the authored turning recovery."
+        }
+      },
+      "outcomes": "Hit, miss, critical, opportunity and native Multiattack children select the same explicit anatomical row. One emitted attack fact owns one contact; art turns and repeated swipes create no extra native hits. Separate AttackVfx tracks are explicitly empty.",
+      "movement": "Run owns the gait only. Native recorded path/height owns displacement. Jump uses Run as an explicitly normalized airborne gallop adaptation. Window uses Run with its own frame keys and existing connector passage scale.",
+      "flight": "No flying native capability is granted by this binding.",
+      "prone": "Intact non-exploding fall, explicit frame-14 living rest pose, reverse stand-up. Death continues to use the compatible shared death owner; summoned departure is separate.",
+      "ordinary_actions": "Body action, recovery, equipment, healing and optional save-avoidance gestures explicitly disabled with neutral Idle. Existing native effects, feedback and child joins remain authoritative. Shove uses the primary physical strike; forced movement uses TakeDamage brace 5.",
+      "unarmed": "Rig-scoped unarmed physical-strike adaptation uses the inspected primary motion; this grants no native action.",
+      "validation_scope": "Original strip/direction/support inspection and typed binding checks; full live native fight, historical replay, height/occlusion and Fey material acceptance are separate packet-5 integration checks."
+    }
   }
 }

@@ -11,11 +11,12 @@ from typing import Literal, Mapping
 from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
+from dnd.core.content.identities import ContentRef
 from dnd.core.events import EventType
 from dnd.core.life_types import LifeState
 from game.animation import (ActorContact, BodySample, BodyTransition, NumberSample, body_clip,
-                            compile_body_transition, sample_body_transition)
-from game.animation_types import AnimationData, FloatingFeedbackStyle, StudioCondition
+                            compile_body_transition, sample_body_transition, body_context, resolve_body_context)
+from game.animation_types import AnimationData, FloatingFeedbackStyle, StudioCondition, ContentBodyQualifier
 from game.condition_types import (Activity, ConditionBodyColor, ConditionLabel, ConditionRecipe, ConditionTransition,
                                   ConditionBodyDistortion, ConditionLiveCopies, ConditionBodyRamp, ConditionTransitionEffect,
                                   ConditionFrozenPose, ConditionBodyOutline)
@@ -55,6 +56,8 @@ class ConditionAppearance:
     body_outline: ConditionBodyOutline | None = None
     outline_owner_uuid: UUID | None = None
     outline_age_ms: float | None = None
+    body_pose_ref: ContentRef | None = None
+    frozen_pose_ref: ContentRef | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +172,7 @@ def resolve_condition_appearance(
     scale = 1.
     copies, distortion, ramp = None, None, None
     frozen, outline = None, None
+    pose_ref = frozen_ref = None
     outline_owner = None
     layers: list[ResolvedConditionLayer] = []
     for recipe in ordered:
@@ -200,6 +204,7 @@ def resolve_condition_appearance(
             ramp = persistent.bodyRamp
         if frozen is None and persistent.frozenPose is not None:
             frozen = persistent.frozenPose
+            frozen_ref = recipe.definitionRef
         if outline is None and persistent.bodyOutline is not None:
             outline = persistent.bodyOutline
             outline_owner = owner
@@ -208,6 +213,7 @@ def resolve_condition_appearance(
             body = persistent.bodyColor
         if pose is None and persistent.bodyPose is not None:
             pose = persistent.bodyPose
+            pose_ref = recipe.definitionRef
         if label is None and persistent.label is not None:
             label = persistent.label
         layers.extend(ResolvedConditionLayer(layer, media[layer.assetId], owners[recipe.definitionRef.identity_key])
@@ -220,7 +226,8 @@ def resolve_condition_appearance(
     selected_layers = tuple(sorted(layers, key=lambda value: (-value.layer.priority, value.layer.id)))
     return ConditionAppearance(alpha, body, tuple(selected), tuple(dict.fromkeys(unsupported)), pose, label,
                                selected_layers, scale=scale, live_copies=copies, distortion=distortion, body_ramp=ramp,
-                               frozen_pose=frozen, body_outline=outline, outline_owner_uuid=outline_owner)
+                               frozen_pose=frozen, body_outline=outline, outline_owner_uuid=outline_owner,
+                               body_pose_ref=pose_ref, frozen_pose_ref=frozen_ref)
 
 
 def condition_contact(contact: ActorContact, appearance: ConditionAppearance | None) -> ActorContact:
@@ -237,13 +244,27 @@ def condition_body_pose(data: AnimationData, body: BodySample, contact: ActorCon
     if appearance is not None and appearance.frozen_pose is not None and contact.life_state is not LifeState.DEAD:
         pose = appearance.frozen_pose
         frame = pose.framesByRig.get(contact.rig_id, pose.frame)
-        if frame >= body_clip(data, contact, pose.clip).frames:
+        selected = (resolve_body_context(data, contact, "condition_hold",
+            ContentBodyQualifier(contentRef=appearance.frozen_pose_ref)) if appearance.frozen_pose_ref is not None else None)
+        clip = selected.actor.clip if selected is not None else pose.clip
+        if selected is not None:
+            assert selected.restFrame is not None
+            frame = selected.restFrame
+        if frame >= body_clip(data, contact, clip).frames:
             raise ValueError("frozen pose frame exceeds the registered clip")
-        return replace(body, clip=pose.clip, frame=frame)
+        return replace(body, clip=clip, frame=frame)
     if (body.clip not in ("Idle", data.damage_context.bodyClip) or contact.life_state is LifeState.DEAD
             or appearance is None or appearance.body_pose is None):
         return body
     clip = appearance.body_pose
+    # Resolve before reading the shared pose's metadata: an alternate body may
+    # legitimately lack that source clip entirely.
+    selected = None
+    if appearance.body_pose_ref is not None:
+        selected = resolve_body_context(data, contact, "condition_hold",
+            ContentBodyQualifier(contentRef=appearance.body_pose_ref))
+    if selected is not None and selected.restFrame is not None:
+        return replace(body, clip=selected.actor.clip, frame=selected.restFrame)
     return replace(body, clip=clip, frame=body_clip(data, contact, clip).frames - 1)
 
 
@@ -256,7 +277,10 @@ def bind_condition_body(timeline: ConditionTimeline, recipe: ConditionRecipe | N
     animation = (recipe.application if new is not None else recipe.removal).bodyAnimation
     if animation is None:
         return timeline
-    cue = compile_body_transition(data, contact, animation)
+    selected = resolve_body_context(data, contact, "condition_entry" if new is not None else "condition_exit",
+        ContentBodyQualifier(contentRef=recipe.definitionRef), body_context(
+            animation.bodyClip, animation.bodyPlaybackSpeed, reversed=animation.reversed))
+    cue = compile_body_transition(data, contact, animation, body=selected)
     return replace(timeline, body=cue, alpha_end_ms=timeline.complete_ms,
                    complete_ms=max(timeline.complete_ms, timeline.start_ms + cue.frames * 1000 / cue.fps))
 

@@ -468,6 +468,17 @@ class SpellHandoffCase(BaseModel):
     repeat: bool = False
 
 
+class SummoningCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["summoning"]
+    form: str
+    family: Literal["animals", "fey", "fiend"]
+    slot: int = Field(ge=3, le=9)
+    flight: bool = False
+    release_control: bool = False
+    program: Literal["attacks", "injury", "ordinary_injury"] = "attacks"
+
+
 class ReviewFacing(BaseModel):
     """Starting review pose, separate from the saved gameplay sequence."""
 
@@ -485,7 +496,7 @@ class ReviewCase(BaseModel):
     framing: Literal["scene", "actors"] = "scene"
     initial_facings: tuple[ReviewFacing, ...] = ()
     scenario: Annotated[AttackCase | DamageResolutionCase | ConstructionCase | FlightCase | ItemPowerCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | AssemblyCase | HypnoticCase | CurseCase | DivineCase | SlowCase | HoldCase | ScorchingCase | FearCase | ContinualFlameCase | CreatureCase | EquipmentCase | ItemTransferCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | CallLightningCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
+                        | SummoningCase | AssemblyCase | HypnoticCase | CurseCase | DivineCase | SlowCase | HoldCase | ScorchingCase | FearCase | ContinualFlameCase | CreatureCase | EquipmentCase | ItemTransferCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | CallLightningCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)

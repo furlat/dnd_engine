@@ -153,6 +153,7 @@ def _build_weapon(
         damage_type=definition.damage_type,
         properties=list(definition.properties),
         weapon_kind=definition.weapon_kind, material=definition.material,
+        usage=definition.usage,
         range=Range(
             type=(
                 RangeType.RANGE

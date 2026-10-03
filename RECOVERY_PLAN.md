@@ -27,6 +27,49 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**October 3 — final summoning/Fly phase is at a planning checkpoint.**
+The human accepted the delivered summoning artwork and requested a combined
+[final-phase plan](agent_docs/SUMMONING_FLY_FINAL_PHASE_PLAN_2026-10-03.md):
+received injury/blood and Prone/death corrections, shared ground-to-ground Fly
+presentation including native-wing demons, flight clipping/trajectories, and the
+accepted summon arrival/departure/control-break effects. No other spells enter
+this phase. The old gallery did not exercise incoming lethal damage adequately;
+current smoke evidence exposes retirement before damage observer-evidence capture.
+The bounded existing blood/scale/pose corrections are partly implemented, but that
+ordering fix, Fly and lifecycle VFX integration remain pending. No flight-to-Run
+substitution remains. This active amendment supersedes the broader completion
+wording below; prior receipts remain historical evidence, not proof of this phase.
+Both independent reviewers approve the final design; exact-hash verdicts are in
+the [review receipt](agent_docs/audits/SUMMONING_FLY_FINAL_PHASE_PLAN_REVIEWS_2026-10-03.md).
+The subsequent human scale correction is implemented and independently reviewed:
+all six demons use 1.00, no rules-Size-derived artwork resizing. All 18 animal
+scales were audited: none is below 1.00; approved enlargements remain. Existing
+recordings retain the previous scales until regenerated.
+
+**October 3 — summoning and the first 24-creature batch complete.**
+The human-approved [unified plan](agent_docs/SUMMONING_BACKEND_PLAN_2026-10-03.md)
+is implemented end to end. Animals, Fey and authored Fiend offer 42 choices across
+24 ordinary canonical creatures, one selected destination per cast, autonomous
+existing AI, exact initiative/lifetime/ownership, Fey hostility on control loss,
+and native dismissal/defeat/expiry. Recorded presentation uses the shared rig and
+event machinery. All existing-art bindings and original shadow layers are active;
+the vendor T-Rex artwork is the user's Raptor at its original scale.
+
+The [implementation ledger](agent_docs/SUMMONING_IMPLEMENTATION_2026-10-03.md)
+records packet/final independent reviews, source hashes and honest full-suite
+reconciliation: 2,532 native cases, 239 progression/root cases and 3,115 game
+cases accounted for after documented corrections. Final affected game checks:
+96 passed; installed asset checks: 60 passed; active dnd/game typing: zero errors.
+The [standard 38-clip native gallery](http://127.0.0.1:8768/animation-review-summoning-20261003/runs/20261003T182436Z-original-shadows/index.html)
+has 1,350 passing recorder checks and paired observers/four cameras.
+
+New arrival/departure particles and optional spirit accents remain the approved
+later art delivery. The [VFX handoff](agent_docs/SUMMONING_VFX_HANDOFF_2026-10-03.md)
+is ready **for the human to send**; no external chat was contacted. No required
+summoning/backend/existing-art work remains. Work is uncommitted on the shared
+checkout, based on `5ff3d983c0912d2419473b394384ec08742d84a6`. Prior checkpoints
+below are historical and must not be mistaken for current pending work.
+
 **October 3 — cleanup repairs complete; final independent acceptance approved.**
 The human authorized complete implementation and final external review of the
 [repair plan](agent_docs/CLEANUP_TEST_REPAIR_PLAN_2026-10-03.md), approved at SHA256

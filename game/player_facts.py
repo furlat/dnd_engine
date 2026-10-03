@@ -35,6 +35,7 @@ from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 from dnd.types.abilities import AbilityName
 from dnd.types.actor import TemporaryHitPointsGrant
 from dnd.types.actor_facts import ConditionFact
+from dnd.types.summoning import SummonManifestation
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -75,6 +76,9 @@ class PlayerActor:
     temporary_hp_grant: TemporaryHitPointsGrant | None = None
     resolved_size: Size | None = None
     structural_base_size: Size | None = None
+    manifestation: SummonManifestation | None = None
+    faction: str | None = None
+    present: bool = True
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -333,6 +337,14 @@ class SpatialFact:
     commit_event_uuid: UUID | None = None
     previous_occupancy_layer: OccupancyLayer | None = None
     occupancy_layer: OccupancyLayer | None = None
+    terminal_departure: bool = False
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FactionFact:
+    kind: Literal["faction"] = "faction"
+    entity_uuid: UUID
+    faction_after: str | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -460,7 +472,7 @@ class ObjectDestroyedFact:
 PlayerFact = Annotated[
     AttackFact | SpellFact | AreaReachFact | MovementFact | StepFact | ForcedMovementFact | PortalTransferFact | ShoveFact
     | Annotated[DamageFact, Field(discriminator="stage")] | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact | EquipmentFact
-    | ConditionChangeFact | SpatialFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
+    | ConditionChangeFact | SpatialFact | FactionFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
     | ObjectDamageFact | ObjectDestroyedFact | MechanismActivationFact | SavingThrowFact,
     Field(discriminator="kind"),
 ]

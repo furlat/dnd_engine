@@ -26,6 +26,11 @@ def _declare_variant(
         context = CreatureBuildContext.model_validate(raw_context)
         entity = construct_srd_creature(context, "dretch")
         entity.description = description
+        # Replace the canonical ordinary response before composition; one body
+        # has one configured injury handler, including the special variants.
+        inherited, = (handler for handler in entity.event_handlers.values()
+            if handler.semantic_key == "trait.body_response")
+        entity.remove_event_handler(inherited)
         install_body_response(entity, profile)
         return entity
 

@@ -17,6 +17,7 @@ class ContentSourceFamily(str, Enum):
     """Authored source families kept separate from runtime effect origin."""
 
     SRD_5_1_CC = "srd_5_1_cc"
+    SRD_5_2_CC = "srd_5_2_cc"
     SRD_5_2_1_CC = "srd_5_2_1_cc"
     NEURODRAGON_ORIGINAL = "neurodragon_original"
     THIRD_PARTY_OPEN = "third_party_open"
@@ -90,10 +91,10 @@ class ContentSource(BaseModel):
         ):
             raise ValueError("SRD 5.1 content must use the 2014 rules baseline")
         if (
-            self.source_family == ContentSourceFamily.SRD_5_2_1_CC
+            self.source_family in {ContentSourceFamily.SRD_5_2_CC, ContentSourceFamily.SRD_5_2_1_CC}
             and self.rules_baseline != RulesBaseline.RULES_2024
         ):
-            raise ValueError("SRD 5.2.1 content must use the 2024 rules baseline")
+            raise ValueError("SRD 5.2 content must use the 2024 rules baseline")
         return self
 
 

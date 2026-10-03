@@ -19,11 +19,13 @@ from dnd.core.equipment_types import (
     RingSlot,
     UnarmoredAc,
     WeaponKind,
+    WeaponUsage,
     WeaponProperty,
     WeaponSet,
     WeaponSlot,
 )
-from dnd.core.item_types import ItemEffectPresentationState, ItemPresentationKind, ItemPresentationState
+from dnd.core.item_types import ItemEffectPresentationState, ItemPresentationKind, ItemPresentationState, ItemReleaseReason
+from dnd.types.summoning import TerminalOwnerRelease
 
 import copy
 
@@ -38,6 +40,7 @@ class EquipmentEvent(Event):
     name: str = Field(default="Equipment Event", description="An equipment event")
     slot: EquipmentSlot = Field(description="The slot being affected")
     item_uuid: UUID = Field(description="UUID of the item being transitioned")
+    release_reason: ItemReleaseReason | None = None
     active_weapon_set_after: Optional[WeaponSet] = Field(
         default=None,
         description="Exact owner stance after the accepted equipment completion.",
@@ -305,6 +308,19 @@ class Shield(EquippableItem):
 
 
 class Weapon(EquippableItem):
+    usage: WeaponUsage = WeaponUsage.HELD
+
+    @property
+    def is_body_attack(self) -> bool:
+        """Explicit anatomy use, never inferred from the name or hand position."""
+        return self.usage is WeaponUsage.BODY
+
+    @model_validator(mode="after")
+    def validate_body_usage(self) -> Self:
+        if self.is_body_attack and (self.intrinsic_owner_uuid is None or "natural" not in self.tags):
+            raise ValueError("Body attacks require explicitly owned intrinsic natural weapons")
+        return self
+
     weapon_kind: WeaponKind | None = None
     material: Material | None = None
     attack_overrides: dict[UUID, WeaponAttackOverride] = Field(default_factory=dict)
@@ -397,8 +413,13 @@ class Weapon(EquippableItem):
                 raise ValueError("All extra damage targets must be of the same length")
         return self
 
+    def owned_values(self) -> tuple[ModifiableValue, ...]:
+        return (*super().owned_values(), *self.extra_damage_bonus)
+
     def compatible_equipment_slots(self) -> Tuple[EquipmentSlot, ...]:
         """Return slots allowed by the weapon's ranged and light properties."""
+        if self.is_body_attack:
+            return (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF)
         if WeaponProperty.RANGED in self.properties:
             slots: List[EquipmentSlot] = [WeaponSlot.RANGED_MAIN]
             if WeaponProperty.LIGHT in self.properties:
@@ -491,6 +512,7 @@ class Weapon(EquippableItem):
         if equipment_block.damage_bonus is not None:
             bonuses.append(equipment_block.damage_bonus)
 
+        is_off_hand = is_off_hand and not self.is_body_attack
         override_ability = self.selected_attack_ability(ability_block, override_ability)
         if override_ability is not None and not is_off_hand:
             ability = ability_block.get_ability(override_ability)
@@ -580,6 +602,17 @@ class _PreparedEquipmentTransition:
     equipping: bool
     declaration: EquipmentEvent
     execution: EquipmentEvent
+
+
+@dataclass
+class PreparedEquipmentRelease:
+    """An admitted release of one exact slot, retaining ordinary unequip hooks."""
+
+    owner: 'Equipment'
+    transition: _PreparedEquipmentTransition
+    reason: ItemReleaseReason
+    committed: bool = False
+    published: bool = False
 
 
 DamageProfileT = TypeVar("DamageProfileT")
@@ -765,6 +798,9 @@ class Equipment(BaseBlock):
         default_factory=list,
         description="Extra damage type for the weapon",
     )
+
+    def owned_values(self) -> tuple[ModifiableValue, ...]:
+        return (*super().owned_values(), *self.extra_attack_damage_bonus)
 
     unarmed_damage_type: DamageType = Field(
         default=DamageType.BLUDGEONING,
@@ -1028,7 +1064,7 @@ class Equipment(BaseBlock):
                 if value is not None
             ]
             ability_bonus = 0
-            if weapon_slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF):
+            if weapon_slot in (WeaponSlot.MELEE_OFF, WeaponSlot.RANGED_OFF) and not weapon.is_body_attack:
                 base_bonuses.append(
                     self.off_hand_ranged_ability_bonus
                     if weapon_slot == WeaponSlot.RANGED_OFF
@@ -1153,43 +1189,93 @@ class Equipment(BaseBlock):
             for damage_type in damage_types
         ]
 
-    def remove_contained_item(self, item_uuid: UUID) -> None:
-        """Remove an equipped item by UUID during item-owned cleanup.
+    def prepare_item_release(self, item_uuid: UUID, *, parent_event: Event | None = None,
+                             reason: ItemReleaseReason = ItemReleaseReason.OWNER_DEPARTED,
+                             terminal_release: TerminalOwnerRelease | None = None
+                             ) -> PreparedEquipmentRelease | None:
+        """Admit a retirement release without mutating the slot or item."""
+        if terminal_release is not None and terminal_release.entity_uuid != self.source_entity_uuid:
+            raise ValueError("Terminal release belongs to another equipment owner")
+        for slot in _SLOT_ATTRIBUTE_BY_SLOT:
+            item = self.get_item_by_slot(slot)
+            if item is None or item.uuid != item_uuid:
+                continue
+            if item.intrinsic_owner_uuid is not None and (
+                    terminal_release is None or item.intrinsic_owner_uuid != terminal_release.entity_uuid):
+                return None
+            declaration = self._create_equipment_event(item, slot, equipping=False,
+                parent_event_uuid=parent_event.uuid if parent_event is not None else None,
+                use_register=False)
+            declaration.release_reason = reason
+            mandatory = terminal_release is not None and terminal_release.mandatory
+            if not mandatory:
+                declaration = EventQueue.preflight(declaration)
+                if declaration.canceled:
+                    return None
+            execution = declaration.phase_to(EventPhase.EXECUTION)
+            if not mandatory:
+                execution = EventQueue.preflight(execution)
+                if execution.canceled:
+                    return None
+            for event in (declaration, execution):
+                if (event.item_uuid != item.uuid or event.slot != slot
+                        or event.source_entity_uuid != self.source_entity_uuid):
+                    raise RuntimeError("Release admission cannot replace owner, item or slot")
+            return PreparedEquipmentRelease(self,
+                _PreparedEquipmentTransition(slot, item, False, declaration, execution), reason)
+        return None
 
-        Destruction cleanup must not be cancelable, but item unequip hooks still
-        need to run so equipped modifiers and handlers are removed.
+    def validate_item_release(self, prepared: PreparedEquipmentRelease) -> bool:
+        """The admitted item must still occupy this exact owner and slot."""
+        transition = prepared.transition
+        return (prepared.owner is self
+                and self.get_item_by_slot(transition.slot) is transition.item
+                and transition.item.owner_uuid == self.source_entity_uuid
+                and transition.item.stored_in_uuid == self.uuid)
 
-        Args:
-            item_uuid: UUID of the equipped item to remove.
-        """
-        for slot, attribute_name in _SLOT_ATTRIBUTE_BY_SLOT.items():
-            item = getattr(self, attribute_name)
-            if item is not None and item.uuid == item_uuid:
-                declaration = self._create_equipment_event(
-                    item,
-                    slot,
-                    equipping=False,
-                    use_register=False,
-                )
-                execution = declaration.phase_to(
-                    EventPhase.EXECUTION,
-                    status_message="Equipped item destruction committed",
-                )
-                item.unequip(slot, self.source_entity_uuid)
-                setattr(self, attribute_name, None)
-                if isinstance(slot, WeaponSlot):
-                    self._reconcile_active_weapon_set()
-                effect = execution.phase_to(
-                    EventPhase.EFFECT,
-                    status_message="Destroyed item removed from equipment",
-                )
-                effect.phase_to(
-                    EventPhase.COMPLETION,
-                    status_message="Destroyed item equipment state completed",
-                    use_register=True,
-                    active_weapon_set_after=self.active_weapon_set,
-                )
-                return
+    def commit_item_release(self, prepared: PreparedEquipmentRelease) -> None:
+        """Run the item's ordinary unequip hook exactly once before releasing its slot."""
+        if prepared.owner is not self:
+            raise ValueError("Equipment release token belongs to another owner")
+        if prepared.committed:
+            return
+        transition = prepared.transition
+        if not self.validate_item_release(prepared):
+            raise RuntimeError("Admitted equipment release changed before commitment")
+        transition.item.unequip(transition.slot, self.source_entity_uuid)
+        setattr(self, _SLOT_ATTRIBUTE_BY_SLOT[transition.slot], None)
+        if isinstance(transition.slot, WeaponSlot):
+            self._reconcile_active_weapon_set()
+        prepared.committed = True
+
+    def publish_item_release(self, prepared: PreparedEquipmentRelease) -> None:
+        if prepared.owner is not self or not prepared.committed:
+            raise ValueError("Equipment release must commit before publication")
+        if prepared.published:
+            return
+        prepared.published = True
+        transition = self._publish_prepared_transition(prepared.transition)
+        transition.execution.phase_to(EventPhase.EFFECT,
+            status_message=f"Equipment released: {prepared.reason.value}").phase_to(
+                EventPhase.COMPLETION, active_weapon_set_after=self.active_weapon_set)
+
+    def remove_contained_item(self, item_uuid: UUID, *, parent_event: Event | None = None,
+                              reason: ItemReleaseReason = ItemReleaseReason.TRANSFERRED) -> bool:
+        """Release an already-committed transfer/retirement through unequip hooks."""
+        for slot in _SLOT_ATTRIBUTE_BY_SLOT:
+            item = self.get_item_by_slot(slot)
+            if item is None or item.uuid != item_uuid:
+                continue
+            declaration = self._create_equipment_event(item, slot, equipping=False,
+                parent_event_uuid=parent_event.uuid if parent_event is not None else None,
+                use_register=False)
+            declaration.release_reason = reason
+            token = PreparedEquipmentRelease(self, _PreparedEquipmentTransition(
+                slot, item, False, declaration, declaration.phase_to(EventPhase.EXECUTION)), reason)
+            self.commit_item_release(token)
+            self.publish_item_release(token)
+            return True
+        return False
 
     def is_unarmed(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN) -> bool:
         """Return whether the slot attacks as unarmed."""

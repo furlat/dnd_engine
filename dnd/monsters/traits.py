@@ -39,7 +39,7 @@ from dnd.core.base_actions import (
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
 from dnd.core.dice import AttackOutcome, Dice, RollType
 from dnd.core.events import (
     DamageRollResultEvent,
@@ -566,7 +566,9 @@ class MultiattackAction(BaseAction):
     def get_discovery_variants(self, entity: object) -> list[BaseAction]:
         if not isinstance(entity, Entity):
             return []
-        variants = super().get_discovery_variants(entity)
+        # A full stat-block sequence is not an eligible restricted-budget action.
+        # Its ordinary action cost still permits Action Surge.
+        variants: list[BaseAction] = [self]
         if self.attack_replacement is not None and self._substitution_available(entity) and not self.use_attack_substitution:
             variants += [variant.model_copy(deep=True, update={"uuid":uuid4(),
                 "use_attack_substitution":True, "name":f"{self.name} ({self.attack_replacement.action.name})",
@@ -584,7 +586,9 @@ class MultiattackAction(BaseAction):
                         "costs":[],"template":False,"use_register":False}))
                 else:
                     result.append(Attack(name=f"{self.name}: Attack",source_entity_uuid=self.source_entity_uuid,
-                        target_entity_uuid=self.target_entity_uuid,weapon_slot=slot,costs=[],use_register=False))
+                        target_entity_uuid=self.target_entity_uuid,weapon_slot=slot,costs=[],use_register=False,
+                        behavior_binding=BehaviorBinding(behavior_id="action.attack",
+                            provided_by_id="action.monster.multiattack", runtime_owner_uuid=self.source_entity_uuid)))
         return result
 
 
@@ -861,7 +865,7 @@ class SimpleMarkerCondition(BaseCondition):
 
 
 class HitSaveRiderFeature(BaseCondition):
-    """Feature that applies a save-based condition rider after a named hit."""
+    """Feature that applies a save-based condition rider after an exact authored item hit."""
 
     name: str = Field(default="Hit Save Rider", description="Condition name.")
     description: str = Field(
@@ -871,7 +875,7 @@ class HitSaveRiderFeature(BaseCondition):
         ),
         description="Rules-facing summary for the hit-triggered saving throw rider.",
     )
-    weapon_names: tuple[str, ...] = Field(default_factory=tuple, description="Weapon names that trigger the rider.")
+    weapon_item_ids: tuple[str, ...] = Field(default_factory=tuple, description="Exact item identities that trigger the rider.")
     save_ability: str = Field(default="strength", description="Saving throw ability.")
     save_dc: int = Field(default=10, description="Saving throw DC.")
     condition_name: str = Field(default="Prone", description="Condition to apply.")
@@ -881,8 +885,9 @@ class HitSaveRiderFeature(BaseCondition):
         """Declare the save-based rider carried by matching attack actions."""
         if not isinstance(actor, Entity) or not isinstance(action, Attack):
             return None
-        weapon_name = _attack_weapon_name(actor, action)
-        if weapon_name not in self.weapon_names:
+        metadata = action.get_attack_source_metadata()
+        weapon = actor.equipment.get_weapon(action.weapon_slot)
+        if metadata is None or metadata.kind != "equipped" or weapon is None or weapon.item_id not in self.weapon_item_ids:
             return None
         condition_keys = {
             "Prone": frozenset({"dnd.conditions.Prone"}),
@@ -923,7 +928,8 @@ class HitSaveRiderFeature(BaseCondition):
             return event
         if event.damage_rolls is None:
             return event
-        if event.weapon_name not in self.weapon_names:
+        item = event.source_item_presentation
+        if event.attack_source_kind != "equipped" or item is None or item.item_id not in self.weapon_item_ids:
             return event
         source = Entity.get(source_entity_uuid)
         target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
@@ -959,7 +965,7 @@ class WolfBiteProneRiderFeature(HitSaveRiderFeature):
             "the target is knocked prone."
         ),
     )
-    weapon_names: tuple[str, ...] = Field(default=("Bite",))
+    weapon_item_ids: tuple[str, ...] = Field(default=("weapon.creature.wolf_bite",))
     save_ability: str = Field(default="strength")
     save_dc: int = Field(default=11)
     condition_name: str = Field(default="Prone")
@@ -975,7 +981,7 @@ class DireWolfBiteProneRiderFeature(HitSaveRiderFeature):
             "the target is knocked prone."
         ),
     )
-    weapon_names: tuple[str, ...] = Field(default=("Bite",))
+    weapon_item_ids: tuple[str, ...] = Field(default=("weapon.creature.dire_wolf_bite",))
     save_ability: str = Field(default="strength")
     save_dc: int = Field(default=13)
     condition_name: str = Field(default="Prone")
@@ -991,7 +997,7 @@ class GhoulClawsParalysisFeature(HitSaveRiderFeature):
             "failure, a non-undead target is paralyzed by ghoul claws."
         ),
     )
-    weapon_names: tuple[str, ...] = Field(default=("Claws",))
+    weapon_item_ids: tuple[str, ...] = Field(default=("weapon.creature.ghoul_claws",))
     save_ability: str = Field(default="constitution")
     save_dc: int = Field(default=10)
     condition_name: str = Field(default="Ghoul Paralysis")
@@ -1484,14 +1490,6 @@ def _is_unseen_attacker(source: Entity, target: Entity) -> bool:
     """Return whether target currently lacks sight of the source."""
     contact = target.senses.entities.get(source.uuid)
     return contact is None or not contact.visual
-
-
-def _attack_weapon_name(actor: Entity, action: Attack) -> Optional[str]:
-    """Return the weapon name a discovered attack row would use."""
-    if isinstance(action, NaturalAttack):
-        return action.name
-    weapon = actor.equipment._get_weapon_by_slot(action.weapon_slot)
-    return weapon.name if weapon is not None else None
 
 
 def _action_primary_damage_type(actor: Entity, action: Attack) -> DamageType:

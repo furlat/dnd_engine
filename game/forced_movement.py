@@ -11,10 +11,12 @@ from uuid import UUID
 
 from dnd.core.events import SpatialChangeType
 from game.animation import (
-    ActorContact, BodySample, body_clip, body_duration, body_frame, facing_for_delta,
-    sample_idle_body,
+    ActorContact, BodySample, facing_for_delta,
+    sample_idle_body, body_context, resolve_body_context, context_duration, context_anchor_ms,
+    sample_context_body,
 )
-from game.animation_types import AnimationData, LifecycleFeedback
+from game.animation_types import (AnimationData, LifecycleFeedback, BodyContext, ActionFrameAnchor,
+                                  ContentBodyQualifier, RoleDefault)
 from game.combat import actor_contact
 from game.player_facts import ForcedMovementFact, PlayerLineage, PlayerNode, PlayerState, ShoveFact, SpatialFact
 from game.player_reduction import reduce_lineage
@@ -32,6 +34,7 @@ class ShoveCue:
     body_end_ms: float
     feedback: LifecycleFeedback
     data: AnimationData
+    body_context: BodyContext | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +59,8 @@ class ForcedMovementCue:
     body_end_ms: float
     complete_ms: float
     data: AnimationData
+    body_context: BodyContext | None = None
+    recovery_body: BodyContext | None = None
 
 
 def bind_shove(before: PlayerState, node: PlayerNode, data: AnimationData,
@@ -74,16 +79,18 @@ def bind_shove(before: PlayerState, node: PlayerNode, data: AnimationData,
         before, before.actors[event.target_entity_uuid], data)
     source = replace(source, facing=facing_for_delta(
         (target.grid[0] - source.grid[0], target.grid[1] - source.grid[1]), data))
-    metadata = body_clip(data, source, recipe.actor.clip)
     frame = next((row.frame for name in ("contact", "impact", "effect")
                   for row in recipe.anchors if row.name == name), None)
-    if frame is None or frame >= metadata.frames:
+    if frame is None:
         raise ValueError("Shove contact anchor is absent or unreachable")
+    selected = resolve_body_context(data, source, "shove", ContentBodyQualifier(contentRef=recipe.definitionRef),
+        body_context(recipe.actor.clip, recipe.actor.playbackSpeed,
+                     anchors=(ActionFrameAnchor(name="contact", frame=frame),)))
     outcome = ("resisted" if not event.contest_success else "succeeded_prone" if event.knocked_prone
                else "succeeded_blocked" if event.push_distance == 0 else "succeeded_push")
-    return ShoveCue(node.uuid, source, target, recipe.actor.clip, recipe.actor.playbackSpeed,
-        start_ms, start_ms + frame * 1000 / (metadata.fps * recipe.actor.playbackSpeed),
-        start_ms + body_duration(metadata, recipe.actor.playbackSpeed), data.shove_feedback[outcome], data)
+    return ShoveCue(node.uuid, source, target, selected.actor.clip, selected.actor.playbackSpeed,
+        start_ms, start_ms + context_anchor_ms(data, source, selected, "contact"),
+        start_ms + context_duration(data, source, selected), data.shove_feedback[outcome], data, selected)
 
 
 def motion_progress(value: float, curve: str, *, inverse: bool = False) -> float:
@@ -113,9 +120,11 @@ def bind_forced_movement(before: PlayerState, lineage: PlayerLineage,
                 before, before.actors[event.source_entity_uuid], data)
             facing_delta = source.grid[0] - actor.grid[0], source.grid[1] - actor.grid[1]
         actor = replace(actor, facing=facing_for_delta(facing_delta, data))
-    metadata = body_clip(data, actor, profile.target_clip)
-    if profile.brace_frame >= metadata.frames:
-        raise ValueError("Forced movement brace frame is unreachable on the selected rig")
+    selected = resolve_body_context(data, actor, "forced_movement", RoleDefault(), body_context(
+        profile.target_clip, profile.playback_speed * context.playbackSpeedScale,
+        anchors=(ActionFrameAnchor(name="brace", frame=profile.brace_frame),)))
+    recovery = resolve_body_context(data, actor, "forced_movement_recovery", RoleDefault(), body_context(
+        context.recovery.bodyClip, context.recovery.bodyPlaybackSpeed, enabled=context.recovery.enabled))
     after = reduce_lineage(before, lineage)
     spatial = tuple((row.uuid, row.fact) for row in lineage.events if isinstance(row.fact, SpatialFact)
                     and row.fact.entity_uuid == target.uuid and row.parent_lineage == node.lineage_uuid
@@ -134,13 +143,12 @@ def bind_forced_movement(before: PlayerState, lineage: PlayerLineage,
     points = tuple(DisplacementPoint(grid,
         actor.elevation_steps if index == 0 else after.tiles[grid].elevation_steps,
         cumulative[index] / total) for index, grid in enumerate(grids))
-    speed = profile.playback_speed * context.playbackSpeedScale
-    travel_start = start_ms + profile.brace_frame * 1000 / (metadata.fps * speed)
+    speed = selected.actor.playbackSpeed
+    brace_frame = next(row.frame for row in selected.anchors if row.name == "brace")
+    travel_start = start_ms + context_anchor_ms(data, actor, selected, "brace")
     duration = profile.duration_ms * context.durationScale
-    body_end = start_ms + body_duration(metadata, speed) + duration
-    complete = body_end
-    if context.recovery.enabled:
-        complete += body_duration(body_clip(data, actor, context.recovery.bodyClip), context.recovery.bodyPlaybackSpeed)
+    body_end = start_ms + context_duration(data, actor, selected) + duration
+    complete = body_end + context_duration(data, actor, recovery)
     arrivals: list[tuple[UUID, float]] = []
     entered_index = 1
     for identity, row in spatial:
@@ -151,8 +159,8 @@ def bind_forced_movement(before: PlayerState, lineage: PlayerLineage,
         arrivals.append((identity, at))
         if row.change_type is SpatialChangeType.ENTITY_ENTERED:
             entered_index += 1
-    return ForcedMovementCue(node.uuid, actor, points, tuple(arrivals), profile.target_clip,
-        profile.brace_frame, speed, start_ms, travel_start, travel_start + duration, body_end, complete, data)
+    return ForcedMovementCue(node.uuid, actor, points, tuple(arrivals), selected.actor.clip,
+        brace_frame, speed, start_ms, travel_start, travel_start + duration, body_end, complete, data, selected, recovery)
 
 
 def forced_contact(cue: ForcedMovementCue, data: AnimationData, elapsed_ms: float) -> ActorContact:
@@ -170,21 +178,18 @@ def forced_contact(cue: ForcedMovementCue, data: AnimationData, elapsed_ms: floa
 
 
 def sample_forced_body(cue: ForcedMovementCue, data: AnimationData, elapsed_ms: float) -> BodySample:
-    metadata = body_clip(data, cue.actor, cue.clip)
+    selected = cue.body_context or body_context(cue.clip, cue.playback_speed)
     if elapsed_ms < cue.travel_start_ms:
-        frame = body_frame(elapsed_ms - cue.start_ms, metadata.fps * cue.playback_speed, metadata.frames, loop=False)
+        return sample_context_body(data, cue.actor, selected, elapsed_ms - cue.start_ms)
     elif elapsed_ms < cue.travel_end_ms:
         frame = cue.brace_frame
     elif elapsed_ms < cue.body_end_ms:
-        frame = min(metadata.frames - 1, cue.brace_frame + body_frame(
-            elapsed_ms - cue.travel_end_ms, metadata.fps * cue.playback_speed, metadata.frames, loop=False))
+        return sample_context_body(data, cue.actor, selected,
+            elapsed_ms - cue.start_ms - (cue.travel_end_ms - cue.travel_start_ms))
     else:
-        recovery = data.forced_movement_context.recovery
-        if recovery.enabled and elapsed_ms < cue.complete_ms:
-            clip = body_clip(data, cue.actor, recovery.bodyClip)
-            return BodySample(cue.actor.actor_uuid, recovery.bodyClip,
-                body_frame(elapsed_ms - cue.body_end_ms, clip.fps * recovery.bodyPlaybackSpeed, clip.frames, loop=False),
-                cue.actor.facing)
+        recovery = cue.recovery_body
+        if recovery is not None and recovery.actor.enabled and elapsed_ms < cue.complete_ms:
+            return sample_context_body(data, cue.actor, recovery, elapsed_ms - cue.body_end_ms)
         return sample_idle_body(data, cue.actor, elapsed_ms - cue.complete_ms)
     return BodySample(cue.actor.actor_uuid, cue.clip, frame, cue.actor.facing)
 
@@ -192,6 +197,5 @@ def sample_forced_body(cue: ForcedMovementCue, data: AnimationData, elapsed_ms: 
 def sample_shove(cue: ShoveCue, data: AnimationData, elapsed_ms: float) -> BodySample:
     if elapsed_ms >= cue.body_end_ms:
         return sample_idle_body(data, cue.source, elapsed_ms - cue.body_end_ms)
-    clip = body_clip(data, cue.source, cue.clip)
-    return BodySample(cue.source.actor_uuid, cue.clip,
-        body_frame(elapsed_ms - cue.start_ms, clip.fps * cue.playback_speed, clip.frames, loop=False), cue.source.facing)
+    return sample_context_body(data, cue.source, cue.body_context or body_context(cue.clip, cue.playback_speed),
+                               elapsed_ms - cue.start_ms)

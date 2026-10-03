@@ -1089,6 +1089,7 @@ class DecisionEpoch(ControlModel):
     actor_uuid: str = Field(description="Active controlled actor UUID.")
     round_number: int = Field(description="Encounter round number.")
     turn_index: int = Field(description="Encounter turn index.")
+    turn_execution_id: Optional[str] = Field(default=None, description="Stable native turn identity.")
     economy: ActionEconomyState = Field(description="Current actor action economy.")
     affordances: AffordanceSet = Field(description="Legal command rows.")
     created_at: float = Field(default_factory=time.time, description="Unix timestamp when the epoch was created.")

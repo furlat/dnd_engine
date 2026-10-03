@@ -49,6 +49,8 @@ class EventType(str, Enum):
     WORLD_INITIALIZED = "world_initialized"
     WORLD_MODIFIED = "world_modified"
     ENTITY_CREATED = "entity_created"
+    ENTITY_FACTION_CHANGED = "entity_faction_changed"
+    SUMMON_ADMISSION = "summon_admission"
     ENTITY_LEVEL_ADDED = "entity_level_added"
     ENTITY_LEVEL_REMOVED = "entity_level_removed"
 

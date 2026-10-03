@@ -477,8 +477,10 @@ class WetSurfaceMembership(SpatialConditionMembershipSource):
             return [], [], [], [], execution_event.cancel(
                 status_message="Wet membership target is unavailable",
             )
-        if self._find_wet(target) is None:
+        manifestation = self._find_wet(target)
+        if manifestation is None:
             manifestation = self.create_manifestation(target)
+            manifestation.parent_condition = self.uuid
             result = target.add_condition(
                 manifestation,
                 parent_event=execution_event,
@@ -487,34 +489,12 @@ class WetSurfaceMembership(SpatialConditionMembershipSource):
                 return [], [], [], [], execution_event.cancel(
                     status_message="Wet manifestation was rejected",
                 )
+        self.add_shared_subcondition(manifestation)
         effect = execution_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
         )
         return [], [], [], [], effect
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Release Wet only after the entity's final source lease ends."""
-        target = (
-            Entity.get(self.target_entity_uuid)
-            if self.target_entity_uuid is not None
-            else None
-        )
-        if not isinstance(target, Entity):
-            return event
-        has_other_source = any(
-            isinstance(condition, WetSurfaceMembership)
-            and condition.uuid != self.uuid
-            for condition in target.active_conditions_by_uuid.values()
-        )
-        manifestation = self._find_wet(target)
-        if not has_other_source and manifestation is not None:
-            target.remove_condition_by_uuid(
-                manifestation.uuid,
-                parent_event=event,
-            )
-        return event
-
 
 class WetAreaCondition(MembershipAreaCondition):
     """Continuous Wet membership shared by water-bearing conditions."""

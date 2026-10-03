@@ -13,18 +13,20 @@ from pydantic import Field, JsonValue, TypeAdapter
 
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
+from dnd.types.summoning import SummonManifestation
 from dnd.core.equipment_types import BodyPart, VisualLoadoutSlot, WeaponSet, WeaponSlot
 from dnd.core.item_types import EquippedVisualPolicy, ItemPresentationState
 from dnd.items.authored_variant_inventory import AUTHORED_ITEM_VARIANT_CATEGORIES
 from game.residue_media import region_media_assets
 from game.animation_types import (
     ActionMediaAssetFile, ParticleMediaAssetFile, AnimationData, AttackProfileFile, AttackRecipe, AuthoredProjectileAsset, AuthoredRecord, BodyActionBinding, BodyActionRecipe, BloodResponse,
-    BodyClip, BodyRig, BoltStyle, DamageContext, DartStyle,
+    BodyClip, BodyRig, BodyMaterial, BoltStyle, DamageContext, DartStyle,
     DeathContext, DeathSaveContext, EquipmentTransitionContext, FloatingFeedbackStyle, ForcedMovementContext,
     ForcedMovementProfile, FrozenMap, HealingContext, Identifier, LifecycleFeedback, LifeStateContext,
     MovementMediaTrack, MovementReactionContext, ProjectileStorage, RigLayer, RigTables, ShoveRecipe, StudioDraftFile, StudioSpellDraft,
     VoluntaryMovementContext, MovementPresentation, Point, PoseSockets, FacingMap,
     InterruptionPresentation,
+    ContentBodyQualifier,
 )
 from game.condition_types import load_condition_recipes
 from game.condition_media import load_condition_media
@@ -92,7 +94,7 @@ def resolve_actor_layers(
         if any(len(rig.slot_categories[slot]) != 1 for slot in appearance_slots):
             raise ValueError(f"fixed actor rig requires one category per slot: {rig_id}")
         return tuple(
-            RigLayer(slot, rig.slot_categories[slot][0], alpha=0.5 if slot == "shadow" else 1)
+            RigLayer(slot, rig.slot_categories[slot][0], alpha=rig.shadow_alpha if slot == "shadow" else 1)
             for slot in appearance_slots
         )
 
@@ -341,7 +343,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         draft_versions[ref] = drafts_file.version
         identities.add(ref.identity_key)
     if authored_bundles is None:
-        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media", "curse_media", "divine_media", "control_media", "fire_media", "lightning_media")
+        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media", "curse_media", "divine_media", "control_media", "fire_media", "lightning_media", "summoning_spells")
                                  if (data_root.parent / name).is_dir())
     bundle_resources: dict[str, Path] = {}
     projectile_storage: dict[str, ProjectileStorage] = {}
@@ -491,7 +493,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     movement_media = MovementPresentation.model_validate_json(_read(DATA_ROOT.parent / "movement-media.json"))
     movement_context = movement_context.model_copy(update={
         "walkMedia": movement_media.walkMedia, "jumpMedia": movement_media.jumpMedia})
-    return AnimationData(
+    data = AnimationData(
         interruptions=InterruptionPresentation.model_validate_json(_read(DATA_ROOT.parent / "interruptions.json")),
         devices=load_device_art(),
         device_wrecks=load_device_wrecks(),
@@ -550,6 +552,66 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         action_playback_rates=movement_media.actionPlaybackRates,
         action_deliveries=MappingProxyType(action_deliveries),
         movement_reference_speed_feet=movement_media.referenceSpeedFeet,
+        body_materials=MappingProxyType(TypeAdapter(dict[SummonManifestation, BodyMaterial]).validate_json(
+            _read(DATA_ROOT.parent / "body-materials.json"))),
         blood_responses=MappingProxyType(TypeAdapter(dict[str, BloodResponse | None]).validate_json(
             _read(DATA_ROOT.parent / "blood-responses.json"))),
     )
+    installed_rig_ids = frozenset(TypeAdapter(Identifier).validate_python(
+        json.loads(_read(path))["rig_id"]) for path in (data_root.parent / "rigs").glob("*.json"))
+    validate_rig_body_contexts(data, installed_rig_ids=installed_rig_ids)
+    return data
+
+
+def validate_rig_body_contexts(data: AnimationData, *, installed_rig_ids: frozenset[str] = frozenset()) -> None:
+    """Admit portable overrides against this installed authored vocabulary."""
+    action_refs = tuple(recipe.definitionRef for recipe in (*data.drafts.values(), *data.body_action_recipes.values()))
+    condition_refs = tuple(recipe.definitionRef for recipe in data.condition_recipes.values())
+    references = {"body_action": action_refs, "body_action_recovery": action_refs,
+        "condition_entry": condition_refs, "condition_hold": condition_refs, "condition_exit": condition_refs,
+        "shove": tuple(recipe.definitionRef for recipe in data.shove_recipes.values()),
+        "save_avoidance": tuple(recipe.definitionRef for recipe in data.drafts.values())}
+    for identity, rig in data.rigs.items():
+        for binding in rig.body_contexts:
+            if (isinstance(binding.qualifier, ContentBodyQualifier)
+                    and binding.qualifier.contentRef not in references.get(binding.role, ())):
+                raise ValueError(f"{identity}/{binding.role}: unknown content reference {binding.qualifier.contentRef.identity_key}")
+            body = binding.body
+            if body.actor.enabled and not any(rig.clips[body.actor.clip].sheets.get(category) in data.resources
+                    for category in rig.slot_categories["body"]):
+                raise ValueError(f"{identity}/{binding.role}: missing body resource {body.actor.clip}")
+        if rig.body_contexts:
+            # Alternate body selection does not erase the existing damage/life
+            # owners. Their shared clips and callback frames must remain usable.
+            damage, death = data.damage_context, data.death_context
+            requirements = [("Idle", 0), (damage.bodyClip, max(damage.flashFrame, damage.numberFrame,
+                damage.conditionFrame, damage.deathFrame)), (death.bodyClip, death.equipmentHideFrame)]
+            for pose in data.life_state_context.bodyPoses.values():
+                if pose.bodyPose is not None:
+                    requirements.append((pose.bodyPose, 0))
+                for transition in (pose.applicationBody, pose.removalBody):
+                    if transition is not None:
+                        requirements.append((transition.bodyClip, 0))
+            for clip_name, frame in requirements:
+                clip = rig.clips.get(clip_name)
+                if clip is None or frame >= clip.frames:
+                    raise ValueError(f"{identity}/shared-vitals: missing {clip_name} frame {frame}")
+                if not any(clip.sheets.get(category) in data.resources for category in rig.slot_categories["body"]):
+                    raise ValueError(f"{identity}/shared-vitals: missing body resource {clip_name}")
+    for recipe in data.attack_recipes.values():
+        for profile in recipe.variants:
+            for identity in profile.match.rigIds or ():
+                if identity not in data.rigs and identity not in installed_rig_ids:
+                    raise ValueError(f"unknown attack profile rig: {identity}")
+                rig = data.rigs.get(identity)
+                if rig is None:  # This load may intentionally select only a subset of installed rigs.
+                    continue
+                clip = rig.clips.get(profile.actor.clip)
+                names = {"release"} if profile.projectile is not None else {"impact", "contact", "effect"}
+                if (not profile.actor.enabled or profile.actor.hiddenSlots or profile.actor.media or clip is None
+                        or not any(anchor.name in names for anchor in profile.anchors)
+                        or len({anchor.name for anchor in profile.anchors}) != len(profile.anchors)
+                        or any(anchor.name not in names | {"action_start", "prepare", "recover"}
+                               or anchor.frame >= clip.frames for anchor in profile.anchors)
+                        or not any(clip.sheets.get(category) in data.resources for category in rig.slot_categories["body"])):
+                    raise ValueError(f"{identity}/attack/{profile.id}: incompatible body or contact markers")

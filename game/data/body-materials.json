@@ -1,0 +1,10 @@
+{
+  "fey_spirit": {
+    "palette": {
+      "colors": [1523071, 2450605, 4759530, 8571135, 14283263],
+      "mapping": "maximum_rgb",
+      "gain": 1.0
+    },
+    "alpha": 0.7
+  }
+}

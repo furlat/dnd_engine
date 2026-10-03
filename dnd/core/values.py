@@ -1409,6 +1409,18 @@ class ModifiableValue(BaseValue):
         description="Whether this value propagates its normalizer into nested numerical channels."
     )
 
+    def retire_owned_state(self) -> None:
+        """Release this value's exact owned channels, leaving imported values alone."""
+        for component in (self.self_static, self.to_target_static,
+                          self.self_contextual, self.to_target_contextual):
+            for identity in component.get_all_modifier_uuids():
+                BaseObject.unregister(identity)
+            component.remove_all_modifiers()
+            component.remove_from_register()
+        self.from_target_static = None
+        self.from_target_contextual = None
+        self.remove_from_register()
+
     def get_base_modifier(self) -> Optional[NumericalModifier]:
         """Return the generated base numerical modifier when present.
 

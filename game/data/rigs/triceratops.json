@@ -1,0 +1,663 @@
+{
+  "rig_id": "smallscale.triceratops",
+  "creature_content_refs": [
+    "content.neurodragon:creature:creature.triceratops@1"
+  ],
+  "rig": {
+    "cell_width": 64,
+    "cell_height": 64,
+    "origin_y_from_ground": 22,
+    "facing_rows": {
+      "E": 0,
+      "SE": 1,
+      "S": 2,
+      "SW": 3,
+      "W": 4,
+      "NW": 5,
+      "N": 6,
+      "NE": 7
+    },
+    "slot_order": [
+      "shadow",
+      "body"
+    ],
+    "slot_categories": {
+      "shadow": [
+        "TriceratopsShadow"
+      ],
+      "body": [
+        "Triceratops"
+      ]
+    },
+    "clips": {
+      "Idle": {
+        "source_clip": "Idle",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Triceratops": "/rigs/triceratops/body/Idle.png",
+          "TriceratopsShadow": "/rigs/triceratops/shadow/Idle.png"
+        }
+      },
+      "Run": {
+        "source_clip": "Run",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Triceratops": "/rigs/triceratops/body/Run.png",
+          "TriceratopsShadow": "/rigs/triceratops/shadow/Run.png"
+        }
+      },
+      "TakeDamage": {
+        "source_clip": "TakeDamage",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Triceratops": "/rigs/triceratops/body/TakeDamage.png",
+          "TriceratopsShadow": "/rigs/triceratops/shadow/TakeDamage.png"
+        }
+      },
+      "Die": {
+        "source_clip": "Die",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Triceratops": "/rigs/triceratops/body/Die.png",
+          "TriceratopsShadow": "/rigs/triceratops/shadow/Die.png"
+        }
+      },
+      "Attack1": {
+        "source_clip": "Attack1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Triceratops": "/rigs/triceratops/body/Attack1.png",
+          "TriceratopsShadow": "/rigs/triceratops/shadow/Attack1.png"
+        }
+      }
+    },
+    "body_anchor": {
+      "x": 32.0,
+      "y": 36
+    },
+    "rest_pose_anchors": {
+      "Die": {
+        "E": {
+          "x": 33,
+          "y": 39
+        },
+        "SE": {
+          "x": 31,
+          "y": 39
+        },
+        "S": {
+          "x": 30,
+          "y": 38
+        },
+        "SW": {
+          "x": 31,
+          "y": 37
+        },
+        "W": {
+          "x": 32,
+          "y": 36
+        },
+        "NW": {
+          "x": 33,
+          "y": 36
+        },
+        "N": {
+          "x": 34,
+          "y": 37
+        },
+        "NE": {
+          "x": 34,
+          "y": 38
+        }
+      }
+    },
+    "body_contexts": [
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "loop"
+        }
+      },
+      {
+        "role": "movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "shove",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Attack1",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "contact",
+              "frame": 8
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "TakeDamage",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "brace",
+              "frame": 5
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "equipment",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "healing",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "save_avoidance",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_entry",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_hold",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "final_rest",
+          "restFrame": 14
+        }
+      },
+      {
+        "role": "condition_exit",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "reversed": true
+        }
+      }
+    ],
+    "shadow_alpha": 1
+  },
+  "resources": {
+    "/rigs/triceratops/body/Idle.png": "game/assets/rigs/triceratops/body/Idle.png",
+    "/rigs/triceratops/body/Run.png": "game/assets/rigs/triceratops/body/Run.png",
+    "/rigs/triceratops/body/TakeDamage.png": "game/assets/rigs/triceratops/body/TakeDamage.png",
+    "/rigs/triceratops/body/Die.png": "game/assets/rigs/triceratops/body/Die.png",
+    "/rigs/triceratops/body/Attack1.png": "game/assets/rigs/triceratops/body/Attack1.png",
+    "/rigs/triceratops/shadow/Idle.png": "game/assets/rigs/triceratops/shadow/Idle.png",
+    "/rigs/triceratops/shadow/Run.png": "game/assets/rigs/triceratops/shadow/Run.png",
+    "/rigs/triceratops/shadow/TakeDamage.png": "game/assets/rigs/triceratops/shadow/TakeDamage.png",
+    "/rigs/triceratops/shadow/Die.png": "game/assets/rigs/triceratops/shadow/Die.png",
+    "/rigs/triceratops/shadow/Attack1.png": "game/assets/rigs/triceratops/shadow/Attack1.png"
+  },
+  "provenance": {
+    "files": {
+      "/rigs/triceratops/body/Idle.png": {
+        "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Triceratops/Idle_Shadowless.png",
+        "bytes": 30474,
+        "sha256": "d936f0177df1d2e51ae3d3a3e4e2c3b508945f3a2730be037f1e3d84dadac89b"
+      },
+      "/rigs/triceratops/body/Run.png": {
+        "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Triceratops/Run_Shadowless.png",
+        "bytes": 37811,
+        "sha256": "c543cb7386933eae2f006b050489d1acc6d97e39f51c2cc1f1ff15842e542491"
+      },
+      "/rigs/triceratops/body/TakeDamage.png": {
+        "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Triceratops/TakeDamage_Shadowless.png",
+        "bytes": 50537,
+        "sha256": "62f96b0ec697958c671ec630100fc2f0668039ce7d27e7fb7b1fdf1b5e16e93c"
+      },
+      "/rigs/triceratops/body/Die.png": {
+        "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Triceratops/Die_Shadowless.png",
+        "bytes": 69662,
+        "sha256": "25981d031b697c898094012519f81a10601158e8b0de1dc48d7e13b929df35db"
+      },
+      "/rigs/triceratops/body/Attack1.png": {
+        "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Triceratops/Attack1_Shadowless.png",
+        "bytes": 71332,
+        "sha256": "2328fc6ba2a7bd8fa6005fcea46b888afb2e717ad870cefb014cb972eaea4f6a"
+      },
+      "/rigs/triceratops/shadow/Idle.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Triceratops/Idle_Shadowless.png",
+          "bytes": 30474,
+          "sha256": "d936f0177df1d2e51ae3d3a3e4e2c3b508945f3a2730be037f1e3d84dadac89b"
+        },
+        "combined": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/With shadow/Triceratops/Idle.png",
+          "bytes": 55304,
+          "sha256": "d43e20eebabc8b62d75e7f30519103f82e42e5b75c467816561cc8c63f7b55d2"
+        },
+        "bytes": 14192,
+        "sha256": "3620352cbaca9171e606071f634aa2d9d56f02a0558a1af5d8ecefb1552ba677"
+      },
+      "/rigs/triceratops/shadow/Run.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Triceratops/Run_Shadowless.png",
+          "bytes": 37811,
+          "sha256": "c543cb7386933eae2f006b050489d1acc6d97e39f51c2cc1f1ff15842e542491"
+        },
+        "combined": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/With shadow/Triceratops/Run.png",
+          "bytes": 72889,
+          "sha256": "4db19b7724174491b3d160851f04bd71faf25fdd52881cf68be744ede60ce8e5"
+        },
+        "bytes": 26272,
+        "sha256": "f6cb6897751221c50f90860236ed76330d960ebcfa671a78f4e0f892f5d88d47"
+      },
+      "/rigs/triceratops/shadow/TakeDamage.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Triceratops/TakeDamage_Shadowless.png",
+          "bytes": 50537,
+          "sha256": "62f96b0ec697958c671ec630100fc2f0668039ce7d27e7fb7b1fdf1b5e16e93c"
+        },
+        "combined": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/With shadow/Triceratops/TakeDamage.png",
+          "bytes": 89764,
+          "sha256": "818ee145ae5481820d0fe0a1c6eca4484af469075b8651f5f877462976215da2"
+        },
+        "bytes": 28161,
+        "sha256": "1956c9c0574e30b6d66a18c2286926bb94604e17a494a605eb2949be24ee77a4"
+      },
+      "/rigs/triceratops/shadow/Die.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Triceratops/Die_Shadowless.png",
+          "bytes": 69662,
+          "sha256": "25981d031b697c898094012519f81a10601158e8b0de1dc48d7e13b929df35db"
+        },
+        "combined": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/With shadow/Triceratops/Die.png",
+          "bytes": 118279,
+          "sha256": "d75e8ef93a2850ea7ff5ed3d22891e60f656c2c2754a1f997737171c3d8ce680"
+        },
+        "bytes": 37207,
+        "sha256": "015f5e948fe7ebf3625c36f0708ad12574a87042c89edea9a0af90d866875bd8"
+      },
+      "/rigs/triceratops/shadow/Attack1.png": {
+        "derivation": "paired-visible-shadow-v1",
+        "body": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/Shadowless/Triceratops/Attack1_Shadowless.png",
+          "bytes": 71332,
+          "sha256": "2328fc6ba2a7bd8fa6005fcea46b888afb2e717ad870cefb014cb972eaea4f6a"
+        },
+        "combined": {
+          "archive_member": "2D Dinosaurs Pack 1/Spritesheets/With shadow/Triceratops/Attack1.png",
+          "bytes": 120188,
+          "sha256": "0109594ec90e045438abc3bec7a1c035f5262c5b44f664dfde7022c7efea294d"
+        },
+        "bytes": 35183,
+        "sha256": "c142c133195d18fbc42837d349cd6a67dc2a4eb9b5d0287639da7c757c2c335f"
+      }
+    },
+    "archive": {
+      "name": "2D Dinosaurs Pack 1.rar",
+      "bytes": 191565078,
+      "sha256": "04c0f1904ec6056ac1632fc9b92e156b3b7fae19cf4ccd81aae516a1ecbc24c3"
+    },
+    "summoning_body_review": {
+      "date": "2026-10-03",
+      "source_variant": "Triceratops",
+      "direction_evidence": "Named original Idle frames exactly match all eight atlas rows.",
+      "timing": "15 original samples at authored 12 FPS. The PNG packs provide no FPS, pivot or event markers. Contact/recovery frames below are reviewed execution choices.",
+      "ground_pivot": {
+        "x": 32.0,
+        "y": 42,
+        "evidence": "Authored from paired Idle shadow footprint and all eight support views; image bounds are not the ground plane."
+      },
+      "shadow_policy": "Recoverable original shadow pixels from exact With shadow + Shadowless pairs; original alpha is preserved at rig shadow_alpha 1. Opaque body pixels match the source composite exactly and hide an unrecoverable region, left transparent rather than invented. Recomposition with the original opaque body reproduces all visible source RGBA and all alpha exactly. Shadow is independent of body/Fey palette and body lift.",
+      "attacks": {
+        "triceratops_gore": {
+          "source_clip": "Attack1",
+          "contact_frame": 8,
+          "recover_frame": 12,
+          "motion": "Horned head extends into the forward rush at 8."
+        }
+      },
+      "outcomes": "Hit, miss, critical, opportunity and native Multiattack children select the same explicit anatomical row. One emitted attack fact owns one contact; art turns and repeated swipes create no extra native hits. Separate AttackVfx tracks are explicitly empty.",
+      "movement": "Run owns the gait only. Native recorded path/height owns displacement. Jump uses Run as an explicitly normalized airborne gallop adaptation. Window uses Run with its own frame keys and existing connector passage scale.",
+      "flight": "No flying native capability is granted by this binding.",
+      "prone": "Intact non-exploding fall, explicit frame-14 living rest pose, reverse stand-up. Death continues to use the compatible shared death owner; summoned departure is separate.",
+      "ordinary_actions": "Body action, recovery, equipment, healing and optional save-avoidance gestures explicitly disabled with neutral Idle. Existing native effects, feedback and child joins remain authoritative. Shove uses the primary physical strike; forced movement uses TakeDamage brace 5.",
+      "unarmed": "Rig-scoped unarmed physical-strike adaptation uses the inspected primary motion; this grants no native action.",
+      "validation_scope": "Original strip/direction/support inspection and typed binding checks; full live native fight, historical replay, height/occlusion and Fey material acceptance are separate packet-5 integration checks."
+    }
+  }
+}

@@ -34,7 +34,7 @@ from dnd.core.events import (
     Damage, Event, EventPhase, EventQueue, Range, SavingThrowEvent, SkillCheckEvent, TurnStartEvent, TurnEndEvent,
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     TakeDamageEvent, DamageAppliedEvent, DeathSaveEvent, InstantDeathEvent, DeathEvent, HealEvent,
-    LifeStateChangeEvent, ReviveEvent, EntityCreatedEvent,
+    LifeStateChangeEvent, ReviveEvent, EntityCreatedEvent, EntityFactionChangedEvent,
 )
 from dnd.core.equipment_types import (
     ArmorType,
@@ -44,11 +44,12 @@ from dnd.core.equipment_types import (
     WeaponProperty,
     WeaponSlot,
 )
-from dnd.core.base_block import BaseBlock, MovementMode
+from dnd.core.base_block import BaseBlock, MovementMode, PreparedConditionApplication, PreparedInitialConditions, PreparedConditionRemovals
 from dnd.types.world import OccupancyLayer
 from dnd.types.physical_access import PhysicalAccess
 from dnd.core.events import RangeType
 from dnd.types.actor import EntityStatsState
+from dnd.types.summoning import SummonOrigin, TerminalOwnerRelease
 from dnd.types.spatial_effects import SpatialDamageSource
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
 from dnd.blocks.saving_throws import SavingThrowSetConfig, SavingThrowSet
@@ -59,7 +60,7 @@ from dnd.blocks.health import (
     HitDiceConfig,
     HitDiceHealingResult,
 )
-from dnd.blocks.equipment import EquipmentConfig, Equipment
+from dnd.blocks.equipment import EquipmentConfig, Equipment, PreparedEquipmentRelease
 from dnd.blocks.creature_proficiencies import (
     CreatureProficiencies,
     CreatureProficienciesConfig,
@@ -75,8 +76,9 @@ from dnd.blocks.base_item import (
     EquippableItem,
     ItemLocationStateEvent,
     UsableItem,
+    PreparedItemRetirement,
 )
-from dnd.core.item_types import ItemLocation
+from dnd.core.item_types import ItemLocation, ItemReleaseReason
 from dnd.core.item_properties import ItemWearerValues
 from dnd.blocks.appearance import Appearance, AppearanceConfig
 from dnd.types.abilities import AbilityName, SkillName
@@ -117,6 +119,44 @@ from dnd.core.base_actions import (
 class _EquipmentStorageDestination:
     item: BaseItem
     floor: Optional[PreparedObjectPlacement] = None
+
+
+@dataclass(slots=True)
+class PreparedBirth:
+    """One staged birth, owned by the exact uncommitted aggregate."""
+
+    entity: 'Entity'
+    event: EntityCreatedEvent
+    committed: bool = False
+    published: bool = False
+    publication_error: BaseException | None = None
+
+
+@dataclass(slots=True)
+class PreparedSpatialReturn:
+    """One native return and its admitted adjacent occupant displacements."""
+
+    entity: 'Entity'
+    position: tuple[int, int]
+    displaced: tuple[tuple['Entity', tuple[int, int], tuple[int, int]], ...]
+    parent_event: UUID | None
+    committed: bool = False
+    published: bool = False
+
+
+@dataclass
+class PreparedEntityRetirement:
+    entity: 'Entity'
+    release: TerminalOwnerRelease
+    parent_event: Event | None
+    blocks: tuple[BaseBlock, ...]
+    conditions: PreparedConditionRemovals
+    equipment: tuple[PreparedEquipmentRelease, ...]
+    intrinsic: tuple[PreparedItemRetirement, ...]
+    possessions: tuple[tuple[BaseItem, PreparedObjectPlacement], ...]
+    item_locations: tuple[tuple[UUID, UUID | None], ...] = ()
+    committed: bool = False
+    canceled: bool = False
 
 
 _CONCRETE_EQUIPMENT_SLOTS: Tuple[EquipmentSlot, ...] = (
@@ -410,7 +450,7 @@ class Entity(BaseBlock):
     )
     creation_committed: bool = Field(
         default=False,
-        description="Whether finished composition published its birth fact.",
+        description="Whether the finished aggregate's birth has committed, before fact publication.",
     )
     is_spatially_suspended: bool = Field(
         default=False,
@@ -520,6 +560,7 @@ class Entity(BaseBlock):
         frozenset[Tuple[int, int]],
     ] = PrivateAttr(default_factory=dict)
     _life_state_modifier_ownership: ModifierOwnership = PrivateAttr(default_factory=list)
+    _runtime_agency_revoked: bool = PrivateAttr(default=False)
     _character_grant_receipts: Dict[str, CharacterGrantReceipt] = PrivateAttr(
         default_factory=dict,
     )
@@ -677,6 +718,11 @@ class Entity(BaseBlock):
 
     def _attach_to_world(self, position: Tuple[int, int]) -> None:
         """Commit initial Tile membership for the owning Game."""
+        self._commit_world_attachment(position)
+        self._publish_world_attachment(position)
+
+    def _commit_world_attachment(self, position: Tuple[int, int]) -> None:
+        """Commit admitted presence without publishing its observation."""
         if not self.creation_committed:
             raise RuntimeError("cannot deploy an entity before creation commits")
         if self.is_deployed:
@@ -699,8 +745,10 @@ class Entity(BaseBlock):
             if isinstance(exc, PositionCommitError):
                 raise
             raise PositionCommitError(exc) from exc
+    def _publish_world_attachment(self, position: Tuple[int, int], *, parent_event: Event | None = None) -> None:
         try:
-            grid._publish_entity_membership(self.uuid, None, position)
+            get_map()._publish_entity_membership(self.uuid, None, position,
+                parent_event=parent_event.uuid if parent_event is not None else None)
         except PositionPublicationError:
             raise
         except BaseException as exc:
@@ -759,6 +807,7 @@ class Entity(BaseBlock):
         position: Tuple[int, int],
         *,
         parent_event: Optional[UUID] = None,
+        publish: bool = True,
     ) -> None:
         """Restore one suspended Entity into an admitted live Tile."""
         if not self.is_spatially_suspended or self.is_deployed:
@@ -781,6 +830,8 @@ class Entity(BaseBlock):
             if isinstance(exc, PositionCommitError):
                 raise
             raise PositionCommitError(exc) from exc
+        if not publish:
+            return
         try:
             grid._publish_entity_membership(
                 self.uuid,
@@ -801,6 +852,7 @@ class Entity(BaseBlock):
         parent_event: Optional[UUID] = None,
         *,
         occupancy_layer: Optional[OccupancyLayer] = None,
+        publish: bool = True,
     ) -> None:
         """Commit objective position and contact layer, then publish spatial facts.
 
@@ -833,6 +885,8 @@ class Entity(BaseBlock):
             raise PositionCommitError(exc) from exc
         if old_layer is not new_layer:
             grid.invalidate_occupancy_paths()
+        if not publish:
+            return
         try:
             grid._publish_entity_membership(
                 entity.uuid,
@@ -847,6 +901,83 @@ class Entity(BaseBlock):
         except BaseException as exc:
             raise PositionPublicationError(exc) from exc
 
+    def prepare_spatial_return(self, *, parent_event: UUID | None = None) -> PreparedSpatialReturn:
+        """Admit the existing return-to-origin rule without moving any actor."""
+        if not self.is_spatially_suspended or self.is_deployed:
+            raise PositionCommitError(ValueError("only a suspended Entity can return"))
+        grid = get_map()
+        if grid.get_tile(*self.position) is None:
+            raise PositionCommitError(ValueError("return Tile no longer exists"))
+        displaced: list[tuple[Entity, tuple[int, int], tuple[int, int]]] = []
+        reserved = {self.position}
+        for occupant_uuid in sorted(grid.get_entities_at(self.position) - {self.uuid}, key=str):
+            occupant = Entity.get(occupant_uuid)
+            if occupant is None or not occupant.is_deployed:
+                raise PositionCommitError(ValueError("return occupant identity is stale"))
+            destination = next((
+                (self.position[0] + dx, self.position[1] + dy)
+                for dx, dy in ((0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1))
+                if (self.position[0] + dx, self.position[1] + dy) not in reserved
+                and grid.is_walkable_for(self.position[0] + dx, self.position[1] + dy, occupant.uuid)
+            ), None)
+            if destination is None:
+                raise PositionCommitError(ValueError("return occupant has no supported adjacent destination"))
+            reserved.add(destination)
+            displaced.append((occupant, occupant.position, destination))
+        return PreparedSpatialReturn(self, self.position, tuple(displaced), parent_event)
+
+    def validate_spatial_return(self, prepared: PreparedSpatialReturn) -> bool:
+        if prepared.entity is not self or prepared.committed:
+            return False
+        grid = get_map()
+        if (Entity.get(self.uuid) is not self or not self.is_spatially_suspended
+                or self.is_deployed or self.position != prepared.position
+                or grid.get_entity_position(self.uuid) is not None
+                or grid.get_tile(*prepared.position) is None):
+            return False
+        if grid.get_entities_at(prepared.position) != {actor.uuid for actor, _, _ in prepared.displaced}:
+            return False
+        return all(Entity.get(actor.uuid) is actor and actor.is_deployed
+            and actor.position == source and grid.get_entity_position(actor.uuid) == source
+            and grid.is_walkable_for(destination[0], destination[1], actor.uuid)
+            for actor, source, destination in prepared.displaced)
+
+    def commit_spatial_return(self, prepared: PreparedSpatialReturn) -> None:
+        if prepared.committed:
+            return
+        if not self.validate_spatial_return(prepared):
+            raise PositionCommitError(ValueError("prepared return no longer matches objective occupancy"))
+        for actor, _source, destination in prepared.displaced:
+            Entity.update_entity_position(actor, destination, publish=False)
+        self.restore_spatial_presence(prepared.position, publish=False)
+        prepared.committed = True
+
+    def publish_spatial_return(self, prepared: PreparedSpatialReturn) -> None:
+        if prepared.entity is not self or not prepared.committed:
+            raise ValueError("only a committed native return may publish")
+        if prepared.published:
+            return
+        prepared.published = True
+        grid = get_map()
+        errors: list[BaseException] = []
+        for actor, source, destination in prepared.displaced:
+            try:
+                grid._publish_entity_membership(actor.uuid, source, destination,
+                    parent_event=prepared.parent_event,
+                    previous_occupancy_layer=actor.occupancy_layer,
+                    occupancy_layer=actor.occupancy_layer)
+            except BaseException as error:
+                errors.append(error)
+        try:
+            grid._publish_entity_membership(self.uuid, None, prepared.position,
+                                           parent_event=prepared.parent_event)
+        except BaseException as error:
+            errors.append(error)
+        if errors:
+            raise PositionPublicationError(
+                BaseExceptionGroup("Committed native return publication failed", errors),
+            )
+
     @classmethod
     def register_entity(cls, entity: 'Entity') -> None:
         """Register an entity in the entity registry.
@@ -856,12 +987,16 @@ class Entity(BaseBlock):
         """
         cls._entity_registry[entity.uuid] = entity
 
-    def _entity_created_event(self) -> EntityCreatedEvent:
+    def _entity_created_event(self, *, parent_event: Event | None = None,
+                              summon_origin: SummonOrigin | None = None) -> EntityCreatedEvent:
         """Capture this finished aggregate without consulting another owner."""
         if self.character_body_id is not None and self.content_ref is not None:
             raise RuntimeError(
                 "character body identity cannot coexist with creature content",
             )
+        if summon_origin is None:
+            summon_origin = next((origin for condition in self.active_conditions.values()
+                                  if (origin := condition.snapshot_summon_origin()) is not None), None)
         proficiencies = self.creature_proficiencies
         inventory_items = tuple(self.inventory.items.values())
         equipped_by_slot = tuple(
@@ -949,6 +1084,10 @@ class Entity(BaseBlock):
             use_register=False,
             phase=EventPhase.COMPLETION,
             entity_uuid=self.uuid,
+            parent_event=parent_event.uuid if parent_event is not None else None,
+            summon_origin=summon_origin,
+            initial_condition_states=tuple(condition.snapshot_state()
+                for condition in self.active_conditions.values()),
             occupancy_layer=self.occupancy_layer,
             entity_kind_id=(
                 self.character_body_id
@@ -1205,6 +1344,201 @@ class Entity(BaseBlock):
         for block in owned_blocks:
             BaseBlock.unregister(block.uuid)
 
+    def prepare_retirement(self, *, terminal_release: TerminalOwnerRelease,
+                           parent_event: Event | None = None) -> PreparedEntityRetirement | None:
+        """Admit terminal cleanup of this exact actor, preserving transferable possessions."""
+        if terminal_release.entity_uuid != self.uuid:
+            raise ValueError("Terminal release belongs to another actor")
+        if Entity.get(self.uuid) is not self:
+            return None
+        items = dict(self.inventory.items)
+        for slot in _CONCRETE_EQUIPMENT_SLOTS:
+            item = self.equipment.get_item_by_slot(slot)
+            if item is not None:
+                items[item.uuid] = item
+        # Composition can retain initial equipment references after transfer.
+        # Only current container membership establishes ownership of possessions.
+        embedded_items = frozenset(block.uuid for block in self.owned_block_tree()
+            if isinstance(block, BaseItem))
+        item_locations = tuple((item.uuid, item.stored_in_uuid) for item in items.values())
+        blocks = self.owned_block_tree(excluded_uuids=embedded_items)
+        conditions = BaseBlock.prepare_owned_condition_removals(blocks, parent_event=parent_event,
+            terminal_release=terminal_release,
+            excluded_condition_uuids=frozenset({terminal_release.existence_condition_uuid}))
+        if conditions is None:
+            return None
+        prepared = PreparedEntityRetirement(self, terminal_release, parent_event,
+            blocks, conditions, (), (), (), item_locations=item_locations)
+        try:
+            grid = get_map()
+            real_items = [item for item in items.values() if item.intrinsic_owner_uuid is None]
+            if real_items and (not grid.is_walkable(*self.position)
+                    or any((block := BaseBlock.get(identity)) is not None and block.blocks_walking()
+                        for identity in grid.get_center_objects_at(self.position))):
+                raise RuntimeError("Departing actor's real possessions have no supported nonblocking ground")
+            for item in items.values():
+                if item.owner_uuid != self.uuid or item.stored_in_uuid not in (self.equipment.uuid, self.inventory.uuid):
+                    raise RuntimeError("Actor possession identity is inconsistent during retirement")
+                if item.stored_in_uuid == self.equipment.uuid:
+                    release = self.equipment.prepare_item_release(item.uuid, parent_event=parent_event,
+                        terminal_release=terminal_release)
+                    if release is None:
+                        self.cancel_retirement(prepared)
+                        return None
+                    prepared.equipment = (*prepared.equipment, release)
+                if item.intrinsic_owner_uuid is not None:
+                    retirement = item.prepare_retirement(parent_event, terminal_release=terminal_release)
+                    if retirement is None:
+                        self.cancel_retirement(prepared)
+                        return None
+                    prepared.intrinsic = (*prepared.intrinsic, retirement)
+                else:
+                    floor = grid.prepare_object_placement(item.uuid, self.position,
+                        parent_event.uuid if parent_event is not None else None,
+                        terminal_release=terminal_release)
+                    if floor is None:
+                        self.cancel_retirement(prepared)
+                        return None
+                    prepared.possessions = (*prepared.possessions, (item, floor))
+        except BaseException as failure:
+            try:
+                self.cancel_retirement(prepared)
+            except BaseException as cleanup:
+                raise BaseExceptionGroup("Actor retirement admission and cancellation failed", [failure, cleanup]) from failure
+            raise
+        return prepared
+
+    def cancel_retirement(self, prepared: PreparedEntityRetirement) -> None:
+        if prepared.entity is not self or prepared.committed:
+            raise ValueError("Invalid actor retirement cancellation")
+        if prepared.canceled:
+            return
+        prepared.canceled = True
+        errors: list[BaseException] = []
+        try:
+            BaseBlock.cancel_owned_condition_removals(prepared.conditions, "Actor retirement canceled")
+        except BaseException as error:
+            errors.append(error)
+        for item in prepared.intrinsic:
+            try:
+                item.item.cancel_retirement(item)
+            except BaseException as error:
+                errors.append(error)
+        for _, floor in prepared.possessions:
+            try:
+                get_map().cancel_object_placement(floor, "Actor retirement canceled")
+            except BaseException as error:
+                errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Actor retirement cancellation failed", errors)
+
+    def validate_prepared_retirement(self, prepared: PreparedEntityRetirement) -> bool:
+        """Recheck the exact admitted possessions and destinations before removal."""
+        if prepared.canceled or prepared.entity is not self or Entity.get(self.uuid) is not self:
+            return False
+        items = dict(self.inventory.items)
+        for slot in _CONCRETE_EQUIPMENT_SLOTS:
+            item = self.equipment.get_item_by_slot(slot)
+            if item is not None:
+                items[item.uuid] = item
+        expected = {entry.item.uuid for entry in prepared.intrinsic}
+        expected.update(item.uuid for item, _ in prepared.possessions)
+        if set(items) != expected or any(item.owner_uuid != self.uuid for item in items.values()):
+            return False
+        if any(items[identity].stored_in_uuid != container for identity, container in prepared.item_locations):
+            return False
+        if any(not self.equipment.validate_item_release(release) for release in prepared.equipment):
+            return False
+        return (BaseBlock.validate_prepared_condition_removals(prepared.conditions.entries)
+                and all(get_map().validate_prepared_object_placement(floor)
+                        for _, floor in prepared.possessions))
+
+    def commit_retirement(self, prepared: PreparedEntityRetirement) -> None:
+        """End exact live authority after existence removal; retain historical facts."""
+        if prepared.entity is not self:
+            raise ValueError("Actor retirement token belongs to another entity")
+        if prepared.canceled:
+            raise ValueError("Canceled actor retirement cannot commit")
+        if prepared.committed:
+            return
+        if prepared.release.existence_condition_uuid in self.active_conditions_by_uuid:
+            raise RuntimeError("Existence removal must commit before actor retirement")
+        if not self.validate_prepared_retirement(prepared):
+            raise RuntimeError("Admitted actor ownership changed before retirement")
+        grid = get_map()
+        if any(not grid.validate_prepared_object_placement(floor) for _, floor in prepared.possessions):
+            raise RuntimeError("Admitted possession destination changed before retirement")
+        parent = prepared.parent_event
+        parent_uuid = parent.uuid if parent is not None else None
+        errors: list[BaseException] = []
+        with BaseBlock.condition_removal_scope(terminal_release=prepared.release):
+            for release in prepared.equipment:
+                self.equipment.commit_item_release(release)
+            BaseBlock.commit_owned_condition_removals(prepared.conditions)
+            prepared.committed = True
+            try:
+                BaseBlock.publish_owned_condition_removals(prepared.conditions)
+            except BaseException as error:
+                errors.append(error)
+            for release in prepared.equipment:
+                try:
+                    self.equipment.publish_item_release(release)
+                except BaseException as error:
+                    errors.append(error)
+            for item, floor in prepared.possessions:
+                container_uuid = item.stored_in_uuid
+                if container_uuid == self.inventory.uuid:
+                    self.inventory.remove_contained_item(item.uuid, parent_event=parent,
+                        reason=ItemReleaseReason.OWNER_DEPARTED)
+                item.owner_uuid = None
+                item.stored_in_uuid = None
+                try:
+                    grid.commit_object_placement(floor)
+                except BaseException as error:
+                    errors.append(error)
+                try:
+                    item.drop(entity_uuid=self.uuid, position=floor.placement.position)
+                except BaseException as error:
+                    errors.append(error)
+                try:
+                    if container_uuid is not None:
+                        item.publish_holdings_release(self.uuid, container_uuid, parent_event=parent_uuid)
+                    self._publish_owned_item_location(item, ItemLocation.FLOOR, parent_event=parent)
+                except BaseException as error:
+                    errors.append(error)
+            for item in prepared.intrinsic:
+                try:
+                    item.item.commit_retirement(item)
+                except BaseException as error:
+                    errors.append(error)
+            self.turn_duration_interval = None
+            was_deployed = self.is_deployed
+            if was_deployed:
+                grid._commit_entity_membership(self.uuid, self.position, None)
+            self.is_deployed = False
+            self.is_spatially_suspended = False
+            spatial_senses_system.unregister_observer(self.uuid)
+            # The observer receives terminal membership while identity/position exists.
+            if was_deployed:
+                try:
+                    grid._publish_entity_membership(self.uuid, self.position, None,
+                        parent_event=parent_uuid, terminal_release=prepared.release)
+                except BaseException as error:
+                    errors.append(error)
+            for block in prepared.blocks:
+                try:
+                    grid.cleanup_block_light_sources(block.uuid, parent_event=parent_uuid)
+                except BaseException as error:
+                    errors.append(error)
+            for action in tuple(self.registered_actions):
+                action.remove_from_register()
+            self.registered_actions.clear()
+            for block in prepared.blocks:
+                block.release_runtime_ownership()
+            Entity._entity_registry.pop(self.uuid, None)
+        if errors:
+            raise BaseExceptionGroup("Actor retirement publication failed after commitment", errors)
+
     def validate_initial_composition(self) -> None:
         """Validate one finished aggregate without publishing its birth fact."""
         if self.creation_committed:
@@ -1273,21 +1607,81 @@ class Entity(BaseBlock):
             self.discard_uncommitted()
             raise
 
-    def compose_entity(self) -> EntityCreatedEvent:
-        """Validate and publish exactly one birth fact for this aggregate."""
-        if self.creation_committed:
-            raise RuntimeError("entity creation is already committed")
-        if self.is_deployed or self.is_spatially_suspended:
-            raise RuntimeError("initial composition requires world absence")
+    def prepare_birth(self, *, initial_conditions: PreparedInitialConditions | None = None,
+                      parent_event: Event | None = None,
+                      summon_origin: SummonOrigin | None = None) -> PreparedBirth:
+        """Validate and retain the complete birth while still undeployed."""
+        self.validate_initial_composition()
+        created = self._entity_created_event(parent_event=parent_event, summon_origin=summon_origin)
+        if initial_conditions:
+            states = {state.condition_uuid: state for state in created.initial_condition_states}
+            if initial_conditions.owner_uuid != self.uuid:
+                raise ValueError("initial conditions belong to another actor")
+            states.update((application.condition.uuid, application.condition.snapshot_state())
+                          for application in initial_conditions.applications)
+            created = created.model_copy(update={"initial_condition_states": tuple(states.values())})
+        return PreparedBirth(self, created)
+
+    def commit_birth(self, prepared: PreparedBirth) -> None:
+        """Commit authority without publishing or repeating admission callbacks."""
+        if prepared.entity is not self:
+            raise ValueError("birth token belongs to another aggregate")
+        if prepared.committed:
+            return
+        if self.creation_committed or self.is_deployed or Entity.get(self.uuid) is not self:
+            raise RuntimeError("prepared birth is no longer admissible")
+        self.creation_committed = True
+        prepared.committed = True
+
+    def publish_birth(self, prepared: PreparedBirth) -> EntityCreatedEvent:
+        """Publish the retained fact once; publication failure never undoes birth."""
+        if prepared.entity is not self or not prepared.committed:
+            raise ValueError("birth must commit before publication")
+        if prepared.publication_error is not None:
+            raise prepared.publication_error
+        if not prepared.published:
+            prepared.published = True
+            try:
+                prepared.event = EventQueue.publish_completed_fact(prepared.event)
+            except BaseException as error:
+                prepared.publication_error = error
+                raise
+        return prepared.event
+
+    def compose_entity(self, *, parent_event: Event | None = None,
+                       summon_origin: SummonOrigin | None = None) -> EntityCreatedEvent:
+        """Compose an ordinary birth, discarding an unpublished failed aggregate."""
+        prepared: PreparedBirth | None = None
         try:
-            self.validate_initial_composition()
-            created = self._entity_created_event()
-            self.creation_committed = True
-            return EventQueue.publish_completed_fact(created)
+            prepared = self.prepare_birth(parent_event=parent_event, summon_origin=summon_origin)
+            self.commit_birth(prepared)
+            return self.publish_birth(prepared)
         except BaseException:
-            self.creation_committed = False
-            self.discard_uncommitted()
+            # Explicit prepare/commit/publish callers own a larger committed
+            # operation. This convenience path can still discard a birth that
+            # failed before any observer received it, as ordinary creation did.
+            if (prepared is not None and not self.is_deployed
+                    and EventQueue.get_event_by_uuid(prepared.event.uuid) is None):
+                self.creation_committed = False
+            if not self.creation_committed and not self.is_deployed:
+                self.discard_uncommitted()
             raise
+
+    def set_faction(self, faction: str | None, *, parent_event: Event | None = None) -> EntityFactionChangedEvent | None:
+        """Commit one allegiance change and record its explicit after-value."""
+        if Entity.get(self.uuid) is not self or not self.creation_committed:
+            raise ValueError("faction mutation requires a committed live identity")
+        if faction == self.faction:
+            return None
+        previous = self.faction
+        self.faction = faction
+        get_map().invalidate_occupancy_paths()
+        return EventQueue.publish_completed_fact(EntityFactionChangedEvent(
+            source_entity_uuid=self.uuid, target_entity_uuid=self.uuid,
+            entity_uuid=self.uuid, previous_faction=previous, faction_after=faction,
+            parent_event=parent_event.uuid if parent_event is not None else None,
+            phase=EventPhase.COMPLETION, use_register=False,
+        ))
 
     @classmethod
     def get_all_entities(cls) -> List['Entity']:
@@ -1638,90 +2032,152 @@ class Entity(BaseBlock):
                 return True
         return False
 
-    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, parent_event: Optional[Event] = None, *, required_condition: Optional[Tuple[BaseBlock, BaseCondition]] = None) -> Optional[Event]:
-        """Apply an entity condition with immunities, saves, and combat-log names.
-
-        Args:
-            condition: Condition to apply.
-            context: Optional runtime context for the condition.
-            check_save_throw: Whether to honor the condition's application save.
-            parent_event: Optional parent event for condition event lineage.
-
-        Returns:
-            Completion or cancellation event from the condition application, or
-            `None` when no declaration event exists.
-        """
-        if required_condition is not None and required_condition[1].applied:
-            raise ValueError("Required condition must be a fresh application")
-        if condition.name is None:
-            raise ValueError("BaseCondition name is not set")
-        if condition.target_entity_uuid is None:
-            condition.target_entity_uuid = self.uuid
-        bind_runtime_root_owned_behavior(
-            condition,
-            current_binding=condition.behavior_binding,
-            origin_root_id=(
-                self.content_ref.content_id
-                if self.content_ref is not None
-                else None
-            ),
-            runtime_owner_uuid=self.uuid,
-        )
-        if context is not None:
-            condition.set_context(context)
-
-        condition.target_entity_name = self.name
-        source = Entity.get(condition.source_entity_uuid)
-        if source and isinstance(source, Entity):
-            condition.source_entity_name = source.name
-
-        declaration_event = condition.declare_event(parent_event)
-        declaration_event = EventQueue.publish_declaration(declaration_event)
-
-        if declaration_event.canceled:
-            self._discard_uncommitted_condition_tree(condition)
-            return declaration_event
-
-        if self.check_condition_immunity(condition.name, condition=condition):
-            target_name = self.name
-            condition_name = condition.name
-            entry = CombatLogEntry(
-                entry_type=CombatLogEntryType.CONDITION_APPLIED,
-                source_name=target_name,
-                source_uuid=str(self.uuid),
-                target_name=target_name,
-                target_uuid=str(self.uuid),
-                compact=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
-                verbose=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
-                detailed=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
-                success=False,
+    def _declare_entity_condition(self, condition: BaseCondition, *,
+                                  context: Optional[Dict[str, Any]] = None,
+                                  check_save_throw: bool = True,
+                                  parent_event: Event | None = None) -> Event | None:
+        """Shared native entity admission: identity, immunity, saving throw."""
+        try:
+            if condition.name is None:
+                raise ValueError("BaseCondition name is not set")
+            if condition.target_entity_uuid is None:
+                condition.target_entity_uuid = self.uuid
+            bind_runtime_root_owned_behavior(
+                condition,
+                current_binding=condition.behavior_binding,
+                origin_root_id=(
+                    self.content_ref.content_id
+                    if self.content_ref is not None
+                    else None
+                ),
+                runtime_owner_uuid=self.uuid,
             )
-            EventQueue.push_combat_log(entry, self.uuid)
+            if context is not None:
+                condition.set_context(context)
 
-            if declaration_event is not None:
-                canceled = declaration_event.cancel(
-                    status_message=f"Condition {condition.name} is immune",
-                )
+            condition.target_entity_name = self.name
+            source = Entity.get(condition.source_entity_uuid)
+            if source and isinstance(source, Entity):
+                condition.source_entity_name = source.name
+
+            declaration_event = condition.declare_event(parent_event)
+            declaration_event = EventQueue.publish_declaration(declaration_event)
+
+            if declaration_event.canceled:
                 self._discard_uncommitted_condition_tree(condition)
-                return canceled
-            else:
-                return None
-        if check_save_throw and condition.application_saving_throw is not None:
-            (_, _, success) = self.saving_throw(condition.application_saving_throw)
-            if success:
+                return declaration_event
+
+            if self.check_condition_immunity(condition.name, condition=condition):
+                target_name = self.name
+                condition_name = condition.name
+                entry = CombatLogEntry(
+                    entry_type=CombatLogEntryType.CONDITION_APPLIED,
+                    source_name=target_name,
+                    source_uuid=str(self.uuid),
+                    target_name=target_name,
+                    target_uuid=str(self.uuid),
+                    compact=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
+                    verbose=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
+                    detailed=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
+                    success=False,
+                )
+                EventQueue.push_combat_log(entry, self.uuid)
+
                 if declaration_event is not None:
                     canceled = declaration_event.cancel(
-                        status_message=(
-                            "Target passed the "
-                            f"{condition.application_saving_throw.ability_name} "
-                            "saving throw with"
-                        ),
+                        status_message=f"Condition {condition.name} is immune",
                     )
                     self._discard_uncommitted_condition_tree(condition)
                     return canceled
                 else:
                     return None
-        return self._apply_declared_condition(condition, declaration_event, required_condition=required_condition)
+            if check_save_throw and condition.application_saving_throw is not None:
+                (_, _, success) = self.saving_throw(condition.application_saving_throw)
+                if success:
+                    if declaration_event is not None:
+                        canceled = declaration_event.cancel(
+                            status_message=(
+                                "Target passed the "
+                                f"{condition.application_saving_throw.ability_name} "
+                                "saving throw with"
+                            ),
+                        )
+                        self._discard_uncommitted_condition_tree(condition)
+                        return canceled
+                    else:
+                        return None
+            return declaration_event
+        except BaseException:
+            if not condition.applied:
+                self._discard_uncommitted_condition_tree(condition)
+            raise
+
+    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None,
+                      check_save_throw: bool = True, parent_event: Optional[Event] = None, *,
+                      required_condition: Optional[Tuple[BaseBlock, BaseCondition]] = None) -> Optional[Event]:
+        """Apply admitted entity conditions through the shared lower owner."""
+        if required_condition is not None and required_condition[1].applied:
+            raise ValueError("Required condition must be a fresh application")
+        declaration = self._declare_entity_condition(condition, context=context,
+            check_save_throw=check_save_throw, parent_event=parent_event)
+        if declaration is None or declaration.canceled:
+            return declaration
+        return self._apply_declared_condition(condition, declaration, required_condition=required_condition)
+
+    def prepare_condition_application(self, condition: BaseCondition, *,
+            declaration_event: Event | None = None, parent_event: Event | None = None,
+            required_condition: tuple[BaseBlock, BaseCondition] | None = None,
+    ) -> PreparedConditionApplication | Event | None:
+        if declaration_event is None:
+            declaration_event = self._declare_entity_condition(condition, parent_event=parent_event)
+            if declaration_event is None or declaration_event.canceled:
+                return declaration_event
+        return super().prepare_condition_application(condition,
+            declaration_event=declaration_event, parent_event=parent_event,
+            required_condition=required_condition)
+
+    def prepare_initial_conditions(self, conditions: Sequence[BaseCondition], *,
+                                   parent_event: Event | None = None) -> PreparedInitialConditions:
+        """Admit a complete unpublished lifecycle membership without applying it."""
+        if self.creation_committed or self.is_deployed:
+            raise ValueError("initial conditions require an uncommitted absent actor")
+        names = [condition.name for condition in conditions]
+        if len(set(names)) != len(names):
+            raise ValueError("initial conditions must have distinct membership names")
+        applications: list[PreparedConditionApplication] = []
+        try:
+            for condition in conditions:
+                prepared = self.prepare_condition_application(condition, parent_event=parent_event)
+                if not isinstance(prepared, PreparedConditionApplication):
+                    raise ValueError("initial condition application was rejected")
+                applications.append(prepared)
+        except BaseException:
+            for prepared in reversed(applications):
+                self.cancel_condition_application(prepared, "Initial composition was rejected")
+            raise
+        return PreparedInitialConditions(self.uuid, tuple(applications))
+
+    def commit_initial_conditions(self, prepared: PreparedInitialConditions) -> None:
+        if prepared.owner_uuid != self.uuid:
+            raise ValueError("initial conditions belong to another actor")
+        if not prepared.committed:
+            for application in prepared.applications:
+                self.commit_condition_application(application)
+            prepared.committed = True
+
+    def publish_initial_conditions(self, prepared: PreparedInitialConditions) -> None:
+        if prepared.owner_uuid != self.uuid or not prepared.committed:
+            raise ValueError("initial conditions must be committed before publication")
+        if not prepared.published:
+            prepared.published = True
+            errors: list[BaseException] = []
+            for application in prepared.applications:
+                try:
+                    self.publish_condition_application(application)
+                except BaseException as error:
+                    errors.append(error)
+            if errors:
+                raise BaseExceptionGroup("Committed initial condition publication failed", errors)
 
     def advance_duration_condition(self, condition_name: str, skip_save_throw: bool = False) -> bool:
         """Progress a condition's duration and remove if expired.
@@ -1746,9 +2202,10 @@ class Entity(BaseBlock):
                 self.remove_condition(condition_name)
                 return True
 
-        expired = condition.progress()
+        expired = condition.progress_for_interval(self.turn_duration_interval)
         if expired:
-            self.remove_condition(condition_name, expire=True)
+            self.remove_condition(condition_name, expire=True,
+                terminal_release=condition.terminal_release_for_expiration())
         return expired
 
     def reduce_condition_level(
@@ -2322,6 +2779,8 @@ class Entity(BaseBlock):
         condition_names = list(self.active_conditions.keys())
         for condition_name in condition_names:
             self.advance_duration_condition(condition_name)
+            if self._runtime_agency_revoked:
+                return event.phase_to(EventPhase.COMPLETION)
 
         for item in self.equipment.get_all_equipped_items():
             for cond_name in list(item.active_conditions.keys()):
@@ -2815,7 +3274,7 @@ class Entity(BaseBlock):
             override_ability,
             natural_weapon=natural_weapon,
         )
-        size_dice = self.get_size_damage_dice()
+        size_dice = self.get_size_damage_dice(weapon_slot, natural_weapon=natural_weapon)
         if size_dice > 0 and profiles:
             profiles.append(DamageRollProfile(
                 dice_count=size_dice,
@@ -2863,11 +3322,15 @@ class Entity(BaseBlock):
 
         return general + specific
 
-    def get_size_damage_dice(self) -> int:
-        """Return extra d4 weapon damage dice from creature size."""
+    def get_size_damage_dice(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN,
+                             *, natural_weapon: Optional[NaturalWeaponSpec] = None) -> int:
+        """Return size dice, excluding anatomy already included in authored dice."""
         size_order = [Size.TINY, Size.SMALL, Size.MEDIUM, Size.LARGE, Size.HUGE, Size.GARGANTUAN]
         idx = size_order.index(self.size)
-        return max(0, idx - 2)
+        weapon = self.equipment.get_weapon(weapon_slot) if natural_weapon is None else None
+        base_idx = (size_order.index(self.structural_base_size)
+                    if weapon is not None and weapon.is_body_attack else 2)
+        return max(0, idx - base_idx)
 
     def get_damages(self, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, target_entity_uuid: Optional[UUID] = None, override_ability: Optional[AbilityName] = None, natural_weapon: Optional[NaturalWeaponSpec] = None) -> List[Damage]:
         """Build weapon damage packets for this entity.
@@ -2885,7 +3348,7 @@ class Entity(BaseBlock):
             self.set_target_entity(target_entity_uuid)
             should_clear_target = True
         damages = self.equipment.get_damages(weapon_slot, self.ability_scores, override_ability=override_ability, natural_weapon=natural_weapon)
-        size_dice = self.get_size_damage_dice()
+        size_dice = self.get_size_damage_dice(weapon_slot, natural_weapon=natural_weapon)
         if size_dice > 0 and damages:
             primary_type = damages[0].damage_type
             size_damage_bonus = ModifiableValue.create(
@@ -3304,7 +3767,15 @@ class Entity(BaseBlock):
 
     def can_take_actions(self) -> bool:
         """Return whether neutral condition transforms permit ordinary actions."""
-        return self.action_economy.action_permission.normalized_score > 0
+        return (self.has_runtime_agency()
+                and self.action_economy.action_permission.normalized_score > 0)
+
+    def has_runtime_agency(self) -> bool:
+        return not self._runtime_agency_revoked and Entity.get(self.uuid) is self
+
+    def revoke_runtime_agency(self) -> None:
+        """End action/reaction authority immediately while terminal cleanup unwinds."""
+        self._runtime_agency_revoked = True
 
     def allows_action_channels(self, channels: AbstractSet[ActionEconomyCostType]) -> bool:
         return self.action_economy.allows_action_channels(channels)
@@ -3345,7 +3816,7 @@ class Entity(BaseBlock):
 
     def get_weapon_physical_access(self, slot: WeaponSlot) -> PhysicalAccess:
         weapon = self.equipment.get_weapon(slot)
-        if weapon is None:
+        if weapon is None or weapon.is_body_attack:
             return PhysicalAccess.NATURAL
         if self.get_weapon_range(slot).type is RangeType.RANGE:
             return PhysicalAccess.PROJECTILE
@@ -4681,7 +5152,9 @@ class Entity(BaseBlock):
         Args:
             name: Template name to remove.
         """
-        self.registered_actions = [a for a in self.registered_actions if a.name != name]
+        for action in tuple(self.registered_actions):
+            if action.name == name:
+                self.unregister_action_by_uuid(action.uuid)
 
     def unregister_action_by_uuid(self, action_uuid: UUID) -> bool:
         """Remove exactly one action template by runtime identity."""

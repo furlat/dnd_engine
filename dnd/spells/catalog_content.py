@@ -40,6 +40,7 @@ import dnd.spells.transmutation as transmutation
 import dnd.spells.walls as walls
 import dnd.spells.wall_fields as wall_fields
 import dnd.spells.wall_constructions as wall_constructions
+import dnd.spells.summoning as summoning
 from dnd.spells.content_metadata import (
     SpellCatalogAoeShapeType,
     SpellCatalogAoeSpec,
@@ -175,6 +176,14 @@ def _catalog(
 
 
 SPELL_CONTENT_IDENTITY_SPECS: tuple[SpellContentIdentitySpec, ...] = (
+    SpellContentIdentitySpec("Conjure Animals", summoning.ConjureAnimals, SRD_SPELL_PACK_ID,
+        "spell.conjure_animals", "conjuration", 3, 127, 2300,
+        adaptation_notes="One chosen canonical beast per cast; cumulative stronger forms on upcast; native autonomous ally turns."),
+    SpellContentIdentitySpec("Conjure Fey", summoning.ConjureFey, SRD_SPELL_PACK_ID,
+        "spell.conjure_fey", "conjuration", 6, 128, 2310,
+        adaptation_notes="One available beast-shaped Fey spirit; one-action cast; concentration controls allegiance and loss makes it hostile for its remaining hour."),
+    SpellContentIdentitySpec("Conjure Fiend", summoning.ConjureFiend, NEURODRAGON_SPELL_PACK_ID,
+        "spell.conjure_fiend", "conjuration", 3, None, 2320),
     SpellContentIdentitySpec("Produce Flame", conjuration.ProduceFlame, SRD_SPELL_PACK_ID, "spell.produce_flame", "conjuration", 0, 171, 2200),
     SpellContentIdentitySpec("Shillelagh", transmutation.Shillelagh, SRD_SPELL_PACK_ID, "spell.shillelagh", "transmutation", 0, 179, 2210),
     SpellContentIdentitySpec("Longstrider", transmutation.Longstrider, SRD_SPELL_PACK_ID, "spell.longstrider", "transmutation", 1, 159, 2220),
@@ -326,6 +335,9 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     tuple[type[SpellAction], SpellCatalogMetadata],
     ...,
 ] = (
+    (summoning.ConjureAnimals, _catalog('conjure_animals', 'Summon one beast; higher slots unlock stronger creatures.', 'position', 'ranged', 60, 'none', concentration=True, classes=('druid', 'ranger'))),
+    (summoning.ConjureFey, _catalog('conjure_fey', 'Summon a beast-shaped Fey spirit; lost concentration leaves it hostile for the remaining duration.', 'position', 'ranged', 60, 'none', concentration=True, classes=('druid', 'warlock'))),
+    (summoning.ConjureFiend, _catalog('conjure_fiend', 'Summon one fiend while concentration holds; higher slots unlock stronger forms.', 'position', 'ranged', 60, 'none', concentration=True, classes=('warlock', 'wizard'))),
     (conjuration.ProduceFlame, _catalog('produce_flame', 'Hand flame; hurl30ft for1d8 fire, bright/dim10ft for10minutes.', 'entity', 'ranged', 30, 'single_projectile', projectile='bolt', damage=(DamageType.FIRE,), attack_roll=True, classes=('druid',))),
     (transmutation.Shillelagh, _catalog('shillelagh', 'Bonus action: held club/staff becomes magical,d8 for1minute; optional casting ability.', 'self', 'self', 0, 'self', classes=('druid',))),
     (transmutation.Longstrider, _catalog('longstrider', 'Touch: speed+10ft for1hour; upcast adds recipients.', 'multi_entity', 'touch', 5, 'touch', multi_target=_multi_target(1, 1, False), classes=('bard','druid','ranger','wizard'))),

@@ -55,6 +55,7 @@ from dnd.types.spatial_effects import (
 from dnd.types.materials import TileSurface
 from dnd.types.traps import TrapState
 from dnd.types.physical_access import PhysicalAccess, contact_passage_allows
+from dnd.types.summoning import TerminalOwnerRelease
 from dnd.types.world_placement import (
     BoundaryStructure,
     WorldObjectPlacement,
@@ -80,6 +81,15 @@ class PreparedObjectPlacement:
     obj: BaseBlock
     placement: WorldObjectPlacement
     effect: Optional[Event]
+
+
+@dataclass
+class CommittedObjectRemovals:
+    """Exact object completions retained after the placements have gone."""
+
+    effects: tuple[Event, ...]
+    light_changes: tuple[SpatialChangeEvent, ...] = ()
+    published: bool = False
 
 
 class SpatialConditionOwner(Protocol):
@@ -1403,11 +1413,16 @@ class GridMap:
         parent_event: Optional[UUID] = None,
     ) -> Optional[SpatialChangeEvent]:
         """Publish one committed complete traversal tuple for a Tile."""
+        return self._fire_committed_spatial_event(self.snapshot_tile_mechanics_change(
+            position, source_entity_uuid=source_entity_uuid, parent_event=parent_event))
+
+    def snapshot_tile_mechanics_change(self, position: Tuple[int, int], *,
+            source_entity_uuid: UUID, parent_event: Optional[UUID] = None) -> SpatialChangeEvent:
+        """Retain the exact traversal after-value before observer publication."""
         tile = self._tiles.get(position)
         if tile is None:
             raise ValueError(f"tile mechanics position is absent: {position}")
-        return self._fire_committed_spatial_event(
-            SpatialChangeEvent.tile_changed(
+        return SpatialChangeEvent.tile_changed(
                 position,
                 tile_walking_cost=tile.get_movement_cost(MovementMode.WALKING),
                 tile_flying_cost=tile.get_movement_cost(MovementMode.FLYING),
@@ -1416,7 +1431,6 @@ class GridMap:
                 source_entity_uuid=source_entity_uuid,
                 parent_event=parent_event,
                 senses_hint=SensesUpdateHint(requires_paths=True),
-            ),
         )
 
     def validate_spatial_condition_positions(
@@ -2293,6 +2307,7 @@ class GridMap:
         parent_event: Optional[UUID] = None,
         previous_occupancy_layer: Optional[OccupancyLayer] = None,
         occupancy_layer: Optional[OccupancyLayer] = None,
+        terminal_release: TerminalOwnerRelease | None = None,
     ) -> None:
         """Publish LEFT then ENTERED for one already committed membership."""
         block = BaseBlock.get(entity_uuid)
@@ -2323,6 +2338,7 @@ class GridMap:
                     parent_event=parent_event,
                     previous_occupancy_layer=previous_occupancy_layer,
                     occupancy_layer=occupancy_layer,
+                    terminal_release=terminal_release,
                 )
             )
         if new_position is not None:
@@ -2866,6 +2882,7 @@ class GridMap:
         boundary_direction: Optional[CardinalDirection] = None,
         base_height_steps: Optional[int] = None,
         orientation: Optional[CardinalDirection] = None,
+        terminal_release: TerminalOwnerRelease | None = None,
     ) -> Optional[PreparedObjectPlacement]:
         """Admit the first placement without detaching its current container."""
         try:
@@ -2880,6 +2897,8 @@ class GridMap:
             raise ValueError("object is already placed; use move_object")
         obj = BaseBlock.get(object_uuid)
         assert obj is not None
+        if terminal_release is not None and obj.source_entity_uuid != terminal_release.entity_uuid:
+            raise ValueError("Terminal item placement belongs to another owner")
         structure = obj.get_boundary_structure()
         declaration = SpatialChangeEvent.object_placed(
             position,
@@ -2894,11 +2913,11 @@ class GridMap:
             object_boundary_structure=structure,
             **self._boundary_event_metadata(candidate, structure),
         )
-        effect = (
-            self._accept_event_effect(declaration)
-            if self._events_enabled
-            else None
-        )
+        effect = None
+        if self._events_enabled:
+            effect = (declaration.model_copy(update={"phase": EventPhase.EFFECT})
+                if terminal_release is not None and terminal_release.mandatory
+                else self._accept_event_effect(declaration))
         if self._events_enabled and effect is None:
             return None
         prepared = PreparedObjectPlacement(obj, candidate, effect)
@@ -2911,7 +2930,9 @@ class GridMap:
     @staticmethod
     def cancel_object_placement(prepared: PreparedObjectPlacement, reason: str) -> None:
         if prepared.effect is not None and not prepared.effect.canceled:
-            prepared.effect.cancel(status_message=reason)
+            canceled = prepared.effect.cancel(status_message=reason)
+            if EventQueue.get_event_by_uuid(prepared.effect.uuid) is not None:
+                EventQueue.register(canceled)
 
     def validate_prepared_object_placement(self, prepared: PreparedObjectPlacement) -> bool:
         """Recheck admitted geometry before its caller changes membership."""
@@ -3233,7 +3254,7 @@ class GridMap:
 
     def prepare_object_removals(
         self, object_uuids: Tuple[UUID, ...], parent_event: Optional[UUID] = None,
-        clear_object_location: bool = True,
+        clear_object_location: bool = True, *, terminal_release: TerminalOwnerRelease | None = None,
     ) -> Optional[List[Tuple[BaseBlock, WorldObjectPlacement, Optional[Event]]]]:
         """Admit a finite owned construction's item removals without mutation."""
         identities = list(dict.fromkeys(object_uuids))
@@ -3252,6 +3273,9 @@ class GridMap:
             if previous is None or obj is None:
                 self.cancel_object_removals(prepared, "Construction changed before removal")
                 return None
+            if terminal_release is not None and not obj.permits_terminal_retirement(terminal_release):
+                self.cancel_object_removals(prepared, "Object is not owned by this terminal release")
+                raise ValueError("Terminal object removal requires its exact native owner")
             supporting_uuid = obj.get_supporting_object_uuid()
             cause = causes.get(supporting_uuid, parent_event) if supporting_uuid is not None else parent_event
             declaration = SpatialChangeEvent.object_removed(
@@ -3259,7 +3283,11 @@ class GridMap:
                 blocks_optics=obj.blocks_optics_at_center(), blocks_propagation=obj.blocks_propagation(),
                 blocks_walking=obj.blocks_walking(), object_boundary_structure=obj.get_boundary_structure(),
                 **self._boundary_event_metadata(previous, obj.get_boundary_structure()))
-            effect = self._accept_event_effect(declaration) if self._events_enabled else None
+            effect = None
+            if self._events_enabled:
+                effect = (declaration.model_copy(update={"phase": EventPhase.EFFECT})
+                    if terminal_release is not None and terminal_release.mandatory
+                    else self._accept_event_effect(declaration))
             if self._events_enabled and effect is None:
                 self.cancel_object_removals(prepared, "Construction removal was canceled")
                 return None
@@ -3273,14 +3301,27 @@ class GridMap:
     @staticmethod
     def cancel_object_removals(prepared: List[Tuple[BaseBlock, WorldObjectPlacement, Optional[Event]]],
                                reason: str) -> None:
+        errors: list[BaseException] = []
         for _, _, effect in prepared:
             if effect is not None and not effect.canceled:
-                effect.cancel(status_message=reason)
+                try:
+                    canceled = effect.cancel(status_message=reason)
+                    if EventQueue.get_event_by_uuid(effect.uuid) is not None:
+                        EventQueue.register(canceled)
+                except BaseException as error:
+                    errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Object removal cancellation failed", errors)
 
     def commit_object_removals(self, prepared: List[Tuple[BaseBlock, WorldObjectPlacement, Optional[Event]]],
                                *, clear_object_location: bool = True,
-                               parent_event: Optional[UUID] = None) -> None:
+                               parent_event: Optional[UUID] = None,
+                               publish: bool = True) -> CommittedObjectRemovals:
         """Commit only the exact admitted placements, then publish after-values."""
+        if not publish and (clear_object_location or any(
+                connector.aperture is not None and connector.aperture.frame_uuid in
+                {obj.uuid for obj, _, _ in prepared} for connector in self.get_all_connectors())):
+            raise ValueError("Unpublished object removal requires caller-owned location cleanup and no connectors")
         if any(self._object_placements.get(obj.uuid) != previous for obj, previous, _ in prepared):
             self.cancel_object_removals(prepared, "Construction changed after admission")
             raise RuntimeError("admitted object removal changed before commit")
@@ -3288,12 +3329,43 @@ class GridMap:
             self._replace_placement_bands(previous, add=False)
             del self._object_placements[obj.uuid]
             self._bump_spatial_revisions(self._object_revision_channels(obj))
+        effects: list[Event] = []
+        light_changes: list[SpatialChangeEvent] = []
         for obj, previous, effect in reversed(prepared):
             self.remove_object_connectors(obj.uuid, effect.uuid if effect is not None else parent_event)
             if clear_object_location:
                 obj.on_grid_object_removed(previous.position, parent_event=effect)
             if effect is not None:
-                self._complete_event_effect(effect)
+                if publish:
+                    self._complete_event_effect(effect)
+                else:
+                    if isinstance(effect, SpatialChangeEvent) and effect.senses_hint is not None and effect.senses_hint.requires_light_recompute:
+                        changed = self.recompute_lights_at_positions(effect.get_affected_positions(),
+                            parent_event=effect.uuid, publish=False)
+                        light = self.snapshot_light_change(list(changed), parent_event=effect.uuid)
+                        if light is not None:
+                            light_changes.append(light)
+                    effects.append(effect.model_copy(update=self._spatial_world_after_values(effect)))
+        return CommittedObjectRemovals(tuple(effects), tuple(light_changes), published=publish)
+
+    def publish_object_removals(self, committed: CommittedObjectRemovals) -> None:
+        """Publish retained after-values without repeating any removal mechanics."""
+        if committed.published:
+            return
+        committed.published = True
+        errors: list[BaseException] = []
+        for change in committed.light_changes:
+            try:
+                self._fire_committed_spatial_event(change)
+            except BaseException as error:
+                errors.append(error)
+        for effect in committed.effects:
+            try:
+                EventQueue.register(effect.phase_to(EventPhase.COMPLETION))
+            except BaseException as error:
+                errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Committed object removal publication failed", errors)
 
     def remove_object(self, object_uuid: UUID, parent_event: Optional[UUID] = None,
                       clear_object_location: bool = True) -> bool:
@@ -4281,6 +4353,7 @@ class GridMap:
         source_uuid: UUID,
         positions: Set[Tuple[int, int]],
         parent_event: Optional[UUID] = None,
+        *, publish: bool = True,
     ) -> Set[Tuple[int, int]]:
         """Remove one source-owned illumination fact from existing Tiles."""
         changed: Set[Tuple[int, int]] = set()
@@ -4288,10 +4361,10 @@ class GridMap:
             tile = self._tiles.get(position)
             if tile is not None and tile._remove_light_modifier(source_uuid):
                 changed.add(position)
-        self._fire_light_batch_events(
-            list(changed),
-            parent_event=parent_event,
-        )
+        if publish:
+            self._fire_light_batch_events(list(changed), parent_event=parent_event)
+        elif changed:
+            self._bump_spatial_revisions({"illumination"})
         return changed
 
     def apply_optical_obscurement(
@@ -4465,13 +4538,13 @@ class GridMap:
 
     def remove_light_source(self, light_uuid: UUID,
                             parent_event: Optional[UUID] = None,
-                            publish_event: bool = True) -> None:
-        """Remove a light source and clean up tile modifiers."""
+                            publish_event: bool = True) -> Optional[SpatialChangeEvent]:
+        """Remove one source; silent owners retain its exact native light delta."""
         source = self._light_sources.pop(light_uuid, None)
         if source is None:
             return
 
-        self._remove_light_source_tiles(
+        changed = self._remove_light_source_tiles(
             source,
             parent_event=parent_event,
             publish_event=publish_event,
@@ -4481,6 +4554,8 @@ class GridMap:
             anchor = BaseBlock.get(source.anchor_uuid)
             if anchor:
                 anchor.detach_light_source(light_uuid)
+
+        return self.snapshot_light_change(changed, parent_event=parent_event) if not publish_event else None
 
     def cleanup_block_light_sources(
         self,
@@ -4667,7 +4742,7 @@ class GridMap:
 
     def _remove_light_source_tiles(self, source: LightSourceData,
                                    parent_event: Optional[UUID] = None,
-                                   publish_event: bool = True) -> None:
+                                   publish_event: bool = True) -> List[Tuple[int, int]]:
         """Remove illumination from all tiles affected by this light source.
         Suppresses per-tile events and fires a single senses update after."""
         changed_positions: List[Tuple[int, int]] = []
@@ -4681,6 +4756,8 @@ class GridMap:
             self._fire_light_batch_events(changed_positions, parent_event=parent_event)
         elif changed_positions:
             self._bump_spatial_revisions({"illumination"})
+
+        return changed_positions
 
     def _fire_light_batch_events(
         self,
@@ -4699,7 +4776,15 @@ class GridMap:
         if not changed_positions:
             return
         self._bump_spatial_revisions({"illumination"})
+        event = self.snapshot_light_change(changed_positions, parent_event=parent_event)
+        if event is not None:
+            self._fire_committed_spatial_event(event)
 
+    def snapshot_light_change(self, changed_positions: List[Tuple[int, int]], *,
+                              parent_event: Optional[UUID] = None) -> Optional[SpatialChangeEvent]:
+        """Retain an illumination delta after commitment without running observers."""
+        if not changed_positions:
+            return None
         batch_hint = SensesUpdateHint(
             light_changed_positions=set(changed_positions),
         )
@@ -4712,7 +4797,7 @@ class GridMap:
             for position in sorted(set(changed_positions))
             if (tile := self._tiles.get(position)) is not None
         }
-        event = SpatialChangeEvent.light_changed(
+        return SpatialChangeEvent.light_changed(
             representative_position,
             representative_tile.uuid,
             senses_hint=batch_hint,
@@ -4720,7 +4805,6 @@ class GridMap:
             new_light_level=representative_tile.resolved_light_level.value,
             light_level_map=level_map,
         )
-        self._fire_committed_spatial_event(event)
 
     def _settle_object_presence_before_completion(
         self,
@@ -4808,8 +4892,10 @@ class GridMap:
 
     def recompute_lights_at_positions(
         self, positions: Set[Tuple[int, int]], parent_event: Optional[UUID] = None,
-    ) -> None:
+        *, publish: bool = True,
+    ) -> set[Tuple[int, int]]:
         """Recompute each in-range source once, applying only illumination deltas."""
+        all_changed: set[Tuple[int, int]] = set()
         for source in self._light_sources.values():
             if not self._is_light_effectively_active(source):
                 continue
@@ -4851,7 +4937,12 @@ class GridMap:
                         changed_positions.append(pos)
 
             source.affected_tiles = new_affected
-            self._fire_light_batch_events(changed_positions, parent_event=parent_event)
+            all_changed.update(changed_positions)
+            if publish:
+                self._fire_light_batch_events(changed_positions, parent_event=parent_event)
+            elif changed_positions:
+                self._bump_spatial_revisions({"illumination"})
+        return all_changed
 
     def get_positions_near_entities(
         self, entity_positions: Set[Tuple[int, int]], radius: int

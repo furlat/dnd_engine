@@ -25,7 +25,7 @@ from dnd.core.events import (
     DeathEvent,
     DeathSaveEvent,
     EncounterEvent,
-    EntityCreatedEvent,
+    EntityCreatedEvent, EntityFactionChangedEvent,
     Event,
     EventPhase,
     EventQueue,
@@ -637,7 +637,7 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
             copied = event.model_copy(update={**common, "shover_athletics": None})
         case AreaReachEvent() | MovementEvent() | JumpEvent() | TraverseConnectorEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent():
             copied = event.model_copy(update=common)
-        case SensoryUpdateEvent() | LifeStateChangeEvent() | DeathEvent() | HealEvent() | TemporaryHitPointsChangedEvent() | ConditionStateChangedEvent():
+        case EntityFactionChangedEvent() | SensoryUpdateEvent() | LifeStateChangeEvent() | DeathEvent() | HealEvent() | TemporaryHitPointsChangedEvent() | ConditionStateChangedEvent():
             copied = event.model_copy(update=common)
         case DeathSaveEvent() | ReviveEvent() | InstantDeathEvent() | TurnEvent() | RoundEvent() | EncounterEvent():
             copied = event.model_copy(update=common)
@@ -671,7 +671,7 @@ def _actor_participants(event: Event) -> tuple[UUID, ...]:
             # light_changed() stores the affected tile UUID in entity_uuid.
             # Its sensory children provide observer-specific light after-values.
             return ()
-        case LifeStateChangeEvent() | DeathEvent() | ReviveEvent() | InstantDeathEvent() | TemporaryHitPointsChangedEvent():
+        case EntityFactionChangedEvent() | LifeStateChangeEvent() | DeathEvent() | ReviveEvent() | InstantDeathEvent() | TemporaryHitPointsChangedEvent():
             return (event.entity_uuid,)
         case SpatialChangeEvent(change_type=(
             SpatialChangeType.PERCEIVABILITY_CHANGED | SpatialChangeType.ENTITY_ENTERED

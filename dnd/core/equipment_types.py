@@ -4,6 +4,13 @@ from enum import Enum
 from typing import TypeAlias, Union
 
 
+class WeaponUsage(str, Enum):
+    """Whether a weapon is held gear or an explicitly intrinsic body attack."""
+
+    HELD = "held"
+    BODY = "body"
+
+
 class WeaponKind(str, Enum):
     """Base weapon form, independent of recipe, possession and visual identity."""
 

@@ -14261,5 +14261,516 @@
       "kind": "item-power"
     },
     "tail_duration_ms": 1200
+  },
+  {
+    "id": "summoning-animals-wolf",
+    "title": "Wolf \u00b7 native summon, fight and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "description": "Native indexed summon and movement, primary/secondary attacks and available Multiattack, followed by native controlled dismissal. Ordinary cast-body/departure cues may remain disclosed gaps; no new summon VFX is manufactured.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "wolf",
+      "family": "animals",
+      "slot": 3,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-jaguar",
+    "title": "Jaguar \u00b7 native summon, fight and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "description": "Native indexed summon and movement, primary/secondary attacks and available Multiattack, followed by native controlled dismissal. Ordinary cast-body/departure cues may remain disclosed gaps; no new summon VFX is manufactured.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "jaguar",
+      "family": "animals",
+      "slot": 3,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-brown-bear",
+    "title": "Brown Bear \u00b7 native summon, fight and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "description": "Native indexed summon and movement, primary/secondary attacks and available Multiattack, followed by native controlled dismissal. Ordinary cast-body/departure cues may remain disclosed gaps; no new summon VFX is manufactured.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "brown_bear",
+      "family": "animals",
+      "slot": 4,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-raptor",
+    "title": "Raptor \u00b7 native summon, bite, tail and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "description": "Native indexed summon and movement, primary/secondary attacks and available Multiattack, followed by native controlled dismissal. Ordinary cast-body/departure cues may remain disclosed gaps; no new summon VFX is manufactured.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "raptor",
+      "family": "animals",
+      "slot": 5,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-fiend-dretch",
+    "title": "Dretch \u00b7 native summon, fight and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "description": "Native indexed summon and movement, primary/secondary attacks and available Multiattack, followed by native controlled dismissal. Ordinary cast-body/departure cues may remain disclosed gaps; no new summon VFX is manufactured.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "dretch",
+      "family": "fiend",
+      "slot": 3,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-fiend-huntsman-wing-devil",
+    "title": "Huntsman Wing Devil \u00b7 native summon, fight and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "description": "Native indexed summon and movement, primary/secondary attacks and available Multiattack, followed by native controlled dismissal. Ordinary cast-body/departure cues may remain disclosed gaps; no new summon VFX is manufactured.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "huntsman_wing_devil",
+      "family": "fiend",
+      "slot": 5,
+      "flight": true,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-fey-jaguar",
+    "title": "Fey Jaguar \u00b7 native summon, fight and control loss",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "description": "Native indexed summon and movement, primary/secondary attacks and available Multiattack, followed by real concentration drop and a hostile attack on its former caster. The same Fey body and identity remain; its lifetime is not shortened.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "jaguar",
+      "family": "fey",
+      "slot": 6,
+      "flight": false,
+      "release_control": true
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-stag",
+    "title": "Stag \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "stag",
+      "family": "animals",
+      "slot": 3,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-bison",
+    "title": "Bison \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "bison",
+      "family": "animals",
+      "slot": 3,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-ostrich",
+    "title": "Ostrich \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "ostrich",
+      "family": "animals",
+      "slot": 3,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-lion",
+    "title": "Lion \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "lion",
+      "family": "animals",
+      "slot": 4,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-tiger",
+    "title": "Tiger \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "tiger",
+      "family": "animals",
+      "slot": 4,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-polar-bear",
+    "title": "Polar Bear \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "polar_bear",
+      "family": "animals",
+      "slot": 5,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-rhinoceros",
+    "title": "Rhinoceros \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "rhinoceros",
+      "family": "animals",
+      "slot": 5,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-blue-raptor",
+    "title": "Blue Raptor \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "blue_raptor",
+      "family": "animals",
+      "slot": 5,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-stegosaurus",
+    "title": "Stegosaurus \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "stegosaurus",
+      "family": "animals",
+      "slot": 6,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-elephant",
+    "title": "Elephant \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "elephant",
+      "family": "animals",
+      "slot": 6,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-triceratops",
+    "title": "Triceratops \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "triceratops",
+      "family": "animals",
+      "slot": 7,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "summoning-animals-mammoth",
+    "title": "Mammoth \u00b7 native summon, enlarged art and dismissal",
+    "tags": [
+      "summoning",
+      "native-combat",
+      "paired-observers",
+      "four-corners",
+      "summoning-scale"
+    ],
+    "framing": "actors",
+    "description": "Native summoning, movement and available intrinsic attacks inspect the explicitly enlarged original body artwork, followed by controlled dismissal. Creature size and native placement are unchanged.",
+    "scenario": {
+      "kind": "summoning",
+      "form": "mammoth",
+      "family": "animals",
+      "slot": 8,
+      "flight": false,
+      "release_control": false
+    },
+    "tail_duration_ms": 1000
+  },
+  {
+    "id": "ordinary-wolf-injury",
+    "title": "Ordinary Wolf: wounds, prone recovery and death",
+    "tags": [
+      "summoning-injury",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "A real indexed longsword hit releases the canonical body residue. An admitted knockdown Shove applies Prone; the standard native next-turn handler spends half movement to stand. Further indexed attacks kill the ordinary body or defeat and retire the summon. No HP, lifetime, condition or damage fact is fabricated.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "summoning",
+      "form": "wolf",
+      "family": "animals",
+      "slot": 3,
+      "program": "ordinary_injury"
+    },
+    "settled_hold_ms": 1500
+  },
+  {
+    "id": "summoning-animals-wolf-defeat",
+    "title": "Summoned Wolf: wounds, prone recovery and defeat",
+    "tags": [
+      "summoning-injury",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "A real indexed longsword hit releases the canonical body residue. An admitted knockdown Shove applies Prone; the standard native next-turn handler spends half movement to stand. Further indexed attacks kill the ordinary body or defeat and retire the summon. No HP, lifetime, condition or damage fact is fabricated.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "summoning",
+      "form": "wolf",
+      "family": "animals",
+      "slot": 3,
+      "program": "injury"
+    },
+    "settled_hold_ms": 1500
+  },
+  {
+    "id": "summoning-fey-jaguar-defeat",
+    "title": "Fey Jaguar: wounds, prone recovery and defeat",
+    "tags": [
+      "summoning-injury",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "A real indexed longsword hit releases the canonical body residue. An admitted knockdown Shove applies Prone; the standard native next-turn handler spends half movement to stand. Further indexed attacks kill the ordinary body or defeat and retire the summon. No HP, lifetime, condition or damage fact is fabricated.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "summoning",
+      "form": "jaguar",
+      "family": "fey",
+      "slot": 6,
+      "program": "injury"
+    },
+    "settled_hold_ms": 1500
+  },
+  {
+    "id": "ordinary-corrosive-demon-injury",
+    "title": "Corrosive Demon: wounds, prone recovery and death",
+    "tags": [
+      "summoning-injury",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "A real indexed longsword hit releases the canonical body residue. An admitted knockdown Shove applies Prone; the standard native next-turn handler spends half movement to stand. Further indexed attacks kill the ordinary body or defeat and retire the summon. No HP, lifetime, condition or damage fact is fabricated.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "summoning",
+      "form": "corrosive_demon",
+      "family": "fiend",
+      "slot": 4,
+      "program": "ordinary_injury"
+    },
+    "settled_hold_ms": 1500
+  },
+  {
+    "id": "ordinary-dread-demon-injury",
+    "title": "Dread Demon: wounds, prone recovery and death",
+    "tags": [
+      "summoning-injury",
+      "native-combat",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "A real indexed longsword hit releases the canonical body residue. An admitted knockdown Shove applies Prone; the standard native next-turn handler spends half movement to stand. Further indexed attacks kill the ordinary body or defeat and retire the summon. No HP, lifetime, condition or damage fact is fabricated.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "summoning",
+      "form": "dread_demon",
+      "family": "fiend",
+      "slot": 4,
+      "program": "ordinary_injury"
+    },
+    "settled_hold_ms": 1500
   }
 ]

@@ -1,6 +1,7 @@
 """Concrete engine conditions and condition-related event handlers."""
 
 from types import MappingProxyType
+from dataclasses import dataclass
 
 from pydantic import Field, PrivateAttr
 from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, ConditionStateChangedEvent, Duration
@@ -9,6 +10,8 @@ from dnd.core.condition_types import (
     ConditionCategory,
     ConditionTag,
     DurationType,
+    InvoluntarySustainLoss,
+    SustainLossCause,
 )
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -52,7 +55,7 @@ from dnd.core.modifiers import (
     ResistanceStatus,
 )
 from dnd.blocks.skills import all_skills, skills_requiring_sight, skills_requiring_hearing, skills_social
-from dnd.core.base_block import LightLevel
+from dnd.core.base_block import CommittedConditionRemovals, LightLevel, PreparedConditionRemovals
 from dnd.core.geometry import bresenham_line
 from dnd.core.gridmap import get_map
 from dnd.core.ground import ground_neighbors
@@ -80,6 +83,7 @@ from dnd.core.base_object import BaseObject
 from dnd.core.combat_log import CombatLogEntry, CombatLogEntryType, SkillCheckLogData, DiceRollDisplay, ModifierBreakdown
 from dnd.creature_transforms import (
     apply_incapacitated_transform,
+    remove_modifier_ownership,
     apply_opportunity_attack_immunity_transform,
     apply_paralyzed_transform,
     apply_prone_geometry_transform,
@@ -1313,6 +1317,26 @@ class Invisible(BaseCondition):
     description: str = Field(default="An invisible creature is impossible to see without the aid of magic or a special sense.", description="Condition description.")
     obscures_perceivability: bool = Field(default=True, description="Removing invisibility may reveal the target.")
 
+    _invisibility_changed: bool = PrivateAttr(default=False)
+
+    def _commit_application(self, effect_event: Event) -> None:
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            self._invisibility_changed = target.set_invisible(True, publish=False)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if self.applied and target is not None:
+            self._invisibility_changed = target.set_invisible(
+                _has_surviving_invisibility(target, self.uuid), publish=False,
+            ) or self._invisibility_changed
+
+    def on_membership_changed(self, event: Event) -> None:
+        changed, self._invisibility_changed = self._invisibility_changed, False
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if changed and target is not None:
+            target._notify_perceivability_changed(parent_event=event.uuid)
+
     def format_application_log(self, target_name: str) -> str:
         """Render the invisibility-specific application message."""
         return f"{{cyan:{target_name}}} becomes **invisible**"
@@ -1325,27 +1349,18 @@ class Invisible(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
-            target_entity.set_invisible(True, parent_event=declaration_event.uuid)
             self_contextual_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=unseen_attacker_advantage))
             outs.append((target_entity.equipment.attack_bonus.uuid,self_contextual_uuid))
-            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Invisible self to others advantage modifier to {target_entity.name}")
             to_target_contextual_uuid = target_entity.equipment.ac_bonus.to_target_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Invisible",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=unseen_target_disadvantage))
             outs.append((target_entity.equipment.ac_bonus.uuid,to_target_contextual_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Invisible to target disadvantage modifier to {target_entity.name}")
+            try:
+                effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Invisible to target disadvantage modifier to {target_entity.name}")
+            except BaseException:
+                remove_modifier_ownership(outs)
+                raise
             return outs, [], [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Derive invisibility from the condition sources that survive."""
-        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.set_invisible(
-                _has_surviving_invisibility(target, self.uuid),
-                parent_event=event.uuid if event else None,
-            )
-        return super()._remove(event)
-
 
 def unseen_attacker_advantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
     """Return advantage when an attacker is absent from the defender's senses.
@@ -1757,6 +1772,15 @@ class ConcentrationSlot(BaseObject):
     linked_entries: List[Tuple[UUID, UUID]] = Field(default_factory=list)
 
 
+@dataclass
+class PreparedConcentrationTransfer:
+    previous: "Concentrating | None"
+    removals: list[tuple[BaseBlock | None, BaseCondition, Event, bool]]
+    retained_slots: dict[UUID, ConcentrationSlot]
+    retained_links: list[tuple[UUID, UUID]]
+    committed_removals: CommittedConditionRemovals | None = None
+
+
 @_core_condition_identity(
     content_id="condition.concentrating",
     display_name="Concentrating",
@@ -1796,6 +1820,22 @@ class Concentrating(BaseCondition):
     concentration_slots: Dict[UUID, ConcentrationSlot] = Field(default_factory=dict)
 
     _active_slot_uuid: Optional[UUID] = PrivateAttr(default=None)
+    _prepared_transfer: PreparedConcentrationTransfer | None = PrivateAttr(default=None)
+
+    def prepares_own_replacement(self) -> bool:
+        return True
+
+    def sustained_links_for_slot(self, slot_uuid: UUID | None) -> tuple[tuple[UUID, UUID], ...]:
+        if slot_uuid is None:
+            return tuple(self.linked_conditions)
+        slot = self.concentration_slots.get(slot_uuid)
+        return tuple(slot.linked_entries) if slot is not None else ()
+
+    def release_sustain_slot(self, slot_uuid: UUID | None, *, parent_event: Event) -> bool:
+        if slot_uuid is not None:
+            return self.drop_slot(slot_uuid, parent_event=parent_event)
+        owner = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        return owner.remove_condition_by_uuid(self.uuid, parent_event=parent_event) if owner else False
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1844,6 +1884,10 @@ class Concentrating(BaseCondition):
         If this is the last slot, removes the entire Concentrating condition.
         Otherwise, removes just this slot's conditions and updates state.
         """
+        with BaseBlock.condition_removal_scope():
+            return self._drop_slot(slot_uuid, parent_event=parent_event)
+
+    def _drop_slot(self, slot_uuid: UUID, *, parent_event: Event | None) -> bool:
         if slot_uuid not in self.concentration_slots:
             return False
 
@@ -1862,35 +1906,39 @@ class Concentrating(BaseCondition):
             Tuple[Optional[BaseBlock], BaseCondition, Event, bool]
         ] = []
         visited: Set[UUID] = {self.uuid}
-        for block_uuid, condition_uuid in tuple(slot.linked_entries):
-            child = BaseCondition.get(condition_uuid)
-            if not isinstance(child, BaseCondition) or not child.applied:
-                continue
-            block = BaseBlock.get(block_uuid)
-            owner: Optional[BaseBlock]
-            if (
-                isinstance(block, BaseBlock)
-                and block.active_conditions_by_uuid.get(condition_uuid) is child
-            ):
-                owner = block
-            elif child.is_active_spatial_condition():
-                owner = None
-            else:
-                continue
-            canceled = BaseBlock._prepare_condition_removal_tree(
-                child,
-                condition_owner=owner,
-                expire=False,
-                parent_event=parent_event,
-                prepared=prepared,
-                visited=visited,
-            )
-            if canceled is not None:
-                BaseBlock._cancel_prepared_condition_removals(
-                    prepared,
-                    canceled,
+        try:
+            for block_uuid, condition_uuid in tuple(slot.linked_entries):
+                child = BaseCondition.get(condition_uuid)
+                if not isinstance(child, BaseCondition) or not child.applied:
+                    continue
+                block = BaseBlock.get(block_uuid)
+                owner: Optional[BaseBlock]
+                if (
+                    isinstance(block, BaseBlock)
+                    and block.active_conditions_by_uuid.get(condition_uuid) is child
+                ):
+                    owner = block
+                elif child.is_active_spatial_condition():
+                    owner = None
+                else:
+                    continue
+                canceled = BaseBlock._prepare_condition_removal_tree(
+                    child,
+                    condition_owner=owner,
+                    expire=False,
+                    parent_event=parent_event,
+                    prepared=prepared,
+                    visited=visited,
                 )
-                return False
+                if canceled is not None:
+                    BaseBlock._cancel_prepared_condition_removals(
+                        prepared,
+                        canceled,
+                    )
+                    return False
+        except BaseException:
+            BaseBlock.cancel_owned_condition_removals(PreparedConditionRemovals(prepared), "Concentration slot removal admission raised")
+            raise
 
         BaseBlock._commit_prepared_condition_removals(prepared)
         for pair in list(slot.linked_entries):
@@ -1912,6 +1960,8 @@ class Concentrating(BaseCondition):
 
     def add_linked_condition(self, target_block_uuid: UUID, condition_uuid: UUID) -> None:
         """Override to also route into the active slot."""
+        if (target_block_uuid, condition_uuid) in self.linked_conditions:
+            return
         super().add_linked_condition(target_block_uuid, condition_uuid)
 
         if self._active_slot_uuid and self._active_slot_uuid in self.concentration_slots:
@@ -1979,8 +2029,6 @@ class Concentrating(BaseCondition):
         if not isinstance(target, (Entity, BaseItem)):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
-        handler_uuids: List[UUID] = []
-
         existing = target.active_conditions.get("Concentrating")
         prepared: List[Tuple[Optional[BaseBlock], BaseCondition, Event, bool]] = []
         retained_slots: Dict[UUID, ConcentrationSlot] = {}
@@ -1999,6 +2047,9 @@ class Concentrating(BaseCondition):
                 if key in evicted_slots for link in slot.linked_entries))
             retained_links = [link for link in existing.linked_conditions if link not in removed_links]
 
+            self._prepared_transfer = PreparedConcentrationTransfer(
+                existing, prepared, retained_slots, retained_links,
+            )
             # Ownership transfer releases the old root but preserves retained children.
             accepted = BaseBlock._accepted_condition_removals.get()
             entry = accepted.get(existing.uuid) if accepted is not None else None
@@ -2008,7 +2059,11 @@ class Concentrating(BaseCondition):
                 if removal.canceled:
                     return [], [], [], [], declaration_event.cancel(
                         status_message="Existing concentration could not be replaced")
-                removal_effect = existing.publish_removal_effect(removal)
+                try:
+                    removal_effect = existing.publish_removal_effect(removal)
+                except BaseException:
+                    existing.cancel_prepared_removal("Concentration replacement admission raised")
+                    raise
                 if removal_effect.canceled:
                     return [], [], [], [], declaration_event.cancel(
                         status_message="Existing concentration could not be replaced")
@@ -2028,10 +2083,38 @@ class Concentrating(BaseCondition):
                     parent_event=entry[2], prepared=prepared, visited=visited,
                 )
                 if canceled is not None:
-                    BaseBlock._cancel_prepared_condition_removals(prepared, canceled)
                     return [], [], [], [], declaration_event.cancel(
                         status_message="Existing concentration could not be released")
 
+        self._prepared_transfer = PreparedConcentrationTransfer(
+            existing if isinstance(existing, Concentrating) else None,
+            prepared, retained_slots, retained_links,
+        )
+        if not self.validate_prepared_removal():
+            return [], [], [], [], declaration_event.cancel(
+                status_message="Condition removal destinations conflict or changed")
+        effect_event = declaration_event.phase_to(
+            EventPhase.EFFECT, update={"condition": self},
+            status_message=f"{target.name} is concentrating on {self.spell_name}",
+        )
+        return [], [], [], [], effect_event
+
+    def prepared_removal_occupancies(self) -> tuple[tuple[int, int], ...]:
+        transfer = self._prepared_transfer
+        if transfer is None:
+            return ()
+        return tuple(dict.fromkeys(position for _, condition, _, _ in transfer.removals
+                                   for position in condition.prepared_removal_occupancies()))
+
+    def validate_prepared_removal(self) -> bool:
+        transfer = self._prepared_transfer
+        return transfer is None or BaseBlock.validate_prepared_condition_removals(
+            [row for row in transfer.removals if row[1] is not transfer.previous])
+
+    def _install_concentration_handler(self) -> None:
+        assert self.target_entity_uuid is not None
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        handler_uuids: list[UUID] = []
         def concentration_break_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
             """On damage, make CON save or lose concentration. On death, auto-break."""
 
@@ -2050,14 +2133,22 @@ class Concentrating(BaseCondition):
                 spell_name = "spell"
                 if conc is not None and isinstance(conc, Concentrating):
                     spell_name = conc.spell_name
-                entity.remove_condition("Concentrating", parent_event=event)
+                entity.release_involuntary_sustain(InvoluntarySustainLoss(
+                    cause=SustainLossCause.DEATH,
+                    sustaining_condition_uuid=self.uuid,
+                    parent_event_uuid=event.uuid,
+                ))
                 return None
 
             if not isinstance(event, DamageAppliedEvent):
                 return None
 
             if event.resulting_normal_hp <= 0:
-                entity.remove_condition("Concentrating", parent_event=event)
+                entity.release_involuntary_sustain(InvoluntarySustainLoss(
+                    cause=SustainLossCause.ZERO_HP,
+                    sustaining_condition_uuid=self.uuid,
+                    parent_event_uuid=event.uuid,
+                ))
                 return None
 
             damage = event.applied_damage
@@ -2083,7 +2174,11 @@ class Concentrating(BaseCondition):
                 if conc is not None and isinstance(conc, Concentrating):
                     spell_name = conc.spell_name
 
-                entity.remove_condition("Concentrating", parent_event=event)
+                entity.release_involuntary_sustain(InvoluntarySustainLoss(
+                    cause=SustainLossCause.FAILED_SAVE,
+                    sustaining_condition_uuid=self.uuid,
+                    parent_event_uuid=event.uuid,
+                ))
                 return event.with_updates(
                     concentration_broken=True,
                     status_message=(
@@ -2109,21 +2204,22 @@ class Concentrating(BaseCondition):
             target.add_event_handler(handler)
             handler_uuids.append(handler.uuid)
 
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self},
-            status_message=f"{target.name} is concentrating on {self.spell_name}"
-        )
+        self.event_handlers_uuids.extend(handler_uuids)
 
-        if effect_event.canceled:
-            BaseBlock._cancel_prepared_condition_removals(prepared, effect_event)
-            return [], handler_uuids, [], [], effect_event
-        if isinstance(existing, Concentrating):
+    def _commit_application(self, effect_event: Event) -> None:
+        transfer = self._prepared_transfer
+        if transfer is None:
+            raise RuntimeError("Concentration was not prepared")
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            raise RuntimeError("Prepared concentration owner disappeared")
+        if not self.validate_prepared_removal():
+            raise RuntimeError("Prepared concentration replacement no longer matches native state")
+        existing = transfer.previous
+        retained_slots, retained_links, prepared = transfer.retained_slots, transfer.retained_links, transfer.removals
+        if existing is not None:
             for slot_uuid, slot in retained_slots.items():
-                if slot_uuid not in self.concentration_slots:
-                    self.concentration_slots[slot_uuid] = slot
-                else:
-                    self.concentration_slots[slot_uuid].linked_entries.extend(slot.linked_entries)
+                self.concentration_slots[slot_uuid] = slot
             for pair in retained_links:
                 if pair not in self.linked_conditions:
                     self.linked_conditions.append(pair)
@@ -2137,17 +2233,30 @@ class Concentrating(BaseCondition):
                     slot.remove_from_register()
             existing.concentration_slots.clear()
             self._sync_spell_name()
-            BaseBlock._commit_prepared_condition_removals(prepared)
+            transfer.committed_removals = BaseBlock._commit_prepared_condition_removals(prepared, publish=False)
+        self._install_concentration_handler()
 
-        return [], handler_uuids, [], [], effect_event
+    def publish_prepared_application(self) -> None:
+        transfer = self._prepared_transfer
+        if transfer is not None and transfer.committed_removals is not None:
+            BaseBlock._publish_committed_condition_removals(transfer.committed_removals)
+        self._prepared_transfer = None
 
     def _release_owned_runtime_state(self, *, parent_event: Optional[Event] = None) -> None:
         """Release concentration slots on committed removal and provisional rollback."""
-        for slot in self.concentration_slots.values():
-            slot.remove_from_register()
-        self.concentration_slots.clear()
-        self._active_slot_uuid = None
-        super()._release_owned_runtime_state(parent_event=parent_event)
+        transfer = self._prepared_transfer
+        self._prepared_transfer = None
+        try:
+            if transfer is not None and transfer.committed_removals is None:
+                BaseBlock.cancel_owned_condition_removals(
+                    PreparedConditionRemovals(transfer.removals), "Concentration admission canceled",
+                )
+        finally:
+            for slot in self.concentration_slots.values():
+                slot.remove_from_register()
+            self.concentration_slots.clear()
+            self._active_slot_uuid = None
+            super()._release_owned_runtime_state(parent_event=parent_event)
 
 
 class ConcentrationActionMarker(BaseCondition):
@@ -2245,6 +2354,8 @@ class Hidden(BaseCondition):
     stealth_result: int = Field(default=0, description="Stealth check result used as perception DC.")
     creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition.")
 
+    _stealth_changed: bool = PrivateAttr(default=False)
+
     def format_application_log(self, target_name: str) -> str:
         """Render the hidden-specific application message with its Stealth DC."""
         return f"{{cyan:{target_name}}} gains **Hidden** (Stealth DC {self.stealth_result})"
@@ -2259,8 +2370,6 @@ class Hidden(BaseCondition):
             outs: List[Tuple[UUID, UUID]] = []
             handler_uuids: List[UUID] = []
 
-            target_entity.set_stealth_dc(self.stealth_result, parent_event=declaration_event.uuid)
-
             adv_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
                 modifier=ContextualAdvantageModifier(
                     name="Hidden (Unseen Attacker)",
@@ -2271,11 +2380,15 @@ class Hidden(BaseCondition):
             )
             outs.append((target_entity.equipment.attack_bonus.uuid, adv_uuid))
 
-            effect_event = declaration_event.phase_to(
-                EventPhase.EFFECT,
-                update={"condition": self},
-                status_message=f"Applied Hidden to {target_entity.name} (Stealth DC {self.stealth_result})"
-            )
+            try:
+                effect_event = declaration_event.phase_to(
+                    EventPhase.EFFECT,
+                    update={"condition": self},
+                    status_message=f"Applied Hidden to {target_entity.name} (Stealth DC {self.stealth_result})"
+                )
+            except BaseException:
+                remove_modifier_ownership(outs)
+                raise
 
             parent = declaration_event.get_parent_event()
             self.creation_lineage_uuid = parent.lineage_uuid if parent else declaration_event.lineage_uuid
@@ -2308,24 +2421,23 @@ class Hidden(BaseCondition):
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Derive stealth DC from the Hidden sources that survive."""
+    def _commit_application(self, event: Event) -> None:
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.set_stealth_dc(
-                max(
-                    (
-                        condition.stealth_result
-                        for condition in target.active_conditions_by_uuid.values()
-                        if condition.uuid != self.uuid
-                        and condition.applied
-                        and isinstance(condition, Hidden)
-                    ),
-                    default=None,
-                ),
-                parent_event=event.uuid if event else None,
-            )
-        return super()._remove(event)
+        if target is not None:
+            self._stealth_changed = target.set_stealth_dc(self.stealth_result, publish=False)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if self.applied and target is not None:
+            remaining = max((condition.stealth_result for condition in target.active_conditions_by_uuid.values()
+                if condition.uuid != self.uuid and condition.applied and isinstance(condition, Hidden)), default=None)
+            self._stealth_changed = target.set_stealth_dc(remaining, publish=False) or self._stealth_changed
+
+    def on_membership_changed(self, event: Event) -> None:
+        changed, self._stealth_changed = self._stealth_changed, False
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if changed and target is not None:
+            target._notify_perceivability_changed(parent_event=event.uuid)
 
 NON_REVEALING_ACTIONS = {
     "Dash", "Dodge", "Disengage", "Hide", "Stand Up", "Drop Prone",
@@ -2411,6 +2523,26 @@ class InvisibilityEffect(BaseCondition):
     reveal_on_spell: bool = True
     reveal_on_other_actions: bool = True
 
+    _invisibility_changed: bool = PrivateAttr(default=False)
+
+    def _commit_application(self, effect_event: Event) -> None:
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            self._invisibility_changed = target.set_invisible(True, publish=False)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if self.applied and target is not None:
+            self._invisibility_changed = target.set_invisible(
+                _has_surviving_invisibility(target, self.uuid), publish=False,
+            ) or self._invisibility_changed
+
+    def on_membership_changed(self, event: Event) -> None:
+        changed, self._invisibility_changed = self._invisibility_changed, False
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if changed and target is not None:
+            target._notify_perceivability_changed(parent_event=event.uuid)
+
     def format_application_log(self, target_name: str) -> str:
         """Render the invisibility-specific application message."""
         return f"{{cyan:{target_name}}} becomes **invisible**"
@@ -2425,7 +2557,6 @@ class InvisibilityEffect(BaseCondition):
             outs: List[Tuple[UUID, UUID]] = []
             handler_uuids: List[UUID] = []
 
-            target_entity.set_invisible(True, parent_event=declaration_event.uuid)
 
             self_ctx_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
                 modifier=ContextualAdvantageModifier(
@@ -2447,11 +2578,15 @@ class InvisibilityEffect(BaseCondition):
             )
             outs.append((target_entity.equipment.ac_bonus.uuid, to_target_ctx_uuid))
 
-            effect_event = declaration_event.phase_to(
-                EventPhase.EFFECT,
-                update={"condition": self},
-                status_message=f"Applied Invisibility to {target_entity.name}"
-            )
+            try:
+                effect_event = declaration_event.phase_to(
+                    EventPhase.EFFECT,
+                    update={"condition": self},
+                    status_message=f"Applied Invisibility to {target_entity.name}"
+                )
+            except BaseException:
+                remove_modifier_ownership(outs)
+                raise
 
             parent = declaration_event.get_parent_event()
             self.creation_lineage_uuid = parent.lineage_uuid if parent else declaration_event.lineage_uuid
@@ -2475,16 +2610,6 @@ class InvisibilityEffect(BaseCondition):
             return outs, handler_uuids, [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity")
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Derive invisibility from the condition sources that survive."""
-        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.set_invisible(
-                _has_surviving_invisibility(target, self.uuid),
-                parent_event=event.uuid if event else None,
-            )
-        return super()._remove(event)
 
 
 def invisibility_reveal_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:
@@ -2530,6 +2655,26 @@ class GreaterInvisibilityEffect(BaseCondition):
     base_dc: int = Field(default=15, description="Starting DC for stealth check")
     creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition")
 
+    _invisibility_changed: bool = PrivateAttr(default=False)
+
+    def _commit_application(self, effect_event: Event) -> None:
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            self._invisibility_changed = target.set_invisible(True, publish=False)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if self.applied and target is not None:
+            self._invisibility_changed = target.set_invisible(
+                _has_surviving_invisibility(target, self.uuid), publish=False,
+            ) or self._invisibility_changed
+
+    def on_membership_changed(self, event: Event) -> None:
+        changed, self._invisibility_changed = self._invisibility_changed, False
+        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if changed and target is not None:
+            target._notify_perceivability_changed(parent_event=event.uuid)
+
     def format_application_log(self, target_name: str) -> str:
         """Render the invisibility-specific application message."""
         return f"{{cyan:{target_name}}} becomes **invisible**"
@@ -2547,7 +2692,6 @@ class GreaterInvisibilityEffect(BaseCondition):
             outs: List[Tuple[UUID, UUID]] = []
             handler_uuids: List[UUID] = []
 
-            target_entity.set_invisible(True, parent_event=declaration_event.uuid)
 
             self_ctx_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(
                 modifier=ContextualAdvantageModifier(
@@ -2569,11 +2713,15 @@ class GreaterInvisibilityEffect(BaseCondition):
             )
             outs.append((target_entity.equipment.ac_bonus.uuid, to_target_ctx_uuid))
 
-            effect_event = declaration_event.phase_to(
-                EventPhase.EFFECT,
-                update={"condition": self},
-                status_message=f"Applied Greater Invisibility to {target_entity.name}"
-            )
+            try:
+                effect_event = declaration_event.phase_to(
+                    EventPhase.EFFECT,
+                    update={"condition": self},
+                    status_message=f"Applied Greater Invisibility to {target_entity.name}"
+                )
+            except BaseException:
+                remove_modifier_ownership(outs)
+                raise
 
             parent = declaration_event.get_parent_event()
             self.creation_lineage_uuid = parent.lineage_uuid if parent else declaration_event.lineage_uuid
@@ -2597,16 +2745,6 @@ class GreaterInvisibilityEffect(BaseCondition):
             return outs, handler_uuids, [], [], effect_event
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity")
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Derive invisibility from the condition sources that survive."""
-        target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target:
-            target.set_invisible(
-                _has_surviving_invisibility(target, self.uuid),
-                parent_event=event.uuid if event else None,
-            )
-        return super()._remove(event)
 
 
 def greater_invisibility_check_processor(event: Event, source_entity_uuid: UUID) -> Optional[Event]:

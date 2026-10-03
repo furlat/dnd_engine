@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import Field, PrivateAttr
 
 from dnd.actions import Move, SpellAction, SpellEvent, commit_forced_movement, entity_action_economy_cost_evaluator
-from dnd.blocks.base_item import BaseItem, WorldItem
+from dnd.blocks.base_item import BaseItem, WorldItem, PreparedItemRetirement
 from dnd.core.action_types import PositionPathSelection, PositionSelection, SinglePositionSelection
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
@@ -28,8 +28,9 @@ from dnd.types.materials import Material
 from dnd.types.physical_access import PhysicalAccess
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation, SpatialEffectLayer, SpatialEffectOccupancyPolicy, SpatialEffectTriggerKind
+from dnd.types.summoning import TerminalOwnerRelease
 from dnd.types.world import MovementMode
-from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementKind, WorldPlacementSpec
+from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 
 
 class FrigidAirZone(WallFieldZone):
@@ -85,13 +86,26 @@ class WallSection(WorldItem):
     def _on_destroy(self, parent_event: Event | None) -> None:
         self._break_event = parent_event
 
-    def retire(self, parent_event: Event | None = None) -> None:
-        super().retire(parent_event)
+    def permits_terminal_retirement(self, release: TerminalOwnerRelease) -> bool:
+        owner = BaseCondition.get(self.wall_owner_uuid)
+        if not isinstance(owner, SolidWallZone) or self.uuid not in owner.sections or owner.parent_link is None:
+            return False
+        parent_owner, parent_uuid = owner.parent_link
+        parent = BaseCondition.get(parent_uuid)
+        return (owner.applied and owner.source_entity_uuid == release.entity_uuid
+            and parent_owner == release.entity_uuid and isinstance(parent, BaseCondition)
+            and parent.source_entity_uuid == release.entity_uuid
+            and (owner.uuid, owner.uuid) in parent.linked_conditions
+            and BaseBlock.prepared_condition_terminal_release(parent.uuid) == release)
+
+    def retire(self, parent_event: Event | None = None) -> bool:
+        accepted = super().retire(parent_event)
         if BaseBlock.get(self.uuid) is None and self._break_event is not None:
             owner = BaseCondition.get(self.wall_owner_uuid)
             if isinstance(owner, SolidWallZone) and owner.applied:
                 owner.on_section_destroyed(self.uuid, self._break_event)
             self._break_event = None
+        return accepted
 
     def disintegrate(self, parent_event: Event) -> bool:
         if self.magical_force:
@@ -123,7 +137,7 @@ class SolidWallZone(AreaCondition):
     occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
     duration: Duration = Field(default_factory=lambda: Duration(duration=100, duration_type=DurationType.ROUNDS))
     tags: set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
-    _prepared_removals: list[tuple[BaseBlock, WorldObjectPlacement, Event | None]] | None = PrivateAttr(default=None)
+    _prepared_retirements: tuple[PreparedItemRetirement, ...] = PrivateAttr(default=())
 
     _pending_sections: tuple[tuple[WallSection, tuple[int, int]], ...] = PrivateAttr(default=())
     _formation_displacements: dict[UUID, tuple[int, int]] = PrivateAttr(default_factory=dict)
@@ -199,36 +213,85 @@ class SolidWallZone(AreaCondition):
         effect = super().publish_removal_effect(declaration_event)
         if effect.canceled:
             return effect
-        if self.sections:
-            self._prepared_removals = get_map().prepare_object_removals(tuple(self.sections), effect.uuid)
-            if self._prepared_removals is None:
-                return effect.cancel(status_message="A wall section refused retirement")
+        return self._prepare_section_retirements(effect)
+
+    def prepare_removal_state(self, event: Event) -> Event:
+        event = super().prepare_removal_state(event)
+        release = (BaseBlock.prepared_condition_terminal_release(self.parent_link[1])
+            if self.parent_link is not None else None)
+        return self._prepare_section_retirements(event, release) if release is not None else event
+
+    def _prepare_section_retirements(self, effect: Event,
+            release: TerminalOwnerRelease | None = None) -> Event:
+        try:
+            for identity in self.sections:
+                item = BaseBlock.get(identity)
+                retirement = item.prepare_retirement(effect, terminal_release=release) if isinstance(item, BaseItem) else None
+                if retirement is None:
+                    self.cancel_prepared_removal("A wall section refused retirement")
+                    return effect.cancel(status_message="A wall section refused retirement")
+                self._prepared_retirements = (*self._prepared_retirements, retirement)
+        except BaseException as failure:
+            try:
+                self.cancel_prepared_removal("Wall retirement admission raised")
+            except BaseException as cleanup:
+                raise BaseExceptionGroup("Wall retirement admission and cancellation failed", [failure, cleanup]) from failure
+            raise
         return effect
 
     def cancel_prepared_removal(self, reason: str) -> None:
-        if self._prepared_removals is not None:
-            get_map().cancel_object_removals(self._prepared_removals, reason)
-            self._prepared_removals = None
+        pending = self._prepared_retirements
+        self._prepared_retirements = ()
+        errors: list[BaseException] = []
+        for prepared in pending:
+            try:
+                prepared.item.cancel_retirement(prepared)
+            except BaseException as error:
+                errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Wall retirement cancellation failed", errors)
 
     def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
-        grid = get_map()
-        identities = tuple(self.sections)
-        if self._prepared_removals is not None:
-            grid.commit_object_removals(self._prepared_removals,
-                parent_event=parent_event.uuid if parent_event is not None else None)
-            self._prepared_removals = None
-        for identity in identities:
-            item = BaseBlock.get(identity)
+        if self.sections and not self._prepared_retirements:
+            if self._removal_publication is not None:
+                raise RuntimeError("Wall retirement requires admitted section cleanup")
+            # Failed formation has no accepted removal graph. Preserve its
+            # ordinary cleanup route; prepared replacement never enters here.
+            for identity in tuple(self.sections):
+                item = BaseBlock.get(identity)
+                if isinstance(item, WallSection):
+                    item._break_event = None
+                if isinstance(item, BaseItem) and not item.retire(parent_event):
+                    raise RuntimeError("Wall section could not release its native owner")
+        for prepared in self._prepared_retirements:
+            item = prepared.item
             if isinstance(item, WallSection):
                 # Expiry/concentration removal never completes a deferred break
                 # or admits a new child after the removal graph was preflighted.
                 item._break_event = None
-            if isinstance(item, BaseItem):
-                item.retire(parent_event)
-                if BaseBlock.get(identity) is not None:
-                    raise RuntimeError("Wall section could not release its native owner")
+            item.commit_retirement(prepared, publish=False)
         self.sections.clear()
         super()._release_owned_runtime_state(parent_event=parent_event)
+        changed = get_map().recompute_lights_at_positions(set(self.affected_positions),
+            parent_event=parent_event.uuid if parent_event is not None else None, publish=False)
+        light = get_map().snapshot_light_change(list(changed),
+            parent_event=parent_event.uuid if parent_event is not None else None)
+        if light is not None and self._removal_publication is not None:
+            self._removal_publication.light_changes.append(light)
+
+    def publish_runtime_owner_removal(self, effect: Event) -> None:
+        errors: list[BaseException] = []
+        for prepared in self._prepared_retirements:
+            try:
+                prepared.item.publish_retirement(prepared)
+            except BaseException as error:
+                errors.append(error)
+        try:
+            super().publish_runtime_owner_removal(effect)
+        except BaseException as error:
+            errors.append(error)
+        if errors:
+            raise BaseExceptionGroup("Committed wall removal publication failed", errors)
 
     def progress(self) -> bool:
         if self.material == "stone" and not self.permanent and self.duration.duration == 1:
