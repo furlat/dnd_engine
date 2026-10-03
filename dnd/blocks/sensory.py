@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from collections import defaultdict
 import time
 
+from dnd.core.effect_types import ObservedChangeRef, ObservedField
 from dnd.action_timing import action_timing_enabled, record_action_timing
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
@@ -490,10 +491,30 @@ def emit_sensory_update_delta(
     if timing:
         record_action_timing("sensory_reducer.emit.delta_ms", started)
     started = time.perf_counter() if timing else 0.0
+    observed_changes: list[ObservedChangeRef] = []
+    source_index = EventQueue.get_event_index(cause_event.uuid) if cause_event is not None else None
+    if cause_event is not None and source_index is not None:
+        fields: tuple[tuple[ObservedField, tuple[UUID, ...]], ...] = (
+            ("position", (owner_uuid,) if position_changed else ()),
+            ("visibility", (owner_uuid,) if visible_added or visible_removed or seen_added else ()),
+            ("light", (owner_uuid,) if light_changed else ()),
+            ("hazards", (owner_uuid,) if hazards_changed else ()),
+            ("senses", (owner_uuid,) if passive_changed or sense_modes_changed or visual_access_changed else ()),
+            ("paths", (owner_uuid,) if paths_refresh_needed else ()),
+            ("entity_contact", (*entity_changed, *entity_removed)),
+            ("object_contact", (*object_changed, *object_removed)),
+            ("spatial_effect", (*effects_changed, *effects_removed)),
+        )
+        for field, owners in fields:
+            for identity in owners:
+                observed_changes.append(ObservedChangeRef(source_event_uuid=cause_event.uuid,
+                    source_index=source_index, resolution_ref=cause_event.resolution_ref,
+                    field=field, owner_uuid=identity))
     sensory_event = SensoryUpdateEvent(
         source_entity_uuid=owner_uuid,
         target_entity_uuid=owner_uuid,
         observer_uuid=owner_uuid,
+        observed_changes=tuple(observed_changes),
         initial=initial,
         observer_position=after.position,
         observer_position_changed=position_changed,
@@ -1435,6 +1456,12 @@ class SpatialSensesSystem:
             source_entity_uuid=observer_uuid, target_entity_uuid=observer_uuid,
             observer_uuid=observer_uuid, observer_position=senses.position,
             cause_event_uuid=event.uuid, parent_event=event.uuid,
+            observed_changes=tuple(ObservedChangeRef(source_event_uuid=event.uuid,
+                source_index=source_index, resolution_ref=event.resolution_ref,
+                field=field, owner_uuid=identity)
+                for field, identity in (("entity_contact", subject_uuid), ("paths", observer_uuid))
+                if (field == "entity_contact" and contact_changed or field == "paths" and paths_changed)
+                and (source_index := EventQueue.get_event_index(event.uuid)) is not None),
             parent_lineage=event.lineage_uuid, phase=EventPhase.COMPLETION,
             update_reason=self._reason_for(event, observer_uuid), use_register=False,
             entity_contacts_changed={subject_uuid: contact} if contact_changed and contact is not None else {},

@@ -1,15 +1,17 @@
 """Actual potion consumption survives saved player input without private leaks."""
 
+import json
 from uuid import uuid4
 
 import pytest
 
 from dnd.actions_functional import execute_by_index, get_available_actions, setup_standard_actions
-from dnd.blocks.base_item import ItemChargeConsumptionEvent
+from dnd.blocks.base_item import ItemResourceChangeEvent
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventPhase, EventQueue, TemporaryHitPointsChangedEvent
+from dnd.core.item_types import ItemResourceChange
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
@@ -87,7 +89,7 @@ def consumed_potion_history(stack_count: int) -> tuple[CapturedHistory, str]:
         assert (potion.uuid in drinker.inventory.items) == (stack_count > 1)
         assert drinker.action_economy.bonus_actions.normalized_score == 0
         consumption, = (row for _, row in EventQueue.iter_events_since(cursor)
-                        if isinstance(row, ItemChargeConsumptionEvent) and row.phase is EventPhase.COMPLETION)
+                        if isinstance(row, ItemResourceChangeEvent) and row.phase is EventPhase.COMPLETION)
         assert consumption.item_destroyed == (stack_count == 1)
         assert consumption.charges_after == (0 if stack_count == 1 else 1)
         return capture_history(before, (), observers=(
@@ -120,7 +122,22 @@ def test_consumed_potion_updates_only_recorded_owned_inventory(stack_count: int)
         assert (remaining_potion[0].stack_count, remaining_potion[0].charges) == (stack_count - 1, 1)
     charges = [node.fact for root in roots for node in root.events if isinstance(node.fact, ItemChargeFact)]
     assert len(charges) == 1 and charges[0].item_destroyed == (stack_count == 1)
+    assert charges[0].resource_change is ItemResourceChange.CONSUME
     assert EventQueue.event_cursor() == 0
+
+    legacy = project_sequence(history.views["drinker"]).model_dump(mode="json")
+    legacy["schema_version"] = 1
+    for root in legacy["lineages"]:
+        for node in root["events"]:
+            if node["fact"] and node["fact"]["kind"] == "item_charge":
+                node["fact"].pop("resource_change")
+    old_state, old_roots = decode_player_sequence(json.dumps(legacy).encode())
+    old_charges = [node.fact for root in old_roots for node in root.events
+                   if isinstance(node.fact, ItemChargeFact)]
+    assert len(old_charges) == 1 and old_charges[0].resource_change is None
+    for root in old_roots:
+        old_state = reduce_lineage(old_state, root)
+    assert old_state == after
 
     other, other_roots = received["watcher"]
     assert not any(isinstance(node.fact, ItemChargeFact) for root in other_roots for node in root.events)

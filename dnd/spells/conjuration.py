@@ -3,6 +3,7 @@
 Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web, Cloudkill,
           SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud
 """
+from dnd.types.physical_access import PhysicalAccess
 from typing import Any, Dict, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
@@ -30,7 +31,7 @@ from dnd.core.base_actions import (
     TargetType,
     TopologyEffectProfile,
 )
-from dnd.core.aoe import AoEShape, Sphere
+from dnd.core.aoe import Sphere
 from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -66,6 +67,7 @@ from dnd.core.values import ModifiableValue
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, ExposedFlameEvent, SpatialChangeEvent, SpatialEffectInteractionEvent
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
+    ArithmeticFactor,
     NumericalModifier,
     AdvantageModifier,
     AdvantageStatus,
@@ -1668,8 +1670,9 @@ class BlackTentaclesZone(RestrainingAreaCondition):
             roll.total,
             DamageType.BLUDGEONING,
             self.source_entity_uuid,
-            parent_event=parent_event.uuid,
+            independent_resolution=True, effect_origin=self.effect_origin, parent_event=parent_event.uuid,
         )
+
 
     def _save_or_apply(
         self,
@@ -1982,8 +1985,9 @@ class CloudkillZone(AreaCondition):
             roll.total // 2 if success else roll.total,
             DamageType.POISON,
             self.source_entity_uuid,
-            parent_event=parent_event.uuid,
+            independent_resolution=True, effect_origin=self.effect_origin, parent_event=parent_event.uuid,
         )
+
 
     def _create_zone_entry_handler(self) -> EventHandler:
         """Create handler for entry - CON save, poison damage."""
@@ -2234,16 +2238,11 @@ class SpiritGuardiansSlowed(BaseCondition):
         if entity.ignore_magical_speed_reduction:
             return [], [], [], [], declaration_event.cancel(status_message=f"{entity.name} ignores magical speed reduction")
 
-        current_speed = entity.action_economy.get_base_value("movement")
-        half_speed = current_speed // 2
-
-        mod = NumericalModifier.create(
-            source_entity_uuid=self.source_entity_uuid,
-            name="Spirit Guardians Slowed",
-            value=-half_speed
-        )
-        mod_uuid = entity.action_economy.movement.self_static.add_value_modifier(mod)
-        outs.append((entity.action_economy.movement.uuid, mod_uuid))
+        for speed in entity.action_economy.speed_values:
+            modifier = ArithmeticFactor(name="Spirit Guardians Slowed", numerator=1, denominator=2,
+                source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid)
+            speed.self_static.add_factor(modifier)
+            outs.append((speed.uuid, modifier.uuid))
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -2475,9 +2474,10 @@ class SpiritGuardiansZone(MembershipAreaCondition):
             rolled // 2 if success else rolled,
             self.damage_type,
             self.source_entity_uuid,
-            parent_event=parent_event.uuid,
+            independent_resolution=True, effect_origin=self.effect_origin, parent_event=parent_event.uuid,
         )
         return True
+
 
     def _apply_effect_entry_effect(
         self,
@@ -3322,6 +3322,7 @@ class InsectPlagueZone(AreaCondition):
         entity: Entity,
         *,
         parent_event: Event,
+        independent_resolution: bool = True,
     ) -> None:
         """Resolve one admitted Insect Plague damage trigger."""
         if not entity.has_hp:
@@ -3356,8 +3357,9 @@ class InsectPlagueZone(AreaCondition):
             roll.total // 2 if success else roll.total,
             DamageType.PIERCING,
             self.source_entity_uuid,
-            parent_event=parent_event.uuid,
+            independent_resolution=independent_resolution, effect_origin=self.effect_origin, parent_event=parent_event.uuid,
         )
+
 
     def _apply_appearance_effect(
         self,
@@ -3366,7 +3368,8 @@ class InsectPlagueZone(AreaCondition):
         parent_event: Event,
     ) -> None:
         """Apply the spell's explicit appearance damage."""
-        self._damage_entity(entity, parent_event=parent_event)
+        self._damage_entity(entity, parent_event=parent_event, independent_resolution=False)
+
 
     def _create_zone_entry_handler(self) -> EventHandler:
         condition = self
@@ -3564,6 +3567,7 @@ class IncendiaryCloudZone(AreaCondition):
         entity: Entity,
         *,
         parent_event: Event,
+        independent_resolution: bool = True,
     ) -> None:
         """Resolve Incendiary Cloud's Dexterity save and fire damage."""
         if not entity.has_hp:
@@ -3598,8 +3602,9 @@ class IncendiaryCloudZone(AreaCondition):
             roll.total // 2 if success else roll.total,
             DamageType.FIRE,
             self.source_entity_uuid,
-            parent_event=parent_event.uuid,
+            independent_resolution=independent_resolution, effect_origin=self.effect_origin, parent_event=parent_event.uuid,
         )
+
 
     def _apply_appearance_effect(
         self,
@@ -3608,7 +3613,8 @@ class IncendiaryCloudZone(AreaCondition):
         parent_event: Event,
     ) -> None:
         """Apply the spell's explicit appearance damage."""
-        self._damage_entity(entity, parent_event=parent_event)
+        self._damage_entity(entity, parent_event=parent_event, independent_resolution=False)
+
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         outs, handler_uuids, sub_conditions_uuids, external_uuids, effect_event = super()._apply(declaration_event)
@@ -4585,7 +4591,7 @@ class GuardianOfFaithZone(AreaCondition):
                 amount=10 if success else 20,
                 damage_type=DamageType.RADIANT,
                 source_entity_uuid=caster.uuid,
-                parent_event=event.uuid,
+                independent_resolution=True, effect_origin=self.effect_origin, parent_event=event.uuid,
             )
             zone.damage_dealt += max(0, hp_before - entity.get_hp())
             if zone.damage_dealt >= zone.damage_budget:
@@ -4607,6 +4613,7 @@ class GuardianOfFaithZone(AreaCondition):
             ],
             event_processor=damage_hostile,
         )
+
 
 
 class GuardianOfFaith(SpellAction):
@@ -4944,3 +4951,146 @@ class HeroesFeast(SpellAction):
         return effect_event.with_updates(
             status_message=f"A magnificent feast appears at {position}"
         )
+
+
+class ProduceFlameEffect(BaseCondition):
+    granted_action_uuids: set[UUID] = Field(default_factory=set)
+    description: str = "Retained hand flame, anchored light and later hurl/dismiss actions."
+    name: str = "Produce Flame"
+    tags: set[ConditionTag] = {ConditionTag.MAGICAL}
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=100))
+    caster_level: int = 1
+    spellcasting_source_id: UUID | None = None
+    light_source_uuid: UUID | None = None
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Caster missing")
+        self.light_source_uuid = get_map().add_light_source(position=target.position,
+            bright_radius_feet=10, dim_radius_feet=10, anchor_uuid=target.uuid, parent_event=event.uuid)
+        actions = [HurlProduceFlame(source_entity_uuid=target.uuid, flame_uuid=self.uuid,
+                    caster_level=self.caster_level, spellcasting_source_id=self.spellcasting_source_id, template=True),
+                   DismissProduceFlame(source_entity_uuid=target.uuid, effect_uuid=self.uuid, template=True)]
+        for action in actions:
+            target.register_action(action)
+        self.granted_action_uuids = {action.uuid for action in actions}
+        return [], [], [], [], event.phase_to(EventPhase.EFFECT)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        owner = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if owner is not None:
+            for action_uuid in self.granted_action_uuids:
+                owner.unregister_action_by_uuid(action_uuid)
+        self.granted_action_uuids.clear()
+        if self.light_source_uuid is not None:
+            get_map().remove_light_source(self.light_source_uuid, parent_event=parent_event.uuid if parent_event else None)
+            self.light_source_uuid = None
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+
+def _hurl_flame(spell: SpellAction, event: SpellEvent) -> SpellEvent:
+    caster = Entity.get(spell.source_entity_uuid)
+    target = Entity.get(spell.target_entity_uuid) if spell.target_entity_uuid else None
+    if caster is None or target is None or target.uuid == caster.uuid:
+        return event.cancel(status_message="Flame requires another creature")
+    if (error := spell.physical_access_error()) is not None:
+        return event.cancel(status_message=error)
+    resolution = spell.resolve_spell_attack(caster, target, event.uuid)
+    effect = event.phase_to(EventPhase.EFFECT, attack_bonus=resolution.attack_bonus,
+        ac=resolution.target_ac, dice_roll=resolution.dice_roll, attack_outcome=resolution.outcome,
+        is_threatened=resolution.is_threatened)
+    if effect.canceled or resolution.outcome in (AttackOutcome.MISS, AttackOutcome.CRIT_MISS):
+        return effect
+    damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+        damage_dice=8, dice_numbers=spell._get_cantrip_dice_count(spell.caster_level),
+        damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.FIRE)
+    roll = damage.get_dice(resolution.outcome,
+        crit_extra_dice=caster.get_spell_crit_extra_dice() if resolution.outcome == AttackOutcome.CRIT else 0).roll
+    target.receive_damage(amount=roll.total, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid,
+        parent_event=effect.uuid, damages=[damage], damage_rolls=[roll])
+    return effect.with_updates(damages=[damage], damage_rolls=[roll])
+
+
+class ProduceFlame(SpellAction):
+    name: str = "Produce Flame"
+    description: str = "Create a hand flame and 10 feet bright/dim light, or hurl it up to 30 feet for 1d8 fire."
+    spell_school: str = "conjuration"
+    target_type: TargetType = TargetType.ENTITY
+    include_self: bool = True
+    valid_target_filter: str = "all"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+    physical_access: PhysicalAccess | None = PhysicalAccess.PROJECTILE
+    projectile_type: str | None = "bolt"
+    spell_damage_type: DamageType | None = DamageType.FIRE
+
+    @property
+    def performs_attack(self) -> bool:
+        return self.target_entity_uuid is not None and self.target_entity_uuid != self.source_entity_uuid
+
+    def _apply(self, event: SpellEvent):
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return event.cancel(status_message="Caster missing")
+        if self.target_entity_uuid is not None and self.target_entity_uuid != caster.uuid:
+            old = caster.active_conditions.get("Produce Flame")
+            if old is not None:
+                removed = caster.remove_condition_by_uuid(old.uuid, parent_event=event)
+                if not removed:
+                    return event.cancel(status_message="Existing flame could not be released")
+            return _hurl_flame(self, event)
+        return self.apply_owned_condition( event.phase_to(EventPhase.EFFECT), ProduceFlameEffect(
+            source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
+            caster_level=self.caster_level, spellcasting_source_id=self.spellcasting_source_id))
+
+
+@srd_action_identity(content_id="action.spell.produce_flame.hurl", display_name="Hurl Produce Flame",
+    description="Hurl the retained hand flame.", parent_spell_name="Produce Flame", source_page=171, sort_order=1)
+class HurlProduceFlame(SpellAction):
+    name: str = "Hurl Produce Flame"
+    spell_school: str = "conjuration"
+    flame_uuid: UUID
+    target_type: TargetType = TargetType.ENTITY
+    valid_target_filter: str = "enemies"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=30))
+    physical_access: PhysicalAccess | None = PhysicalAccess.PROJECTILE
+    projectile_type: str | None = "bolt"
+    spell_damage_type: DamageType | None = DamageType.FIRE
+
+    @property
+    def performs_attack(self) -> bool:
+        return True
+
+    def _validate(self, event: SpellEvent):
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None or not any(effect.uuid == self.flame_uuid for effect in caster.active_conditions.values()):
+            return event.cancel(status_message="Hand flame is no longer retained")
+        return super()._validate(event)
+
+    def _apply(self, event: SpellEvent):
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return event.cancel(status_message="Caster missing")
+        removed = caster.remove_condition_by_uuid(self.flame_uuid, parent_event=event)
+        if not removed:
+            return event.cancel(status_message="Hand flame could not be released")
+        return _hurl_flame(self, event)
+
+
+@srd_action_identity(content_id="action.spell.produce_flame.dismiss", display_name="Dismiss Produce Flame",
+    description="Dismiss the retained hand flame.", parent_spell_name="Produce Flame", source_page=171, sort_order=2)
+class DismissProduceFlame(BaseAction):
+    name: str = "Dismiss Produce Flame"
+    effect_uuid: UUID
+    target_type: TargetType = TargetType.SELF
+    costs: list[Cost] = Field(default_factory=lambda: [Cost(name="Dismiss Flame", cost_type="actions",
+        cost=1, evaluator=entity_action_economy_cost_evaluator)])
+
+    def _apply(self, event):
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return event.cancel(status_message="Caster missing")
+        removed = caster.remove_condition_by_uuid(self.effect_uuid, parent_event=event)
+        if not removed:
+            return event.cancel(status_message="Flame could not be dismissed")
+        return event.phase_to(EventPhase.EFFECT)

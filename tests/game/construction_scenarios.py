@@ -82,8 +82,8 @@ def construction_history(*, material: Literal['ice', 'stone']='ice', break_secti
             for _ in range(8):
                 encounter.next_turn()
                 perform('action.attack',target.uuid)
-                if target.get_hp()==0:break
-            assert target.get_hp()==0
+                if target.get_hp()<=0:break
+            assert target.get_hp()<=0
             caster.update_entity_senses()
             remaining=[o for identity in caster.senses.objects
                 if isinstance((o:=BaseBlock.get(identity)),BaseItem) and o.item_id==target.item_id]

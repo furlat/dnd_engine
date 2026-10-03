@@ -922,7 +922,7 @@ def test_haste_links_spell_effect_to_concentration_and_cleans_up(capsys) -> None
     )
     ally = create_spell_actor("Haste Ally", (1, 0), "heroes")
     Entity.update_all_entities_senses(max_distance=30)
-    movement_before = ally.action_economy.movement.normalized_score
+    movement_before = ally.action_economy.movement_remaining()
     actions_before = ally.action_economy.actions.normalized_score
     ac_before = ally.ac_bonus().normalized_score
 
@@ -935,7 +935,7 @@ def test_haste_links_spell_effect_to_concentration_and_cleans_up(capsys) -> None
     assert not event.canceled
     assert "Concentrating" in caster.active_conditions
     assert "Haste" in ally.active_conditions
-    assert ally.action_economy.movement.normalized_score == movement_before * 2
+    assert ally.action_economy.movement_remaining() == movement_before * 2
     assert ally.action_economy.actions.normalized_score == actions_before
     assert ally.action_economy.resources["haste_action"].current == 1
     assert ally.ac_bonus().normalized_score == ac_before + 2
@@ -950,7 +950,7 @@ def test_haste_links_spell_effect_to_concentration_and_cleans_up(capsys) -> None
         event.canceled,
         "Concentrating" in caster.active_conditions,
         "Haste" in ally.active_conditions,
-        ally.action_economy.movement.normalized_score,
+        ally.action_economy.movement_remaining(),
         ally.action_economy.actions.normalized_score,
         ally.action_economy.resources["haste_action"].current,
         ally.ac_bonus().normalized_score,

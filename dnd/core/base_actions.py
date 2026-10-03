@@ -5,7 +5,8 @@ from math import hypot
 
 from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, computed_field, field_validator, model_validator
 from dnd.action_timing import action_timing_enabled, record_action_timing
-from dnd.core.attack_types import AttackSourceMetadata, AttackAmmunitionMetadata, AttackAmmunitionPayload
+from dnd.core.attack_types import AttackSourceMetadata
+from dnd.core.creature_types import DamageType
 from dnd.core.action_types import (
     ActionPresentationKind,
     ActionEconomyCostType,
@@ -15,6 +16,7 @@ from dnd.core.action_types import (
     RestrictedActionGrantProvider,
     RestrictedActionKind,
 )
+from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRef, EventResolutionRef
 from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range, EventQueue
 from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
 from dnd.types.world import MovementMode
@@ -46,6 +48,9 @@ class FiniteChargeProvider(Protocol):
     """Structural boundary for an item-backed finite action cost."""
 
     charges: int
+
+    def use_admission_error(self, actor_uuid: UUID) -> Optional[str]:
+        ...
 
     def prepare_charge_consumption(self, amount: int, source_entity_uuid: UUID, parent_event: Event) -> Event:
         ...
@@ -239,6 +244,15 @@ class AttackRollBaseline(BaseModel):
     advantage: AdvantageStatus = Field(description="Actor-side advantage state before target modifiers.")
     critical_threshold: int = Field(ge=1, le=20, description="Natural d20 threshold for an actor-side critical hit.")
     critical_extra_dice: int = Field(ge=0, description="Actor-side extra damage dice added on a critical hit.")
+
+
+class ActionDiscoveryDescription(BaseModel):
+    """Action-owned descriptive facts; existing profiles retain rules and outcomes."""
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    spell_level: int | None = None
+    cast_at_level: int | None = None
+    is_spell_variant: bool = False
+    damage_types: tuple[DamageType, ...] = ()
 
 
 class ActionOutcomeProfile(BaseModel):
@@ -651,15 +665,16 @@ class ActionEvent(Event):
         default_factory=list,
         description="Complete entity target selection captured when the action is declared.",
     )
-    application_index: Optional[int] = Field(
-        default=None,
-        ge=0,
-        description="Ordered target-application index for a convolution child event.",
-    )
-    application_id: Optional[UUID] = Field(
-        default=None,
-        description="Deterministic identity of one ordered target application.",
-    )
+    application: ApplicationMembership | None = None
+
+    @property
+    def application_id(self) -> UUID | None:
+        return self.application.application_id if self.application is not None else None
+
+    @property
+    def application_index(self) -> int | None:
+        return self.application.index if self.application is not None else None
+
     event_type: EventType = Field(default=EventType.BASE_ACTION, description="Base action event type.")
     description: str = Field(default="", description="Action description for combat log generation")
     total_targets: int = Field(
@@ -691,6 +706,10 @@ class ActionEvent(Event):
                 self.behavior_id = binding.behavior_id
                 self.provided_by_id = binding.provided_by_id
                 self.origin_root_id = binding.origin_root_id
+        if __context is not PASSIVE_EVENT_REPLAY:
+            self.resolution_ref = (ApplicationResolutionRef(
+                lineage_uuid=self.application.lineage_uuid, application_id=self.application.application_id)
+                if self.application is not None else EventResolutionRef(lineage_uuid=self.lineage_uuid))
         super().model_post_init(__context)
 
     def add_cost(self, cost: Cost) -> None:
@@ -752,6 +771,8 @@ class ActionEvent(Event):
     @model_validator(mode="after")
     def validate_cold_presentation_facts(self) -> "ActionEvent":
         """Keep item and target-application identities internally coherent."""
+        if self.application is not None and self.application.lineage_uuid == self.lineage_uuid:
+            raise ValueError("An application must name its separate owning action lineage")
         if (self.behavior_id is None) != (self.provided_by_id is None):
             raise ValueError(
                 "behavior_id and provided_by_id must be present together"
@@ -768,8 +789,6 @@ class ActionEvent(Event):
             and self.source_item_presentation is None
         ):
             raise ValueError("drink action requires a declaration-time item presentation")
-        if (self.application_index is None) != (self.application_id is None):
-            raise ValueError("application_index and application_id must be set together")
         return self
 
     @field_validator("behavior_id", "provided_by_id", "origin_root_id")
@@ -963,8 +982,6 @@ class BaseAction(BaseObject):
     def get_attack_source_metadata(self) -> Optional[AttackSourceMetadata]:
         return None
 
-    def get_attack_ammunition_metadata(self) -> AttackAmmunitionMetadata | None:
-        return None
 
     @property
     def is_attack(self) -> bool:
@@ -1410,8 +1427,11 @@ class BaseAction(BaseObject):
         if self.source_item_uuid is None:
             return None
         source_item=BaseBlock.get(self.source_item_uuid)
-        if source_item is None or not source_item.permits_use_by(self.source_entity_uuid):
-            return "Source item cannot be activated by this actor"
+        if source_item is None:
+            return "Source item is no longer present"
+        if isinstance(source_item, FiniteChargeProvider):
+            if (error := source_item.use_admission_error(self.source_entity_uuid)) is not None:
+                return error
         grid = get_map()
         contact_uuid = self.source_item_uuid
         if self._source_item_controller_uuid is not None:
@@ -1765,6 +1785,9 @@ class BaseAction(BaseObject):
             variants.append(variant)
         return variants
 
+    def describe_discovery(self) -> ActionDiscoveryDescription:
+        return ActionDiscoveryDescription()
+
     def get_discovery_template_name(self) -> str:
         """Return the machine-facing action name used for execution."""
         base_name = self.name or "Unknown"
@@ -2023,6 +2046,9 @@ class BaseAction(BaseObject):
             for application_index, target_uuid in enumerate(target_uuids, application_index_offset):
                 self.target_entity_uuid = target_uuid
                 target_block = BaseBlock.get(target_uuid)
+                membership = ApplicationMembership(lineage_uuid=execution_event.lineage_uuid,
+                    application_id=uuid5(execution_event.lineage_uuid, f"target-application:{application_index}"),
+                    index=application_index)
                 per_target_event = execution_event.model_copy(update={
                     'uuid': uuid4(), 'lineage_uuid': uuid4(),
                     'parent_event': parent_event.uuid,
@@ -2030,9 +2056,9 @@ class BaseAction(BaseObject):
                     'target_entity_uuid': target_uuid,
                     'target_entity_name': target_block.name if target_block else None,
                     'children_events': [], 'lineage_children_events': [], 'children_lineages': [],
-                    'application_index': application_index,
-                    'application_id': uuid5(execution_event.lineage_uuid,
-                                            f"target-application:{application_index}"),
+                    'application': membership,
+                    'resolution_ref': ApplicationResolutionRef(lineage_uuid=membership.lineage_uuid,
+                        application_id=membership.application_id),
                 })
                 per_target_event = cast(ActionEvent, EventQueue.register(per_target_event))
                 if per_target_event.canceled:
@@ -2132,9 +2158,6 @@ class BaseAction(BaseObject):
         result = item.commit_prepared_charge(prepared)
         return execution_event.cancel(status_message="Finite item resource rejected") if result.canceled else execution_event
 
-    def _commit_release_costs(self, execution_event: ActionEvent) -> ActionEvent:
-        """Resource release after execution admission; ordinary actions have none."""
-        return execution_event
 
     @staticmethod
     def _publish_detached_cancellation(event: ActionEvent) -> ActionEvent:
@@ -2263,117 +2286,122 @@ class BaseAction(BaseObject):
             update={"use_register": False}
         )
         execution_event, prepared_item_charge = self._prepare_item_charge(execution_event, declaration_event)
-        if execution_event.canceled:
-            record_total()
-            return self._publish_detached_cancellation(execution_event)
-        # Resource-admission handlers can change source ownership.
-        if (error := self.source_item_contact_error()) is not None:
-            return self._publish_detached_cancellation(execution_event.cancel(status_message=error))
-        started = start_phase()
-        execution_event = self._apply_costs(execution_event)
-        record_phase("apply_costs", started)
-        if execution_event is None:
-            record_total()
-            return None
-        if execution_event.canceled:
-            record_total()
-            return self._publish_detached_cancellation(execution_event)
-        if execution_event.phase is not EventPhase.EXECUTION:
-            raise ValueError("Action cost commitment must preserve execution phase")
-
-        self._on_costs_committed(declaration_event, execution_event)
-        execution_event = execution_event.model_copy(update={
-            "use_register": True,
-            "lineage_children_events": list(
-                declaration_event.lineage_children_events
-            ),
-            "children_events": [],
-        })
-        published_execution = EventQueue.register(execution_event)
-        if not isinstance(published_execution, ActionEvent):
-            raise TypeError(
-                "Action execution dispatch returned "
-                f"{type(published_execution).__name__}, expected ActionEvent"
-            )
-        execution_event = published_execution
-        if execution_event.canceled:
-            record_total()
-            return execution_event
-
-        # Execution handlers may change the geometry after costs are committed.
-        # Rejection here is an interruption, without refunding those costs.
-        access_error = (self.source_item_contact_error() or self.position_selection_error()
-                        or self.physical_access_error() or self.position_placement_error())
-        if access_error is not None:
-            record_total()
-            return execution_event.cancel(status_message=access_error)
-
-        execution_event = self._commit_item_charge(execution_event, prepared_item_charge)
-        if execution_event.canceled:
-            return execution_event
-        execution_event = self._commit_release_costs(execution_event)
-        if execution_event.canceled:
-            return execution_event
-        if self.effective_target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
+        try:
+            if execution_event.canceled:
+                record_total()
+                return self._publish_detached_cancellation(execution_event)
+            # Resource-admission handlers can change source ownership.
+            if (error := self.source_item_contact_error()) is not None:
+                return self._publish_detached_cancellation(execution_event.cancel(status_message=error))
             started = start_phase()
-            all_target_uuids, resolved_area_positions = self._resolve_execution_targets()
-            record_phase("resolve_convolution_targets", started)
+            execution_event = self._apply_costs(execution_event)
+            record_phase("apply_costs", started)
+            if execution_event is None:
+                record_total()
+                return None
+            if execution_event.canceled:
+                record_total()
+                return self._publish_detached_cancellation(execution_event)
+            if execution_event.phase is not EventPhase.EXECUTION:
+                raise ValueError("Action cost commitment must preserve execution phase")
+
+            self._on_costs_committed(declaration_event, execution_event)
+            execution_event = execution_event.model_copy(update={
+                "use_register": True,
+                "lineage_children_events": list(
+                    declaration_event.lineage_children_events
+                ),
+                "children_events": [],
+            })
+            published_execution = EventQueue.register(execution_event)
+            if not isinstance(published_execution, ActionEvent):
+                raise TypeError(
+                    "Action execution dispatch returned "
+                    f"{type(published_execution).__name__}, expected ActionEvent"
+                )
+            execution_event = published_execution
+            if execution_event.canceled:
+                record_total()
+                return execution_event
+
+            # Execution handlers may change the geometry after costs are committed.
+            # Rejection here is an interruption, without refunding those costs.
+            access_error = (self.source_item_contact_error() or self.position_selection_error()
+                            or self.physical_access_error() or self.position_placement_error())
+            if access_error is not None:
+                record_total()
+                return execution_event.cancel(status_message=access_error)
+
+            execution_event = self._commit_item_charge(execution_event, prepared_item_charge)
+            if execution_event.canceled:
+                return execution_event
+            if self.effective_target_type in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
+                started = start_phase()
+                all_target_uuids, resolved_area_positions = self._resolve_execution_targets()
+                record_phase("resolve_convolution_targets", started)
+                started = start_phase()
+                effect_event = execution_event.phase_to(
+                    EventPhase.EFFECT,
+                    total_targets=len(all_target_uuids),
+                    total_damage=0,
+                    aoe_position=self.end_position,
+                    resolved_area_positions=resolved_area_positions,
+                    status_message=(
+                        f"Applying {self.name} to {len(all_target_uuids)} targets"
+                    ),
+                )
+                record_phase("convolution_effect_event", started)
+                if effect_event.canceled:
+                    record_total()
+                    return effect_event
+
+                targets_started = start_phase()
+                effect_event = self._apply_target_applications(
+                    execution_event, effect_event, all_target_uuids)
+                record_phase("convolution_apply_targets", targets_started)
+                if effect_event.canceled:
+                    record_total()
+                    return effect_event
+
+                if self.effective_target_type == TargetType.POSITION_AOE:
+                    started = start_phase()
+                    self._finalize_aoe(effect_event)
+                    record_phase("finalize_aoe", started)
+            else:
+                started = start_phase()
+                effect_event = self._apply(execution_event)
+                record_phase("apply_effect", started)
+
+            if effect_event is None or effect_event.canceled:
+                record_total()
+                return effect_event
+            # Canceled child Events propagate above; success retains ActionEvent.
+            effect_event = cast(ActionEvent, effect_event)
+            if effect_event.phase is not EventPhase.EFFECT:
+                raise ValueError(
+                    f"Action {self.name} must finish authored mechanics at effect phase"
+                )
+            if self.requires_concentration:
+                started = start_phase()
+                self._cleanup_concentration(effect_event)
+                record_phase("cleanup_concentration", started)
             started = start_phase()
-            effect_event = execution_event.phase_to(
-                EventPhase.EFFECT,
-                total_targets=len(all_target_uuids),
-                total_damage=0,
-                aoe_position=self.end_position,
-                resolved_area_positions=resolved_area_positions,
+            completion_event = effect_event.phase_to(
+                EventPhase.COMPLETION,
                 status_message=(
-                    f"Applying {self.name} to {len(all_target_uuids)} targets"
+                    effect_event.status_message or f"{self.name} completed"
                 ),
             )
-            record_phase("convolution_effect_event", started)
-            if effect_event.canceled:
-                record_total()
-                return effect_event
-
-            targets_started = start_phase()
-            effect_event = self._apply_target_applications(
-                execution_event, effect_event, all_target_uuids)
-            record_phase("convolution_apply_targets", targets_started)
-            if effect_event.canceled:
-                record_total()
-                return effect_event
-
-            if self.effective_target_type == TargetType.POSITION_AOE:
-                started = start_phase()
-                self._finalize_aoe(effect_event)
-                record_phase("finalize_aoe", started)
-        else:
-            started = start_phase()
-            effect_event = self._apply(execution_event)
-            record_phase("apply_effect", started)
-
-        if effect_event is None or effect_event.canceled:
+            record_phase("completion_event", started)
             record_total()
-            return effect_event
-        # Canceled child Events propagate above; success retains ActionEvent.
-        effect_event = cast(ActionEvent, effect_event)
-        if effect_event.phase is not EventPhase.EFFECT:
-            raise ValueError(
-                f"Action {self.name} must finish authored mechanics at effect phase"
-            )
-        if self.requires_concentration:
-            started = start_phase()
-            self._cleanup_concentration(effect_event)
-            record_phase("cleanup_concentration", started)
-        started = start_phase()
-        completion_event = effect_event.phase_to(
-            EventPhase.COMPLETION,
-            status_message=(
-                effect_event.status_message or f"{self.name} completed"
-            ),
-        )
-        record_phase("completion_event", started)
-        record_total()
-        return completion_event
+            return completion_event
+        finally:
+            if prepared_item_charge is not None:
+                history = EventQueue.get_event_history(prepared_item_charge.uuid)
+                if history and not any(event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL)
+                        for event in history):
+                    history[-1].cancel(status_message="Owning action ended before item release")
+
 
 
 class StructuredAction(BaseAction):
@@ -2654,8 +2682,6 @@ class AvailableActionInfo(BaseModel):
         ge=0,
         description="Finite source-item charges consumed by successful execution.",
     )
-    selected_ammunition_uuid: UUID | None = None
-    ammunition_payload: AttackAmmunitionPayload | None = None
     fixed_healing: Optional[int] = Field(
         default=None,
         ge=0,

@@ -7,7 +7,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import (
     BaseItem,
-    ItemChargeConsumptionEvent,
+    ItemResourceChangeEvent,
     UsableItem,
 )
 from dnd.blocks.equipment import BodyArmor, EquipmentConfig, Shield, Weapon
@@ -406,7 +406,7 @@ def test_equipment_moves_items_and_applies_equipment_effects(capsys) -> None:
     put_in_inventory(guard, armor)
 
     base_ac = guard.ac_bonus().normalized_score
-    base_movement = guard.action_economy.movement.normalized_score
+    base_movement = guard.action_economy.movement_remaining()
 
     assert guard.equip_item(sword.uuid, WeaponSlot.MELEE_MAIN)
     assert guard.equipment.weapon_melee_main is sword
@@ -434,12 +434,12 @@ def test_equipment_moves_items_and_applies_equipment_effects(capsys) -> None:
     assert guard.equipment.body_armor is armor
     assert armor.is_equipped
     assert guard.skill_set.stealth.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE
-    assert guard.action_economy.movement.normalized_score == base_movement - 10
+    assert guard.action_economy.movement_remaining() == base_movement - 10
     armor_state = (
         guard.equipment.body_armor is armor,
         armor.is_equipped,
         guard.skill_set.stealth.skill_bonus.advantage,
-        guard.action_economy.movement.normalized_score,
+        guard.action_economy.movement_remaining(),
     )
 
     unequipped = guard.unequip_item(WeaponSlot.MELEE_MAIN)
@@ -702,7 +702,7 @@ def test_usable_items_and_environment_objects_expose_item_bound_actions(capsys) 
         EventPhase.COMPLETION,
     ]
     charge_completion = charge_events[-1]
-    assert isinstance(charge_completion, ItemChargeConsumptionEvent)
+    assert isinstance(charge_completion, ItemResourceChangeEvent)
     assert charge_completion.item_uuid == potion.uuid
     assert charge_completion.amount == 1
     assert charge_completion.charges_before == 1
@@ -855,7 +855,7 @@ def test_magic_condition_potions_preserve_magical_origin_and_haste_lethargy() ->
     haste_potion = build_haste_potion(actor.uuid)
     put_in_inventory(actor, haste_potion)
     haste_potion_uuid = haste_potion.uuid
-    base_speed = actor.action_economy.movement.normalized_score
+    base_speed = actor.action_economy.movement_remaining()
     base_ac = actor.equipment.ac_bonus.normalized_score
 
     haste_completion = execute_use_action(
@@ -870,7 +870,7 @@ def test_magic_condition_potions_preserve_magical_origin_and_haste_lethargy() ->
     assert haste.tags == {ConditionTag.MAGICAL}
     assert haste.apply_lethargy is True
     assert "Concentrating" not in actor.active_conditions
-    assert actor.action_economy.movement.normalized_score == base_speed * 2
+    assert actor.action_economy.movement_remaining() == base_speed * 2
     assert actor.equipment.ac_bonus.normalized_score == base_ac + 2
     assert (
         actor.saving_throws.get_saving_throw("dexterity").bonus.advantage
@@ -885,7 +885,7 @@ def test_magic_condition_potions_preserve_magical_origin_and_haste_lethargy() ->
     assert "Haste" not in actor.active_conditions
     assert "Haste Lethargy" in actor.active_conditions
     assert actor.action_economy.action_permission.normalized_score == 0
-    assert actor.action_economy.movement.normalized_score == 0
+    assert actor.action_economy.movement_remaining() == 0
 
     reset_item_tutorial_state()
     actor = create_tutorial_actor("Invisibility Potion Tester")

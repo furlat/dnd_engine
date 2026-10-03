@@ -15,11 +15,11 @@ def test_content_bootstrap_and_composed_spell_catalog_cold_start() -> None:
     """A fresh process must not cycle through extensions while dnd.spells loads."""
     script = """
 from dnd.content_system.bootstrap import bootstrap_content_system
-from server.spell_catalog import build_spell_catalog
+from dnd.spells.catalog_content import SPELL_CONTENT_IDENTITY_BY_NAME
 loaded = bootstrap_content_system(pack_roots=())
-catalog = build_spell_catalog()
 assert len(loaded.registry.declarations) > 0
-assert any(row.id == "aegis_spark" for row in catalog.spells)
+assert "Fire Bolt" in SPELL_CONTENT_IDENTITY_BY_NAME
+assert any(row.ref.content_id == "spell.aegis_spark" for row in loaded.registry.declarations.values())
 """
     result = subprocess.run(
         [sys.executable, "-c", script],

@@ -25,7 +25,7 @@ def _strength_penalty(source_entity_uuid: UUID, target_entity_uuid: UUID | None 
                       requirement: int, name: str) -> NumericalModifier | None:
     if strength.score >= requirement:
         return None
-    return NumericalModifier(name=name, value=-10, source_entity_uuid=source_entity_uuid,
+    return NumericalModifier(name=name, value=-10, use_register=False, source_entity_uuid=source_entity_uuid,
                              target_entity_uuid=source_entity_uuid)
 
 
@@ -88,11 +88,12 @@ def install_item_properties(item_uuid: UUID, item_id: str, item_name: str,
                 contributions.append(ItemPropertyContribution(wearer_uuid, handle, values.stealth))
             if property.strength_requirement is not None:
                 name = f"{item_name} Strength Requirement"
-                handle = values.movement.self_contextual.add_value_modifier(ContextualNumericalModifier(
-                    name=name, source_entity_uuid=wearer_uuid, target_entity_uuid=wearer_uuid,
-                    callable=partial(_strength_penalty, strength=values.strength,
-                        requirement=property.strength_requirement, name=name)))
-                contributions.append(ItemPropertyContribution(wearer_uuid, handle, values.movement, True))
+                for speed in values.speeds:
+                    handle = speed.self_contextual.add_value_modifier(ContextualNumericalModifier(
+                        name=name, source_entity_uuid=wearer_uuid, target_entity_uuid=wearer_uuid,
+                        callable=partial(_strength_penalty, strength=values.strength,
+                            requirement=property.strength_requirement, name=name)))
+                    contributions.append(ItemPropertyContribution(wearer_uuid, handle, speed, True))
     return contributions
 
 

@@ -22,7 +22,6 @@ def data():
     pygame.quit()
 
 
-@pytest.mark.xfail(reason='Native wall owner blocks ordinary attacks on its own section; documented backend defect',strict=True,raises=ConstructionAttackUnavailable)
 @pytest.mark.parametrize('material',('ice','stone'))
 def test_real_cast_attack_and_removal_keep_sections_independent(data,material):
     history=construction_history(material=material)

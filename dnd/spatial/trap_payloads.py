@@ -60,7 +60,7 @@ def apply_trap_payload(entity: Entity, payload: TrapPayload, *, source_uuid: UUI
         if amount > 0:
             entity.receive_damage(amount, component.damage_type, source_uuid,
                 damage_rolls=[roll], damages=[damage], parent_event=parent_event.uuid,
-                effect_id=content_ref.identity_key)
+                effect_id=content_ref.identity_key, independent_resolution=True)
     condition = payload.condition
     if not apply_condition or condition is None:
         return

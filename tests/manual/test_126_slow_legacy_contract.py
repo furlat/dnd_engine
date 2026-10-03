@@ -196,7 +196,7 @@ def test_slow_applies_complete_static_debuff_bundle() -> None:
     caster = _create_caster()
     target = _create_target("Slowed Target", (3, 1))
     Entity.update_all_entities_senses()
-    base_speed = target.action_economy.movement.normalized_score
+    base_speed = target.action_economy.movement_remaining()
     base_ac = target.equipment.ac_bonus.normalized_score
     base_dex_save = target.saving_throws.get_saving_throw(
         "dexterity"
@@ -208,7 +208,7 @@ def test_slow_applies_complete_static_debuff_bundle() -> None:
     _remove_wisdom_save_modifier(target, failure_modifier)
     assert "Slowed" in target.active_conditions
     assert "Concentrating" in caster.active_conditions
-    assert target.action_economy.movement.normalized_score == base_speed // 2
+    assert target.action_economy.movement_remaining() == base_speed // 2
     assert target.equipment.ac_bonus.normalized_score == base_ac - 2
     assert (
         target.saving_throws.get_saving_throw(

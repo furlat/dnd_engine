@@ -18,7 +18,13 @@ from dnd.content.items.authored_item_definitions import (
     AUTHORED_WEAPON_DEFINITIONS,
     AUTHORED_WEARABLE_DEFINITIONS,
     STATIC_BLOCKER_DEFINITIONS,
+    POWERED_WEARABLE_DEFINITIONS,
 )
+from dnd.content.items.roster_item_definitions import (
+    ROSTER_CARRIED_DEFINITIONS, ROSTER_EMBER_DEFINITIONS, ROSTER_GEAR_DEFINITIONS,
+    ROSTER_INVENTORY_DEFINITIONS, ROSTER_WEAPON_DEFINITIONS, ROSTER_MAUL_DEFINITION,
+)
+from dnd.content.items.window_definitions import WINDOW_DEFINITIONS
 from dnd.content.items.door_profiles import DOOR_PROFILES
 from dnd.content.items.environment_item_builders import LIQUID_BARREL_PROFILES
 from dnd.content.items.ground_hardware_builders import GROUND_HARDWARE_PROFILES
@@ -49,6 +55,7 @@ _BEHAVIOR_ITEM_IDS = frozenset({
     "consumable.potion_true_seeing",
     "consumable.weapon_coat.fire",
     "consumable.weapon_coat.lightning",
+    "consumable.weapon_coat.basic_poison",
     "consumable.weapon_coat.concentration_fire",
     "consumable.weapon_coat.timed_fire",
     "consumable.acid_flask",
@@ -224,10 +231,18 @@ def test_cri_public_item_inventory_is_complete_and_direct() -> None:
         | set(GROUND_HARDWARE_PROFILES)
         | set(WORLD_PROP_PROFILES)
         | set(LIQUID_BARREL_PROFILES)
+        | set(POWERED_WEARABLE_DEFINITIONS)
+        | set(ROSTER_WEAPON_DEFINITIONS) | set(ROSTER_EMBER_DEFINITIONS)
+        | set(ROSTER_GEAR_DEFINITIONS) | set(ROSTER_CARRIED_DEFINITIONS) | set(ROSTER_INVENTORY_DEFINITIONS)
+        | {ROSTER_MAUL_DEFINITION.item_id}
+        | {profile.wall.item_id for profile in WINDOW_DEFINITIONS.values()}
+        | {profile.insert.item_id for profile in WINDOW_DEFINITIONS.values() if profile.insert is not None}
         | _BEHAVIOR_ITEM_IDS
         | {"environment.directional_wall", "environment.cliff_face"}
     )
     assert public_ids == expected
+    assert not public_ids.intersection({"consumable.arrow.ember", "consumable.arrow.frost",
+        "consumable.arrow.storm", "consumable.arrow.venom"})
     assert "environment.door" not in public_ids
     assert "environment.directional_door" in public_ids
     assert _PRIVATE_GUARDIAN_ID not in public_ids

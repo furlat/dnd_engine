@@ -27,6 +27,7 @@ from dnd.core.aoe import AoEShape, Cone, Cube, Cylinder, Line, Sphere, snapshot_
 from dnd.core.modifiers import NumericalModifier
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
+from dnd.blocks.sensory import spatial_senses_system
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
 from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.traps import TrapState
@@ -236,13 +237,15 @@ class SpatialCondition(BaseCondition):
             EventPhase.EFFECT,
             update={"condition": self},
         )
+        if application_effect.canceled:
+            return [], [], [], [], application_effect
         change_effect = self._open_change(
             SpatialEffectChangeOperation.CREATED,
             previous_positions=set(),
             affected_positions=set(self._activation_positions or ()),
             parent_event=application_effect,
         )
-        self._commit_activation_footprint()
+        self._commit_activation_footprint(change_effect)
         get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
         event_handler_uuids: list[UUID] = []
         anchor_handler = self._create_anchor_handler()
@@ -333,7 +336,7 @@ class SpatialCondition(BaseCondition):
             )
         return admitted
 
-    def _commit_activation_footprint(self) -> None:
+    def _commit_activation_footprint(self, parent_event: Event) -> None:
         """Swap preflighted Tile membership before installing mechanics."""
         if self._activation_positions is None:
             raise RuntimeError("Spatial condition has no prepared footprint")
@@ -1357,6 +1360,10 @@ class AreaCondition(SpatialCondition):
             set(self.affected_positions),
             parent_event=effect,
         )
+        # The installed field is a committed spatial change before its separate
+        # appearance callbacks. Publish that observation while this cause is exact;
+        # later injury/visibility changes keep their own native refresh boundary.
+        spatial_senses_system(effect)
         if SpatialEffectTriggerKind.APPEAR in self.trigger_kinds:
             for entity in self._occupants_at(set(self.affected_positions)):
                 if self._admit_trigger(

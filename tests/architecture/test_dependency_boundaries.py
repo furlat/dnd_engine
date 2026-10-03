@@ -89,7 +89,7 @@ CANONICAL_NEUTRAL_SYMBOL_OWNERS = {
     "ContentRef": "dnd.core.content.identities",
     "BehaviorBinding": "dnd.core.content.runtime",
     "RuntimeBehaviorKind": "dnd.core.content.runtime",
-    "HandlerDispatchOutcome": "dnd.core.content.runtime",
+    "HandlerDispatchOutcome": "dnd.core.content.identities",
     "HandlerDispatchEvidence": "dnd.core.content.runtime",
     "EffectiveHandlerPresentation": "dnd.core.content.runtime",
     "ConditionTag": "dnd.core.condition_types",

@@ -27,7 +27,7 @@ def test_same_saved_attack_can_face_defender_forward_or_away_without_changing_ga
         # The review pose travels with the input, while the same public gameplay
         # packet is decoded afresh. No native world or damage rerun during rendering.
         recorded = RecordedInput(case=cases[case_id], captured_at="test", sources={},
-                                 sequence=json.loads(encoded), sequence_format="player-v1")
+                                 sequence=json.loads(encoded), sequence_format="player-v2")
         saved = tmp_path / case_id
         saved.mkdir()
         path = saved / "input.json"

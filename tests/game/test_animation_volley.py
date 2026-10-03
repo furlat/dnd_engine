@@ -12,6 +12,7 @@ from game.animation import (
     compile_cast, project_geometry_projectile, projectile_contact, sample_cast,
     view_facing,
 )
+from tests.game.authoring_fixtures import recorded_recipe_data
 from game.animation_data import load_animation_data
 from game.animation_types import StudioSpellDraft
 from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
@@ -19,7 +20,7 @@ from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
 
 @pytest.fixture(scope="module")
 def timeline() -> CastTimeline:
-    data = load_animation_data(authored_bundles=())
+    data = recorded_recipe_data()
     a = ActorContact("A", (3, -3), "W", 1, hp=80)
     b = ActorContact("B", (3, 0), "W", 1, hp=80)
     return compile_cast(data, "spell.magic_missile", CastInput(

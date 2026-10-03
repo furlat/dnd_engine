@@ -93,7 +93,7 @@ def test_voluntary_move_interrupts_only_after_one_committed_paid_step() -> None:
     assert movement.controller_revalidation_reason == "newly_visible_hostile"
     assert movement.outcome_code == "movement.subjective_revalidation"
     assert actor.position == requested_path[1]
-    assert actor.action_economy.movement.normalized_score == 25
+    assert actor.action_economy.movement_remaining() == 25
 
     assert len(guard.boundaries) == 1
     boundary = guard.boundaries[0]

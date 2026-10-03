@@ -316,7 +316,7 @@ class FireSurface(AreaCondition):
             damage_rolls=[damage_roll],
             damages=[damage],
             parent_event=parent_event.uuid,
-            effect_id=self.content_ref.identity_key,
+            effect_id=self.content_ref.identity_key, independent_resolution=True,
         )
 
     def _create_zone_entry_handler(self) -> EventHandler:
@@ -755,7 +755,7 @@ class ElectrifiedWater(WetAreaCondition):
             damage_rolls=[damage_roll],
             damages=[damage],
             parent_event=parent_event.uuid,
-            effect_id=self.content_ref.identity_key,
+            effect_id=self.content_ref.identity_key, independent_resolution=True,
         )
 
     def _apply_appearance_effect(
@@ -1116,7 +1116,7 @@ class SpikeTrap(SpatialCondition):
             entity.receive_damage(
                 roll.total, component.damage_type, self.source_entity_uuid,
                 damage_rolls=[roll], damages=[damage], parent_event=parent_event.uuid,
-                effect_id=self.content_ref.identity_key,
+                effect_id=self.content_ref.identity_key, independent_resolution=True,
             )
         condition = self.payload.condition
         if condition is None:

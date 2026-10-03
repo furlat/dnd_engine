@@ -713,6 +713,8 @@ def _project_outcome_profile(
                 die_size=roll.die_size,
                 flat_bonus=roll.flat_bonus,
                 damage_type=roll.damage_type,
+                save_dc=roll.save_dc, save_ability=roll.save_ability,
+                double_on_critical=roll.double_on_critical,
             )
             for roll in profile.damage_rolls
         ),

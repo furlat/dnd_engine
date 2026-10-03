@@ -216,7 +216,7 @@ def test_barbarian_berserker_applies_1_to_20_and_removes_exactly() -> None:
     assert entity.action_economy.resources["relentless_rage"].maximum == 999
     assert entity.action_economy.resolve_attacks_per_attack_action() == 2
     assert entity.equipment.crit_extra_dice_melee.normalized_score == 4
-    assert entity.action_economy.movement.normalized_score == 40
+    assert entity.action_economy.movement_remaining() == 40
     assert entity.initiative.advantage.name == "ADVANTAGE"
     assert entity.ability_scores.strength.ability_score.score == 18
     assert entity.ability_scores.constitution.ability_score.score == 20
@@ -253,7 +253,7 @@ def test_barbarian_berserker_applies_1_to_20_and_removes_exactly() -> None:
     }
     applied_objects = set(BaseObject._registry)
     for _ in range(3):
-        assert entity.action_economy.movement.normalized_score == 40
+        assert entity.action_economy.movement_remaining() == 40
         assert entity.saving_throws.dexterity_saving_throw.bonus.advantage.name == (
             "ADVANTAGE"
         )

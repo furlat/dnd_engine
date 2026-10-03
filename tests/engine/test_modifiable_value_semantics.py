@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
+    ArithmeticFactor,
     AdvantageModifier,
     AutoHitModifier,
     ContextualDamageTypeModifier,
@@ -730,3 +731,49 @@ def test_outgoing_numerical_buckets_reject_their_own_source(bucket: str) -> None
         **{bucket: {other_modifier.uuid: other_modifier}},
     )
     assert outgoing.source_entity_uuid == owner_uuid
+
+
+def test_exact_factors_apply_after_all_channels_before_bounds_and_survive_composition():
+    owner, target = uuid4(), uuid4()
+    speed = ModifiableValue.create(source_entity_uuid=owner, base_value=31)
+    speed.set_target_entity(target)
+    bonus = ModifiableValue.create(source_entity_uuid=owner, base_value=4)
+    speed.self_contextual.add_value_modifier(ContextualNumericalModifier(
+        source_entity_uuid=owner, callable=lambda *_: number_mod(owner, 5)))
+    external = ModifiableValue.create(source_entity_uuid=target, target_entity_uuid=owner)
+    external.to_target_static.add_value_modifier(NumericalModifier(
+        source_entity_uuid=target, target_entity_uuid=owner, value=10))
+    speed.set_from_target(external)
+    haste = ArithmeticFactor(source_entity_uuid=owner, numerator=2)
+    slow = ArithmeticFactor(source_entity_uuid=owner, numerator=1, denominator=2)
+    speed.self_static.add_factor(haste)
+    external.to_target_static.add_factor(slow)
+    combined = speed.combine_values([bonus])
+    assert combined.normalized_score == 50
+    combined.remove_modifier(slow.uuid)
+    assert combined.normalized_score == 100
+    cap = number_mod(owner, 0)
+    combined.self_static.add_max_constraint(cap)
+    assert combined.normalized_score == 0
+    combined.remove_modifier(cap.uuid)
+    assert haste.uuid in combined.get_all_modifier_uuids()
+    assert any(row.get('operation') == 'multiply' for row in combined.get_breakdown())
+    combined.remove_modifier(haste.uuid)
+    assert combined.normalized_score == 50
+    assert not combined.self_static.factor_modifiers
+
+
+def test_fractional_factors_round_only_after_combining_and_serialize_exactly():
+    owner = uuid4()
+    value = ModifiableValue.create(source_entity_uuid=owner, base_value=31)
+    half = ArithmeticFactor(source_entity_uuid=owner, numerator=1, denominator=2)
+    double = ArithmeticFactor(source_entity_uuid=owner, numerator=2)
+    value.self_static.add_factor(half)
+    assert value.normalized_score == 15
+    value.self_static.add_factor(double)
+    assert value.normalized_score == 31
+    snapshot = value.model_dump(mode='json')
+    assert snapshot['self_static']['factor_modifiers'][str(half.uuid)]['denominator'] == 2
+    assert value.normalized_score_excluding_static_modifiers({double.uuid}) == 15
+    value.remove_all_modifiers()
+    assert value.normalized_score == 0

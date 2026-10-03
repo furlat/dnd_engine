@@ -10273,6 +10273,31 @@
     {
       "accepted_proof": null,
       "blocker": null,
+      "capability": "Accepted Dretch content; exact current authored owner, with limitations documented in the SRD coverage row",
+      "current_owner": {
+        "source_path": "dnd/monsters/multiattack_definitions.py",
+        "source_symbol": "SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS"
+      },
+      "current_proof_nodes": [
+        "tests/engine/test_dretch_content.py::test_discovered_dretch_multiattack_spends_one_action_for_bite_then_claws"
+      ],
+      "current_ref": {
+        "content_id": "action.monster.multiattack.dretch",
+        "content_version": 1,
+        "definition_contract_hash": "55eb3a13d620536ba108a3e8cb10b6673307fcb9f18ed0836999f1d39feb796e",
+        "definition_kind": "action",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "definition_kind": "action",
+      "disposition": "retain_then_migrate",
+      "evidence_state": "current_only_keep",
+      "row_id": "definition::content.srd_5_1_cc:action:action.monster.multiattack.dretch@1",
+      "semantic_id": "action.monster.multiattack.dretch",
+      "target_cut": "CR-2"
+    },
+    {
+      "accepted_proof": null,
+      "blocker": null,
       "capability": "exact current action structural definition names one authored data owner and authenticated contract",
       "current_owner": {
         "source_path": "dnd/monsters/multiattack_definitions.py",
@@ -14669,6 +14694,31 @@
       "row_id": "definition::content.srd_5_1_cc:creature:creature.dire_wolf@1",
       "semantic_id": "creature.dire_wolf",
       "target_cut": "CR-6"
+    },
+    {
+      "accepted_proof": null,
+      "blocker": null,
+      "capability": "Accepted Dretch content; exact current authored owner, with limitations documented in the SRD coverage row",
+      "current_owner": {
+        "source_path": "dnd/monsters/srd_roster.py",
+        "source_symbol": "_configure_dretch"
+      },
+      "current_proof_nodes": [
+        "tests/engine/test_dretch_content.py::test_dretch_keeps_native_fiend_facts_and_intrinsic_equipment"
+      ],
+      "current_ref": {
+        "content_id": "creature.dretch",
+        "content_version": 1,
+        "definition_contract_hash": "9014e1a5dc325535b66c757f22cd984dd4f8f8caae914b2664c15f03d65f9fa2",
+        "definition_kind": "creature",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "definition_kind": "creature",
+      "disposition": "retain_then_migrate",
+      "evidence_state": "current_only_keep",
+      "row_id": "definition::content.srd_5_1_cc:creature:creature.dretch@1",
+      "semantic_id": "creature.dretch",
+      "target_cut": "CR-2"
     },
     {
       "accepted_proof": null,
@@ -36044,6 +36094,16 @@
       "authority_kind": "declaration",
       "blocker": null,
       "disposition": "retain_then_migrate",
+      "legacy_identity": "content.srd_5_1_cc:action:action.monster.multiattack.dretch@1",
+      "semantic_id": "action.monster.multiattack.dretch",
+      "source_path": "dnd/monsters/multiattack_definitions.py",
+      "source_symbol_or_row": "SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS",
+      "target_cut": "CR-2"
+    },
+    {
+      "authority_kind": "declaration",
+      "blocker": null,
+      "disposition": "retain_then_migrate",
       "legacy_identity": "content.srd_5_1_cc:action:action.monster.multiattack.knight@1",
       "semantic_id": "action.monster.multiattack.knight",
       "source_path": "dnd/monsters/multiattack_definitions.py",
@@ -45076,6 +45136,16 @@
       "disposition": "retain_then_migrate",
       "legacy_identity": "content.srd_5_1_cc:action:action.monster.multiattack.cult_fanatic@1",
       "semantic_id": "action.monster.multiattack.cult_fanatic",
+      "source_path": "dnd/monsters/multiattack_definitions.py",
+      "source_symbol_or_row": "SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS",
+      "target_cut": "CR-2"
+    },
+    {
+      "authority_kind": "structural_definition",
+      "blocker": null,
+      "disposition": "retain_then_migrate",
+      "legacy_identity": "content.srd_5_1_cc:action:action.monster.multiattack.dretch@1",
+      "semantic_id": "action.monster.multiattack.dretch",
       "source_path": "dnd/monsters/multiattack_definitions.py",
       "source_symbol_or_row": "SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS",
       "target_cut": "CR-2"
@@ -61549,8 +61619,8 @@
       "artifact_id": "current.authored_item_visuals",
       "disposition": "pinned_current_evidence",
       "git_object_or_path": "content_data/ledgers/neuroclient_authored_item_visuals.json",
-      "row_count": 283,
-      "sha256": "7850493fb83395a363110e0c5e99d9da69a287a7b1f663c4906715af41ce7a4a",
+      "row_count": 404,
+      "sha256": "3de4e992e0f4a93bde534bb7ea68900118d4a24dd09dbd193f019f0acbaab8b0",
       "source_tier": "current_reconstructed_engine"
     },
     {
@@ -61565,8 +61635,8 @@
       "artifact_id": "current.icon_bindings",
       "disposition": "pinned_current_evidence",
       "git_object_or_path": "content_data/ledgers/content_icon_bindings.json",
-      "row_count": 874,
-      "sha256": "2129a753a0ad13d5fa472ad9dd9a3b354ae0f73299b753d12ef520ac17736ec8",
+      "row_count": 876,
+      "sha256": "1b2dfb4c26934ce539c6addf11bf7b9bfa77ccd9978ad551ccab762b3f925375",
       "source_tier": "current_reconstructed_engine"
     },
     {
@@ -61590,7 +61660,7 @@
       "disposition": "pinned_current_evidence",
       "git_object_or_path": "content_data/ledgers/srd_5_1_source_coverage.json",
       "row_count": 925,
-      "sha256": "cb5c78be958636b158c0b9ce2a7005f76d6db6a7e795c609f8829124400879be",
+      "sha256": "a644608cd9e0d4c6a51cc78782d5469a9ce5ff2ec24d0d3205566695ec11441a",
       "source_tier": "current_reconstructed_engine"
     },
     {
@@ -61711,6 +61781,11 @@
     {
       "implemented_content_row_id": "definition::content.srd_5_1_cc:creature:creature.dire_wolf@1",
       "source_row_identity": "srd_5_1.creature.dire_wolf",
+      "status_conflict": null
+    },
+    {
+      "implemented_content_row_id": "definition::content.srd_5_1_cc:creature:creature.dretch@1",
+      "source_row_identity": "srd_5_1.creature.dretch",
       "status_conflict": null
     },
     {

@@ -146,7 +146,7 @@ def test_entity_methods_compose_health_actions_and_spellcasting() -> None:
     assert hero.action_economy.actions.normalized_score == 1
     assert hero.action_economy.bonus_actions.normalized_score == 1
     assert hero.action_economy.reactions.normalized_score == 1
-    assert hero.action_economy.movement.normalized_score == 35
+    assert hero.action_economy.movement_remaining() == 35
     assert hero.action_economy.spell_slot_1.normalized_score == 2
     assert hero.action_economy.spell_slot_2.normalized_score == 0
     assert hero.action_economy.spell_slot_3.normalized_score == 1

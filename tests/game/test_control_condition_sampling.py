@@ -50,16 +50,17 @@ def test_sleep_uses_advancing_loop_and_arbitrary_phase_clear_without_restarting(
 
 
 @pytest.mark.parametrize("identity,stem", (("condition.blinded", "blinded"), ("condition.deafened", "deafened")))
-def test_senses_use_authored_intro_loop_and_finite_removal(data, identity, stem):
+def test_senses_use_current_sustained_glyph_until_membership_is_removed(data, identity, stem):
     actor, appearance, record = cue(data, identity)
     initial = samples(data, actor, appearance, record, 1250)
-    assert len(initial) == 2 and all(f"{stem}.application" in row.asset_id for _, row in initial)
+    assert len(initial) == 2 and all(f"divine.divine_condition_{stem}.sustain." in row.asset_id for _, row in initial)
     sustained = samples(data, actor, appearance, record, 3500)
-    assert len(sustained) == 2 and all(f"{stem}.sustain" in row.asset_id for _, row in sustained)
+    assert len(sustained) == 2 and all(f"divine.divine_condition_{stem}.sustain." in row.asset_id for _, row in sustained)
+    assert [row.frame for _, row in initial] != [row.frame for _, row in sustained]
     cleared = replace(record, removed_ms=3600,
         removed_layers=tuple(layer.layer.assetId for layer in appearance.layers))
-    tail = samples(data, actor, ConditionAppearance(), cleared, 3850)
-    assert len(tail) == 2 and all(f"{stem}.removal" in row.asset_id and row.frame == 8 for _, row in tail)
+    tail = samples(data, actor, ConditionAppearance(), cleared, 3700)
+    assert len(tail) == 2 and all(0 < row.alpha < 1 for _, row in tail)
     assert not samples(data, actor, ConditionAppearance(), cleared, 4300)
 
 

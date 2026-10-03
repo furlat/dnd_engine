@@ -444,7 +444,7 @@ def apply_origin(
                 name=f"{resolved.species.value} walking speed",
                 value=speed_delta,
             )
-            entity.action_economy.movement.self_static.add_value_modifier(modifier)
+            entity.action_economy.walking_speed.self_static.add_value_modifier(modifier)
             speed_modifiers.append(modifier_id)
 
         for language_id in resolved.languages:
@@ -839,7 +839,7 @@ def _validate_origin_receipt_ownership(
             raise RuntimeError("origin sense ownership changed")
 
     numerical_owners = (
-        (entity.action_economy.movement.self_static.value_modifiers,
+        (entity.action_economy.walking_speed.self_static.value_modifiers,
          receipt.walking_speed_modifier_ids),
         (entity.health.max_hit_points_bonus.self_static.value_modifiers,
          receipt.maximum_hit_point_modifier_ids),
@@ -930,7 +930,7 @@ def _remove_origin_receipt(entity: Entity, receipt: OriginGrantReceipt) -> None:
         if not entity.senses.remove_sense_mode_source(sense_source):
             raise RuntimeError("origin sense source is missing")
     for modifier_id in reversed(receipt.walking_speed_modifier_ids):
-        entity.action_economy.movement.self_static.remove_value_modifier(modifier_id)
+        entity.action_economy.walking_speed.self_static.remove_value_modifier(modifier_id)
         NumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.maximum_hit_point_modifier_ids):
         entity.health.max_hit_points_bonus.self_static.remove_value_modifier(modifier_id)

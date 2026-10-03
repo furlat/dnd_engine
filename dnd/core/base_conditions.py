@@ -313,6 +313,9 @@ class BaseCondition(BaseObject):
         """Return current native mode for physical hardware represented by this owner."""
         return None
 
+    def publish_owner_state(self, parent_event: Event | None) -> None:
+        """Publish a dependent owner's changed snapshot after a committed link batch."""
+
     def unlink_condition(self, condition_uuid: UUID, *, parent_event: Event) -> None:
         """Forget one committed child removal from this condition's links."""
         self.linked_conditions = [link for link in self.linked_conditions if link[1] != condition_uuid]

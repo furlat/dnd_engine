@@ -140,7 +140,7 @@ async def _run(
         latest = historical = seed
         catalog = load_catalog()
         rig_files = (Path(__file__).parent / "data" / "rigs" / "goblin01.json",) if goblin_recipient else ()
-        data = load_animation_data(rig_files=rig_files)
+        data = load_animation_data(rig_files=rig_files, world_source=catalog.world_source)
         cache = SurfaceCache(catalog)
         positions = tuple(seed.senses.entities.values()) if seed.senses is not None else ()
         if seed.senses is None or not positions:

@@ -14143,5 +14143,123 @@
       "kind": "call-lightning"
     },
     "tail_duration_ms": 1200
+  },
+  {
+    "id": "damage-resolution-retaliation",
+    "title": "Damage ownership \u00b7 retaliation",
+    "tags": [
+      "cleanup-acceptance",
+      "damage-resolution",
+      "four-corners"
+    ],
+    "description": "Actual melee hit and Fire Shield retaliation retain distinct results.",
+    "scenario": {
+      "kind": "damage-resolution",
+      "program": "retaliation"
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "damage-resolution-push",
+    "title": "Damage ownership \u00b7 push",
+    "tags": [
+      "cleanup-acceptance",
+      "damage-resolution",
+      "four-corners"
+    ],
+    "description": "Thunderwave pushes through two Spike Growth cells: 2 thunder, then 2 + 2 piercing.",
+    "scenario": {
+      "kind": "damage-resolution",
+      "program": "push"
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "damage-resolution-walk",
+    "title": "Damage ownership \u00b7 walk",
+    "tags": [
+      "cleanup-acceptance",
+      "damage-resolution",
+      "four-corners"
+    ],
+    "description": "Ordinary Move through two Spike Growth cells, one result per entry.",
+    "scenario": {
+      "kind": "damage-resolution",
+      "program": "walk"
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "damage-resolution-hidden",
+    "title": "Damage ownership \u00b7 hidden",
+    "tags": [
+      "cleanup-acceptance",
+      "damage-resolution",
+      "four-corners"
+    ],
+    "description": "Undisclosed source deals 7 damage: 40 normal + 5 temporary becomes 38 + 0 together.",
+    "scenario": {
+      "kind": "damage-resolution",
+      "program": "hidden"
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "construction-ice-break",
+    "title": "Ice \u00b7 form, break section, dismiss",
+    "tags": [
+      "cleanup-acceptance",
+      "construction",
+      "four-corners"
+    ],
+    "description": "Real cast commits all three sections before formation; ordinary attacks break one; concentration removal retires the other two.",
+    "scenario": {
+      "kind": "construction",
+      "material": "ice"
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "construction-stone-break",
+    "title": "Stone \u00b7 form, break section, dismiss",
+    "tags": [
+      "cleanup-acceptance",
+      "construction",
+      "four-corners"
+    ],
+    "description": "Real cast commits all three sections before formation; ordinary attacks break one; concentration removal retires the other two.",
+    "scenario": {
+      "kind": "construction",
+      "material": "stone"
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "flight-ground-to-ground",
+    "title": "Fly \u00b7 ground departure and landing",
+    "tags": [
+      "cleanup-acceptance",
+      "flight",
+      "four-corners"
+    ],
+    "description": "Already-active Fly uses the ordinary movement action and one movement budget between ground endpoints. This clip inspects travel and landing; effect admission/removal is covered by native ownership tests.",
+    "scenario": {
+      "kind": "flight"
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "item-warden-power-cycle",
+    "title": "Warden pack \u00b7 use, dismiss, recharge",
+    "tags": [
+      "cleanup-acceptance",
+      "powered-item",
+      "four-corners"
+    ],
+    "description": "Real equipped-item use grants Resistance. Dismissing concentration removes its glyph; the same item recharges through its rest hook. Charge changes are in the wearer packet and withheld from the witness; the current video HUD does not display inventory charges.",
+    "scenario": {
+      "kind": "item-power"
+    },
+    "tail_duration_ms": 1200
   }
 ]

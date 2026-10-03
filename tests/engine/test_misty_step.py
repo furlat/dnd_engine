@@ -70,7 +70,7 @@ def test_misty_step_records_one_parented_relocation_without_opportunity_attack(
     assert origin in threatened, threatened
     before = (caster.action_economy.bonus_actions.normalized_score,
               caster.action_economy.spell_slot_2.normalized_score,
-              caster.action_economy.movement.normalized_score,
+              caster.action_economy.movement_remaining(),
               witness.action_economy.reactions.normalized_score)
     cursor = EventQueue.event_cursor()
     root = discovered_cast(caster, destination)
@@ -88,7 +88,7 @@ def test_misty_step_records_one_parented_relocation_without_opportunity_attack(
     assert caster.uuid not in get_map().get_entities_at(origin)
     assert (caster.action_economy.bonus_actions.normalized_score,
             caster.action_economy.spell_slot_2.normalized_score,
-            caster.action_economy.movement.normalized_score,
+            caster.action_economy.movement_remaining(),
             witness.action_economy.reactions.normalized_score) == (before[0] - 1, before[1] - 1, before[2], before[3])
 
 

@@ -36,8 +36,6 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
     entity_resource_cost_evaluator,
     entity_action_economy_cost_applier,
-    Move,
-    MovementEvent,
     SpellAction,
 )
 from dnd.actions_functional import apply_action_overrides, clear_action_overrides
@@ -395,9 +393,7 @@ class DragonWingsActive(BaseCondition):
             return [], [], [], [], declaration_event.cancel(
                 status_message="Dragon Wings target does not exist",
             )
-        target.action_economy.movement_speed_grants[self.uuid] = {
-            MovementMode.FLYING: target.action_economy.get_base_value("movement")
-        }
+        target.action_economy.grant_speed(self.uuid, MovementMode.FLYING, target.action_economy.get_base_value("movement"))
         return [], [], [], [], declaration_event.phase_to(
             EventPhase.EFFECT,
             update={"condition": self},
@@ -421,35 +417,15 @@ class DragonWingsActive(BaseCondition):
         template = cast(DragonWings, template)
         if template.active_wings_condition_uuid != self.uuid:
             raise RuntimeError("Dragon Wings owner edge is inconsistent")
-        target.action_economy.movement_speed_grants.pop(self.uuid, None)
         result = super()._remove(event)
         template.active_wings_condition_uuid = None
         return result
 
-
-class Fly(Move):
-    """Use manifested dragon wings for ordinary movement expenditure."""
-
-    name: str = Field(
-        default="Fly",
-        description="Human-readable flying movement action name.",
-    )
-    description: str = Field(
-        default="Move through traversable space using manifested wings.",
-        description="Rules summary for Dragon Wings movement.",
-    )
-    movement_mode: MovementMode = Field(
-        default=MovementMode.FLYING,
-        description="Dragon Wings always use flying traversal costs.",
-    )
-
-    def _validate(self, declaration_event: MovementEvent) -> MovementEvent:
-        entity = Entity.get(self.source_entity_uuid)
-        if entity is None or "Dragon Wings" not in entity.active_conditions:
-            return declaration_event.cancel(
-                status_message="Dragon Wings are not manifested",
-            )
-        return super()._validate(declaration_event)
+    def _release_owned_runtime_state(self, *, parent_event: Optional[Event] = None) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            target.action_economy.remove_speed_grant(self.uuid)
+        super()._release_owned_runtime_state(parent_event=parent_event)
 
 
 class DragonWings(BaseAction):

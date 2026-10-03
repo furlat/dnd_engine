@@ -163,8 +163,8 @@ Travel and impact may select different rotation behavior. A directional shot
 can retain hybrid rotation while its ground impact authors `fineRotation: "none"`.
 This changes the sprite's extra screen rotation, not its directional row,
 registered contact, launch path or arrival clock. Extended impact media continues
-through the existing projectile impact/area-mask path. `area.sprite` is parsed
-reference vocabulary without an executor; populating it does not render media.
+through the existing projectile impact/area-mask path. `area.sprite` remains archived reference vocabulary. Selecting a recipe with
+this unsupported requirement fails admission.
 
 The original `orientation.directionSource: "tangent"` now selects the nearest
 screen octant throughout travel, with hybrid rotation correcting that row's
@@ -1535,3 +1535,40 @@ replacement palette color on the same source zones, rather than multiplying an
 already colored item. Ground registration includes `reference_tile_width`; the
 vendor equipment uses a 64-pixel tile against the game's 128-pixel tile. Image,
 pivot and shadow share that conversion before the authored scale and camera zoom.
+
+
+## Player sequence version 2
+
+`python -m game.export_schema OUTPUT_DIRECTORY` exports the actual PlayerSequence,
+selected draft and world-binding schemas without the paused server or art loading.
+The packet and native event producers share passive declarations in `dnd/types`.
+There is one definition of each public enum and world after-value.
+
+UUIDs identify instances. Event UUIDs identify versions, lineage UUIDs identify
+operations. A resolution reference names an operation or its specific application;
+application membership includes its owning cast, ID and index together. Missing
+causality remains null. Artwork availability never changes that ownership.
+Damage requests and committed damage are separate discriminated variants; applied
+results require damage and normal/temporary HP after-values. Applications retain
+all committed results in native source order. Grouped feedback does not discard
+those commits.
+
+Observed-change references identify a recorded source version, source index and
+changed field/owner. Fields in one indivisible observation retain the same commit
+boundary. Native field installation publishes its actual observation before its
+separate appearance callbacks, so presentation does not synthesize partial events.
+Hidden source references are withheld independently of the permitted after-value.
+Spatial membership changes name their actual commit event version; reduction uses
+that version's source index, not the operation's eventual completion. This keeps
+nested reactions from replaying an older position over a later committed move.
+
+World coordinates use cells; elevations use engine height steps; rules distances
+use feet. Authored and compiled times use milliseconds. Sampling is pure at a
+requested time and uses one compiled timeline independent of camera or frame rate.
+Condition, field, concentration and construction lifetimes traverse the same bound
+timelines with accumulated offsets. They retain distinct membership policies.
+
+Version 1 input is migrated only where its recorded facts determine membership
+and ownership. Ambiguous legacy damage requires the preserved native recording;
+no live entity state or current art may supply missing history. Original archives
+are never overwritten by schema export or migration.

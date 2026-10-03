@@ -476,7 +476,7 @@ def test_command_branches_spend_exactly_the_targets_next_turn(
     assert target.action_economy.action_permission.normalized_score == 0
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert target.action_economy.reactions.normalized_score == 1
     assert not _command_zero_cost_probe(target).check_costs()
     assert _command_reaction_probe(target).check_costs()
@@ -499,17 +499,17 @@ def test_command_branches_spend_exactly_the_targets_next_turn(
     assert target.action_economy.bonus_actions.normalized_score == 1
     assert target.action_economy.reactions.normalized_score == 1
     if command_word == "grovel":
-        assert target.action_economy.movement.normalized_score == 30
+        assert target.action_economy.movement_remaining() == 30
         assert has_condition(target, "Prone")
         target.on_turn_start(round_number=2, turn_index=0)
         assert not has_condition(target, "Prone")
-        assert target.action_economy.movement.normalized_score == 15
+        assert target.action_economy.movement_remaining() == 15
     elif command_word == "flee":
-        assert target.action_economy.movement.normalized_score == 0
+        assert target.action_economy.movement_remaining() == 0
         target.on_turn_start(round_number=2, turn_index=0)
-        assert target.action_economy.movement.normalized_score == 30
+        assert target.action_economy.movement_remaining() == 30
     else:
-        assert target.action_economy.movement.normalized_score == 30
+        assert target.action_economy.movement_remaining() == 30
 
 
 def test_command_flee_uses_voluntary_movement_and_provokes_reactions() -> None:

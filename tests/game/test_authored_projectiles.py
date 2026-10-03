@@ -43,11 +43,11 @@ def test_default_bundle_replaces_geometry_without_changing_body_delivery_or_vita
     # Compare media choices with the same authored contacts. The original
     # imported recipe's old canvas/insets no longer describe the selected
     # palm-to-torso trajectory, so its absolute arrivals are not a baseline.
-    reference = load_animation_data(authored_bundles=())
-    document = reference.drafts["spell.magic_missile"].model_dump(mode="json", exclude_unset=True)
+    reference = timeline.data
+    document = timeline.recipe.model_dump(mode="json", exclude_unset=True)
     assert timeline.recipe.projectile is not None
-    document["projectile"]["sourceAnchor"] = timeline.recipe.projectile.sourceAnchor.model_dump(mode="json")
-    document["projectile"]["targetAnchor"] = timeline.recipe.projectile.targetAnchor.model_dump(mode="json")
+    document["projectile"]["sprite"] = None
+    document["projectile"]["geometry"]["enabled"] = True
     reference = replace(reference, drafts=MappingProxyType({**reference.drafts,
         "spell.magic_missile": StudioSpellDraft.model_validate_json(json.dumps(document))}))
     baseline = compile_cast(reference, "spell.magic_missile", timeline.source)

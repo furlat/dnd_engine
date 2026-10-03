@@ -680,7 +680,7 @@ def test_haste_cleanup_paths_remove_the_budget_and_apply_owned_lethargy(
     assert fighter.action_economy.get_restricted_action_grants() == ()
     assert "Haste Lethargy" in fighter.active_conditions
     assert fighter.action_economy.action_permission.normalized_score == 0
-    assert fighter.action_economy.movement.normalized_score == 0
+    assert fighter.action_economy.movement_remaining() == 0
 
 
 def test_replacing_haste_preserves_the_new_conditions_owned_budget() -> None:

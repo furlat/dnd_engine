@@ -98,13 +98,13 @@ def test_cleared_aperture_costs_twice_normal_terrain_and_moves_once(arena: Game,
     grid.set_tile(3, 2, tile=Tile.create((3, 2), walking_cost=cost))
     place_window("environment.window.fantasy_g7", (2, 2), CardinalDirection.EAST)
     entity = actor(arena)
-    before = entity.action_economy.movement.normalized_score
+    before = entity.action_economy.movement_remaining()
     choices = passage(entity)
     assert len(choices) == 1
     result = choices[0].apply()
     assert result is not None and not result.canceled
     assert entity.position == (3, 2)
-    assert entity.action_economy.movement.normalized_score == before - 10 * cost
+    assert entity.action_economy.movement_remaining() == before - 10 * cost
 
 
 def test_grille_size_and_opposite_wall_each_gate_traversal(arena: Game) -> None:
@@ -117,11 +117,11 @@ def test_grille_size_and_opposite_wall_each_gate_traversal(arena: Game) -> None:
     blocker = build_directional_wall()
     blocker.place_on_grid((3, 2), boundary_direction=CardinalDirection.WEST)
     choices = passage(entity)
-    before = entity.action_economy.movement.normalized_score
+    before = entity.action_economy.movement_remaining()
     for choice in choices:
         result = choice.apply()
         assert result is not None and result.canceled
-    assert entity.position == (2, 2) and entity.action_economy.movement.normalized_score == before
+    assert entity.position == (2, 2) and entity.action_economy.movement_remaining() == before
     blocker.retire()
     entity.size = Size.MEDIUM
     assert not passage(entity)
@@ -132,11 +132,11 @@ def test_stale_crossing_revalidates_before_spending_and_cold_wreck_has_no_break(
         insert_destroyed=True)
     entity = actor(arena)
     choice = passage(entity)[0]
-    before = entity.action_economy.movement.normalized_score
+    before = entity.action_economy.movement_remaining()
     assembly.wall.receive_damage(100, DamageType.BLUDGEONING, entity.uuid)
     result = choice.apply()
     assert result is not None and result.canceled
-    assert entity.position == (2, 2) and entity.action_economy.movement.normalized_score == before
+    assert entity.position == (2, 2) and entity.action_economy.movement_remaining() == before
     assert assembly.insert is not None
     assert not [e for _, e in EventQueue.iter_events_since(0)
                 if isinstance(e, ItemDestructionEvent) and e.target_entity_uuid == assembly.insert.uuid]

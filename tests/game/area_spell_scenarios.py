@@ -24,12 +24,13 @@ from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.evocation import BurningHands, GustOfWind, Thunderwave
+from dnd.spells.conjuration import CallLightning
 from dnd.types.world import CardinalDirection
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
-AreaProgram = Literal["burning_hands", "thunderwave", "gust_of_wind"]
+AreaProgram = Literal["burning_hands", "thunderwave", "gust_of_wind", "call_lightning"]
 
 
 def area_spell_history(*, program: AreaProgram = "burning_hands",
@@ -63,20 +64,24 @@ def area_spell_history(*, program: AreaProgram = "burning_hands",
             if diagonal and program == "thunderwave":
                 positions["target"] = (4, 6)
             destination = (4, 6) if diagonal else (4, 5)
+        if program == "call_lightning":
+            positions = {"caster": (3, 5), "target": (7, 5), "saved": (8, 5),
+                         "ally": (7, 6), "outside": (10, 5)}
+            destination = (7, 5)
         if blocked:
             build_directional_wall().place_on_grid((5, 5), boundary_direction=CardinalDirection.EAST)
         actors: dict[str, Entity] = {}
         for role, position in positions.items():
             save_score = 20 if role == "saved" else 8
             actor = Entity.create(uuid4(), role.title(), config=EntityConfig(
-                position=position, faction="heroes" if role == "caster" else "enemies",
+                position=position, faction="heroes" if role in ("caster", "ally") else "enemies",
                 ability_scores=AbilityScoresConfig(
                     intelligence=AbilityConfig(ability_score=18),
                     strength=AbilityConfig(ability_score=save_score),
                     dexterity=AbilityConfig(ability_score=save_score),
                     constitution=AbilityConfig(ability_score=save_score),
                 ),
-                action_economy=ActionEconomyConfig(spell_slots={1: 1, 2: 1}),
+                action_economy=ActionEconomyConfig(spell_slots={1: 1, 2: 1, **({3: 1} if program == "call_lightning" else {})}),
                 spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
                 health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=12, mode="maximums")]),
                 appearance=AppearanceConfig(body_category="NakedBody", has_beard=False,
@@ -89,7 +94,8 @@ def area_spell_history(*, program: AreaProgram = "burning_hands",
             setup_standard_actions(actor)
             if role == "caster":
                 register_spell(actor, {"burning_hands": BurningHands, "thunderwave": Thunderwave,
-                                       "gust_of_wind": GustOfWind}[program], caster_level=3)
+                                       "gust_of_wind": GustOfWind, "call_lightning": CallLightning}[program],
+                               caster_level=5 if program == "call_lightning" else 3)
             install_body_response(actor, BLOOD_BODY_RESPONSE)
             actor.compose_entity()
             game.deploy_entity(actor, position)
@@ -124,24 +130,35 @@ def area_spell_history(*, program: AreaProgram = "burning_hands",
         assert selected, (behavior, destination, [(row.behavior_id, [target.position for target in row.valid_targets])
                           for row in available.all_actions if row.behavior_id == behavior])
         action, target = selected[0]
-        damage_dice = {"burning_hands": 3, "thunderwave": 2, "gust_of_wind": 0}[program]
+        damage_dice = {"burning_hands": 3, "thunderwave": 2, "gust_of_wind": 0, "call_lightning": 3}[program]
         packet = (10, *((4,) * damage_dice))
         with fixed_dice_faces(*(packet * 4)):
             cast = execute_available_action(caster, action, target)
         assert isinstance(cast, SpellEvent) and not cast.canceled and cast.phase is EventPhase.COMPLETION
         assert cast.area_geometry is not None and cast.resolved_area_positions is not None
         assert actors["outside"].get_hp() == before.actors[actors["outside"].uuid].normal_hp
-        if program == "gust_of_wind":
+        if program in ("gust_of_wind", "call_lightning"):
             assert "Concentrating" in caster.active_conditions
             with fixed_dice_faces(*([10] * 30)):
                 encounter.next_turn()
                 while encounter.get_current_entity() is not caster:
                     encounter.next_turn()
+            if program == "call_lightning":
+                repeat = [(row, choice) for row in get_available_actions(caster).all_actions
+                          if row.behavior_id == "action.spell.call_lightning.strike" for choice in row.valid_targets
+                          if choice.position == destination]
+                assert repeat
+                with fixed_dice_faces(*(packet * 4)):
+                    strike = execute_available_action(caster, *repeat[0])
+                assert strike is not None and not strike.canceled
+                assert actors["outside"].get_hp() == before.actors[actors["outside"].uuid].normal_hp
             choices = [(row, choice) for row in get_available_actions(caster).all_actions
                        if row.behavior_id == "action.drop_concentration" for choice in row.valid_targets]
             assert choices
             end = execute_available_action(caster, *choices[0])
             assert end is not None and not end.canceled and "Concentrating" not in caster.active_conditions
+            if program == "call_lightning":
+                assert caster.get_action_template("Call Lightning Strike") is None
         captured = capture_history(before, (), observers=tuple(
             ObserverCapture(role, actors[role].uuid, baseline) for role in ("caster", "target")))
         primary = captured.views["caster"]

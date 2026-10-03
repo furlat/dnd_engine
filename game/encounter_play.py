@@ -111,7 +111,8 @@ async def _run(
         projection, initialization = begin_projection(startup)
         baseline = reduce_initialization(initialization)
         latest = historical = baseline
-        data = load_animation_data(rig_files=tuple(sorted((Path(__file__).parent / "data/rigs").glob("*.json"))))
+        catalog = load_catalog()
+        data = load_animation_data(rig_files=tuple(sorted((Path(__file__).parent / "data/rigs").glob("*.json"))), world_source=catalog.world_source)
         number_font, badge_font = (pygame.font.SysFont(style.fontFamily, round(style.fontSizePx),
                                                        bold=style.fontWeight == "bold")
                                    for style in (data.number_style, data.badge_style))
@@ -120,7 +121,6 @@ async def _run(
         actors = scene_actors(historical, data, facings)
         body_media: LoadedBodyRows = {}
         load_scene_media(actors, data, body_rows=body_media)
-        catalog = load_catalog()
         cache = SurfaceCache(catalog)
         panel_rect = pygame.Rect(0, 0, 345, window_size[1] - 145)
         feedback_viewport = pygame.Rect(panel_rect.right, 0, window_size[0] - panel_rect.right, panel_rect.height)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from game.player_reduction import PlayerCausalIndex, index_player_lineage
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Mapping
@@ -20,7 +21,7 @@ from game.animation import (
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, Facing8, RigLayer
 from game.player_facts import (
-    ActionFact, AreaReachFact, AttackFact, ConditionChangeFact, DamageFact, EquipmentFact, LifeFact, ObjectDamageFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SavingThrowFact, SpellFact,
+    ActionFact, AreaReachFact, ConditionChangeFact, DamageResultFact, EquipmentFact, LifeFact, ObjectDamageFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SavingThrowFact, SpellFact,
 )
 from game.player_reduction import reduce_lineage, state_before_event
 from game.device_art import DeviceEmission, device_bank
@@ -134,6 +135,7 @@ def bind_cast(
     *, travel_apex_steps: float = 0.0,
     contacts: Mapping[str, ActorContact] | None = None,
     facings: Mapping[str, Facing8] | None = None,
+    causal_index: PlayerCausalIndex | None = None,
 ) -> BoundCast:
     """Use the historical pre-head state and actual child results, without IO."""
     root_node = lineage.root
@@ -184,7 +186,7 @@ def bind_cast(
     application_roots: list[tuple[PlayerNode, SpellFact | ActionFact]] = list(spell_applications)
     if not application_roots and not area and root.target_entity_uuid is not None and not root_node.canceled:
         application_roots = [(root_node, root)]
-    by_lineage = {event.lineage_uuid: event for event in lineage.events}
+    index = causal_index if causal_index is not None else index_player_lineage(lineage)
     actor_contacts = {caster.uuid: source_contact}
     contact_actors = {caster.uuid: caster}
     applications: list[CastApplication] = []
@@ -206,41 +208,31 @@ def bind_cast(
         if recipient_contact is None:
             raise ValueError("cast binding requires each retained target contact")
         recipient_uuid = application.target_entity_uuid
-        descendants: list[PlayerNode] = []
-        pending = list(application_node.children_lineages)
-        while pending:
-            child = by_lineage[pending.pop()]
-            if (isinstance(child.fact, (AttackFact, SpellFact))
-                    or isinstance(child.fact, ActionFact) and child.fact.behavior_id in data.drafts):
-                # A nested action owns its own delivery/effect subtree. The
-                # shared compositor binds it at this application's anchor.
-                continue
-            descendants.append(child)
-            pending.extend(child.children_lineages)
-        applied = [event.fact for event in descendants
-                   if isinstance(event.fact, DamageFact) and event.fact.stage == "applied"]
-        if not applied:
-            damage = None
-        elif len(applied) == 1 and applied[0].target_entity_uuid == recipient_uuid:
-            damage = applied[0]
-        else:
-            raise NotImplementedError("selected cast binding requires one positive packet per application or an actual miss")
+        reference = application_node.resolution_ref
+        descendants = index.owned.get(reference, ()) if reference is not None else ()
+        results = index.results.get(reference, ()) if reference is not None else ()
+        applied = [event.fact for event in results if isinstance(event.fact, DamageResultFact)]
+        if any(packet.target_entity_uuid != recipient_uuid for packet in applied):
+            raise ValueError("Application result belongs to a different recipient")
+        damage = applied[-1] if applied else None
         descendants_ids = {event.uuid for event in descendants}
         changes = [(event.uuid, event.fact) for event in lineage.events
                    if event.uuid in descendants_ids and not event.canceled
                    and isinstance(event.fact, LifeFact) and event.fact.entity_uuid == recipient_uuid]
         if damage is not None:
             owned_life_events.update(identity for identity, _ in changes)
-        object_damage = next((row.fact for row in descendants if isinstance(row.fact, ObjectDamageFact)
-            and row.fact.object_uuid == recipient_uuid and row.fact.applied_damage > 0), None)
+        object_packets = [row.fact for row in results if isinstance(row.fact, ObjectDamageFact)
+            and row.fact.object_uuid == recipient_uuid and row.fact.applied_damage > 0]
+        object_damage = object_packets[-1] if object_packets else None
         received_saves = tuple(row.fact for row in descendants if not row.canceled
             and isinstance(row.fact, SavingThrowFact) and row.fact.target_entity_uuid == recipient_uuid)
         applications.append(CastApplication(
             application_id=(str(application.application_id)
                 if isinstance(application, SpellFact) and application.application_id is not None else None),
-            target=recipient_contact,
+            target=recipient_contact, resolution_ref=reference, results=results,
             damage_applied=damage is not None or object_damage is not None,
-            damage_total=damage.applied_damage if damage is not None else object_damage.applied_damage if object_damage else None,
+            damage_total=(sum(row.applied_damage for row in applied) if applied else
+                          sum(row.applied_damage for row in object_packets) if object_packets else None),
             resulting_hp=(changes[-1][1].normal_hit_points if changes else
                           damage.resulting_normal_hp if damage is not None else None),
             resulting_life_state=changes[-1][1].new_state if changes else None,

@@ -80,7 +80,7 @@ class WallSection(WorldItem):
 
     def to_item_presentation_state(self, *, stack_count: int | None = None) -> ItemPresentationState:
         return super().to_item_presentation_state(stack_count=stack_count).model_copy(
-            update={"construction_geometry": self.geometry, "known_to_creator": self.known_to_creator})
+            update={"construction_owner_uuid": self.wall_owner_uuid, "construction_geometry": self.geometry, "known_to_creator": self.known_to_creator})
 
     def _on_destroy(self, parent_event: Event | None) -> None:
         self._break_event = parent_event
@@ -124,6 +124,27 @@ class SolidWallZone(AreaCondition):
     duration: Duration = Field(default_factory=lambda: Duration(duration=100, duration_type=DurationType.ROUNDS))
     tags: set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     _prepared_removals: list[tuple[BaseBlock, WorldObjectPlacement, Event | None]] | None = PrivateAttr(default=None)
+
+    _pending_sections: tuple[tuple[WallSection, tuple[int, int]], ...] = PrivateAttr(default=())
+    _formation_displacements: dict[UUID, tuple[int, int]] = PrivateAttr(default_factory=dict)
+
+    def _commit_activation_footprint(self, parent_event: Event) -> None:
+        """Commit real sections before CREATED can disclose the construction."""
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            raise ValueError("Construction caster no longer exists")
+        for identity, destination in self._formation_displacements.items():
+            entity = Entity.get(identity)
+            if entity is not None and not move_displaced(entity, destination, caster, parent_event):
+                raise ValueError("Formation displacement was canceled")
+        placements = get_map().place_object_sections(
+            tuple((item.uuid, anchor) for item, anchor in self._pending_sections), parent_event=parent_event.uuid)
+        for (item, _), placement in zip(self._pending_sections, placements, strict=True):
+            item.synchronize_floor_placement(placement)
+            self.sections[item.uuid] = item.geometry
+        super()._commit_activation_footprint(parent_event)
+        self._pending_sections = ()
+        self._formation_displacements.clear()
 
     def resolve_condition_footprint(self) -> set[tuple[int, int]]:
         return self._apply_spell_protection({p for p in wall_shell_cells(self.geometry) if get_map().has_tile(*p)})
@@ -221,6 +242,7 @@ class SolidWallZone(AreaCondition):
                 parent = BaseCondition.get(self.parent_link[1])
                 if isinstance(parent, BaseCondition):
                     parent.unlink_condition(self.uuid, parent_event=change)
+                    parent.publish_owner_state(change)
                 self.parent_link = None
             self.tags.discard(ConditionTag.MAGICAL)
             self._complete_change(change)
@@ -523,25 +545,14 @@ class ConstructWall(SpellAction):
                         damage_type=DamageType.FIRE, value=ResistanceStatus.VULNERABILITY))
                 grid.validate_object_placement(item.uuid, anchor)
             # All native placements are preflighted before displacement or commit.
-            activated = zone.activate(parent_event=effect)
-            if activated is None or activated.canceled or not zone.applied:
-                return effect.cancel(status_message="Wall construction was canceled")
-            for identity, destination in displacements.items():
-                entity = Entity.get(identity)
-                if entity is not None and not move_displaced(entity, destination, caster, effect):
-                    return effect.cancel(status_message="Formation displacement was canceled")
+            zone._pending_sections = tuple(pending)
+            zone._formation_displacements = dict(displacements)
             try:
-                placements = grid.place_object_sections(tuple((item.uuid, anchor) for item, anchor in pending),
-                                                        parent_event=effect.uuid)
+                activated = zone.activate(parent_event=effect)
             except ValueError as error:
                 return effect.cancel(status_message=str(error))
-            for (item, _), placement in zip(pending, placements):
-                item.synchronize_floor_placement(placement)
-                zone.sections[item.uuid] = item.geometry
-            change = zone._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
-                previous_positions=set(zone.affected_positions), affected_positions=set(zone.affected_positions),
-                parent_event=effect)
-            zone._complete_change(change)
+            if activated is None or activated.canceled or not zone.applied:
+                return effect.cancel(status_message="Wall construction was canceled")
             self.ensure_concentration(effect).add_linked_condition(zone.uuid, zone.uuid)
             if self.construction_material == "ice":
                 spec = WallDamageSpec(dice_count=10 + 2 * max(0, self.cast_at_level - 6), die=6,

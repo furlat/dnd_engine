@@ -15,6 +15,7 @@ import pytest
 
 from dnd.core.life_types import LifeState
 from game.animation import ActorContact, CastApplication, CastInput, ProjectileSample, compile_cast, crossed_anchors, project_projectile, sample_cast
+from tests.game.authoring_fixtures import recorded_recipe_data
 from game.animation_data import DATA_ROOT, load_animation_data
 from game.animation_types import AnimationData, DamageContext, StudioSpellDraft
 
@@ -29,7 +30,7 @@ QUEUE_CASES = (
 
 @pytest.fixture(scope="module")
 def data() -> AnimationData:
-    return load_animation_data(authored_bundles=())
+    return recorded_recipe_data()
 
 
 def authored_data(data: AnimationData, draft_json: dict) -> AnimationData:

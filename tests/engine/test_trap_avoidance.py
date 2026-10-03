@@ -62,7 +62,7 @@ def forced_events(cursor):
 def test_success_retreats_without_extra_cost_or_voluntary_movement(arena, program):
     target = actor(arena, (2, 3))
     trap = mechanism(program)
-    before = target.action_economy.movement.normalized_score
+    before = target.action_economy.movement_remaining()
     cursor = EventQueue.event_cursor()
     result = enter(target, 20)
     movement, = forced_events(cursor)
@@ -70,7 +70,7 @@ def test_success_retreats_without_extra_cost_or_voluntary_movement(arena, progra
     assert (movement.start_position, movement.end_position, movement.actual_distance) == ((3, 3), (2, 3), 5)
     assert movement.target_entity_uuid == target.uuid and movement.source_entity_uuid == trap.uuid
     assert target.get_hp() == 80 and target.occupancy_layer is OccupancyLayer.GROUND
-    assert target.action_economy.movement.normalized_score == before - 5
+    assert target.action_economy.movement_remaining() == before - 5
     assert target.action_economy.actions.normalized_score == 1
     assert target.action_economy.bonus_actions.normalized_score == 1
     assert "Restrained" not in target.active_conditions

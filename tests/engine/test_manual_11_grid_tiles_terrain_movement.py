@@ -165,7 +165,7 @@ def test_voluntary_move_walks_cell_by_cell_and_spends_movement() -> None:
     hero = create_world_actor("Hero", (0, 0), "heroes")
     Entity.update_all_entities_senses(max_distance=20)
     cursor = EventQueue.event_cursor()
-    movement_before = hero.action_economy.movement.normalized_score
+    movement_before = hero.action_economy.movement_remaining()
 
     event = Move(source_entity_uuid=hero.uuid, end_position=(3, 0)).apply()
 
@@ -180,7 +180,7 @@ def test_voluntary_move_walks_cell_by_cell_and_spends_movement() -> None:
     assert event is not None
     assert not event.canceled
     assert hero.position == (3, 0)
-    assert hero.action_economy.movement.normalized_score == movement_before - 15
+    assert hero.action_economy.movement_remaining() == movement_before - 15
     assert [(step.from_position, step.to_position) for step in step_events] == [
         ((0, 0), (1, 0)),
         ((1, 0), (2, 0)),
@@ -195,7 +195,7 @@ def test_forced_movement_uses_forced_event_spatial_entries_and_no_step_events() 
     target = create_world_actor("Practice Ally", (1, 0), "heroes", strength=10)
     Entity.update_all_entities_senses(max_distance=20)
     cursor = EventQueue.event_cursor()
-    target_movement_before = target.action_economy.movement.normalized_score
+    target_movement_before = target.action_economy.movement_remaining()
 
     shove_event = Shove(
         source_entity_uuid=shover.uuid,
@@ -222,7 +222,7 @@ def test_forced_movement_uses_forced_event_spatial_entries_and_no_step_events() 
     assert shove_event.push_distance == 10
     assert shove_event.end_position == (3, 0)
     assert target.position == (3, 0)
-    assert target.action_economy.movement.normalized_score == target_movement_before
+    assert target.action_economy.movement_remaining() == target_movement_before
 
     assert len(forced_completions) == 1
     assert forced_completions[0].event_type == EventType.FORCED_MOVEMENT

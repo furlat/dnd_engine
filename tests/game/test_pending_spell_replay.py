@@ -5,7 +5,7 @@ import pytest
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
-from game.player_facts import ActionFact, DamageFact, MovementFact, SpellFact, StepFact, TemporaryHitPointsFact
+from game.player_facts import ActionFact, DamageResultFact, MovementFact, SpellFact, StepFact, TemporaryHitPointsFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.replay import RecordedSequence
@@ -54,7 +54,7 @@ def test_real_spell_narratives_survive_both_observer_round_trips(program, option
             assert any(fact.behavior_id == "spell." + program for fact in spells), (program, role)
         if program == "inflict_wounds":
             assert actors["Target"].normal_hp == (120 if options.get("miss") else 108)
-            released = [fact for fact in facts if isinstance(fact, DamageFact) and fact.body_release is not None]
+            released = [fact for fact in facts if isinstance(fact, DamageResultFact) and fact.body_release is not None]
             assert bool(released) is not bool(options.get("miss"))
             assert actors["Caster"].last_visual_position == initial["Caster"].last_visual_position
         elif program == "hellish_rebuke":

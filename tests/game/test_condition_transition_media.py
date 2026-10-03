@@ -24,12 +24,13 @@ def test_transition_only_recipe_plays_at_real_application_and_removal(captured, 
     data = load_animation_data()
     identity = "condition.blinded"
     recipe = data.condition_recipes[identity]
+    finite_source = data.condition_recipes["condition.spell.command.halt"]
     finite = recipe.model_copy(update={
         "persistent": recipe.persistent.model_copy(update={"layers": ()}),
         "application": recipe.application.model_copy(update={
-            "effects": recipe.application.effects if application else ()}),
+            "effects": finite_source.application.effects if application else ()}),
         "removal": recipe.removal.model_copy(update={
-            "effects": recipe.removal.effects if removal else ()}),
+            "effects": finite_source.removal.effects if removal else ()}),
     })
     data = replace(data, condition_recipes={**data.condition_recipes, identity: finite})
     before, roots = player_history(captured, role="caster")
@@ -55,13 +56,13 @@ def test_transition_only_recipe_plays_at_real_application_and_removal(captured, 
                 applied.add(owner)
                 initial = samples(record.applied_ms + 250)
                 assert len(initial) == (2 if application else 0)
-                assert all("blinded.application" in sample.asset_id and sample.frame == 8 for sample in initial)
+                assert all("command.application" in sample.asset_id and sample.frame == 8 for sample in initial)
                 assert not samples(record.applied_ms + 3500), "Finite application must not silently become a loop"
             if record.removed_ms is not None and owner not in removed:
                 removed.add(owner)
                 tail = samples(record.removed_ms + 250)
                 assert len(tail) == (2 if removal else 0)
-                assert all("blinded.removal" in sample.asset_id and sample.frame == 8 for sample in tail)
+                assert all("command.removal" in sample.asset_id and sample.frame == 8 for sample in tail)
                 assert not samples(record.removed_ms + 700)
         assert motion is not None or group is not None
         clock += (motion.complete_ms if motion is not None else group.complete_ms if group is not None else 0) + 25

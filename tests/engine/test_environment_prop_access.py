@@ -64,11 +64,11 @@ def test_low_stove_blocks_shots_and_entry_until_actually_broken(arena: Game, spe
     assert result is not None and result.canceled
     assert target.get_hp() == hp
     assert source.action_economy.actions.normalized_score == budget
-    movement = source.action_economy.movement.normalized_score
+    movement = source.action_economy.movement_remaining()
     step = Move(source_entity_uuid=source.uuid, path=[(2, 3), (3, 3)],
                 end_position=(3, 3), prefer_safe=False).apply()
     assert step is not None and source.position == (2, 3)
-    assert source.action_economy.movement.normalized_score == movement
+    assert source.action_economy.movement_remaining() == movement
     # The blocking item remains a legitimate target; its own collision cannot
     # stop contact with its near surface.
     for _ in range(2):
@@ -213,10 +213,10 @@ def test_large_prop_far_cell_blocks_and_can_be_attacked_then_entered(arena: Game
     source = actor(arena, "Far-end attacker", origin)
     Entity.update_all_entities_senses()
     assert not get_map().can_reach_between(origin, beyond, PhysicalAccess.PROJECTILE, source.uuid)
-    budget = source.action_economy.movement.normalized_score
+    budget = source.action_economy.movement_remaining()
     denied = Move(source_entity_uuid=source.uuid, path=[origin, far], end_position=far, prefer_safe=False).apply()
     assert denied is not None and source.position == origin
-    assert source.action_economy.movement.normalized_score == budget
+    assert source.action_economy.movement_remaining() == budget
     for _ in range(4):
         if prop.integrity is ItemIntegrity.DESTROYED:
             break

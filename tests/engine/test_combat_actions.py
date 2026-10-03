@@ -490,13 +490,13 @@ def test_eb_10_004_move_consumes_movement_per_step_and_records_step_events() -> 
     mover = create_goblin(name="Mover", position=(5, 5), faction="heroes")
     Entity.update_all_entities_senses(max_distance=20)
 
-    movement_before = mover.action_economy.movement.normalized_score
+    movement_before = mover.action_economy.movement_remaining()
     event = Move(source_entity_uuid=mover.uuid, end_position=(5, 8)).apply()
 
     assert event is not None
     assert event.phase == EventPhase.COMPLETION
     assert mover.position == (5, 8)
-    assert mover.action_economy.movement.normalized_score == movement_before - 15
+    assert mover.action_economy.movement_remaining() == movement_before - 15
     completed_steps = [
         step
         for step in EventQueue.get_events_by_type(EventType.STEP_MOVEMENT)
@@ -695,7 +695,7 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
     materialize_spike_trap_condition({(7, 5), (8, 5)})
     cursor = EventQueue.event_cursor()
     hp_before = target.get_hp()
-    target_movement_before = target.action_economy.movement.normalized_score
+    target_movement_before = target.action_economy.movement_remaining()
 
     with fixed_terrain_damage(2):
         shove_event = Shove(source_entity_uuid=shover.uuid, target_entity_uuid=target.uuid).apply()
@@ -729,7 +729,7 @@ def test_eb_10_021_forced_movement_traverses_terrain_without_step_costs() -> Non
     assert shove_event.end_position == (8, 5)
     assert target.position == (8, 5)
     assert shover.action_economy.bonus_actions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == target_movement_before
+    assert target.action_economy.movement_remaining() == target_movement_before
 
     assert len(forced_completions) == 1
     forced_event = forced_completions[0]
@@ -847,13 +847,13 @@ def test_eb_10_008_dash_damage_healing_and_death_use_events() -> None:
     hero = strong_entity("Hero", (5, 5), "heroes")
     enemy = create_skeleton(name="Enemy", position=(6, 5), faction="monsters")
 
-    movement_before = hero.action_economy.movement.normalized_score
+    movement_before = hero.action_economy.movement_remaining()
     dash_event = Dash(source_entity_uuid=hero.uuid).apply()
 
     assert dash_event is not None
     assert "Dashing" in hero.active_conditions
     assert hero.action_economy.actions.normalized_score == 0
-    assert hero.action_economy.movement.normalized_score > movement_before
+    assert hero.action_economy.movement_remaining() > movement_before
 
     hp_before_damage = hero.get_hp()
     damage_taken = hero.receive_damage(

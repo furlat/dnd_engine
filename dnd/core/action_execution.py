@@ -1,6 +1,7 @@
 """Dependency-neutral scoped contracts for controller-aware action execution."""
 
 from __future__ import annotations
+from dnd.types.world import MovementProvocationPolicy as MovementProvocationPolicy
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -34,11 +35,6 @@ class MovementTerminationReason(str, Enum):
     INVALID_COST = "invalid_cost"
 
 
-class MovementProvocationPolicy(str, Enum):
-    """Objective source-exit reaction policy for one movement leg."""
-
-    ORDINARY_EXIT = "ordinary_exit"
-    DOES_NOT_PROVOKE = "does_not_provoke"
 
 
 @dataclass(frozen=True, slots=True)

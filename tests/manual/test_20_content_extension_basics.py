@@ -101,7 +101,7 @@ def test_custom_condition_applies_and_cleans_up_owned_modifiers(capsys) -> None:
     """A custom condition can own value modifiers and clean them up."""
     reset_content_extension_state()
     hero = create_goblin(name="Focus Tester", position=(1, 1), faction="heroes")
-    base_movement = hero.action_economy.movement.normalized_score
+    base_movement = hero.action_economy.movement_remaining()
     base_ac = hero.ac_bonus().normalized_score
 
     condition = FieldFocus(source_entity_uuid=hero.uuid, target_entity_uuid=hero.uuid)
@@ -110,18 +110,18 @@ def test_custom_condition_applies_and_cleans_up_owned_modifiers(capsys) -> None:
     assert event is not None
     assert event.phase == EventPhase.COMPLETION
     assert "Field Focus" in hero.active_conditions
-    assert hero.action_economy.movement.normalized_score == base_movement + 10
+    assert hero.action_economy.movement_remaining() == base_movement + 10
     assert hero.ac_bonus().normalized_score == base_ac + 1
     assert condition.modifers_uuids
 
     active_before_cleanup = "Field Focus" in hero.active_conditions
-    active_movement = hero.action_economy.movement.normalized_score
+    active_movement = hero.action_economy.movement_remaining()
     active_ac = hero.ac_bonus().normalized_score
 
     hero.remove_condition("Field Focus")
 
     assert "Field Focus" not in hero.active_conditions
-    assert hero.action_economy.movement.normalized_score == base_movement
+    assert hero.action_economy.movement_remaining() == base_movement
     assert hero.ac_bonus().normalized_score == base_ac
 
     readout_lines = [
@@ -135,7 +135,7 @@ def test_custom_condition_applies_and_cleans_up_owned_modifiers(capsys) -> None:
         (
             "after cleanup: "
             f"active={'Field Focus' in hero.active_conditions}, "
-            f"movement={hero.action_economy.movement.normalized_score}, "
+            f"movement={hero.action_economy.movement_remaining()}, "
             f"ac={hero.ac_bonus().normalized_score}"
         ),
     ]

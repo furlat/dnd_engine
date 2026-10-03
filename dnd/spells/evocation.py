@@ -6,6 +6,11 @@ Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
           CureWounds, HealingWord, PrayerOfHealing, MassHealingWord,
           MassCureWounds, HealSpell, MassHeal
 """
+from typing import cast
+from uuid import uuid4
+from dnd.actions import AttackEvent
+from dnd.core.geometry import grid_distance_feet
+from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
 import random
 from typing import Any, Literal, Optional, List, Set, Tuple
 from uuid import UUID
@@ -287,8 +292,9 @@ class RayOfFrostEffect(BaseCondition):
             source_entity_uuid=self.source_entity_uuid or self.target_entity_uuid,
             target_entity_uuid=self.affected_target_uuid
         )
-        mod_uuid = target.action_economy.movement.self_static.add_value_modifier(speed_reduction)
-        outs.append((target.action_economy.movement.uuid, mod_uuid))
+        for speed in target.action_economy.speed_values:
+            mod_uuid = speed.self_static.add_value_modifier(speed_reduction)
+            outs.append((speed.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -5208,3 +5214,119 @@ class DivineWord(SpellAction):
             total_damage=0,
             status_message=f"Divine Word: {target.name} is {outcome}"
         )
+
+
+class FireShieldEffect(BaseCondition):
+    granted_action_uuids: set[UUID] = Field(default_factory=set)
+    description: str = "Warm/chill resistance and automatic retaliation against qualifying melee hits."
+    name: str = "Fire Shield"
+    tags: set[ConditionTag] = {ConditionTag.MAGICAL}
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=100))
+    shield_kind: Literal["warm", "chill"] = "warm"
+    light_source_uuid: UUID | None = None
+    retaliated_lineages: set[UUID] = Field(default_factory=set, exclude=True)
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Caster missing")
+        resisted = DamageType.COLD if self.shield_kind == "warm" else DamageType.FIRE
+        damage_type = DamageType.FIRE if self.shield_kind == "warm" else DamageType.COLD
+        value = target.health.damage_reduction
+        modifier = ResistanceModifier(name=self.name, value=ResistanceStatus.RESISTANCE, damage_type=resisted,
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid)
+        value.self_static.add_resistance_modifier(modifier)
+        self.light_source_uuid = get_map().add_light_source(position=target.position,
+            bright_radius_feet=10, dim_radius_feet=10, anchor_uuid=target.uuid, parent_event=event.uuid)
+
+        def retaliate(attack: Event, owner_uuid: UUID):
+            if attack.canceled or attack.lineage_uuid in self.retaliated_lineages:
+                return None
+            if attack.event_type == EventType.ATTACK:
+                weapon_hit = cast(AttackEvent, attack)
+                melee = weapon_hit.range is not None and weapon_hit.range.type == RangeType.REACH
+                outcome = weapon_hit.attack_outcome
+            elif attack.event_type == EventType.CAST_SPELL:
+                spell_hit = cast(SpellEvent, attack)
+                melee = spell_hit.range_type == "touch"
+                outcome = spell_hit.attack_outcome
+            else:
+                return None
+            if not melee or outcome not in (AttackOutcome.HIT, AttackOutcome.CRIT):
+                return None
+            attacker = Entity.get(attack.source_entity_uuid)
+            owner = Entity.get(owner_uuid)
+            if attacker is None or owner is None or grid_distance_feet(owner.position, attacker.position) > 5:
+                return None
+            self.retaliated_lineages.add(attack.lineage_uuid)
+            damage = Damage(source_entity_uuid=owner.uuid, target_entity_uuid=attacker.uuid,
+                damage_dice=8, dice_numbers=2, damage_type=damage_type,
+                damage_bonus=ModifiableValue.create(source_entity_uuid=owner.uuid, base_value=0, value_name="Fire Shield damage"))
+            roll = damage.get_dice(AttackOutcome.HIT).roll
+            attacker.receive_damage(amount=roll.total, damage_type=damage_type, source_entity_uuid=owner.uuid,
+                parent_event=attack.uuid, damages=[damage], damage_rolls=[roll], effect_origin=self.effect_origin,
+                independent_resolution=True)
+            return None
+
+        handler = EventHandler(name="Fire Shield retaliation", source_entity_uuid=target.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EFFECT,
+                event_target_entity_uuid=target.uuid),
+                Trigger(event_type=EventType.CAST_SPELL, event_phase=EventPhase.EFFECT,
+                    event_target_entity_uuid=target.uuid)], event_processor=retaliate)
+        target.add_event_handler(handler)
+        dismiss = DismissFireShield(source_entity_uuid=target.uuid, effect_uuid=self.uuid, template=True)
+        target.register_action(dismiss)
+        self.granted_action_uuids = {dismiss.uuid}
+        return [(value.uuid, modifier.uuid)], [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        owner = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if owner is not None:
+            for action_uuid in self.granted_action_uuids:
+                owner.unregister_action_by_uuid(action_uuid)
+        self.granted_action_uuids.clear()
+        if self.light_source_uuid is not None:
+            get_map().remove_light_source(self.light_source_uuid, parent_event=parent_event.uuid if parent_event else None)
+            self.light_source_uuid = None
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+
+class FireShield(SpellAction):
+    name: str = "Fire Shield"
+    description: str = "Warm/cold ward: resistance, 10-foot light and 2d8 retaliation against melee hits within 5 feet."
+    spell_level: int = 4
+    spell_school: str = "evocation"
+    target_type: TargetType = TargetType.SELF
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    shield_kind: Literal["warm", "chill"] = "warm"
+
+    def get_discovery_variants(self, entity: Any) -> list[BaseAction]:
+        return [variant.model_copy(deep=True, update={"uuid":uuid4(), "shield_kind":kind,
+            "registered_template_uuid":self.registered_template_uuid or self.uuid})
+            for variant in super().get_discovery_variants(entity) for kind in ("warm","chill")]
+
+    def get_discovery_template_name(self) -> str:
+        return f"{super().get_discovery_template_name()}__{self.shield_kind}"
+
+    def get_discovery_display_name(self) -> str:
+        return f"{super().get_discovery_display_name()} ({self.shield_kind})"
+
+    def _apply(self, event: SpellEvent):
+        return self.apply_owned_condition( event.phase_to(EventPhase.EFFECT), FireShieldEffect(
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.source_entity_uuid, shield_kind=self.shield_kind))
+
+
+@srd_action_identity(content_id="action.spell.fire_shield.dismiss", display_name="Dismiss Fire Shield",
+    description="Dismiss the retained fire or cold shield.", parent_spell_name="Fire Shield", source_page=144, sort_order=1)
+class DismissFireShield(BaseAction):
+    name: str = "Dismiss Fire Shield"
+    effect_uuid: UUID
+    target_type: TargetType = TargetType.SELF
+    costs: list[Cost] = Field(default_factory=lambda: [Cost(name="Dismiss Shield", cost_type="actions",
+        cost=1, evaluator=entity_action_economy_cost_evaluator)])
+
+    def _apply(self, event: Event):
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None or not caster.remove_condition_by_uuid(self.effect_uuid, parent_event=event):
+            return event.cancel(status_message="Shield could not be dismissed")
+        return event.phase_to(EventPhase.EFFECT)

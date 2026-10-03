@@ -185,6 +185,8 @@ def validate_contact_sweeps(binding: SpatialMediaBinding,
 
 def validate_composition(draft: StudioSpellDraft, storage: Mapping[str, ProjectileStorage]) -> None:
     """Check the selected in-memory contract; never inspect or validate media files."""
+    if draft.area is not None and draft.area.sprite is not None:
+        raise ValueError(f"Selected recipe {draft.definitionRef} requires unsupported area.sprite")
     uses = [(track.assetId, track.assetPhase, track.composition) for track in draft.media]
     projectile = draft.projectile
     if projectile is not None and projectile.sprite is not None:

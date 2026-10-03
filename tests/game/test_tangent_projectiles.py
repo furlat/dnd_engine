@@ -23,7 +23,7 @@ from game.projection import Camera, TILE_WIDTH, project_world
 
 @pytest.fixture(scope="module")
 def data() -> AnimationData:
-    return load_animation_data(authored_bundles=())
+    return load_animation_data()
 
 
 def cast(data: AnimationData, path: Literal["device", "straight", "vertical", "bezier"], *,

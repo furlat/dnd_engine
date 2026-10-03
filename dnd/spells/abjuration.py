@@ -2209,8 +2209,13 @@ def _freedom_of_movement_available_movement(entity: Entity) -> int:
         Remaining movement after movement-cost modifiers, ignoring restraint
         max constraints so the escape can pay the SRD 5-foot cost.
     """
-    movement_modifiers = entity.action_economy.movement.self_static.value_modifiers.values()
-    return max(0, sum(modifier.normalized_value for modifier in movement_modifiers))
+    economy = entity.action_economy
+    excluded = {modifier_uuid
+        for condition in entity.active_conditions_by_uuid.values()
+        if condition.name in FREEDOM_OF_MOVEMENT_RESTRAINT_NAMES
+        for modifier_uuid in condition.modifers_uuids.get(economy.walking_speed.uuid, [])}
+    speed = economy.walking_speed.normalized_score_excluding_static_modifiers(excluded)
+    return max(0, speed * (1 + economy.dash_count) - economy.movement_spent())
 
 
 def _freedom_of_movement_escape_cost_evaluator(source_entity_uuid: UUID, cost_type: CostType, cost: int) -> bool:
@@ -2607,15 +2612,7 @@ class Resistance(SpellAction):
         )
         resistance_effect.duration.duration_type = DurationType.ROUNDS
         resistance_effect.duration.duration = 10
-        target.add_condition(resistance_effect, parent_event=effect_event)
-
-        concentration = self.ensure_concentration(effect_event)
-        if resistance_effect.applied:
-            concentration.add_linked_condition(target.uuid, resistance_effect.uuid)
-
-        return effect_event.with_updates(
-            status_message=f"Resistance cast on {target.name}"
-        )
+        return self.apply_owned_condition(effect_event, resistance_effect)
 
 
 class ShieldOfFaithEffect(BaseCondition):

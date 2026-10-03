@@ -11,7 +11,7 @@ from dnd.actions_functional import execute_use_action
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.base_item import (
     BaseItem,
-    ItemChargeConsumptionEvent,
+    ItemResourceChangeEvent,
     ItemLocationStateEvent,
 )
 from dnd.blocks.equipment import Helmet
@@ -394,12 +394,12 @@ def test_item_state_location_and_charge_events_publish_direct_item_id() -> None:
         event_type=EventType.BASE_ACTION,
     )
     consumed = wand.consume_charge_with_event(1, entity.uuid, parent)
-    assert isinstance(consumed, ItemChargeConsumptionEvent)
+    assert isinstance(consumed, ItemResourceChangeEvent)
     assert consumed.phase is EventPhase.COMPLETION
     assert consumed.item_id == wand.item_id
     assert consumed.charges_after == consumed.charges_before - 1
     with pytest.raises(ValidationError):
-        ItemChargeConsumptionEvent(
+        ItemResourceChangeEvent(
             source_entity_uuid=entity.uuid,
             item_uuid=wand.uuid,
             charges_before=1,

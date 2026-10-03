@@ -10,7 +10,7 @@ from game.attack import BoundAttack
 from game.choreography import bind_choreography, sample_choreography
 from game.combat import BoundCast, actor_contact
 from game.motion_media import choreography_motion_media
-from game.player_facts import AttackFact, ConditionChangeFact, DamageFact, SpellFact
+from game.player_facts import AttackFact, ConditionChangeFact, DamageRequestFact, SpellFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from tests.game.persistent_spell_scenarios import persistent_spell_history
@@ -32,7 +32,7 @@ def test_saved_shield_gesture_precedes_actual_intercept_and_maintained_contacts_
         gesture_count, interceptions, untreated_attacks = 0, 0, 0
         for root in roots:
             group = bind_choreography(before, root, data)
-            tagged = [(node, node.fact) for node in root.events if isinstance(node.fact, (AttackFact, DamageFact))
+            tagged = [(node, node.fact) for node in root.events if isinstance(node.fact, (AttackFact, DamageRequestFact))
                       and node.fact.intercepted_by_condition_uuid is not None]
             if tagged:
                 assert not group.gaps

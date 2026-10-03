@@ -1,6 +1,6 @@
 """Native forced lineages in; authored bodies, placed pixels and historical HP out."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterator
 from uuid import UUID
@@ -122,7 +122,12 @@ def test_native_displacement_plays_brace_travel_release_and_idle_without_latest_
         assert actor_contact(travelling, identity).grid == pytest.approx(expected)
         assert actor_contact(end_travel, identity).grid == end
         assert actor_body(released, identity)[4][8:10] == ("TakeDamage", 4)
-        assert travelling.displayed.actors[target] == group.before.actors[target]
+        # The two-cell shoves have already reached their first cell at 75%
+        # travel. Its received position commits there, before the final cell.
+        reached = (5, 3) if case_id in ("shove-success", "shove-goblin") else cue.actor.grid
+        assert travelling.displayed.actors[target] == replace(
+            group.before.actors[target], last_visual_position=reached)
+        assert end_travel.displayed.actors[target].last_visual_position == end
         assert not travelling.complete
         # Latest has already settled; an absolute paused presentation seek is
         # still byte-identical and never consumes the retained lineage.

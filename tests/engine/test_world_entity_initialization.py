@@ -91,12 +91,12 @@ def test_visual_terrace_walks_up_and_down_the_stairs_not_through_cliff_edges() -
         assert actor.position == destination
         if destination == middle:
             for bank in ((15, 23), (17, 23)):
-                movement_before = actor.action_economy.movement.normalized_score
+                movement_before = actor.action_economy.movement_remaining()
                 result = Move(source_entity_uuid=actor.uuid, end_position=bank,
                               path=[destination, bank]).apply()
                 assert result is not None
                 assert actor.position == destination
-                assert actor.action_economy.movement.normalized_score == movement_before
+                assert actor.action_economy.movement_remaining() == movement_before
 
 
 def test_visual_vertical_seam_world_has_exact_cold_and_settled_facts() -> None:

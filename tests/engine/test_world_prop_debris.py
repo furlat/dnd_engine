@@ -97,11 +97,11 @@ def test_floor_covering_can_be_walked_across_before_and_after_destruction(game: 
     for destroyed, origin, destination in ((False, (3, 2), (3, 3)), (True, (3, 3), (3, 2))):
         if destroyed:
             prop.receive_damage(prop.get_hp(), DamageType.SLASHING, actor.uuid)
-        budget = actor.action_economy.movement.normalized_score
+        budget = actor.action_economy.movement_remaining()
         move = Move(source_entity_uuid=actor.uuid, path=[origin, destination], end_position=destination).apply()
         assert move is not None and not move.canceled
         assert actor.position == destination
-        assert budget - actor.action_economy.movement.normalized_score == 5
+        assert budget - actor.action_economy.movement_remaining() == 5
         assert walking_cost((3, 3)) == 1
         assert not get_map().get_spatial_conditions()
 
@@ -166,12 +166,12 @@ def test_wreck_disposal_removes_only_its_owned_terrain_and_preserves_actual_move
     actor.compose_entity()
     game.deploy_entity(actor, (3, 2))
     actor.update_entity_senses()
-    budget = actor.action_economy.movement.normalized_score
+    budget = actor.action_economy.movement_remaining()
     move = Move(source_entity_uuid=actor.uuid, path=[(3, 2), (3, 3)], end_position=(3, 3)).apply()
     assert move is not None
     assert not move.canceled, move.status_message
     assert actor.position == (3, 3)
-    assert budget - actor.action_economy.movement.normalized_score == 10
+    assert budget - actor.action_economy.movement_remaining() == 10
     bed.retire()
     assert (walking_cost((3, 3)), walking_cost((4, 3))) == (1, 2)
     assert get_map().get_spatial_conditions() == [oil]

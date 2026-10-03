@@ -1,16 +1,67 @@
 """Reduce and stage saved player packets without native event projection."""
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
+import json
+from game.recording_compat import upgrade_player_sequence
+from types import MappingProxyType
+from typing import Mapping
+from dnd.core.effect_types import ResolutionRef
 from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import EventType, SpatialChangeType
 from dnd.types.senses import reduce_senses_snapshot
 from game.player_facts import (
-    AttackFact, ConditionChangeFact, DamageFact, EquipmentFact, HealFact, ItemChargeFact, LifeFact,
+    AttackFact, ConditionChangeFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, LifeFact,
     PlayerFact, PlayerInitialization, PlayerLineage, PlayerNode, PlayerObservation, PlayerSequence,
     PlayerState, SensoryFact, SpatialFact, TurnFact, VersionRow, WorldUpdate, TemporaryHitPointsFact,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerCausalIndex:
+    """References into one received group, in its native commit order."""
+    by_lineage: Mapping[UUID, PlayerNode]
+    by_uuid: Mapping[UUID, PlayerNode]
+    source_order: Mapping[UUID, int]
+    owned: Mapping[ResolutionRef, tuple[PlayerNode, ...]]
+    results: Mapping[ResolutionRef, tuple[PlayerNode, ...]]
+    damage_requests: Mapping[UUID, UUID]
+
+
+def index_player_lineage(lineage: PlayerLineage) -> PlayerCausalIndex:
+    source_order = {row.event_uuid: row.source_index for row in lineage.version_rows}
+    owned: dict[ResolutionRef, list[PlayerNode]] = {}
+    results: dict[ResolutionRef, list[PlayerNode]] = {}
+    by_lineage = {row.lineage_uuid: row for row in lineage.events}
+    damage_requests: dict[UUID, UUID] = {}
+    for node in lineage.events:
+        ancestors: list[UUID] = []
+        current = node
+        while current.lineage_uuid not in ancestors:
+            ancestors.append(current.lineage_uuid)
+            request = (current.lineage_uuid if isinstance(current.fact, DamageRequestFact)
+                       else damage_requests.get(current.lineage_uuid))
+            if request is not None:
+                damage_requests.update((identity, request) for identity in ancestors)
+                break
+            parent = by_lineage.get(current.parent_lineage) if current.parent_lineage is not None else None
+            if parent is None:
+                break
+            current = parent
+    for node in sorted(lineage.events, key=lambda row: source_order[row.uuid]):
+        reference = node.resolution_ref
+        if reference is None:
+            continue
+        owned.setdefault(reference, []).append(node)
+        if not node.canceled and isinstance(node.fact, (DamageResultFact, ObjectDamageFact)):
+            results.setdefault(reference, []).append(node)
+    return PlayerCausalIndex(
+        MappingProxyType(by_lineage),
+        MappingProxyType({row.uuid: row for row in lineage.events}), MappingProxyType(source_order),
+        MappingProxyType({key: tuple(rows) for key, rows in owned.items()}),
+        MappingProxyType({key: tuple(rows) for key, rows in results.items()}),
+        MappingProxyType(damage_requests))
 
 
 # These received families have ordinary state presentation, without a separate
@@ -116,7 +167,7 @@ def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
             if actor is not None:
                 stance = fact.weapon_set
                 target.actors[actor.uuid] = replace(actor, visual_loadout=replace(actor.visual_loadout, active_weapon_set=stance))
-        case DamageFact(stage="applied"):
+        case DamageResultFact(stage="applied"):
             actor = target.actors[fact.target_entity_uuid]
             if fact.resulting_normal_hp is None or fact.resulting_temporary_hp is None:
                 raise ValueError("applied damage requires exact committed HP")
@@ -169,9 +220,6 @@ def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: t
     """Fold received values in source order, including a timed partial group."""
     result = copy_target(target)
     indexes = {row.event_uuid: row.source_index for row in versions}
-    first_versions: dict[UUID, int] = {}
-    for row in versions:
-        first_versions.setdefault(row.lineage_uuid, row.source_index)
     pending = iter(sorted(observations, key=lambda row: indexes[row.event_uuid]))
     observation = next(pending, None)
     world_updates = {row.event_uuid: row for row in updates}
@@ -184,10 +232,11 @@ def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: t
         if not node.canceled and node.fact is not None:
             if (isinstance(node.fact, SpatialFact) and node.fact.entity_uuid is not None
                     and node.fact.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT)):
-                # Membership is committed before its spatial declaration. An
-                # entry can cause another entry before the first one completes;
-                # completion order must not restore that older position/layer.
-                committed_at = first_versions[node.lineage_uuid]
+                # The producer identifies the actual commit publication. An
+                # enclosing completion cannot restore a superseded membership.
+                if node.fact.commit_event_uuid is None or node.fact.commit_event_uuid not in indexes:
+                    raise ValueError(f"Spatial change {node.uuid} lacks its recorded commit version")
+                committed_at = indexes[node.fact.commit_event_uuid]
                 # Only a nested commit supersedes this closing transition.
                 # Independent earlier transitions can be deliberately retimed
                 # (e.g. jump takeoff after all preflight opportunity attacks).
@@ -257,5 +306,8 @@ def encode_player_sequence(sequence: PlayerSequence) -> bytes:
 
 
 def decode_player_sequence(payload: bytes) -> tuple[PlayerState, tuple[PlayerLineage, ...]]:
+    raw = json.loads(payload)
+    if raw.get("schema_version", 1) == 1:
+        payload = json.dumps(upgrade_player_sequence(raw)).encode("utf-8")
     sequence = PlayerSequence.model_validate_json(payload)
     return reduce_initialization(sequence.initialization), sequence.lineages

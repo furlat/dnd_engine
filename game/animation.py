@@ -13,6 +13,8 @@ from typing import Literal
 from uuid import UUID
 
 from dnd.core.life_types import LifeState
+from dnd.core.effect_types import ResolutionRef
+from game.player_facts import PlayerNode
 from dnd.core.condition_types import ConditionTag
 from dnd.types.senses import PerceivedSpatialEffect
 from game.animation_types import (
@@ -102,6 +104,8 @@ class CastApplication:
     hit: bool | None = None
     removed_condition_tags: frozenset[ConditionTag] = frozenset()
     save_succeeded: bool | None = None
+    resolution_ref: ResolutionRef | None = None
+    results: tuple[PlayerNode, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

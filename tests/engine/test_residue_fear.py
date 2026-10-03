@@ -121,7 +121,7 @@ def test_save_and_immunity_control_paid_retreat(
     assert not result.canceled
     assert result.end_position == traveler.position == ((0, 1) if retreat else (2, 1))
     assert result.requested_end_position == (2, 1)
-    assert traveler.action_economy.movement.normalized_score == 20
+    assert traveler.action_economy.movement_remaining() == 20
     assert "Frightened" not in traveler.active_conditions
     events = completed(cursor)
     saves = [event for event in events if isinstance(event, SavingThrowEvent)]
@@ -149,18 +149,18 @@ def test_exhausted_entrant_stays_frightened_then_pays_for_later_reverse_move(gam
         result = walk(traveler, [(0, 1), (1, 1)])
     assert not result.canceled and traveler.position == (1, 1)
     assert "Frightened" in traveler.active_conditions
-    assert traveler.action_economy.movement.normalized_score == 0
+    assert traveler.action_economy.movement_remaining() == 0
     assert traveler.skill_set.athletics.skill_bonus.advantage is AdvantageStatus.DISADVANTAGE
     traveler.on_turn_end()
     traveler.on_turn_start(round_number=2)
     assert traveler.position == (1, 1) and "Frightened" in traveler.active_conditions
-    refreshed = traveler.action_economy.movement.normalized_score
+    refreshed = traveler.action_economy.movement_remaining()
     forward = walk(traveler, [(1, 1), (2, 1)])
     assert forward.canceled and traveler.position == (1, 1)
-    assert traveler.action_economy.movement.normalized_score == refreshed
+    assert traveler.action_economy.movement_remaining() == refreshed
     result = walk(traveler, [(1, 1), (0, 1)])
     assert not result.canceled and traveler.position == (0, 1)
-    assert traveler.action_economy.movement.normalized_score == refreshed - 5
+    assert traveler.action_economy.movement_remaining() == refreshed - 5
     assert "Frightened" not in traveler.active_conditions
 
 
@@ -172,7 +172,7 @@ def test_jump_landing_uses_last_airborne_step_as_retreat_origin(game: Game) -> N
     assert isinstance(result, JumpEvent) and not result.canceled
     assert result.end_position == result.objective_end_position == traveler.position == (1, 1)
     assert traveler.occupancy_layer is OccupancyLayer.GROUND
-    assert traveler.action_economy.movement.normalized_score == 15
+    assert traveler.action_economy.movement_remaining() == 15
     assert "Frightened" not in traveler.active_conditions
 
 
@@ -184,11 +184,11 @@ def test_occupied_retreat_cell_blocks_jump_response_until_real_exit_is_clear(gam
         result = Jump(source_entity_uuid=traveler.uuid, end_position=(2, 1)).apply()
     assert result is not None and not result.canceled
     assert traveler.position == (2, 1) and "Frightened" in traveler.active_conditions
-    assert traveler.action_economy.movement.normalized_score == 20
+    assert traveler.action_economy.movement_remaining() == 20
     assert not walk(blocker, [(1, 1), (1, 0)]).canceled
     assert not walk(traveler, [(2, 1), (1, 1)]).canceled
     assert traveler.position == (1, 1) and "Frightened" not in traveler.active_conditions
-    assert traveler.action_economy.movement.normalized_score == 15
+    assert traveler.action_economy.movement_remaining() == 15
 
 
 def test_donor_departure_visibility_and_actual_source_removal(game: Game) -> None:
@@ -221,7 +221,7 @@ def test_teleport_entry_pays_one_adjacent_step_toward_actual_departure(game: Gam
         result = MistyStep(source_entity_uuid=traveler.uuid, end_position=(4, 1)).apply()
     assert isinstance(result, SpellEvent) and not result.canceled
     assert traveler.position == (3, 1)
-    assert traveler.action_economy.movement.normalized_score == 25
+    assert traveler.action_economy.movement_remaining() == 25
     assert traveler.action_economy.bonus_actions.normalized_score == 0
     assert traveler.action_economy.spell_slot_2.normalized_score == 0
     assert "Frightened" not in traveler.active_conditions
@@ -246,7 +246,7 @@ def test_paid_retreat_uses_ordinary_opportunity_attack_rules(game: Game) -> None
     with fixed_dice_faces(1, 18, 2):
         result = walk(traveler, [(0, 1), (1, 1)])
     assert not result.canceled and traveler.position == (0, 1)
-    assert traveler.action_economy.movement.normalized_score == 20
+    assert traveler.action_economy.movement_remaining() == 20
     assert traveler.get_hp() < health
     attacks = [event for event in completed(cursor) if isinstance(event, AttackEvent)]
     assert len(attacks) == 1 and attacks[0].source_entity_uuid == reactor.uuid
@@ -262,12 +262,12 @@ def test_interrupted_jump_records_retreat_from_its_last_committed_step(game: Gam
     assert result is not None and not result.canceled
     assert traveler.position == (2, 1) and traveler.occupancy_layer is OccupancyLayer.GROUND
     assert {"Paralyzed", "Frightened"} <= traveler.active_conditions.keys()
-    assert traveler.action_economy.movement.normalized_score == 0
+    assert traveler.action_economy.movement_remaining() == 0
     assert traveler.remove_condition("Paralyzed")
-    assert traveler.action_economy.movement.normalized_score == 20
+    assert traveler.action_economy.movement_remaining() == 20
     assert not walk(traveler, [(2, 1), (1, 1)]).canceled
     assert traveler.position == (1, 1) and "Frightened" not in traveler.active_conditions
-    assert traveler.action_economy.movement.normalized_score == 15
+    assert traveler.action_economy.movement_remaining() == 15
 
 
 def test_shove_entry_stops_for_a_paid_reverse_step(game: Game) -> None:
@@ -280,8 +280,8 @@ def test_shove_entry_stops_for_a_paid_reverse_step(game: Game) -> None:
     assert isinstance(result, ShoveEvent) and not result.canceled
     assert result.end_position == traveler.position == (1, 1)
     assert result.push_distance == 5
-    assert traveler.action_economy.movement.normalized_score == 25
-    assert shover.action_economy.movement.normalized_score == 30
+    assert traveler.action_economy.movement_remaining() == 25
+    assert shover.action_economy.movement_remaining() == 30
     assert "Frightened" not in traveler.active_conditions
     forced = [event for event in completed(cursor) if isinstance(event, ForcedMovementEvent)]
     assert len(forced) == 1 and forced[0].actual_distance == 5
@@ -313,7 +313,7 @@ def test_telekinesis_granted_move_retains_incoming_contact_before_paid_retreat(g
         result = template.instantiate(end_position=(4, 1)).apply()
     assert result is not None and not result.canceled
     assert traveler.position == (3, 1)
-    assert traveler.action_economy.movement.normalized_score == 25
+    assert traveler.action_economy.movement_remaining() == 25
     assert "Frightened" not in traveler.active_conditions
     assert caster.get_action_template("Telekinesis: Move") is None
     events = completed(cursor)

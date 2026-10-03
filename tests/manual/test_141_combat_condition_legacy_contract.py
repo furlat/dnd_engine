@@ -182,9 +182,9 @@ def test_dashing_and_dodging_apply_and_clean_their_exact_modifiers() -> None:
     base_speed = target.action_economy.current_speed()
 
     apply_to_target(Dashing, source, target)
-    assert target.action_economy.movement.normalized_score == base_speed * 2
+    assert target.action_economy.movement_remaining() == base_speed * 2
     target.remove_condition("Dashing")
-    assert target.action_economy.movement.normalized_score == base_speed
+    assert target.action_economy.movement_remaining() == base_speed
 
     apply_to_target(Dodging, source, target)
     assert (
@@ -228,8 +228,8 @@ def test_condition_modifiers_compose_and_clean_up_by_independent_owner() -> None
 
     apply_to_target(Grappled, attacker, target)
     apply_to_target(Restrained, attacker, target)
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     target.remove_condition("Grappled")
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     target.remove_condition("Restrained")
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30

@@ -20,7 +20,7 @@ from game.assets import SurfaceCache, load_catalog
 from game.app import draw_frame
 from game.choreography import bind_choreography, sample_choreography
 from game.motion import bind_motion, sample_motion
-from game.player_facts import AttackFact, DamageFact
+from game.player_facts import AttackFact, DamageResultFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
@@ -53,7 +53,7 @@ def test_each_received_injury_plays_one_strip_at_contact_and_retains_one_stain(h
         if not isinstance(root.root.fact, AttackFact):
             state = reduce_lineage(state, root)
             continue
-        packets = [node for node in root.events if isinstance(node.fact, DamageFact)
+        packets = [node for node in root.events if isinstance(node.fact, DamageResultFact)
                    and node.fact.body_release is not None]
         group = bind_choreography(state, root, data)
         assert not group.gaps
@@ -134,7 +134,7 @@ def test_real_opportunity_injury_keeps_its_midstep_release_contact(maximum_hp, r
     assert frame.contact is not None and frame.reaction_sample is not None
     drawn, = frame.reaction_sample.strips
     assert drawn.cue.contact.grid == frame.contact.grid
-    injury, = [node.fact for node in root.events if isinstance(node.fact, DamageFact)
+    injury, = [node.fact for node in root.events if isinstance(node.fact, DamageResultFact)
                and node.fact.body_release is not None]
     assert injury.body_release is not None
     assert injury.body_release.position != strip.contact.grid

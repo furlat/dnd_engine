@@ -166,7 +166,7 @@ def forced_movement_history(
             assert "Concentrating" in source.active_conditions
         before = latest
         history.clear()
-        movement_before = target.action_economy.movement.normalized_score
+        movement_before = target.action_economy.movement_remaining()
         actions_before = source.action_economy.actions.normalized_score
         bonus_before = source.action_economy.bonus_actions.normalized_score
         watcher_reactions = watcher.action_economy.reactions.normalized_score if watcher is not None else None
@@ -174,7 +174,7 @@ def forced_movement_history(
         assert source.action_economy.actions.normalized_score == actions_before
         assert source.action_economy.bonus_actions.normalized_score == bonus_before - (mechanism == "shove")
         if target.can_take_actions():
-            assert target.action_economy.movement.normalized_score == movement_before
+            assert target.action_economy.movement_remaining() == movement_before
         if watcher is not None:
             assert watcher.action_economy.reactions.normalized_score == watcher_reactions == 1
         events = tuple(event for lineage in history for event in lineage.events)

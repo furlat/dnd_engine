@@ -96,10 +96,16 @@ def test_retained_completion_archives_preserve_absent_receipts_on_native_round_t
             pending.extend(zip(old, new, strict=True))
     assert checked > 0
     assert decode_sequence(original) == decode_sequence(blob)
-    player, roots = player_inputs(again.initialization, again.lineages)
-    for root in roots:
-        player = reduce_player_lineage(player, root)
-    assert all(node.cancellation is None for root in roots for node in root.events if not node.canceled)
+    if family == "device":
+        # This archive's Fire Bolt predates causal result identities. Native
+        # state replay remains valid; timed playback must diagnose missing proof.
+        with pytest.raises(ValueError, match="Legacy damage .* lacks unambiguous resolution ownership"):
+            player_inputs(again.initialization, again.lineages)
+    else:
+        player, roots = player_inputs(again.initialization, again.lineages)
+        for root in roots:
+            player = reduce_player_lineage(player, root)
+        assert all(node.cancellation is None for root in roots for node in root.events if not node.canceled)
     assert EventQueue.event_cursor() == 0 and BaseObject._registry == {}
     assert DiceRoll._registry == rolls
 
@@ -297,7 +303,11 @@ def test_native_spell_archives_before_subeffect_identity_replay_unchanged() -> N
     assert removed > 0
     reset_engine_runtime()
     before, lineages = decode_sequence(json.dumps(payload).encode())
-    assert before == source.before and lineages == source.lineages
+    assert before == source.before
+    # The semantic event values are unchanged; omission metadata must differ
+    # because these old packets never recorded effect_id.
+    assert [[event.model_dump() for event in row.events] for row in lineages] == [
+        [event.model_dump() for event in row.events] for row in source.lineages]
     player, public = player_inputs(source.initialization, lineages)
     data = load_animation_data()
     for lineage in public:

@@ -1,7 +1,6 @@
 """Action economy resources, turn costs, and spell slot values."""
 
 from typing import AbstractSet, Optional, List, Tuple, Dict, Union, Sequence
-from math import prod
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, StrictInt
@@ -258,7 +257,8 @@ class ActionEconomyConfig(BaseModel):
 
 class ActionEconomy(BaseBlock):
     movement_speed_grants: Dict[UUID, Dict[MovementMode, int]] = Field(default_factory=dict)
-    movement_speed_factors: Dict[UUID, float] = Field(default_factory=dict, description="Speed factors owned by exact movement modifier handles.")
+    movement_debits: Dict[UUID, ActionEconomyDebitHandle] = Field(default_factory=dict)
+    dash_count: int = Field(default=0, ge=0)
 
     """Turn resources, named resources, movement, and spell slots for an entity.
 
@@ -292,14 +292,19 @@ class ActionEconomy(BaseBlock):
         ),
         description="Reaction count available before recharge.",
     )
-    movement: ModifiableValue = Field(
+    walking_speed: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(
             source_entity_uuid=uuid4(),
             base_value=30,
             value_name="Movement"
         ),
-        description="Movement budget in feet.",
+        description="Walking speed before turn expenditure.",
     )
+    flying_speed: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), base_value=0, value_name="Flying Speed"),
+        description="Flying speed; its base is owned by movement grants.",
+    )
+
     action_permission: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(
             source_entity_uuid=uuid4(),
@@ -974,7 +979,7 @@ class ActionEconomy(BaseBlock):
         elif cost_type == "reactions":
             return self.reactions
         elif cost_type == "movement":
-            return self.movement
+            return self.walking_speed
         elif cost_type.startswith("spell_slot_"):
             level = int(cost_type.split("_")[-1])
             return self.spell_slot_value(level)
@@ -989,41 +994,48 @@ class ActionEconomy(BaseBlock):
 
     def get_cost_modifiers(self, cost_type: CostType) -> List[NumericalModifier]:
         """Get all cost modifiers (negative values) for a given action type."""
+        if cost_type == "movement":
+            raise ValueError("Movement expenditure is not a speed modifier")
         value = self._get_value_for_cost_type(cost_type)
         return [mod for mod in value.self_static.value_modifiers.values()
                 if mod.name is not None and "cost" in mod.name]
 
+    @property
+    def speed_values(self) -> tuple[ModifiableValue, ModifiableValue]:
+        """Both supported values, including inactive flight, for owned speed effects."""
+        return self.walking_speed, self.flying_speed
+
+    def grant_speed(self, owner_uuid: UUID, mode: MovementMode, speed: int) -> None:
+        if mode is not MovementMode.FLYING or speed <= 0:
+            raise ValueError("Only positive flying speed grants are supported")
+        self.movement_speed_grants[owner_uuid] = {mode: speed}
+        self._update_flying_base()
+
+    def remove_speed_grant(self, owner_uuid: UUID) -> None:
+        self.movement_speed_grants.pop(owner_uuid, None)
+        self._update_flying_base()
+
+    def _update_flying_base(self) -> None:
+        base = self.flying_speed.get_base_modifier()
+        if base is None:
+            raise RuntimeError("Flying speed is missing its base value")
+        base.value = max((grant.get(MovementMode.FLYING, 0)
+            for grant in self.movement_speed_grants.values()), default=0)
+
     def current_speed(self, mode: MovementMode = MovementMode.WALKING) -> int:
-        """Resolve a mode's speed, excluding the one shared expenditure ledger."""
-        channel = self.movement.self_static
-        spent = {modifier.uuid for modifier in self.get_cost_modifiers("movement")}
-        dashes = {modifier.uuid for modifier in channel.value_modifiers.values() if modifier.name == "Dashing"}
-        live = set(channel.value_modifiers) | set(channel.max_constraints)
-        self.movement_speed_factors = {handle: factor for handle, factor in self.movement_speed_factors.items() if handle in live}
-        factor_handles = set(self.movement_speed_factors)
-        factors = list(self.movement_speed_factors.values())
-        excluded = spent | dashes | factor_handles
-        base = self.movement.get_base_modifier()
-        mode_base = max((grant.get(mode, 0) for grant in self.movement_speed_grants.values()), default=0)
-        if mode == MovementMode.FLYING and mode_base <= 0:
-            return 0
-        # A detached value preserves contextual speed restrictions without
-        # rewriting the live base speed or scaling already spent movement.
-        resolved = self.movement.model_copy(deep=True)
-        for handle in excluded:
-            resolved.self_static.remove_modifier(handle)
-        if mode != MovementMode.WALKING and mode_base > 0 and base is not None:
-            resolved.self_static.value_modifiers[base.uuid] = base.model_copy(update={"value": mode_base})
-        speed = max(0, resolved.normalized_score)
-        return max(0, int(speed * prod(factors)))
+        """Pure resolved speed; swimming/climbing retain their walking fallback."""
+        if mode is MovementMode.FLYING:
+            if not self.movement_speed_grants:
+                return 0
+            return max(0, self.flying_speed.normalized_score)
+        return max(0, self.walking_speed.normalized_score)
 
     def movement_spent(self) -> int:
         """Actual feet paid this turn, shared by every movement mode."""
-        return max(0, -sum(modifier.normalized_value for modifier in self.get_cost_modifiers("movement")))
+        return sum(debit.amount for debit in self.movement_debits.values())
 
     def movement_remaining(self, mode: MovementMode = MovementMode.WALKING) -> int:
-        dashes = sum(modifier.name == "Dashing" for modifier in self.movement.self_static.value_modifiers.values())
-        return max(0, self.current_speed(mode) * (1 + dashes) - self.movement_spent())
+        return max(0, self.current_speed(mode) * (1 + self.dash_count) - self.movement_spent())
 
     def can_afford(self, cost_type: CostType, amount: int) -> bool:
         """Check if the entity can afford a given action type and amount.
@@ -1042,7 +1054,9 @@ class ActionEconomy(BaseBlock):
         Called at the start of each turn. Does NOT reset spell slot costs -
         use reset_spell_slot_costs() for long rest.
         """
-        turn_based_types: List[CostType] = ["actions", "bonus_actions", "reactions", "movement"]
+        self.movement_debits.clear()
+        self.dash_count = 0
+        turn_based_types: List[CostType] = ["actions", "bonus_actions", "reactions"]
         for cost_type in turn_based_types:
             value = self._get_value_for_cost_type(cost_type)
             for modifier in self.get_cost_modifiers(cost_type):
@@ -1134,6 +1148,12 @@ class ActionEconomy(BaseBlock):
         pending_cost_type: Optional[CostType] = None
         try:
             for cost in aggregated:
+                if cost.cost_type == "movement":
+                    handle = ActionEconomyDebitHandle(cost_type="movement", modifier_uuid=uuid4(),
+                        amount=cost.amount, modifier_name=cost.name or "movement")
+                    self.movement_debits[handle.modifier_uuid] = handle
+                    installed.append(handle)
+                    continue
                 value = self._get_value_for_cost_type(cost.cost_type)
                 modifier_name = (
                     f"{cost.name}_cost" if cost.name is not None else "cost"
@@ -1162,6 +1182,9 @@ class ActionEconomy(BaseBlock):
                 )
                 pending_modifier.remove_from_register()
             for handle in reversed(installed):
+                if handle.cost_type == "movement":
+                    self.movement_debits.pop(handle.modifier_uuid, None)
+                    continue
                 value = self._get_value_for_cost_type(handle.cost_type)
                 modifier = value.self_static.value_modifiers.get(
                     handle.modifier_uuid
@@ -1223,6 +1246,10 @@ class ActionEconomy(BaseBlock):
                 or type(handle.modifier_name) is not str
             ):
                 raise TypeError("debit handle has malformed typed evidence")
+            if handle.cost_type == "movement":
+                if self.movement_debits.get(handle.modifier_uuid) != handle:
+                    raise ValueError("Movement debit receipt no longer names exact spent feet")
+                continue
             value = self._get_value_for_cost_type(handle.cost_type)
             modifier = value.self_static.value_modifiers.get(handle.modifier_uuid)
             if (
@@ -1236,6 +1263,9 @@ class ActionEconomy(BaseBlock):
                 )
             exact_modifiers.append((handle, modifier))
 
+        for handle in receipt.handles:
+            if handle.cost_type == "movement":
+                del self.movement_debits[handle.modifier_uuid]
         for handle, modifier in exact_modifiers:
             value = self._get_value_for_cost_type(handle.cost_type)
             value.self_static.remove_value_modifier(handle.modifier_uuid)
@@ -1336,7 +1366,8 @@ class ActionEconomy(BaseBlock):
             return cls(
                 source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                 target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
-                actions=actions, bonus_actions=bonus_actions, reactions=reactions, movement=movement,
+                actions=actions, bonus_actions=bonus_actions, reactions=reactions, walking_speed=movement,
+                flying_speed=ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=0, value_name="Flying Speed"),
                 spell_slot_1=spell_slot_1, spell_slot_2=spell_slot_2, spell_slot_3=spell_slot_3,
                 spell_slot_4=spell_slot_4, spell_slot_5=spell_slot_5, spell_slot_6=spell_slot_6,
                 spell_slot_7=spell_slot_7, spell_slot_8=spell_slot_8, spell_slot_9=spell_slot_9,

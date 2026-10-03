@@ -266,6 +266,11 @@ def test_owned_lethal_delivery_keeps_its_original_timing_and_exactly_one_body(
                 number, badge, choreography=group, choreography_media=group_media)
             for body in expected.bodies:
                 command = actor_body(frame, body.actor_uuid)
+                if time >= group.complete_ms and body.clip == "Idle":
+                    # Completed gestures rejoin the scene's presentation clock.
+                    actor = next(row for row in scene_actors(group.after, data, {})
+                                 if row.contact.actor_uuid == body.actor_uuid)
+                    body = sample_idle_body(data, replace(actor.contact, facing=body.facing), time + 5000)
                 assert command[4][8:10] == (body.clip, body.frame)
 
 

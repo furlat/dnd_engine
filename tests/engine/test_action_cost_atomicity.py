@@ -28,11 +28,11 @@ def test_aggregate_debit_combines_channels_and_undoes_only_exact_handles() -> No
         ActionEconomyChannelCost(cost_type="bonus_actions", amount=1, name="jump"),
     ))
 
-    assert economy.movement.normalized_score == 15
+    assert economy.movement_remaining() == 15
     assert economy.bonus_actions.normalized_score == 0
     assert len(receipt.handles) == 2
     economy.undo_prevalidated_debit(receipt)
-    assert economy.movement.normalized_score == 30
+    assert economy.movement_remaining() == 30
     assert economy.bonus_actions.normalized_score == 1
     with pytest.raises(ValueError, match="no longer names exact installed state"):
         economy.undo_prevalidated_debit(receipt)
@@ -137,7 +137,7 @@ def test_debit_undo_rejects_forged_handle_before_removing_any_modifier() -> None
         name="Unrelated",
         value=5,
     )
-    economy.movement.self_static.add_value_modifier(unrelated)
+    economy.walking_speed.self_static.add_value_modifier(unrelated)
     forged_handle = receipt.handles[0].model_copy(update={
         "cost_type": "movement",
         "modifier_uuid": unrelated.uuid,
@@ -153,4 +153,4 @@ def test_debit_undo_rejects_forged_handle_before_removing_any_modifier() -> None
         economy.undo_prevalidated_debit(forged_receipt)
 
     assert economy.bonus_actions.normalized_score == 0
-    assert unrelated.uuid in economy.movement.self_static.value_modifiers
+    assert unrelated.uuid in economy.walking_speed.self_static.value_modifiers

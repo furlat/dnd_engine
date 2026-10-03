@@ -11,7 +11,7 @@ from dnd.ai.contracts.observation import (
     ObservationTileFact,
 )
 from dnd.ai.runtime.world_projection import adjacent_domain, project_object, project_tile
-from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
+from dnd.blocks.base_item import ItemResourceChangeEvent, ItemLocationStateEvent
 from dnd.core.condition_types import ConditionTag
 from dnd.core.events import (
     EntityCreatedEvent, Event, EventPhase, EventType, SensoryUpdateEvent,
@@ -233,6 +233,6 @@ class AIKnowledge:
                 return {event.object_uuid} if event.object_uuid is not None else set()
             case ItemLocationStateEvent():
                 return {event.item_state.item_uuid}
-            case ItemChargeConsumptionEvent():
+            case ItemResourceChangeEvent():
                 return {event.item_uuid}
         return set()

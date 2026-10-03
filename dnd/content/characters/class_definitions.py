@@ -175,7 +175,6 @@ SORCERER_RETIRED_DECLARATION_IDS = frozenset({
     "action.class.sorcerer.convert_slot_to_sorcery_points",
     "action.class.sorcerer.distant_spell",
     "action.class.sorcerer.draconic_presence",
-    "action.class.sorcerer.dragon_wings.fly",
     "action.class.sorcerer.dragon_wings.toggle",
     "action.class.sorcerer.elemental_affinity.resistance",
     "action.class.sorcerer.quickened_spell",

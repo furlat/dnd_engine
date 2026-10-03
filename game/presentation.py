@@ -8,7 +8,7 @@ from typing import Mapping
 from uuid import UUID
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, TraverseConnectorEvent, ShoveEvent, SpellEvent
-from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
+from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
 from dnd.core.base_actions import ActionEvent, BaseCost
@@ -151,6 +151,8 @@ class CompletedLineage:
     conditions: tuple[ConditionFact, ...] = ()
     dispositions: tuple[tuple[UUID, Disposition], ...] = ()
     admissions: tuple[ActorAdmission, ...] = ()
+    # Exact already-recorded versions that caused an observation before completion.
+    observed_sources: tuple[RecordedEvent, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -569,6 +571,7 @@ def _event_header(event: Event) -> Event:
         event_type=event.event_type, phase=event.phase, modified=event.modified,
         canceled=event.canceled, canceled_from_phase=event.canceled_from_phase,
         parent_event=event.parent_event, turn_execution_id=event.turn_execution_id,
+        resolution_ref=event.resolution_ref,
         status_message=event.status_message, outcome_code=event.outcome_code,
         outcome_source_entity_uuid=event.outcome_source_entity_uuid,
         is_first=event.is_first, is_last=event.is_last,
@@ -642,7 +645,7 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
             copied = event.model_copy(update=common)
         case ActionEvent() if type(event) is ActionEvent:
             copied = event.model_copy(update=common)
-        case EquipmentEvent() | ItemChargeConsumptionEvent() | ItemHoldingsReleasedEvent():
+        case EquipmentEvent() | ItemResourceChangeEvent() | ItemHoldingsReleasedEvent():
             copied = event.model_copy(update=common)
         case ItemLocationStateEvent() | ItemDestructionEvent():
             copied = event.model_copy(update=common)
@@ -662,7 +665,7 @@ def _actor_participants(event: Event) -> tuple[UUID, ...]:
     match event:
         case TurnEvent() | RoundEvent() | EncounterEvent() | SensoryUpdateEvent():
             return ()
-        case ItemChargeConsumptionEvent() | ItemHoldingsReleasedEvent():
+        case ItemResourceChangeEvent() | ItemHoldingsReleasedEvent():
             return (event.source_entity_uuid,) if event.source_entity_uuid is not None else ()
         case SpatialChangeEvent(change_type=SpatialChangeType.LIGHT_CHANGED):
             # light_changed() stores the affected tile UUID in entity_uuid.
@@ -874,6 +877,11 @@ def _capture_lineage(
         conditions=conditions,
         dispositions=dispositions,
         admissions=_capture_actor_admissions(history, indexed, observer_uuid, known_actor_uuids),
+        observed_sources=tuple(_retained_event(event, observer_uuid)
+            for _, event in indexed if event.uuid in {
+                reference.source_event_uuid for node in retained
+                if isinstance(node, SensoryUpdateEvent) for reference in node.observed_changes
+            } and event.uuid not in {node.uuid for node in retained}),
     )
 
 

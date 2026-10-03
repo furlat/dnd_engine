@@ -17,7 +17,7 @@ from dnd.analytics import (
     reduce_game_summary,
     summary_digest_is_valid,
 )
-from dnd.blocks.base_item import ItemChargeConsumptionEvent
+from dnd.blocks.base_item import ItemResourceChangeEvent
 from dnd.conditions import Prone
 from dnd.core.base_actions import ActionEvent, BaseCost
 from dnd.core.base_conditions import ConditionApplicationEvent
@@ -376,7 +376,7 @@ def _representative_evidence() -> tuple[list[Event], list[CombatLogEntry]]:
         costs=[BaseCost(name="Potion", cost_type="bonus_actions", cost=1)],
         **_completed_event_kwargs(source_uuid=HERO_UUID, seconds=11),
     )
-    item_charge = ItemChargeConsumptionEvent(
+    item_charge = ItemResourceChangeEvent(
         target_entity_uuid=HERO_UUID,
         item_uuid=ITEM_UUID,
         item_semantic_key="item.potion.healing",

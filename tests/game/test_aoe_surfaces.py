@@ -145,7 +145,7 @@ def test_actual_ice_knife_late_tail_cannot_shine_through_the_floor(production_da
 def test_old_player_archives_keep_their_declared_spell_propagation(spell, policy):
     value = dict(kind='spell', source_entity_uuid=str(uuid4()), target_entity_uuid=None,
         behavior_id='spell.'+spell, name=spell, source_position=[0, 0], declared_target_entity_uuids=[],
-        application_id=None, application_index=None)
+        application=None)
     adapter = TypeAdapter(PlayerFact)
     fact = adapter.validate_python(value)
     assert isinstance(fact, SpellFact) and fact.area_propagation == policy

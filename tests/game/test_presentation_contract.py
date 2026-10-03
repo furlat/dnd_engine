@@ -22,7 +22,7 @@ VALUES = json.loads((Path(__file__).parent / "fixtures/presentation-values.json"
 
 @pytest.fixture(scope="module")
 def contract_data(tmp_path_factory):
-    data = load_animation_data(authored_bundles=())
+    data = load_animation_data()
     asset = AuthoredProjectileAsset.model_validate_json(json.dumps(VALUES["asset"]))
     packet = VALUES["packet"]
     root = tmp_path_factory.mktemp("presentation-contract")

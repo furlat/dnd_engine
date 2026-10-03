@@ -12,7 +12,7 @@ from dnd.types.senses import PerceivedSpatialEffect
 from game.animation import ActorContact
 from game.animation_types import AnimationData, StudioMediaTrack, Facing8, ContactSweep
 from game.combat import BoundCast, actor_contact, actor_is_visible
-from game.player_facts import DamageFact, PlayerNode, PlayerState, SpatialFact
+from game.player_facts import DamageResultFact, PlayerNode, PlayerState, SpatialFact
 from game.stationary_media import StationaryMediaCue
 
 
@@ -68,7 +68,7 @@ def bind_spatial_contacts(state: PlayerState, event: PlayerNode, data: Animation
     trigger: Literal["ground_entry", "damage"]
     if isinstance(fact, SpatialFact) and ground_contact_is_authored(state, fact, data):
         identity, position, effect_id, trigger = fact.entity_uuid, fact.position, None, "ground_entry"
-    elif (isinstance(fact, DamageFact) and fact.stage == "applied"
+    elif (isinstance(fact, DamageResultFact) and fact.stage == "applied"
           and fact.applied_damage is not None and fact.applied_damage > 0 and fact.effect_id is not None):
         identity, position, effect_id, trigger = fact.target_entity_uuid, None, fact.effect_id, "damage"
     else:
@@ -96,7 +96,7 @@ def bind_spatial_contacts(state: PlayerState, event: PlayerNode, data: Animation
     return (*sweep, *cues.values())
 
 
-def damage_sweep_recipe(state: PlayerState, fact: DamageFact,
+def damage_sweep_recipe(state: PlayerState, fact: DamageResultFact,
                         data: AnimationData,
                         created_effects: Mapping[UUID, tuple[PerceivedSpatialEffect, ...]] = MappingProxyType({})) -> ContactSweep | None:
     """Resolve only a witnessed positive packet's authored contact presentation."""
@@ -129,7 +129,7 @@ def bind_damage_sweep(state: PlayerState, event: PlayerNode, data: AnimationData
                       created_effects: Mapping[UUID, tuple[PerceivedSpatialEffect, ...]] = MappingProxyType({})) -> tuple[StationaryMediaCue, ...]:
     """Compile a witnessed applied contact; never infer a source from nearby fields."""
     fact = event.fact
-    if not isinstance(fact, DamageFact) or (sweep := damage_sweep_recipe(state, fact, data, created_effects)) is None:
+    if not isinstance(fact, DamageResultFact) or (sweep := damage_sweep_recipe(state, fact, data, created_effects)) is None:
         return ()
     source = fact.spatial_source
     assert source is not None

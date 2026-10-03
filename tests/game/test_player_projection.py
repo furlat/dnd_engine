@@ -1,6 +1,7 @@
 """Native observations cross saved public bytes without private engine state."""
 
 import json
+from dataclasses import replace
 from uuid import UUID, uuid4
 
 import pytest
@@ -25,6 +26,7 @@ from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation import capture_interval, capture_lineage, reduce_interval
 from game.replay import ObserverCapture, RecordedSequence, capture_history
+from tests.game.damage_resolution_scenarios import unseen_source_damage
 from tests.game.visibility_scenarios import visibility_history
 from tests.game.concealment_scenarios import concealment_history
 from tests.game.scenarios import movement_with_paralysis
@@ -150,37 +152,9 @@ def test_hidden_damage_and_gear_are_received_only_when_the_actor_is_reacquired()
     assert before.senses.seen <= state.senses.seen
 
 
-def _unseen_source_damage() -> tuple[RecordedSequence, UUID]:
-    reset_engine_runtime()
-    build_battlefield("battlefield.visibility_doorway_closed")
-    game = Game()
-    try:
-        observer = Entity.create(uuid4(), "Observed recipient", config=EntityConfig(
-            position=(5, 7), health=HealthConfig(hit_dices=[
-                HitDiceConfig(hit_dice_value=10, hit_dice_count=4, mode="maximums")]),
-        ))
-        hidden = Entity.create(uuid4(), "Unseen private source", config=EntityConfig(position=(8, 4)))
-        for actor in (observer, hidden):
-            actor.compose_entity()
-            game.deploy_entity(actor, actor.position)
-        assert hidden.uuid not in observer.senses.entities
-        cursor = EventQueue.event_cursor()
-        initialization = capture_interval(name="hidden damage source", start_cursor=0, end_cursor=cursor,
-            observer_uuid=observer.uuid, battlefield_id="battlefield.visibility_doorway_closed")
-        observer.receive_damage(7, DamageType.FORCE, source_entity_uuid=hidden.uuid)
-        root, = (event for _, event in EventQueue.iter_events_since(cursor)
-                 if isinstance(event, TakeDamageEvent) and event.parent_lineage is None
-                 and event.phase is EventPhase.COMPLETION)
-        assert observer.get_hp() == 33 and hidden.uuid not in observer.senses.entities
-        lineage = capture_lineage(root, observer_uuid=observer.uuid, known_actor_uuids=frozenset({observer.uuid}))
-        return RecordedSequence(initialization=initialization, lineages=(lineage,)), hidden.uuid
-    finally:
-        game.close()
-        reset_engine_runtime()
-
 
 def test_known_recipient_keeps_damage_when_its_source_is_not_disclosed() -> None:
-    native, hidden_uuid = _unseen_source_damage()
+    native, hidden_uuid = unseen_source_damage()
     payload, before, (root,) = _saved_public(native)
     damage = [node.fact for node in root.events if isinstance(node.fact, DamageFact)]
     assert [row.stage for row in damage] == ["applied", "taken"]
@@ -362,3 +336,20 @@ def test_initialization_keeps_unnamed_authored_torch_after_values() -> None:
         torch = public.objects[fact.item_state.item_uuid]
         assert torch.placement == fact.world_placement
         assert torch.item.is_lit is True
+
+
+def test_unknown_owner_commits_normal_and_temporary_hp_at_the_same_authored_frame():
+    native, hidden_uuid = unseen_source_damage(temporary_hp=5, undisclosed_owner=True)
+    payload, before, (root,) = _saved_public(native)
+    assert str(hidden_uuid).encode() not in payload
+    requests = [node for node in root.events if isinstance(node.fact, DamageFact)]
+    assert requests and all(node.resolution_ref is None for node in requests)
+    data = load_animation_data()
+    data = replace(data, damage_context=data.damage_context.model_copy(update={'numberFrame': 3, 'bodyPlaybackSpeed': 1.0}))
+    group = bind_choreography(before, root, data)
+    assert not group.gaps and len(group.damage) == 1
+    assert group.damage[0].timing.hp_ms == pytest.approx(250)
+    for time, expected in [(0,(40,5)),(249.999,(40,5)),(250,(38,0)),(0,(40,5)),(250,(38,0))]:
+        actor = sample_choreography(group, time).displayed.actors[before.observer_uuid]
+        assert (actor.normal_hp, actor.temporary_hp) == expected
+    assert EventQueue.event_cursor() == 0

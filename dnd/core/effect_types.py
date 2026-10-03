@@ -1,9 +1,52 @@
 """Dependency-neutral provenance contracts for applied game effects."""
 
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Annotated, Literal, Optional, Tuple
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class EventResolutionRef(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    kind: Literal["event"] = "event"
+    lineage_uuid: UUID
+
+
+class ApplicationResolutionRef(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    kind: Literal["application"] = "application"
+    lineage_uuid: UUID
+    application_id: UUID
+
+
+ResolutionRef = Annotated[EventResolutionRef | ApplicationResolutionRef, Field(discriminator="kind")]
+
+
+class ApplicationMembership(BaseModel):
+    """One ordered application belonging to an existing action lineage."""
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    lineage_uuid: UUID
+    application_id: UUID
+    index: int = Field(ge=0)
+
+
+ObservedField = Literal["position", "visibility", "light", "hazards", "senses", "paths",
+                   "entity_contact", "object_contact", "spatial_effect"]
+
+
+class ObservedChangeRef(BaseModel):
+    """One observed field at an actual native refresh/commit boundary.
+
+    Fields sharing a source event and cursor belong to the same indivisible
+    observation. This reference supplies provenance, never a second after-value.
+    """
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    source_event_uuid: UUID
+    source_index: int = Field(ge=0)
+    resolution_ref: ResolutionRef | None = None
+    field: ObservedField
+    owner_uuid: UUID
 
 
 class EffectOriginKind(str, Enum):

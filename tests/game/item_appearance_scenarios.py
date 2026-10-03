@@ -23,6 +23,30 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from game.presentation import capture_interval, reduce_interval
 from game.replay import ObserverCapture, capture_history
+from tests.game.scenarios import _healing_encounter
+
+
+def item_power_history():
+    """Existing Warden power, effect release and the same item's recharge."""
+    with _healing_encounter() as (_, wearer, witness, _encounter):
+        pack = build_authored_item("gear.warden_pack", wearer.uuid)
+        assert wearer.loot_item(pack) and wearer.equip_item(pack.uuid, BodyPart.BACKPACK)
+        setup_standard_actions(wearer)
+        baseline = EventQueue.event_cursor()
+        before, _ = reduce_interval(None, capture_interval(name="Equipped Warden power", start_cursor=0,
+            end_cursor=baseline, observer_uuid=wearer.uuid, battlefield_id="battlefield.open_floor_bright"))
+        result = execute_use_action(wearer, pack.uuid,
+            pack.get_use_actions(wearer.uuid)[0].get_discovery_template_name())
+        assert result is not None and not result.canceled and pack.charges == 0
+        assert "Resistance" in wearer.active_conditions
+        wearer.action_economy.reset_all_costs()
+        result = next(row for row in wearer.registered_actions
+                      if row.name == "Drop Concentration").instantiate().apply()
+        assert result is not None and not result.canceled and "Resistance" not in wearer.active_conditions
+        pack.on_long_rest(wearer.uuid)
+        assert pack.charges == 1
+        return capture_history(before, (), observers=(ObserverCapture("wearer", wearer.uuid, baseline),
+            ObserverCapture("witness", witness.uuid, baseline)))
 
 
 def item_transfer_history(*, include_floor_robe=True, initial_hand=WeaponSlot.MELEE_MAIN,

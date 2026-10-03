@@ -408,10 +408,6 @@ class BaseBlock(BaseModel):
         """Actors expose the accepted wearer property channels through this capability."""
         return None
 
-    def permits_use_by(self, actor_uuid: UUID) -> bool:
-        """Source-owned activation admission; ordinary blocks add no restriction."""
-        return True
-
     def get_senses(self) -> Optional[SensesView]:
         """Override in Entity to return Senses block for subjective perception."""
         return None
@@ -1054,6 +1050,16 @@ class BaseBlock(BaseModel):
         ],
     ) -> None:
         """Commit a fully accepted condition graph child-first."""
+        linked_owners = {}
+        for _, condition, event, _ in prepared:
+            if condition.parent_link is None:
+                continue
+            owner_uuid, parent_uuid = condition.parent_link
+            parent = BaseCondition.get(parent_uuid)
+            owner = BaseBlock.get(owner_uuid)
+            if isinstance(parent, BaseCondition) and owner is not None:
+                linked_owners.setdefault(parent_uuid, (parent, owner, parent.snapshot_state(),
+                    owner.snapshot_entity_stats(), event))
         for owner, condition, removal_effect, expire in reversed(prepared):
             if not condition.applied:
                 continue
@@ -1098,6 +1104,12 @@ class BaseBlock(BaseModel):
                 resulting_item=owner.snapshot_item_state(),
                 **condition._post_removal_stats(),
             )
+
+        for parent, owner, previous_state, previous_stats, event in linked_owners.values():
+            if (parent.applied and owner.active_conditions_by_uuid.get(parent.uuid) is parent
+                    and (parent.snapshot_state() != previous_state
+                         or owner.snapshot_entity_stats() != previous_stats)):
+                parent.publish_owner_state(event)
 
     @classmethod
     def _prepare_condition_removal_tree(
@@ -1302,6 +1314,17 @@ class BaseBlock(BaseModel):
             self._discard_uncommitted_condition_tree(condition)
             return declaration_event
 
+        return self._apply_declared_condition(condition, declaration_event, required_condition=required_condition)
+
+    def _apply_declared_condition(self, condition: BaseCondition, declaration_event: Event, *,
+                                  required_condition: Optional[Tuple['BaseBlock', BaseCondition]] = None) -> Optional[Event]:
+        """Commit admitted membership through one replacement/removal boundary.
+
+        Callers retain their own declaration, immunity, save and provenance gates.
+        """
+        name = condition.name
+        if name is None:
+            raise ValueError("BaseCondition name is not set")
         try:
             condition_applied = condition.apply(
                 declaration_event=declaration_event,
@@ -1312,7 +1335,7 @@ class BaseBlock(BaseModel):
         if condition_applied and not condition_applied.canceled and condition.applied:
             if required_condition is not None:
                 prepared: List[Tuple[Optional[BaseBlock], BaseCondition, Event, bool]] = []
-                previous = self.active_conditions.get(condition.name)
+                previous = self.active_conditions.get(name)
                 canceled = None
                 if previous is not None:
                     canceled = self._prepare_condition_removal_tree(
@@ -1349,9 +1372,9 @@ class BaseBlock(BaseModel):
                              if entry[1].applied and (entry[0] is None or
                                  entry[0].active_conditions_by_uuid.get(entry[1].uuid) is entry[1])]
                 self._commit_prepared_condition_removals(remaining)
-            elif condition.name in self.active_conditions:
+            elif name in self.active_conditions:
                 if not self.remove_condition(
-                    condition.name,
+                    name,
                     parent_event=condition_applied,
                 ):
                     self._discard_uncommitted_condition_tree(condition)
@@ -1361,9 +1384,9 @@ class BaseBlock(BaseModel):
                             "the active condition"
                         ),
                     )
-            self.active_conditions[condition.name] = condition
+            self.active_conditions[name] = condition
             self.active_conditions_by_uuid[condition.uuid] = condition
-            self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
+            self.active_conditions_by_source[condition.source_entity_uuid].append(name)
             condition.on_membership_changed(condition_applied)
             completed_event = condition_applied.phase_to(
                 EventPhase.COMPLETION,

@@ -17,7 +17,6 @@ import dnd.classes.barbarian as barbarian
 import dnd.classes.feats as feats
 import dnd.classes.fighter as fighter
 import dnd.classes.rage as rage
-import dnd.monsters.roster_abilities as roster_abilities
 import dnd.conditions as conditions
 import dnd.extensions.aegis_spark as aegis_spark
 import dnd.extensions.field_focus as field_focus
@@ -34,7 +33,6 @@ import dnd.spells.evocation as evocation
 import dnd.spells.illusion as illusion
 import dnd.spells.necromancy as necromancy
 import dnd.spells.transmutation as transmutation
-import dnd.spells.roster_support as roster_support
 import dnd.spells.walls as walls
 import dnd.spells.wall_fields as wall_fields
 import dnd.spells.wall_constructions as wall_constructions
@@ -128,15 +126,15 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     ConditionBehaviorIdentitySpec,
     ...,
 ] = (
-    _srd(roster_abilities.MagicResistance,ContentDefinitionKind.TRAIT,"trait.magic_resistance"),
-    _srd(roster_abilities.InnateFlight,ContentDefinitionKind.TRAIT,"trait.innate_flight"),
-    _srd(roster_abilities.LifeDrainReduction,ContentDefinitionKind.CONDITION,"condition.wight.life_drain"),
-    _srd(roster_support.ProduceFlameEffect, ContentDefinitionKind.CONDITION, "condition.spell.produce_flame"),
-    _srd(roster_support.ShillelaghEffect, ContentDefinitionKind.CONDITION, "condition.spell.shillelagh"),
-    _srd(roster_support.LongstriderEffect, ContentDefinitionKind.CONDITION, "condition.spell.longstrider"),
-    _srd(roster_support.BarkskinEffect, ContentDefinitionKind.CONDITION, "condition.spell.barkskin"),
-    _srd(roster_support.FlyEffect, ContentDefinitionKind.CONDITION, "condition.spell.fly"),
-    _srd(roster_support.FireShieldEffect, ContentDefinitionKind.CONDITION, "condition.spell.fire_shield"),
+    _srd(monster_traits.MagicResistance,ContentDefinitionKind.TRAIT,"trait.magic_resistance"),
+    _srd(monster_traits.InnateFlight,ContentDefinitionKind.TRAIT,"trait.innate_flight"),
+    _srd(monster_traits.LifeDrainReduction,ContentDefinitionKind.CONDITION,"condition.wight.life_drain"),
+    _srd(conjuration.ProduceFlameEffect, ContentDefinitionKind.CONDITION, "condition.spell.produce_flame"),
+    _srd(transmutation.ShillelaghEffect, ContentDefinitionKind.CONDITION, "condition.spell.shillelagh"),
+    _srd(transmutation.LongstriderEffect, ContentDefinitionKind.CONDITION, "condition.spell.longstrider"),
+    _srd(transmutation.BarkskinEffect, ContentDefinitionKind.CONDITION, "condition.spell.barkskin"),
+    _srd(transmutation.FlyEffect, ContentDefinitionKind.CONDITION, "condition.spell.fly"),
+    _srd(evocation.FireShieldEffect, ContentDefinitionKind.CONDITION, "condition.spell.fire_shield"),
     # SRD class and feat behaviors represented by persistent conditions.
     _srd(barbarian.BrutalCritical, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.brutal_critical"),
     _srd(barbarian.DangerSense, ContentDefinitionKind.CLASS_FEATURE, "class_feature.barbarian.danger_sense"),
@@ -234,7 +232,7 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
         "condition.consumable.weapon_coat.basic_poison",
     ),
     _original(
-        consumables._TimedFireWeaponCoatCondition,
+        consumables.TimedFireWeaponCoatCondition,
         ContentDefinitionKind.CONDITION,
         "condition.consumable.weapon_coat.timed_fire",
     ),
@@ -397,7 +395,6 @@ _GRANTED_ACTION_TYPES_BY_CONDITION: Mapping[
     conjuration.WebRestrained: (conjuration.EscapeWebAction,),
     jaws.JawRestrained: (jaws.ForceJawOpen, jaws.SlipFreeOfJaw),
     transmutation.ExpeditiousRetreatEffect: (transmutation.BonusDash,),
-    roster_abilities.InnateFlight: (roster_support.FlyingMovement,),
 })
 
 _ROOT_OWNED_CONDITION_TYPES = frozenset({

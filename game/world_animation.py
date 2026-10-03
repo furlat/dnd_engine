@@ -3,19 +3,22 @@
 from dataclasses import dataclass
 from math import hypot
 from types import MappingProxyType
-from typing import Annotated, Literal, Mapping, Sequence
+from typing import Literal, Mapping, Sequence
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, PositiveFloat, PositiveInt, NonNegativeInt, model_validator
 from uuid import UUID
 
 from dnd.types.world import CardinalDirection
 from dnd.types.senses import PerceivedSpatialEffect
-from dnd.core.presentation_geometry import CylinderPresentationGeometry, SpherePresentationGeometry
+from dnd.core.presentation_geometry import (
+    CylinderPresentationGeometry, SpherePresentationGeometry,
+    ConePresentationGeometry, LinePresentationGeometry,
+)
 from game.player_facts import PlayerState, WorldUpdate
-from game.animation_types import Facing8, HitFlash, MechanismProjectileArt, PropAnimation, PropDepth, SaveHop, SurfaceReveal
+from game.animation_types import HitFlash, MechanismProjectileArt, PropAnimation, PropDepth, SaveHop, SurfaceReveal
 from game.device_art import DeviceFacing
 from game.mechanism_projectile import MechanismProjectileCue
 from game.environment_art import load_environment_art
+from game.world_binding_types import PropAnimationSource
 
 
 def surface_reveal_delay(update: WorldUpdate, before: PlayerState, reveal: SurfaceReveal,
@@ -46,77 +49,6 @@ def surface_reveal_delay(update: WorldUpdate, before: PlayerState, reveal: Surfa
                     for x, y, height in positions), default=0)
     return distance * 1000 / reveal.speedTilesPerSecond
 
-
-class _PropSource(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
-
-
-class MechanismProjectileSource(_PropSource):
-    frames_by_pose: dict[str, Annotated[tuple[str, ...], Field(min_length=1)]]
-    tip_offsets_by_pose: dict[str, tuple[tuple[FiniteFloat, FiniteFloat], ...]]
-    muzzle_offsets_by_pose: dict[str, tuple[FiniteFloat, FiniteFloat]]
-    muzzle_height_steps: FiniteFloat
-    speed_tiles_per_second: PositiveFloat
-
-    @model_validator(mode="after")
-    def registered_frames(self) -> "MechanismProjectileSource":
-        if set(self.frames_by_pose) != set(self.tip_offsets_by_pose) or set(self.frames_by_pose) != set(self.muzzle_offsets_by_pose):
-            raise ValueError("projectile contacts must cover its poses")
-        if any(len(frames) != len(self.tip_offsets_by_pose[pose]) for pose, frames in self.frames_by_pose.items()):
-            raise ValueError("projectile tips must cover its frames")
-        return self
-
-
-class SaveHopSource(_PropSource):
-    effect_id: str
-    body_clip: str
-    duration_ms: PositiveFloat
-    height_px: PositiveFloat
-
-
-class PropDepthSource(_PropSource):
-    asset_id: str
-    cell: tuple[PositiveInt, PositiveInt]
-    rows_by_pose: dict[str, NonNegativeInt]
-    depth_range: tuple[FiniteFloat, FiniteFloat]
-    pixels_per_unit_by_pose: dict[str, PositiveFloat]
-
-
-class TetherSource(_PropSource):
-    frames_by_facing: dict[Facing8, Annotated[tuple[str, ...], Field(min_length=1)]]
-    endpoints_by_facing: dict[Facing8, tuple[tuple[FiniteFloat, FiniteFloat], tuple[FiniteFloat, FiniteFloat]]]
-    fps: PositiveFloat
-
-
-class PropAnimationSource(_PropSource):
-    frames_by_pose: Annotated[dict[str, Annotated[tuple[str, ...], Field(min_length=1)]], Field(min_length=1)]
-    fps: PositiveInt
-    state_frames: dict[str, NonNegativeInt]
-    default_frame: NonNegativeInt = 0
-    placement: Literal["cell", "area", "anchor"] = "cell"
-    origin_offset: tuple[FiniteFloat, FiniteFloat] = (0, 0)
-    creation_start_frame: NonNegativeInt | None = None
-    footprint_tiles: tuple[PositiveInt, PositiveInt] | None = None
-    activation_frames: tuple[NonNegativeInt, ...] = ()
-    contact_frame: NonNegativeInt | None = None
-    transition_frames: dict[str, tuple[NonNegativeInt, ...]] = Field(default_factory=dict)
-    projectile: MechanismProjectileSource | None = None
-    depth: Literal["ground", "world"] = "ground"
-    successful_save_hop: SaveHopSource | None = None
-    actor_depth: PropDepthSource | None = None
-    # Adjacent world-catalog media share the authored object's source row.
-    tether: TetherSource | None = None
-    residue_overlays: dict[str, dict[str, tuple[str, ...]]] = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def frame_markers(self) -> "PropAnimationSource":
-        markers = (self.default_frame, self.creation_start_frame, self.contact_frame,
-                   *self.state_frames.values(), *self.activation_frames,
-                   *(frame for frames in self.transition_frames.values() for frame in frames))
-        limit = min(map(len, self.frames_by_pose.values()))
-        if any(frame is not None and frame >= limit for frame in markers):
-            raise ValueError("prop frame markers must index each pose's frames")
-        return self
 
 
 def prop_animation(row: Mapping[str, object] | PropAnimationSource) -> PropAnimation:
@@ -167,7 +99,10 @@ def bind_spatial_media_motion(before: PerceivedSpatialEffect, after: PerceivedSp
                               speed: float) -> SpatialMediaMotion | None:
     """Only disclosed old/new geometry can provide a moving field's endpoints."""
     old, new = before.area_geometry, after.area_geometry
-    if old is None or new is None:
+    if (not isinstance(old, (SpherePresentationGeometry, CylinderPresentationGeometry,
+                             ConePresentationGeometry, LinePresentationGeometry))
+            or not isinstance(new, (SpherePresentationGeometry, CylinderPresentationGeometry,
+                                     ConePresentationGeometry, LinePresentationGeometry))):
         return None
     start = old.center if isinstance(old, (SpherePresentationGeometry, CylinderPresentationGeometry)) else old.origin
     end = new.center if isinstance(new, (SpherePresentationGeometry, CylinderPresentationGeometry)) else new.origin

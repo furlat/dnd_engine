@@ -4,6 +4,41 @@ from enum import Enum
 from typing import TypeAlias, Union
 
 
+class WeaponKind(str, Enum):
+    """Base weapon form, independent of recipe, possession and visual identity."""
+
+    CLUB = "club"
+    SPEAR = "spear"
+    MACE = "mace"
+    DAGGER = "dagger"
+    HANDAXE = "handaxe"
+    JAVELIN = "javelin"
+    LIGHT_HAMMER = "light_hammer"
+    QUARTERSTAFF = "quarterstaff"
+    SICKLE = "sickle"
+    DART = "dart"
+    SLING = "sling"
+    BATTLEAXE = "battleaxe"
+    GREATAXE = "greataxe"
+    GREATSWORD = "greatsword"
+    DOUBLE_BLADED_SWORD = "double_bladed_sword"
+    LONGSWORD = "longsword"
+    MORNINGSTAR = "morningstar"
+    RAPIER = "rapier"
+    LONGBOW = "longbow"
+    SHORTSWORD = "shortsword"
+    SCIMITAR = "scimitar"
+    TRIDENT = "trident"
+    WARHAMMER = "warhammer"
+    SHORTBOW = "shortbow"
+    LIGHT_CROSSBOW = "light_crossbow"
+    HEAVY_CROSSBOW = "heavy_crossbow"
+    HAND_CROSSBOW = "hand_crossbow"
+    GREATCLUB = "greatclub"
+    MAUL = "maul"
+    MUSKET = "musket"
+
+
 class WeaponSlot(str, Enum):
     """Weapon positions exposed by an entity's equipment block."""
 

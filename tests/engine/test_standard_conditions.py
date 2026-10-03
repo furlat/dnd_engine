@@ -192,7 +192,7 @@ def test_eb_08_003_poisoned_and_frightened_penalize_attacks_and_checks() -> None
     source.set_invisible(False)
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.DISADVANTAGE
     assert target.skill_set.athletics.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
 
 
 def test_eb_08_004_grappled_incapacitated_and_restrained_limit_actions() -> None:
@@ -202,7 +202,7 @@ def test_eb_08_004_grappled_incapacitated_and_restrained_limit_actions() -> None
     target = configured_entity("Target", (2, 1), "monsters")
 
     apply_to_target(Grappled, source, target)
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert target.action_economy.actions.normalized_score == 1
 
     target.remove_condition("Grappled")
@@ -210,11 +210,11 @@ def test_eb_08_004_grappled_incapacitated_and_restrained_limit_actions() -> None
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
     assert target.action_economy.reactions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
 
     target.remove_condition("Incapacitated")
     apply_to_target(Restrained, source, target)
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.DISADVANTAGE
     assert (
         target.saving_throws.get_saving_throw("dexterity").bonus.advantage
@@ -254,7 +254,7 @@ def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
     assert paralyzed.sub_conditions == []
     assert "Incapacitated" not in target.active_conditions
     assert target.action_economy.action_permission.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert (
         target.saving_throws.get_saving_throw("strength").bonus.auto_hit
         == AutoHitStatus.AUTOMISS
@@ -273,7 +273,7 @@ def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
     target.remove_condition("Paralyzed")
     assert "Incapacitated" not in target.active_conditions
     assert target.action_economy.action_permission.normalized_score == 1
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
 
     stunned = apply_to_target(Stunned, source, target)
     assert stunned.sub_conditions == []
@@ -282,7 +282,7 @@ def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
     assert target.action_economy.reactions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert (
         target.saving_throws.get_saving_throw("strength").bonus.auto_hit
         == AutoHitStatus.AUTOMISS
@@ -302,7 +302,7 @@ def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
     assert target.action_economy.actions.normalized_score == 1
     assert target.action_economy.bonus_actions.normalized_score == 1
     assert target.action_economy.reactions.normalized_score == 1
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
     assert (
         target.saving_throws.get_saving_throw("strength").bonus.auto_hit
         == AutoHitStatus.NONE
@@ -320,7 +320,7 @@ def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
     assert target.action_economy.reactions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert target.senses.visual_access.normalized_score == 0
     assert (
         target.saving_throws.get_saving_throw("strength").bonus.auto_hit
@@ -346,7 +346,7 @@ def test_eb_08_006_severe_conditions_own_direct_denial_transforms() -> None:
     assert target.action_economy.actions.normalized_score == 1
     assert target.action_economy.bonus_actions.normalized_score == 1
     assert target.action_economy.reactions.normalized_score == 1
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
     assert target.senses.visual_access.normalized_score == 1
     assert (
         target.saving_throws.get_saving_throw("strength").bonus.auto_hit
@@ -414,7 +414,7 @@ def test_eb_08_009_prone_immediate_stand_on_own_turn_cancels_indexing() -> None:
     assert "Prone" not in target.active_conditions
     assert condition.uuid not in target.active_conditions_by_uuid
     assert BaseCondition.get(condition.uuid) is None
-    assert target.action_economy.movement.normalized_score == 15
+    assert target.action_economy.movement_remaining() == 15
 
 
 def test_eb_08_010_prone_auto_stand_handler_is_standard_action_state() -> None:
@@ -429,17 +429,17 @@ def test_eb_08_010_prone_auto_stand_handler_is_standard_action_state() -> None:
 
     assert target.get_event_handler_by_name("Prone Auto-Stand") is not None
     assert "Prone" in target.active_conditions
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
 
     other.on_turn_start()
 
     assert "Prone" in target.active_conditions
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
 
     target.on_turn_start()
 
     assert "Prone" not in target.active_conditions
-    assert target.action_economy.movement.normalized_score == 15
+    assert target.action_economy.movement_remaining() == 15
 
 
 def test_eb_08_011_hidden_and_invisibility_reveal_handlers_filter_actions() -> None:
@@ -563,7 +563,7 @@ def test_eb_08_012_standard_condition_removal_cleans_owned_state() -> None:
         assert target.action_economy.actions.normalized_score == 1
         assert target.action_economy.bonus_actions.normalized_score == 1
         assert target.action_economy.reactions.normalized_score == 1
-        assert target.action_economy.movement.normalized_score == 30
+        assert target.action_economy.movement_remaining() == 30
         assert target.action_economy.action_permission.normalized_score == 1
         assert target.senses.visual_access.normalized_score == 1
 
@@ -704,7 +704,7 @@ def test_eb_08_014_petrified_composes_severe_control_and_all_damage_resistance()
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
     assert target.action_economy.reactions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert (
         target.saving_throws.get_saving_throw("strength").bonus.auto_hit
         == AutoHitStatus.AUTOMISS
@@ -732,7 +732,7 @@ def test_eb_08_014_petrified_composes_severe_control_and_all_damage_resistance()
     assert "Incapacitated" not in target.active_conditions
     assert target.action_economy.action_permission.normalized_score == 1
     assert target.action_economy.actions.normalized_score == 1
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
     assert not target.check_condition_immunity("Poisoned")
     assert target.equipment.ac_bonus.outgoing_advantage == AdvantageStatus.NONE
     for damage_type in DamageType:
@@ -745,7 +745,7 @@ def test_eb_08_015_exhaustion_levels_are_cumulative_and_removable() -> None:
     source = configured_entity("Source", (1, 1), "heroes")
     target = configured_entity("Exhausted Target", (2, 1), "monsters")
     setup_standard_actions(target)
-    base_movement = target.action_economy.movement.normalized_score
+    base_movement = target.action_economy.movement_remaining()
     base_max_hp = get_max_hp(target)
 
     level_one = apply_to_target(
@@ -760,7 +760,7 @@ def test_eb_08_015_exhaustion_levels_are_cumulative_and_removable() -> None:
 
     apply_to_target(lambda **kwargs: Exhaustion(level=2, **kwargs), source, target)
     assert target.skill_set.perception.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE
-    assert target.action_economy.movement.normalized_score == base_movement // 2
+    assert target.action_economy.movement_remaining() == base_movement // 2
     target.remove_condition("Exhaustion")
 
     apply_to_target(lambda **kwargs: Exhaustion(level=3, **kwargs), source, target)
@@ -777,7 +777,7 @@ def test_eb_08_015_exhaustion_levels_are_cumulative_and_removable() -> None:
     assert get_max_hp(target) == base_max_hp
 
     apply_to_target(lambda **kwargs: Exhaustion(level=5, **kwargs), source, target)
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     target.remove_condition("Exhaustion")
 
     apply_to_target(lambda **kwargs: Exhaustion(level=6, **kwargs), source, target)

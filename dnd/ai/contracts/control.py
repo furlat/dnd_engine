@@ -99,6 +99,9 @@ class DamageRollProfile(ControlModel):
     die_size: int = Field(ge=1, description="Number of faces on each damage die.")
     flat_bonus: int = Field(default=0, description="Flat bonus added once per application.")
     damage_type: str = Field(description="Damage type applied to this component.")
+    save_dc: Optional[int] = Field(default=None, description="Optional save DC for this damage component.")
+    save_ability: Optional[str] = Field(default=None, description="Optional save ability for this component.")
+    double_on_critical: bool = Field(default=True, description="Whether critical hits double this component's dice.")
 
 
 class ActionOutcomeProfile(ControlModel):

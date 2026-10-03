@@ -153,12 +153,12 @@ def test_social_poison_and_fear_conditions_use_context_or_static_pressure() -> N
 
     charmer.set_invisible(True)
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.NONE
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
 
     charmer.set_invisible(False)
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.DISADVANTAGE
     assert target.skill_set.athletics.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
 
 
 def test_movement_and_control_conditions_clamp_action_economy_values() -> None:
@@ -168,7 +168,7 @@ def test_movement_and_control_conditions_clamp_action_economy_values() -> None:
     target = create_tutorial_actor("Target", (2, 1), "monsters")
 
     apply_condition(Grappled, source, target)
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert target.action_economy.actions.normalized_score == 1
 
     target.remove_condition("Grappled")
@@ -176,11 +176,11 @@ def test_movement_and_control_conditions_clamp_action_economy_values() -> None:
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
     assert target.action_economy.reactions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
 
     target.remove_condition("Incapacitated")
     apply_condition(Restrained, source, target)
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert target.equipment.attack_bonus.advantage == AdvantageStatus.DISADVANTAGE
     assert (
         target.saving_throws.get_saving_throw("dexterity").bonus.advantage

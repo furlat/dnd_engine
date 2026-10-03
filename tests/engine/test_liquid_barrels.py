@@ -249,7 +249,7 @@ def test_dread_uses_paid_reverse_step_or_retains_fear_when_exhausted(
         walk(traveler, [(0, 1), (1, 1)])
     assert traveler.position == expected_position
     assert ("Frightened" in traveler.active_conditions) is feared
-    assert traveler.action_economy.movement.normalized_score == movement - (10 if save == 1 and movement > 5 else 5)
+    assert traveler.action_economy.movement_remaining() == movement - (10 if save == 1 and movement > 5 else 5)
 
 
 def interact(source: Entity, operation: SpatialEffectInteractionOperation) -> Event:
@@ -318,7 +318,7 @@ def test_only_authored_slippery_material_adds_difficult_terrain(world: Game, con
     break_with_attack(barrel, attacker)
     with fixed_dice_faces(20):
         walk(traveler, [(0, 1), (1, 1), (2, 1)])
-    assert traveler.action_economy.movement.normalized_score == remaining
+    assert traveler.action_economy.movement_remaining() == remaining
 
 
 def test_grease_preserves_native_immediate_standing_policy_during_own_turn(world: Game) -> None:
@@ -333,7 +333,7 @@ def test_grease_preserves_native_immediate_standing_policy_during_own_turn(world
     assert save.result is False
     assert "Prone" not in traveler.active_conditions
     # Entering grease costs 10ft, then existing Prone pays 15ft to stand.
-    assert traveler.action_economy.movement.normalized_score == 5
+    assert traveler.action_economy.movement_remaining() == 5
 
 
 @pytest.mark.parametrize("contents", ("oil", "water", "grease"))

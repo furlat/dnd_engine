@@ -123,7 +123,8 @@ def response_data(member, trigger):
     """Existing delivered strips stand in for any authored response's pixels."""
     data = load_animation_data()
     donor = data.condition_recipes["condition.spell.bless"]
-    finite = data.condition_recipes["condition.blinded"].application.effects
+    # Exercise a finite response with an actual finite admitted media pair.
+    finite = data.condition_recipes["condition.spell.command.halt"].application.effects
     recipe = donor.model_copy(update={
         "definitionRef": data.condition_recipes[member.behavior_id].definitionRef,
         "responses": (ConditionResponse(trigger=trigger, effects=tuple(

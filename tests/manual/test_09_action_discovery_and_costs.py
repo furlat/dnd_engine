@@ -23,7 +23,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.equipment import EquipmentConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.blocks.base_item import ItemChargeConsumptionEvent
+from dnd.blocks.base_item import ItemResourceChangeEvent
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_actions import ActionCategory, BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
@@ -312,7 +312,7 @@ def test_standard_action_discovery_groups_choices_for_clients(capsys) -> None:
     entity_names = {info.template_name for info in available.entity_actions}
 
     assert available.entity_uuid == hero.uuid
-    assert available.remaining_movement == hero.action_economy.movement.normalized_score
+    assert available.remaining_movement == hero.action_economy.movement_remaining()
     assert {"Dash", "Dodge", "Disengage"}.issubset(self_names)
     assert "Move" in position_names
     assert "Jump" in position_names
@@ -584,7 +584,7 @@ def test_position_action_rows_report_target_cost_unaffordable(
     template.set_target_position((3, 2))
     actor.action_economy.consume(
         "movement",
-        actor.action_economy.movement.normalized_score,
+        actor.action_economy.movement_remaining(),
     )
 
     authored = get_available_actions(actor)
@@ -656,7 +656,7 @@ def test_move_row_reports_movement_budget_exhaustion() -> None:
     Entity.update_all_entities_senses()
     actor.action_economy.consume(
         "movement",
-        actor.action_economy.movement.normalized_score,
+        actor.action_economy.movement_remaining(),
     )
 
     authored = get_available_actions(actor)
@@ -901,7 +901,7 @@ def test_dash_adds_current_speed_after_speed_bonuses_and_movement_spending() -> 
     """Dash adds speed, not base speed, remaining movement, or prior Dash budget."""
     reset_action_state()
     actor = create_tutorial_actor()
-    movement = actor.action_economy.movement
+    movement = actor.action_economy.walking_speed
     movement.self_static.add_value_modifier(NumericalModifier(
         name="Fast Movement",
         value=10,
@@ -1067,7 +1067,7 @@ def test_item_bound_spell_consumes_its_charge_before_action_completion() -> None
         EventPhase.COMPLETION,
     ]
     completion = charge_events[-1]
-    assert isinstance(completion, ItemChargeConsumptionEvent)
+    assert isinstance(completion, ItemResourceChangeEvent)
     assert completion.parent_lineage == result.lineage_uuid
     indexed = list(EventQueue.iter_events_since(cursor))
     charge_terminal_index = next(
@@ -1228,7 +1228,7 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
         [(5, 3), (5, 4), (6, 5), (5, 6)],
     )
 
-    movement_before = scout.action_economy.movement.normalized_score
+    movement_before = scout.action_economy.movement_remaining()
     result = execute_by_index(
         scout,
         "Move",
@@ -1242,7 +1242,7 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
     movement_result = cast(MovementEvent, result)
     assert movement_result.path == hazard_target.safe_path
     assert scout.position == hazard_target.position
-    assert scout.action_economy.movement.normalized_score == (
+    assert scout.action_economy.movement_remaining() == (
         movement_before - hazard_target.safe_path_cost
     )
 
@@ -1255,7 +1255,7 @@ def test_safe_movement_metadata_shapes_path_choice(capsys) -> None:
         f"hazard in safe path: {hazard_position in hazard_target.safe_path[1:]}",
         f"safe path cost: {hazard_target.safe_path_cost}",
         f"executed path is safe path: {movement_result.path == hazard_target.safe_path}",
-        f"movement after safe move: {scout.action_economy.movement.normalized_score}",
+        f"movement after safe move: {scout.action_economy.movement_remaining()}",
     ]
 
     print("\n".join(safe_lines))
@@ -1290,7 +1290,7 @@ def test_move_executes_affordable_disclosed_path_when_safe_alternative_is_too_co
     assert target.position is not None
     assert target.path is not None
     assert target.path_cost is not None
-    assert target.path_cost <= scout.action_economy.movement.normalized_score
+    assert target.path_cost <= scout.action_economy.movement_remaining()
 
     unaffordable_safe_path = [
         (5, 3),
@@ -1371,7 +1371,7 @@ def test_partial_move_completion_reports_only_traversed_path_and_cost() -> None:
     )
 
     assert scout.position == (3, 6)
-    assert scout.action_economy.movement.normalized_score == 15
+    assert scout.action_economy.movement_remaining() == 15
     assert movement_result.end_position == (3, 6)
     assert movement_result.path == traversed_path
     assert movement_result.get_affected_positions() == set(traversed_path)

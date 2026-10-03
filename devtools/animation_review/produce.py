@@ -42,7 +42,7 @@ from tests.game.projectile_life_scenarios import projectile_life_history
 from tests.game.true_strike_scenarios import true_strike_history
 from tests.game.dread_residue_scenarios import dread_residue_history
 from tests.game.equipment_scenarios import equipment_sequence_history
-from tests.game.item_appearance_scenarios import item_transfer_history
+from tests.game.item_appearance_scenarios import item_transfer_history, item_power_history
 from tests.game.mechanism_scenarios import mechanism_history
 from tests.game.trap_expansion_scenarios import trap_expansion_history
 from tests.game.portal_scenarios import portal_history
@@ -64,9 +64,13 @@ from tests.game.visibility_scenarios import visibility_history
 from tests.game.scenarios import (
     attack_history, dodge_expiry_history, healing_history, lifecycle_history, movement_with_paralysis, paralysis_lifecycle,
 )
+from tests.game.damage_resolution_scenarios import resolution_history, unseen_source_damage
+from tests.game.construction_scenarios import construction_history
+from tests.game.movement_scenarios import flight_history
+from game.presentation import reduce_interval
 
 from devtools.animation_review.cases import (
-    AreaSpellCase, CantripCase, AttackCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DeviceCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,
+    AreaSpellCase, CallLightningCase, CantripCase, AttackCase, DamageResolutionCase, ConstructionCase, FlightCase, ItemPowerCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DeviceCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,
     MechanismCase, PortalCase, WindowCase, DoorCase, TrapHardwareCase, PropDestructionCase, ObjectAttackCase, LiquidBarrelCase, EnvironmentCase, EnvironmentControlCase, EquipmentCase, ItemTransferCase, ForcedMovementCase, GroundContactCase, HealingCase, LifecycleCase, MovementCase,
     ParalysisCase, ParalysisLifecycleCase, PendingSpellCase, PersistentSpellCase, WallSpellCase, GlobeCase, InterruptionCase, ControlSpellCase, ProjectileLifeCase, ReviewCase, SpellHandoffCase, SupportCase, HealingBatchCase, SupportConditionCase, TrueStrikeCase, TeleportCase, TrapCase, VisibilityCase, WebCase,
 )
@@ -75,6 +79,17 @@ from devtools.animation_review.cases import (
 def produce(case: ReviewCase) -> CapturedHistory:
     """Run real rules once, then hand only retained values to the recorder."""
     match case.scenario:
+        case DamageResolutionCase() as scenario:
+            native = (unseen_source_damage(temporary_hp=5, undisclosed_owner=True)[0]
+                      if scenario.program == "hidden" else resolution_history(scenario.program))
+            before, _ = reduce_interval(None, native.initialization)
+            return CapturedHistory(native.initialization, before, native.lineages)
+        case ConstructionCase() as scenario:
+            return construction_history(material=scenario.material)
+        case FlightCase():
+            return flight_history()
+        case ItemPowerCase():
+            return item_power_history()
         case AssemblyCase() as scenario:
             return assembly_history(program=scenario.program,direction=scenario.direction,form=scenario.form)
         case ScorchingCase() as scenario:
@@ -145,6 +160,8 @@ def produce(case: ReviewCase) -> CapturedHistory:
             return true_strike_history(ranged=scenario.ranged, miss=scenario.miss)
         case CantripCase() as scenario:
             return cantrip_history(program=scenario.program, outcome=scenario.outcome, layout=scenario.layout)
+        case CallLightningCase():
+            return area_spell_history(program="call_lightning")
         case AreaSpellCase() as scenario:
             return area_spell_history(program=scenario.program, diagonal=scenario.diagonal, blocked=scenario.blocked)
         case WebCase() as scenario:

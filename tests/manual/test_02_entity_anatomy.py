@@ -310,7 +310,7 @@ def test_health_resources_spellcasting_and_appearance_print_actor_regions(capsys
         f"actions: {hero.action_economy.actions.normalized_score}",
         f"bonus actions: {hero.action_economy.bonus_actions.normalized_score}",
         f"reactions: {hero.action_economy.reactions.normalized_score}",
-        f"movement: {hero.action_economy.movement.normalized_score}",
+        f"movement: {hero.action_economy.movement_remaining()}",
         f"level 1 spell slots: {hero.action_economy.spell_slot_1.normalized_score}",
     ]
 
@@ -327,7 +327,7 @@ def test_health_resources_spellcasting_and_appearance_print_actor_regions(capsys
     assert hero.action_economy.actions.normalized_score == 1
     assert hero.action_economy.bonus_actions.normalized_score == 1
     assert hero.action_economy.reactions.normalized_score == 1
-    assert hero.action_economy.movement.normalized_score == 30
+    assert hero.action_economy.movement_remaining() == 30
     assert hero.action_economy.spell_slot_1.normalized_score == 2
     assert resource_lines == expected_resource_lines
 

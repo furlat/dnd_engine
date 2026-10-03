@@ -544,8 +544,9 @@ class FastMovement(BaseCondition):
             target_entity_uuid=self.target_entity_uuid,
             callable=fast_movement_check
         )
-        mod_uuid = target.action_economy.movement.self_contextual.add_value_modifier(speed_mod)
-        outs.append((target.action_economy.movement.uuid, mod_uuid))
+        for speed in target.action_economy.speed_values:
+            mod_uuid = speed.self_contextual.add_value_modifier(speed_mod)
+            outs.append((speed.uuid, mod_uuid))
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,

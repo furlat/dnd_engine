@@ -22,6 +22,7 @@ from dnd.core.events import (
 )
 from dnd.blocks.equipment import Weapon, WeaponEquipEvent, WeaponUnequipEvent
 from dnd.core.equipment_types import WeaponSlot
+from dnd.types.world import MovementMode
 from dnd.core.content.runtime import BehaviorBinding
 from dnd.entity import Entity
 from dnd.actions import Move, Swim, Dash, Dodge, Disengage, DropConcentration, ShakeAwake, Hide, Attack, Jump, Shove, PickUp, Drop, SpellAction
@@ -84,6 +85,7 @@ def setup_standard_actions(entity: Entity) -> None:
 
     for action, behavior_id in (
         (Move(source_entity_uuid=entity.uuid, template=True), "action.move"),
+        (Move(source_entity_uuid=entity.uuid, template=True, name="Flying Movement", movement_mode=MovementMode.FLYING), "action.move"),
         (Swim(source_entity_uuid=entity.uuid, template=True), "action.swim"),
         (Jump(source_entity_uuid=entity.uuid, template=True), "action.jump"),
         (Dash(source_entity_uuid=entity.uuid, template=True), "action.dash"),
@@ -732,7 +734,7 @@ def execute_use_action(
             instance.target_entity_uuid = target.target_uuid
             instance.extra_target_entity_uuids = target.extra_target_uuids or []
     elif template.target_type == TargetType.SELF:
-        instance = template.instantiate()
+        instance = template.instantiate(target_entity_uuid=entity.uuid)
     elif template.target_type in (TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT):
         if target is None or target.target_uuid is None:
             raise ValueError("ENTITY use action requires target")

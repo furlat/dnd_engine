@@ -9,7 +9,7 @@ from dnd.core.creature_types import DamageType
 from dnd.core.events import EventQueue
 from dnd.entity import Entity
 from dnd.types.world import OccupancyLayer
-from game.player_facts import AttackFact, DamageFact
+from game.player_facts import AttackFact, DamageFact, DamageResultFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation import reduce_interval, reduce_lineage as reduce_native_lineage
@@ -24,7 +24,7 @@ def test_real_weapon_hits_retain_pattern_critical_and_floor_geometry_after_teard
     for role in ("walker", "donor"):
         _, state, roots = saved_public(history.views[role])
         releases = [node.fact.body_release for root in roots for node in root.events
-                    if isinstance(node.fact, DamageFact) and node.fact.body_release is not None]
+                    if isinstance(node.fact, DamageResultFact) and node.fact.body_release is not None]
         assert len(releases) == 1
         release = releases[0]
         assert release.pattern == pattern and release.critical_hit is critical
@@ -61,7 +61,7 @@ def test_review_creatures_retain_real_identity_and_material_after_seven_attacks(
         _, before, roots = saved_public(native)
         assert before.actors[donor].creature_content_ref == identity
         injuries = [node.fact for root in roots for node in root.events
-                    if isinstance(node.fact, DamageFact) and node.fact.body_release is not None]
+                    if isinstance(node.fact, DamageResultFact) and node.fact.body_release is not None]
         assert len(injuries) == 7
         assert all(injury.body_release.release_id == release_id for injury in injuries)
         after = before
@@ -85,7 +85,7 @@ def test_repeated_native_injuries_leave_one_persistent_residue_and_replay_crossi
     expected_residue = {"blood": "residue.blood", "bone": "residue.bone_fragments",
                         "corrosive": "residue.corrosive_demonic_blood"}[profile]
     releases = [node.fact for root in roots for node in root.events
-                if isinstance(node.fact, DamageFact) and node.fact.body_release is not None]
+                if isinstance(node.fact, DamageResultFact) and node.fact.body_release is not None]
     injuries = [row for row in releases if row.damage_type is DamageType.PIERCING]
     assert len(injuries) == 2
     assert all(row.target_entity_uuid == donor and row.body_release is not None
@@ -150,7 +150,7 @@ def test_blood_and_bone_coexist_with_the_same_observed_spike_fixture():
     releases = []
     for root in roots:
         releases.extend(node.fact.body_release.release_id for node in root.events
-                        if isinstance(node.fact, DamageFact) and node.fact.body_release is not None)
+                        if isinstance(node.fact, DamageResultFact) and node.fact.body_release is not None)
         state = reduce_lineage(state, root)
     assert sorted(releases) == ["body.blood", "body.blood", "body.bone"]
     assert {row.residue_id for row in state.tiles[(5, 3)].residues} == {
@@ -200,7 +200,7 @@ def test_recordings_without_release_and_residue_fields_remain_readable(injury_hi
     native = RecordedSequence.model_validate_json(json.dumps(payload), context=PASSIVE_EVENT_REPLAY)
     _, state, roots = saved_public(native)
     for root in roots:
-        assert all(node.fact.body_release is None for node in root.events if isinstance(node.fact, DamageFact))
+        assert all(node.fact.body_release is None for node in root.events if isinstance(node.fact, DamageResultFact))
         state = reduce_lineage(state, root)
     assert all(tile.residues == () for tile in state.tiles.values())
     assert EventQueue.event_cursor() == 0 and not Entity.get_all_entities()
@@ -223,6 +223,6 @@ def test_receiving_regions_match_authored_supports_and_doors_for_both_saved_view
             door, = [obj for obj in state.objects.values() if obj.item.item_id == "environment.directional_door"]
             assert door.item.is_open is (layout == "open-door")
         release, = [node.fact.body_release for root in roots for node in root.events
-                    if isinstance(node.fact, DamageFact) and node.fact.body_release is not None]
+                    if isinstance(node.fact, DamageResultFact) and node.fact.body_release is not None]
         assert (forward_cell in {cell for region in release.regions for cell in region.positions}) is forward
         assert {region.elevation_steps for region in release.regions} == {origin_height}

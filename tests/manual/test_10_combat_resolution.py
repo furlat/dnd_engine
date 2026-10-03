@@ -193,7 +193,7 @@ def test_prone_auto_stand_waits_when_movement_is_unavailable() -> None:
     actor.on_turn_start(round_number=1, turn_index=0)
 
     assert "Prone" in actor.active_conditions
-    assert actor.action_economy.movement.normalized_score == 0
+    assert actor.action_economy.movement_remaining() == 0
 
 
 def test_invalid_melee_attack_cancels_before_costs(capsys) -> None:

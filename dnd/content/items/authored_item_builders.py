@@ -52,7 +52,13 @@ from dnd.content.items.environment_item_builders import (
     build_wall_torch,
 )
 from dnd.content.items.door_profiles import DOOR_PROFILES
-from dnd.items.roster_carried_powers import PACK_POWERS, ARROW_PAYLOADS, build_powered_backpack, build_special_arrow
+from dnd.content.items.authored_item_definitions import POWERED_WEARABLE_DEFINITIONS, SpellWearableDefinition
+from dnd.core.equipment_types import ArmorType
+from dnd.core.item_types import EquippedSourceRequirement
+from dnd.core.base_actions import TargetType
+from dnd.items.spell_items import SpellGrantingWearable, EmberQuiverActivation
+from dnd.spells.transmutation import Longstrider
+from dnd.spells.abjuration import Resistance
 from dnd.content.items.roster_item_definitions import ROSTER_EMBER_DEFINITIONS, ROSTER_MAUL_DEFINITION, ROSTER_WEAPON_DEFINITIONS, ROSTER_GEAR_DEFINITIONS, ROSTER_CARRIED_DEFINITIONS, ROSTER_INVENTORY_DEFINITIONS
 from dnd.content.items.window_definitions import WINDOW_DEFINITIONS
 from dnd.content.items.window_builders import build_window_component
@@ -146,7 +152,7 @@ def _build_weapon(
         dice_numbers=definition.damage_dice_count,
         damage_type=definition.damage_type,
         properties=list(definition.properties),
-        supports_arrow_payload=definition.supports_arrow_payload,
+        weapon_kind=definition.weapon_kind, material=definition.material,
         range=Range(
             type=(
                 RangeType.RANGE
@@ -418,15 +424,29 @@ def _window_component_builder(family: str, *, insert: bool) -> ItemBuilder:
         family, insert=insert, source_entity_uuid=source))
 
 
-def _carried_power_builder(item_id: str, *, arrow: bool) -> ItemBuilder:
+def _spell_wearable_builder(definition: SpellWearableDefinition) -> ItemBuilder:
+    action_type = {
+        "action.item.ember_quiver": EmberQuiverActivation,
+        "spell.longstrider": Longstrider,
+        "spell.resistance": Resistance,
+    }[definition.action_id]
+
     def build(actor_uuid: UUID, quantity: int = 1) -> BaseItem:
-        return build_special_arrow(item_id,actor_uuid,quantity) if arrow else build_powered_backpack(item_id,actor_uuid,quantity)
+        if quantity != 1:
+            raise ValueError("A wearable is one physical possession")
+        action = action_type(source_entity_uuid=actor_uuid, template=True,
+            alt_skip_slot=True, target_type=TargetType.SELF, include_self=True)
+        return SpellGrantingWearable(item_id=definition.item_id, source_entity_uuid=actor_uuid,
+            name=definition.name, visual_item_name=definition.visual_item_name,
+            type=ArmorType.CLOTH, body_part=definition.slot,
+            use_requirement=EquippedSourceRequirement(slot=definition.slot),
+            use_action_templates=[action], charges=definition.charges, max_charges=definition.charges,
+            recharge_on_long_rest=definition.recharge_on_long_rest)
     return build
 
 
 DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
-    **{item_id:_carried_power_builder(item_id,arrow=False) for item_id in PACK_POWERS},
-    **{item_id:_carried_power_builder(item_id,arrow=True) for item_id in ARROW_PAYLOADS},
+    **{item_id: _spell_wearable_builder(definition) for item_id, definition in POWERED_WEARABLE_DEFINITIONS.items()},
     **{p.wall.item_id: _window_component_builder(family, insert=False) for family, p in WINDOW_DEFINITIONS.items()},
     **{p.insert.item_id: _window_component_builder(family, insert=True) for family, p in WINDOW_DEFINITIONS.items() if p.insert is not None},
     **{item_id: _chest_definition_builder(definition) for item_id, definition in CHEST_DEFINITIONS.items()},
@@ -565,6 +585,9 @@ def build_authored_item(
     quantity: int = 1,
 ) -> BaseItem:
     """Construct one migrated item through the sole direct builder table."""
+    if item_id in {"consumable.arrow.ember", "consumable.arrow.frost",
+                   "consumable.arrow.storm", "consumable.arrow.venom"}:
+        raise ValueError(f"Retired ammunition content {item_id!r}; saved possessions must be preserved, not converted")
     try:
         builder = DIRECT_ITEM_BUILDERS[item_id]
     except KeyError as exc:

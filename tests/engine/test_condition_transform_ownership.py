@@ -124,7 +124,7 @@ def test_severe_conditions_own_independent_action_and_movement_denials(
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
     assert target.action_economy.reactions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert _cost_free_action(target).check_costs() is False
 
     target.remove_condition_by_uuid(owners[removed_first].uuid)
@@ -135,7 +135,7 @@ def test_severe_conditions_own_independent_action_and_movement_denials(
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
     assert target.action_economy.reactions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert _cost_free_action(target).check_costs() is False
 
     target.remove_condition_by_uuid(owners[remaining].uuid)
@@ -144,7 +144,7 @@ def test_severe_conditions_own_independent_action_and_movement_denials(
     assert target.action_economy.actions.normalized_score == 1
     assert target.action_economy.bonus_actions.normalized_score == 1
     assert target.action_economy.reactions.normalized_score == 1
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
     assert _cost_free_action(target).check_costs() is True
 
 
@@ -278,7 +278,7 @@ def test_magical_sleep_remains_after_healing_removes_life_state_transform() -> N
     assert target.active_conditions_by_uuid[sleep.uuid] is sleep
     assert target.senses.visual_access.normalized_score == 0
     assert target.action_economy.action_permission.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert target.can_see_visual_effects() is False
     assert _cost_free_action(target).check_costs() is False
     assert _reaction_action(target).check_costs() is False
@@ -287,7 +287,7 @@ def test_magical_sleep_remains_after_healing_removes_life_state_transform() -> N
 
     assert target.senses.visual_access.normalized_score == 1
     assert target.action_economy.action_permission.normalized_score == 1
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
     assert target.can_see_visual_effects() is True
     assert _cost_free_action(target).check_costs() is True
 
@@ -315,7 +315,7 @@ def test_spell_local_control_effects_own_transforms_without_global_children(
     assert "Incapacitated" not in target.active_conditions
     assert "Unconscious" not in target.active_conditions
     assert target.action_economy.action_permission.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert target.senses.visual_access.normalized_score == (
         0 if denies_visual_access else 1
     )
@@ -323,7 +323,7 @@ def test_spell_local_control_effects_own_transforms_without_global_children(
     target.remove_condition_by_uuid(effect.uuid)
 
     assert target.action_economy.action_permission.normalized_score == 1
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
     assert target.senses.visual_access.normalized_score == 1
 
 
@@ -407,7 +407,7 @@ def test_banishment_left_publication_failure_compensates_application() -> None:
     assert target.uuid in get_map().get_entities_at(target.position)
     assert condition.uuid not in target.active_conditions_by_uuid
     assert target.action_economy.action_permission.normalized_score == 1
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
 
 
 def test_banishment_effect_failure_releases_denial_and_restores_presence() -> None:
@@ -447,7 +447,7 @@ def test_banishment_effect_failure_releases_denial_and_restores_presence() -> No
     assert target.uuid in get_map().get_entities_at(target.position)
     assert condition.uuid not in target.active_conditions_by_uuid
     assert target.action_economy.action_permission.normalized_score == 1
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
 
 
 def test_banishment_restore_precommit_failure_is_retryable() -> None:

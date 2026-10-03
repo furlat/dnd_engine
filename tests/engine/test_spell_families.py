@@ -778,7 +778,7 @@ def test_eb_15_040_greater_restoration_reduces_exhaustion_one_level() -> None:
     caster = create_family_caster(spell_slots={5: 3})
     ally = create_family_target(name="Exhausted Ally", position=(2, 1), faction="heroes")
     Entity.update_all_entities_senses()
-    base_movement = ally.action_economy.movement.normalized_score
+    base_movement = ally.action_economy.movement_remaining()
 
     ally.add_condition(
         Exhaustion(
@@ -792,7 +792,7 @@ def test_eb_15_040_greater_restoration_reduces_exhaustion_one_level() -> None:
     assert isinstance(active_exhaustion, Exhaustion)
     assert active_exhaustion.level == 3
     assert ally.skill_set.athletics.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE
-    assert ally.action_economy.movement.normalized_score == base_movement // 2
+    assert ally.action_economy.movement_remaining() == base_movement // 2
     assert ally.equipment.attack_bonus.advantage == AdvantageStatus.DISADVANTAGE
     assert (
         ally.saving_throws.get_saving_throw("wisdom").bonus.advantage
@@ -810,7 +810,7 @@ def test_eb_15_040_greater_restoration_reduces_exhaustion_one_level() -> None:
     assert isinstance(active_exhaustion, Exhaustion)
     assert active_exhaustion.level == 2
     assert ally.skill_set.athletics.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE
-    assert ally.action_economy.movement.normalized_score == base_movement // 2
+    assert ally.action_economy.movement_remaining() == base_movement // 2
     assert ally.equipment.attack_bonus.advantage == AdvantageStatus.NONE
     assert ally.saving_throws.get_saving_throw("wisdom").bonus.advantage == AdvantageStatus.NONE
     assert caster.action_economy.spell_slot_5.normalized_score == 2
@@ -827,7 +827,7 @@ def test_eb_15_040_greater_restoration_reduces_exhaustion_one_level() -> None:
     assert isinstance(active_exhaustion, Exhaustion)
     assert active_exhaustion.level == 1
     assert ally.skill_set.athletics.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE
-    assert ally.action_economy.movement.normalized_score == base_movement
+    assert ally.action_economy.movement_remaining() == base_movement
     assert caster.action_economy.spell_slot_5.normalized_score == 1
 
     caster.action_economy.reset_all_costs()
@@ -840,7 +840,7 @@ def test_eb_15_040_greater_restoration_reduces_exhaustion_one_level() -> None:
     removed_event = assert_completed_spell(removed_event)
     assert "Exhaustion" not in ally.active_conditions
     assert ally.skill_set.athletics.skill_bonus.advantage == AdvantageStatus.NONE
-    assert ally.action_economy.movement.normalized_score == base_movement
+    assert ally.action_economy.movement_remaining() == base_movement
     assert caster.action_economy.spell_slot_5.normalized_score == 0
 
 
@@ -985,7 +985,7 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     ally.add_condition(Restrained(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     assert "Grappled" in ally.active_conditions
     assert "Restrained" in ally.active_conditions
-    assert ally.action_economy.movement.normalized_score == 0
+    assert ally.action_economy.movement_remaining() == 0
 
     movement_event = FreedomOfMovement(
         source_entity_uuid=caster.uuid,
@@ -1020,7 +1020,7 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert escape_event.phase == EventPhase.COMPLETION
     assert "Grappled" not in ally.active_conditions
     assert "Restrained" not in ally.active_conditions
-    assert ally.action_economy.movement.normalized_score == 25
+    assert ally.action_economy.movement_remaining() == 25
     ally.action_economy.reset_all_costs()
 
     ally.equipment.equip(
@@ -1060,21 +1060,21 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert protected_swim.phase == EventPhase.COMPLETION
     assert not protected_swim.canceled
     assert ally.position == water_lane[-1]
-    assert ally.action_economy.movement.normalized_score == 20
+    assert ally.action_economy.movement_remaining() == 20
     Entity.update_entity_position(ally, water_lane[0])
     ally.action_economy.reset_all_costs()
 
-    protected_speed = ally.action_economy.movement.normalized_score
+    protected_speed = ally.action_economy.movement_remaining()
     protected_ac = ally.ac_bonus().normalized_score
     ally.add_condition(SlowedEffect(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     assert "Slowed" in ally.active_conditions
-    assert ally.action_economy.movement.normalized_score == protected_speed
+    assert ally.action_economy.movement_remaining() == protected_speed
     assert ally.ac_bonus().normalized_score == protected_ac - 2
     ally.remove_condition("Slowed")
 
     ally.add_condition(SpiritGuardiansSlowed(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     assert "Spirit Guardians Slowed" not in ally.active_conditions
-    assert ally.action_economy.movement.normalized_score == protected_speed
+    assert ally.action_economy.movement_remaining() == protected_speed
 
     caster.add_condition(
         RayOfFrostEffect(
@@ -1084,7 +1084,7 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
         )
     )
     assert "Ray of Frost Effect" not in caster.active_conditions
-    assert ally.action_economy.movement.normalized_score == protected_speed
+    assert ally.action_economy.movement_remaining() == protected_speed
 
     ally.add_condition(Grappled(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     ally.add_condition(Restrained(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
@@ -1142,19 +1142,19 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert unprotected_swim.phase == EventPhase.COMPLETION
     assert not unprotected_swim.canceled
     assert ally.position == water_lane[-1]
-    assert ally.action_economy.movement.normalized_score == 10
+    assert ally.action_economy.movement_remaining() == 10
     ally.action_economy.reset_all_costs()
     ally.remove_condition("Underwater")
 
-    unprotected_speed = ally.action_economy.movement.normalized_score
+    unprotected_speed = ally.action_economy.movement_remaining()
     ally.add_condition(SlowedEffect(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     assert "Slowed" in ally.active_conditions
-    assert ally.action_economy.movement.normalized_score == unprotected_speed // 2
+    assert ally.action_economy.movement_remaining() == unprotected_speed // 2
     ally.remove_condition("Slowed")
 
     ally.add_condition(SpiritGuardiansSlowed(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     assert "Spirit Guardians Slowed" in ally.active_conditions
-    assert ally.action_economy.movement.normalized_score == unprotected_speed // 2
+    assert ally.action_economy.movement_remaining() == unprotected_speed // 2
     ally.remove_condition("Spirit Guardians Slowed")
 
     caster.add_condition(
@@ -1165,7 +1165,7 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
         )
     )
     assert "Ray of Frost Effect" in caster.active_conditions
-    assert ally.action_economy.movement.normalized_score == unprotected_speed - 10
+    assert ally.action_economy.movement_remaining() == unprotected_speed - 10
     caster.remove_condition("Ray of Frost Effect")
 
     ally.add_condition(Grappled(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
@@ -2112,7 +2112,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
     with patch("dnd.core.dice.random.randint", side_effect=fixed_zone_randint):
         target.on_turn_end(round_number=1, turn_index=0)
     assert "Prone" in target.active_conditions
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
 
     caster.remove_condition("Concentrating")
     assert grease_zone not in get_map().get_spatial_conditions()
@@ -2533,7 +2533,7 @@ def test_eb_15_028_gas_and_ice_zones_match_srd_turn_start_edges() -> None:
     assert retching_target.action_economy.actions.normalized_score == 0
     assert retching_target.action_economy.bonus_actions.normalized_score == 1
     assert retching_target.action_economy.reactions.normalized_score == 1
-    assert retching_target.action_economy.movement.normalized_score > 0
+    assert retching_target.action_economy.movement_remaining() > 0
 
     with patch("dnd.core.dice.random.randint", return_value=10):
         immune_target.on_turn_start(round_number=1, turn_index=1)
@@ -3274,7 +3274,7 @@ def test_eb_15_011_haste_modifier_bundle_and_lethargy_cleanup() -> None:
     caster = create_family_caster(spell_slots={3: 1})
     target = create_family_target(name="Hasted Ally", position=(3, 1), faction="heroes")
     Entity.update_all_entities_senses()
-    base_speed = target.action_economy.movement.normalized_score
+    base_speed = target.action_economy.movement_remaining()
     base_ac_bonus = target.equipment.ac_bonus.normalized_score
     base_actions = target.action_economy.actions.normalized_score
 
@@ -3290,7 +3290,7 @@ def test_eb_15_011_haste_modifier_bundle_and_lethargy_cleanup() -> None:
     concentration = caster.active_conditions["Concentrating"]
     assert isinstance(concentration, Concentrating)
     assert (target.uuid, target.active_conditions["Haste"].uuid) in concentration.linked_conditions
-    assert target.action_economy.movement.normalized_score == base_speed * 2
+    assert target.action_economy.movement_remaining() == base_speed * 2
     assert target.equipment.ac_bonus.normalized_score == base_ac_bonus + 2
     assert (
         target.saving_throws.get_saving_throw("dexterity").bonus.advantage
@@ -3309,7 +3309,7 @@ def test_eb_15_011_haste_modifier_bundle_and_lethargy_cleanup() -> None:
     assert "Incapacitated" not in target.active_conditions
     assert target.action_economy.action_permission.normalized_score == 0
     assert target.action_economy.actions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
 
 
 def test_eb_15_012_slow_multi_target_modifier_bundle_and_cleanup() -> None:
@@ -3319,7 +3319,7 @@ def test_eb_15_012_slow_multi_target_modifier_bundle_and_cleanup() -> None:
     target_one = create_family_target(name="Slowed One", position=(3, 1), faction="monsters")
     target_two = create_family_target(name="Slowed Two", position=(4, 1), faction="monsters")
     Entity.update_all_entities_senses()
-    base_speed = target_one.action_economy.movement.normalized_score
+    base_speed = target_one.action_economy.movement_remaining()
     base_ac_bonus = target_one.equipment.ac_bonus.normalized_score
     base_dex_save = target_one.saving_throws.get_saving_throw("dexterity").bonus.normalized_score
     penalize_save(target_one, "wisdom")
@@ -3335,7 +3335,7 @@ def test_eb_15_012_slow_multi_target_modifier_bundle_and_cleanup() -> None:
     assert event.total_targets >= 2
     assert "Slowed" in target_one.active_conditions
     assert "Slowed" in target_two.active_conditions
-    assert target_one.action_economy.movement.normalized_score == base_speed // 2
+    assert target_one.action_economy.movement_remaining() == base_speed // 2
     assert target_one.equipment.ac_bonus.normalized_score == base_ac_bonus - 2
     assert (
         target_one.saving_throws.get_saving_throw("dexterity").bonus.normalized_score
@@ -3352,7 +3352,7 @@ def test_eb_15_012_slow_multi_target_modifier_bundle_and_cleanup() -> None:
     assert "Concentrating" not in caster.active_conditions
     assert "Slowed" not in target_one.active_conditions
     assert "Slowed" not in target_two.active_conditions
-    assert target_one.action_economy.movement.normalized_score == base_speed
+    assert target_one.action_economy.movement_remaining() == base_speed
     assert target_one.equipment.ac_bonus.normalized_score == base_ac_bonus
 
 

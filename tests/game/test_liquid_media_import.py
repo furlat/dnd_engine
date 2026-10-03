@@ -36,7 +36,7 @@ def display() -> Iterator[None]:
 
 @pytest.fixture(scope="module")
 def original() -> AnimationData:
-    return load_animation_data(authored_bundles=())
+    return load_animation_data()
 
 
 @pytest.fixture

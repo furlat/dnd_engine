@@ -1,4 +1,5 @@
 import random
+from dnd.core.creature_types import AttackOutcome as AttackOutcome
 from collections import deque
 from contextlib import contextmanager
 from enum import Enum
@@ -73,11 +74,6 @@ def fixed_dice_faces(*faces: int) -> Iterator[None]:
         _randint = previous_randint
 
 
-class AttackOutcome(str, Enum):
-    HIT = "Hit"
-    MISS = "Miss"
-    CRIT = "Crit"
-    CRIT_MISS = "Crit Miss"
 
 
 class RollType(str, Enum):

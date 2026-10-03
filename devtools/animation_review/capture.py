@@ -30,7 +30,7 @@ def capture_inputs(case: ReviewCase, output: Path, captured_at: str, sources: di
             end_cursor=max((lineage.end_cursor for lineage in native.lineages), default=native.initialization.end_cursor))
         recorded = RecordedInput(case=view_case, captured_at=captured_at, sources=sources,
             sequence=json.loads(encode_player_sequence(project_sequence(native))),
-            sequence_format="player-v1", perspective=perspective)
+            sequence_format="player-v2", perspective=perspective)
         directory = output / "inputs" / identity
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "native.json").write_text(native.model_dump_json(), encoding="utf-8")

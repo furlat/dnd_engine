@@ -5,7 +5,7 @@ from uuid import uuid4
 from dnd.actions_functional import execute_use_action
 from dnd.blocks.base_item import (
     BaseItem,
-    ItemChargeConsumptionEvent,
+    ItemResourceChangeEvent,
     ItemLocationStateEvent,
 )
 from dnd.blocks.equipment import (
@@ -191,16 +191,16 @@ def test_destroyed_equipment_and_consumables_publish_ordered_removal_facts() -> 
     consumption_facts = [
         event
         for event in _completion_facts_since(cursor)
-        if isinstance(event, (ItemLocationStateEvent, ItemChargeConsumptionEvent))
+        if isinstance(event, (ItemLocationStateEvent, ItemResourceChangeEvent))
     ]
     assert [type(event) for event in consumption_facts] == [
         ItemLocationStateEvent,
-        ItemChargeConsumptionEvent,
+        ItemResourceChangeEvent,
     ]
     removal_fact = consumption_facts[0]
     charge_fact = consumption_facts[1]
     assert isinstance(removal_fact, ItemLocationStateEvent)
-    assert isinstance(charge_fact, ItemChargeConsumptionEvent)
+    assert isinstance(charge_fact, ItemResourceChangeEvent)
     assert removal_fact.item_state.item_uuid == potion.uuid
     assert removal_fact.location is ItemLocation.DESTROYED
     assert removal_fact.item_state.stack_count == 0

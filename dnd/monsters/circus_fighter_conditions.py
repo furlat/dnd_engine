@@ -406,15 +406,16 @@ class CircusPerformer(BaseCondition):
             )
             outs.append((target_entity.action_economy.actions.uuid, extra_actions_mod_uuid))
 
-            movement_mod_uuid = target_entity.action_economy.movement.self_static.add_value_modifier(
-                NumericalModifier(
-                    name="Circus Training",
-                    value=-5,
-                    source_entity_uuid=self.target_entity_uuid,
-                    target_entity_uuid=self.source_entity_uuid,
+            for speed in target_entity.action_economy.speed_values:
+                movement_mod_uuid = speed.self_static.add_value_modifier(
+                    NumericalModifier(
+                        name="Circus Training",
+                        value=-5,
+                        source_entity_uuid=self.target_entity_uuid,
+                        target_entity_uuid=self.source_entity_uuid,
+                    )
                 )
-            )
-            outs.append((target_entity.action_economy.movement.uuid, movement_mod_uuid))
+                outs.append((speed.uuid, movement_mod_uuid))
 
             ac_mod_uuid = target_entity.equipment.ac_bonus.self_static.add_value_modifier(
                 NumericalModifier(
@@ -491,15 +492,16 @@ class Tired(BaseCondition):
         if isinstance(target_entity, Entity):
             outs = []
 
-            movement_mod_uuid = target_entity.action_economy.movement.self_static.add_value_modifier(
-                NumericalModifier(
-                    name="Tired",
-                    value=-10,
-                    source_entity_uuid=self.target_entity_uuid,
-                    target_entity_uuid=self.source_entity_uuid,
+            for speed in target_entity.action_economy.speed_values:
+                movement_mod_uuid = speed.self_static.add_value_modifier(
+                    NumericalModifier(
+                        name="Tired",
+                        value=-10,
+                        source_entity_uuid=self.target_entity_uuid,
+                        target_entity_uuid=self.source_entity_uuid,
+                    )
                 )
-            )
-            outs.append((target_entity.action_economy.movement.uuid, movement_mod_uuid))
+                outs.append((speed.uuid, movement_mod_uuid))
 
             reactions_mod_uuid = target_entity.action_economy.reactions.self_static.add_value_modifier(
                 NumericalModifier(

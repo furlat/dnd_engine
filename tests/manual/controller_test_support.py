@@ -113,7 +113,7 @@ def make_turn_context(entity: Entity) -> TurnContext:
         actions_remaining=entity.action_economy.actions.normalized_score,
         bonus_actions_remaining=entity.action_economy.bonus_actions.normalized_score,
         reactions_remaining=entity.action_economy.reactions.normalized_score,
-        movement_remaining=entity.action_economy.movement.normalized_score,
+        movement_remaining=entity.action_economy.movement_remaining(),
         visible_enemies=entity.get_visible_enemies(),
         visible_allies=entity.get_visible_allies(),
     )

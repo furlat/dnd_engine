@@ -39,7 +39,7 @@ def test_dretch_keeps_native_fiend_facts_and_intrinsic_equipment(mode: CreatureP
     # The established roster uses character hit-die conversion: 22, not the
     # printed SRD average 18. The source ledger explicitly records this limit.
     assert (actor.get_max_hp(), actor.ac_bonus().normalized_score) == (22, 11)
-    assert actor.action_economy.movement.normalized_score == 20
+    assert actor.action_economy.movement_remaining() == 20
     scores = actor.ability_scores
     assert tuple(score.ability_score.score for score in (
         scores.strength, scores.dexterity, scores.constitution,

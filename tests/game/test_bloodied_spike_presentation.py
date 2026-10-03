@@ -20,7 +20,7 @@ from game.assets import SurfaceCache, load_catalog
 from game.attack import BoundAttack
 from game.choreography import bind_choreography, sample_choreography
 from game.motion import bind_motion, sample_motion
-from game.player_facts import ActionFact, AttackFact, DamageFact, MovementFact
+from game.player_facts import ActionFact, AttackFact, DamageResultFact, MovementFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, camera_pose, project_screen
@@ -159,7 +159,7 @@ def test_full_saved_story_keeps_one_bloodied_tile_through_lowering_and_occupied_
         old_hp = state.actors[walker].normal_hp
         state = reduce_lineage(state, root)
         releases.extend(node.fact.body_release for node in root.events
-                        if isinstance(node.fact, DamageFact) and node.fact.body_release is not None)
+                        if isinstance(node.fact, DamageResultFact) and node.fact.body_release is not None)
         if not isinstance(root.root.fact, (MovementFact, ActionFact)):
             continue
         residue, = state.tiles[(5, 3)].residues

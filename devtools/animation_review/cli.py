@@ -40,12 +40,12 @@ def source_identity() -> dict:
 
 def public_input(recorded: RecordedInput) -> RecordedInput:
     """Project a historical private capture without changing its saved bytes."""
-    if recorded.sequence_format == "player-v1":
+    if recorded.sequence_format in ("player-v1", "player-v2"):
         return recorded
     native = RecordedSequence.model_validate(recorded.sequence, context=PASSIVE_EVENT_REPLAY)
     player = project_sequence(native)
     return recorded.model_copy(update={"sequence": json.loads(encode_player_sequence(player)),
-                                       "sequence_format": "player-v1"})
+                                       "sequence_format": "player-v2"})
 
 
 

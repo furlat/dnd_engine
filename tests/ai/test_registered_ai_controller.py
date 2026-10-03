@@ -65,7 +65,7 @@ def _context(actor: Entity, target: Entity) -> TurnContext:
         actions_remaining=economy.actions.normalized_score,
         bonus_actions_remaining=economy.bonus_actions.normalized_score,
         reactions_remaining=economy.reactions.normalized_score,
-        movement_remaining=economy.movement.normalized_score,
+        movement_remaining=economy.movement_remaining(),
         visible_enemies={target.uuid: target.position},
         initiative_order=[actor.uuid, target.uuid],
     )

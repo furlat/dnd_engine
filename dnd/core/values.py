@@ -1,3 +1,6 @@
+from fractions import Fraction
+from math import prod
+
 from pydantic import Field, computed_field, model_validator
 from typing import List, Optional, Dict, Any, Callable, ClassVar, Union, Self
 from uuid import UUID, uuid4, uuid5
@@ -6,6 +9,7 @@ from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
     naming_callable,
     NumericalModifier,
+    ArithmeticFactor,
     AdvantageModifier,
     CriticalModifier,
     AutoHitModifier,
@@ -127,6 +131,8 @@ class StaticValue(BaseValue):
     always considered when the channel is aggregated.
     """
 
+    factor_modifiers: Dict[UUID, ArithmeticFactor] = Field(default_factory=dict)
+
     value_modifiers: Dict[UUID, NumericalModifier] = Field(
         default_factory=dict,
         description="Flat numerical bonuses or penalties that contribute to the channel score."
@@ -184,7 +190,7 @@ class StaticValue(BaseValue):
         """
         if not self.is_outgoing_modifier:
             return self
-        for modifiers in (self.value_modifiers, self.min_constraints, self.max_constraints):
+        for modifiers in (self.value_modifiers, self.factor_modifiers, self.min_constraints, self.max_constraints):
             for modifier in modifiers.values():
                 if modifier.target_entity_uuid == self.source_entity_uuid:
                     raise ValueError(f"Outgoing modifier target ({modifier.target_entity_uuid}) should not be the same as the value source ({self.source_entity_uuid})")
@@ -389,12 +395,25 @@ class StaticValue(BaseValue):
         """
         self.resistance_modifiers.pop(uuid, None)
 
+    def add_factor(self, modifier: ArithmeticFactor) -> UUID:
+        self.factor_modifiers[modifier.uuid] = modifier
+        return modifier.uuid
+
+    def arithmetic_factor(self, excluded: frozenset[UUID] = frozenset()) -> Fraction:
+        return prod((Fraction(f.numerator, f.denominator)
+            for key, f in self.factor_modifiers.items() if key not in excluded), start=Fraction(1))
+
+    def additive_score(self, normalized: bool = False, excluded: frozenset[UUID] = frozenset()) -> int:
+        return sum((modifier.normalized_value if normalized else modifier.value)
+            for key, modifier in self.value_modifiers.items() if key not in excluded)
+
     def remove_modifier(self, uuid: UUID) -> None:
         """Remove a modifier UUID from every static modifier bucket.
 
         Args:
             uuid: UUID of the modifier to remove.
         """
+        self.factor_modifiers.pop(uuid, None)
         self.remove_value_modifier(uuid)
         self.remove_min_constraint(uuid)
         self.remove_max_constraint(uuid)
@@ -438,15 +457,15 @@ class StaticValue(BaseValue):
         Returns:
             Final score after minimum and maximum constraints are applied.
         """
-        modifier_sum = sum(modifier.value if not normalized else modifier.normalized_value for modifier in self.value_modifiers.values())
+        modifier_sum = self.additive_score(normalized) * self.arithmetic_factor()
         if self.max is not None and self.min is not None:
-            return max(self.min, min(modifier_sum, self.max))
+            return int(max(self.min, min(modifier_sum, self.max)))
         elif self.max is not None:
-            return min(modifier_sum, self.max)
+            return int(min(modifier_sum, self.max))
         elif self.min is not None:
-            return max(self.min, modifier_sum)
+            return int(max(self.min, modifier_sum))
         else:
-            return modifier_sum
+            return int(modifier_sum)
 
     @computed_field
     @property
@@ -468,27 +487,21 @@ class StaticValue(BaseValue):
         """
         return self._score(normalized=True)
 
+    def score_bounds(self, excluded: frozenset[UUID] = frozenset()) -> tuple[int | None, int | None]:
+        minima = [value.value for key, value in self.min_constraints.items() if key not in excluded]
+        maxima = [value.value for key, value in self.max_constraints.items() if key not in excluded]
+        return (min(minima) if minima else None, max(maxima) if maxima else None)
+
     def normalized_score_excluding(self, modifier_uuids: set[UUID]) -> int:
-        """Return the normalized static score without selected value modifiers.
-
-        Args:
-            modifier_uuids: Numerical modifier UUIDs omitted from the sum.
-
-        Returns:
-            Filtered score with this channel's constraints still applied.
-        """
-        modifier_sum = sum(
-            modifier.normalized_value
-            for modifier_uuid, modifier in self.value_modifiers.items()
-            if modifier_uuid not in modifier_uuids
-        )
-        if self.max is not None and self.min is not None:
-            return max(self.min, min(modifier_sum, self.max))
-        if self.max is not None:
-            return min(modifier_sum, self.max)
-        if self.min is not None:
-            return max(self.min, modifier_sum)
-        return modifier_sum
+        """Resolve this channel without the explicitly excluded owned contributions."""
+        excluded = frozenset(modifier_uuids)
+        total = self.additive_score(True, excluded) * self.arithmetic_factor(excluded)
+        minimum, maximum = self.score_bounds(excluded)
+        if maximum is not None:
+            total = min(total, maximum)
+        if minimum is not None:
+            total = max(total, minimum)
+        return int(total)
 
     @computed_field
     @property
@@ -652,6 +665,7 @@ class StaticValue(BaseValue):
 
         return StaticValue(
             name=naming_callable([self.name] + [other.name for other in others]),
+            factor_modifiers={**self.factor_modifiers, **{k: v for other in others for k, v in other.factor_modifiers.items()}},
             value_modifiers={**self.value_modifiers, **{k: v for other in others for k, v in other.value_modifiers.items()}},
             min_constraints={**self.min_constraints, **{k: v for other in others for k, v in other.min_constraints.items()}},
             max_constraints={**self.max_constraints, **{k: v for other in others for k, v in other.max_constraints.items()}},
@@ -675,7 +689,7 @@ class StaticValue(BaseValue):
         Returns:
             UUIDs from every static modifier bucket.
         """
-        return (list(self.value_modifiers.keys()) +
+        return (list(self.factor_modifiers.keys()) + list(self.value_modifiers.keys()) +
                 list(self.min_constraints.keys()) +
                 list(self.max_constraints.keys()) +
                 list(self.advantage_modifiers.keys()) +
@@ -687,6 +701,7 @@ class StaticValue(BaseValue):
 
     def remove_all_modifiers(self) -> None:
         """Clear every static modifier bucket."""
+        self.factor_modifiers.clear()
         self.value_modifiers.clear()
         self.min_constraints.clear()
         self.max_constraints.clear()
@@ -829,6 +844,28 @@ class ContextualValue(BaseValue):
         values = [constraint.value for constraint in constraints if isinstance(constraint, NumericalModifier)]
         return max(values) if len(values) > 0 else None
 
+    def score_bounds(self, excluded: frozenset[UUID] = frozenset()) -> tuple[int | None, int | None]:
+        # Exclusion names static contributions; contextual constraints retain their contract.
+        return self.min, self.max
+
+    def arithmetic_factor(self, excluded: frozenset[UUID] = frozenset()) -> Fraction:
+        return Fraction(1)
+
+    def additive_score(self, normalized: bool = False, excluded: frozenset[UUID] = frozenset()) -> int:
+        modifier_sum = 0
+        for key, context_aware_modifier in self.value_modifiers.items():
+            if key in excluded:
+                continue
+            result = context_aware_modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
+                                                      event_lineage_uuid=self.event_lineage_uuid)
+            if result is None:
+                continue
+            if not isinstance(result, NumericalModifier):
+                continue
+            modifier_sum += result.value if not normalized else result.normalized_value
+
+        return modifier_sum
+
     def _score(self, normalized: bool = False) -> int:
         """Calculate the contextual score after modifiers and constraints.
 
@@ -839,16 +876,7 @@ class ContextualValue(BaseValue):
         Returns:
             Final score after active minimum and maximum constraints are applied.
         """
-        modifier_sum = 0
-        for context_aware_modifier in self.value_modifiers.values():
-            result = context_aware_modifier.evaluate(self.source_entity_uuid, self.target_entity_uuid, self.context,
-                                                      event_lineage_uuid=self.event_lineage_uuid)
-            if result is None:
-                continue
-            if not isinstance(result, NumericalModifier):
-                continue
-            modifier_sum += result.value if not normalized else result.normalized_value
-
+        modifier_sum = self.additive_score(normalized)
         if self.max is not None and self.min is not None:
             return max(self.min, min(modifier_sum, self.max))
         elif self.max is not None:
@@ -1538,24 +1566,30 @@ class ModifiableValue(BaseValue):
             return None
         return max(modifiers_max)
 
-    def _score(self, normalized: bool = False) -> int:
-        """Calculate the aggregate score after modifiers and constraints.
-
-        Args:
-            normalized: Whether to use each channel's normalized score.
-
-        Returns:
-            Final score after active minimum and maximum constraints are applied.
-        """
-        typed_modifiers = self.get_typed_modifiers()
-        if self.max is not None and self.min is not None:
-            return max(self.min, min(sum(modifier.score if not normalized else modifier.normalized_score for modifier in typed_modifiers), self.max))
-        elif self.max is not None:
-            return min(sum(modifier.score if not normalized else modifier.normalized_score for modifier in typed_modifiers), self.max)
-        elif self.min is not None:
-            return max(self.min, sum(modifier.score if not normalized else modifier.normalized_score for modifier in typed_modifiers))
+    def _score(self, normalized: bool = False, excluded: frozenset[UUID] = frozenset()) -> int:
+        """Sum all channels, multiply exactly once, then bound and normalize."""
+        channels = self.get_typed_modifiers()
+        factors = tuple(channel.arithmetic_factor(excluded) for channel in channels)
+        has_factors = bool(set(self.self_static.factor_modifiers) - excluded) or (
+            self.from_target_static is not None
+            and bool(set(self.from_target_static.factor_modifiers) - excluded))
+        if has_factors:
+            total = sum(channel.additive_score(normalized, excluded) for channel in channels) * prod(factors)
         else:
-            return sum(modifier.score if not normalized else modifier.normalized_score for modifier in typed_modifiers)
+            # Preserve established channel bounds for values without factors.
+            total = Fraction(sum(
+                channel.normalized_score_excluding(set(excluded))
+                if excluded and isinstance(channel, StaticValue) else
+                channel.normalized_score if normalized else channel.score
+                for channel in channels))
+        bounds = tuple(channel.score_bounds(excluded) for channel in channels)
+        minimum = min((low for low, _ in bounds if low is not None), default=None)
+        maximum = max((high for _, high in bounds if high is not None), default=None)
+        if maximum is not None:
+            total = min(total, maximum)
+        if minimum is not None:
+            total = max(total, minimum)
+        return int(total)
 
     @computed_field
     @property
@@ -1590,20 +1624,7 @@ class ModifiableValue(BaseValue):
         Returns:
             Filtered aggregate with channel and value constraints preserved.
         """
-        channel_scores = [
-            channel.normalized_score_excluding(modifier_uuids)
-            if isinstance(channel, StaticValue)
-            else channel.normalized_score
-            for channel in self.get_typed_modifiers()
-        ]
-        score = sum(channel_scores)
-        if self.max is not None and self.min is not None:
-            return max(self.min, min(score, self.max))
-        if self.max is not None:
-            return min(score, self.max)
-        if self.min is not None:
-            return max(self.min, score)
-        return score
+        return self._score(normalized=True, excluded=frozenset(modifier_uuids))
 
     @computed_field
     @property
@@ -2019,6 +2040,10 @@ class ModifiableValue(BaseValue):
         for component, source in static_components:
             if component is None:
                 continue
+            for modifier in component.factor_modifiers.values():
+                result.append({"name": clean_name(modifier.name or "Factor"),
+                    "numerator": modifier.numerator, "denominator": modifier.denominator,
+                    "source": source, "operation": "multiply"})
             for modifier in component.value_modifiers.values():
                 value = modifier.normalized_value
                 if value == 0:

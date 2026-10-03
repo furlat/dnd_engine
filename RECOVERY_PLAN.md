@@ -27,7 +27,31 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
-**October 3 — implementation stopped; cleanup plan proposed.**
+**October 3 — cleanup repairs complete; final independent acceptance approved.**
+The human authorized complete implementation and final external review of the
+[repair plan](agent_docs/CLEANUP_TEST_REPAIR_PLAN_2026-10-03.md), approved at SHA256
+`78f6cb43170e26eff5b8f37dbf886838d98070ec33e1b262ea8e93c4e7200c06`.
+The [repair implementation report](agent_docs/CLEANUP_REPAIR_IMPLEMENTATION_2026-10-03.md)
+records the fixes, source snapshot and final receipts. Native/AI/progression:
+2,386 passed; architecture/root packaging: 120 passed; active dnd/game typing:
+0 errors. All three independent implementation reviewers approve the frozen
+source. The complete game run passed 3,045 tests and exposed one hop regression;
+that one-line timing correction then passed all 34 affected tests. All 3,046
+collected game tests and all 344 original failure/error entries are reconciled.
+Anti-slop, ECS/import-DAG and event/render reviewers independently approved the
+completed source, full-suite reconciliation and all 44 recording receipts. No
+unresolved blocker remains within the approved cleanup scope.
+
+The [44-clip in-engine matrix](agent_docs/audits/CLEANUP_REPAIR_VISUAL_ACCEPTANCE_2026-10-03.md)
+covers the repaired contracts with existing production art. Call Lightning's
+repeat-action delivery retains an explicitly documented pre-existing binding
+limitation; no new artwork is claimed. The paused server retains its collection/
+cold-start failures and 134 typing errors, separately named rather than hidden.
+Source backup: `/home/tommaso/.local/share/dnd-engine-recovery/repair-20261003-start`.
+Branch remains `codex/recovery-design` at base `981079bc0208`; all changes are
+uncommitted. Unrelated coordination remains stopped. Historical checkpoints follow.
+
+**October 3 — cleanup design and review.**
 The [source review](agent_docs/audits/OVERALL_ANTISLOP_REVIEW_2026-10-02.md)
 and [cleanup plan](agent_docs/ANTISLOP_CLEANUP_PLAN_2026-10-03.md) supersede earlier
 architectural approval claims for the new ability machinery. The human confirmed
@@ -40,7 +64,7 @@ confirmed committed workarounds as well: recipe-dependent damage ownership,
 target/time matching and formation-specific sensory splitting. Cleanup steps
 5–6 now require typed causal/result links and shared milestone scheduling before
 traversal extraction; the existing renderer/authoring system stays. No production
-edits or tests for this plan. The human required two independent approvals:
+edits or tests occurred during that design review. The human required two independent approvals:
 anti-slop and ECS/import-DAG. Both reviewers requested corrections, then approved
 the revised design; [exact-revision receipts](agent_docs/audits/ANTISLOP_CLEANUP_PLAN_REVIEWS_2026-10-03.md)
 record the blockers, fixes and approvals. These are plan approvals, not

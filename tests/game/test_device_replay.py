@@ -6,7 +6,7 @@ from devtools.animation_review.cases import DeviceCase, load_cases
 from devtools.animation_review.produce import produce
 from devtools.animation_review.trace import timeline_trace
 from dnd.actions import SpellEvent
-from dnd.blocks.base_item import ItemChargeConsumptionEvent
+from dnd.blocks.base_item import ItemResourceChangeEvent
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.events import EventPhase, EventQueue, TakeDamageEvent
 from dnd.core.item_types import ItemIntegrity
@@ -63,7 +63,7 @@ def test_device_turns_replay_from_both_players_saved_events(case, animation_data
     assert len(canceled) == (1 if program == "reposition" else 0)
     expected_charges = [1, 0] if program == "mixed-spells" else [] if program == "normal-sleep" else [0]
     charges = [event for root in successful for event in root.events
-               if isinstance(event, ItemChargeConsumptionEvent)]
+               if isinstance(event, ItemResourceChangeEvent)]
     assert [event.charges_after for event in charges] == expected_charges
     assert all(event.item_uuid == device_uuid and event.charges_before == event.charges_after + 1
                and not event.item_destroyed for event in charges)

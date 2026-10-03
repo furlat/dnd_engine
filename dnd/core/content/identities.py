@@ -89,3 +89,12 @@ class ContentRef(BaseModel):
             f"{self.pack_id}:{self.definition_kind.value}:"
             f"{self.content_id}@{self.content_version}"
         )
+
+
+class HandlerDispatchOutcome(str, Enum):
+    """Observable result of one handler invocation by the event queue."""
+
+    NO_EFFECT = "no_effect"
+    EMITTED_EVENTS = "emitted_events"
+    MODIFIED_EVENT = "modified_event"
+    CANCELED_EVENT = "canceled_event"

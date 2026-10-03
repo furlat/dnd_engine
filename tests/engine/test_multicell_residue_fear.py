@@ -40,7 +40,7 @@ def test_successful_boundary_save_covers_internal_cells_until_real_exit_and_reen
     assert not result.canceled and traveler.position == (3, 1)
     assert len([event for event in completed(cursor) if isinstance(event, SavingThrowEvent)]) == 2
     assert not fear_changes(cursor)
-    assert traveler.action_economy.movement.normalized_score == 5
+    assert traveler.action_economy.movement_remaining() == 5
 
 
 @pytest.mark.parametrize("entry", ("teleport", "jump"))
@@ -59,15 +59,15 @@ def test_deep_arrival_pays_one_step_then_keeps_one_fear_and_outward_heading(game
     assert len([event for event in completed(cursor) if isinstance(event, SavingThrowEvent)]) == 1
     assert len(fear_changes(cursor)) == 1
     expected_budget = 25 if entry == "teleport" else 10
-    assert traveler.action_economy.movement.normalized_score == expected_budget
+    assert traveler.action_economy.movement_remaining() == expected_budget
 
     blocked = walk(traveler, [(2, 1), (3, 1)])
     assert blocked.canceled and traveler.position == (2, 1)
-    assert traveler.action_economy.movement.normalized_score == expected_budget
+    assert traveler.action_economy.movement_remaining() == expected_budget
     assert traveler.active_conditions["Frightened"].uuid == fear.uuid
     exit_move = walk(traveler, [(2, 1), (1, 1)])
     assert not exit_move.canceled and traveler.position == (1, 1)
-    assert traveler.action_economy.movement.normalized_score == expected_budget - 5
+    assert traveler.action_economy.movement_remaining() == expected_budget - 5
     assert "Frightened" not in traveler.active_conditions
     assert len(fear_changes(cursor)) == 2
     steps = [event for event in completed(cursor) if isinstance(event, StepMovementEvent) and event.committed]
@@ -90,7 +90,7 @@ def test_exhausted_deep_entrant_keeps_fear_then_can_retreat_across_multiple_cell
     assert traveler.active_conditions["Frightened"].uuid == fear_uuid
     result = walk(traveler, [(2, 1), (1, 1)])
     assert not result.canceled and traveler.position == (1, 1)
-    assert traveler.action_economy.movement.normalized_score == 0
+    assert traveler.action_economy.movement_remaining() == 0
     assert "Frightened" not in traveler.active_conditions
     assert len([event for event in completed(cursor) if isinstance(event, SavingThrowEvent)]) == 1
 

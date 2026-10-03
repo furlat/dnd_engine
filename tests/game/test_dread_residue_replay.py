@@ -9,7 +9,7 @@ from dnd.types.world import OccupancyLayer
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.motion import bind_motion, sample_motion
-from game.player_facts import ConditionChangeFact, DamageFact, MovementFact, SpatialFact, SpellFact, StepFact
+from game.player_facts import ConditionChangeFact, DamageResultFact, MovementFact, SpatialFact, SpellFact, StepFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation import reduce_interval, reduce_lineage as reduce_native_lineage
@@ -57,7 +57,7 @@ def test_native_dread_arrival_and_paid_reverse_step_survive_saved_player_replay(
     assert residue.residue_id == "residue.dread_blood"
     assert before.actors[donor.uuid].last_visual_position == (8, 3)
     release, = [node.fact.body_release for lineage in roots for node in lineage.events
-        if isinstance(node.fact, DamageFact) and node.fact.body_release is not None]
+        if isinstance(node.fact, DamageResultFact) and node.fact.body_release is not None]
     assert release.release_id == "body.dread_blood" and release.deposited_position == (7, 3)
 
     steps = [node for node in root.events if isinstance(node.fact, StepFact) and node.fact.committed]

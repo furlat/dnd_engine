@@ -7,7 +7,7 @@ from uuid import UUID
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from game.animation_types import AnimationData
-from game.choreography import BoundChoreography, MotionTimeline
+from game.choreography import BoundChoreography, MotionTimeline, walk_bound_timelines
 from game.player_facts import PlayerLineage, PlayerState, SpatialEffectStateFact
 from game.maintained_media import maintained_removal_duration
 
@@ -38,32 +38,6 @@ def _edges(before: PlayerState, states: tuple[tuple[float, PlayerState], ...], d
     return result
 
 
-def _group_edges(group: BoundChoreography, data: AnimationData,
-                 offset: float = 0) -> list[tuple[float, UUID, PerceivedSpatialEffect, bool]]:
-    result = _edges(group.before, group.states, data, offset)
-    for movement in group.movements:
-        result.extend(_motion_edges(movement.timeline, data, offset + movement.start_ms))
-    return result
-
-
-def _motion_edges(motion: MotionTimeline, data: AnimationData,
-                  offset: float = 0) -> list[tuple[float, UUID, PerceivedSpatialEffect, bool]]:
-    result = _edges(motion.before, motion.states, data, offset)
-    for reaction in motion.reactions:
-        result.extend(_group_edges(reaction.choreography, data, offset + reaction.start_ms))
-    return result
-
-
-def _group_removals(group: BoundChoreography, offset: float = 0) -> list[tuple[float, UUID]]:
-    return [(row.start_ms + offset, row.identity) for row in group.world_transitions if row.field == "removal"] + [
-        row for movement in group.movements for row in _motion_removals(movement.timeline, offset + movement.start_ms)]
-
-
-def _motion_removals(motion: MotionTimeline, offset: float = 0) -> list[tuple[float, UUID]]:
-    return [(row.start_ms + offset, row.identity) for row in motion.world_transitions if row.field == "removal"] + [
-        row for reaction in motion.reactions for row in _group_removals(reaction.choreography, offset + reaction.start_ms)]
-
-
 def register_spatial_lifetimes(
     retained: Mapping[UUID, SpatialMediaLifetime], before: PlayerState, data: AnimationData,
     *, absolute_start_ms: float, lineage: PlayerLineage | None = None,
@@ -87,16 +61,17 @@ def register_spatial_lifetimes(
             created.add(fact.spatial_effect_uuid)
         elif fact.operation is SpatialEffectChangeOperation.REMOVED:
             removed.add(fact.spatial_effect_uuid)
-    edges = (_motion_edges(motion, data) if motion is not None else
-             _group_edges(choreography, data) if choreography is not None else [])
+    visits = tuple(walk_bound_timelines(choreography, motion))
+    edges = [row for visit in visits
+             for row in _edges(visit.timeline.before, visit.timeline.states, data, visit.offset_ms)]
     for at, owner, effect, added in sorted(edges, key=lambda row: row[0]):
         old = result.get(owner)
         if added and old is None:
             result[owner] = SpatialMediaLifetime(effect, absolute_start_ms + at if owner in created else None)
         elif not added and old is not None and old.removed_ms is None and owner in removed:
             result[owner] = replace(old, effect=effect, removed_ms=absolute_start_ms + at)
-    removals = (_motion_removals(motion) if motion is not None else
-                _group_removals(choreography) if choreography is not None else [])
+    removals = ((row.start_ms + visit.offset_ms, row.identity) for visit in visits
+                for row in visit.timeline.world_transitions if row.field == "removal")
     for at, owner in removals:
         if owner in result:
             result[owner] = replace(result[owner], removed_ms=absolute_start_ms + at)

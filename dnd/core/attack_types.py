@@ -1,5 +1,5 @@
 """Attack-local source data shared by authoring and resolution."""
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from dnd.core.events import Range
 from dnd.core.creature_types import DamageType
 from typing import Literal
@@ -40,20 +40,3 @@ class AttackSourceMetadata(BaseModel):
     damage_types: tuple[DamageType, ...]
     item_uuid: UUID | None = None
     magical: bool = False
-
-
-class AttackAmmunitionPayload(BaseModel):
-    """Immutable single-release payload; no inventory or equipment slot owner."""
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    item_id: str
-    damage_type: DamageType
-    damage_die: DamageDieValue
-    dice_count: int = 1
-    save_dc: int | None = None
-
-
-class AttackAmmunitionMetadata(BaseModel):
-    """Selected inventory possession and packet exposed to action discovery."""
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    item_uuid: UUID
-    payload: AttackAmmunitionPayload

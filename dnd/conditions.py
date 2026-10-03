@@ -30,7 +30,7 @@ from dnd.core.content.registration import (
 from dnd.core.content.runtime import RuntimeBehaviorKind
 from dnd.entity import Entity
 from dnd.types.actor import ConditionState
-from dnd.blocks.base_item import BaseItem
+from dnd.blocks.base_item import BaseItem, ItemLocationStateEvent
 from dnd.core.item_types import ItemConcentrationSlot, ItemLocation
 from dnd.types.residue_fear import PaidEntryRetreat, ResidueFearOrigin
 from typing import Callable, Dict, Any, Optional, List, Literal, Set, Tuple, TypeVar
@@ -42,6 +42,7 @@ from dnd.core.modifiers import (
     AdvantageStatus,
     AutoHitStatus,
     ContextualNumericalModifier,
+    ArithmeticFactor,
     NumericalModifier,
     ContextAwareNumerical,
     ContextAwareAutoHit,
@@ -624,17 +625,15 @@ class Dashing(BaseCondition):
         target_entity = Entity.get(self.target_entity_uuid)
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
-        elif isinstance(target_entity,Entity):
-            outs = []
-            current_speed = target_entity.action_economy.current_speed()
-            if current_speed > 0:
-                extra_modifier = NumericalModifier(name="Dashing",value=current_speed,source_entity_uuid=self.source_entity_uuid,target_entity_uuid=self.target_entity_uuid)
-                target_entity.action_economy.movement.self_static.add_value_modifier(extra_modifier)
-                outs.append((target_entity.action_economy.movement.uuid,extra_modifier.uuid))
-            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied current speed modifier from Dashing to {target_entity.name}")
-            return outs, [], [], [], effect_event
-        else:
-            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
+        return [], [], [], [], declaration_event.phase_to(EventPhase.EFFECT,
+            update={"condition": self}, status_message=f"{target_entity.name} gains a Dash movement credit")
+
+    def on_membership_changed(self, event: Event) -> None:
+        # Credit belongs to the turn, not to the expiring/replaced marker.
+        if self.applied:
+            target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+            if target is not None:
+                target.action_economy.dash_count += 1
 
 
 @_core_condition_identity(
@@ -819,23 +818,11 @@ class Exhaustion(BaseCondition):
                 )
 
             if 2 <= self.level < 5:
-                movement_base = target_entity.action_economy.get_base_value("movement")
-                movement_cap = movement_base // 2
-                modifier_uuid = target_entity.action_economy.movement.self_static.add_max_constraint(
-                    NumericalModifier(
-                        name="Exhaustion",
-                        value=movement_cap,
-                        source_entity_uuid=source_uuid,
-                        target_entity_uuid=target_uuid,
-                    )
-                )
-                outs.append((target_entity.action_economy.movement.uuid, modifier_uuid))
-                target_entity.action_economy.movement_speed_factors[modifier_uuid] = 0.5
-                effect_event = effect_event.phase_to(
-                    EventPhase.EFFECT,
-                    update={"condition": self},
-                    status_message=f"Applied Exhaustion halved speed to {target_entity.name}",
-                )
+                for speed in target_entity.action_economy.speed_values:
+                    modifier_uuid = speed.self_static.add_factor(ArithmeticFactor(
+                        name="Exhaustion", numerator=1, denominator=2,
+                        source_entity_uuid=source_uuid, target_entity_uuid=target_uuid))
+                    outs.append((speed.uuid, modifier_uuid))
 
             if self.level >= 3:
                 attack_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(
@@ -888,15 +875,16 @@ class Exhaustion(BaseCondition):
                 )
 
             if self.level >= 5:
-                modifier_uuid = target_entity.action_economy.movement.self_static.add_max_constraint(
-                    NumericalModifier(
-                        name="Exhaustion",
-                        value=0,
-                        source_entity_uuid=source_uuid,
-                        target_entity_uuid=target_uuid,
+                for speed in target_entity.action_economy.speed_values:
+                    modifier_uuid = speed.self_static.add_max_constraint(
+                        NumericalModifier(
+                            name="Exhaustion",
+                            value=0,
+                            source_entity_uuid=source_uuid,
+                            target_entity_uuid=target_uuid,
+                        )
                     )
-                )
-                outs.append((target_entity.action_economy.movement.uuid, modifier_uuid))
+                    outs.append((speed.uuid, modifier_uuid))
                 effect_event = effect_event.phase_to(
                     EventPhase.EFFECT,
                     update={"condition": self},
@@ -1086,9 +1074,9 @@ class Frightened(BaseCondition):
                 outs.append((skill_obj.skill_bonus.uuid,skills_modifier_uuid))
             effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Frightened skill disadvantage modifier to {target_entity.name}")
             if self.residue_origin is None:
-                movement_value = target_entity.action_economy.movement
-                max_movement_constraint_uuid = movement_value.self_contextual.add_max_constraint(constraint=ContextualNumericalModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frigthener_in_senses_zero_max_speed()))
-                outs.append((movement_value.uuid,max_movement_constraint_uuid))
+                for speed in target_entity.action_economy.speed_values:
+                    max_movement_constraint_uuid = speed.self_contextual.add_max_constraint(constraint=ContextualNumericalModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frigthener_in_senses_zero_max_speed()))
+                    outs.append((speed.uuid,max_movement_constraint_uuid))
                 effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Frightened movement constraint to {target_entity.name}")
                 return outs, [], [], [], effect_event
             direction = EventHandler(
@@ -1248,9 +1236,9 @@ class Grappled(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
-            speed_obj = target_entity.action_economy.movement
-            grappled_modifer_uuid = speed_obj.self_static.add_max_constraint(constraint=NumericalModifier(name="Grappled",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((speed_obj.uuid,grappled_modifer_uuid))
+            for speed in target_entity.action_economy.speed_values:
+                grappled_modifer_uuid = speed.self_static.add_max_constraint(constraint=NumericalModifier(name="Grappled",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+                outs.append((speed.uuid,grappled_modifer_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Grappled max speed constraint to {target_entity.name}")
             return outs, [], [], [], effect_event
         else:
@@ -1694,9 +1682,9 @@ class Restrained(BaseCondition):
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
             outs = []
-            speed_obj = target_entity.action_economy.movement
-            speed_max_constrain_uuid = speed_obj.self_static.add_max_constraint(constraint=NumericalModifier(name="Restrained",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-            outs.append((speed_obj.uuid,speed_max_constrain_uuid))
+            for speed in target_entity.action_economy.speed_values:
+                speed_max_constrain_uuid = speed.self_static.add_max_constraint(constraint=NumericalModifier(name="Restrained",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
+                outs.append((speed.uuid,speed_max_constrain_uuid))
             effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Restrained max speed constraint to {target_entity.name}")
             self_static_attack_uuid = target_entity.equipment.attack_bonus.self_static.add_advantage_modifier(AdvantageModifier(name="Restrained",value=AdvantageStatus.DISADVANTAGE,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
             outs.append((target_entity.equipment.attack_bonus.uuid,self_static_attack_uuid))
@@ -1765,6 +1753,7 @@ class ConcentrationSlot(BaseObject):
     name: Optional[str] = "Concentration Slot"
     spell_name: str = ""
     spell_id: Optional[str] = None
+    cast_lineage_uuid: UUID | None = None
     linked_entries: List[Tuple[UUID, UUID]] = Field(default_factory=list)
 
 
@@ -1928,9 +1917,13 @@ class Concentrating(BaseCondition):
         if self._active_slot_uuid and self._active_slot_uuid in self.concentration_slots:
             self.concentration_slots[self._active_slot_uuid].linked_entries.append((target_block_uuid, condition_uuid))
 
+    def record_cast_owner(self, lineage_uuid: UUID) -> None:
+        if self._active_slot_uuid is not None:
+            self.concentration_slots[self._active_slot_uuid].cast_lineage_uuid = lineage_uuid
+
     def snapshot_concentration_slots(self) -> tuple[ItemConcentrationSlot, ...]:
         return tuple(ItemConcentrationSlot(slot_uuid=slot.uuid, spell_id=slot.spell_id,
-            spell_name=slot.spell_name) for slot in self.concentration_slots.values() if slot.linked_entries)
+            spell_name=slot.spell_name, cast_lineage_uuid=slot.cast_lineage_uuid) for slot in self.concentration_slots.values() if slot.linked_entries)
 
     def snapshot_state(self) -> ConditionState:
         return super().snapshot_state().model_copy(update={
@@ -1938,18 +1931,32 @@ class Concentrating(BaseCondition):
         })
 
     def publish_owner_state(self, parent_event: Event | None) -> None:
+        """Publish only a changed committed snapshot, using the existing event history."""
         owner = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+        if owner is None or owner.active_conditions_by_uuid.get(self.uuid) is not self:
+            return
+        recorded = EventQueue.get_events_by_target(owner.uuid)
         if isinstance(owner, BaseItem) and owner.tile_uuid is not None:
-            owner.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
-        elif isinstance(owner, Entity) and owner.active_conditions_by_uuid.get(self.uuid) is self:
+            previous = next((event for event in reversed(recorded)
+                if isinstance(event, ItemLocationStateEvent) and event.phase is EventPhase.COMPLETION), None)
+            if previous is None or previous.item_state != owner.to_item_presentation_state():
+                owner.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
+        elif isinstance(owner, Entity):
+            state, stats = self.snapshot_state(), owner.snapshot_entity_stats()
+            previous = next((event for event in reversed(recorded)
+                if isinstance(event, (ConditionApplicationEvent, ConditionStateChangedEvent))
+                and event.phase is EventPhase.COMPLETION and event.condition_state is not None
+                and event.condition_state.condition_uuid == self.uuid), None)
+            if previous is not None and previous.condition_state == state and previous.resulting_stats == stats:
+                return
             ConditionStateChangedEvent(
                 source_entity_uuid=self.source_entity_uuid,
                 target_entity_uuid=owner.uuid,
                 parent_event=parent_event.uuid if parent_event is not None else None,
                 parent_lineage=parent_event.lineage_uuid if parent_event is not None else None,
                 phase=EventPhase.COMPLETION,
-                condition_state=self.snapshot_state(),
-                resulting_stats=owner.snapshot_entity_stats(),
+                condition_state=state,
+                resulting_stats=stats,
                 behavior_id=self.behavior_binding.behavior_id if self.behavior_binding is not None else None,
             )
 
@@ -1963,7 +1970,6 @@ class Concentrating(BaseCondition):
                 slot.remove_from_register()
                 del self.concentration_slots[slot_uuid]
         self._sync_spell_name()
-        self.publish_owner_state(parent_event)
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         if not self.target_entity_uuid:

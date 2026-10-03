@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemLocationStateEvent
+from dnd.blocks.base_item import ItemResourceChangeEvent, ItemLocationStateEvent
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.events import (
     Event, SpatialChangeEvent, SpatialChangeType, SpatialEffectChangeEvent, TileElevationChangeEvent,
@@ -79,7 +79,7 @@ def world_event_positions(
             identity = event.item_state.item_uuid
             if event.world_placement is not None:
                 positions.update(event.world_placement.positions)
-        case ItemChargeConsumptionEvent():
+        case ItemResourceChangeEvent():
             identity = event.item_uuid
         case TileElevationChangeEvent():
             positions.add(event.position)
@@ -159,7 +159,7 @@ def apply_world_fact(
                 ))
             else:
                 _put_object(world, identity, None)
-        case ItemChargeConsumptionEvent():
+        case ItemResourceChangeEvent():
             previous = world.objects.get(event.item_uuid)
             if previous is None:
                 return False

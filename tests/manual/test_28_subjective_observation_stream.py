@@ -74,7 +74,7 @@ from server.agent_runtime.observation_journal import (
 )
 from server.combat_log_projection import _sanitize_multi_entity_log_summary
 from dnd.actions import MovementEvent
-from dnd.blocks.base_item import ItemChargeConsumptionEvent
+from dnd.blocks.base_item import ItemResourceChangeEvent
 from server.event_server import app, sim
 from server.event_stream import event_stream
 from server.session import PlayerType
@@ -1510,7 +1510,7 @@ def test_visible_enemy_item_use_does_not_invent_inventory_item_position() -> Non
     before = client.get(f"/ai/sessions/{session_id}/observation/snapshot").json()
     assert str(potion.uuid) not in {row["uuid"] for row in before["known_objects"]}
 
-    complete_event(ItemChargeConsumptionEvent(
+    complete_event(ItemResourceChangeEvent(
         source_entity_uuid=monster.uuid,
         target_entity_uuid=monster.uuid,
         item_uuid=potion.uuid,

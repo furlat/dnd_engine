@@ -5,7 +5,7 @@ from uuid import UUID
 
 from dnd.actions import AttackEvent
 from dnd.blocks.appearance import AppearanceConfig
-from dnd.blocks.base_item import ItemChargeConsumptionEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
+from dnd.blocks.base_item import ItemResourceChangeEvent, ItemHoldingsReleasedEvent, ItemLocationStateEvent
 from dnd.blocks.equipment import EquipmentEvent
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.creature_types import Size
@@ -41,7 +41,7 @@ def actor_fact_owner(event: Event) -> UUID | None:
     match event:
         case AttackEvent() if event.attack_outcome is not None:
             return event.source_entity_uuid
-        case EquipmentEvent() | ItemChargeConsumptionEvent() | ItemHoldingsReleasedEvent():
+        case EquipmentEvent() | ItemResourceChangeEvent() | ItemHoldingsReleasedEvent():
             return event.source_entity_uuid
         case DamageAppliedEvent() | HealEvent():
             return event.target_entity_uuid
@@ -71,7 +71,7 @@ def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact |
         case SpatialChangeEvent(change_type=SpatialChangeType.ENTITY_ENTERED | SpatialChangeType.ENTITY_LEFT):
             return (actor if event.occupancy_layer is None
                     else replace(actor, occupancy_layer=event.occupancy_layer))
-        case ItemChargeConsumptionEvent():
+        case ItemResourceChangeEvent():
             items = tuple(item.model_copy(update={
                 "charges": event.charges_after, "stack_count": event.stack_count_after,
             }) if item.item_uuid == event.item_uuid else item for item in actor.items

@@ -1,6 +1,7 @@
 """Runtime behavior identities and passive handler-dispatch evidence."""
 
 from __future__ import annotations
+from dnd.core.content.identities import HandlerDispatchOutcome as HandlerDispatchOutcome
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -402,13 +403,6 @@ def bind_runtime_handler_before_admission(
     )
 
 
-class HandlerDispatchOutcome(str, Enum):
-    """Observable result of one handler invocation by the event queue."""
-
-    NO_EFFECT = "no_effect"
-    EMITTED_EVENTS = "emitted_events"
-    MODIFIED_EVENT = "modified_event"
-    CANCELED_EVENT = "canceled_event"
 
 
 class HandlerDispatchEvidence(BaseModel):

@@ -115,7 +115,7 @@ def dread_residue_history(*, entry: Literal["walk", "jump", "misty-step"] = "wal
             "misty-step": "spell.misty_step"}[entry], destination=(7, 3))
         assert traveler.position == (6, 3) and traveler.occupancy_layer is OccupancyLayer.GROUND
         assert "Frightened" not in traveler.active_conditions
-        assert traveler.action_economy.movement.normalized_score == {"walk": 20, "jump": 15, "misty-step": 25}[entry]
+        assert traveler.action_economy.movement_remaining() == {"walk": 20, "jump": 15, "misty-step": 25}[entry]
         if entry == "misty-step":
             assert traveler.action_economy.bonus_actions.normalized_score == 0
             assert traveler.action_economy.spell_slot_2.normalized_score == 0

@@ -6,16 +6,15 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 from types import MappingProxyType
-from typing import Annotated, Literal, Mapping
+from typing import Literal, Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, PositiveFloat, PositiveInt, JsonValue
 
-from game.asset_types import AssetSpec as AssetSpec, ImageResourceSource, image_resources
+from game.asset_types import AssetSpec as AssetSpec, image_resources
 from game.animation_types import ParticleMediaAsset, PropAnimation, TetherAnimation
 from game.residue_media import region_media_assets
-from game.world_animation import PropAnimationSource, WorldTransitionSample, prop_animation
+from game.world_animation import WorldTransitionSample, prop_animation
 from game.surface_residue import LiquidSurfaceStyle, ResidueSurfaceCache, ResidueSurfaceStyle, WallFace
-from dnd.types.residues import ResidueEllipse
+from game.world_binding_types import AssetDocument, WorldBindingsSource
 
 import numpy as np
 import pygame
@@ -24,134 +23,6 @@ import pygame
 PACKAGE_ROOT = Path(__file__).resolve().parent
 ASSET_ROOT = PACKAGE_ROOT / "assets"
 DATA_ROOT = PACKAGE_ROOT / "data"
-
-
-class _WorldSource(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
-
-
-class ImageAnimationSource(_WorldSource):
-    frames: Annotated[tuple[str, ...], Field(min_length=1)]
-    fps: PositiveInt
-
-
-class WaterSource(_WorldSource):
-    mask: str
-    ripple: str
-    normal: str
-    shallowColor: tuple[FiniteFloat, FiniteFloat, FiniteFloat, FiniteFloat]
-    deepColor: tuple[FiniteFloat, FiniteFloat, FiniteFloat, FiniteFloat]
-    tint: tuple[FiniteFloat, FiniteFloat, FiniteFloat, FiniteFloat]
-    depthBlendStrength: FiniteFloat
-    uvScale: PositiveFloat
-    detailPan: tuple[FiniteFloat, FiniteFloat]
-    detailInfluence: FiniteFloat
-    ripplePan: tuple[FiniteFloat, FiniteFloat]
-    rippleTilingMultiplier: PositiveFloat
-    rippleAmount: FiniteFloat
-    uvWobbleAmount: FiniteFloat
-    normalPanA: tuple[FiniteFloat, FiniteFloat]
-    normalPanB: tuple[FiniteFloat, FiniteFloat]
-    normalTilingMultiplier: PositiveFloat
-    normalScale: FiniteFloat
-    sheenStrength: FiniteFloat
-    sheenSharpness: PositiveFloat
-    overallAlpha: Annotated[float, Field(ge=0, le=1)]
-    alphaDepthStrength: FiniteFloat
-    alphaCutoff: Annotated[float, Field(ge=0, le=1)]
-    premultiplyOutput: bool
-    blend: Literal["one_one_minus_src_alpha"]
-
-
-class AssetDocument(_WorldSource):
-    schema_version: Literal[1]
-    resources: dict[str, ImageResourceSource]
-    animations: dict[str, ImageAnimationSource]
-    water: WaterSource
-
-
-class PropBindingSource(_WorldSource):
-    body_by_pose: dict[str, str]
-    lit_animation: str | None
-    state_field: Literal["is_open", "is_engaged"] | None = None
-    active_body_by_pose: dict[str, str] | None = None
-    transition: PropAnimationSource | None = None
-
-
-class TerrainCliffSource(_WorldSource):
-    role: Literal["cliff"]
-    rise_steps: PositiveInt
-    bed_material: str
-    upper_support_offset: tuple[int, int]
-    straight: dict[str, str]
-    corner: dict[str, str]
-    corner_faces: dict[str, tuple[Literal["east", "south", "west", "north"], Literal["east", "south", "west", "north"]]]
-
-
-class TerrainStairSource(_WorldSource):
-    role: Literal["stairs"]
-    rise_steps: PositiveInt
-    support_offsets: tuple[tuple[int, int, int], ...]
-    poses: dict[str, str]
-    contacts_px: dict[str, tuple[tuple[FiniteFloat, FiniteFloat], ...]]
-
-
-class TreatmentSource(_WorldSource):
-    id: str
-    rgb: tuple[FiniteFloat, FiniteFloat, FiniteFloat]
-
-
-class ResidueSurfaceSource(_WorldSource):
-    floor_atlas: str
-    wall_atlas: str
-    floor_opacity: Annotated[float, Field(ge=0, le=1)]
-    wall_opacity: Annotated[float, Field(ge=0, le=1)]
-
-
-class WallFaceSource(_WorldSource):
-    origin: tuple[FiniteFloat, FiniteFloat]
-    across: tuple[FiniteFloat, FiniteFloat]
-    down: tuple[FiniteFloat, FiniteFloat]
-    reverse: bool = False
-
-
-class WallFacesSource(_WorldSource):
-    profiles: dict[str, dict[str, tuple[WallFaceSource, ...]]] = Field(default_factory=dict)
-    assets: dict[str, str] = Field(default_factory=dict)
-
-
-class LiquidSurfaceSource(_WorldSource):
-    asset_id: str
-    ellipse: ResidueEllipse
-    opacity: Annotated[float, Field(ge=0, le=1)]
-
-
-class WorldBindingsSource(_WorldSource):
-    schema_version: Literal[1]
-    terrain: dict[str, dict[str, str] | str]
-    terrain_cliff: TerrainCliffSource
-    terrain_stairs: TerrainStairSource
-    stone_wall_straight: dict[str, str]
-    stone_wall_corner: dict[str, str]
-    wood_wall_straight: dict[str, str]
-    wood_wall_corner: dict[str, str]
-    stone_door_frame: dict[str, str]
-    wood_door_closed: dict[str, str]
-    wood_door_open: dict[str, str]
-    props: dict[str, PropBindingSource]
-    treatments: dict[str, TreatmentSource]
-    spatial_effects: dict[str, PropAnimationSource] = Field(default_factory=dict)
-    residue_wall_faces: WallFacesSource = Field(default_factory=WallFacesSource)
-    residue_particles: dict[str, str] = Field(default_factory=dict)
-    residue_ground: dict[str, dict[str, str]] = Field(default_factory=dict)
-    residue_surfaces: dict[str, ResidueSurfaceSource] = Field(default_factory=dict)
-    liquid_surfaces: dict[str, LiquidSurfaceSource] = Field(default_factory=dict)
-    # These presentation sections are decoded into SpatialMediaBinding/DepositMediaBinding
-    # by animation_data. They are not consumed a second time by this catalog.
-    spatial_media: dict[str, JsonValue] = Field(default_factory=dict)
-    concentration_media: dict[str, JsonValue] = Field(default_factory=dict)
-    construction_media: dict[str, JsonValue] = Field(default_factory=dict)
-    deposit_media: dict[str, JsonValue] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +46,7 @@ class PropBinding:
 class AssetCatalog:
     """Direct resources, bindings, animation, and Water constants."""
 
+    world_source: WorldBindingsSource
     resources: Mapping[str, AssetSpec]
     bindings: Mapping[str, object]
     flame_frames: tuple[str, ...]
@@ -225,11 +97,12 @@ def prop_animation_frame(animation: PropAnimation, pose: str, state: str | None,
 
 
 def catalog_from_documents(
-    assets: dict[str, object], bindings: dict[str, object]
+    assets: dict[str, object], bindings: dict[str, object] | WorldBindingsSource
 ) -> AssetCatalog:
     """Assemble the checked-in catalog values without filesystem validation."""
     source = AssetDocument.model_validate(assets)
-    world = WorldBindingsSource.model_validate(bindings)
+    world = (bindings if isinstance(bindings, WorldBindingsSource)
+             else WorldBindingsSource.model_validate_json(json.dumps(bindings)))
     flame = source.animations["torch.flame"]
     resources = image_resources(source.resources, ASSET_ROOT)
     props = {}
@@ -248,8 +121,9 @@ def catalog_from_documents(
         for face in faces) for pose, faces in poses.items()})
         for identity, poses in world.residue_wall_faces.profiles.items()}
     return AssetCatalog(
+        world_source=world,
         resources=MappingProxyType(resources),
-        bindings=MappingProxyType(bindings),
+        bindings=MappingProxyType(world.model_dump(mode="json")),
         flame_frames=flame.frames,
         flame_fps=flame.fps,
         # Existing material consumers use JSON vector arrays; retain that public shape.

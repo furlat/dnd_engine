@@ -219,11 +219,11 @@ def test_operator_walk_changes_the_sector_and_rejects_the_old_selection() -> Non
     before = item_action(caster, device.uuid, "Magic Missile")
     assert {row.target_uuid for row in before.valid_targets} == {east.uuid}
     old_selection = before.valid_targets[0]
-    movement_before = caster.action_economy.movement.normalized_score
+    movement_before = caster.action_economy.movement_remaining()
     moved = Move(source_entity_uuid=caster.uuid, end_position=(6, 10)).apply()
     assert moved is not None and not moved.canceled
     assert caster.position == (6, 10)
-    assert caster.action_economy.movement.normalized_score < movement_before
+    assert caster.action_economy.movement_remaining() < movement_before
     after = item_action(caster, device.uuid, "Magic Missile")
     assert {row.target_uuid for row in after.valid_targets} == {west.uuid}
     rejected = execute_use_action(caster, device.uuid, before.template_name, old_selection)

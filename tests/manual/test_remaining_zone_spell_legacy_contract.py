@@ -258,13 +258,13 @@ def test_grease_preserves_initial_entry_turn_stand_and_cleanup_rules() -> None:
     with fixed_dice_faces(*([10] * 4)):
         initial.on_turn_end()
     assert has_condition(initial, "Prone")
-    assert initial.action_economy.movement.normalized_score == 30
+    assert initial.action_economy.movement_remaining() == 30
 
     initial.remove_condition("Prone")
 
     initial.action_economy.consume(
         "movement",
-        initial.action_economy.movement.normalized_score,
+        initial.action_economy.movement_remaining(),
     )
     zero_movement_prone = Prone(
         source_entity_uuid=caster.uuid,
@@ -274,7 +274,7 @@ def test_grease_preserves_initial_entry_turn_stand_and_cleanup_rules() -> None:
     assert zero_movement_result is not None
     assert not zero_movement_result.canceled
     assert has_condition(initial, "Prone")
-    assert initial.action_economy.movement.normalized_score == 0
+    assert initial.action_economy.movement_remaining() == 0
 
     assert entrant.is_my_turn is False
     with fixed_dice_faces(*([10] * 4)):
@@ -283,7 +283,7 @@ def test_grease_preserves_initial_entry_turn_stand_and_cleanup_rules() -> None:
     with fixed_dice_faces(*([10] * 4)):
         Entity.update_entity_position(entrant, (4, 5))
     assert has_condition(entrant, "Prone")
-    assert entrant.action_economy.movement.normalized_score == 30
+    assert entrant.action_economy.movement_remaining() == 30
 
     caster.remove_condition("Concentrating")
     assert not has_condition(caster, "Concentrating")
@@ -425,7 +425,7 @@ def test_spirit_guardians_preserves_faction_damage_slow_follow_and_cleanup() -> 
             initial_enemy.on_turn_start()
         assert enemy_hp - get_hp(initial_enemy) == 12
         assert has_condition(initial_enemy, "Spirit Guardians Slowed")
-        assert initial_enemy.action_economy.movement.normalized_score == 15
+        assert initial_enemy.action_economy.movement_remaining() == 15
 
         hp_after_initial = get_hp(initial_enemy)
         Entity.update_entity_position(initial_enemy, (12, 10))
@@ -438,11 +438,11 @@ def test_spirit_guardians_preserves_faction_damage_slow_follow_and_cleanup() -> 
         Entity.update_entity_position(entrant, (11, 10))
     assert entrant_hp - get_hp(entrant) == 12
     assert has_condition(entrant, "Spirit Guardians Slowed")
-    assert entrant.action_economy.movement.normalized_score == 15
+    assert entrant.action_economy.movement_remaining() == 15
 
     Entity.update_entity_position(entrant, (20, 10))
     assert not has_condition(entrant, "Spirit Guardians Slowed")
-    assert entrant.action_economy.movement.normalized_score == 30
+    assert entrant.action_economy.movement_remaining() == 30
 
     Entity.update_entity_position(caster, (15, 15))
     assert zone.position == (15, 15)

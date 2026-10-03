@@ -449,15 +449,15 @@ def _apply_level_features(
         )
     if _FAST_MOVEMENT in features:
         modifier_id = _source(entity, f"{step_id}.{_FAST_MOVEMENT}")
-        entity.action_economy.movement.self_contextual.add_value_modifier(
-            ContextualNumericalModifier(
-                uuid=modifier_id,
-                name="Fast Movement",
-                source_entity_uuid=entity.uuid,
-                target_entity_uuid=entity.uuid,
-                callable=barbarian.fast_movement_check,
-            ),
+        modifier = ContextualNumericalModifier(
+            uuid=modifier_id,
+            name="Fast Movement",
+            source_entity_uuid=entity.uuid,
+            target_entity_uuid=entity.uuid,
+            callable=barbarian.fast_movement_check,
         )
+        for speed in entity.action_economy.speed_values:
+            speed.self_contextual.add_value_modifier(modifier)
         walking.append(modifier_id)
     if _FERAL_INSTINCT in features:
         modifier_id = _source(entity, f"{step_id}.{_FERAL_INSTINCT}")
@@ -828,7 +828,7 @@ def _validate_barbarian_receipt_ownership(
         if modifier is None or AdvantageModifier.get(modifier_id) is not modifier:
             raise RuntimeError("Barbarian initiative modifier ownership changed")
     for modifier_id in receipt.walking_speed_modifier_ids:
-        modifiers = entity.action_economy.movement.self_contextual.value_modifiers
+        modifiers = entity.action_economy.walking_speed.self_contextual.value_modifiers
         modifier = modifiers.get(modifier_id)
         if (
             modifier is None
@@ -925,9 +925,10 @@ def _remove_barbarian_receipt(
         entity.initiative.self_static.remove_advantage_modifier(modifier_id)
         AdvantageModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.walking_speed_modifier_ids):
-        entity.action_economy.movement.self_contextual.remove_value_modifier(
-            modifier_id,
-        )
+        for speed in entity.action_economy.speed_values:
+            speed.self_contextual.remove_value_modifier(
+                modifier_id,
+            )
         ContextualNumericalModifier.unregister(modifier_id)
     for modifier_id in reversed(receipt.dexterity_save_advantage_modifier_ids):
         entity.saving_throws.dexterity_saving_throw.bonus.self_contextual.remove_advantage_modifier(

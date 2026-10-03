@@ -418,7 +418,7 @@ def test_eb_17_012_circus_warrior_preset_applies_custom_condition_bundle() -> No
     assert performer.health.get_resistance(DamageType.COLD) == ResistanceStatus.NONE
     assert performer.action_economy.actions.normalized_score == 100
     assert performer.action_economy.reactions.normalized_score == 3
-    assert performer.action_economy.movement.normalized_score == 25
+    assert performer.action_economy.movement_remaining() == 25
     assert performer.skill_set.get_skill("acrobatics").skill_bonus.normalized_score == 7
     assert performer.skill_set.get_skill("history").skill_bonus.normalized_score == -2
     assert performer.saving_throws.get_saving_throw("strength").bonus.normalized_score == 1

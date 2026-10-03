@@ -237,14 +237,14 @@ def test_jump_pays_landing_cost_once_before_web_restraint(traveler: Entity) -> N
         affected_occupancy_layers=frozenset({OccupancyLayer.GROUND}))
     web.activate(parent_event=Event(name="Landing web fixture", source_entity_uuid=traveler.uuid,
         event_type=EventType.BASE_ACTION, phase=EventPhase.EFFECT))
-    movement_before = traveler.action_economy.movement.normalized_score
+    movement_before = traveler.action_economy.movement_remaining()
     with fixed_dice_faces(1):
         result = Jump(source_entity_uuid=traveler.uuid, end_position=(1, 1)).apply()
 
     assert result is not None and result.phase is EventPhase.COMPLETION and not result.canceled
     assert traveler.position == (1, 1) and traveler.occupancy_layer is OccupancyLayer.GROUND
     assert "Restrained" in traveler.active_conditions and traveler.can_take_actions()
-    assert traveler.action_economy.movement.normalized_score == 0
+    assert traveler.action_economy.movement_remaining() == 0
     assert web.deactivate(parent_event=result)
     assert "Restrained" not in traveler.active_conditions
-    assert traveler.action_economy.movement.normalized_score == movement_before - 5 == 25
+    assert traveler.action_economy.movement_remaining() == movement_before - 5 == 25

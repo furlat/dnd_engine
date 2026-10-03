@@ -580,7 +580,7 @@ def test_effect_phase_step_handler_cancels_before_position_and_cost_commit() -> 
         )
     )
     Entity.update_all_entities_senses(max_distance=10)
-    movement_before = mover.action_economy.movement.normalized_score
+    movement_before = mover.action_economy.movement_remaining()
 
     result = Move(source_entity_uuid=mover.uuid, end_position=(5, 0)).apply()
 
@@ -588,7 +588,7 @@ def test_effect_phase_step_handler_cancels_before_position_and_cost_commit() -> 
     assert mover.position == (2, 0)
     assert result.end_position == (2, 0)
     assert "partial" in (result.status_message or "").lower()
-    assert mover.action_economy.movement.normalized_score == movement_before - 10
+    assert mover.action_economy.movement_remaining() == movement_before - 10
     assert len(canceled_steps) == 1
     assert canceled_steps[0].from_position == (2, 0)
     assert canceled_steps[0].to_position == (3, 0)
@@ -598,7 +598,7 @@ def test_effect_phase_speed_reduction_limits_the_remaining_path() -> None:
     """A speed change during a committed step constrains subsequent steps."""
     reset_arena(width=10, height=1)
     mover = create_skeleton(name="Mover", position=(0, 0), faction="heroes")
-    mover.action_economy.movement.self_static.add_value_modifier(
+    mover.action_economy.walking_speed.self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=mover.uuid,
             name="Initial Speed Boost",
@@ -614,7 +614,7 @@ def test_effect_phase_speed_reduction_limits_the_remaining_path() -> None:
         nonlocal applied
         assert isinstance(event, StepMovementEvent)
         if event.to_position == (3, 0) and not applied:
-            mover.action_economy.movement.self_static.add_value_modifier(
+            mover.action_economy.walking_speed.self_static.add_value_modifier(
                 NumericalModifier.create(
                     source_entity_uuid=handler_source_uuid,
                     name="Mid-path Slow",
@@ -646,7 +646,7 @@ def test_effect_phase_speed_reduction_limits_the_remaining_path() -> None:
     assert mover.position == (6, 0)
     assert result.end_position == (6, 0)
     assert "partial" in (result.status_message or "").lower()
-    assert mover.action_economy.movement.normalized_score == 0
+    assert mover.action_economy.movement_remaining() == 0
 
 
 @pytest.mark.parametrize(
@@ -784,7 +784,7 @@ def test_prepare_intercept_prepays_action_and_distance() -> None:
     fighter = create_melee_fighter("Fighter", (2, 2), "heroes")
     Entity.update_all_entities_senses(max_distance=20)
     action_before = fighter.action_economy.actions.normalized_score
-    movement_before = fighter.action_economy.movement.normalized_score
+    movement_before = fighter.action_economy.movement_remaining()
     prepare = PrepareIntercept(source_entity_uuid=fighter.uuid)
     prepare.set_target_position((5, 2))
 
@@ -800,7 +800,7 @@ def test_prepare_intercept_prepays_action_and_distance() -> None:
     ]
     assert "Intercepting" in fighter.active_conditions
     assert fighter.action_economy.actions.normalized_score == action_before - 1
-    assert fighter.action_economy.movement.normalized_score == movement_before - 15
+    assert fighter.action_economy.movement_remaining() == movement_before - 15
 
 
 def test_prepare_intercept_rejects_unaffordable_distance_before_effects() -> None:
@@ -808,7 +808,7 @@ def test_prepare_intercept_rejects_unaffordable_distance_before_effects() -> Non
     reset_arena()
     fighter = create_melee_fighter("Tired Fighter", (2, 2), "heroes")
     Entity.update_all_entities_senses(max_distance=20)
-    fighter.action_economy.movement.self_static.add_value_modifier(
+    fighter.action_economy.walking_speed.self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=fighter.uuid,
             target_entity_uuid=fighter.uuid,
@@ -825,7 +825,7 @@ def test_prepare_intercept_rejects_unaffordable_distance_before_effects() -> Non
     assert result is None
     assert "Intercepting" not in fighter.active_conditions
     assert fighter.action_economy.actions.normalized_score == action_before
-    assert fighter.action_economy.movement.normalized_score == 10
+    assert fighter.action_economy.movement_remaining() == 10
 
 
 def test_intercept_blocks_the_triggering_step_and_charges_only_committed_steps() -> None:
@@ -835,7 +835,7 @@ def test_intercept_blocks_the_triggering_step_and_charges_only_committed_steps()
     enemy = create_melee_fighter("Enemy", (8, 2), "monsters")
     arm_intercept(interceptor, (5, 2))
     Entity.update_all_entities_senses(max_distance=20)
-    movement_before = enemy.action_economy.movement.normalized_score
+    movement_before = enemy.action_economy.movement_remaining()
 
     result = Move(source_entity_uuid=enemy.uuid, end_position=(3, 2)).apply()
 
@@ -843,7 +843,7 @@ def test_intercept_blocks_the_triggering_step_and_charges_only_committed_steps()
     assert interceptor.position == (5, 2)
     assert enemy.position == (6, 2)
     assert result.end_position == (6, 2)
-    assert enemy.action_economy.movement.normalized_score == movement_before - 10
+    assert enemy.action_economy.movement_remaining() == movement_before - 10
     assert interceptor.action_economy.reactions.normalized_score == 0
     assert "Intercepting" not in interceptor.active_conditions
 

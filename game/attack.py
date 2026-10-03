@@ -27,8 +27,8 @@ from game.animation_types import (
     LayerColors, RigLayer, StudioActorLayer, StudioDamage,
 )
 from game.combat import actor_contact, object_contact
-from game.player_facts import ActionFact, AttackFact, DamageFact, ObjectDamageFact, LifeFact, PlayerLineage, PlayerNode, PlayerState, SpellFact
-from game.player_reduction import reduce_lineage
+from game.player_facts import AttackFact, DamageResultFact, ObjectDamageFact, LifeFact, PlayerLineage, PlayerNode, PlayerState
+from game.player_reduction import PlayerCausalIndex, index_player_lineage, reduce_lineage
 from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
 
 
@@ -73,6 +73,7 @@ class AttackTimeline:
     projectile: AttackProjectileTimeline | None = None
     authored_clip: str | None = None
     release_ms: float | None = None
+    results: tuple[PlayerNode, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,7 +228,8 @@ def attack_projectile_contact(timeline: AttackTimeline, effect: GeometryProjecti
 def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData,
                 *, facings: Mapping[str, Facing8] | None = None,
                 contacts: Mapping[str, ActorContact] | None = None,
-                child_presentation: ChildAttackPresentation | None = None) -> BoundAttack | None:
+                child_presentation: ChildAttackPresentation | None = None,
+                causal_index: PlayerCausalIndex | None = None) -> BoundAttack | None:
     """Bind one retained attack root; geometry remains authored profile data."""
     root_node = lineage.root
     root = root_node.fact
@@ -291,29 +293,20 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
                     if hypot(planar, height) >= 1 else 0)
         contact += duration
         projectile = AttackProjectileTimeline(profile.projectile, release, contact, first, last, _attack_colors(data, root))
-    by_lineage = {event.lineage_uuid: event for event in lineage.events}
-
-    def primary_effect(event: PlayerNode) -> bool:
-        """Nested actions own their own effects in the shared causal composition."""
-        parent = event.parent_lineage
-        while parent is not None and parent != root_node.lineage_uuid:
-            ancestor = by_lineage[parent]
-            if (isinstance(ancestor.fact, (AttackFact, SpellFact))
-                    or isinstance(ancestor.fact, ActionFact) and ancestor.fact.behavior_id in data.drafts):
-                return False
-            parent = ancestor.parent_lineage
-        return parent == root_node.lineage_uuid
-
-    applied = [event.fact for event in lineage.events
-               if isinstance(event.fact, DamageFact) and event.fact.stage == "applied" and primary_effect(event)]
-    if len(applied) > 1 or any(event.target_entity_uuid != root.target_entity_uuid for event in applied):
-        return None
-    changes = [(event.uuid, event.fact) for event in lineage.events if isinstance(event.fact, LifeFact)
-               and event.fact.entity_uuid == root.target_entity_uuid and primary_effect(event)]
+    index = causal_index if causal_index is not None else index_player_lineage(lineage)
+    reference = root_node.resolution_ref
+    owned = index.owned.get(reference, ()) if reference is not None else ()
+    results = index.results.get(reference, ()) if reference is not None else ()
+    applied = [node.fact for node in results if isinstance(node.fact, DamageResultFact)]
+    if any(event.target_entity_uuid != root.target_entity_uuid for event in applied):
+        raise ValueError("Attack result belongs to a different recipient")
+    changes = [(event.uuid, event.fact) for event in owned if isinstance(event.fact, LifeFact)
+               and event.fact.entity_uuid == root.target_entity_uuid and not event.canceled]
     life = changes[-1][1].new_state if changes else None
-    fact = applied[0] if applied else None
-    object_damage = next((node.fact for node in lineage.events if isinstance(node.fact, ObjectDamageFact)
-                          and node.fact.object_uuid == root.target_entity_uuid and primary_effect(node)), None)
+    fact = applied[-1] if applied else None
+    object_packets = [node.fact for node in results if isinstance(node.fact, ObjectDamageFact)
+                      and node.fact.object_uuid == root.target_entity_uuid]
+    object_damage = object_packets[-1] if object_packets else None
     damage_type = fact.damage_type if fact is not None else object_damage.damage_type if object_damage is not None else None
     damage = (resolve_damage(data, damage_type.value if damage_type is not None else None,
                              critical=root.attack_outcome is AttackOutcome.CRIT)
@@ -344,8 +337,9 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
         # FloatingText.run returns immediately: a badge fade does not hold the
         # causal join. The enclosing historical head owns overlay retirement.
         complete_ms=max(body_end, timing.end_ms if timing is not None else contact), layers=layers,
-        damage=damage, damage_timing=timing, damage_total=(fact.applied_damage if fact is not None
-            else object_damage.applied_damage if object_damage is not None else None),
+        damage=damage, damage_timing=timing, results=results,
+        damage_total=(sum(row.applied_damage for row in applied) if applied
+            else sum(row.applied_damage for row in object_packets) if object_packets else None),
         # The owned life commit may normalize the packet's intermediate HP
         # (for example, entering DYING at zero). Present its HP/life together.
         resulting_hp=changes[-1][1].normal_hit_points if changes else fact.resulting_normal_hp if fact is not None else None,

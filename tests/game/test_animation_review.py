@@ -259,7 +259,7 @@ def test_paired_doorway_inputs_replay_without_native_generation(tmp_path: Path) 
         for row in pair:
             directory = first / 'cases' / row['id']
             recorded = json.loads((directory / 'input.json').read_text())
-            assert recorded['sequence_format'] == 'player-v1'
+            assert recorded['sequence_format'] == 'player-v2'
             assert (directory / 'native.json').is_file()
             assert 'objective_rows' not in (directory / 'input.json').read_text()
             roots.append({root['root']['uuid'] for root in recorded['sequence']['lineages']})

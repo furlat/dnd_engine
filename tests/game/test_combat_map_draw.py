@@ -10,6 +10,7 @@ import pytest
 
 from dnd.types.world import CardinalDirection
 from game.animation import CastSample, CastTimeline, compile_cast, sample_cast
+from tests.game.authoring_fixtures import recorded_recipe_data
 from game.animation_data import load_animation_data
 from game.animation_draw import AnimationMedia, animation_draw_commands, load_animation_media
 from game.app import draw_frame
@@ -157,7 +158,7 @@ def test_point_dart_remains_visible_above_the_target_floor(scene: MapScene) -> N
                      applications=(replace(scene.cast.timeline.source.applications[0], travel_apex_steps=1),))
     # Keep the geometry-dart regression explicit while the shared scene uses
     # current production media, including its selected cast overlays.
-    original = load_animation_data(authored_bundles=()).drafts["spell.magic_missile"]
+    original = recorded_recipe_data().drafts["spell.magic_missile"]
     data = replace(scene.cast.timeline.data, drafts=MappingProxyType({
         **scene.cast.timeline.data.drafts, "spell.magic_missile": original,
     }))

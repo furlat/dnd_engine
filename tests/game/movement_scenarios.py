@@ -4,7 +4,7 @@ import random
 from typing import Literal
 from uuid import uuid4
 
-from dnd.actions import JumpEvent, MovementEvent
+from dnd.actions import JumpEvent, MovementEvent, Move
 from dnd.actions_functional import execute_by_index, get_available_actions, register_spell, setup_standard_actions
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
@@ -20,7 +20,8 @@ from dnd.game import Game
 from dnd.monsters.traits import register_cunning_action
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from dnd.spells.transmutation import Haste
+from dnd.spells.transmutation import Haste, Fly
+from dnd.types.world import MovementMode
 from dnd.types.senses import SenseMode, SensesType
 from game.presentation import (
     CompletedLineage, capture_interval, capture_lineage,
@@ -28,6 +29,27 @@ from game.presentation import (
 )
 
 from game.replay import CapturedHistory, ObserverCapture, capture_history
+from tests.game.scenarios import _healing_encounter
+
+
+def flight_history() -> CapturedHistory:
+    """An admitted Fly moves between ground endpoints using the ordinary action."""
+    with _healing_encounter() as (_, caster, target, _encounter):
+        setup_standard_actions(caster)
+        register_spell(caster, Fly, caster_level=7)
+        cast = next(row for row in caster.registered_actions if isinstance(row, Fly)).instantiate(
+            target_entity_uuid=caster.uuid, alt_skip_slot=True).apply()
+        assert cast is not None and not cast.canceled
+        baseline = EventQueue.event_cursor()
+        startup = capture_interval(name="Flight ground departure", start_cursor=0, end_cursor=baseline,
+            observer_uuid=caster.uuid, battlefield_id="battlefield.open_floor_bright")
+        before, _ = reduce_interval(None, startup)
+        root = next(row for row in caster.registered_actions if isinstance(row, Move)).instantiate(
+            end_position=(6, 3), movement_mode=MovementMode.FLYING).apply()
+        assert root is not None and not root.canceled
+        assert caster.get_position() == (6, 3) and caster.action_economy.movement_spent() == 15
+        return capture_history(before, (), observers=(ObserverCapture("caster", caster.uuid, baseline),
+            ObserverCapture("recipient", target.uuid, baseline)))
 
 
 def movement_history(
@@ -151,21 +173,21 @@ def movement_history(
             result = execute_by_index(mover, action.template_name, action.valid_targets[0].index, available=available)
             assert result is not None and result.phase is EventPhase.COMPLETION
             retain(cursor)
-            assert mover.action_economy.movement.normalized_score == 2 * base_speed
+            assert mover.action_economy.movement_remaining() == 2 * base_speed
             assert mover.action_economy.actions.normalized_score == actions
             assert mover.action_economy.bonus_actions.normalized_score == 0
         for destination in route[1:]:
             available = get_available_actions(mover)
             action = next(row for row in available.all_actions if row.behavior_id == behavior and row.valid_targets)
             option = next(row for row in action.valid_targets if row.position == destination)
-            movement_before = mover.action_economy.movement.normalized_score
+            movement_before = mover.action_economy.movement_remaining()
             cursor = EventQueue.event_cursor()
             result = execute_by_index(mover, action.template_name, option.index, available=available)
             assert isinstance(result, (MovementEvent, JumpEvent)) and result.phase is EventPhase.COMPLETION
             retain(cursor)
             assert mover.position == destination
             spent = sum(event.movement_cost for event in history[-1].events if isinstance(event, StepMovementEvent))
-            assert mover.action_economy.movement.normalized_score == movement_before - spent
+            assert mover.action_economy.movement_remaining() == movement_before - spent
         return capture_history(before, tuple(history), observers=tuple(ObserverCapture("mover" if actor is mover else "haste-caster", actor.uuid, before.reducer_cursor)
             for actor in actors))
     finally:

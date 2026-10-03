@@ -13,6 +13,12 @@ from dnd.actions import (
     entity_action_economy_cost_evaluator,
 )
 from dnd.blocks.base_item import UsableItem
+from dnd.blocks.equipment import Armor
+from dnd.core.base_conditions import Duration
+from dnd.core.condition_types import DurationType
+from dnd.core.equipment_types import WeaponSlot, WeaponKind
+from dnd.core.events import Event
+from dnd.items.consumables import TimedFireWeaponCoatCondition
 from dnd.core.aoe import AoEShape, Cube
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.content.descriptors import (
@@ -98,7 +104,8 @@ class SpellGrantingItem(UsableItem):
 
     def get_use_actions(self, user_entity_uuid: UUID) -> list[BaseAction]:
         """Create item-bound spell variants without spell-slot costs."""
-        if self.charges == 0 or not self.use_action_templates:
+        if (not self.is_active or self.charges == 0 or not self.use_action_templates
+                or self.use_admission_error(user_entity_uuid) is not None):
             return []
         result: list[BaseAction] = []
         source_item_presentation = self.to_item_presentation_state()
@@ -155,6 +162,49 @@ class SpellGrantingItem(UsableItem):
                 self.bind_dynamic_use_action(action)
             result.append(action)
         return result
+
+
+class SpellGrantingWearable(SpellGrantingItem, Armor):
+    """Existing wearable and finite-use spell composition, authored by data."""
+
+    is_consumable: bool = False
+    max_stack: int = 1
+
+
+class EmberQuiverActivation(SpellAction):
+    name: str = "Ember Quiver"
+    target_type: TargetType = TargetType.SELF
+    alt_skip_slot: bool = True
+    selected_weapon_uuid: UUID | None = None
+
+    def _create_declaration_event(self, parent_event: Event | None = None, use_register: bool = True):
+        actor = Entity.get(self.source_entity_uuid)
+        weapon = actor.equipment.get_weapon(WeaponSlot.RANGED_MAIN) if actor else None
+        self.selected_weapon_uuid = weapon.uuid if weapon else None
+        return super()._create_declaration_event(parent_event, use_register=use_register)
+
+    def _validate(self,event: SpellEvent):
+        actor = Entity.get(self.source_entity_uuid)
+        weapon = actor.equipment.get_weapon(WeaponSlot.RANGED_MAIN) if actor else None
+        if weapon is None or weapon.weapon_kind not in (WeaponKind.LONGBOW, WeaponKind.SHORTBOW,
+                    WeaponKind.LIGHT_CROSSBOW, WeaponKind.HEAVY_CROSSBOW, WeaponKind.HAND_CROSSBOW):
+            return event.cancel(status_message="Ember Quiver requires an equipped bow or crossbow")
+        return super()._validate(event)
+
+    def _apply(self,event: SpellEvent):
+        actor = Entity.get(self.source_entity_uuid)
+        weapon = actor.equipment.get_weapon(WeaponSlot.RANGED_MAIN) if actor else None
+        if (actor is None or weapon is None or weapon.uuid != self.selected_weapon_uuid
+                or weapon.weapon_kind not in (WeaponKind.LONGBOW, WeaponKind.SHORTBOW,
+                    WeaponKind.LIGHT_CROSSBOW, WeaponKind.HEAVY_CROSSBOW, WeaponKind.HAND_CROSSBOW)):
+            return event.cancel(status_message="Bow or crossbow missing")
+        condition = TimedFireWeaponCoatCondition(source_entity_uuid=actor.uuid,target_entity_uuid=weapon.uuid,
+            coated_weapon_uuid=weapon.uuid,duration=Duration(duration_type=DurationType.ROUNDS,duration=10))
+        result = weapon.add_condition(condition,parent_event=event)
+        if result is None or result.canceled or not condition.applied:
+            return event.cancel(status_message="Fire coating rejected")
+        return event.phase_to(EventPhase.EFFECT)
+
 
 
 @behavior_identity(

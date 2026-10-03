@@ -533,7 +533,7 @@ def test_ray_of_frost_hit_and_slow_expire_on_caster_turn_not_target_turn() -> No
         "monsters",
     )
     Entity.update_all_entities_senses(max_distance=80)
-    base_speed = target.action_economy.movement.normalized_score
+    base_speed = target.action_economy.movement_remaining()
     hp_before = get_hp(target)
     hit_modifier = _force_spell_attack_hit(caster, target)
 
@@ -550,19 +550,19 @@ def test_ray_of_frost_hit_and_slow_expire_on_caster_turn_not_target_turn() -> No
     assert result.damage_rolls is not None
     assert result.damage_rolls[0].effective_dice_count == 2
     assert get_hp(target) < hp_before
-    assert target.action_economy.movement.normalized_score == base_speed - 10
+    assert target.action_economy.movement_remaining() == base_speed - 10
     assert has_condition(caster, "Ray of Frost Effect")
 
     target.on_turn_start()
     target.on_turn_end()
 
-    assert target.action_economy.movement.normalized_score == base_speed - 10
+    assert target.action_economy.movement_remaining() == base_speed - 10
     assert has_condition(caster, "Ray of Frost Effect")
 
     caster.on_turn_start()
 
     assert not has_condition(caster, "Ray of Frost Effect")
-    assert target.action_economy.movement.normalized_score == base_speed
+    assert target.action_economy.movement_remaining() == base_speed
 
 
 def test_acid_splash_two_target_damage_and_proximity_validation() -> None:
@@ -1041,7 +1041,7 @@ def test_fear_and_hypnotic_pattern_execute_area_and_cleanup_rules() -> None:
     assert has_condition(target, "Charmed")
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert not has_condition(outside, "Hypnotic Pattern")
     assert has_condition(caster, "Concentrating")
 
@@ -1051,7 +1051,7 @@ def test_fear_and_hypnotic_pattern_execute_area_and_cleanup_rules() -> None:
     assert not has_condition(target, "Charmed")
     assert target.action_economy.actions.normalized_score == 1
     assert target.action_economy.bonus_actions.normalized_score == 1
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
 
 
 def test_position_aoe_preview_execution_preserves_filters_and_cardinality() -> None:

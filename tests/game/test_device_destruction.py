@@ -48,7 +48,29 @@ def recorded():
 def legacy_recorded():
     # Actual pre-migration recording from inputs/device-break-cannon/native.json.
     path = Path(__file__).parent / "fixtures/legacy-device-destruction.json.gz"
-    return RecordedSequence.model_validate_json(gzip.decompress(path.read_bytes()), context=PASSIVE_EVENT_REPLAY)
+    native = RecordedSequence.model_validate_json(gzip.decompress(path.read_bytes()), context=PASSIVE_EVENT_REPLAY)
+    return _settled_before_destruction(native)
+
+
+def _settled_before_destruction(native):
+    """Keep every archived fact, reviewing only the final destruction animation.
+
+    The old device story also contains a creature hit with no recorded damage
+    owner. That operation cannot be animated honestly (tested separately), but
+    its committed state can initialize this later object-destruction review.
+    """
+    prefix = native.lineages[:-1]
+    initial = native.initialization
+    admitted = list(initial.admitted)
+    for root in prefix:
+        indexes = {row.event_uuid: row.source_index for row in root.objective_rows}
+        admitted.extend((indexes[event.uuid], event) for event in root.events)
+    initial = replace(initial, end_cursor=prefix[-1].end_cursor,
+        admitted=tuple(sorted(admitted, key=lambda row: row[0])),
+        objective_rows=initial.objective_rows + tuple(row for root in prefix for row in root.objective_rows),
+        conditions=initial.conditions + tuple(row for root in prefix for row in root.conditions),
+        admissions=initial.admissions + tuple(row for root in prefix for row in root.admissions))
+    return native.model_copy(update={"initialization": initial, "lineages": native.lineages[-1:]})
 
 
 @pytest.fixture(scope="module")
@@ -191,6 +213,8 @@ def test_unknown_replacement_is_redacted_and_legacy_destruction_never_invents_on
 def test_archived_replacement_and_same_identity_settled_bodies_have_identical_pixels(raster, family, outcome):
     path = Path(__file__).parent / f"fixtures/legacy-{family}-destruction.json.gz"
     archived = RecordedSequence.model_validate_json(gzip.decompress(path.read_bytes()), context=PASSIVE_EVENT_REPLAY)
+    if family == "device":
+        archived = _settled_before_destruction(archived)
     before, root, fact = _destruction(archived)
     assert fact.replacement_uuid is not None and fact.replacement_uuid != fact.object_uuid
     after = reduce_lineage(before, root)

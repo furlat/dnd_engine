@@ -90,7 +90,7 @@ def apply_incapacitated_transform(
             target.action_economy.actions,
             target.action_economy.bonus_actions,
             target.action_economy.reactions,
-            target.action_economy.movement,
+            *target.action_economy.speed_values,
         )
     ]
 
@@ -119,7 +119,7 @@ def apply_turn_spent_transform(
             target.action_economy.action_permission,
             target.action_economy.actions,
             target.action_economy.bonus_actions,
-            target.action_economy.movement,
+            *target.action_economy.speed_values,
         )
     ]
 

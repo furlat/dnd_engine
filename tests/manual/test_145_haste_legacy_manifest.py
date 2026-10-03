@@ -166,7 +166,7 @@ def test_potion_authored_haste_expires_after_exactly_ten_rounds() -> None:
     potion_uuid = potion.uuid
     assert actor.loot_item(potion)
     base_ac = actor.equipment.ac_bonus.normalized_score
-    base_movement = actor.action_economy.movement.normalized_score
+    base_movement = actor.action_economy.movement_remaining()
 
     completion = execute_use_action(
         actor,
@@ -181,7 +181,7 @@ def test_potion_authored_haste_expires_after_exactly_ten_rounds() -> None:
     assert haste.duration.duration == 10
     assert "Concentrating" not in actor.active_conditions
     assert actor.equipment.ac_bonus.normalized_score == base_ac + 2
-    assert actor.action_economy.movement.normalized_score == base_movement * 2
+    assert actor.action_economy.movement_remaining() == base_movement * 2
     assert actor.action_economy.resources["haste_action"].current == 1
     assert not actor.inventory.has_item(potion_uuid)
     assert BaseBlock.get(potion_uuid) is None
@@ -205,4 +205,4 @@ def test_potion_authored_haste_expires_after_exactly_ten_rounds() -> None:
     assert "haste_action" not in actor.action_economy.resources
     assert actor.equipment.ac_bonus.normalized_score == base_ac
     assert actor.action_economy.action_permission.normalized_score == 0
-    assert actor.action_economy.movement.normalized_score == 0
+    assert actor.action_economy.movement_remaining() == 0

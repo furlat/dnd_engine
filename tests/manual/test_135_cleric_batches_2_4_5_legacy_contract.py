@@ -176,14 +176,14 @@ def test_freedom_of_movement_changes_path_and_committed_step_costs() -> None:
     assert distances_after[(6, 3)] == 4
 
     target.update_entity_senses(max_distance=20)
-    movement_before = target.action_economy.movement.normalized_score
+    movement_before = target.action_economy.movement_remaining()
     move = Move(
         source_entity_uuid=target.uuid,
         end_position=(3, 3),
     ).apply()
     assert move is not None
     assert not move.canceled
-    assert target.action_economy.movement.normalized_score == movement_before - 5
+    assert target.action_economy.movement_remaining() == movement_before - 5
 
 
 def test_resistance_modifies_one_save_then_cleans_concentration() -> None:

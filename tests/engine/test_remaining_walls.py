@@ -243,13 +243,13 @@ def test_stone_enclosure_escape_spends_reaction_not_normal_movement(succeeds):
     caster = scene(5)
     target = actor((7, 7))
     force_save_result(target, "dexterity", succeeds=succeeds)
-    target.action_economy.consume("movement", target.action_economy.movement.normalized_score)
+    target.action_economy.consume("movement", target.action_economy.movement_remaining())
     result = WallOfStone(source_entity_uuid=caster.uuid, end_position=(5, 5),
         extra_target_positions=[(9, 5), (9, 9), (5, 9), (5, 5)]).apply()
     assert result is not None and not result.canceled
     assert (target.position != (7, 7)) is succeeds
     assert target.action_economy.reactions.normalized_score == (0 if succeeds else 1)
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
 
 
 def test_disintegrate_known_force_section_retires_complete_wall():

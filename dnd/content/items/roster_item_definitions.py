@@ -6,7 +6,8 @@ from typing import Mapping
 from dnd.content.items.authored_item_definitions import AUTHORED_WEAPON_DEFINITIONS, WeaponDefinition, WearableDefinition, AuthoredItemDefinition
 from dnd.content.items.item_composition import named_item, with_extra_damage, with_weapon_bonus
 from dnd.core.creature_types import DamageType
-from dnd.core.equipment_types import WeaponProperty, BodyPart
+from dnd.types.materials import Material
+from dnd.core.equipment_types import WeaponKind, WeaponProperty, BodyPart
 from dnd.core.item_properties import AdditionalDamage
 
 
@@ -61,7 +62,7 @@ ROSTER_MAUL_DEFINITION = WeaponDefinition(
     properties=(WeaponProperty.HEAVY, WeaponProperty.TWO_HANDED, WeaponProperty.MARTIAL),
     # Shared original hammer geometry is explicitly approximate; native rules remain Maul.
     visual_item_name="Maul", visual_variant_id="roster.06ceb223da45",
-)
+ weapon_kind=WeaponKind.MAUL, material=Material.METAL)
 
 
 # Ordinary carried gear uses the existing hand/attack path. Specialist focus,
@@ -82,7 +83,7 @@ ROSTER_CARRIED_DEFINITIONS: Mapping[str, WeaponDefinition] = MappingProxyType({
         ("gear", "weapon", "ranged"), damage_die=12, damage_type=DamageType.PIERCING,
         properties=(WeaponProperty.RANGED, WeaponProperty.TWO_HANDED, WeaponProperty.MARTIAL),
         range_kind="range", normal_range_feet=40, long_range_feet=120,
-        visual_item_name="Musket"),
+        visual_item_name="Musket", weapon_kind=WeaponKind.MUSKET, material=Material.METAL),
 })
 
 ROSTER_GEAR_DEFINITIONS: Mapping[str, WearableDefinition] = MappingProxyType({

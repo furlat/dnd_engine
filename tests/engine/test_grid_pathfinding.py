@@ -320,7 +320,7 @@ def test_eb_11_004_move_action_converts_tile_cost_units_to_feet() -> None:
     assert event is not None
     assert not event.canceled
     assert entity.position == (4, 0)
-    assert entity.action_economy.movement.normalized_score == 5
+    assert entity.action_economy.movement_remaining() == 5
 
 
 def test_eb_11_005_occupants_and_objects_block_walkable_tiles_polymorphically() -> None:

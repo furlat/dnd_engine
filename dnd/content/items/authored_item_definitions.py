@@ -1,12 +1,14 @@
 """Cold renderer-independent definitions for directly authored items."""
 
+from dnd.types.materials import Material
+
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Literal, Mapping, Optional
 
 from dnd.core.item_properties import AdditionalDamage, ArmorPenalties, ItemProperty, UnseenStrike, WearerBonus, WearerValue
 from dnd.core.creature_types import DamageType
-from dnd.core.equipment_types import ArmorType, BodyPart, WeaponProperty
+from dnd.core.equipment_types import ArmorType, BodyPart, WeaponKind, WeaponProperty
 from dnd.core.item_types import EquippedVisualPolicy, ItemDestructionProfile
 from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 
@@ -38,6 +40,27 @@ def _validate_properties(properties: tuple[ItemProperty, ...], *, weapon: bool) 
         if key in seen:
             raise ValueError("Duplicate item property family/target")
         seen.add(key)
+
+
+@dataclass(frozen=True, slots=True)
+class SpellWearableDefinition:
+    item_id: str
+    name: str
+    action_id: str
+    visual_item_name: str
+    slot: BodyPart = BodyPart.BACKPACK
+    charges: int = 1
+    recharge_on_long_rest: bool = True
+
+
+POWERED_WEARABLE_DEFINITIONS = MappingProxyType({
+    "gear.ember_quiver": SpellWearableDefinition("gear.ember_quiver", "Ember Quiver",
+        "action.item.ember_quiver", "Quiver"),
+    "gear.wayfarer_pack": SpellWearableDefinition("gear.wayfarer_pack", "Wayfarer's Pack",
+        "spell.longstrider", "Quiver"),
+    "gear.warden_pack": SpellWearableDefinition("gear.warden_pack", "Warden's Pack",
+        "spell.resistance", "Back Canister"),
+})
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,7 +101,8 @@ class WeaponDefinition:
     equipped_visual_policy: EquippedVisualPolicy = EquippedVisualPolicy.VISIBLE
     item_properties: tuple[ItemProperty, ...] = ()
     intrinsic: bool = False
-    supports_arrow_payload: bool = False
+    weapon_kind: WeaponKind | None = None
+    material: Material | None = None
     damage_die: Literal[4, 6, 8, 10, 12, 20] = 4
     damage_dice_count: int = 1
     damage_type: DamageType = DamageType.BLUDGEONING
@@ -310,12 +334,12 @@ _AUTHORED_WEAPONS = (
         (), visual_item_name="Dagger", visual_variant_id="10000004",
         damage_die=4, damage_type=DamageType.PIERCING,
         properties=(WeaponProperty.FINESSE, WeaponProperty.LIGHT),
-        item_properties=(UnseenStrike(),)),
+        item_properties=(UnseenStrike(),), weapon_kind=WeaponKind.DAGGER, material=Material.METAL),
     WeaponDefinition(
         "weapon.club", "Club", "A simple wooden club.",
         ("melee", "simple", "weapon"), damage_die=4,
         properties=(WeaponProperty.LIGHT,),
-    ),
+     weapon_kind=WeaponKind.CLUB, material=Material.WOOD),
     WeaponDefinition(
         "weapon.spear", "Spear",
         "A versatile spear suitable for thrusting or throwing.",
@@ -326,12 +350,12 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.THROWN,
             WeaponProperty.VERSATILE,
         ),
-    ),
+     weapon_kind=WeaponKind.SPEAR, material=Material.METAL),
     WeaponDefinition(
         "weapon.mace", "Mace", "A heavy-headed simple melee weapon.",
         ("melee", "simple", "weapon"), damage_die=6,
         properties=(WeaponProperty.SIMPLE,),
-    ),
+     weapon_kind=WeaponKind.MACE, material=Material.METAL),
     WeaponDefinition(
         "weapon.dagger", "Dagger", "A simple blade for quick strikes.",
         ("melee", "simple", "weapon"), damage_die=4,
@@ -341,37 +365,37 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.LIGHT,
             WeaponProperty.THROWN,
         ),
-    ),
+     weapon_kind=WeaponKind.DAGGER, material=Material.METAL),
     WeaponDefinition(
         "weapon.handaxe", "Handaxe", "A small axe that can be thrown.",
         ("melee", "simple", "weapon"), damage_die=6,
         damage_type=DamageType.SLASHING,
         properties=(WeaponProperty.LIGHT, WeaponProperty.THROWN),
-    ),
+     weapon_kind=WeaponKind.HANDAXE, material=Material.METAL),
     WeaponDefinition(
         "weapon.javelin", "Javelin", "A light spear designed for throwing.",
         ("melee", "simple", "weapon"), damage_die=6,
         damage_type=DamageType.PIERCING,
         properties=(WeaponProperty.THROWN,),
-    ),
+     weapon_kind=WeaponKind.JAVELIN, material=Material.METAL),
     WeaponDefinition(
         "weapon.light_hammer", "Light Hammer",
         "A compact hammer balanced for melee or throwing.",
         ("light", "melee", "simple", "thrown", "weapon"),
         damage_die=4,
         properties=(WeaponProperty.LIGHT, WeaponProperty.THROWN),
-    ),
+     weapon_kind=WeaponKind.LIGHT_HAMMER, material=Material.METAL),
     WeaponDefinition(
         "weapon.quarterstaff", "Quarterstaff", "A wooden staff used as a weapon.",
         ("melee", "simple", "weapon"), damage_die=6,
         properties=(WeaponProperty.VERSATILE,),
-    ),
+     weapon_kind=WeaponKind.QUARTERSTAFF, material=Material.WOOD),
     WeaponDefinition(
         "weapon.sickle", "Sickle", "A light, curved harvesting blade.",
         ("light", "melee", "simple", "weapon"), damage_die=4,
         damage_type=DamageType.SLASHING,
         properties=(WeaponProperty.LIGHT,),
-    ),
+     weapon_kind=WeaponKind.SICKLE, material=Material.METAL),
     WeaponDefinition(
         "weapon.dart", "Dart", "A balanced throwing dart.",
         ("finesse", "ranged", "simple", "thrown", "weapon"),
@@ -383,21 +407,21 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.THROWN,
         ),
         range_kind="range", normal_range_feet=20, long_range_feet=60,
-    ),
+     weapon_kind=WeaponKind.DART, material=Material.METAL),
     WeaponDefinition(
         "weapon.sling", "Sling",
         "A simple leather sling for hurling stones or bullets.",
         ("ranged", "simple", "weapon"), damage_die=4,
         properties=(WeaponProperty.RANGED,),
         range_kind="range", normal_range_feet=30, long_range_feet=120,
-    ),
+     weapon_kind=WeaponKind.SLING, material=Material.FABRIC),
     WeaponDefinition(
         "weapon.battleaxe", "Battleaxe",
         "A large axe suitable for battle.",
         ("martial", "melee", "weapon"), damage_die=8,
         damage_type=DamageType.SLASHING,
         properties=(WeaponProperty.VERSATILE, WeaponProperty.MARTIAL),
-    ),
+     weapon_kind=WeaponKind.BATTLEAXE, material=Material.METAL),
     WeaponDefinition(
         "weapon.greataxe", "Greataxe",
         "A massive two-handed axe favored by barbarians.",
@@ -408,7 +432,7 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.TWO_HANDED,
             WeaponProperty.MARTIAL,
         ),
-    ),
+     weapon_kind=WeaponKind.GREATAXE, material=Material.METAL),
     WeaponDefinition(
         "weapon.greatsword", "Greatsword", "A massive two-handed sword.",
         ("heavy", "martial", "melee", "weapon"), damage_die=6,
@@ -418,7 +442,7 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.TWO_HANDED,
             WeaponProperty.MARTIAL,
         ),
-    ),
+     weapon_kind=WeaponKind.GREATSWORD, material=Material.METAL),
     WeaponDefinition(
         "weapon.double_bladed_sword",
         "Double-Bladed Sword",
@@ -428,26 +452,26 @@ _AUTHORED_WEAPONS = (
         damage_dice_count=2,
         damage_type=DamageType.SLASHING,
         properties=(WeaponProperty.TWO_HANDED, WeaponProperty.MARTIAL),
-    ),
+     weapon_kind=WeaponKind.DOUBLE_BLADED_SWORD, material=Material.METAL),
     WeaponDefinition(
         "weapon.longsword", "Longsword", "A versatile one-handed sword.",
         ("martial", "melee", "weapon"), damage_die=8,
         damage_type=DamageType.SLASHING,
         properties=(WeaponProperty.VERSATILE, WeaponProperty.MARTIAL),
-    ),
+     weapon_kind=WeaponKind.LONGSWORD, material=Material.METAL),
     WeaponDefinition(
         "weapon.morningstar", "Morningstar",
         "A spiked metal head mounted on a sturdy haft.",
         ("martial", "melee", "weapon"), damage_die=8,
         damage_type=DamageType.PIERCING,
         properties=(WeaponProperty.MARTIAL,),
-    ),
+     weapon_kind=WeaponKind.MORNINGSTAR, material=Material.METAL),
     WeaponDefinition(
         "weapon.rapier", "Rapier", "A slender thrusting sword.",
         ("finesse", "martial", "melee", "weapon"), damage_die=8,
         damage_type=DamageType.PIERCING,
         properties=(WeaponProperty.FINESSE, WeaponProperty.MARTIAL),
-    ),
+     weapon_kind=WeaponKind.RAPIER, material=Material.METAL),
     WeaponDefinition(
         "weapon.longbow", "Longbow", "A tall bow capable of long-range shots.",
         ("heavy", "martial", "ranged", "weapon"), damage_die=8,
@@ -458,10 +482,10 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.HEAVY,
             WeaponProperty.MARTIAL,
         ),
-        supports_arrow_payload=True, range_kind="range",
+        range_kind="range",
         normal_range_feet=150,
         long_range_feet=600,
-    ),
+     weapon_kind=WeaponKind.LONGBOW, material=Material.WOOD),
     WeaponDefinition(
         "weapon.shortsword", "Shortsword",
         "A short blade suitable for quick strikes.",
@@ -472,7 +496,7 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.LIGHT,
             WeaponProperty.MARTIAL,
         ),
-    ),
+     weapon_kind=WeaponKind.SHORTSWORD, material=Material.METAL),
     WeaponDefinition(
         "weapon.scimitar", "Scimitar",
         "A light curved sword made for quick slashing attacks.",
@@ -484,7 +508,7 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.LIGHT,
             WeaponProperty.MARTIAL,
         ),
-    ),
+     weapon_kind=WeaponKind.SCIMITAR, material=Material.METAL),
     WeaponDefinition(
         "weapon.trident", "Trident", "A three-pronged martial spear.",
         ("martial", "melee", "thrown", "weapon"), damage_die=6,
@@ -494,13 +518,13 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.VERSATILE,
             WeaponProperty.MARTIAL,
         ),
-    ),
+     weapon_kind=WeaponKind.TRIDENT, material=Material.METAL),
     WeaponDefinition(
         "weapon.warhammer", "Warhammer",
         "A heavy hammer designed for combat.",
         ("martial", "melee", "weapon"), damage_die=8,
         properties=(WeaponProperty.VERSATILE, WeaponProperty.MARTIAL),
-    ),
+     weapon_kind=WeaponKind.WARHAMMER, material=Material.METAL),
     WeaponDefinition(
         "weapon.shortbow", "Shortbow",
         "A compact bow effective at short and medium range.",
@@ -511,10 +535,10 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.RANGED,
             WeaponProperty.TWO_HANDED,
         ),
-        supports_arrow_payload=True, range_kind="range",
+        range_kind="range",
         normal_range_feet=80,
         long_range_feet=320,
-    ),
+     weapon_kind=WeaponKind.SHORTBOW, material=Material.WOOD),
     WeaponDefinition(
         "weapon.light_crossbow", "Light Crossbow",
         "A two-handed crossbow effective at long range.",
@@ -526,10 +550,10 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.SIMPLE,
             WeaponProperty.TWO_HANDED,
         ),
-        supports_arrow_payload=True, range_kind="range",
+        range_kind="range",
         normal_range_feet=80,
         long_range_feet=320,
-    ),
+     weapon_kind=WeaponKind.LIGHT_CROSSBOW, material=Material.METAL),
     WeaponDefinition(
         "weapon.heavy_crossbow", "Heavy Crossbow",
         "A powerful martial crossbow built for long-range attacks.",
@@ -542,10 +566,10 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.RANGED,
             WeaponProperty.TWO_HANDED,
         ),
-        supports_arrow_payload=True, range_kind="range",
+        range_kind="range",
         normal_range_feet=100,
         long_range_feet=400,
-    ),
+     weapon_kind=WeaponKind.HEAVY_CROSSBOW, material=Material.METAL),
     WeaponDefinition(
         "weapon.arcane_staff", "Arcane Staff",
         "A staff crackling with arcane energy that improves spell attacks while equipped.",
@@ -557,7 +581,7 @@ _AUTHORED_WEAPONS = (
         damage_die=6,
         damage_type=DamageType.BLUDGEONING,
         properties=(WeaponProperty.VERSATILE,),
-    ),
+     weapon_kind=WeaponKind.QUARTERSTAFF, material=Material.WOOD),
     WeaponDefinition(
         "weapon.circus.rusty_dagger", "Rusty Dagger",
         "A poorly maintained dagger whose rusty blade makes accurate strikes difficult.",
@@ -570,7 +594,7 @@ _AUTHORED_WEAPONS = (
             WeaponProperty.THROWN,
         ),
         attack_disadvantage=True,
-    ),
+     weapon_kind=WeaponKind.DAGGER, material=Material.METAL),
     WeaponDefinition(
         "weapon.circus.flaming_scimitar", "Flaming Scimitar",
         "An elegant curved blade whose magical flames intensify during acrobatic maneuvers.",
@@ -584,7 +608,7 @@ _AUTHORED_WEAPONS = (
         extra_damage_die=6,
         extra_damage_dice_count=1,
         extra_damage_type=DamageType.FIRE,
-    ),
+     weapon_kind=WeaponKind.SCIMITAR, material=Material.METAL),
     WeaponDefinition(
         "weapon.circus.longsword_plus_one", "Longsword +1",
         "A magical longsword granting +1 to attack and damage rolls.",
@@ -595,7 +619,7 @@ _AUTHORED_WEAPONS = (
         properties=(WeaponProperty.VERSATILE,),
         attack_bonus=1,
         damage_bonus=1,
-    ),
+     weapon_kind=WeaponKind.LONGSWORD, material=Material.METAL),
     WeaponDefinition(
         "weapon.circus.soul_draining_morningstar", "Soul-Draining Morningstar",
         "A wicked morningstar carrying an additional pulse of necrotic damage.",
@@ -606,7 +630,7 @@ _AUTHORED_WEAPONS = (
         extra_damage_die=4,
         extra_damage_dice_count=1,
         extra_damage_type=DamageType.NECROTIC,
-    ),
+     weapon_kind=WeaponKind.MORNINGSTAR, material=Material.METAL),
     WeaponDefinition(
         "weapon.creature.kobold_sling", "Sling",
         "A sling used by an SRD kobold.",
@@ -618,7 +642,7 @@ _AUTHORED_WEAPONS = (
         range_kind="range",
         normal_range_feet=30,
         long_range_feet=120,
-    ),
+     weapon_kind=WeaponKind.SLING, material=Material.FABRIC),
     WeaponDefinition(
         "weapon.creature.spy_hand_crossbow", "Hand Crossbow",
         "A compact crossbow carried by an SRD spy.",
@@ -627,10 +651,10 @@ _AUTHORED_WEAPONS = (
         damage_die=6,
         damage_type=DamageType.PIERCING,
         properties=(WeaponProperty.RANGED,),
-        supports_arrow_payload=True, range_kind="range",
+        range_kind="range",
         normal_range_feet=30,
         long_range_feet=120,
-    ),
+     weapon_kind=WeaponKind.HAND_CROSSBOW, material=Material.METAL),
     WeaponDefinition(
         "weapon.creature.bandit_captain_thrown_dagger", "Thrown Dagger",
         "A dagger profile used at range by an SRD bandit captain.",
@@ -642,7 +666,7 @@ _AUTHORED_WEAPONS = (
         range_kind="range",
         normal_range_feet=20,
         long_range_feet=60,
-    ),
+     weapon_kind=WeaponKind.DAGGER, material=Material.METAL),
     WeaponDefinition(
         "weapon.creature.thrown_javelin", "Thrown Javelin",
         "A javelin profile used at range by an SRD creature.",
@@ -654,7 +678,7 @@ _AUTHORED_WEAPONS = (
         range_kind="range",
         normal_range_feet=30,
         long_range_feet=120,
-    ),
+     weapon_kind=WeaponKind.JAVELIN, material=Material.METAL),
     WeaponDefinition(
         "weapon.creature.bugbear_morningstar", "Morningstar",
         "The piercing morningstar profile of an SRD bugbear.",
@@ -662,7 +686,7 @@ _AUTHORED_WEAPONS = (
         visual_item_name="Morningstar",
         damage_die=8,
         damage_type=DamageType.PIERCING,
-    ),
+     weapon_kind=WeaponKind.MORNINGSTAR, material=Material.METAL),
     WeaponDefinition(
         "weapon.creature.ogre_greatclub", "Greatclub",
         "The massive greatclub profile of an SRD ogre.",
@@ -670,7 +694,7 @@ _AUTHORED_WEAPONS = (
         visual_item_name="Club",
         damage_die=8,
         damage_dice_count=2,
-    ),
+     weapon_kind=WeaponKind.GREATCLUB, material=Material.WOOD),
     WeaponDefinition(
         "weapon.creature.ogre_thrown_javelin", "Thrown Javelin",
         "The oversized ranged javelin profile of an SRD ogre.",
@@ -683,7 +707,7 @@ _AUTHORED_WEAPONS = (
         range_kind="range",
         normal_range_feet=30,
         long_range_feet=120,
-    ),
+     weapon_kind=WeaponKind.JAVELIN, material=Material.METAL),
     WeaponDefinition(
         "weapon.creature.wolf_bite", "Bite",
         "The intrinsic bite of an SRD wolf.",
@@ -716,7 +740,7 @@ _AUTHORED_WEAPONS = (
         visual_item_name="Morningstar",
         damage_die=8,
         damage_dice_count=2,
-    ),
+     weapon_kind=WeaponKind.MORNINGSTAR, material=Material.METAL),
     WeaponDefinition(
         "weapon.creature.ghoul_claws", "Claws",
         "The intrinsic claws of an SRD ghoul.",

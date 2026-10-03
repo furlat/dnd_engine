@@ -89,7 +89,7 @@ def test_two_players_move_spend_actions_and_receive_native_enemy_turns(session: 
     move = next(row for row in choices.position_actions if row.behavior_id == "action.move")
     destination = min(move.valid_targets, key=lambda target: target.path_cost or 0)
     assert destination.path_cost is not None
-    movement_before = actor.action_economy.movement.normalized_score
+    movement_before = actor.action_economy.movement_remaining()
     actions_before = actor.action_economy.actions.normalized_score
     other_player = next(identity for identity in session.player_uuids if identity != first_player)
     cursor_before_rejection = EventQueue.event_cursor()
@@ -100,7 +100,7 @@ def test_two_players_move_spend_actions_and_receive_native_enemy_turns(session: 
     movement = execute_player_action(session, first_player, move, destination)
     operations.append(movement)
     assert actor.position == destination.position
-    assert actor.action_economy.movement.normalized_score == movement_before - destination.path_cost
+    assert actor.action_economy.movement_remaining() == movement_before - destination.path_cost
     assert actor.action_economy.actions.normalized_score == actions_before
     assert any(isinstance(root, MovementEvent) and root.source_entity_uuid == first_player for root in movement.roots)
 

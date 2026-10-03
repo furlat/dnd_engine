@@ -4,9 +4,10 @@ No registration, asset access, native event reconstruction, or frame work lives
 here. Declared bindings and observed results are deliberately separate records.
 """
 
-from dataclasses import fields
-from typing import Any, Iterable, cast, get_args
+from typing import Any, Iterable
 from uuid import UUID
+
+from pydantic import TypeAdapter
 
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import EventType
@@ -39,8 +40,7 @@ def presentation_inventory(data: AnimationData, *, spell_ids: Iterable[str] = ()
     lineage works. Those are observations of the ordinary binder/media loader.
     """
     rows = []
-    for model in get_args(get_args(PlayerFact)[0]):
-        identity = cast(str, next(field.default for field in fields(model) if field.name == "kind"))
+    for identity in TypeAdapter(PlayerFact).json_schema()["discriminator"]["mapping"]:
         if identity in STATE_PRESENTATION_KINDS:
             rows.append(_row("fact", identity, "player_reduction", "state", "state_only"))
         else:
@@ -104,12 +104,15 @@ def presentation_inventory(data: AnimationData, *, spell_ids: Iterable[str] = ()
                              ("portal", data.portals), ("condition_media", data.condition_media),
                              ("spatial_media", data.spatial_media), ("deposit_media", data.deposit_media)):
         for identity in sorted(bindings):
-            wall = family == "spatial_media" and any(
-                layer.composition == "wall_modules" for layer in data.spatial_media[identity].layers)
+            details: tuple[str, ...] = ()
+            if family == "spatial_media":
+                binding = data.spatial_media[identity]
+                details = tuple(f"{layer.side}: {layer.composition}; banks "
+                    + ", ".join(axis.axis for axis in layer.wallAxes)
+                    + (f"; ring radius {layer.wallRing.radiusFeet:g} feet" if layer.wallRing else "; no ring bank")
+                    for layer in binding.layers if layer.composition == "wall_modules")
             rows.append(_row(family, identity, family, "authored media binding",
-                "partial" if wall else "binding_selected", binding=identity,
-                details=("Cardinal front/back modules only; ring/diagonal banks, XYZ occlusion and physical height registration are pending.",)
-                    if wall else ()))
+                "binding_selected", binding=identity, details=details))
     for identity, binding in data.spatial_media.items():
         for trigger, track in binding.contactMedia.items():
             limitations = stationary_media_limitations(track)

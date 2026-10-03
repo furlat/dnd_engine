@@ -107,7 +107,7 @@ class GasCloud(AreaCondition):
             if amount > 0:
                 entity.receive_damage(amount, self.damage.damage_type, self.uuid,
                     damage_rolls=[roll], damages=[damage], parent_event=parent_event.uuid,
-                    effect_id=self.content_ref.identity_key)
+                    effect_id=self.content_ref.identity_key, independent_resolution=True)
         if not saved and self.poisoned_duration_rounds is not None:
             entity.add_condition(Poisoned(source_entity_uuid=self.uuid, target_entity_uuid=entity.uuid,
                 duration=Duration(duration=self.poisoned_duration_rounds, duration_type=DurationType.ROUNDS,

@@ -44,7 +44,7 @@ class WallDamageSpec(BaseModel):
 
 def apply_wall_damage(zone: AreaCondition, entity: Entity, spec: WallDamageSpec,
                       dc: int, parent_event: Event, base_height_steps: int,
-                      contact_position: tuple[int, int] | None = None) -> None:
+                      contact_position: tuple[int, int] | None = None, *, formation: bool = False) -> None:
     caster = Entity.get(zone.source_entity_uuid)
     if caster is None:
         return
@@ -58,6 +58,7 @@ def apply_wall_damage(zone: AreaCondition, entity: Entity, spec: WallDamageSpec,
     roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
     entity.receive_damage(roll.total // 2 if success else roll.total, spec.damage_type, caster.uuid,
         damage_rolls=[roll], damages=[damage], parent_event=parent_event.uuid, effect_id=spec.effect_id,
+        independent_resolution=not formation, effect_origin=zone.effect_origin,
         spatial_source=SpatialDamageSource(spatial_effect_uuid=zone.uuid, position=contact_position or entity.position,
             target_position=entity.position, base_height_steps=base_height_steps, exposure="contact"))
 
@@ -89,7 +90,7 @@ class WallFieldZone(AreaCondition):
     def _apply_appearance_effect(self, entity: Entity, *, parent_event: Event) -> None:
         if self.formation_damage is not None:
             apply_wall_damage(self, entity, self.formation_damage, self.spell_dc,
-                parent_event, self.geometry.base_height_steps)
+                parent_event, self.geometry.base_height_steps, formation=True)
 
     def admits_occupancy_transition(self, event: SpatialChangeEvent) -> bool:
         if not super().admits_occupancy_transition(event):

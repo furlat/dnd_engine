@@ -23,8 +23,8 @@ from game.animation_types import (
     DeathContext, DeathSaveContext, EquipmentTransitionContext, FloatingFeedbackStyle, ForcedMovementContext,
     ForcedMovementProfile, FrozenMap, HealingContext, Identifier, LifecycleFeedback, LifeStateContext,
     MovementMediaTrack, MovementReactionContext, ProjectileStorage, RigLayer, RigTables, ShoveRecipe, StudioDraftFile, StudioSpellDraft,
-    VoluntaryMovementContext, MovementPresentation, Point, PoseSockets, SpatialMediaBinding, DepositMediaBinding, FacingMap,
-    InterruptionPresentation, ConstructionMediaBinding,
+    VoluntaryMovementContext, MovementPresentation, Point, PoseSockets, FacingMap,
+    InterruptionPresentation,
 )
 from game.condition_types import load_condition_recipes
 from game.condition_media import load_condition_media
@@ -32,6 +32,7 @@ from game.authoring_conversion import explicit_attachments, explicit_composition
 from game.player_facts import PlayerActor, VisualItem
 from game.item_appearance import hand_appearance
 from game.world_animation import prop_animation
+from game.world_binding_types import WorldBindingsSource
 from game.portal_art import load_portal_art
 
 
@@ -258,14 +259,16 @@ def _additional_rigs(paths: tuple[Path, ...], data_root: Path,
 
 def load_animation_data(data_root: Path = DATA_ROOT, *,
                         rig_files: tuple[Path, ...] = (),
-                        authored_bundles: tuple[Path, ...] | None = None) -> AnimationData:
+                        authored_bundles: tuple[Path, ...] | None = None,
+                        world_source: WorldBindingsSource | None = None) -> AnimationData:
     """Decode shipped typed records; importers own authored source conversion.
 
     Unselected media may have metadata without copied sprites. Only explicit
     local resource bindings select files for the media loader. Archive provenance
     URLs and paths are never fetched or treated as runtime dependencies. By default the
-    explicit sibling authored bundles are selected when present; () retains the
-    original NeuroClient baseline for source comparisons.
+    explicit sibling authored bundles are selected when present. An explicit
+    bundle selection must include all media required by the supplied world;
+    () excludes bundles but does not select a historical or empty world.
     """
     data_root = data_root.resolve()
     drafts_file = StudioDraftFile.model_validate_json(
@@ -453,18 +456,18 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
                                           bindings.root_rest_pose_anchors, pose_sockets)}
     creature_rigs = {identity: bindings.root_rig for identity in bindings.root_creature_content_refs}
     _additional_rigs(rig_files, data_root, rigs, resources, creature_rigs)
-    world_bindings = json.loads(_read(DATA_ROOT.parent / "world_bindings.json"))
+    world = world_source if world_source is not None else WorldBindingsSource.model_validate_json(
+        _read(DATA_ROOT.parent / "world_bindings.json"))
     spatial_media = {identity: explicit_spatial_composition(
-        SpatialMediaBinding.model_validate_json(json.dumps(row)), projectile_storage)
-        for identity, row in world_bindings.get("spatial_media", {}).items()}
+        row, projectile_storage)
+        for identity, row in world.spatial_media.items()}
     for binding in spatial_media.values():
         validate_wall_modules(binding, projectile_assets, projectile_storage)
         validate_contact_sweeps(binding, projectile_assets, projectile_storage)
     concentration_media = {identity: explicit_spatial_composition(
-        SpatialMediaBinding.model_validate_json(json.dumps(row)), projectile_storage)
-        for identity, row in world_bindings.get("concentration_media", {}).items()}
-    construction_media = {identity: ConstructionMediaBinding.model_validate_json(json.dumps(row))
-        for identity, row in world_bindings.get("construction_media", {}).items()}
+        row, projectile_storage)
+        for identity, row in world.concentration_media.items()}
+    construction_media = world.construction_media
     for binding in construction_media.values():
         for direction in binding.directions:
             for variant in direction.variants:
@@ -481,10 +484,10 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
                                 or any(layer.partsByFacing is None or not {'E', 'S', 'W', 'N'} <= set(layer.partsByFacing)
                                        for layer in storage.layers)):
                             raise ValueError('Construction phases require four-view finite banks and a single intact still')
-    world_animations = {identity: prop_animation(row["transition"])
-        for identity, row in world_bindings["props"].items() if "transition" in row}
+    world_animations = {identity: prop_animation(row.transition)
+        for identity, row in world.props.items() if row.transition is not None}
     world_animations.update({identity: prop_animation(row)
-        for identity, row in world_bindings["spatial_effects"].items()})
+        for identity, row in world.spatial_effects.items()})
     movement_media = MovementPresentation.model_validate_json(_read(DATA_ROOT.parent / "movement-media.json"))
     movement_context = movement_context.model_copy(update={
         "walkMedia": movement_media.walkMedia, "jumpMedia": movement_media.jumpMedia})
@@ -535,8 +538,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         spatial_media=MappingProxyType(spatial_media),
         concentration_media=MappingProxyType(concentration_media),
         construction_media=MappingProxyType(construction_media),
-        deposit_media=MappingProxyType(TypeAdapter(dict[str, DepositMediaBinding]).validate_json(
-            json.dumps(world_bindings.get("deposit_media", {})))),
+        deposit_media=MappingProxyType(world.deposit_media),
         action_media_assets=MappingProxyType({asset.assetId: asset for asset in (
             *ActionMediaAssetFile.model_validate_json(_read(data_root / "body-release-assets.json")).assets,
             *ParticleMediaAssetFile.model_validate_json(_read(data_root / "body-release-particles.json")).assets,

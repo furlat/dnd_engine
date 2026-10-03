@@ -60,13 +60,13 @@ from dnd.core.content.runtime import (
     bind_runtime_behavior_child,
 )
 from dnd.core.equipment_types import WeaponSlot
-from dnd.core.events import Event, EventPhase, EventType, EventQueue, EventHandler, Trigger, DamageRollResultEvent
+from dnd.core.events import Damage, Event, EventPhase, EventType, EventQueue, EventHandler, Trigger, DamageRollResultEvent
+from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.core.dice import AttackOutcome
 from dnd.core.creature_types import DamageType
 from dnd.core.item_types import ItemEffectPresentationState
 from dnd.core.values import ModifiableValue
 from dnd.entity import Entity
-from dnd.damage_payloads import append_saved_poison
 from dnd.spells.divination import TrueSeeingEffect
 from dnd.spells.transmutation import HasteEffect
 
@@ -119,6 +119,26 @@ TIMED_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY = (
     "content.neurodragon:condition:"
     "condition.consumable.weapon_coat.timed_fire@1"
 )
+
+
+
+def append_saved_poison(event: DamageRollResultEvent, *, dc: int,
+        die: Literal[4,6,8,10,12,20], name: str, bonus: ModifiableValue,
+        cause_id: str) -> DamageRollResultEvent:
+    attacker = Entity.get(event.source_entity_uuid) if event.source_entity_uuid else None
+    target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+    if attacker is None or target is None or event.canceled:
+        return event
+    request = attacker.create_saving_throw_request(target.uuid,"constitution",dc,parent_event=event.uuid,
+        saving_throw_context=SavingThrowContext(cause_id=cause_id,effect_id="item.basic_poison.hit",
+            is_magical=False,effect_tags=(SavingThrowEffectTag.POISON,)))
+    _,_,saved = target.saving_throw(request)
+    if saved:
+        return event
+    damage = Damage(name=name,source_entity_uuid=attacker.uuid,target_entity_uuid=target.uuid,
+        damage_dice=die,dice_numbers=1,damage_type=DamageType.POISON,damage_bonus=bonus)
+    return event.append_damage_roll(damage,damage.get_dice(AttackOutcome.HIT).roll,
+        name,"Failed poison Constitution save")
 
 
 def _provenance(display_name: str) -> ContentProvenance:
@@ -582,7 +602,7 @@ class _ConcentrationFireWeaponCoatCondition(_WeaponCoatCondition):
     ),
     sort_order=40,
 )
-class _TimedFireWeaponCoatCondition(_WeaponCoatCondition):
+class TimedFireWeaponCoatCondition(_WeaponCoatCondition):
     """Round-limited fire coating."""
 
     name: str = Field(default="Flaming Coat")
@@ -619,7 +639,7 @@ _WEAPON_COAT_CONDITION_TYPES_BY_SEMANTIC_KEY = MappingProxyType({
     CONCENTRATION_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY:
         _ConcentrationFireWeaponCoatCondition,
     TIMED_FIRE_WEAPON_COAT_CONDITION_SEMANTIC_KEY:
-        _TimedFireWeaponCoatCondition,
+        TimedFireWeaponCoatCondition,
 })
 if any(
     get_content_declaration(condition_type).ref.identity_key != semantic_key

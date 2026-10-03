@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from game.animation import ActorContact, CastApplication, CastInput, CastTimeline, compile_cast, sample_cast
+from tests.game.authoring_fixtures import recorded_recipe_data
 from game.animation_data import load_animation_data
 
 
@@ -24,7 +25,7 @@ def timeline() -> CastTimeline:
         row["uuid"]: ActorContact(row["uuid"], tuple(row["grid"]), "W", parameters["visualScale"], row["initialHp"])
         for row in parameters["targets"]
     }
-    return compile_cast(load_animation_data(authored_bundles=()), parameters["draftContentId"], CastInput(
+    return compile_cast(recorded_recipe_data(), parameters["draftContentId"], CastInput(
         CASE["id"], ActorContact("caster", tuple(parameters["sourceGrid"]), "E", parameters["visualScale"]),
         tuple(CastApplication(
             row["applicationId"], targets[row["targetUuid"]], True, row["damage"], row["resultingHp"],

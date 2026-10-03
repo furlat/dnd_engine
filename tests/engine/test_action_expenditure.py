@@ -26,7 +26,7 @@ def test_haste_named_action_expenditure_is_recorded_after_ordinary_action_is_spe
         assert actor.action_economy.resources["haste_action"].current == 1
         action = next(row for row in get_available_actions(actor, legal_only=True).all_actions
                       if row.template_name == "Dash__grant_haste")
-        movement = actor.action_economy.movement.normalized_score
+        movement = actor.action_economy.movement_remaining()
         result = execute_available_action(actor, action, action.valid_targets[0])
         assert isinstance(result, ActionEvent) and result.phase is EventPhase.COMPLETION
         assert result.action_economy_spent
@@ -34,6 +34,6 @@ def test_haste_named_action_expenditure_is_recorded_after_ordinary_action_is_spe
         assert any(cost.resource_name == "haste_action" and cost.resource_cost == 1 for cost in result.costs)
         assert actor.action_economy.actions.normalized_score == 0
         assert actor.action_economy.resources["haste_action"].current == 0
-        assert actor.action_economy.movement.normalized_score > movement
+        assert actor.action_economy.movement_remaining() > movement
     finally:
         reset_engine_runtime()

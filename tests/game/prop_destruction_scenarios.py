@@ -96,9 +96,9 @@ def prop_destruction_history(*, item_id: str, opened: bool = False,
             assert attacker.action_economy.actions.normalized_score == budget - int(accepted)
 
         if access != "none" and item.blocks_walking(attacker.uuid):
-            budget = attacker.action_economy.movement.normalized_score
+            budget = attacker.action_economy.movement_remaining()
             walk(attacker, (left, 4), accepted=False)
-            assert attacker.action_economy.movement.normalized_score == budget
+            assert attacker.action_economy.movement_remaining() == budget
             shoot(accepted=not item.blocks_propagation())
             # Actual legal detour, then a successful shot from the far corner.
             detour = ([(origin[0], y) for y in range(3, bottom - 2, -1)]

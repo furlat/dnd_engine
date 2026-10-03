@@ -1,3 +1,4 @@
+from dnd.types.materials import Material
 from dnd.core.attack_types import AttackSourceMetadata, NaturalWeaponSpec, WeaponAttackOverride
 """Equipment, armor, weapon, and shield models for entity combat gear."""
 
@@ -17,6 +18,7 @@ from dnd.core.equipment_types import (
     EquipmentSlot,
     RingSlot,
     UnarmoredAc,
+    WeaponKind,
     WeaponProperty,
     WeaponSet,
     WeaponSlot,
@@ -303,7 +305,8 @@ class Shield(EquippableItem):
 
 
 class Weapon(EquippableItem):
-    supports_arrow_payload: bool = False
+    weapon_kind: WeaponKind | None = None
+    material: Material | None = None
     attack_overrides: dict[UUID, WeaponAttackOverride] = Field(default_factory=dict)
 
     def attack_override(self, wielder_uuid: UUID) -> WeaponAttackOverride | None:

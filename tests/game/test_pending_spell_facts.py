@@ -246,14 +246,14 @@ def test_native_dash_adds_allowance_without_multiplying_recorded_speed(arena, sp
     next_turn(turns, caster)
     cast(caster, "action.dash")
     assert caster.action_economy.current_speed() == speed
-    assert caster.action_economy.movement.normalized_score == 2 * speed
+    assert caster.action_economy.movement_remaining() == 2 * speed
     cursor = EventQueue.event_cursor()
     result = cast(caster, "action.move", position=(4, 3))
     assert result is not None and caster.position == (4, 3)
     steps = [event for _, event in EventQueue.iter_events_since(cursor)
              if isinstance(event, StepMovementEvent) and event.phase is EventPhase.COMPLETION]
     assert len(steps) == 1 and steps[0].resolved_speed_feet == speed
-    assert caster.action_economy.movement.normalized_score == 2 * speed - 5
+    assert caster.action_economy.movement_remaining() == 2 * speed - 5
 
 
 def test_committed_speed_is_sampled_before_arrival_suppresses_haste(arena):

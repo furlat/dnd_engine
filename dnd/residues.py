@@ -160,7 +160,7 @@ class TileResidueCondition(BaseCondition):
         entity.receive_damage(
             roll.total, payload.damage_type, self.source_entity_uuid,
             damage_rolls=[roll], damages=[damage], parent_event=entry.uuid,
-            effect_id=self.profile.residue_id,
+            effect_id=self.profile.residue_id, independent_resolution=True,
         )
 
     def _frighten_entrant(self, entity: Entity, payload: ResidueFear, entry: SpatialChangeEvent) -> None:

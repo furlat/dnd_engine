@@ -70,8 +70,9 @@ class FieldFocus(BaseCondition):
             name="Field Focus Movement",
             value=self.movement_bonus,
         )
-        movement_uuid = target.action_economy.movement.self_static.add_value_modifier(movement_modifier)
-        owned_modifiers.append((target.action_economy.movement.uuid, movement_uuid))
+        for speed in target.action_economy.speed_values:
+            movement_uuid = speed.self_static.add_value_modifier(movement_modifier)
+            owned_modifiers.append((speed.uuid, movement_uuid))
 
         armor_modifier = NumericalModifier.create(
             source_entity_uuid=self.source_entity_uuid,

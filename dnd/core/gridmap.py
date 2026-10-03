@@ -301,6 +301,9 @@ class GridMap:
         if not self._events_enabled:
             self._pending_committed_events.append(event)
             return None
+        # Membership is already committed before any callback can move it again.
+        # Name this existing publication version, not a later closing phase.
+        event = event.model_copy(update={"commit_event_uuid": event.uuid})
         current_event = cast(
             SpatialChangeEvent,
             EventQueue.publish_preflighted(event),

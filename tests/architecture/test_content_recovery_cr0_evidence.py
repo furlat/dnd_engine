@@ -54,10 +54,10 @@ REQUIRED_TOP_LEVEL_FIELDS = {
 }
 EXPECTED_SECTION_COUNTS = {
     "source_artifacts": 14,
-    "legacy_authorities": 1_551,
-    "implemented_content": 1_014,
+    "legacy_authorities": 1_553,
+    "implemented_content": 1_016,
     "python_binding_overlay": 788,
-    "srd_proof_overlay": 182,
+    "srd_proof_overlay": 183,
     "production_importers": 234,
     "excluded_or_rescued_test_modules": 81,
     "maintained_in_process_nodes": 105,
@@ -963,7 +963,7 @@ def test_srd_source_inventory_and_proof_overlay_are_exact() -> None:
     rows = source["rows"]
     assert len(rows) == 925
     assert Counter(row["implementation_status"] for row in rows) == Counter(
-        {"playable": 177, "partial": 5, "missing": 743}
+        {"playable": 178, "partial": 5, "missing": 742}
     )
     source_ids = [row["source_entry_id"] for row in rows]
     assert len(source_ids) == len(set(source_ids))
@@ -1390,7 +1390,7 @@ def test_every_structural_definition_has_one_exact_authored_owner() -> None:
         for identity, declaration in declarations.items()
         if declaration.mode.value == "typed_definition"
     }
-    assert len(structural_identities) == 10
+    assert len(structural_identities) == 11
     manifest_rows = _definition_manifest_rows()
     assert set(manifest_rows) >= structural_identities
     for identity in sorted(structural_identities):

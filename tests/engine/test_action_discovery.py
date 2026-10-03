@@ -171,7 +171,7 @@ def test_eb_09_002_standard_actions_discover_self_position_and_entity_groups() -
     position_names = {info.template_name for info in available.position_actions}
 
     assert available.entity_uuid == goblin.uuid
-    assert available.remaining_movement == goblin.action_economy.movement.normalized_score
+    assert available.remaining_movement == goblin.action_economy.movement_remaining()
     assert {"Dash", "Dodge", "Disengage"}.issubset(self_names)
     assert "Hide" in self_names
     assert "Move" in position_names
@@ -618,7 +618,7 @@ def test_eb_09_011_move_discovery_marks_hazardous_and_safe_paths() -> None:
         for step in hazard_target.safe_path[1:]
     )
 
-    movement_before = scout.action_economy.movement.normalized_score
+    movement_before = scout.action_economy.movement_remaining()
     result = execute_by_index(
         scout,
         "Move",
@@ -632,7 +632,7 @@ def test_eb_09_011_move_discovery_marks_hazardous_and_safe_paths() -> None:
     movement_result = cast(MovementEvent, result)
     assert movement_result.path == hazard_target.safe_path
     assert scout.position == hazard_target.position
-    assert scout.action_economy.movement.normalized_score == (
+    assert scout.action_economy.movement_remaining() == (
         movement_before - hazard_target.safe_path_cost
     )
 

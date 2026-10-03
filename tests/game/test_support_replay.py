@@ -1,5 +1,7 @@
 """Saved support actions own healing contact, condition lifetime and illumination."""
 
+from itertools import groupby
+
 import pytest
 
 from devtools.animation_review.cases import SupportCase, TrueStrikeCase, load_cases
@@ -102,18 +104,21 @@ def test_support_replay_preserves_contact_lifetime_and_native_results(captured, 
                 assert not group.conditions and not group.healing and not group.damage
             else:
                 # Exact condition memberships become visible at the parent's contact.
-                for condition in group.conditions:
-                    if condition.target_uuid != recipient:
-                        continue
-                    sample = sample_choreography(group, condition.start_ms)
+                recipient_cues = sorted((cue for cue in group.conditions if cue.target_uuid == recipient),
+                                        key=lambda cue: cue.start_ms)
+                for start_ms, simultaneous in groupby(recipient_cues, key=lambda cue: cue.start_ms):
+                    changes = tuple(simultaneous)
+                    # A timestamp commits all its native changes in source order;
+                    # intermediate memberships are not earlier visual states.
+                    sample = sample_choreography(group, start_ms)
                     assert {member.condition_uuid for member in sample.displayed.actors[recipient].conditions} == {
-                        member.condition_uuid for member in condition.after_membership}
-                    if condition.start_ms > 0:
-                        early = sample_choreography(group, condition.start_ms - .01)
+                        member.condition_uuid for member in changes[-1].after_membership}
+                    if start_ms > 0:
+                        early = sample_choreography(group, start_ms - .01)
                         assert {member.condition_uuid for member in early.displayed.actors[recipient].conditions} == {
-                            member.condition_uuid for member in condition.before_membership}
+                            member.condition_uuid for member in changes[0].before_membership}
                         sample_choreography(group, group.complete_ms)
-                        assert sample_choreography(group, condition.start_ms - .01).displayed == early.displayed
+                        assert sample_choreography(group, start_ms - .01).displayed == early.displayed
                     if program == "light":
                         assert sample.displayed.senses is not None and early.displayed.senses is not None
                         assert early.displayed.senses.effective_light_levels[(4, 6)] is LightLevel.DIM_LIGHT

@@ -3,27 +3,26 @@ from uuid import uuid4
 
 import pytest
 
-from dnd.actions import Attack
 from dnd.actions_functional import setup_standard_actions, get_available_actions, execute_by_index
 from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.health import HealthConfig
-from dnd.classes.fighter import ExtraAttack, ExtraAttackFeature, ActionSurgeFeature
+from dnd.classes.fighter import ExtraAttackFeature, ActionSurgeFeature
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.condition_types import ConditionTag
-from dnd.core.creature_types import DamageType
+from dnd.core.base_conditions import ConditionApplicationEvent
 from dnd.core.action_types import HasteActionPolicy
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import BodyPart, WeaponSlot
-from dnd.core.events import EventHandler, EventPhase, EventQueue, EventType, Trigger
-from dnd.core.modifiers import NumericalModifier, AdvantageStatus
+from dnd.core.events import EventPhase, EventQueue, EventType, EventHandler, Trigger
+from dnd.core.modifiers import NumericalModifier
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.actions_functional import execute_use_action
-from dnd.monsters.roster_abilities import InnateFlight, InnateInvisibility, MagicResistance, WightLifeDrain, wight_melee_multiattack
+from dnd.monsters.traits import InnateFlight, InnateInvisibility, MagicResistance, WightLifeDrain, wight_melee_multiattack
 from dnd.monsters.traits import MultiattackAction
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spells.roster_support import Longstrider
+from dnd.spells.transmutation import Longstrider
 from dnd.spells.transmutation import HasteEffect, SlowedEffect
 from dnd.types.world import MovementMode
 
@@ -54,77 +53,27 @@ def equip(owner, item_id, slot):
     return item
 
 
-def arrows(owner, suffix='ember', count=3):
-    item=build_authored_item('consumable.arrow.'+suffix,owner.uuid,quantity=count)
-    assert owner.loot_item(item)
-    return item
+@pytest.mark.parametrize('suffix', ['ember', 'frost', 'storm', 'venom'])
+def test_retired_arrows_are_explicitly_rejected_without_altering_inventory(game, suffix):
+    owner = actor(game)
+    before = owner.inventory.model_dump()
+    with pytest.raises(ValueError, match="Retired ammunition content"):
+        build_authored_item('consumable.arrow.' + suffix, owner.uuid)
+    assert owner.inventory.model_dump() == before
 
 
-def shoot(owner,target,item):
-    Entity.update_all_entities_senses()
-    return Attack(source_entity_uuid=owner.uuid,target_entity_uuid=target.uuid,
-        weapon_slot=WeaponSlot.RANGED_MAIN,selected_ammunition_uuid=item.uuid).apply()
-
-
-@pytest.mark.parametrize('suffix,damage_type',[('ember',DamageType.FIRE),('frost',DamageType.COLD),('storm',DamageType.LIGHTNING),('venom',DamageType.POISON)])
-def test_selected_arrow_uses_normal_attack_and_one_stack_copy(game,suffix,damage_type):
-    owner=actor(game); target=actor(game,'Target',(7,3))
-    equip(owner,'weapon.longbow',WeaponSlot.RANGED_MAIN)
-    item=arrows(owner,suffix)
-    before=target.get_hp()
-    action=Attack(source_entity_uuid=owner.uuid,target_entity_uuid=target.uuid,
-        weapon_slot=WeaponSlot.RANGED_MAIN,selected_ammunition_uuid=item.uuid)
-    packet=action.get_outcome_profile(owner).damage_rolls[-1]
-    assert packet.damage_type == damage_type.value
-    assert packet.save_dc == (10 if suffix=='venom' else None)
-    with fixed_dice_faces(15,2,3,1):
-        result=action.apply()
-    assert result and not result.canceled and target.get_hp()<before
-    assert item.stack_count==2 and owner.action_economy.actions.normalized_score==0
-    assert 'Poisoned' not in target.active_conditions
-
-
-@pytest.mark.parametrize('cancel_at',[EventType.ITEM_CHARGE_CONSUMPTION,EventType.ATTACK])
-def test_arrow_canceled_before_release_keeps_the_stack(game,cancel_at):
-    owner=actor(game); target=actor(game,'Target',(7,3))
-    equip(owner,'weapon.longbow',WeaponSlot.RANGED_MAIN); item=arrows(owner)
-    owner.add_event_handler(EventHandler(name='Cancel before release',source_entity_uuid=owner.uuid,
-        trigger_conditions=[Trigger(event_type=cancel_at,event_phase=EventPhase.EFFECT if cancel_at is EventType.ITEM_CHARGE_CONSUMPTION else EventPhase.EXECUTION)],
-        event_processor=lambda event,source:event.cancel(status_message='Release denied')))
-    result=shoot(owner,target,item)
-    assert result and result.canceled and item.stack_count==3
-    assert owner.action_economy.actions.normalized_score==(1 if cancel_at is EventType.ITEM_CHARGE_CONSUMPTION else 0)
-
-
-def test_arrow_miss_consumes_one_and_musket_cannot_fire_it(game):
-    owner=actor(game); target=actor(game,'Target',(7,3))
-    equip(owner,'weapon.longbow',WeaponSlot.RANGED_MAIN); item=arrows(owner)
-    hp=target.get_hp()
-    with fixed_dice_faces(1): result=shoot(owner,target,item)
-    assert result and not result.canceled and target.get_hp()==hp and item.stack_count==2
-    owner.action_economy.reset_all_costs()
-    equip(owner,'weapon.musket',WeaponSlot.RANGED_MAIN)
-    result=shoot(owner,target,item)
-    assert result is None or result.canceled
-    assert item.stack_count==2 and owner.action_economy.actions.normalized_score==1
-
-
-def test_extra_attack_and_ranged_multiattack_discover_and_spend_selected_arrows(game):
-    owner=actor(game); target=actor(game,'Target',(7,3))
-    equip(owner,'weapon.longbow',WeaponSlot.RANGED_MAIN); item=arrows(owner,count=6)
-    owner.add_condition(ExtraAttackFeature(source_entity_uuid=owner.uuid,target_entity_uuid=owner.uuid))
-    with fixed_dice_faces(15,2,3): result=shoot(owner,target,item)
+def test_ranged_multiattack_needs_no_ammunition_and_spends_one_action(game):
+    owner = actor(game); target = actor(game, 'Target', (7, 3))
+    equip(owner, 'weapon.longbow', WeaponSlot.RANGED_MAIN)
+    action = MultiattackAction(source_entity_uuid=owner.uuid, target_entity_uuid=target.uuid,
+        attack_sequence=((WeaponSlot.RANGED_MAIN, 2),))
+    with fixed_dice_faces(15, 2, 15, 2):
+        result = action.apply()
     assert result and not result.canceled
-    template=next(action for action in owner.registered_actions if isinstance(action,ExtraAttack) and action.weapon_slot is WeaponSlot.RANGED_MAIN)
-    selected=next(action for action in template.get_discovery_variants(owner) if action.selected_ammunition_uuid==item.uuid)
-    with fixed_dice_faces(15,2,3): result=selected.instantiate(target_entity_uuid=target.uuid).apply()
-    assert result and not result.canceled and item.stack_count==4
-    owner.action_economy.reset_all_costs()
-    multi=MultiattackAction(source_entity_uuid=owner.uuid,target_entity_uuid=target.uuid,
-        attack_sequence=((WeaponSlot.RANGED_MAIN,2),),selected_ammunition_uuid=item.uuid)
-    with fixed_dice_faces(15,2,3,15,2,3): result=multi.apply()
-    assert result and not result.canceled and item.stack_count==2
-    assert owner.action_economy.actions.normalized_score==0
+    roots = [event for event in EventQueue.get_events_by_type(EventType.ATTACK)
+        if event.phase is EventPhase.DECLARATION]
+    assert len(roots) == 2
+    assert owner.action_economy.actions.normalized_score == 0
 
 
 def test_pack_activation_requires_current_equipment_and_rest_recharges_exact_item(game):
@@ -213,13 +162,13 @@ def test_wight_multiattack_replaces_one_longsword_and_has_no_bow_replacement(gam
     assert owner.action_economy.actions.normalized_score==0
     equip(owner,'weapon.longbow',WeaponSlot.RANGED_MAIN)
     ranged=MultiattackAction(source_entity_uuid=owner.uuid,attack_sequence=((WeaponSlot.RANGED_MAIN,2),),
-        attack_substitution=action.attack_substitution,substitution_slot=action.substitution_slot,substitution_item_id=action.substitution_item_id)
+        attack_replacement=action.attack_replacement)
     assert not any(variant.use_attack_substitution for variant in ranged.get_discovery_variants(owner))
 
 
 def test_odd_speed_haste_and_slow_do_not_depend_on_application_order(game):
     owner=actor(game)
-    owner.action_economy.movement.self_static.add_value_modifier(NumericalModifier(name='Odd speed',value=5,source_entity_uuid=owner.uuid))
+    owner.action_economy.walking_speed.self_static.add_value_modifier(NumericalModifier(name='Odd speed',value=5,source_entity_uuid=owner.uuid))
     for types in ((HasteEffect,SlowedEffect),(SlowedEffect,HasteEffect)):
         for condition in types:
             owner.add_condition(condition(source_entity_uuid=owner.uuid,target_entity_uuid=owner.uuid, **({"apply_lethargy":False} if condition is HasteEffect else {})))
@@ -227,30 +176,13 @@ def test_odd_speed_haste_and_slow_do_not_depend_on_application_order(game):
         owner.remove_condition('Haste'); owner.remove_condition('Slowed')
 
 
-def test_arrow_discovery_and_charge_events_expose_the_selected_possession(game):
-    owner=actor(game); target=actor(game,'Target',(7,3))
-    equip(owner,'weapon.longbow',WeaponSlot.RANGED_MAIN); item=arrows(owner)
-    available=get_available_actions(owner,legal_only=True)
-    row=next(row for row in available.entity_actions if row.selected_ammunition_uuid==item.uuid)
-    assert row.ammunition_payload and row.ammunition_payload.item_id==item.item_id
-    with fixed_dice_faces(15,2,3):
-        result=execute_by_index(owner,row.template_name,
-            next(option.index for option in row.valid_targets if option.target_uuid==target.uuid),available=available)
-    assert result and not result.canceled
-    charges=EventQueue.get_events_by_type(EventType.ITEM_CHARGE_CONSUMPTION)
-    assert charges
-    for event in charges:
-        parent=event.get_parent_event()
-        assert parent is not None and parent.event_type is EventType.ATTACK
-
-
 @pytest.mark.parametrize('slow',[False,True])
 @pytest.mark.parametrize('haste_policy',[None,HasteActionPolicy.SRD_5_1,HasteActionPolicy.BG3_HONOUR])
 @pytest.mark.parametrize('attacks_per_action',[1,2,3,4])
 @pytest.mark.parametrize('surge',[False,True])
-def test_special_arrow_haste_extra_attack_surge_slow_budget_grid(game,slow,haste_policy,attacks_per_action,surge):
+def test_ranged_attack_haste_extra_attack_surge_slow_budget_grid(game,slow,haste_policy,attacks_per_action,surge):
     owner=actor(game); target=actor(game,'Target',(7,3))
-    equip(owner,'weapon.longbow',WeaponSlot.RANGED_MAIN); item=arrows(owner,count=20)
+    equip(owner,'weapon.longbow',WeaponSlot.RANGED_MAIN)
     if attacks_per_action>1:
         owner.add_condition(ExtraAttackFeature(source_entity_uuid=owner.uuid,
             target_entity_uuid=owner.uuid,extra_attacks=attacks_per_action-1))
@@ -271,8 +203,7 @@ def test_special_arrow_haste_extra_attack_surge_slow_budget_grid(game,slow,haste
             row=next(row for row in available.self_actions if row.template_name=='Action Surge')
             option=row.valid_targets[0]
         else:
-            rows=[row for row in available.entity_actions if row.selected_ammunition_uuid==item.uuid
-                and row.weapon_slot==WeaponSlot.RANGED_MAIN.value]
+            rows=[row for row in available.entity_actions if row.weapon_slot==WeaponSlot.RANGED_MAIN.value]
             resource={'haste':'haste_action','extra':'extra_attacks'}.get(route)
             row=next(row for row in rows if
                 (any(cost.resource_name==resource for cost in row.costs) if resource else
@@ -297,11 +228,11 @@ def test_special_arrow_haste_extra_attack_surge_slow_budget_grid(game,slow,haste
     while credits:
         execute('extra'); shots+=1; credits-=1
     expected=(1 if slow else attacks_per_action)*(1+int(surge))+int(haste_policy is not None)
-    assert shots==expected and item.stack_count==20-expected
+    assert shots==expected
     assert owner.action_economy.actions.normalized_score==0
     assert owner.action_economy.bonus_actions.normalized_score==(0 if slow else 1)
     assert owner.action_economy.reactions.normalized_score==(0 if slow else 1)
-    assert not any(row.selected_ammunition_uuid==item.uuid
+    assert not any(row.weapon_slot==WeaponSlot.RANGED_MAIN.value
         for row in get_available_actions(owner,legal_only=True).entity_actions)
 
 
@@ -318,3 +249,45 @@ def test_powered_backpacks_construct_equip_and_activate_through_normal_item_use(
         assert owner.action_economy.current_speed()==40
     else:
         assert 'Resistance' in owner.active_conditions and 'Concentrating' in owner.active_conditions
+
+
+@pytest.mark.parametrize('item_id', ['gear.ember_quiver', 'gear.wayfarer_pack', 'gear.warden_pack'])
+@pytest.mark.parametrize('phase', [EventPhase.DECLARATION, EventPhase.EXECUTION, EventPhase.EFFECT])
+def test_rejected_backpack_effect_leaves_no_owned_state_after_paid_release(game, item_id, phase):
+    owner = actor(game)
+    bow = equip(owner, 'weapon.longbow', WeaponSlot.RANGED_MAIN)
+    pack = equip(owner, item_id, BodyPart.BACKPACK)
+    previous_owner = dict(owner.active_conditions)
+    previous_weapon = dict(bow.active_conditions)
+    owner.add_event_handler(EventHandler(source_entity_uuid=owner.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.CONDITION_APPLICATION, event_phase=phase)],
+        event_processor=lambda event, _: event.cancel('Rejected effect')))
+    result = execute_use_action(owner, pack.uuid, pack.get_use_actions(owner.uuid)[0].get_discovery_template_name())
+    assert result is not None and result.canceled
+    assert owner.active_conditions == previous_owner and bow.active_conditions == previous_weapon
+    assert owner.action_economy.current_speed() == 30
+    assert pack.charges == 0 and owner.action_economy.actions.normalized_score == 0
+
+
+@pytest.mark.parametrize('veto', ['Concentrating', 'Resistance', 'replacement-removal'])
+def test_warden_rejected_replacement_preserves_previous_owner_and_child(game, veto):
+    owner = actor(game)
+    pack = equip(owner, 'gear.warden_pack', BodyPart.BACKPACK)
+    use = pack.get_use_actions(owner.uuid)[0].get_discovery_template_name()
+    result = execute_use_action(owner, pack.uuid, use)
+    assert result is not None and not result.canceled
+    previous = dict(owner.active_conditions)
+    assert previous['Resistance'].duration.duration == 10
+    pack.on_long_rest(owner.uuid)
+    owner.action_economy.reset_all_costs()
+    def reject(event, _):
+        if veto == 'replacement-removal' or isinstance(event, ConditionApplicationEvent) and event.condition.name == veto:
+            return event.cancel('Keep accepted ownership')
+        return None
+    owner.add_event_handler(EventHandler(source_entity_uuid=owner.uuid,
+        trigger_conditions=[Trigger(event_type=EventType.CONDITION_REMOVAL if veto == 'replacement-removal'
+            else EventType.CONDITION_APPLICATION, event_phase=EventPhase.EFFECT)], event_processor=reject))
+    result = execute_use_action(owner, pack.uuid, use)
+    assert result is not None and result.canceled
+    assert owner.active_conditions == previous and all(row.applied for row in previous.values())
+    assert pack.charges == 0 and owner.action_economy.actions.normalized_score == 0

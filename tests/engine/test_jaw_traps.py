@@ -80,7 +80,7 @@ def test_failed_save_captures_success_leaves_sprung_empty(arena, saved):
     assert jaw.trap_state is TrapState.ACTIVATED
     assert target.get_hp() == (80 if saved else 76)
     assert ("Restrained" in target.active_conditions) is not saved
-    assert target.action_economy.movement.normalized_score == (30 if saved else 0)
+    assert target.action_economy.movement_remaining() == (30 if saved else 0)
     assert pulse(jaw).canceled and target.get_hp() == (80 if saved else 76)
     if not saved:
         source = jaw_source(target)
@@ -122,7 +122,7 @@ def test_escape_uses_one_action_actual_check_and_leaves_jaw_closed(arena, action
     assert escaped is not None and not escaped.canceled
     assert source.uuid not in target.active_conditions_by_uuid and "Restrained" not in target.active_conditions
     assert target.action_economy.actions.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 30
+    assert target.action_economy.movement_remaining() == 30
     assert jaw.trap_state is TrapState.ACTIVATED and not jaw.linked_conditions
     assert not any(isinstance(action, (ForceJawOpen, SlipFreeOfJaw)) for action in target.registered_actions)
 
@@ -201,9 +201,9 @@ def test_web_and_jaw_independent_sources_in_both_orders(arena, first, remove_fir
     first_source, remaining = (web, source) if remove_first == "web" else (source, web)
     assert target.remove_condition_by_uuid(first_source.uuid)
     assert remaining.uuid in target.active_conditions_by_uuid and "Restrained" in target.active_conditions
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert target.remove_condition_by_uuid(remaining.uuid)
-    assert "Restrained" not in target.active_conditions and target.action_economy.movement.normalized_score == 30
+    assert "Restrained" not in target.active_conditions and target.action_economy.movement_remaining() == 30
     assert not jaw.linked_conditions
 
 
@@ -222,7 +222,7 @@ def test_two_leases_do_not_claim_or_remove_a_preexisting_standalone_restraint(ar
     assert target.active_conditions["Restrained"].uuid == standalone.uuid
     assert not any(isinstance(condition, (JawRestrained, WebRestrained)) for condition in target.active_conditions_by_uuid.values())
     assert standalone.tags == ({ConditionTag.MAGICAL} if magical else set())
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
 
 
 def test_freedom_of_movement_escapes_only_the_mundane_lease_for_five_feet(arena):
@@ -239,7 +239,7 @@ def test_freedom_of_movement_escapes_only_the_mundane_lease_for_five_feet(arena)
     assert not jaw.linked_conditions
     assert target.remove_condition_by_uuid(web.uuid)
     assert "Restrained" not in target.active_conditions
-    assert target.action_economy.movement.normalized_score == 25
+    assert target.action_economy.movement_remaining() == 25
 
 
 def test_antimagic_suppresses_web_but_preserves_jaw_mechanics(arena):
@@ -253,7 +253,7 @@ def test_antimagic_suppresses_web_but_preserves_jaw_mechanics(arena):
     assert result is not None and not result.canceled
     assert web.uuid not in target.active_conditions_by_uuid
     assert jaw_source(target).applied and "Restrained" in target.active_conditions
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert any(isinstance(action, ForceJawOpen) for action in target.registered_actions)
     assert not any(isinstance(action, EscapeWebAction) for action in target.registered_actions)
     field.deactivate()
@@ -341,7 +341,7 @@ def test_removal_veto_keeps_capture_closed_and_escape_does_not_claim_success(are
         result = template.instantiate().apply()
     assert result is not None and "fails to escape" in (result.status_message or "")
     assert jaw.trap_state is TrapState.ACTIVATED and source.uuid in target.active_conditions_by_uuid
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
 
 
 @pytest.mark.parametrize("first", ("standalone", "jaw"))
@@ -363,14 +363,14 @@ def test_antimagic_of_independent_restraint_preserves_mundane_capture_in_both_or
     cause.phase_to(EventPhase.COMPLETION)
     assert result is not None and not result.canceled
     assert standalone.uuid not in target.active_conditions_by_uuid
-    assert jaw_source(target).applied and target.action_economy.movement.normalized_score == 0
+    assert jaw_source(target).applied and target.action_economy.movement_remaining() == 0
     assert target.active_conditions["Restrained"].tags == set()
     field.deactivate()
     assert standalone.uuid in target.active_conditions_by_uuid and standalone.tags == {ConditionTag.MAGICAL}
-    assert jaw_source(target).applied and target.action_economy.movement.normalized_score == 0
+    assert jaw_source(target).applied and target.action_economy.movement_remaining() == 0
     cause = control(jaw)
     assert jaw.set_trap_state(TrapState.DEACTIVATED, parent_event=cause)
     cause.phase_to(EventPhase.COMPLETION)
     assert target.active_conditions["Restrained"].uuid == standalone.uuid
     assert target.remove_condition_by_uuid(standalone.uuid)
-    assert "Restrained" not in target.active_conditions and target.action_economy.movement.normalized_score == 30
+    assert "Restrained" not in target.active_conditions and target.action_economy.movement_remaining() == 30

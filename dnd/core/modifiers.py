@@ -1,6 +1,6 @@
 import logging
 
-from pydantic import Field, computed_field, model_validator
+from pydantic import Field, PrivateAttr, computed_field, model_validator
 from typing import List, Literal, Optional, Dict, Any, Callable, TypeVar, Union, Tuple, Self
 from uuid import UUID
 from enum import Enum
@@ -46,6 +46,13 @@ saving_throws = Literal[
     "wisdom_saving_throw",
     "charisma_saving_throw",
 ]
+
+
+class ArithmeticFactor(BaseObject):
+    """Owned exact multiplier, applied after additive contributions and before bounds."""
+
+    numerator: int = Field(ge=0)
+    denominator: int = Field(default=1, gt=0)
 
 
 class NumericalModifier(BaseObject):
@@ -252,10 +259,16 @@ class ContextualModifier(BaseObject):
         default=None,
         description="Arguments used by strict `execute_callable()` rather than normal contextual aggregation."
     )
-    cached_results: Dict[str, Optional[Any]] = Field(
-        default_factory=dict,
-        description="Evaluation cache keyed by `source|target|lineage`; values may be `None`."
-    )
+    _cached_results: Dict[str, Optional[Any]] = PrivateAttr(default_factory=dict)
+
+    @property
+    def cached_results(self) -> Dict[str, Optional[Any]]:
+        """Last evaluated values for breakdown display, never authoritative data.
+
+        Evaluation always recomputes; equipment/condition changes cannot leave
+        a stale cached value driving a rules query.
+        """
+        return self._cached_results
 
     @classmethod
     def get(cls, uuid: UUID) -> Optional['ContextualModifier']:

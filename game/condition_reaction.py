@@ -5,12 +5,12 @@ from typing import Mapping, cast
 from uuid import UUID
 
 from dnd.core.events import EventType
-from game.animation import ActorContact, feedback_identity, body_elevation_steps, facing_for_delta
+from game.animation import ActorContact, body_elevation_steps, facing_for_delta
 from game.animation_types import AnimationData, Facing8, StudioMediaTrack
 from game.attack import BoundAttack
 from game.body_action import BodyActionCue, bind_body_action
 from game.combat import BoundCast, actor_contact, actor_is_visible
-from game.player_facts import AttackFact, ConditionChangeFact, DamageFact, PlayerLineage, PlayerState, SpellFact
+from game.player_facts import AttackFact, ConditionChangeFact, DamageRequestFact, PlayerLineage, PlayerState, SpellFact
 from game.stationary_media import StationaryMediaCue
 
 
@@ -30,21 +30,14 @@ def _interceptions(lineage: PlayerLineage, bound: BoundAttack | BoundCast) -> tu
                 if root.intercepted_by_condition_uuid is not None else ())
     result = []
     if isinstance(root, SpellFact) and isinstance(bound, BoundCast):
-        nodes = {node.lineage_uuid: node for node in lineage.events}
         for node in lineage.events:
             fact = node.fact
-            if not isinstance(fact, DamageFact) or fact.intercepted_by_condition_uuid is None:
+            if (not isinstance(fact, DamageRequestFact)
+                    or fact.intercepted_by_condition_uuid is None
+                    or node.resolution_ref is None):
                 continue
-            parent = node
-            application_id = None
-            while parent.parent_lineage is not None and parent.parent_lineage in nodes:
-                parent = nodes[parent.parent_lineage]
-                if isinstance(parent.fact, SpellFact) and parent.fact.application_id is not None:
-                    application_id = str(parent.fact.application_id)
-                    break
             delivery = next((row for row in bound.timeline.applications
-                if feedback_identity(row.source.target) == str(fact.target_entity_uuid)
-                and (application_id is None or row.source.application_id == application_id)), None)
+                             if row.source.resolution_ref == node.resolution_ref), None)
             if delivery is not None:
                 result.append(_Interception(node.uuid, fact.intercepted_by_condition_uuid,
                                              fact.target_entity_uuid, delivery.travel_end_ms))

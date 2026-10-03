@@ -70,20 +70,20 @@ def test_raw_entity_lifecycle_never_depends_on_standard_action_setup() -> None:
 
     assert target.health.life_state is LifeState.DYING
     assert target.action_economy.action_permission.normalized_score == 0
-    assert target.action_economy.movement.normalized_score == 0
+    assert target.action_economy.movement_remaining() == 0
     assert target.senses.visual_access.normalized_score == 0
     assert not target.can_take_actions()
     assert "Dying" not in target.active_conditions
 
     before = (
         target.action_economy.action_permission.normalized_score,
-        target.action_economy.movement.normalized_score,
+        target.action_economy.movement_remaining(),
         target.senses.visual_access.normalized_score,
     )
     setup_standard_actions(target)
     assert before == (
         target.action_economy.action_permission.normalized_score,
-        target.action_economy.movement.normalized_score,
+        target.action_economy.movement_remaining(),
         target.senses.visual_access.normalized_score,
     )
 

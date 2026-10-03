@@ -29,7 +29,7 @@ from tests.game.player_helpers import player_history, player_inputs
 
 @pytest.fixture(scope="module")
 def data() -> AnimationData:
-    return load_animation_data(authored_bundles=(), rig_files=(Path("game/data/rigs/goblin01.json"),))
+    return load_animation_data(rig_files=(Path("game/data/rigs/goblin01.json"),))
 
 
 @pytest.fixture(scope="module")

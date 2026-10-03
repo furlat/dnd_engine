@@ -4,6 +4,7 @@ from uuid import uuid5
 
 from pydantic import Field
 
+from dnd.core.effect_types import ApplicationMembership
 from dnd.actions import SpellAction, SpellEvent
 from dnd.core.aoe import Sphere, snapshot_aoe_presentation_geometry
 from dnd.core.base_actions import TargetType, target_resolution_sort_key
@@ -146,8 +147,9 @@ class IceKnife(SpellAction):
                 target_entity_uuid=recipient.uuid, target_entity_name=recipient.name,
                 behavior_id=parent.behavior_id, provided_by_id=parent.provided_by_id, origin_root_id=parent.origin_root_id,
                 spell_level=self.spell_level, cast_at_level=self.cast_at_level, spell_school=self.spell_school,
-                verbal=False, costs=[], damage_types=[DamageType.COLD], application_index=index,
-                application_id=uuid5(burst.lineage_uuid, f"target-application:{index}"),
+                verbal=False, costs=[], damage_types=[DamageType.COLD],
+                application=ApplicationMembership(lineage_uuid=burst.lineage_uuid,
+                    application_id=uuid5(burst.lineage_uuid, f"target-application:{index}"), index=index),
             )
             application = application.post(use_register=True)
             if application.canceled:

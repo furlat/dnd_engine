@@ -141,6 +141,7 @@ class WallOfFireZone(AreaCondition):
             roll.total // 2 if success else roll.total, DamageType.FIRE, self.source_entity_uuid,
             damage_rolls=[roll], damages=[damage], parent_event=parent_event.uuid,
             effect_id="wall_of_fire.appearance" if appearance else "wall_of_fire.exposure",
+            independent_resolution=not appearance, effect_origin=self.effect_origin,
             spatial_source=SpatialDamageSource(spatial_effect_uuid=self.uuid, position=contact,
                 target_position=entity.position, base_height_steps=self.geometry.base_height_steps,
                 exposure="contact" if entity.position in self.flame_positions else "radiated_heat")

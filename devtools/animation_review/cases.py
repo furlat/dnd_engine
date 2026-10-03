@@ -36,6 +36,28 @@ class AttackCase(BaseModel):
     bloodied: bool = False
 
 
+class DamageResolutionCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["damage-resolution"]
+    program: Literal["retaliation", "push", "walk", "hidden"]
+
+
+class ConstructionCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["construction"]
+    material: Literal["ice", "stone"]
+
+
+class FlightCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["flight"]
+
+
+class ItemPowerCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["item-power"]
+
+
 class ParalysisCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["paralysis"]
@@ -318,6 +340,11 @@ class AreaSpellCase(BaseModel):
     blocked: bool = False
 
 
+class CallLightningCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["call-lightning"]
+
+
 class WebCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["web"]
@@ -457,8 +484,8 @@ class ReviewCase(BaseModel):
     description: str
     framing: Literal["scene", "actors"] = "scene"
     initial_facings: tuple[ReviewFacing, ...] = ()
-    scenario: Annotated[AttackCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | AssemblyCase | HypnoticCase | CurseCase | DivineCase | SlowCase | HoldCase | ScorchingCase | FearCase | ContinualFlameCase | CreatureCase | EquipmentCase | ItemTransferCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
+    scenario: Annotated[AttackCase | DamageResolutionCase | ConstructionCase | FlightCase | ItemPowerCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
+                        | AssemblyCase | HypnoticCase | CurseCase | DivineCase | SlowCase | HoldCase | ScorchingCase | FearCase | ContinualFlameCase | CreatureCase | EquipmentCase | ItemTransferCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | CallLightningCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)
@@ -492,7 +519,7 @@ class RecordedInput(BaseModel):
     captured_at: str
     sources: dict[str, JsonValue]
     sequence: JsonValue
-    sequence_format: Literal["native-v2", "player-v1"] = "native-v2"
+    sequence_format: Literal["native-v2", "player-v1", "player-v2"] = "native-v2"
     perspective: ReviewPerspective | None = None
 
 

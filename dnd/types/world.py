@@ -54,3 +54,10 @@ __all__ = [
     "OccupancyLayer",
     "WorldEdgeChannel",
 ]
+
+
+class MovementProvocationPolicy(str, Enum):
+    """Objective source-exit reaction policy for one movement leg."""
+
+    ORDINARY_EXIT = "ordinary_exit"
+    DOES_NOT_PROVOKE = "does_not_provoke"

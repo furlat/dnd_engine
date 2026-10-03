@@ -245,7 +245,7 @@ def persistent_spell_history(*, program: PersistentProgram, mode: Literal['enlar
                 perform(target, 'action.jump' if jump else 'action.move', position=entrance)
             if tired_grease_entry:
                 assert 'Prone' in target.active_conditions
-                assert target.action_economy.movement.normalized_score < 15
+                assert target.action_economy.movement_remaining() < 15
             elif 'Prone' in target.active_conditions:
                 perform(target, 'action.stand_up')
             perform(target, 'action.jump' if jump_across else 'action.move', position=positions['target'], fresh=True)

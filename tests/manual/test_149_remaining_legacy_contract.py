@@ -289,11 +289,11 @@ def test_prone_auto_stand_is_owner_turn_scoped() -> None:
     assert "Prone" in owner.active_conditions
     other.on_turn_start()
     assert "Prone" in owner.active_conditions
-    assert owner.action_economy.movement.normalized_score == 30
+    assert owner.action_economy.movement_remaining() == 30
 
     owner.on_turn_start()
     assert "Prone" not in owner.active_conditions
-    assert owner.action_economy.movement.normalized_score == 15
+    assert owner.action_economy.movement_remaining() == 15
 
 
 def test_prone_application_during_owner_turn_respects_movement() -> None:
@@ -312,7 +312,7 @@ def test_prone_application_during_owner_turn_respects_movement() -> None:
     assert completion.canceled is True
     assert condition.applied is True
     assert "Prone" not in mobile.active_conditions
-    assert mobile.action_economy.movement.normalized_score == 15
+    assert mobile.action_economy.movement_remaining() == 15
 
     reset_condition_state()
     immobile = configured_entity("Immobile actor", (2, 1), "heroes")
@@ -329,4 +329,4 @@ def test_prone_application_during_owner_turn_respects_movement() -> None:
     assert completion is not None
     assert completion.canceled is False
     assert "Prone" in immobile.active_conditions
-    assert immobile.action_economy.movement.normalized_score == 0
+    assert immobile.action_economy.movement_remaining() == 0

@@ -137,7 +137,7 @@ def test_jump_moves_and_spends_bonus_action_and_distance() -> None:
     jumper = _create_jumper(strength=16)
     Entity.update_all_entities_senses()
     initial_bonus_actions = jumper.action_economy.bonus_actions.normalized_score
-    initial_movement = jumper.action_economy.movement.normalized_score
+    initial_movement = jumper.action_economy.movement_remaining()
 
     event = Jump(
         source_entity_uuid=jumper.uuid,
@@ -152,7 +152,7 @@ def test_jump_moves_and_spends_bonus_action_and_distance() -> None:
         jumper.action_economy.bonus_actions.normalized_score
         == initial_bonus_actions - 1
     )
-    assert jumper.action_economy.movement.normalized_score == initial_movement - 15
+    assert jumper.action_economy.movement_remaining() == initial_movement - 15
 
 
 def test_jump_declares_bonus_action_before_target_distance_cost() -> None:
@@ -217,7 +217,7 @@ def test_jump_pays_named_resources_without_double_spending_movement() -> None:
 
     assert result is not None and not result.canceled
     assert jumper.action_economy.get_resource_current("jump_tokens") == 0
-    assert jumper.action_economy.movement.normalized_score == 15
+    assert jumper.action_economy.movement_remaining() == 15
 
 
 def test_jump_rejects_an_occupied_landing_position() -> None:
@@ -242,7 +242,7 @@ def test_jump_range_is_capped_by_remaining_movement_budget() -> None:
     _reset_state(width=30, height=30)
     jumper = _create_jumper(strength=20)
     Entity.update_all_entities_senses()
-    jumper.action_economy.movement.self_static.add_value_modifier(
+    jumper.action_economy.walking_speed.self_static.add_value_modifier(
         NumericalModifier.create(
             source_entity_uuid=jumper.uuid,
             target_entity_uuid=jumper.uuid,
@@ -270,7 +270,7 @@ def test_jump_range_is_capped_by_remaining_movement_budget() -> None:
     assert affordable is not None
     assert not affordable.canceled
     assert jumper.position == (6, 5)
-    assert jumper.action_economy.movement.normalized_score == 0
+    assert jumper.action_economy.movement_remaining() == 0
     assert jumper.action_economy.bonus_actions.normalized_score == 0
 
 

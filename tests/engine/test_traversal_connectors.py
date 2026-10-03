@@ -171,7 +171,7 @@ def test_connector_variant_commits_one_exact_transfer_and_cost() -> None:
     assert variant.connector_traversal is not None
     assert variant.connector_traversal.command.connector_uuid == connector.uuid
 
-    movement_before = actor.action_economy.movement.normalized_score
+    movement_before = actor.action_economy.movement_remaining()
     result = variant.apply()
 
     assert isinstance(result, TraverseConnectorEvent)
@@ -181,7 +181,7 @@ def test_connector_variant_commits_one_exact_transfer_and_cost() -> None:
     assert result.start_elevation_feet == 0
     assert result.end_elevation_feet == 5
     assert actor.position == (1, 0)
-    assert actor.action_economy.movement.normalized_score == movement_before - 10
+    assert actor.action_economy.movement_remaining() == movement_before - 10
     completed_steps = [
         event
         for _, event in EventQueue.iter_events_since(0)
@@ -211,7 +211,7 @@ def test_connector_step_veto_spends_nothing_and_leaves_actor_at_source() -> None
         source_entity_uuid=actor.uuid,
         template=True,
     ).get_discovery_variants(actor)[0]
-    movement_before = actor.action_economy.movement.normalized_score
+    movement_before = actor.action_economy.movement_remaining()
 
     def stop_step(event: Event, _source_uuid) -> Event:
         return event.cancel("connector step vetoed")
@@ -235,7 +235,7 @@ def test_connector_step_veto_spends_nothing_and_leaves_actor_at_source() -> None
     assert result.phase is EventPhase.COMPLETION
     assert result.termination_reason.value == "step_canceled"
     assert actor.position == (0, 0)
-    assert actor.action_economy.movement.normalized_score == movement_before
+    assert actor.action_economy.movement_remaining() == movement_before
     with pytest.raises(ValidationError):
         TraversalConnectorDefinition(
             authored_id="connector.test.bad",

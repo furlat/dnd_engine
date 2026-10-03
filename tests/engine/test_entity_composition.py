@@ -208,7 +208,7 @@ def test_eb_06_003_health_action_economy_and_spellcasting_compose() -> None:
     assert entity.action_economy.actions.normalized_score == 1
     assert entity.action_economy.bonus_actions.normalized_score == 1
     assert entity.action_economy.reactions.normalized_score == 1
-    assert entity.action_economy.movement.normalized_score == 35
+    assert entity.action_economy.movement_remaining() == 35
 
     assert entity.has_spell_slot(1) is True
     assert entity.has_spell_slot(2) is False
@@ -612,7 +612,7 @@ def test_eb_06_015_entity_long_rest_and_revival_reduce_exhaustion() -> None:
     source = configured_entity("Rest Source", (0, 0), "heroes")
     entity = configured_entity("Resting Hero", (1, 0), "heroes")
     setup_standard_actions(entity)
-    base_movement = entity.action_economy.movement.normalized_score
+    base_movement = entity.action_economy.movement_remaining()
 
     entity.action_economy.add_resource(
         "daily_power",
@@ -639,7 +639,7 @@ def test_eb_06_015_entity_long_rest_and_revival_reduce_exhaustion() -> None:
     assert entity.action_economy.get_resource_current("daily_power") == 0
     assert entity.action_economy.spell_slot_1.normalized_score == 1
     assert "Long Rest Marker" in entity.active_conditions
-    assert entity.action_economy.movement.normalized_score == base_movement // 2
+    assert entity.action_economy.movement_remaining() == base_movement // 2
     assert entity.equipment.attack_bonus.advantage == AdvantageStatus.DISADVANTAGE
 
     entity.on_long_rest()
@@ -650,7 +650,7 @@ def test_eb_06_015_entity_long_rest_and_revival_reduce_exhaustion() -> None:
     assert entity.action_economy.get_resource_current("daily_power") == 1
     assert entity.action_economy.spell_slot_1.normalized_score == 2
     assert "Long Rest Marker" not in entity.active_conditions
-    assert entity.action_economy.movement.normalized_score == base_movement // 2
+    assert entity.action_economy.movement_remaining() == base_movement // 2
     assert entity.equipment.attack_bonus.advantage == AdvantageStatus.NONE
 
     damage_to_zero = entity.get_hp()

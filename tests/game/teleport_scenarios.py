@@ -97,14 +97,14 @@ def teleport_history(
         before, _ = reduce_interval(None, initial)
         resources = (caster.action_economy.bonus_actions.normalized_score,
                      caster.action_economy.spell_slot_2.normalized_score,
-                     caster.action_economy.movement.normalized_score,
+                     caster.action_economy.movement_remaining(),
                      witness.action_economy.reactions.normalized_score)
         root = execute_by_index(caster, row.template_name, target.index, available=available)
         assert isinstance(root, SpellEvent) and not root.canceled and root.phase is EventPhase.COMPLETION
         assert caster.position == destination
         assert (caster.action_economy.bonus_actions.normalized_score,
                 caster.action_economy.spell_slot_2.normalized_score,
-                caster.action_economy.movement.normalized_score,
+                caster.action_economy.movement_remaining(),
                 witness.action_economy.reactions.normalized_score) == (
                     resources[0] - 1, resources[1] - 1, resources[2], resources[3],
                 )

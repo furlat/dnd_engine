@@ -36,7 +36,8 @@ from dnd.analytics.models import (
     UsageCountV1,
     compute_summary_digest,
 )
-from dnd.blocks.base_item import ItemChargeConsumptionEvent
+from dnd.blocks.base_item import ItemResourceChangeEvent
+from dnd.core.item_types import ItemResourceChange
 from dnd.core.base_actions import ActionEvent
 from dnd.core.base_conditions import (
     BaseCondition,
@@ -1027,7 +1028,8 @@ def _reduce_terminal_event(
     if isinstance(event, ConditionRemovalEvent) and event.phase == EventPhase.COMPLETION:
         condition_key = _condition_key(event.condition)
         _increment(target_stats.conditions_removed, condition_key)
-    if isinstance(event, ItemChargeConsumptionEvent) and event.phase == EventPhase.COMPLETION:
+    if (isinstance(event, ItemResourceChangeEvent) and event.phase == EventPhase.COMPLETION
+            and event.resource_change is ItemResourceChange.CONSUME):
         _increment(source_stats.item_charges_spent, event.item_id, event.amount)
     if isinstance(event, TurnStartEvent) and event.phase == EventPhase.COMPLETION:
         statistics_for(event.entity_uuid).turns_started += 1
@@ -1758,7 +1760,7 @@ def _metric_provenance(
         MetricProvenanceV1(
             metric="actions_spells_items_resources",
             availability=action_cost_availability,
-            sources=("ActionEvent", "SpellEvent", "ItemChargeConsumptionEvent"),
+            sources=("ActionEvent", "SpellEvent", "ItemResourceChangeEvent"),
             note=(
                 "Completed action costs prove ordinary economy, spell-slot, and named-resource spending; "
                 "canceled lineages do not currently prove whether costs were committed."

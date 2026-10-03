@@ -1,4 +1,4 @@
-from dnd.core.effect_types import EffectOrigin
+from dnd.core.effect_types import EventResolutionRef, EffectOrigin
 from dnd.core.attack_types import NaturalWeaponSpec
 from typing import AbstractSet, DefaultDict, Dict, Mapping, Optional, Any, Iterator, List, ClassVar, Sequence, Union, Tuple, Set
 from uuid import UUID, uuid4
@@ -1638,7 +1638,7 @@ class Entity(BaseBlock):
                 return True
         return False
 
-    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, parent_event: Optional[Event] = None)  -> Optional[Event]:
+    def add_condition(self, condition: BaseCondition, context: Optional[Dict[str, Any]] = None, check_save_throw: bool = True, parent_event: Optional[Event] = None, *, required_condition: Optional[Tuple[BaseBlock, BaseCondition]] = None) -> Optional[Event]:
         """Apply an entity condition with immunities, saves, and combat-log names.
 
         Args:
@@ -1651,6 +1651,8 @@ class Entity(BaseBlock):
             Completion or cancellation event from the condition application, or
             `None` when no declaration event exists.
         """
+        if required_condition is not None and required_condition[1].applied:
+            raise ValueError("Required condition must be a fresh application")
         if condition.name is None:
             raise ValueError("BaseCondition name is not set")
         if condition.target_entity_uuid is None:
@@ -1719,39 +1721,7 @@ class Entity(BaseBlock):
                     return canceled
                 else:
                     return None
-        try:
-            condition_applied = condition.apply(
-                declaration_event=declaration_event,
-            )
-        except BaseException:
-            self._discard_uncommitted_condition_tree(condition)
-            raise
-        if condition_applied and not condition_applied.canceled:
-            if condition.name in self.active_conditions:
-                if not self.remove_condition(
-                    condition.name,
-                    parent_event=condition_applied,
-                ):
-                    self._discard_uncommitted_condition_tree(condition)
-                    return condition_applied.cancel(
-                        status_message=(
-                            f"Condition {condition.name} could not replace "
-                            "the active condition"
-                        ),
-                    )
-            self.active_conditions[condition.name] = condition
-            self.active_conditions_by_uuid[condition.uuid] = condition
-            self.active_conditions_by_source[condition.source_entity_uuid].append(condition.name)
-            completed_event = condition_applied.phase_to(
-                EventPhase.COMPLETION,
-                condition_state=condition.snapshot_state(),
-                resulting_stats=self.snapshot_entity_stats(),
-            )
-            condition.applied_source_event_cursor = EventQueue.event_cursor()
-            return completed_event
-        elif condition_applied and condition_applied.canceled:
-            self._discard_uncommitted_condition_tree(condition)
-        return condition_applied
+        return self._apply_declared_condition(condition, declaration_event, required_condition=required_condition)
 
     def advance_duration_condition(self, condition_name: str, skip_save_throw: bool = False) -> bool:
         """Progress a condition's duration and remove if expired.
@@ -3042,6 +3012,7 @@ class Entity(BaseBlock):
         impact_direction: tuple[float, float] | None = None,
         spatial_source: SpatialDamageSource | None = None,
         effect_origin: EffectOrigin | None = None,
+        independent_resolution: bool = False,
     ) -> int:
         """Apply damage through the engine event lifecycle.
 
@@ -3076,7 +3047,10 @@ class Entity(BaseBlock):
             )
         ]
 
+        request_lineage = uuid4()
         take_damage_event = TakeDamageEvent(
+            lineage_uuid=request_lineage,
+            resolution_ref=EventResolutionRef(lineage_uuid=request_lineage) if independent_resolution else None,
             name="Take Damage",
             source_entity_uuid=source_entity_uuid,
             target_entity_uuid=self.uuid,
@@ -3311,7 +3285,7 @@ class Entity(BaseBlock):
             strength=self.ability_scores.strength.ability_score,
             spell_attack=self.spellcasting.spell_attack_bonus,
             stealth=self.skill_set.stealth.skill_bonus,
-            movement=self.action_economy.movement,
+            speeds=self.action_economy.speed_values,
         )
 
     def appears_in_entity_contacts(self) -> bool:
@@ -4820,11 +4794,8 @@ class Entity(BaseBlock):
         cost_amount = eff_costs[0].cost if eff_costs else 0
         discovery_template_name = template.get_discovery_template_name()
         base_template_name = template.name if template.name != discovery_template_name else None
-        row_damage_types = list(damage_types or [])
-        if not row_damage_types and template.is_spell:
-            spell_damage_type = getattr(template, "spell_damage_type", None)
-            if spell_damage_type is not None:
-                row_damage_types.append(getattr(spell_damage_type, "value", str(spell_damage_type)))
+        description_facts = template.describe_discovery()
+        row_damage_types = list(damage_types or [kind.value for kind in description_facts.damage_types])
         source_item = BaseBlock.get(source_item_uuid) if source_item_uuid is not None else None
         item_charge_cost = (
             template.charge_cost
@@ -4860,9 +4831,9 @@ class Entity(BaseBlock):
             action_category=template.action_category,
             performs_attack=template.performs_attack,
             base_template_name=base_template_name,
-            spell_level=getattr(template, "spell_level", None) if template.is_spell else None,
-            cast_at_level=getattr(template, "cast_at_level", None) if template.is_spell else None,
-            is_spell_variant=bool(getattr(template, "is_variant", False)) if template.is_spell else False,
+            spell_level=description_facts.spell_level,
+            cast_at_level=description_facts.cast_at_level,
+            is_spell_variant=description_facts.is_spell_variant,
             requires_concentration=template.requires_concentration,
             num_projectiles=template.get_multi_target_count() if target_type == TargetType.MULTI_ENTITY else None,
             allow_same_target=template.allow_same_target if target_type == TargetType.MULTI_ENTITY else None,
@@ -4872,10 +4843,6 @@ class Entity(BaseBlock):
             item_charge_cost=item_charge_cost,
             fixed_healing=template.get_fixed_healing(self),
         )
-        ammunition = template.get_attack_ammunition_metadata()
-        if ammunition is not None:
-            action_info.selected_ammunition_uuid = ammunition.item_uuid
-            action_info.ammunition_payload = ammunition.payload
         action_info.set_execution_template(template)
         return action_info
 

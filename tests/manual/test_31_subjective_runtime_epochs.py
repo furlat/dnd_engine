@@ -1843,7 +1843,7 @@ def test_move_discovery_reuses_subjective_path_projection(monkeypatch) -> None:
     assert first_move.valid_targets == second_move.valid_targets
     assert archmage.senses.path_costs
 
-    remaining_movement = archmage.action_economy.movement.normalized_score
+    remaining_movement = archmage.action_economy.movement_remaining()
     archmage._collect_path_actions(remaining_movement - 5)
 
     assert path_cost_calls == 0
@@ -1991,7 +1991,7 @@ def test_jump_discovery_exposes_subjective_distance_and_movement_cost() -> None:
 
     actions = archmage.get_available_actions()
     jump = next(row for row in actions.position_actions if row.template_name == "Jump")
-    remaining_movement = archmage.action_economy.movement.normalized_score
+    remaining_movement = archmage.action_economy.movement_remaining()
 
     assert jump.valid_targets
     assert all(

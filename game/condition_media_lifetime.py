@@ -10,8 +10,8 @@ from uuid import UUID
 
 from dnd.core.events import EventType
 from game.animation_types import AnimationData
-from game.choreography import BoundChoreography, MotionTimeline
-from game.condition_animation import (ConditionAppearance, ConditionTimeline, LiveCopyAppearance,
+from game.choreography import BoundChoreography, MotionTimeline, walk_bound_timelines
+from game.condition_animation import (ConditionAppearance, LiveCopyAppearance,
     ConditionResponseCue, resolve_condition_appearance)
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer, supported_layer
 from game.condition_types import ConditionLayer, ConditionRecipe, ConditionTransitionEffect, ConditionLiveCopies
@@ -109,24 +109,6 @@ def _state_edges(before: PlayerState, states: tuple[tuple[float, PlayerState], .
     return result
 
 
-def _group_edges(group: BoundChoreography, data: AnimationData,
-                 offset: float = 0) -> list[tuple[float, UUID, UUID, str, bool, tuple[str, ...]]]:
-    result = [(at + offset, actor, owner, identity, added, layers)
-              for at, actor, owner, identity, added, layers in _state_edges(group.before, group.states, data)]
-    for movement in group.movements:
-        result.extend(_motion_edges(movement.timeline, data, offset + movement.start_ms))
-    return result
-
-
-def _motion_edges(motion: MotionTimeline, data: AnimationData,
-                  offset: float = 0) -> list[tuple[float, UUID, UUID, str, bool, tuple[str, ...]]]:
-    result = [(at + offset, actor, owner, identity, added, layers)
-              for at, actor, owner, identity, added, layers in _state_edges(motion.before, motion.states, data)]
-    for reaction in motion.reactions:
-        result.extend(_group_edges(reaction.choreography, data, offset + reaction.start_ms))
-    return result
-
-
 def register_condition_lifetimes(
     retained: Mapping[UUID, ConditionMediaLifetime], before: PlayerState, data: AnimationData,
     *, absolute_start_ms: float, lineage: PlayerLineage | None = None,
@@ -164,8 +146,10 @@ def register_condition_lifetimes(
                 applications.add(fact.condition.condition_uuid)
             elif isinstance(fact, TemporaryHitPointsFact) and fact.grant is not None:
                 applications.add(fact.grant.instance_uuid)
-    edges = (_motion_edges(motion, data) if motion is not None else
-             _group_edges(choreography, data) if choreography is not None else [])
+    visits = tuple(walk_bound_timelines(choreography, motion))
+    edges = [(at + visit.offset_ms, actor, owner, identity, added, layers)
+             for visit in visits for at, actor, owner, identity, added, layers
+             in _state_edges(visit.timeline.before, visit.timeline.states, data)]
     # Nested timelines can publish the same received membership. Stable owners
     # are initialized once; duplicate views of that transition never restart it.
     for at, actor, owner, identity, added, layers in sorted(set(edges), key=lambda row: (row[0], row[4])):
@@ -182,8 +166,8 @@ def register_condition_lifetimes(
                     activated_ms=overlapping.activated_ms if overlapping is not None else None)
         elif previous is not None and previous.removed_ms is None:
             result[owner] = replace(previous, removed_ms=absolute, removed_layers=layers)
-    turns = (_motion_turns(motion) if motion is not None else
-             _group_turns(choreography) if choreography is not None else ())
+    turns = ((at + visit.offset_ms, actor) for visit in visits
+             if isinstance(visit.timeline, BoundChoreography) for at, actor in visit.timeline.turn_starts)
     for at, actor_id in turns:
         absolute = absolute_start_ms + at
         for owner, lifetime in tuple(result.items()):
@@ -192,8 +176,8 @@ def register_condition_lifetimes(
                     and (lifetime.removed_ms is None or lifetime.removed_ms > absolute)
                     and data.condition_recipes[lifetime.behavior_id].activation is not None):
                 result[owner] = replace(lifetime, activated_ms=absolute)
-    conditions = (_motion_conditions(motion) if motion is not None else
-                  _group_conditions(choreography) if choreography is not None else ())
+    conditions = ((row.start_ms + visit.offset_ms, row) for visit in visits
+                  if isinstance(visit.timeline, BoundChoreography) for row in visit.timeline.conditions)
     for at, timeline in sorted(conditions, key=lambda row: row[0]):
         for member in timeline.after_membership:
             if member.state is None or member.state.duplicate_count is None:
@@ -208,8 +192,8 @@ def register_condition_lifetimes(
             if count != previous_count:
                 result[member.condition_uuid] = replace(lifetime,
                     copy_updates=(*lifetime.copy_updates, (absolute_start_ms + at, count)))
-    responses = (_motion_responses(motion) if motion is not None else
-                 _group_responses(choreography) if choreography is not None else ())
+    responses = (replace(cue, start_ms=visit.offset_ms + cue.start_ms) for visit in visits
+                 if isinstance(visit.timeline, BoundChoreography) for cue in visit.timeline.condition_responses)
     for cue in responses:
         absolute = replace(cue, start_ms=absolute_start_ms + cue.start_ms)
         lifetime = result.get(cue.owner_uuid) or ConditionMediaLifetime(
@@ -219,36 +203,6 @@ def register_condition_lifetimes(
         result[cue.owner_uuid] = replace(lifetime, responses=(*lifetime.responses, absolute),
             consumed_ms=absolute.start_ms if cue.trigger == "consumed" else lifetime.consumed_ms)
     return result
-
-
-def _group_responses(group: BoundChoreography, offset: float = 0) -> tuple[ConditionResponseCue, ...]:
-    return (*(replace(cue, start_ms=offset + cue.start_ms) for cue in group.condition_responses),
-            *(row for cue in group.movements for row in _motion_responses(cue.timeline, offset + cue.start_ms)))
-
-
-def _motion_responses(motion: MotionTimeline, offset: float = 0) -> tuple[ConditionResponseCue, ...]:
-    return tuple(row for reaction in motion.reactions
-                 for row in _group_responses(reaction.choreography, offset + reaction.start_ms))
-
-
-def _group_conditions(group: BoundChoreography, offset: float = 0) -> tuple[tuple[float, ConditionTimeline], ...]:
-    return (*( (offset + row.start_ms, row) for row in group.conditions),
-            *(row for cue in group.movements for row in _motion_conditions(cue.timeline, offset + cue.start_ms)))
-
-
-def _motion_conditions(motion: MotionTimeline, offset: float = 0) -> tuple[tuple[float, ConditionTimeline], ...]:
-    return tuple(row for reaction in motion.reactions
-                 for row in _group_conditions(reaction.choreography, offset + reaction.start_ms))
-
-
-def _group_turns(group: BoundChoreography, offset: float = 0) -> tuple[tuple[float, UUID], ...]:
-    return (*( (at + offset, actor) for at, actor in group.turn_starts),
-            *(row for cue in group.movements for row in _motion_turns(cue.timeline, offset + cue.start_ms)))
-
-
-def _motion_turns(motion: MotionTimeline, offset: float = 0) -> tuple[tuple[float, UUID], ...]:
-    return tuple(row for reaction in motion.reactions
-                 for row in _group_turns(reaction.choreography, offset + reaction.start_ms))
 
 
 def _transition_layers(effects: tuple[ConditionTransitionEffect, ...], lifetime: ConditionMediaLifetime,

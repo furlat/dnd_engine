@@ -7,12 +7,13 @@ from math import hypot
 import pytest
 
 from game.animation import ActorContact, CastApplication, CastInput, ProjectileSample, compile_cast, project_projectile, sample_cast
+from tests.game.authoring_fixtures import recorded_recipe_data, recipe_only_world
 from game.animation_data import DATA_ROOT, load_animation_data
 
 
 @pytest.fixture(scope="module")
 def data():
-    return load_animation_data(authored_bundles=())
+    return recorded_recipe_data()
 
 
 def test_supported_v1_and_v6_decode_to_the_same_explicit_v2_recipe(data, tmp_path):
@@ -23,7 +24,7 @@ def test_supported_v1_and_v6_decode_to_the_same_explicit_v2_recipe(data, tmp_pat
     (tmp_path / "projectile-assets.json").write_text("[]")
     recipe_path = tmp_path / "spell-studio-drafts.json"
     recipe_path.write_text(json.dumps({"schema": "dnd.spellStudioDrafts", "version": 1, "spells": [fire_bolt]}))
-    converted = load_animation_data(authored_bundles=(tmp_path,))
+    converted = load_animation_data(authored_bundles=(tmp_path,), world_source=recipe_only_world())
     assert converted.drafts["spell.fire_bolt"] == data.drafts["spell.fire_bolt"]
     explicit = converted.drafts["spell.fire_bolt"]
     assert explicit.projectile is not None
@@ -33,7 +34,7 @@ def test_supported_v1_and_v6_decode_to_the_same_explicit_v2_recipe(data, tmp_pat
     assert explicit.projectile.targetAnchor.forwardPx == 0
     recipe_path.write_text(json.dumps({"schema": "dnd.spellStudioDrafts", "version": 2,
         "spells": [explicit.model_dump(mode="json")]}))
-    assert load_animation_data(authored_bundles=(tmp_path,)).drafts == converted.drafts
+    assert load_animation_data(authored_bundles=(tmp_path,), world_source=recipe_only_world()).drafts == converted.drafts
     # Conversion leaves the retained historical source untouched.
     assert fire_bolt["projectile"]["sourceAnchor"]["basis"] == "tileCenter"
     assert fire_bolt["projectile"]["targetAnchor"]["forwardPx"] == -16

@@ -1502,7 +1502,7 @@ def test_zero_movement_dirty_paths_are_deferred_until_movement_exists() -> None:
     arena = assemble_authored_encounter("srd_low_cr_patrol")
     actor = arena.hero
     actor.update_entity_senses(max_distance=20)
-    actor.action_economy.consume("movement", actor.action_economy.movement.normalized_score)
+    actor.action_economy.consume("movement", actor.action_economy.movement_remaining())
     actor.senses._paths_dirty = True
     phases: list[str] = []
     token = set_action_timing_recorder(lambda phase, _started: phases.append(phase))
@@ -1750,7 +1750,7 @@ def test_full_budget_move_refreshes_visibility_without_full_path_radius() -> Non
     after = actor.get_available_actions()
 
     assert result is not None
-    assert actor.action_economy.movement.normalized_score == 0
+    assert actor.action_economy.movement_remaining() == 0
     assert actor.senses.path_max_distance == 0
     assert actor.senses._paths_dirty is False
     assert actor.senses.visible
@@ -1944,7 +1944,7 @@ def test_weighted_move_discovery_uses_cached_senses_path_costs(
     difficult_position = next(
         position for position, cost in actor.senses.path_costs.items()
         if position != actor.position
-        and 0 < cost <= actor.action_economy.movement.normalized_score
+        and 0 < cost <= actor.action_economy.movement_remaining()
     )
     difficult_tile = grid.get_tile(*difficult_position)
     assert difficult_tile is not None

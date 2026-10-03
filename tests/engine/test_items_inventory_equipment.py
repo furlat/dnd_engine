@@ -405,13 +405,13 @@ def test_eb_13_015_heavy_armor_strength_requirement_reduces_speed() -> None:
     chain_mail = build_authored_item("armor.chain_mail", entity.uuid)
 
     assert entity.ability_scores.strength.ability_score.score == 10
-    assert entity.action_economy.movement.normalized_score == 30
+    assert entity.action_economy.movement_remaining() == 30
 
     assert entity.equipment.equip(chain_mail)
 
     assert chain_mail.strength_requirement == 13
     assert entity.equipment.body_armor is chain_mail
-    assert entity.action_economy.movement.normalized_score == 20
+    assert entity.action_economy.movement_remaining() == 20
 
     strength_boost = NumericalModifier(
         name="Temporary Strength",
@@ -422,15 +422,15 @@ def test_eb_13_015_heavy_armor_strength_requirement_reduces_speed() -> None:
     entity.ability_scores.strength.ability_score.self_static.add_value_modifier(strength_boost)
 
     assert entity.ability_scores.strength.ability_score.score == 13
-    assert entity.action_economy.movement.normalized_score == 30
+    assert entity.action_economy.movement_remaining() == 30
 
     entity.ability_scores.strength.ability_score.self_static.remove_value_modifier(strength_boost.uuid)
 
-    assert entity.action_economy.movement.normalized_score == 20
+    assert entity.action_economy.movement_remaining() == 20
 
     entity.equipment.unequip(BodyPart.BODY)
 
-    assert entity.action_economy.movement.normalized_score == 30
+    assert entity.action_economy.movement_remaining() == 30
 
 
 def test_eb_13_016_canceled_direct_equip_preserves_existing_slot_item() -> None:
@@ -504,14 +504,14 @@ def test_eb_13_018_destroying_equipped_item_clears_slot_and_item_effects() -> No
     assert entity.equipment.equip(armor)
     assert entity.equipment.body_armor is armor
     assert entity.skill_set.stealth.skill_bonus.advantage == AdvantageStatus.DISADVANTAGE
-    assert entity.action_economy.movement.normalized_score == 20
+    assert entity.action_economy.movement_remaining() == 20
 
     armor_damage = armor.receive_damage(99, DamageType.BLUDGEONING, entity.uuid)
 
     assert armor_damage > 0
     assert entity.equipment.body_armor is None
     assert entity.skill_set.stealth.skill_bonus.advantage == AdvantageStatus.NONE
-    assert entity.action_economy.movement.normalized_score == 30
+    assert entity.action_economy.movement_remaining() == 30
     assert not armor.is_equipped
     assert armor.equipped_slot is None
     assert armor.owner_uuid is None

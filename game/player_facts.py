@@ -11,15 +11,16 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from game.recording_compat import upgrade_spell_fact
 
-from dnd.blocks.appearance import AppearanceConfig
-from dnd.core.action_execution import MovementProvocationPolicy
+from dnd.types.appearance import AppearanceConfig
+from dnd.types.world import MovementProvocationPolicy
 from dnd.core.combat_log import CombatLogEntry
-from dnd.core.content.runtime import HandlerDispatchOutcome
+from dnd.core.content.identities import HandlerDispatchOutcome
 from dnd.core.creature_types import DamageType, Size
-from dnd.core.dice import AttackOutcome
+from dnd.core.creature_types import AttackOutcome
+from dnd.core.effect_types import ObservedChangeRef, ApplicationMembership, ResolutionRef
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
-from dnd.core.events import EventPhase, EventType, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState
-from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot, ItemEffectPresentationState,
+from dnd.types.event_facts import EventPhase, EventType, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState
+from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot, ItemResourceChange, ItemEffectPresentationState,
     ItemIntegrity, ItemPresentationKind, ItemPresentationState, ItemRemnantState)
 from dnd.core.life_types import LifeState, LifeStateChangeReason
 from dnd.core.presentation_geometry import AoEPresentationGeometry
@@ -33,7 +34,7 @@ from dnd.types.world import MovementMode, OccupancyLayer
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 from dnd.types.abilities import AbilityName
 from dnd.types.actor import TemporaryHitPointsGrant
-from game.actor_facts import ConditionFact
+from dnd.types.actor_facts import ConditionFact
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -120,8 +121,7 @@ class SpellFact:
     name: str | None
     source_position: tuple[int, int] | None
     declared_target_entity_uuids: tuple[UUID, ...]
-    application_id: UUID | None
-    application_index: int | None
+    application: ApplicationMembership | None
     attack_outcome: AttackOutcome | None = None
     cast_origin: Literal["actor", "source_item"] = "actor"
     source_item_uuid: UUID | None = None
@@ -136,6 +136,14 @@ class SpellFact:
     target_kind: Literal["creature", "object"] = "creature"
     target_position: tuple[int, int] | None = None
     target_base_height_steps: int | None = None
+
+    @property
+    def application_id(self) -> UUID | None:
+        return self.application.application_id if self.application is not None else None
+
+    @property
+    def application_index(self) -> int | None:
+        return self.application.index if self.application is not None else None
 
     @model_validator(mode="before")
     @classmethod
@@ -223,19 +231,30 @@ class ShoveFact:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DamageFact:
+class DamageRequestFact:
     kind: Literal["damage"] = "damage"
-    stage: Literal["taken", "applied"]
+    stage: Literal["taken"] = "taken"
     source_entity_uuid: UUID | None
     target_entity_uuid: UUID
-    applied_damage: int | None = None
-    resulting_normal_hp: int | None = None
-    resulting_temporary_hp: int | None = None
-    damage_type: DamageType | None = None
-    body_release: BodyReleaseResult | None = None
     intercepted_by_condition_uuid: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DamageResultFact:
+    kind: Literal["damage"] = "damage"
+    stage: Literal["applied"] = "applied"
+    source_entity_uuid: UUID | None
+    target_entity_uuid: UUID
+    applied_damage: int
+    resulting_normal_hp: int
+    resulting_temporary_hp: int
+    damage_type: DamageType
+    body_release: BodyReleaseResult | None = None
     effect_id: str | None = None
     spatial_source: SpatialDamageSource | None = None
+
+
+DamageFact = DamageRequestFact | DamageResultFact
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -311,6 +330,7 @@ class SpatialFact:
     change_type: SpatialChangeType
     entity_uuid: UUID | None
     position: tuple[int, int]
+    commit_event_uuid: UUID | None = None
     previous_occupancy_layer: OccupancyLayer | None = None
     occupancy_layer: OccupancyLayer | None = None
 
@@ -331,6 +351,8 @@ class ItemChargeFact:
     charges_after: int
     stack_count_after: int
     item_destroyed: bool
+    # Older public packets retain after-values but did not disclose this label.
+    resource_change: ItemResourceChange | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -356,6 +378,7 @@ class ActionFact:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SensoryFact:
     kind: Literal["sensory"] = "sensory"
+    observed_changes: tuple[ObservedChangeRef, ...] = ()
     observer_uuid: UUID
     initial: bool
     observer_position: tuple[int, int]
@@ -436,7 +459,7 @@ class ObjectDestroyedFact:
 
 PlayerFact = Annotated[
     AttackFact | SpellFact | AreaReachFact | MovementFact | StepFact | ForcedMovementFact | PortalTransferFact | ShoveFact
-    | DamageFact | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact | EquipmentFact
+    | Annotated[DamageFact, Field(discriminator="stage")] | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact | EquipmentFact
     | ConditionChangeFact | SpatialFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
     | ObjectDamageFact | ObjectDestroyedFact | MechanismActivationFact | SavingThrowFact,
     Field(discriminator="kind"),
@@ -475,6 +498,7 @@ class PlayerNode:
     phase: EventPhase
     canceled: bool
     fact: PlayerFact | None
+    resolution_ref: ResolutionRef | None = None
     cancellation: ActionCancellation | None = None
     combat_log: CombatLogEntry | None = None
     content_attributions: tuple[ContentAttribution, ...] = ()
@@ -515,6 +539,7 @@ class FloorItem:
     remnant_state: ItemRemnantState | None = None
     integrity: ItemIntegrity = ItemIntegrity.INTACT
     destruction_outcome: str | None = None
+    construction_owner_uuid: UUID | None = None
     construction_geometry: AoEPresentationGeometry | None = None
     known_to_creator: bool = False
 
@@ -570,7 +595,7 @@ class PlayerInitialization:
 
 class PlayerSequence(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     initialization: PlayerInitialization
     lineages: tuple[PlayerLineage, ...]
 

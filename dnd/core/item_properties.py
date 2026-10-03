@@ -57,4 +57,4 @@ class ItemWearerValues:
     strength: ModifiableValue
     spell_attack: ModifiableValue
     stealth: ModifiableValue
-    movement: ModifiableValue
+    speeds: tuple[ModifiableValue, ...]

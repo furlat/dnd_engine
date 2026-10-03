@@ -513,17 +513,7 @@ def _apply_level_features(
                 ),
                 "action.class.sorcerer.dragon_wings.toggle",
             ),
-            (
-                sorcerer.Fly(
-                    uuid=_source(
-                        entity,
-                        f"{step_id}.{_DRAGON_WINGS}.fly_action",
-                    ),
-                    source_entity_uuid=entity.uuid,
-                    template=True,
-                ),
-                "action.class.sorcerer.dragon_wings.fly",
-            ),
+
         ):
             action_uuid = _register_feature_action(
                 entity,

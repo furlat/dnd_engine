@@ -31,7 +31,7 @@ from dnd.spells.illusion import MirrorImage
 from dnd.spells.transmutation import EnlargeReduce, SpikeGrowth
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.world import CardinalDirection, OccupancyLayer, WorldEdgeChannel
-from game.player_facts import AttackFact, ConditionChangeFact, DamageFact, SpatialEffectStateFact
+from game.player_facts import AttackFact, ConditionChangeFact, DamageFact, DamageRequestFact, SpatialEffectStateFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.presentation import capture_interval, capture_lineages
@@ -462,7 +462,7 @@ def test_shield_magic_missile_block_attribution_survives_canceled_damage_replay(
     for payload in saved_views((defender,attacker),start).values():
         _,heads = decode_player_sequence(payload)
         blocks = [node for head in heads for node in head.events
-                  if isinstance(node.fact,DamageFact) and node.fact.intercepted_by_condition_uuid==owner]
+                  if isinstance(node.fact,DamageRequestFact) and node.fact.intercepted_by_condition_uuid==owner]
         assert blocks and all(node.canceled for node in blocks)
 
 

@@ -126,7 +126,7 @@ def test_real_movement_ground_contact_and_state(game, content_ref, mode, command
     assert traveler.position == result.end_position == ((7, 2) if transferred else (3, 1))
     assert traveler.occupancy_layer is OccupancyLayer.GROUND
     cost = 5 if transferred and command == "walk" else 15
-    assert traveler.action_economy.movement.normalized_score == 30 - cost
+    assert traveler.action_economy.movement_remaining() == 30 - cost
     assert result.path == ([(0, 1), (1, 1)] if cost == 5 else [(0, 1), (1, 1), (2, 1), (3, 1)])
     transfers = completed(cursor, PortalTransferEvent)
     assert len(transfers) == int(transferred)
@@ -160,7 +160,7 @@ def test_blocked_exit_leaves_actor_at_entrance(game, blocker):
     assert traveler.position == result.end_position == (1, 1)
     assert not any(event.committed for _, event in EventQueue.iter_events_since(cursor)
                    if isinstance(event, PortalTransferEvent))
-    assert traveler.action_economy.movement.normalized_score == 25
+    assert traveler.action_economy.movement_remaining() == 25
 
 
 def test_exit_need_not_be_visible_and_keeps_its_own_height(game):
@@ -193,7 +193,7 @@ def test_exit_hazard_and_paid_retreat_are_children_not_extra_transfer_distance(g
     transfer, = completed(cursor, PortalTransferEvent)
     assert transfer.end_position == (7, 2)
     assert traveler.position == result.end_position == (6, 2)
-    assert traveler.action_economy.movement.normalized_score == 20
+    assert traveler.action_economy.movement_remaining() == 20
     assert "Frightened" not in traveler.active_conditions
     steps = completed(cursor, StepMovementEvent)
     assert {(step.from_position, step.to_position) for step in steps} == {
@@ -227,7 +227,7 @@ def test_shove_stops_its_old_route_after_entry(game):
     assert result is not None and not result.canceled
     assert traveler.position == result.end_position == (7, 2)
     assert result.push_distance == 5
-    assert traveler.action_economy.movement.normalized_score == 30
+    assert traveler.action_economy.movement_remaining() == 30
     assert len(completed(cursor, PortalTransferEvent)) == 1
     push, = completed(cursor, ForcedMovementEvent)
     assert push.end_position == (2, 1), "The pushed leg ends at the entrance, not the portal exit"
@@ -249,7 +249,7 @@ def test_spell_push_contacts_intermediate_portal_and_stops(game, spell):
     push, = completed(cursor, ForcedMovementEvent)
     assert push.end_position == (2, 1) and push.actual_distance == 5
     assert len(completed(cursor, PortalTransferEvent)) == 1
-    assert traveler.action_economy.movement.normalized_score == 30
+    assert traveler.action_economy.movement_remaining() == 30
 
 
 @pytest.mark.parametrize("spell,distance", ((Thunderwave, 10), (GustOfWind, 15)))
@@ -294,4 +294,4 @@ def test_lever_opens_under_occupant_and_closing_does_not_recall_them(game):
         result = execute_use_action(operator, lever.uuid, action)
         assert result is not None and not result.canceled
     assert traveler.position == (7, 2) and portal.trap_state is TrapState.DEACTIVATED
-    assert traveler.action_economy.movement.normalized_score == 30
+    assert traveler.action_economy.movement_remaining() == 30

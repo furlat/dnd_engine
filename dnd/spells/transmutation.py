@@ -3,6 +3,13 @@
 Contains: SpikeGrowth, Slow, Haste, Darkvision, JumpSpell, ExpeditiousRetreat, Disintegrate,
           EnhanceAbility, EnlargeReduce, Regenerate
 """
+from typing import cast
+from dnd.blocks.equipment import Weapon, WeaponUnequipEvent
+from dnd.core.attack_types import WeaponAttackOverride
+from dnd.types.materials import Material
+from dnd.core.equipment_types import WeaponKind, WeaponSlot
+from dnd.types.world import MovementMode
+from dnd.core.base_conditions import Duration
 from typing import Any, Dict, Literal, Optional, List, Set, Tuple, cast as type_cast
 from uuid import UUID
 
@@ -62,6 +69,7 @@ from dnd.types.actor import ConditionState
 from dnd.core.dice import AttackOutcome
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
+    ArithmeticFactor,
     NumericalModifier,
     AdvantageModifier,
     AdvantageStatus,
@@ -173,7 +181,8 @@ class SpikeGrowthZone(AreaCondition):
             )
             damage_roll = damage_obj.get_dice(attack_outcome=AttackOutcome.HIT).roll
             entity.receive_damage(damage_roll.total, DamageType.PIERCING, source_uuid,
-                                  parent_event=event.uuid, effect_id=effect_id)
+                                  parent_event=event.uuid, effect_id=effect_id,
+                                  independent_resolution=True, effect_origin=self.effect_origin)
 
             return None
 
@@ -322,18 +331,12 @@ class SlowedEffect(BaseCondition):
         outs: List[Tuple[UUID, UUID]] = []
         handler_uuids: List[UUID] = []
 
-        base_speed_modifier = target.action_economy.movement.get_base_modifier()
-        if base_speed_modifier and not target.ignore_magical_speed_reduction:
-            speed_penalty = -(base_speed_modifier.value // 2)
-            speed_mod = NumericalModifier(
-                name="Slowed",
-                value=speed_penalty,
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid
-            )
-            target.action_economy.movement.self_static.add_value_modifier(speed_mod)
-            outs.append((target.action_economy.movement.uuid, speed_mod.uuid))
-            target.action_economy.movement_speed_factors[speed_mod.uuid] = 0.5
+        if not target.ignore_magical_speed_reduction:
+            for speed in target.action_economy.speed_values:
+                modifier = ArithmeticFactor(name="Slowed", numerator=1, denominator=2,
+                    source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid)
+                speed.self_static.add_factor(modifier)
+                outs.append((speed.uuid, modifier.uuid))
 
         ac_mod = NumericalModifier(
             name="Slowed",
@@ -644,18 +647,11 @@ class HasteEffect(BaseCondition):
             )
 
         outs: List[Tuple[UUID, UUID]] = []
-        base_speed_modifier = target.action_economy.movement.get_base_modifier()
-        if base_speed_modifier:
-            speed_bonus = base_speed_modifier.value
-            speed_mod = NumericalModifier(
-                name="Haste",
-                value=speed_bonus,
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid
-            )
-            target.action_economy.movement.self_static.add_value_modifier(speed_mod)
-            outs.append((target.action_economy.movement.uuid, speed_mod.uuid))
-            target.action_economy.movement_speed_factors[speed_mod.uuid] = 2.0
+        for speed in target.action_economy.speed_values:
+            modifier = ArithmeticFactor(name="Haste", numerator=2, denominator=1,
+                source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid)
+            speed.self_static.add_factor(modifier)
+            outs.append((speed.uuid, modifier.uuid))
 
         ac_mod = NumericalModifier(
             name="Haste",
@@ -2087,3 +2083,192 @@ class Regenerate(SpellAction):
             total_damage=0,
             status_message=f"Regenerate heals {target.name} for {actual} HP + 1 HP/round"
         )
+
+
+class LongstriderEffect(BaseCondition):
+    description: str = "Speed increases by 10 feet until the effect ends."
+    name: str = "Longstrider"
+    tags: set[ConditionTag] = {ConditionTag.MAGICAL}
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=600))
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Recipient missing")
+        modifier = NumericalModifier(name=self.name, value=10,
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid)
+        owned = []
+        for speed in target.action_economy.speed_values:
+            speed.self_static.add_value_modifier(modifier)
+            owned.append((speed.uuid, modifier.uuid))
+        return owned, [], [], [], event.phase_to(EventPhase.EFFECT)
+
+
+class Longstrider(SpellAction):
+    name: str = "Longstrider"
+    description: str = "Touch: speed increases by 10 feet for one hour; additional recipients when upcast."
+    spell_level: int = 1
+    spell_school: str = "transmutation"
+    target_type: TargetType = TargetType.MULTI_ENTITY
+    include_self: bool = True
+    valid_target_filter: str = "self_or_allies"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+
+    def get_multi_target_count(self) -> int:
+        return self.alt_target_count or max(1, self.cast_at_level)
+
+    def _apply(self, event: SpellEvent):
+        effect_event = event.phase_to(EventPhase.EFFECT)
+        return self.apply_owned_condition( effect_event, LongstriderEffect(
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid))
+
+
+class BarkskinEffect(BaseCondition):
+    description: str = "Armor Class cannot fall below 16."
+    name: str = "Barkskin"
+    tags: set[ConditionTag] = {ConditionTag.MAGICAL}
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=600))
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Recipient missing")
+        value = target.equipment.ac_bonus
+        modifier = NumericalModifier(name=self.name, value=16,
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid)
+        value.self_static.add_min_constraint(modifier)
+        return [(value.uuid, modifier.uuid)], [], [], [], event.phase_to(EventPhase.EFFECT)
+
+
+class Barkskin(SpellAction):
+    name: str = "Barkskin"
+    description: str = "Touch: Armor Class cannot be below 16; concentration up to one hour."
+    spell_level: int = 2
+    spell_school: str = "transmutation"
+    concentration: bool = True
+    target_type: TargetType = TargetType.ENTITY
+    include_self: bool = True
+    valid_target_filter: str = "self_or_allies"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+
+    def _apply(self, event: SpellEvent):
+        return self.apply_owned_condition( event.phase_to(EventPhase.EFFECT), BarkskinEffect(
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid))
+
+
+class FlyEffect(BaseCondition):
+    description: str = "Source-owned flying speed and ground-to-ground movement."
+    name: str = "Fly"
+    tags: set[ConditionTag] = {ConditionTag.MAGICAL}
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=100))
+    flying_speed: int = Field(default=60, gt=0)
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Recipient missing")
+        target.action_economy.grant_speed(self.uuid, MovementMode.FLYING, self.flying_speed)
+        return [], [], [], [], event.phase_to(EventPhase.EFFECT)
+
+    def _remove(self, event: Event | None = None):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            target.action_economy.remove_speed_grant(self.uuid)
+        return super()._remove(event)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            target.action_economy.remove_speed_grant(self.uuid)
+
+
+class Fly(SpellAction):
+    name: str = "Fly"
+    description: str = "Touch: 60-foot flying speed, concentration for 10 minutes; supported endpoints only."
+    spell_level: int = 3
+    spell_school: str = "transmutation"
+    concentration: bool = True
+    target_type: TargetType = TargetType.MULTI_ENTITY
+    include_self: bool = True
+    valid_target_filter: str = "self_or_allies"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
+
+    def get_multi_target_count(self) -> int:
+        return self.alt_target_count or max(1, self.cast_at_level - 2)
+
+    def _apply(self, event: SpellEvent):
+        return self.apply_owned_condition( event.phase_to(EventPhase.EFFECT), FlyEffect(
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=self.target_entity_uuid))
+
+
+class ShillelaghEffect(BaseCondition):
+    description: str = "Exact held weapon becomes magical, d8 with optional casting ability."
+    name: str = "Shillelagh"
+    tags: set[ConditionTag] = {ConditionTag.MAGICAL}
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
+    weapon_uuid: UUID
+    casting_ability: AbilityName
+
+    def _apply(self, event: Event):
+        caster = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        weapon = cast(Weapon | None, Weapon.get(self.weapon_uuid))
+        if caster is None or weapon is None:
+            return [], [], [], [], event.cancel(status_message="Held weapon missing")
+        weapon.attack_overrides[self.uuid] = WeaponAttackOverride(wielder_uuid=caster.uuid,
+            damage_die=8, optional_ability=self.casting_ability)
+
+        def released(transition: Event, actor_uuid: UUID):
+            if isinstance(transition, WeaponUnequipEvent) and transition.item_uuid == self.weapon_uuid:
+                actor = Entity.get(actor_uuid)
+                if actor is not None:
+                    actor.remove_condition_by_uuid(self.uuid, parent_event=transition)
+            return None
+
+        handler = EventHandler(name="Shillelagh release", source_entity_uuid=caster.uuid,
+            trigger_conditions=[Trigger(event_type=EventType.WEAPON_UNEQUIP, event_phase=EventPhase.EFFECT)],
+            event_processor=released)
+        caster.add_event_handler(handler)
+        return [], [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        weapon = cast(Weapon | None, Weapon.get(self.weapon_uuid))
+        if weapon is not None:
+            weapon.attack_overrides.pop(self.uuid, None)
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+
+class Shillelagh(SpellAction):
+    name: str = "Shillelagh"
+    description: str = "Held wooden club/staff: magical, d8; optionally use spellcasting ability for one minute."
+    spell_school: str = "transmutation"
+    target_type: TargetType = TargetType.SELF
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
+    selected_weapon_uuid: UUID | None = None
+
+    def _create_declaration_event(self, parent_event: Event | None = None, use_register: bool = True):
+        caster = Entity.get(self.source_entity_uuid)
+        weapon = caster.equipment.get_weapon(self.weapon_slot) if caster else None
+        self.selected_weapon_uuid = weapon.uuid if weapon else None
+        declaration = super()._create_declaration_event(parent_event, use_register=use_register)
+        return declaration.model_copy(update={"source_item_uuid":self.selected_weapon_uuid}) if declaration else None
+
+    costs: list[Cost] = Field(default_factory=lambda: [Cost(name="Shillelagh", cost_type="bonus_actions",
+        cost=1, evaluator=entity_action_economy_cost_evaluator)])
+
+    def _validate(self, event: SpellEvent):
+        caster = Entity.get(self.source_entity_uuid)
+        weapon = caster.equipment.get_weapon(self.weapon_slot) if caster else None
+        if weapon is None or (weapon.weapon_kind not in (WeaponKind.CLUB, WeaponKind.QUARTERSTAFF) or weapon.material != Material.WOOD):
+            return event.cancel(status_message="Shillelagh requires a held wooden club or quarterstaff")
+        return super()._validate(event)
+
+    def _apply(self, event: SpellEvent):
+        caster = Entity.get(self.source_entity_uuid)
+        weapon = caster.equipment.get_weapon(self.weapon_slot) if caster else None
+        if (caster is None or weapon is None or weapon.uuid != self.selected_weapon_uuid
+                or (weapon.weapon_kind not in (WeaponKind.CLUB, WeaponKind.QUARTERSTAFF) or weapon.material != Material.WOOD)):
+            return event.cancel(status_message="Exact eligible held weapon was lost")
+        return self.apply_owned_condition( event.phase_to(EventPhase.EFFECT), ShillelaghEffect(
+            source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid, weapon_uuid=weapon.uuid,
+            casting_ability=caster.spellcasting.resolve_spellcasting_ability(self.spellcasting_source_id)))

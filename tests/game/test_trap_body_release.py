@@ -8,7 +8,7 @@ from dnd.core.base_object import PASSIVE_EVENT_REPLAY
 from dnd.core.creature_types import DamageType
 from dnd.core.events import DamageAppliedEvent, EventQueue
 from dnd.entity import Entity
-from game.player_facts import DamageFact
+from game.player_facts import DamageResultFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.replay import RecordedSequence
@@ -42,7 +42,7 @@ def test_review_injuries_record_material_and_floor_state_for_both_observers(make
         assert all(event.body_release is not None for event in injuries.values()), role
         state, roots = decode_player_sequence(encode_player_sequence(project_sequence(native)))
         releases = {node.uuid: node.fact for root in roots for node in root.events
-                    if isinstance(node.fact, DamageFact) and node.fact.body_release is not None}
+                    if isinstance(node.fact, DamageResultFact) and node.fact.body_release is not None}
         assert set(releases) == set(injuries), role
         for identity, release in releases.items():
             assert release.body_release is not None and release.body_release.release_id == "body.blood"

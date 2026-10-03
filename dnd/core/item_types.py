@@ -8,10 +8,24 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.creature_types import DamageType
+from dnd.core.equipment_types import EquipmentSlot
 from dnd.types.world_placement import BoundaryStructure, WorldPlacementSpec
 from dnd.types.residues import ObjectResidueState
 from dnd.types.traps import TrapState
 from dnd.types.physical_access import ContactPassage
+
+class EquippedSourceRequirement(BaseModel):
+    """A usable possession must occupy this slot on the actor using it."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    slot: EquipmentSlot
+
+
+class ItemResourceChange(str, Enum):
+    """Operation in the existing finite-item resource event family."""
+    CONSUME = "consume"
+    RECHARGE = "recharge"
+
 
 class ItemRarity(str, Enum):
     """Stable rarity labels carried by item definitions and presentation facts."""
@@ -63,6 +77,7 @@ class ItemConcentrationSlot(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     slot_uuid: UUID
+    cast_lineage_uuid: UUID | None = None
     spell_id: str | None = None
     spell_name: str
 
@@ -179,6 +194,7 @@ class ItemPresentationState(BaseModel):
     concentration_capacity: int = Field(default=0, ge=0)
     concentration_slots: tuple[ItemConcentrationSlot, ...] = ()
     boundary_structure: Optional[BoundaryStructure] = None
+    construction_owner_uuid: UUID | None = None
     construction_geometry: AoEPresentationGeometry | None = None
     known_to_creator: bool = False
     supported_by_uuid: Optional[UUID] = None
