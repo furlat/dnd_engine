@@ -77,9 +77,9 @@
       "id": "ranged",
       "match": {"kind": "attack", "delivery": "projectile", "weaponSlots": null, "outcomes": null, "primaryDamageTypes": null, "elemental": null, "sourceItemRefs": null},
       "actor": {"clip": "Attack3", "playbackSpeed": 1, "hiddenSlots": [], "media": [], "enabled": true},
-      "anchors": [{"name": "action_start", "frame": 0}, {"name": "release", "frame": 8}, {"name": "recover", "frame": 10}],
-      "attackVfx": {"onHit": {"slash": {"category": "Slash1", "tint": "white"}}, "onMiss": {}},
-      "projectile": {"geometry": {"renderer": "geometry_projectile", "enabled": true, "primitive": "bolt"}, "speedPxPerSecond": 500, "minimumTravelDurationMs": 150, "trajectory": {"type": "straight", "sameTargetSpread": false}, "originX": 0, "originY": -16, "sourceForwardPx": 0, "targetY": -16, "targetForwardPx": 0, "depthMode": "world", "debugAnchor": false},
+      "anchors": [{"name": "action_start", "frame": 0}, {"name": "release", "frame": 10}, {"name": "recover", "frame": 10}],
+      "attackVfx": {"onHit": {"slash": {"category": "Slash1", "tint": "white"}}, "onMiss": {"slash": {"category": "Slash1", "tint": "white"}}},
+      "projectile": {"geometry": {"renderer": "geometry_projectile", "enabled": true, "primitive": "bolt"}, "speedPxPerSecond": 500, "minimumTravelDurationMs": 150, "trajectory": {"type": "straight", "sameTargetSpread": false}, "originX": 0, "originY": -16, "sourceForwardPx": 0, "targetY": -16, "targetForwardPx": 0, "depthMode": "world", "debugAnchor": false, "sourceSocketsByRig": {"neuroclient.modular": {"release": {"E": {"x": 86.0, "y": 49.5}, "SE": {"x": 82.5, "y": 61.0}, "S": {"x": 68.5, "y": 68.0}, "SW": {"x": 53.0, "y": 64.5}, "W": {"x": 44.5, "y": 55.5}, "NW": {"x": 47.5, "y": 43.5}, "N": {"x": 61.5, "y": 38.0}, "NE": {"x": 78.0, "y": 40.0}}}}},
       "precedence": 100
     }
   ]

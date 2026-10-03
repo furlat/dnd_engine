@@ -74,6 +74,7 @@ class SpellContentIdentitySpec:
     source_page: int | None
     sort_order: int
     icon_key: str | None = None
+    adaptation_notes: str | None = None
 
 
 def _saving_throws(
@@ -237,7 +238,8 @@ SPELL_CONTENT_IDENTITY_SPECS: tuple[SpellContentIdentitySpec, ...] = (
     SpellContentIdentitySpec("Lesser Restoration", abjuration.LesserRestoration, SRD_SPELL_PACK_ID, "spell.lesser_restoration", "abjuration", 2, 158, 540),
     SpellContentIdentitySpec("Protection from Poison", abjuration.ProtectionFromPoison, SRD_SPELL_PACK_ID, "spell.protection_from_poison", "abjuration", 2, 173, 550),
     SpellContentIdentitySpec("Aid", abjuration.Aid, SRD_SPELL_PACK_ID, "spell.aid", "abjuration", 2, 114, 560),
-    SpellContentIdentitySpec("Call Lightning", conjuration.CallLightning, SRD_SPELL_PACK_ID, "spell.call_lightning", "conjuration", 3, 123, 570),
+    SpellContentIdentitySpec("Call Lightning", conjuration.CallLightning, SRD_SPELL_PACK_ID, "spell.call_lightning", "conjuration", 3, 123, 570,
+        adaptation_notes="BG3-style 60-foot range, seven-foot area and ten-turn concentration; no fixed storm, weather or overhead-space rules. https://bg3.wiki/wiki/Call_Lightning"),
     SpellContentIdentitySpec("Fireball", evocation.Fireball, SRD_SPELL_PACK_ID, "spell.fireball", "evocation", 3, 144, 580),
     SpellContentIdentitySpec("Lightning Bolt", evocation.LightningBolt, SRD_SPELL_PACK_ID, "spell.lightning_bolt", "evocation", 3, 159, 590, "spell.lightning-bolt"),
     SpellContentIdentitySpec("Protection from Energy", abjuration.ProtectionFromEnergy, SRD_SPELL_PACK_ID, "spell.protection_from_energy", "abjuration", 3, 173, 600),
@@ -554,8 +556,8 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
         multi_target=_multi_target(1, 1, True),
     )),
     (conjuration.CallLightning, _catalog(
-        'call_lightning', 'Summon storm cloud, strike a five-foot area each turn', 'position_aoe', 'ranged', 120, 'aoe',
-        area=_area('sphere', radius_ft=5), projectile='bolt', damage=(DamageType.LIGHTNING,), saves=_saving_throws('dexterity'), concentration=True, tags=('lightning', 'bolt', 'concentration'),
+        'call_lightning', 'BG3 adaptation: seven-foot bolt area, repeat for ten turns while concentrating', 'position_aoe', 'ranged', 60, 'aoe',
+        area=_area('sphere', radius_ft=7), projectile='bolt', damage=(DamageType.LIGHTNING,), saves=_saving_throws('dexterity'), concentration=True, tags=('lightning', 'bolt', 'concentration'),
     )),
     (evocation.Fireball, _catalog(
         'fireball', '20ft radius explosion dealing 8d6 fire damage (DEX save half)', 'position_aoe', 'ranged', 150, 'aoe_projectile',
@@ -922,6 +924,7 @@ def _declare_spell(spec: SpellContentIdentitySpec) -> ContentDeclaration:
                 sort_order=spec.sort_order,
                 icon_key=spec.icon_key,
                 dependencies=_spell_runtime_dependencies(spec.spell_type),
+                adaptation_notes=spec.adaptation_notes,
             )
         elif spec.pack_id == NEURODRAGON_SPELL_PACK_ID:
             if spec.source_page is not None:

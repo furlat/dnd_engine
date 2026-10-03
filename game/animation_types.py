@@ -1175,6 +1175,7 @@ class ActionProjectile(AuthoredRecord):
     targetForwardPx: float
     depthMode: DepthMode
     debugAnchor: bool
+    sourceSocketsByRig: FrozenMap[SourceSockets] = Field(default_factory=dict)
 
 
 class AttackVariant(AuthoredRecord):

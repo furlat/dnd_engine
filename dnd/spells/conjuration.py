@@ -80,7 +80,7 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.types.world import OccupancyLayer
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
+from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, resolve_paid_entry_retreats
 from dnd.spells.content_metadata import srd_action_identity
 from dnd.spatial.area_conditions import AreaCondition
 from dnd.spatial.environmental_conditions import (
@@ -112,35 +112,75 @@ from dnd.types.spatial_effects import (
 from dnd.spells.spell_utils import validate_line_of_sight
 
 
+def _call_lightning_target_error(spell: SpellAction) -> Optional[str]:
+    caster = Entity.get(spell.source_entity_uuid)
+    if caster is None or spell.end_position is None:
+        return "Caster or strike point missing"
+    error = spell.target_position_error(spell.end_position)
+    if error is not None:
+        return error
+    if not caster.senses.visible.get(spell.end_position, False):
+        return "Strike point is not visible"
+    return None
+
+
+def _call_lightning_positions(spell: SpellAction) -> List[Tuple[int, int]]:
+    """A bolt may target any visible in-range point, including the caster's feet."""
+    caster = Entity.get(spell.source_entity_uuid)
+    if caster is None:
+        return []
+    return [point for point, visible in caster.senses.visible.items()
+            if visible and spell.target_position_error(point) is None]
+
+
+def _apply_call_lightning(spell: SpellAction, event: SpellEvent, *, dc: int) -> SpellEvent:
+    """One initial or repeated bolt application through ordinary spell results."""
+    caster = Entity.get(spell.source_entity_uuid)
+    target = Entity.get(spell.target_entity_uuid) if spell.target_entity_uuid else None
+    if caster is None or target is None:
+        return event.cancel(status_message="Caster or target not found")
+    effect, _, success = spell.resolve_saving_throw(
+        event, caster=caster, target=target, ability_name="dexterity", dc=dc)
+    damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+        damage_dice=10, dice_numbers=3 + spell.get_upcast_bonus(),
+        damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.LIGHTNING)
+    roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+    amount = roll.total // 2 if success else roll.total
+    target.receive_damage(amount=amount, damage_type=DamageType.LIGHTNING,
+        source_entity_uuid=caster.uuid, parent_event=effect.uuid)
+    return effect.with_updates(damages=[damage], damage_rolls=[roll], total_damage=amount,
+        status_message=f"{spell.name} dealt {amount} lightning damage")
+
+
 @srd_action_identity(
     content_id="action.spell.call_lightning.strike",
     display_name="Call Lightning Strike",
-    description="Call another bolt from an active Call Lightning spell.",
+    description="Activate the sustained spell without spending another spell slot.",
     parent_spell_name="Call Lightning",
     source_page=123,
     sort_order=570,
+    adaptation_notes=("BG3-style activation: action, no slot, 60-foot range and seven-foot area; "
+        "retains original cast level and DC. https://bg3.wiki/wiki/Activate_Call_Lightning"),
 )
-class CallLightningStrike(BaseAction):
-    """Action granted by Call Lightning to strike with lightning each turn.
-
-    This is NOT a spell - it's a special action granted while concentrating
-    on Call Lightning. Uses an action, deals 3d10 lightning (DEX save).
-    """
-    name: str = Field(default="Call Lightning Strike", description="Display name for the call lightning strike action.")
-    description: str = Field(default="Call down a bolt of lightning", description="Rules-facing summary for the call lightning strike action.")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for call lightning strike.")
-    costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Strike Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)], description="Action economy costs paid to execute call lightning strike.")
-
-    spell_dc: int = Field(default=10, description="Spell save DC used by call lightning strike saving throws.")
-    damage_dice_count: int = Field(default=3, description="Number of d10 damage dice rolled by call lightning strike.")
-    caster_uuid: Optional[UUID] = Field(default=None, description="Caster UUID used for ownership and effect attribution by call lightning strike.")
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
-        description="Range contract used when validating targets for call lightning strike.",
-    )
-
+class CallLightningStrike(SpellAction):
+    """BG3 spell activation granted by one exact concentration effect."""
+    name: str = "Call Lightning Strike"
+    description: str = "Call another bolt within 60 feet; seven-foot radius, DEX save for half."
+    spell_level: int = 3
+    spell_school: str = "conjuration"
+    alt_skip_slot: bool = True
+    target_type: TargetType = TargetType.POSITION_AOE
+    aoe_require_targets: bool = False
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    spell_damage_type: Optional[DamageType] = DamageType.LIGHTNING
+    projectile_type: Optional[str] = "bolt"
     include_self: bool = True
     valid_target_filter: str = "all"
+    spell_dc: int = 10
+    grant_condition_uuid: Optional[UUID] = None
+
+    def get_valid_positions(self) -> List[Tuple[int, int]]:
+        return _call_lightning_positions(self)
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -150,111 +190,41 @@ class CallLightningStrike(BaseAction):
                 self.end_position = target.position
         if self.aoe_shape is None:
             self.aoe_shape = Sphere(source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0), radius_feet=5)
+                target=self.end_position or (0, 0), radius_feet=7)
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         return self._resolve_area_targets()
 
-    def get_range(self) -> Range:
-        return self.spell_range
-
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    def _validate(self, event: SpellEvent) -> Optional[ActionEvent]:
+        error = _call_lightning_target_error(self)
+        if error is not None:
+            return event.cancel(status_message=error)
         caster = Entity.get(self.source_entity_uuid)
-        if caster is None or self.end_position is None:
-            return declaration_event.cancel(status_message="Caster or strike point missing")
-        conc = caster.active_conditions.get("Concentrating")
-        if not isinstance(conc, Concentrating) or conc.get_slot_by_spell_name("Call Lightning") is None:
-            return declaration_event.cancel(status_message="Not concentrating on Call Lightning")
-        return super()._validate(declaration_event)
+        if caster is None or self.grant_condition_uuid not in caster.active_conditions_by_uuid:
+            return event.cancel(status_message="The Call Lightning grant has ended")
+        return super()._validate(event)
 
-    def _apply(self, execution_event: ActionEvent) -> Optional[Event]:
-        """Strike with lightning - DEX save for half damage."""
-
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not caster or not target:
-            return execution_event.cancel(status_message="Caster or target not found")
-
-        save_request = caster.create_saving_throw_request(
-            target_entity_uuid=target.uuid,
-            ability_name="dexterity",
-            dc=self.spell_dc,
-            parent_event=execution_event.uuid
-        )
-        _, save_roll, success = target.saving_throw(save_request)
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"DEX save: {save_roll.total} vs DC {self.spell_dc} - {'Success' if success else 'Failure'}"
-        )
-
-        damage_bonus = caster.get_spell_damage_bonus()
-        lightning_damage = Damage(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid,
-            damage_dice=10,
-            dice_numbers=self.damage_dice_count,
-            damage_bonus=damage_bonus,
-            damage_type=DamageType.LIGHTNING
-        )
-
-        damage_dice = lightning_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
-
-        final_damage = damage_roll.total // 2 if success else damage_roll.total
-
-        target.receive_damage(
-            amount=final_damage,
-            damage_type=DamageType.LIGHTNING,
-            source_entity_uuid=caster.uuid,
-            parent_event=effect_event.uuid
-        )
-
-        save_text = " (save for half)" if success else ""
-        return effect_event.with_updates(
-            damages=[lightning_damage],
-            damage_rolls=[damage_roll],
-            total_damage=final_damage,
-            status_message=f"{self.name} dealt {final_damage} lightning damage{save_text}"
-        )
-
-    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
-        """Spend the action declared by the granted strike."""
-        return entity_action_economy_cost_applier(
-            execution_event,
-            self.source_entity_uuid,
-        )
+    def _apply(self, event: SpellEvent) -> SpellEvent:
+        return _apply_call_lightning(self, event, dc=self.spell_dc)
 
 
 class CallLightning(SpellAction):
-    """Call Lightning - 3rd level Conjuration (Concentration)
-
-    A storm cloud appears. When you cast the spell, choose a point you can see
-    under the cloud. Each creature within 5 feet of that point must make a DEX
-    saving throw. A creature takes 3d10 lightning damage on a failed save, or
-    half as much on a successful one.
-
-    On each of your turns until the spell ends, you can use your action to call
-    down lightning in this way again, targeting the same point or a different one.
-
-    At Higher Levels: Damage increases by 1d10 for each slot level above 3rd.
-    """
-    name: str = Field(default="Call Lightning", description="Display name for the call lightning spell.")
-    description: str = Field(default="Summon storm cloud, strike with lightning each turn", description="Rules-facing summary for the call lightning spell.")
-    spell_level: int = Field(default=3, description="Spell slot level required to cast call lightning; cantrips use 0.")
-    spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify call lightning.")
-    concentration: bool = Field(default=True, description="Whether call lightning creates and maintains a concentration condition.")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for call lightning.")
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=120),
-        description="Range contract used when validating targets for call lightning.",
-    )
-    projectile_type: Optional[str] = Field(default="bolt", description="Projectile visualization hint for call lightning.")
-    spell_damage_type: Optional[DamageType] = Field(default=DamageType.LIGHTNING, description="Primary damage type for VFX")
-
+    """BG3 adaptation: one bolt now, action-cost activations for ten turns."""
+    name: str = "Call Lightning"
+    description: str = "Strike a seven-foot area within 60 feet; repeat for ten turns while concentrating."
+    spell_level: int = 3
+    spell_school: str = "conjuration"
+    concentration: bool = True
+    target_type: TargetType = TargetType.POSITION_AOE
+    aoe_require_targets: bool = False
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    projectile_type: Optional[str] = "bolt"
+    spell_damage_type: Optional[DamageType] = DamageType.LIGHTNING
     include_self: bool = True
     valid_target_filter: str = "all"
+
+    def get_valid_positions(self) -> List[Tuple[int, int]]:
+        return _call_lightning_positions(self)
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -264,103 +234,43 @@ class CallLightning(SpellAction):
                 self.end_position = target.position
         if self.aoe_shape is None:
             self.aoe_shape = Sphere(source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (0, 0), radius_feet=5)
+                target=self.end_position or (0, 0), radius_feet=7)
 
     def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
         return self._resolve_area_targets()
 
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        if Entity.get(self.source_entity_uuid) is None or self.end_position is None:
-            return declaration_event.cancel(status_message="Caster or strike point missing")
-        return type_cast(Optional[SpellEvent], super()._validate(declaration_event))
+    def _validate(self, event: SpellEvent) -> Optional[ActionEvent]:
+        error = _call_lightning_target_error(self)
+        return event.cancel(status_message=error) if error is not None else super()._validate(event)
 
-    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        """Cast Call Lightning - initial strike + grant repeatable action."""
-
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not caster or not target:
-            return execution_event.cancel(status_message="Caster or target not found")
-
-        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-        damage_dice_count = 3 + self.get_upcast_bonus()
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            save_ability="dexterity",
-            save_dc=dc,
-            status_message=f"Storm cloud appears - requesting DEX save DC {dc}"
-        )
-
-        save_request = caster.create_saving_throw_request(
-            target_entity_uuid=target.uuid,
-            ability_name="dexterity",
-            dc=dc,
-            parent_event=effect_event.uuid
-        )
-        _, save_roll, success = target.saving_throw(save_request)
-
-        effect_event = effect_event.post(
-            save_success=success,
-            status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
-        )
-
-        damage_bonus = caster.get_spell_damage_bonus()
-        lightning_damage = Damage(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid,
-            damage_dice=10,
-            dice_numbers=damage_dice_count,
-            damage_bonus=damage_bonus,
-            damage_type=DamageType.LIGHTNING
-        )
-
-        damage_dice = lightning_damage.get_dice(attack_outcome=AttackOutcome.HIT)
-        damage_roll = damage_dice.roll
-
-        final_damage = damage_roll.total // 2 if success else damage_roll.total
-
-        target.receive_damage(
-            amount=final_damage,
-            damage_type=DamageType.LIGHTNING,
-            source_entity_uuid=caster.uuid,
-            parent_event=effect_event.uuid
-        )
-
-
-        save_text = " (save for half)" if success else ""
-        return effect_event.with_updates(
-            damages=[lightning_damage],
-            damage_rolls=[damage_roll],
-            total_damage=final_damage,
-            status_message=f"{self.name} dealt {final_damage} lightning damage{save_text}"
-        )
-
-    def _finalize_aoe(self, effect_event: ActionEvent) -> None:
-        """Grant one repeat action even when the initial area is empty."""
+    def _apply(self, event: SpellEvent) -> SpellEvent:
         caster = Entity.get(self.source_entity_uuid)
         if caster is None:
-            return
-        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-        damage_dice_count = 3 + self.get_upcast_bonus()
-        strike_action = CallLightningStrike(
-            source_entity_uuid=caster.uuid,
-            spell_dc=dc,
-            damage_dice_count=damage_dice_count,
-            caster_uuid=caster.uuid,
-            template=True
-        )
-        caster.register_action(strike_action)
+            return event.cancel(status_message="Caster not found")
+        return _apply_call_lightning(self, event,
+            dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
 
-        concentration = self.ensure_concentration(effect_event)
+    def _apply_target_applications(self, execution_event: ActionEvent, effect_event: ActionEvent,
+                                  target_uuids: List[UUID]) -> ActionEvent:
+        """Own the timed activation before any bolt can damage the caster."""
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return effect_event.cancel(status_message="Caster not found")
         marker = ConcentrationActionMarker(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            action_name=strike_action.name
-        )
-        caster.add_condition(marker, parent_event=effect_event)
-        concentration.add_linked_condition(caster.uuid, marker.uuid)
+            name="Call Lightning", source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
+            action_name="Call Lightning Strike",
+            duration=Duration(duration=10, duration_type=DurationType.ROUNDS))
+        strike = CallLightningStrike(source_entity_uuid=caster.uuid, template=True,
+            grant_condition_uuid=marker.uuid, cast_at_level=self.cast_at_level,
+            spellcasting_source_id=self.spellcasting_source_id,
+            spell_dc=caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id))
+        marker.action_uuid = strike.uuid
+        admitted = self.apply_owned_condition(type_cast(SpellEvent, effect_event), marker)
+        if admitted.canceled or not marker.applied:
+            strike.remove_from_register()
+            return admitted
+        caster.register_action(strike)
+        return super()._apply_target_applications(execution_event, admitted, target_uuids)
 
 
 class PoisonSpray(SpellAction):

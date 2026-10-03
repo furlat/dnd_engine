@@ -131,7 +131,7 @@ def test_call_lightning_grants_repeatable_strike_and_cleans_on_replacement() -> 
     assert caster.action_economy.actions.normalized_score == 0
 
     caster.action_economy.reset_all_costs()
-    replacement = JumpSpell(
+    replacement = ExpeditiousRetreat(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=caster.uuid,
         cast_at_level=1,
@@ -140,13 +140,13 @@ def test_call_lightning_grants_repeatable_strike_and_cleans_on_replacement() -> 
     assert replacement is not None
     assert not replacement.canceled
     assert caster.get_action_template("Call Lightning Strike") is None
-    assert has_condition(caster, "Jump")
+    assert has_condition(caster, "Expeditious Retreat")
     caster.action_economy.reset_all_costs()
     orphaned_strike = CallLightningStrike(
         source_entity_uuid=caster.uuid,
         target_entity_uuid=target.uuid,
         spell_dc=strike_template.spell_dc,
-        damage_dice_count=strike_template.damage_dice_count,
+        cast_at_level=strike_template.cast_at_level,
     ).apply()
     assert orphaned_strike is not None
     assert orphaned_strike.canceled

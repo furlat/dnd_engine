@@ -246,6 +246,7 @@ def srd_spell_identity(
     sort_order: int,
     icon_key: str | None = None,
     dependencies: tuple[ContentDependency, ...] = (),
+    adaptation_notes: str | None = None,
 ) -> Callable[[_DefinitionT], _DefinitionT]:
     """Declare one existing SRD spell class as metadata-only content.
 
@@ -282,10 +283,12 @@ def srd_spell_identity(
                 f"SRD 5.1 (CC-BY-4.0), p. {source_page}, "
                 f"Spell Descriptions: {display_name}"
             ),
-            relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
+            relation=(ContentProvenanceRelation.COMPATIBLE_ADAPTATION if adaptation_notes
+                      else ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION),
+            adapted_from_source_id="wotc.srd_5_1_cc" if adaptation_notes else None,
             fidelity=ContentFidelity.PARTIAL,
             review_status=ContentReviewStatus.REVIEWED,
-            notes=(
+            notes=adaptation_notes or (
                 "Existing playable spell behavior; metadata identity does not "
                 "claim that every rules edge case is complete."
             ),
@@ -303,6 +306,7 @@ def srd_action_identity(
     source_page: int,
     sort_order: int,
     dependencies: tuple[ContentDependency, ...] = (),
+    adaptation_notes: str | None = None,
 ) -> Callable[[_DefinitionT], _DefinitionT]:
     """Declare an SRD spell-granted action as exact authored content.
 
@@ -338,10 +342,12 @@ def srd_action_identity(
                 f"SRD 5.1 (CC-BY-4.0), p. {source_page}, "
                 f"Spell Descriptions: {parent_spell_name}"
             ),
-            relation=ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION,
+            relation=(ContentProvenanceRelation.COMPATIBLE_ADAPTATION if adaptation_notes
+                      else ContentProvenanceRelation.FAITHFUL_IMPLEMENTATION),
+            adapted_from_source_id="wotc.srd_5_1_cc" if adaptation_notes else None,
             fidelity=ContentFidelity.PARTIAL,
             review_status=ContentReviewStatus.REVIEWED,
-            notes=(
+            notes=adaptation_notes or (
                 "Existing maintained-spell action preserved as an exact "
                 "authored runtime behavior."
             ),

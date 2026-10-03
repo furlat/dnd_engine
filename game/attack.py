@@ -16,6 +16,7 @@ from dnd.core.life_types import LifeState
 from game.animation import (
     ActorContact, ObjectContact, BodySample, DamageTiming, GeometryProjectileSample, NumberSample, VitalsSample,
     feedback_identity,
+    actor_point_offset, view_facing,
     body_clip, body_duration, body_elevation_steps, body_frame, compile_damage, facing_for_delta,
     projectile_curve_point, projectile_curve_tangent, projectile_endpoints, reference_point_contact,
     resolve_damage, sample_damage_body, sample_damage_number, rest_pose_offset,
@@ -170,16 +171,26 @@ def _attack_layers(data: AnimationData, source: ActorContact, profile: AttackVar
     return tuple(layers), tuple(missing)
 
 
+def _projectile_source_offset(data: AnimationData, source: ActorContact,
+                              recipe: ActionProjectile, quadrant: int) -> tuple[float, float]:
+    sockets = recipe.sourceSocketsByRig.get(source.rig_id)
+    if sockets is not None:
+        point = sockets.release[view_facing(source.facing, quadrant, data)]
+        return actor_point_offset(data, source, (point.x, point.y))
+    return recipe.originX * source.visual_scale, recipe.originY * source.visual_scale
+
+
 def _semantic_projectile_endpoints(data: AnimationData, source: ActorContact, target: ActorContact | ObjectContact,
                                    recipe: ActionProjectile, quadrant: int, *, include_height: bool,
                                    ) -> tuple[tuple[float, float], tuple[float, float]]:
-    """AttackClip's semantic body anchors, which already use the tile center."""
+    """Measured release sockets or the profile's semantic body anchors."""
     factor = data.rig.TILE_W / TILE_WIDTH
     start = project_world(source.grid, quadrant=quadrant,
                           elevation_steps=body_elevation_steps(source, data) if include_height else 0)
     target_height = body_elevation_steps(target, data) if isinstance(target, ActorContact) else target.elevation_steps
     end = project_world(target.grid, quadrant=quadrant, elevation_steps=target_height if include_height else 0)
-    first = start[0] * factor + recipe.originX * source.visual_scale, start[1] * factor + recipe.originY * source.visual_scale
+    dx, dy = _projectile_source_offset(data, source, recipe, quadrant)
+    first = start[0] * factor + dx, start[1] * factor + dy
     lift = recipe.targetY * target.visual_scale if isinstance(target, ActorContact) else 0
     last = end[0] * factor, end[1] * factor + lift
     first, last = projectile_endpoints(first, last, recipe.sourceForwardPx, recipe.targetForwardPx)
@@ -218,7 +229,8 @@ def attack_projectile_contact(timeline: AttackTimeline, effect: GeometryProjecti
     target_lift = (projectile.recipe.targetY * target.visual_scale
                    + rest_pose_offset(timeline.data, target, quadrant)[1]) if isinstance(target, ActorContact) else 0
     target_height = body_elevation_steps(target, timeline.data) if isinstance(target, ActorContact) else target.elevation_steps
-    lift = projectile.recipe.originY * source.visual_scale * (1 - progress) + target_lift * progress
+    source_lift = _projectile_source_offset(timeline.data, source, projectile.recipe, quadrant)[1]
+    lift = source_lift * (1 - progress) + target_lift * progress
     height = (body_elevation_steps(source, timeline.data) * (1 - progress)
               + target_height * progress
               - lift * TILE_WIDTH / timeline.data.rig.TILE_W / HEIGHT_STEP_PIXELS)

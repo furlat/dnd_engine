@@ -2159,6 +2159,7 @@ class ConcentrationActionMarker(BaseCondition):
     description: str = "Tracking concentration on an action-grant spell"
     condition_category: ConditionCategory = ConditionCategory.INTERNAL
     action_name: str = ""
+    action_uuid: Optional[UUID] = None
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         effect_event = declaration_event.phase_to(
@@ -2170,7 +2171,9 @@ class ConcentrationActionMarker(BaseCondition):
 
     def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
         entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if entity and self.action_name:
+        if entity and self.action_uuid is not None:
+            entity.unregister_action_by_uuid(self.action_uuid)
+        elif entity and self.action_name:
             entity.unregister_action(self.action_name)
         return super()._remove(removal_event)
 

@@ -14,7 +14,7 @@ from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.events import DamageAppliedEvent, StepMovementEvent
 from dnd.core.life_types import LifeState
 from dnd.runtime_reset import reset_engine_runtime
-from game.animation import body_clip
+from game.animation import ActorContact, body_clip, view_facing
 from game.animation_data import load_animation_data
 from game.animation_draw import actor_draw_commands, load_attack_media
 from game.animation_types import AnimationData
@@ -299,9 +299,10 @@ def test_real_shortbow_uses_original_release_delivery_join_and_retained_loadout(
         bound = bind_attack(player, received, data)
         assert bound is not None and bound.timeline.projectile is not None
         timeline, projectile = bound.timeline, bound.timeline.projectile
+        assert isinstance(timeline.target, ActorContact)
         assert timeline.profile_id == "ranged" and timeline.authored_clip == "Attack3"
         clock = data.rigs[data.root_rig].clips["Attack3"]
-        assert timeline.release_ms == projectile.start_ms == 8 * 1000 / clock.fps
+        assert timeline.release_ms == projectile.start_ms == 10 * 1000 / clock.fps
         # AnimatedEntity completes when it reaches the last frame.
         assert timeline.body_end_ms == (clock.frames - 1) * 1000 / clock.fps
         duration = max(projectile.recipe.minimumTravelDurationMs,
@@ -333,6 +334,24 @@ def test_real_shortbow_uses_original_release_delivery_join_and_retained_loadout(
         else:
             assert timeline.clip == "Attack3" and not timeline.missing_media
             assert any(layer.category == "Ranged1" for layer in bound.appearances[timeline.source.actor_uuid])
+            # Arrow and bow pulse meet at the measured source pixels, in every
+            # camera view, for hits and misses alike. No actor-origin fallback.
+            assert any(layer.category == "Slash1" for layer in timeline.layers)
+            rig = data.rigs[timeline.source.rig_id]
+            sheet = pygame.image.load(str(data.resources[clock.sheets["Slash1"]]))
+            for quadrant in range(4):
+                viewed = view_facing(timeline.facing, quadrant, data)
+                cell = sheet.subsurface((10 * rig.cell_width,
+                    rig.facing_rows[viewed] * rig.cell_height, rig.cell_width, rig.cell_height))
+                bounds = cell.get_bounding_rect(min_alpha=1)
+                assert bounds.width and bounds.height
+                tip = bounds.x + bounds.width / 2, bounds.y + bounds.height / 2
+                ground = project_world(timeline.source.grid, quadrant=quadrant)
+                factor = data.rig.TILE_W / TILE_WIDTH
+                expected = (ground[0] * factor + (tip[0] - rig.cell_width / 2),
+                            ground[1] * factor + tip[1] - rig.cell_height + rig.origin_y_from_ground)
+                arrow = project_attack_projectile(timeline, released.projectiles[0], quadrant)
+                assert arrow.point == pytest.approx(expected)
 
         # Held subcell contacts enter before both facing and endpoint compilation.
         held = replace(timeline.target, grid=(3.25, 4.5), elevation_steps=1.25, visual_scale=.5)
@@ -347,11 +366,12 @@ def test_real_shortbow_uses_original_release_delivery_join_and_retained_loadout(
             projected = project_world(ground, quadrant=quadrant, elevation_steps=height)
             factor = data.rig.TILE_W / TILE_WIDTH
             assert (projected[0] * factor, projected[1] * factor) == pytest.approx(effect.point)
-            expected_height = ((held_timeline.source.elevation_steps + held.elevation_steps) / 2
-                - (held_timeline.projectile.recipe.originY * held_timeline.source.visual_scale
-                   + held_timeline.projectile.recipe.targetY * held.visual_scale)
-                / 2 / factor / HEIGHT_STEP_PIXELS)
-            assert height == pytest.approx(expected_height)
+            if goblin_source:
+                expected_height = ((held_timeline.source.elevation_steps + held.elevation_steps) / 2
+                    - (held_timeline.projectile.recipe.originY * held_timeline.source.visual_scale
+                       + held_timeline.projectile.recipe.targetY * held.visual_scale)
+                    / 2 / factor / HEIGHT_STEP_PIXELS)
+                assert height == pytest.approx(expected_height)
     finally:
         reset_engine_runtime()
         random.setstate(random_state)
