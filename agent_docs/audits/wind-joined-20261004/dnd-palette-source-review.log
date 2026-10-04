@@ -1,0 +1,6 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+{
+  "rgb_default_exact_cases": 20,
+  "cie76_boost_alpha_scalar_exact_cases": 61,
+  "status": "pass"
+}

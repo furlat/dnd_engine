@@ -1,34 +1,56 @@
 """Registered finite media on the shared cast clock; no spell identities or rules."""
 
-from math import atan2
+from math import atan2, floor
 from typing import Mapping, NamedTuple
 
 import pygame
 
 from game.animation import (
     ActorContact, ObjectContact, feedback_identity, BodySample, CastSample, CastTimeline, actor_point_offset, body_elevation_steps, body_rig,
-    facing_vector, media_track_duration, media_track_frame, media_target_applies, view_facing, rest_pose_offset,
+    facing_vector, media_track_duration, media_track_frame, media_track_opacity, media_target_applies, view_facing, rest_pose_offset,
 )
-from game.animation_types import AnimationData, StudioMediaTrack
+from game.animation_types import AnimationData, BodyMaterialSample, StudioMediaTrack
+from game.finite_material import sample_material_track
 from game.area_media import AreaLayer, AreaMedia
 from game.draw_commands import DrawCommand
+from game.media_blend import SCREEN_BLEND
 from game.projectile_media import projectile_frame_layers
 from game.registered_media import registered_material, registered_media_samples, RegisteredMediaSample
 from game.volume_media import ExcludedSphere, SurfaceVolume
-from dnd.core.presentation_geometry import SpherePresentationGeometry
-from game.projection import Camera, TILE_WIDTH, HEIGHT_STEP_PIXELS, painter_key, project_screen
+from dnd.core.presentation_geometry import ConePresentationGeometry, LinePresentationGeometry, SpherePresentationGeometry
+from game.projection import Camera, TILE_WIDTH, HEIGHT_STEP_PIXELS, painter_key, project_screen, project_world
+
+
+def sample_cast_body_materials(timeline: CastTimeline, elapsed_ms: float) -> tuple[tuple[str, BodyMaterialSample], ...]:
+    """Sample authored envelopes for disclosed recipients with admitted outcomes."""
+    samples = []
+    for track in timeline.recipe.bodyMaterials:
+        recipients = {}
+        for application in timeline.applications:
+            target = application.source.target
+            if not isinstance(target, ActorContact) or not media_target_applies(track, application.source):
+                continue
+            start = application.travel_end_ms if track.clock == "contact" else timeline.release_ms
+            sample = sample_material_track(track, elapsed_ms-start)
+            if sample is not None:
+                recipients[target.actor_uuid] = sample
+        samples.extend(recipients.items())
+    return tuple(samples)
 
 
 def preload_cast_media(timeline: CastTimeline) -> None:
     """Warm selected first pages only; the existing bounded cache owns decoding."""
-    for track in timeline.recipe.media:
-        if track.requireRemovedConditionTag is not None and not any(
+    tracks = (*timeline.recipe.media, *(timeline.recipe.cancellationMedia.media
+        if timeline.recipe.cancellationMedia is not None else ()))
+    for track in tracks:
+        if track.attachment.startswith("target_") and not any(
                 media_target_applies(track, application) for application in timeline.source.applications):
             continue
-        asset = timeline.data.projectile_assets[track.assetId]
         for quadrant in range(4):
+            asset_id = track.assetIdsByCamera[quadrant] if track.assetIdsByCamera else track.assetId
+            asset = timeline.data.projectile_assets[asset_id]
             facing = view_facing(track.viewFacing or timeline.facing, quadrant, timeline.data)
-            storage = timeline.data.projectile_storage.get(track.assetId)
+            storage = timeline.data.projectile_storage.get(asset_id)
             first = 0
             if storage is not None:
                 first = min((index for layer in storage.phases[track.assetPhase].layers
@@ -36,7 +58,7 @@ def preload_cast_media(timeline: CastTimeline) -> None:
                     if frames is not None
                     for index, parts in enumerate(frames) if parts), default=0)
             projectile_frame_layers(timeline.data, asset, track.assetPhase, first, facing,
-                                    registered_material(track.assetId, track.alpha), {})
+                                    registered_material(asset_id, track.alpha), {})
 
 
 def _socket(data: AnimationData, contact: ActorContact, camera: Camera,
@@ -99,11 +121,12 @@ def cast_media_placement(timeline: CastTimeline, track: StudioMediaTrack,
         dx, dy = rest_pose_offset(data, contact, camera.quadrant)
         factor = TILE_WIDTH / data.rig.TILE_W * camera.zoom
         anchor = anchor[0] + dx * factor, anchor[1] + dy * factor
-        if track.bodyOffsetsByFacing is not None and body is not None and body.clip == data.damage_context.bodyClip:
-            facing = view_facing(body.facing, camera.quadrant, data)
-            offset = track.bodyOffsetsByFacing[facing][body.frame]
-            factor = contact.visual_scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom
-            anchor = anchor[0] + offset.x * factor * contact.visual_scale_x, anchor[1] + offset.y * factor
+    if (track.bodyOffsetsByFacing is not None and body is not None and isinstance(contact, ActorContact)
+            and body.clip == (track.bodyOffsetsClip or data.damage_context.bodyClip)):
+        facing = view_facing(body.facing, camera.quadrant, data)
+        offset = track.bodyOffsetsByFacing[facing][body.frame]
+        factor = contact.visual_scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom
+        anchor = anchor[0] + offset.x * factor * contact.visual_scale_x, anchor[1] + offset.y * factor
     rotation = 0.0
     factor = track.scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom
     if track.scaleWithActor and isinstance(contact, ActorContact):
@@ -111,7 +134,13 @@ def cast_media_placement(timeline: CastTimeline, track: StudioMediaTrack,
     if track.emissionPointByFacing is not None:
         point = track.emissionPointByFacing[viewed]
         anchor = anchor[0] - point.x * factor, anchor[1] - point.y * factor
-    if track.orientation == "target_vector" and targets:
+    if track.orientation == "target_vector" and isinstance(source.area_geometry, (ConePresentationGeometry, LinePresentationGeometry)):
+        end_x, end_y = project_world(source.area_geometry.direction, quadrant=camera.quadrant)
+        origin_x, origin_y = project_world((0, 0), quadrant=camera.quadrant)
+        dx, dy = end_x-origin_x, end_y-origin_y
+        vx,vy = facing_vector(viewed,data)
+        rotation = atan2(dy,dx)-atan2(vy,vx)
+    elif track.orientation == "target_vector" and targets:
         target = targets[0]
         endpoint = project_screen(target.grid, camera, elevation_steps=(body_elevation_steps(target, data)
             if isinstance(target, ActorContact) else target.elevation_steps))
@@ -143,28 +172,41 @@ def cast_surface_volume(timeline: CastTimeline, sample: RegisteredMediaSample, a
         area.boundaries if area is not None else (), exclusions,
         area.solids if area is not None else (), area.supports if area is not None else (),
         source.area_propagation, admitted=area.admitted if area is not None else None,
-        translation=translation, resolved_occupancy=area is not None and area.admitted is not None)
+        translation=translation, resolved_occupancy=area is not None and area.admitted is not None,
+        line_geometry=source.area_geometry if isinstance(source.area_geometry, LinePresentationGeometry) else None)
 
 
 def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera: Camera,
                              area: AreaMedia | None,
                              rows: Mapping[tuple[str, int], pygame.Surface],
                              *, actor_bounds: Mapping[str, pygame.Rect] | None = None,
+                             body_samples: Mapping[str, BodySample] | None = None,
+                             actor_contacts: Mapping[str, ActorContact] | None = None,
                              ) -> tuple[DrawCommand, ...]:
     data, source, recipe = timeline.data, timeline.source, timeline.recipe
     bodies = {body.actor_uuid: body for body in sample.bodies}
+    if body_samples is not None:
+        bodies.update(body_samples)
     targets = tuple(dict.fromkeys(application.target for application in source.applications))
     commands = []
     for track in recipe.media:
         viewed = view_facing(track.viewFacing or timeline.facing, camera.quadrant, data)
-        start = timeline.release_ms + track.startOffsetMs
-        if not start <= sample.media_elapsed_ms < start + media_track_duration(data, track):
-            continue
-        age = sample.media_elapsed_ms - start
-        asset = data.projectile_assets[track.assetId]
+        duration = media_track_duration(data, track)
+        asset_id = track.assetIdsByCamera[camera.quadrant] if track.assetIdsByCamera else track.assetId
+        asset = data.projectile_assets[asset_id]
         contacts = targets if track.attachment.startswith("target_") else (source.caster,)
-        for contact in contacts:
-            if (track.requireRemovedConditionTag is not None or track.requiredSaveSuccess is not None) and not any(
+        timed = (tuple((row.source.target,row.travel_end_ms) for row in timeline.applications
+            if media_target_applies(track,row.source)) if track.clock == "contact" else
+            tuple((contact,timeline.release_ms) for contact in contacts))
+        for contact, landmark in timed:
+            start = landmark + track.startOffsetMs
+            if not start <= sample.media_elapsed_ms < start + duration:
+                continue
+            age = sample.media_elapsed_ms - start
+            opacity = media_track_opacity(data, track, age)
+            if isinstance(contact, ActorContact) and actor_contacts is not None:
+                contact = actor_contacts.get(contact.actor_uuid, contact)
+            if track.attachment.startswith("target_") and not any(
                     feedback_identity(application.target) == feedback_identity(contact) and media_target_applies(track, application)
                     for application in source.applications):
                 continue
@@ -173,6 +215,9 @@ def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera:
                 continue
             grid, height, anchor, factor, rotation = cast_media_placement(
                 timeline, track, contact, camera, bodies.get(feedback_identity(contact)))
+            if track.composition == "clump" and (area is None or area.admitted is None
+                    or (floor(grid[0] + .5), floor(grid[1] + .5)) not in area.admitted):
+                continue
             if track.actorTopClearancePx is not None:
                 bounds = None if actor_bounds is None else actor_bounds.get(feedback_identity(contact))
                 if bounds is None:
@@ -187,19 +232,22 @@ def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera:
                 identity=(source.root_event_uuid, track.id, feedback_identity(contact)))
             if track.depth in ("behind_body", "front_body"):
                 key = (*key[:3], key[3] + (-1 if track.depth == "behind_body" else 1), key[4])
-            for layer in registered_media_samples(data, track.assetId,
+            if track.sortDepthByFacing is not None:
+                key = (key[0], key[1] + track.sortDepthByFacing[viewed] * 32, *key[2:])
+            for layer in registered_media_samples(data, asset_id,
                     track.assetPhase, frame, viewed, scale=factor, anchor=anchor, rows=rows,
-                    alpha=track.alpha, rotation=rotation, zoom=camera.zoom):
+                    alpha=opacity, rotation=rotation, zoom=camera.zoom):
                 if track.composition == "xyz_volume":
-                    commands.append(DrawCommand(key, layer.image, layer.destination, layer.blend,
+                    commands.append(DrawCommand(key, layer.image, layer.destination, SCREEN_BLEND if track.blendMode == "screen" else layer.blend,
                         (source.root_event_uuid, grid, asset.assetId, "current", None, "authored",
                          "cast_media", height, track.id, frame),
                         volume=cast_surface_volume(timeline, layer, area, grid, height, translation=translation),
                         world_depth_group=(source.root_event_uuid, "cast-media")))
                     continue
-                commands.append(DrawCommand(key, layer.image, layer.destination, layer.blend,
+                commands.append(DrawCommand(key, layer.image, layer.destination, SCREEN_BLEND if track.blendMode == "screen" else layer.blend,
                     (source.root_event_uuid, grid, asset.assetId, "current", None, "authored",
                      "cast_media", height, track.id, frame),
                     AreaLayer(source.ground_target.grid, source.ground_target.elevation_steps, area)
-                    if source.ground_target is not None and not track.attachment.startswith("target_") else None))
+                    if source.ground_target is not None and not track.attachment.startswith("target_")
+                    and track.composition != "clump" else None))
     return tuple(commands)

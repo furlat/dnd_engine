@@ -1,0 +1,183 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/death-curse-review/necrotic-batch-v1",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/necrotic-family-20261004",
+  "identities": [
+    "necrotic.kill.back",
+    "necrotic.kill.front",
+    "necrotic.stun.back",
+    "necrotic.stun.front",
+    "necrotic.stunned.back",
+    "necrotic.stunned.front",
+    "necrotic.harm.back",
+    "necrotic.harm.front",
+    "necrotic.circle.front"
+  ],
+  "files": [
+    {
+      "path": "game/assets/necrotic_media/media/kill/back-0.png",
+      "bytes": 111932,
+      "sha256": "66a194932e332bbc02d4bce92a442594ec978553e41759e3dd1c03d98959b955"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/kill/front-0.png",
+      "bytes": 139492,
+      "sha256": "fe82112506ee0436b04a4fb236e33f6a3c885ea1af44a4ec146f4b3f6df05f5a"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/stun/back-0.png",
+      "bytes": 114219,
+      "sha256": "bad39ac45cd164ff70a9e87f529a42665f9e56cdcdf1219de4d141d66be67704"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/stun/front-0.png",
+      "bytes": 137843,
+      "sha256": "e26b898f30d84c72cc06287ca73fb1259a188dd93a6c6b95823ce6a8efe0bc8b"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/stunned/back-0.png",
+      "bytes": 11293,
+      "sha256": "35f7d8b64039b8e96cab049908c031db249082a147bae45fbf40b77989dabad2"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/stunned/front-0.png",
+      "bytes": 10605,
+      "sha256": "488146e6b47e1b1392d3ca6ef2928be3bf865e091ef407780ddba105663d858e"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/harm/back-0.png",
+      "bytes": 276429,
+      "sha256": "a530b232681a8f6730dfeb559fa446abd3b4553a1044c48cd6c6ce5aeed7fc7b"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/harm/front-0.png",
+      "bytes": 270559,
+      "sha256": "7d042e993259d543e8920fc417b9de6c897b48ff50987c777c1152bf03806ef0"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-0.png",
+      "bytes": 261209,
+      "sha256": "38e25ad64512d6f77479856b4acd118f6235522e6c5bd957247723aa593b1d1b"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-1.png",
+      "bytes": 244497,
+      "sha256": "87bb2b94f1aa5bc2938a73a341a3cac87b9ab4371b6cc8d2fdb99a6c87a45aa4"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-2.png",
+      "bytes": 269390,
+      "sha256": "8c8dd515d4d0feede3c1d0ad78a1029019da4f12c0195b3cbc1a8c023748cef5"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-3.png",
+      "bytes": 279533,
+      "sha256": "704790a538c2df7e4d8a6211fc316ab4f58d8087f5d717f2f594287fcea13a31"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-4.png",
+      "bytes": 290410,
+      "sha256": "e4778ecef7bf26b7471c0f52b160c86e1d53ff887e4c714cfdd47971934ef281"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-5.png",
+      "bytes": 304489,
+      "sha256": "3c1456e42d11431275f74f28227a643e6d01808ba69ed4250bebcef88f33ea83"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-6.png",
+      "bytes": 315166,
+      "sha256": "df99f76eda3865aa521bc1137ade032255aa77036e0b79622ff005f4b3eed8bd"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-7.png",
+      "bytes": 319657,
+      "sha256": "e1b78c3ad027d6483cb500fead2a161c10c0bfeffabb76baa6bcedf5e8e87d15"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-8.png",
+      "bytes": 321073,
+      "sha256": "a2f02b89864abefc1f624464fef358efdc3f8375558f8b8b3604851dcdb4ed79"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-9.png",
+      "bytes": 320932,
+      "sha256": "570c246f39a8120583120bd8ea5b44ec3278a4252b4a8185dd3ef2e24c8d9cf2"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-10.png",
+      "bytes": 320746,
+      "sha256": "0aac9aae648b01124f7e5c0ee6da65382cabbb1dc054d8634ae55c9528ee674a"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-11.png",
+      "bytes": 320888,
+      "sha256": "b3a8e46e82c3977e1a79afd468a86eb3fad2e915ef3cf994f48ab6d5effde0c3"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-12.png",
+      "bytes": 321124,
+      "sha256": "c5e23a4401798c25cda273cd181ee54dcc8c99c446f15c6428d8ea9c70a2b0fe"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-13.png",
+      "bytes": 320892,
+      "sha256": "782256dcbdb47dad36cffdecd36b26d9d90294dba0e543950199e714a3ffd92a"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-14.png",
+      "bytes": 321036,
+      "sha256": "a1191b1fa601826cd0c09a70247ecac005cc51de6a7bda7ebaeb57c67b3d956c"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-15.png",
+      "bytes": 320086,
+      "sha256": "a523146179425618dabcca8c0ab60ebec00c01a8f7634cc5e4bc9f8482760720"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-16.png",
+      "bytes": 329772,
+      "sha256": "ef3f0b0297df11ced389b374c58d7e00a6cc9db8c3975b0247fba7ab603f0088"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-17.png",
+      "bytes": 365876,
+      "sha256": "f7ae4173f7f3c7c561bb9803c7ee2490dac71fa1621e784988f85add82e0e429"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-18.png",
+      "bytes": 433817,
+      "sha256": "387e8cfbc7baac77d022ec0e538eba518a6fbf0bb27d12454c23c4beb098b112"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-19.png",
+      "bytes": 510146,
+      "sha256": "9f454c856ac6ea0a880a20162b9b67ffee50a5ab4dfc7d64f607d97aa8036cfb"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-20.png",
+      "bytes": 467135,
+      "sha256": "9619bbf83223cbf8374eda7afd5bf0533e6b155692d77f61ca1fcb6ecc913c6f"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-21.png",
+      "bytes": 333968,
+      "sha256": "44e10b7d7e67bac894389a39b6a3e31a4f064e1393fc5ab1b8529b226b983afc"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-22.png",
+      "bytes": 190598,
+      "sha256": "5478f30dba5fada3c880b04108998fcc85976f6a27c4f0e67ffd2e5fd122c96e"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-23.png",
+      "bytes": 85209,
+      "sha256": "2da7f1b1a2a60b8e91370a7e140164a8a07f229ededb80c73824edcaaba42fc9"
+    },
+    {
+      "path": "game/assets/necrotic_media/media/circle/whole-24.png",
+      "bytes": 13681,
+      "sha256": "472983741c84c86af980596c24d5599e18a77f3a46dfdb11c3ad5e78833a0006"
+    }
+  ],
+  "manifest_sha256": "edeaf096503350709a2a1e175af9be40a0baef3d0ed64a139f4650bd8d145622"
+}

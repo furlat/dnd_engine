@@ -7,12 +7,17 @@ import numpy as np
 import pygame
 import pytest
 
-from game.animation import ActorContact, BodySample, CastApplication, CastInput, GroundContact, compile_cast, sample_cast
+from game.animation import ActorContact, BodySample, CastApplication, CastInput, GroundContact, compile_cast, resolve_cast_recipe, sample_cast
 from game.animation_data import load_animation_data
-from game.animation_draw import actor_draw_commands, load_actor_media
-from game.animation_types import PaletteTreatment, RigLayer
+from game.animation_draw import actor_draw_commands, load_actor_media, load_cast_rows
+from game.animation_types import ElementColors, LayerColors, PaletteTreatment, RigLayer
+from game.body_action import bind_body_action
+from game.player_facts import SpellFact
+from game.player_reduction import reduce_lineage
 from game.projection import Camera
 from game.spell_palette import recolor_palette
+from tests.game.player_helpers import player_history
+from tests.game.support_conditions_scenarios import support_condition_history
 
 
 SPELLS = ("fire_bolt", "fireball", "magic_missile", "acid_splash", "guiding_bolt", "eldritch_blast",
@@ -29,7 +34,7 @@ def data():
         environment.setenv("SDL_AUDIODRIVER", "dummy")
         pygame.init()
         pygame.display.set_mode((800, 600))
-        yield load_animation_data(rig_files=(Path("game/data/rigs/goblin01.json"),))
+        yield load_animation_data(rig_files=(Path("game/data/rigs/goblin01.json"), Path("game/data/rigs/goblin02.json")))
         pygame.quit()
 
 
@@ -40,6 +45,11 @@ def rgb_set(image):
 
 def colors(treatment):
     return {((c >> 16) & 255, (c >> 8) & 255, c & 255) for c in treatment.colors}
+
+
+def visible_colors(image):
+    visible = pygame.surfarray.array_alpha(image) > 0
+    return {tuple(int(v) for v in pixel) for pixel in pygame.surfarray.array3d(image)[visible]}
 
 
 @pytest.mark.parametrize("spell", SPELLS)
@@ -142,3 +152,156 @@ def test_authored_palette_roundtrips_as_data_and_mapping_preserves_partial_alpha
     result = recolor_palette(source, restored)
     assert np.array_equal(pygame.surfarray.array_alpha(source), pygame.surfarray.array_alpha(result))
     assert {tuple(result.get_at((x, 0))[:3]) for x in range(5)} <= colors(restored)
+
+
+@pytest.mark.parametrize("reverse", (False, True))
+def test_automatic_cast_palette_replaces_pixels_and_shared_sheet_cache_is_isolated(data, reverse):
+    """Two spell palettes sharing one precolored source stay distinct after seeks."""
+    original = data.drafts["spell.fire_bolt"]
+    layer = original.cast.weaponGlow
+    assert layer is not None and layer.sourceSheet is not None
+    automatic = layer.model_copy(update={"colors": layer.colors.model_copy(update={"source": "auto"})})
+    contact = ActorContact("caster", (0, 0), "E", .5)
+    source = CastInput("automatic-hands", contact, (
+        CastApplication("hit", ActorContact("target", (4, 0), "W", .5), True, 3, 17),))
+    palettes = (ElementColors(primary=0xD44422, secondary=0xFFE4A0, tertiary=0x442211),
+                ElementColors(primary=0x22AACC, secondary=0xCCFFFF, tertiary=0x112244))
+    timelines = []
+    for palette in palettes:
+        draft = original.model_copy(update={"elementColors": palette,
+            "cast": original.cast.model_copy(update={"weaponGlow": automatic})})
+        selected_data = replace(data, drafts={**data.drafts, "spell.fire_bolt": draft})
+        timelines.append(compile_cast(selected_data, "spell.fire_bolt", source))
+    # Explicit override of exactly the same source must still retain its baked pixels.
+    timelines.append(compile_cast(data, "spell.fire_bolt", source))
+    rows = {}
+    baked = pygame.image.load(data.resources[layer.sourceSheet]).convert_alpha()
+    rig = data.rigs[contact.rig_id]
+    for index in (reversed(range(3)) if reverse else range(3)):
+        timeline = timelines[index]
+        resolved = timeline.recipe.cast.weaponGlow
+        assert resolved is not None
+        previous = set(rows)
+        load_cast_rows(data, contact, timeline.recipe.cast.actionClip, "E", (resolved,), rows)
+        added = set(rows) - previous
+        assert len(added) == 4, "each effective palette needs its own four camera rows"
+        for key in added:
+            image = rows[key]
+            raw = baked.subsurface((0, key[3] * rig.cell_height, image.width, image.height))
+            assert np.array_equal(pygame.surfarray.array_alpha(raw), pygame.surfarray.array_alpha(image))
+            if index < 2:
+                palette = palettes[index]
+                assert visible_colors(image) == colors(PaletteTreatment(colors=(
+                    palette.tertiary, palette.primary, palette.secondary)))
+            else:
+                assert pygame.image.tobytes(image, "RGBA") == pygame.image.tobytes(raw, "RGBA")
+        snapshot = {key: pygame.image.tobytes(rows[key], "RGBA") for key in added}
+        # Sampling and reloading after seeking cannot mutate the prepared colors or timing.
+        baseline = timelines[2]
+        for elapsed in (250., 100., 250.):
+            sample = sample_cast(timeline, elapsed)
+            base = sample_cast(baseline, elapsed)
+            body = next(body for body in sample.bodies if body.actor_uuid == "caster")
+            base_body = next(body for body in base.bodies if body.actor_uuid == "caster")
+            assert (body.clip, body.frame, body.facing) == (base_body.clip, base_body.frame, base_body.facing)
+            assert body.cast_layers == (resolved,)
+            load_cast_rows(data, contact, body.clip, body.facing, body.cast_layers, rows)
+        assert all(pygame.image.tobytes(rows[key], "RGBA") == pixels for key, pixels in snapshot.items())
+
+
+def test_auto_is_the_default_and_fixed_rigs_keep_their_own_accents(data):
+    original = data.drafts["spell.fire_bolt"]
+    layer = original.cast.weaponGlow
+    assert layer is not None
+    descriptor = layer.colors.model_dump(exclude={"source"})
+    automatic = layer.model_copy(update={"colors": LayerColors.model_validate(descriptor)})
+    assert automatic.colors.source == "auto"
+    draft = original.model_copy(update={"cast": original.cast.model_copy(update={"weaponGlow": automatic})})
+    for rig in ("neuroclient.modular", "smallscale.goblin02"):
+        resolved = resolve_cast_recipe(data, ActorContact("caster", (0, 0), "E", .5, rig_id=rig), draft)
+        if rig == "neuroclient.modular":
+            assert resolved.cast.weaponGlow is not None and resolved.cast.weaponGlow.palette is not None
+        else:
+            assert resolved.cast.weaponGlow is None and not resolved.cast.effects
+
+
+def test_actor_only_cast_uses_the_same_automatic_hand_palette(data):
+    history = support_condition_history(program="death_ward", self_target=True)
+    before, roots = player_history(history, role="caster")
+    original = data.drafts["spell.death_ward"]
+    layer = original.cast.weaponGlow
+    assert layer is not None
+    palette = ElementColors(primary=0xA032CD, secondary=0xFCD3FF, tertiary=0x321046)
+    draft = original.model_copy(update={"elementColors": palette, "cast": original.cast.model_copy(update={
+        "weaponGlow": layer.model_copy(update={"colors": layer.colors.model_copy(update={"source": "auto"})})})})
+    selected_data = replace(data, drafts={**data.drafts, "spell.death_ward": draft})
+    for root in roots:
+        fact = root.root.fact
+        if isinstance(fact, SpellFact) and fact.behavior_id == "spell.death_ward":
+            cue = bind_body_action(before, root.root, selected_data, start_ms=0, facings={}, contacts={})
+            assert cue is not None and len(cue.cast_layers) == 1
+            rows = {}
+            load_cast_rows(data, cue.contact, cue.clip, cue.contact.facing, cue.cast_layers, rows)
+            assert rows
+            expected = colors(PaletteTreatment(colors=(palette.tertiary, palette.primary, palette.secondary)))
+            assert all(visible_colors(image) and visible_colors(image) <= expected for image in rows.values())
+            assert set.union(*(visible_colors(image) for image in rows.values())) == expected
+            return
+        before = reduce_lineage(before, root)
+    pytest.fail("the native cast must be witnessed")
+
+
+@pytest.mark.parametrize('spell', ('slow', 'flame_strike', 'hold_person', 'cone_of_cold'))
+def test_current_spell_hands_match_their_spell_palette_before_release(data, spell):
+    contact = ActorContact('caster', (0, 0), 'E', .5)
+    draft = data.drafts['spell.' + spell]
+    resolved = resolve_cast_recipe(data, contact, draft)
+    layer = resolved.cast.weaponGlow
+    assert layer is not None and layer.enabled and not layer.hidden
+    rows = {}
+    load_cast_rows(data, contact, resolved.cast.actionClip, 'E', (layer,), rows)
+    expected = colors(PaletteTreatment(colors=(draft.elementColors.tertiary,
+        draft.elementColors.primary, draft.elementColors.secondary)))
+    rig = data.rigs[contact.rig_id]
+    for image in rows.values():
+        preparation = image.subsurface((0, 0, int(draft.cast.releaseFrame) * rig.cell_width, rig.cell_height))
+        assert visible_colors(preparation) and visible_colors(preparation) <= expected
+
+
+def test_every_enabled_spell_cast_has_visible_magic_hands(data):
+    """Every real cast, including variants/repeats, visibly carries magic energy."""
+    missing = []
+    for identity, draft in data.drafts.items():
+        if not draft.cast.enabled:
+            continue  # The actual child weapon attack is verified in its replay tests.
+        layer = draft.cast.weaponGlow
+        if layer is None or not layer.enabled or layer.hidden or layer.category not in ('Magic1', 'Magic2', 'Magic3'):
+            missing.append(identity)
+    assert not missing, f"Spells missing casting hands: {missing}"
+    contact = ActorContact('caster', (0, 0), 'E', .5)
+    # Canonical recipes and separately authored variants must both render correctly.
+    checked = set()
+    for draft in data.drafts.values():
+        if not draft.cast.enabled:
+            continue
+        resolved = resolve_cast_recipe(data, contact, draft)
+        layer = resolved.cast.weaponGlow
+        assert layer is not None
+        key = (resolved.cast.actionClip, layer.model_dump_json())
+        if key in checked:
+            continue
+        checked.add(key)
+        rows = {}
+        load_cast_rows(data, contact, resolved.cast.actionClip, contact.facing, (layer,), rows)
+        rig = data.rigs[contact.rig_id]
+        source_path = layer.sourceSheet or rig.clips[resolved.cast.actionClip].sheets[layer.category]
+        source = pygame.image.load(data.resources[source_path]).convert_alpha()
+        for row_key, image in rows.items():
+            raw = source.subsurface((0, row_key[3] * rig.cell_height, image.width, image.height))
+            assert np.array_equal(pygame.surfarray.array_alpha(image), pygame.surfarray.array_alpha(raw))
+            preparation = image.subsurface((0, 0, int(resolved.cast.releaseFrame) * rig.cell_width, rig.cell_height))
+            assert visible_colors(preparation), draft.definitionRef.content_id
+            if layer.colors.source == 'auto':
+                palette = draft.elementColors
+                expected = colors(PaletteTreatment(colors=(palette.tertiary, palette.primary, palette.secondary)))
+                assert visible_colors(image) <= expected

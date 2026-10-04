@@ -12,7 +12,7 @@ from typing import Iterator
 from uuid import uuid4
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent
-from dnd.actions_functional import execute_by_index, get_available_actions, setup_standard_actions, register_spell
+from dnd.actions_functional import execute_by_index, get_available_actions, setup_standard_actions, register_spell, update_weapon_template
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
@@ -49,7 +49,7 @@ def attack_history(
     destination: tuple[int, int] = (2, 3), maximum_hp: int = 80,
     movement_behavior: str = "action.move", watcher_positions: tuple[tuple[int, int], ...] = ((4, 3),),
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, goblin_source: bool = False,
-    uses_death_saves: bool = False, bloodied: bool = False,
+    uses_death_saves: bool = False, bloodied: bool = False, goblin_offhand: str | None = None,
 ) -> CapturedHistory:
     """Execute the discovered attack/movement and detach its completed history."""
     previous = random.getstate()
@@ -86,7 +86,10 @@ def attack_history(
         goblin = watchers[0]
         source, target = (goblin, hero) if goblin_source else (hero, goblin)
         for watcher in watchers:
+            if goblin_offhand is not None:
+                watcher.install_initial_items(((build_authored_item(goblin_offhand,watcher.uuid),WeaponSlot.MELEE_OFF),))
             watcher.compose_entity()
+            if goblin_offhand is not None:update_weapon_template(watcher,WeaponSlot.MELEE_OFF)
         for watcher in watchers:
             add_opportunity_attack_handler(watcher)
         for actor in (hero, *watchers):

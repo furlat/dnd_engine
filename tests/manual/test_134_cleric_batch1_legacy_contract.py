@@ -44,7 +44,6 @@ from dnd.spells.enchantment import Command
 from dnd.spells.evocation import (
     ContinualFlame,
     ContinualFlameCondition,
-    ContinualFlameObject,
     FireBolt,
     FlameStrike,
     Light,
@@ -323,26 +322,19 @@ def test_continual_flame_object_owns_light_lifecycle() -> None:
     )
     Entity.update_all_entities_senses(max_distance=100)
 
+    flame = build_authored_item("weapon.club", caster.uuid)
+    flame.place_on_grid((3, 7))
     result = ContinualFlame(
         source_entity_uuid=caster.uuid,
-        end_position=(3, 7),
+        target_entity_uuid=flame.uuid,
         cast_at_level=2,
     ).apply()
 
     assert isinstance(result, SpellEvent)
     assert not result.canceled
     assert not has_condition(caster, "Concentrating")
-    objects = get_map().get_objects_at((3, 7))
-    flame = next(
-        obj for obj in (BaseBlock.get(object_uuid) for object_uuid in objects)
-        if isinstance(obj, ContinualFlameObject)
-    )
-    condition = next(
-        spatial_condition
-        for spatial_condition in get_map().get_spatial_conditions()
-        if isinstance(spatial_condition, ContinualFlameCondition)
-    )
-    assert condition.anchor_uuid == flame.uuid
+    condition = flame.active_conditions["Continual Flame"]
+    assert condition.target_entity_uuid == flame.uuid
     assert _tile((3, 7)).resolved_light_level is LightLevel.BRIGHT_LIGHT
     assert _tile((5, 7)).resolved_light_level in {
         LightLevel.BRIGHT_LIGHT,
@@ -353,20 +345,22 @@ def test_continual_flame_object_owns_light_lifecycle() -> None:
 
     assert not get_map().get_objects_at((3, 7))
     assert BaseBlock.get(flame.uuid) is None
-    assert condition not in get_map().get_spatial_conditions()
+    assert not condition.applied
     assert _tile((3, 7)).resolved_light_level is LightLevel.DARKNESS
 
 
-def test_vetoed_continual_flame_removes_its_uncommitted_anchor() -> None:
+def test_vetoed_continual_flame_preserves_selected_item_without_light() -> None:
     """A real condition-application veto returns cancellation without leaked light."""
     _dark_arena(8, 5)
     caster = create_spell_regression_actor("Flame Cleric", (2, 2), "heroes", spell_slots={2: 1})
     Entity.update_all_entities_senses(max_distance=40)
-    anchors: list[UUID] = []
+    flame = build_authored_item("weapon.club", caster.uuid)
+    flame.place_on_grid((3, 2))
+    targets: list[UUID] = []
 
     def veto_flame(event: Event, _source_uuid: UUID) -> Event:
         if isinstance(event, ConditionApplicationEvent) and isinstance(event.condition, ContinualFlameCondition):
-            anchors.append(event.condition.anchor_uuid)
+            targets.append(event.target_entity_uuid)
             return event.cancel("Continual Flame application vetoed")
         return event
 
@@ -376,11 +370,13 @@ def test_vetoed_continual_flame_removes_its_uncommitted_anchor() -> None:
                                     event_phase=EventPhase.DECLARATION)],
         event_processor=veto_flame,
     ))
-    result = ContinualFlame(source_entity_uuid=caster.uuid, end_position=(3, 2), cast_at_level=2).apply()
+    result = ContinualFlame(source_entity_uuid=caster.uuid, target_entity_uuid=flame.uuid, cast_at_level=2).apply()
 
     assert result is not None and result.canceled
-    assert anchors and all(BaseBlock.get(identity) is None for identity in anchors)
-    assert not get_map().get_objects_at((3, 2))
+    assert targets == [flame.uuid]
+    assert BaseBlock.get(flame.uuid) is flame
+    assert get_map().get_objects_at((3, 2)) == {flame.uuid}
+    assert not flame.active_conditions
     assert not get_map().get_spatial_conditions()
     assert _tile((3, 2)).resolved_light_level is LightLevel.DARKNESS
 
@@ -765,7 +761,7 @@ def test_guardian_placement_ward_and_damage_budget() -> None:
     reset_spell_regression_arena(24, 15)
     caster = create_spell_regression_actor(
         "Guardian Cleric",
-        (2, 7),
+        (4, 7),
         "heroes",
         spell_slots={4: 1},
     )
@@ -794,7 +790,7 @@ def test_guardian_placement_ward_and_damage_budget() -> None:
         for condition in grid.get_spatial_conditions()
         if isinstance(condition, GuardianOfFaithZone)
     )
-    assert not guardian.blocks_movement
+    assert guardian.blocks_movement
     assert not grid.is_walkable_for(10, 7, caster.uuid)
     assert zone.anchor_uuid == guardian.uuid
     assert zone.damage_budget == 60
@@ -809,7 +805,7 @@ def test_guardian_placement_ward_and_damage_budget() -> None:
             Entity.update_entity_position(first, (12, 7))
         assert get_hp(first) == first_hp - 20
         hp_after_first = get_hp(first)
-        Entity.update_entity_position(first, (11, 7))
+        Entity.update_entity_position(first, (12, 8))
         assert get_hp(first) == hp_after_first
     finally:
         EventQueue.end_turn_execution(first_turn)

@@ -57,6 +57,7 @@ from dnd.core.modifiers import (
 from dnd.blocks.skills import all_skills, skills_requiring_sight, skills_requiring_hearing, skills_social
 from dnd.core.base_block import CommittedConditionRemovals, LightLevel, PreparedConditionRemovals
 from dnd.core.geometry import bresenham_line
+from dnd.core.elevation import support_distance_feet
 from dnd.core.gridmap import get_map
 from dnd.core.ground import ground_neighbors
 from dnd.types.world import OccupancyLayer
@@ -1044,6 +1045,20 @@ def residue_fear_origin(
     )
 
 
+def apply_frightened_disadvantage(
+    target: Entity, source_uuid: UUID, disadvantage: ContextAwareAdvantage,
+) -> List[Tuple[UUID, UUID]]:
+    """Install fear penalties returned to the exact condition's normal ownership list."""
+    values = [target.equipment.attack_bonus]
+    values.extend(target.skill_set.get_skill(skill).skill_bonus for skill in all_skills)
+    values.extend(ability.check_bonus for ability in (
+        target.ability_scores.strength, target.ability_scores.dexterity, target.ability_scores.constitution,
+        target.ability_scores.intelligence, target.ability_scores.wisdom, target.ability_scores.charisma))
+    return [(value.uuid, value.self_contextual.add_advantage_modifier(ContextualAdvantageModifier(
+        name="Frightened", source_entity_uuid=target.uuid, target_entity_uuid=source_uuid,
+        callable=disadvantage))) for value in values]
+
+
 @_core_condition_identity(
     content_id="condition.frightened",
     display_name="Frightened",
@@ -1056,6 +1071,11 @@ class Frightened(BaseCondition):
 
     name: str = Field(default="Frightened", description="Condition name.")
     residue_origin: Optional[ResidueFearOrigin] = None
+    allow_retreat: bool = False
+    source_rules_owned_by_parent: bool = False
+    _source_parent_uuid: UUID | None = PrivateAttr(default=None)
+    _inherited_shared_parents: tuple[UUID, ...] = PrivateAttr(default=())
+    _retiring_shared_parents: tuple[UUID, ...] = PrivateAttr(default=())
     description: str = Field(
         default="A frightened creature has disadvantage on attack rolls and ability checks and cannot move while the frightener is in sight.",
         description="Condition description.",
@@ -1068,15 +1088,29 @@ class Frightened(BaseCondition):
         if not target_entity:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
         elif isinstance(target_entity,Entity):
-            outs = []
-            disadvantage_uuid = target_entity.equipment.attack_bonus.self_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frightener_in_senses_disadvantage()))
-            outs.append((target_entity.equipment.attack_bonus.uuid,disadvantage_uuid))
-            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Frightened self to others disadvantage modifier to {target_entity.name}")
-            for skill in all_skills:
-                skill_obj = target_entity.skill_set.get_skill(skill)
-                skills_modifier_uuid = skill_obj.skill_bonus.self_contextual.add_advantage_modifier(modifier=ContextualAdvantageModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frightener_in_senses_disadvantage()))
-                outs.append((skill_obj.skill_bonus.uuid,skills_modifier_uuid))
-            effect_event = effect_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Frightened skill disadvantage modifier to {target_entity.name}")
+            self._source_parent_uuid = self.parent_condition
+            existing = target_entity.active_conditions.get("Frightened")
+            if isinstance(existing, Frightened):
+                parents = set(existing.additional_parent_conditions)
+                if (existing.parent_condition is not None and (existing.source_rules_owned_by_parent
+                        or existing.parent_condition != existing._source_parent_uuid)):
+                    parents.add(existing.parent_condition)
+                self._inherited_shared_parents = tuple(parents)
+            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition": self},
+                status_message=f"Applied Frightened to {target_entity.name}")
+            if self.source_rules_owned_by_parent:
+                return [], [], [], [], effect_event
+            outs = apply_frightened_disadvantage(target_entity, self.source_entity_uuid,
+                self.get_frightener_in_senses_disadvantage())
+            if self.residue_origin is None and self.allow_retreat:
+                direction = EventHandler(
+                    name="Frightened Retreat Direction", source_entity_uuid=target_entity.uuid,
+                    trigger_conditions=[Trigger(event_type=EventType.STEP_MOVEMENT,
+                        event_phase=EventPhase.EFFECT, event_source_entity_uuid=target_entity.uuid)],
+                    event_processor=self._on_retreat_step,
+                )
+                target_entity.add_event_handler(direction)
+                return outs, [direction.uuid], [], [], effect_event
             if self.residue_origin is None:
                 for speed in target_entity.action_economy.speed_values:
                     max_movement_constraint_uuid = speed.self_contextual.add_max_constraint(constraint=ContextualNumericalModifier(name="Frightened",source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid, callable=self.get_frigthener_in_senses_zero_max_speed()))
@@ -1108,6 +1142,62 @@ class Frightened(BaseCondition):
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
+    def _own_source_active(self) -> bool:
+        if self.source_rules_owned_by_parent or self.duration.is_expired:
+            return False
+        parent = BaseCondition.get(self._source_parent_uuid) if self._source_parent_uuid else None
+        return self._source_parent_uuid is None or isinstance(parent, BaseCondition) and parent.applied
+
+    def has_surviving_parent(self, removing: Set[UUID]) -> bool:
+        if self.parent_condition is None and not self._own_source_active():
+            return bool(self.additional_parent_conditions - removing)
+        return super().has_surviving_parent(removing)
+
+    def progress_for_interval(self, interval: Optional[Tuple[UUID, int]]) -> bool:
+        expired = super().progress_for_interval(interval)
+        # The independent fear expires; borrowed membership still belongs to
+        # its live source parents. Its own contextual contributions now gate off.
+        return expired and not self.additional_parent_conditions
+
+    def _end_own_source(self, event: Event) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return
+        if self.additional_parent_conditions:
+            self.duration.duration_type = DurationType.ROUNDS
+            self.duration.duration = 0
+        else:
+            target.remove_condition_by_uuid(self.uuid, parent_event=event)
+
+    def _commit_application(self, effect_event: Event) -> None:
+        # A later ordinary fear keeps the live shared parents when replacing
+        # their membership-only child. The replacement remains atomic.
+        for parent_uuid in self._inherited_shared_parents:
+            parent = BaseCondition.get(parent_uuid)
+            if isinstance(parent, BaseCondition) and parent.applied:
+                parent.add_shared_subcondition(self)
+        self._inherited_shared_parents = ()
+
+    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
+        parents = set(self.additional_parent_conditions)
+        if (self.parent_condition is not None and (self.source_rules_owned_by_parent
+                or self.parent_condition != self._source_parent_uuid)):
+            parents.add(self.parent_condition)
+        cause = event.get_parent_event() if event is not None else None
+        if isinstance(cause, ConditionApplicationEvent) and isinstance(cause.condition, Frightened):
+            parents.difference_update(cause.condition._inherited_shared_parents)
+        self._retiring_shared_parents = tuple(parents)
+        return event
+
+    def on_membership_changed(self, event: Event) -> None:
+        if self.applied:
+            return
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            for parent_uuid in self._retiring_shared_parents:
+                target.remove_condition_by_uuid(parent_uuid, parent_event=event)
+        self._retiring_shared_parents = ()
+
     @staticmethod
     def frightener_in_senses_disadvantage(frightener_uuid: UUID, source_entity_uuid: UUID, target_entity_uuid: Optional[UUID]=None, context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
         """Return disadvantage while the frightened entity senses the source.
@@ -1131,9 +1221,15 @@ class Frightened(BaseCondition):
         """Return the contextual disadvantage callable for this fear source."""
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set hence cannot generate the callable for the ContextualAdvantageModifier")
+        return self._source_disadvantage
+
+    def _source_disadvantage(self, source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None,
+                            context: Optional[Dict[str, Any]] = None) -> Optional[AdvantageModifier]:
+        if not self._own_source_active():
+            return None
         if self.residue_origin is not None:
-            return partial(self.residue_in_senses_disadvantage, self.residue_origin)
-        return partial(self.frightener_in_senses_disadvantage, self.source_entity_uuid)
+            return self.residue_in_senses_disadvantage(self.residue_origin, source_entity_uuid, target_entity_uuid, context)
+        return self.frightener_in_senses_disadvantage(self.source_entity_uuid, source_entity_uuid, target_entity_uuid, context)
 
     @staticmethod
     def residue_in_senses_disadvantage(
@@ -1151,15 +1247,38 @@ class Frightened(BaseCondition):
 
     def get_paid_entry_retreat(self, *, since_cursor: int) -> Optional[PaidEntryRetreat]:
         """Request the initial response once, at the movement's completed entry boundary."""
-        if (self.residue_origin is None or self.applied_source_event_cursor is None
+        if (not self._own_source_active() or self.residue_origin is None or self.applied_source_event_cursor is None
                 or self.applied_source_event_cursor <= since_cursor):
             return None
         return PaidEntryRetreat(destination=self.residue_origin.retreat_position)
 
+    def _on_retreat_step(self, event: Event, source_uuid: UUID) -> Event:
+        if self.target_entity_uuid is None or not self._own_source_active():
+            return event
+        return self.retreat_step_for_source(self.source_entity_uuid, self.target_entity_uuid, event, source_uuid)
+
+    @staticmethod
+    def retreat_step_for_source(frightener_uuid: UUID, target_uuid: UUID, event: Event, _source_uuid: UUID) -> Event:
+        """Constrain a paid step against the explicit owner's visible frightener."""
+        if not isinstance(event, StepMovementEvent):
+            return event
+        target, source = Entity.get(target_uuid), Entity.get(frightener_uuid)
+        if target is None or source is None:
+            return event
+        contact = target.senses.entities.get(source.uuid)
+        if contact is None or not contact.visual:
+            return event
+        grid = get_map()
+        before = support_distance_feet(source.position, grid.get_support_elevation_feet(source.position),
+            event.from_position, grid.get_support_elevation_feet(event.from_position))
+        after = support_distance_feet(source.position, grid.get_support_elevation_feet(source.position),
+            event.to_position, grid.get_support_elevation_feet(event.to_position))
+        return event.cancel(status_message="Frightened: cannot approach the source") if after < before else event
+
     def _on_residue_step(self, event: Event, _source_uuid: UUID) -> Event:
         """Retain the original outward heading across internal pool cells."""
         origin = self.residue_origin
-        if origin is not None and isinstance(event, StepMovementEvent) and origin.retreat_position is not None:
+        if self._own_source_active() and origin is not None and isinstance(event, StepMovementEvent) and origin.retreat_position is not None:
             destination = (event.from_position[0] + origin.retreat_position[0] - origin.position[0],
                            event.from_position[1] + origin.retreat_position[1] - origin.position[1])
             if event.to_position != destination:
@@ -1169,27 +1288,25 @@ class Frightened(BaseCondition):
     def _on_residue_exit(self, event: Event, _source_uuid: UUID) -> Event:
         """Internal material movement retains fear; an actual exit releases it."""
         origin = self.residue_origin
-        if (origin is not None and self.target_entity_uuid is not None
+        if (self._own_source_active() and origin is not None and self.target_entity_uuid is not None
                 and isinstance(event, SpatialChangeEvent)
                 and event.entity_uuid == self.target_entity_uuid):
             destination = event.old_position  # LEFT stores its arrival here.
             if (destination is not None and event.occupancy_layer is OccupancyLayer.GROUND
                     and same_residue_ground(event.position, destination, origin.residue_id)):
                 return event
-            target = Entity.get(self.target_entity_uuid)
-            if target is not None:
-                target.remove_condition_by_uuid(self.uuid, parent_event=event)
+            self._end_own_source(event)
         return event
 
     def _on_residue_removed(self, event: Event, _source_uuid: UUID) -> Event:
         """Removing the currently contacted material releases only this fear."""
         origin = self.residue_origin
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
-        if origin is None or target is None:
+        if origin is None or target is None or not self._own_source_active():
             return event
         if (isinstance(event, SpatialChangeEvent) and event.position == target.position
                 and not ground_has_residue(target.position, origin.residue_id)):
-            target.remove_condition_by_uuid(self.uuid, parent_event=event)
+            self._end_own_source(event)
         return event
 
     @staticmethod
@@ -1215,8 +1332,14 @@ class Frightened(BaseCondition):
         """Return the contextual zero-movement callable for this fear source."""
         if not self.target_entity_uuid:
             raise ValueError("Target entity UUID is not set hence cannot generate the callable for the ContextualNumericalModifier")
-        partial_function = partial(self.frigthener_in_senses_zero_max_speed, self.source_entity_uuid)
-        return partial_function
+        return self._source_zero_speed
+
+    def _source_zero_speed(self, source_entity_uuid: UUID, target_entity_uuid: Optional[UUID] = None,
+                           context: Optional[Dict[str, Any]] = None) -> Optional[NumericalModifier]:
+        if not self._own_source_active():
+            return None
+        return self.frigthener_in_senses_zero_max_speed(self.source_entity_uuid,
+            source_entity_uuid, target_entity_uuid, context)
 
 
 @_core_condition_identity(
@@ -1286,23 +1409,6 @@ class Incapacitated(BaseCondition):
         else:
             return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
-def _has_surviving_invisibility(
-    target: BaseBlock,
-    removed_uuid: UUID,
-) -> bool:
-    """Return whether another applied condition still owns invisibility."""
-    return any(
-        condition.uuid != removed_uuid
-        and condition.applied
-        and isinstance(condition, (
-            Invisible,
-            InvisibilityEffect,
-            GreaterInvisibilityEffect,
-        ))
-        for condition in target.active_conditions_by_uuid.values()
-    )
-
-
 @_core_condition_identity(
     content_id="condition.invisible",
     display_name="Invisible",
@@ -1315,6 +1421,7 @@ class Invisible(BaseCondition):
 
     name: str = Field(default="Invisible", description="Condition name.")
     description: str = Field(default="An invisible creature is impossible to see without the aid of magic or a special sense.", description="Condition description.")
+    grants_invisibility: bool = True
     obscures_perceivability: bool = Field(default=True, description="Removing invisibility may reveal the target.")
 
     _invisibility_changed: bool = PrivateAttr(default=False)
@@ -1322,14 +1429,12 @@ class Invisible(BaseCondition):
     def _commit_application(self, effect_event: Event) -> None:
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is not None:
-            self._invisibility_changed = target.set_invisible(True, publish=False)
+            self._invisibility_changed = True
 
     def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if self.applied and target is not None:
-            self._invisibility_changed = target.set_invisible(
-                _has_surviving_invisibility(target, self.uuid), publish=False,
-            ) or self._invisibility_changed
+            self._invisibility_changed = True
 
     def on_membership_changed(self, event: Event) -> None:
         changed, self._invisibility_changed = self._invisibility_changed, False
@@ -1508,7 +1613,7 @@ class Petrified(BaseCondition):
                 )
                 resistance_uuid = target_entity.health.damage_reduction.self_static.add_resistance_modifier(resistance_modifier)
                 outs.append((target_entity.health.damage_reduction.uuid, resistance_uuid))
-            target_entity.add_condition_immunity("Poisoned", immunity_name="Petrified")
+            target_entity.add_condition_immunity_source("Poisoned", self.uuid)
             effect_event = effect_event.phase_to(
                 EventPhase.EFFECT,
                 update={"condition": self},
@@ -1529,7 +1634,7 @@ class Petrified(BaseCondition):
         """
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
-            target._remove_static_condition_immunity("Poisoned", "Petrified")
+            target.remove_condition_immunity_source("Poisoned", self.uuid)
         return super()._remove(event)
 
 
@@ -2278,13 +2383,13 @@ class ConcentrationActionMarker(BaseCondition):
         )
         return [], [], [], [], effect_event
 
-    def _remove(self, removal_event: Optional[Event] = None) -> Optional[Event]:
+    def _release_owned_runtime_state(self, *, parent_event: Optional[Event] = None) -> None:
         entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if entity and self.action_uuid is not None:
             entity.unregister_action_by_uuid(self.action_uuid)
         elif entity and self.action_name:
             entity.unregister_action(self.action_name)
-        return super()._remove(removal_event)
+        super()._release_owned_runtime_state(parent_event=parent_event)
 
 
 @_core_condition_identity(
@@ -2518,6 +2623,7 @@ class InvisibilityEffect(BaseCondition):
 
     name: str = Field(default="Invisible", description="Condition name.")
     description: str = Field(default="Invisible until attacking or casting a spell", description="Condition description.")
+    grants_invisibility: bool = True
     obscures_perceivability: bool = Field(default=True, description="Removing invisibility may reveal the target.")
     creation_lineage_uuid: Optional[UUID] = Field(default=None, description="Lineage UUID of the event that created this condition.")
     reveal_on_spell: bool = True
@@ -2528,14 +2634,12 @@ class InvisibilityEffect(BaseCondition):
     def _commit_application(self, effect_event: Event) -> None:
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is not None:
-            self._invisibility_changed = target.set_invisible(True, publish=False)
+            self._invisibility_changed = True
 
     def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if self.applied and target is not None:
-            self._invisibility_changed = target.set_invisible(
-                _has_surviving_invisibility(target, self.uuid), publish=False,
-            ) or self._invisibility_changed
+            self._invisibility_changed = True
 
     def on_membership_changed(self, event: Event) -> None:
         changed, self._invisibility_changed = self._invisibility_changed, False
@@ -2592,7 +2696,7 @@ class InvisibilityEffect(BaseCondition):
             self.creation_lineage_uuid = parent.lineage_uuid if parent else declaration_event.lineage_uuid
 
             handler = EventHandler(
-                name="Invisibility: Reveal",
+                name="Invisibility: Reveal", runs_while_suppressed=True,
                 source_entity_uuid=target_entity.uuid,
                 trigger_conditions=[
                     Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.EFFECT,
@@ -2650,6 +2754,7 @@ class GreaterInvisibilityEffect(BaseCondition):
 
     name: str = Field(default="Invisible", description="Condition name.")
     description: str = Field(default="Greater Invisibility - Stealth check to maintain", description="Condition description.")
+    grants_invisibility: bool = True
     obscures_perceivability: bool = Field(default=True, description="Removing invisibility may reveal the target.")
     check_count: int = Field(default=0, description="Number of successful stealth checks")
     base_dc: int = Field(default=15, description="Starting DC for stealth check")
@@ -2660,14 +2765,12 @@ class GreaterInvisibilityEffect(BaseCondition):
     def _commit_application(self, effect_event: Event) -> None:
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is not None:
-            self._invisibility_changed = target.set_invisible(True, publish=False)
+            self._invisibility_changed = True
 
     def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
         target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if self.applied and target is not None:
-            self._invisibility_changed = target.set_invisible(
-                _has_surviving_invisibility(target, self.uuid), publish=False,
-            ) or self._invisibility_changed
+            self._invisibility_changed = True
 
     def on_membership_changed(self, event: Event) -> None:
         changed, self._invisibility_changed = self._invisibility_changed, False

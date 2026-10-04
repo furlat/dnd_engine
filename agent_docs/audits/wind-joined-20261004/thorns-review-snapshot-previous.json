@@ -1,0 +1,11 @@
+{
+  "files": {
+    "game/thorns_surface.py": "bc47b10efe03cf39d52d2fece640db9a4a97c5fb23dbcc91956065d48a811563",
+    "game/wall_assembly_media.py": "934f272043ce96cbf98d4dc1d30bb656f98500b11ef184910ce0c494c86360b1",
+    "game/spatial_media_draw.py": "3f23b21f8483c2547baa0caa8d5b01b052cc81c5465e5a4767c8ebdeca50af78",
+    "game/animation_types.py": "c8f49ed8a15af1c2ba51db96c1f2f4db5aed85facc06b9796aade4d8acb879b7",
+    "game/data/world_bindings.json": "e7d62370a1dcac2c91c5ef0f2888cbe129ee76c30a9a1a72df4061a2ec8cd175",
+    "tests/game/test_thorns_contact_presentation.py": "0ce1d0e479480453932c52c03baaa23849ddd61411545121a732af5389abc957"
+  },
+  "sha256": "550a67ba7428b41c5c7cfa658aa496c6bf15781b1af641e3e8c9a1b93e4871bc"
+}

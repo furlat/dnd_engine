@@ -11,6 +11,20 @@ from tests.game.curse_scenarios import curse_history
 from devtools.animation_review.curse_cases import CurseCase
 from devtools.animation_review.divine_cases import DivineCase
 from tests.game.divine_scenarios import divine_history
+from tests.game.power_word_scenarios import power_word_history
+from tests.game.nature_spell_scenarios import nature_spell_history
+from tests.game.directed_spell_scenarios import directed_spell_history
+from tests.game.necrotic_spell_scenarios import necrotic_spell_history
+from tests.game.antimagic_scenarios import antimagic_history
+from tests.game.transport_spell_scenarios import transport_spell_history
+from tests.game.electric_spell_scenarios import electric_spell_history
+from tests.game.weather_solar_scenarios import weather_solar_history
+from tests.game.holy_spell_scenarios import holy_spell_history
+from devtools.animation_review.holy_cases import HolyCase
+from devtools.animation_review.class_cases import ClassFeatureCase
+from tests.game.class_feature_scenarios import class_feature_history
+from devtools.animation_review.weather_solar_cases import WeatherSolarCase
+from tests.game.shared_condition_scenarios import shared_condition_history
 from devtools.animation_review.slow_cases import SlowCase
 from devtools.animation_review.hold_cases import HoldCase
 from tests.game.hold_scenarios import hold_history
@@ -33,6 +47,7 @@ from tests.game.device_scenarios import device_history
 from tests.game.web_scenarios import web_history
 from tests.game.cantrip_scenarios import cantrip_history
 from tests.game.area_spell_scenarios import area_spell_history
+from tests.game.production_gap_scenarios import cone_gap_history, wind_interception_history
 from tests.game.support_scenarios import support_history
 from tests.game.healing_batch_scenarios import healing_batch_history
 from tests.game.support_conditions_scenarios import support_condition_history
@@ -69,12 +84,13 @@ from tests.game.scenarios import (
 )
 from tests.game.damage_resolution_scenarios import resolution_history, unseen_source_damage
 from tests.game.construction_scenarios import construction_history
+from tests.game.surface_ignition_scenarios import surface_ignition_history
 from tests.game.movement_scenarios import flight_history
 from game.presentation import reduce_interval
 
 from devtools.animation_review.cases import (
-    SummoningCase, AreaSpellCase, CallLightningCase, CantripCase, AttackCase, DamageResolutionCase, ConstructionCase, FlightCase, ItemPowerCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DeviceCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,
-    MechanismCase, PortalCase, WindowCase, DoorCase, TrapHardwareCase, PropDestructionCase, ObjectAttackCase, LiquidBarrelCase, EnvironmentCase, EnvironmentControlCase, EquipmentCase, ItemTransferCase, ForcedMovementCase, GroundContactCase, HealingCase, LifecycleCase, MovementCase,
+    ConeOfColdCase, WindInterceptionCase, SummoningCase, AreaSpellCase, CallLightningCase, CantripCase, AttackCase, DamageResolutionCase, ConstructionCase, SurfaceIgnitionCase, FlightCase, ItemPowerCase, BodyResidueCase, CastCase, ConcealmentCase, CreatureCase, DeviceCase, DiscoveryCase, DodgeExpiryCase, DreadResidueCase,
+    DirectedSpellCase, TransportSpellCase, AntimagicCase, ElectricSpellCase, NecroticSpellCase, NatureSpellCase, PowerWordCase, SharedConditionCase, MechanismCase, PortalCase, WindowCase, DoorCase, TrapHardwareCase, PropDestructionCase, ObjectAttackCase, LiquidBarrelCase, EnvironmentCase, EnvironmentControlCase, EquipmentCase, ItemTransferCase, ForcedMovementCase, GroundContactCase, HealingCase, LifecycleCase, MovementCase,
     ParalysisCase, ParalysisLifecycleCase, PendingSpellCase, PersistentSpellCase, WallSpellCase, GlobeCase, InterruptionCase, ControlSpellCase, ProjectileLifeCase, ReviewCase, SpellHandoffCase, SupportCase, HealingBatchCase, SupportConditionCase, TrueStrikeCase, TeleportCase, TrapCase, VisibilityCase, WebCase,
 )
 
@@ -91,7 +107,10 @@ def produce(case: ReviewCase) -> CapturedHistory:
             before, _ = reduce_interval(None, native.initialization)
             return CapturedHistory(native.initialization, before, native.lineages)
         case ConstructionCase() as scenario:
-            return construction_history(material=scenario.material)
+            return construction_history(material=scenario.material,break_section=scenario.break_section,
+                disintegrate=scenario.disintegrate,fracture_after_cut=scenario.fracture_after_cut,dome_radius=scenario.dome_radius)
+        case SurfaceIgnitionCase():
+            return surface_ignition_history()
         case FlightCase() as scenario:
             return (flight_history() if scenario.recipient is None
                     else fly_lifetime_history(recipient=scenario.recipient, geometry=scenario.geometry))
@@ -113,6 +132,31 @@ def produce(case: ReviewCase) -> CapturedHistory:
             return hold_history(program=scenario.program, saved=scenario.saved, retain_paralysis=scenario.retain_paralysis)
         case SlowCase() as scenario:
             return slow_history(saved=scenario.saved)
+        case SharedConditionCase() as scenario:
+            return shared_condition_history(program=scenario.program)
+        case AntimagicCase():
+            return antimagic_history()
+        case TransportSpellCase() as scenario:
+            return transport_spell_history(program=scenario.program)
+        case DirectedSpellCase() as scenario:
+            return directed_spell_history(program=scenario.program,mode=scenario.mode,repeat=scenario.repeat,
+                saved=scenario.saved,cleanup=scenario.cleanup,lethal=scenario.lethal,prone=scenario.prone,
+                magical_weapon=scenario.magical_weapon,target_item_id=scenario.target_item_id)
+        case ElectricSpellCase() as scenario:
+            return electric_spell_history(program=scenario.program, empty=scenario.empty)
+        case NecroticSpellCase() as scenario:
+            return necrotic_spell_history(program=scenario.program, saved=scenario.saved, immune=scenario.immune)
+        case ClassFeatureCase() as scenario:
+            return class_feature_history(program=scenario.program,succeeded=scenario.succeeded,hidden_owner=scenario.hidden_owner,martial_route=scenario.martial_route,retire=scenario.retire)
+        case HolyCase() as scenario:
+            return holy_spell_history(program=scenario.program,immune=scenario.immune,expire=scenario.expire)
+        case WeatherSolarCase() as scenario:
+            return weather_solar_history(program=scenario.program, empty=scenario.empty,
+                expire=scenario.expire, heading=scenario.heading, repeat=scenario.repeat)
+        case NatureSpellCase() as scenario:
+            return nature_spell_history(program=scenario.program, immune=scenario.immune)
+        case PowerWordCase() as scenario:
+            return power_word_history(program=scenario.program, outcome=scenario.outcome)
         case DivineCase() as scenario:
             return divine_history(program=scenario.program, multiple_targets=scenario.multiple_targets)
         case WallSpellCase() as scenario:
@@ -167,8 +211,13 @@ def produce(case: ReviewCase) -> CapturedHistory:
             return true_strike_history(ranged=scenario.ranged, miss=scenario.miss)
         case CantripCase() as scenario:
             return cantrip_history(program=scenario.program, outcome=scenario.outcome, layout=scenario.layout)
-        case CallLightningCase():
-            return area_spell_history(program="call_lightning")
+        case CallLightningCase() as scenario:
+            return area_spell_history(program="call_lightning", call_repeat_position=scenario.repeat_position,
+                move_before_repeat=scenario.move_before_repeat)
+        case ConeOfColdCase() as scenario:
+            return cone_gap_history(heading=scenario.heading, oblique=scenario.oblique)
+        case WindInterceptionCase() as scenario:
+            return wind_interception_history(direction=scenario.direction, blocked=scenario.blocked)
         case AreaSpellCase() as scenario:
             return area_spell_history(program=scenario.program, diagonal=scenario.diagonal, blocked=scenario.blocked)
         case WebCase() as scenario:
@@ -217,6 +266,7 @@ def produce(case: ReviewCase) -> CapturedHistory:
                 blocker_position=scenario.blocker_position, watcher_position=scenario.watcher_position,
                 target_identity=scenario.target_identity, target_hp=scenario.target_hp,
                 mechanism=scenario.mechanism, destination=scenario.destination,
+                initial_cast=scenario.initial_cast, resisted=scenario.resisted, allied=scenario.allied,
             )
         case CreatureCase() as scenario:
             if scenario.spell is not None:

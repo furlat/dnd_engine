@@ -303,19 +303,15 @@ def test_telekinesis_granted_move_retains_incoming_contact_before_paid_retreat(g
     game.deploy_entity(caster, caster.position)
     traveler = actor(game, (1, 1), faction="enemies")
     pool((4, 1))
-    with fixed_dice_faces(1):
-        cast = Telekinesis(source_entity_uuid=caster.uuid, target_entity_uuid=traveler.uuid).apply()
-    assert cast is not None and not cast.canceled
-    template = caster.get_action_template("Telekinesis: Move")
-    assert template is not None
     cursor = EventQueue.event_cursor()
-    with fixed_dice_faces(1):
-        result = template.instantiate(end_position=(4, 1)).apply()
+    with fixed_dice_faces(*([1] * 16)):
+        result = Telekinesis(source_entity_uuid=caster.uuid, target_entity_uuid=traveler.uuid,
+            end_position=(4, 1)).apply()
     assert result is not None and not result.canceled
     assert traveler.position == (3, 1)
     assert traveler.action_economy.movement_remaining() == 25
     assert "Frightened" not in traveler.active_conditions
-    assert caster.get_action_template("Telekinesis: Move") is None
+    assert caster.get_action_template("Telekinesis: Move") is not None
     events = completed(cursor)
     incoming, = (event for event in events if isinstance(event, ForcedMovementEvent))
     retreat, = (event for event in events if isinstance(event, MovementEvent))

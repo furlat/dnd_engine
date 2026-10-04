@@ -1,0 +1,13 @@
+{
+  "devtools/import_utility_media.py": "6e34d982655fa9e2d72eeeeada8b3f1f727081af2b5715409d11b8aa9fdd18b9",
+  "game/absence_media.py": "43b2c11c458a3e53b156b69acea3b74d0f7f1536466249a52d866363158c9890",
+  "game/animation_draw.py": "a5b01cbec7e4d9af7c8e625eef6d492fe6a471003b1c2590c25f9c3e4c0a55e2",
+  "game/animation_types.py": "4d3e3166225ff552814669c01531c8deecc891a9295e5db0a654b631cf83a0b8",
+  "game/app.py": "2a3070097e8538d6d56977655947f4815bd8a0c5d224b95a559787bba792e49b",
+  "game/condition_media_lifetime.py": "76efc8cba7c52d890cc3c85282e6fc3f932ffa49791cf4964bcfcab3cb1662f7",
+  "game/data/utility_media/antimagic-draft.json": "22149784615d622015a4475d90d527c99fb48c7dc26b97bade186a33a51e8e22",
+  "game/data/utility_media/cast-hands-source.json": "3ae4ef4131727bb00d521189583479e6e868c2383ba5c5e3c34acb15f420de83",
+  "game/data/utility_media/telekinesis-draft.json": "f74453ab4d5adb85987f1f37696bd2d4e9a61abaa35ed1bff826a89660ad45de",
+  "game/player_projection.py": "268da6c17f81ab5aba69b6590703e1e080ad6e3b9670ab63f5acb80899b2e153",
+  "game/portal_animation.py": "f924f450e46459f6acb36c8a4c6f353c1204deddf72980ebe32ab9784c11f781"
+}

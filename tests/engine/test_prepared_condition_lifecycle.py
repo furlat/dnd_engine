@@ -295,7 +295,8 @@ def test_banishment_return_is_reserved_and_canceled_replacement_does_not_relocat
                              spell_name='Rejected replacement')
     prepared = caster.prepare_condition_application(incoming)
     assert isinstance(prepared, PreparedConditionApplication)
-    assert set(incoming.prepared_removal_occupancies()) == {(3, 3), (3, 4)}
+    reserved = incoming.prepared_removal_occupancies()
+    assert len(reserved) == 1 and reserved[0] != (3, 3)
     assert target.is_spatially_suspended and occupant.position == (3, 3)
     caster.cancel_condition_application(prepared, 'Incoming summon cannot claim return tile')
     assert caster.active_conditions['Concentrating'] is previous
@@ -304,7 +305,7 @@ def test_banishment_return_is_reserved_and_canceled_replacement_does_not_relocat
     assert not banished.prepared_removal_occupancies()
 
 
-def test_banishment_return_and_displacement_commit_without_callbacks():
+def test_banishment_nearest_return_commits_without_callbacks_or_occupant_displacement():
     caster, target, occupant, _previous, banished = banishment_scene()
     incoming = Concentrating(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
                              spell_name='Replacement')
@@ -321,10 +322,10 @@ def test_banishment_return_and_displacement_commit_without_callbacks():
             caster.commit_condition_application(prepared)
             assert EventQueue.event_cursor() == cursor and not observed
             assert not banished.applied and target.is_deployed
-            assert get_map().get_entities_at((3, 3)) == {target.uuid}
-            assert occupant.position == (3, 4)
+            assert get_map().get_entities_at((3, 3)) == {occupant.uuid}
+            assert occupant.position == (3, 3) and target.position != occupant.position
             caster.publish_condition_application(prepared)
-            assert observed and all(row == (incoming, (3, 3), (3, 4)) for row in observed)
+            assert observed and all(row == (incoming, target.position, (3, 3)) for row in observed)
     finally:
         EventQueue.remove_on_event_callback(observe)
 
@@ -362,7 +363,7 @@ def test_antimagic_field_replacement_commits_before_suppressed_condition_restora
     field = AntimagicFieldZone(source_entity_uuid=caster.uuid, anchor_uuid=caster.uuid,
                               position=caster.position, faction=caster.faction)
     field.activate(parent_event=cause)
-    assert not haste.applied and not target.action_economy.get_restricted_action_grants()
+    assert haste.applied and not haste.contributions_active() and not target.action_economy.get_restricted_action_grants()
     previous = Concentrating(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
                              spell_name='Antimagic Field')
     caster.add_condition(previous)
@@ -376,11 +377,12 @@ def test_antimagic_field_replacement_commits_before_suppressed_condition_restora
         caster.commit_condition_application(prepared)
         assert EventQueue.event_cursor() == cursor
         assert caster.active_conditions['Concentrating'] is incoming
-        assert not field.applied and not haste.applied
-        assert not target.active_conditions
+        assert not field.applied and haste.applied and not haste.contributions_active()
+        assert target.active_conditions["Haste"] is haste
         caster.publish_condition_application(prepared)
         assert haste.applied and target.active_conditions['Haste'] is haste
-        assert len(target.action_economy.get_restricted_action_grants()) == 1
+    assert not haste.suppression_provider_uuids
+    assert len(target.action_economy.get_restricted_action_grants()) == 1
 
 
 @pytest.mark.parametrize('condition_type', [Invisible, InvisibilityEffect, GreaterInvisibilityEffect, HasteEffect])
@@ -409,14 +411,15 @@ def test_stale_banishment_return_admission_cannot_partially_replace_concentratio
                              spell_name='Replacement')
     prepared = caster.prepare_condition_application(incoming)
     assert isinstance(prepared, PreparedConditionApplication)
-    Entity.update_entity_position(occupant, (4, 3))
+    reserved, = incoming.prepared_removal_occupancies()
+    Entity.update_entity_position(occupant, reserved)
     with BaseBlock.condition_removal_scope():
         with pytest.raises(RuntimeError, match='no longer matches native state'):
             caster.commit_condition_application(prepared)
     caster.cancel_condition_application(prepared, 'Objective occupancy changed')
     assert caster.active_conditions['Concentrating'] is previous
     assert target.is_spatially_suspended and banished.applied
-    assert occupant.position == (4, 3)
+    assert occupant.position == reserved
 
 
 def test_mandatory_retirement_restores_external_banished_target_only():
@@ -435,7 +438,8 @@ def test_mandatory_retirement_restores_external_banished_target_only():
         cursor = EventQueue.event_cursor()
         BaseBlock.commit_owned_condition_removals(prepared)
         assert EventQueue.event_cursor() == cursor
-        assert target.is_deployed and occupant.position == (3, 4)
+        assert target.is_deployed and occupant.position == (3, 3)
+        assert target.position != occupant.position
         assert caster.is_spatially_suspended and not caster.is_deployed
         BaseBlock.publish_owned_condition_removals(prepared)
         assert caster.is_spatially_suspended and not caster.is_deployed

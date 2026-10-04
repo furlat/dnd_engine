@@ -1,0 +1,1184 @@
+[
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.fighter.second_wind",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Idle2",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.second_wind.heal-q0-back",
+        "assetId": "class.second_wind.heal-q0-back",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "depth": "behind_body",
+        "startOffsetMs": 450,
+        "requireHealingApplied": true
+      },
+      {
+        "id": "class.second_wind.heal-q0-front",
+        "assetId": "class.second_wind.heal-q0-front",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "depth": "front_body",
+        "startOffsetMs": 450,
+        "requireHealingApplied": true
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.fighter.action_surge",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Idle4",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.action_surge.burst-q0-back",
+        "assetId": "class.action_surge.burst-q0-back",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "depth": "behind_body",
+        "startOffsetMs": 200,
+        "alpha": 0.9
+      },
+      {
+        "id": "class.action_surge.burst-q0-front",
+        "assetId": "class.action_surge.burst-q0-front",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "depth": "front_body",
+        "startOffsetMs": 200,
+        "alpha": 0.9
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "class_feature",
+      "content_id": "class_feature.fighter.indomitable",
+      "content_version": 1,
+      "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Idle4",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.indomitable.burst-q0-back",
+        "assetId": "class.indomitable.burst-q0-back",
+        "attachment": "source_ground",
+        "scale": 0.425,
+        "depth": "behind_body",
+        "startOffsetMs": 600,
+        "alpha": 0.8,
+        "requiredSaveSuccess": true
+      },
+      {
+        "id": "class.indomitable.burst-q0-front",
+        "assetId": "class.indomitable.burst-q0-front",
+        "attachment": "source_ground",
+        "scale": 0.425,
+        "depth": "front_body",
+        "startOffsetMs": 600,
+        "alpha": 0.8,
+        "requiredSaveSuccess": true
+      }
+    ],
+    "handlerResponse": true
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "class_feature",
+      "content_id": "class_feature.barbarian.relentless_rage",
+      "content_version": 1,
+      "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": false,
+      "clip": "Idle4",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.relentless.burst-q0-back",
+        "assetId": "class.relentless.burst-q0-back",
+        "attachment": "source_ground",
+        "scale": 0.425,
+        "depth": "behind_body",
+        "startOffsetMs": 600,
+        "alpha": 0.8,
+        "requiredSaveSuccess": true
+      },
+      {
+        "id": "class.relentless.burst-q0-front",
+        "assetId": "class.relentless.burst-q0-front",
+        "attachment": "source_ground",
+        "scale": 0.425,
+        "depth": "front_body",
+        "startOffsetMs": 600,
+        "alpha": 0.8,
+        "requiredSaveSuccess": true
+      }
+    ],
+    "handlerResponse": true
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "class_feature",
+      "content_id": "class_feature.fighter.survivor",
+      "content_version": 1,
+      "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": false,
+      "clip": "Idle",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.second_wind.heal-q0-back",
+        "assetId": "class.second_wind.heal-q0-back",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "depth": "behind_body",
+        "startOffsetMs": 450,
+        "alpha": 0.55,
+        "requireHealingApplied": true
+      },
+      {
+        "id": "class.second_wind.heal-q0-front",
+        "assetId": "class.second_wind.heal-q0-front",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "depth": "front_body",
+        "startOffsetMs": 450,
+        "alpha": 0.55,
+        "requireHealingApplied": true
+      }
+    ],
+    "handlerResponse": true
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "reaction",
+      "content_id": "reaction.class_feature.fighter.protection",
+      "content_version": 1,
+      "definition_contract_hash": "636ffe03ecf4e9d65b406137f0b2812c3a667e4641a56b912c67453ce0790d4b"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Idle4",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [],
+    "handlerResponse": true
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.barbarian.rage",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [
+      "condition"
+    ],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Idle4",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.rage.ground-q0-ground",
+        "assetId": "class.rage.ground-q0-ground",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "depth": "ground",
+        "durationMs": 950,
+        "loop": true,
+        "alpha": 0.4,
+        "fadeInMs": 180,
+        "fadeOutMs": 350,
+        "fadeCurve": "smoothstep",
+        "startOffsetMs": 100
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.barbarian.frenzy",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [
+      "condition"
+    ],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Idle4",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.frenzy.ground-q0-ground",
+        "assetId": "class.frenzy.ground-q0-ground",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "depth": "ground",
+        "durationMs": 950,
+        "loop": true,
+        "alpha": 0.6,
+        "fadeInMs": 180,
+        "fadeOutMs": 350,
+        "fadeCurve": "smoothstep",
+        "startOffsetMs": 100
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.barbarian.end_rage",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [
+      "condition"
+    ],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": false,
+      "clip": "Idle4",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.barbarian.reckless_attack",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [
+      "condition"
+    ],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Idle4",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.barbarian.intimidating_presence",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [
+      "condition"
+    ],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Idle4",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.intimidate.threat",
+        "assetId": "class.intimidate.threat",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "startOffsetMs": 220,
+        "poseSocket": "face",
+        "depth": "front_body"
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.barbarian.extend_intimidating_presence",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Idle4",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.intimidate.threat",
+        "assetId": "class.intimidate.threat",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "startOffsetMs": 220,
+        "poseSocket": "face",
+        "depth": "front_body"
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.sorcerer.convert_slot_to_sorcery_points",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Special1",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "charge-hand",
+        "assetId": "class.font_gather.charge-q0-all",
+        "attachment": "source_ground",
+        "scale": 0.3,
+        "alpha": 0.95,
+        "poseSocket": "hand",
+        "assetIdsByCamera": [
+          "class.font_gather.charge-q0-all",
+          "class.font_gather.charge-q1-all",
+          "class.font_gather.charge-q2-all",
+          "class.font_gather.charge-q3-all"
+        ],
+        "timeMap": [
+          {
+            "elapsedMs": 0,
+            "sourceFrame": 39
+          },
+          {
+            "elapsedMs": 1250,
+            "sourceFrame": 0
+          }
+        ]
+      },
+      {
+        "id": "charge-other_hand",
+        "assetId": "class.font_gather.charge-q0-all",
+        "attachment": "source_ground",
+        "scale": 0.3,
+        "alpha": 0.95,
+        "poseSocket": "other_hand",
+        "assetIdsByCamera": [
+          "class.font_gather.charge-q0-all",
+          "class.font_gather.charge-q1-all",
+          "class.font_gather.charge-q2-all",
+          "class.font_gather.charge-q3-all"
+        ],
+        "timeMap": [
+          {
+            "elapsedMs": 0,
+            "sourceFrame": 39
+          },
+          {
+            "elapsedMs": 1250,
+            "sourceFrame": 0
+          }
+        ]
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.sorcerer.convert_sorcery_points_to_slot",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Special1",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "charge-hand",
+        "assetId": "class.font_gather.charge-q0-all",
+        "attachment": "source_ground",
+        "scale": 0.3,
+        "alpha": 0.95,
+        "poseSocket": "hand",
+        "assetIdsByCamera": [
+          "class.font_gather.charge-q0-all",
+          "class.font_gather.charge-q1-all",
+          "class.font_gather.charge-q2-all",
+          "class.font_gather.charge-q3-all"
+        ]
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.sorcerer.quickened_spell",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [
+      "condition"
+    ],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Special1",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.quickened.quickened-q0-all",
+        "assetId": "class.quickened.quickened-q0-all",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "alpha": 0.95,
+        "poseSocket": "hand"
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.sorcerer.twinned_spell",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [
+      "condition"
+    ],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Special1",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.twinned.twinned-q0-all",
+        "assetId": "class.twinned.twinned-q0-all",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "alpha": 0.95,
+        "poseSocket": "hand"
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.sorcerer.distant_spell",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [
+      "condition"
+    ],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Special1",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.distant.distant-q0-all",
+        "assetId": "class.distant.distant-q0-all",
+        "attachment": "source_ground",
+        "scale": 0.5,
+        "alpha": 0.95,
+        "poseSocket": "hand"
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.sorcerer.elemental_affinity.resistance",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [
+      "condition"
+    ],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Special1",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.sorcerer.dragon_wings.toggle",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [
+      "condition"
+    ],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Idle",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "class.wings.mantle-q0-back",
+        "assetId": "class.wings.mantle-q0-back",
+        "attachment": "source_ground",
+        "scale": 0.4,
+        "depth": "behind_body",
+        "alpha": 0.4,
+        "durationMs": 1250,
+        "loop": true,
+        "fadeInMs": 180,
+        "fadeOutMs": 350,
+        "requireAppliedConditionId": "class_feature.sorcerer.dragon_wings.active"
+      },
+      {
+        "id": "class.wings.mantle-q0-front",
+        "assetId": "class.wings.mantle-q0-front",
+        "attachment": "source_ground",
+        "scale": 0.4,
+        "depth": "front_body",
+        "alpha": 0.4,
+        "durationMs": 1250,
+        "loop": true,
+        "fadeInMs": 180,
+        "fadeOutMs": 350,
+        "requireAppliedConditionId": "class_feature.sorcerer.dragon_wings.active"
+      }
+    ],
+    "handlerResponse": false
+  },
+  {
+    "definitionRef": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "action",
+      "content_id": "action.class.sorcerer.draconic_presence",
+      "content_version": 1,
+      "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+    },
+    "compatibleCueKinds": [
+      "action"
+    ],
+    "previewChildCueKinds": [
+      "condition"
+    ],
+    "disposition": "authored",
+    "mediaFailurePolicy": "fail_transaction",
+    "actor": {
+      "enabled": true,
+      "clip": "Special1",
+      "playbackSpeed": 1,
+      "hiddenSlots": [],
+      "media": []
+    },
+    "anchors": [
+      {
+        "name": "action_start",
+        "frame": 0
+      },
+      {
+        "name": "effect",
+        "frame": 0
+      },
+      {
+        "name": "recover",
+        "frame": 14
+      }
+    ],
+    "attackFeedback": null,
+    "counterspellFeedback": null,
+    "variants": [],
+    "projectile": null,
+    "actionFeedback": null,
+    "media": [
+      {
+        "id": "charge-awe",
+        "assetId": "class.awe.charge-q0-all",
+        "attachment": "source_ground",
+        "scale": 0.3,
+        "alpha": 0.95,
+        "poseSocket": "hand",
+        "whenPresenceMode": "awe",
+        "assetIdsByCamera": [
+          "class.awe.charge-q0-all",
+          "class.awe.charge-q1-all",
+          "class.awe.charge-q2-all",
+          "class.awe.charge-q3-all"
+        ]
+      },
+      {
+        "id": "charge-fear",
+        "assetId": "class.draconic_fear.charge-q0-all",
+        "attachment": "source_ground",
+        "scale": 0.3,
+        "alpha": 0.95,
+        "poseSocket": "hand",
+        "whenPresenceMode": "fear",
+        "assetIdsByCamera": [
+          "class.draconic_fear.charge-q0-all",
+          "class.draconic_fear.charge-q1-all",
+          "class.draconic_fear.charge-q2-all",
+          "class.draconic_fear.charge-q3-all"
+        ]
+      }
+    ],
+    "handlerResponse": false
+  }
+]

@@ -27,6 +27,7 @@ class WorldPlacementSpec(BaseModel):
     occupies_bands: bool
     vertical_extent_steps: StrictInt = Field(ge=1)
     footprint_offsets: tuple[tuple[StrictInt, StrictInt], ...] = ((0, 0),)
+    removed_local_bands: tuple[tuple[StrictInt, StrictInt, StrictInt], ...] = ()
 
     @model_validator(mode="after")
     def validate_footprint(self) -> Self:
@@ -34,6 +35,11 @@ class WorldPlacementSpec(BaseModel):
             raise ValueError("footprint must include its anchor")
         if len(set(self.footprint_offsets)) != len(self.footprint_offsets):
             raise ValueError("footprint offsets must be unique")
+        if len(set(self.removed_local_bands)) != len(self.removed_local_bands):
+            raise ValueError("removed local bands must be unique")
+        if any((x, y) not in self.footprint_offsets or not 0 <= height < self.vertical_extent_steps
+               for x, y, height in self.removed_local_bands):
+            raise ValueError("removed local bands must belong to the authored volume")
         if self.kind is WorldPlacementKind.BOUNDARY and self.footprint_offsets != ((0, 0),):
             raise ValueError("boundary placement has one owner Tile")
         return self
@@ -63,10 +69,15 @@ class WorldObjectPlacement(BaseModel):
     top_height_steps: StrictInt
     orientation: CardinalDirection | None = None
     covered_supports: tuple[WorldObjectSupport, ...] = ()
+    removed_bands: tuple[tuple[StrictInt, StrictInt, StrictInt], ...] = ()
 
     @property
     def positions(self) -> tuple[tuple[int, int], ...]:
-        return tuple(support.position for support in self.covered_supports)
+        return tuple(support.position for support in self.covered_supports if self.band_heights(support.position))
+
+    def band_heights(self, position: tuple[int, int]) -> tuple[int, ...]:
+        return tuple(height for height in range(self.base_height_steps, self.top_height_steps)
+                     if (*position, height) not in self.removed_bands)
 
     @model_validator(mode="after")
     def validate_shape(self) -> Self:
@@ -76,7 +87,7 @@ class WorldObjectPlacement(BaseModel):
             object.__setattr__(self, "covered_supports", (
                 WorldObjectSupport(position=self.position, tile_uuid=self.tile_uuid),
             ))
-        if len(set(self.positions)) != len(self.covered_supports):
+        if len({support.position for support in self.covered_supports}) != len(self.covered_supports):
             raise ValueError("covered support positions must be unique")
         if WorldObjectSupport(position=self.position, tile_uuid=self.tile_uuid) not in self.covered_supports:
             raise ValueError("covered supports must contain the canonical anchor")
@@ -84,6 +95,11 @@ class WorldObjectPlacement(BaseModel):
             raise ValueError(
                 "top_height_steps must be greater than base_height_steps"
             )
+        supports = {support.position for support in self.covered_supports}
+        if len(set(self.removed_bands)) != len(self.removed_bands) or any(
+                (x, y) not in supports or not self.base_height_steps <= height < self.top_height_steps
+                for x, y, height in self.removed_bands):
+            raise ValueError("removed bands must be unique cells of this object volume")
         if self.kind is WorldPlacementKind.CENTER:
             if self.boundary_direction is not None:
                 raise ValueError(

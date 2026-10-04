@@ -34,7 +34,9 @@ AreaProgram = Literal["burning_hands", "thunderwave", "gust_of_wind", "call_ligh
 
 
 def area_spell_history(*, program: AreaProgram = "burning_hands",
-                       diagonal: bool = False, blocked: bool = False) -> CapturedHistory:
+                       diagonal: bool = False, blocked: bool = False,
+                       call_repeat_position: tuple[int, int] | None = None,
+                       move_before_repeat: bool = False) -> CapturedHistory:
     """Use real discovered actions and two observers; no outcome-state edits.
 
     One recipient has a weak save and the other a strong save. A solid boundary
@@ -42,6 +44,8 @@ def area_spell_history(*, program: AreaProgram = "burning_hands",
     Gust remains present through the next turn cycle, then its caster uses the
     ordinary Drop Concentration action.
     """
+    if (call_repeat_position is not None or move_before_repeat) and program != "call_lightning":
+        raise ValueError("Repeat aim/movement belongs to the Call Lightning fixture")
     if blocked and (diagonal or program == "burning_hands"):
         raise ValueError("The authored push-stop fixture is axial Thunderwave/Gust")
     previous_random = random.getstate()
@@ -144,9 +148,17 @@ def area_spell_history(*, program: AreaProgram = "burning_hands",
                 while encounter.get_current_entity() is not caster:
                     encounter.next_turn()
             if program == "call_lightning":
+                if move_before_repeat:
+                    move = [(row, choice) for row in get_available_actions(caster).all_actions
+                            if row.behavior_id == "action.move" for choice in row.valid_targets
+                            if choice.position == (3, 6)]
+                    assert move
+                    moved = execute_available_action(caster, *move[0])
+                    assert moved is not None and not moved.canceled and caster.position == (3, 6)
+                repeat_destination = call_repeat_position or destination
                 repeat = [(row, choice) for row in get_available_actions(caster).all_actions
                           if row.behavior_id == "action.spell.call_lightning.strike" for choice in row.valid_targets
-                          if choice.position == destination]
+                          if choice.position == repeat_destination]
                 assert repeat
                 with fixed_dice_faces(*(packet * 4)):
                     strike = execute_available_action(caster, *repeat[0])

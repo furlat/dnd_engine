@@ -6,12 +6,12 @@ from types import MappingProxyType
 from typing import Mapping
 from uuid import UUID
 
-from dnd.core.presentation_geometry import LinePresentationGeometry, SpherePresentationGeometry
+from dnd.core.presentation_geometry import CylinderPresentationGeometry, LinePresentationGeometry, SpherePresentationGeometry
 from dnd.core.events import WorldTileState
 from dnd.types.world import WorldEdgeChannel
 from dnd.types.world_placement import WorldObjectPlacement
-from game.animation import facing_for_delta, view_facing
-from game.animation_types import AnimationData
+from game.animation import ActorContact, facing_for_delta, view_facing
+from game.animation_types import AnimationData, Facing8
 from game.area_media import AreaLayer, AreaMedia, AreaSolid
 from game.draw_commands import DrawCommand
 from game.player_facts import PlayerState
@@ -25,6 +25,9 @@ from game.world_animation import WorldTransitionSample
 from game.maintained_media import maintained_media_alpha, maintained_media_frame, maintained_removal_duration
 from game.wall_media import wall_media_draw_commands
 from game.wall_assembly_media import assembly_media_draw_commands
+from game.orbit_media import orbit_media_commands, ground_ellipse_command
+from game.component_particles import rising_mote_commands
+from game.cell_media import cell_media_commands
 
 
 @lru_cache(maxsize=8)
@@ -36,6 +39,9 @@ def _observed_area(boundaries: tuple[WorldObjectPlacement, ...], solids: tuple[A
 def spatial_media_draw_commands(state: PlayerState, data: AnimationData, presentation_ms: float,
                                  camera: Camera, transitions: tuple[WorldTransitionSample, ...] = (),
                                  lifetimes: Mapping[UUID, SpatialMediaLifetime] = MappingProxyType({}),
+                                 anchors: Mapping[UUID, ActorContact] = MappingProxyType({}),
+                                 responding: frozenset[UUID] = frozenset(),
+                                 response_facings: Mapping[UUID, Facing8] = MappingProxyType({}),
                                  ) -> tuple[DrawCommand, ...]:
     """Only observed zones exist; creation suppresses their own finite intro."""
     senses = state.senses
@@ -83,11 +89,30 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
         binding = data.spatial_media.get(effect.content_ref.content_id)
         geometry = effect.area_geometry
         if (binding is None or identity in introducing
-                or geometry is None and not any(layer.composition == "clump" for layer in binding.layers)):
+                or geometry is None and not any(layer.composition in ("clump", "cell_modules") for layer in binding.layers)):
             continue
+        anchor = anchors.get(effect.anchor_entity_uuid) if effect.anchor_entity_uuid is not None else None
+        if anchor is not None and effect.anchor_position is not None and any(layer.composition == 'clump' for layer in binding.layers):
+            translation = (anchor.grid[0]-effect.anchor_position[0],anchor.grid[1]-effect.anchor_position[1])
         lifetime = lifetimes.get(identity)
         start = lifetime.applied_ms if lifetime is not None else None
         removed = lifetime.removed_ms if lifetime is not None else None
+        if any(layer.orbit is not None for layer in binding.layers):
+            anchor = anchors.get(effect.anchor_entity_uuid) if effect.anchor_entity_uuid is not None else None
+            origin = anchor.grid if anchor is not None else (spatial_origin(geometry) if geometry is not None else effect.anchor_position)
+            height = anchor.elevation_steps if anchor is not None else effect.anchor_elevation_steps
+            if origin is not None and height is not None:
+                for layer in binding.layers:
+                    if layer.orbit is None or layer.whenEnergyType is not None and layer.whenEnergyType is not effect.energy_type:
+                        continue
+                    alpha = maintained_media_alpha(binding, layer, presentation_ms, removed)
+                    allowed = tuple(position for position in effect.positions
+                        if not any(position in suppression.positions for suppression in effect.suppressions))
+                    commands.extend(orbit_media_commands(state, data, identity, layer, origin, height,
+                        presentation_ms-(start or 0), None if start is None else presentation_ms-start,
+                        alpha, allowed, camera, area, effect.anchor_position,
+                        frozenset(position for row in (*previous_suppressions,*effect.suppressions) for position in row.positions)))
+            continue
         if any(layer.composition == "wall_modules" for layer in binding.layers):
             commands.extend(wall_media_draw_commands(effect, identity, data, binding,
                 presentation_ms, camera, start, removed))
@@ -105,17 +130,75 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
             for suppression in protections
             if isinstance(suppression.area_geometry, SpherePresentationGeometry)
             and suppression.anchor_elevation_steps is not None and suppression.provider_content_ref is not None)
+        if any(layer.cellVariants for layer in binding.layers):
+            commands.extend(cell_media_commands(state,data,effect,identity,binding,presentation_ms,camera,lifetime,area,exclusions))
+            continue
         if any(layer.wallAssembly is not None for layer in binding.layers):
             commands.extend(assembly_media_draw_commands(effect, identity, data, binding,
                 presentation_ms, camera, start, removed, area, exclusions,
-                tuple(position for suppression in protections for position in suppression.positions)))
+                tuple(position for suppression in protections for position in suppression.positions),
+                tuple(anchors.values()), tuple(row.recipient for row in lifetime.damage_contacts
+                    if row.formation and UUID(row.recipient.actor_uuid) in anchors) if lifetime is not None else (),
+                tuple((row.recipient, row.at_ms) for row in lifetime.damage_contacts)
+                    if lifetime is not None else ()))
             continue
         for layer_index, layer in enumerate(binding.layers):
+            if layer.whenPresenceMode is not None and layer.whenPresenceMode != effect.presence_mode:
+                continue
+            if layer.whenEnergyType is not None and layer.whenEnergyType is not effect.energy_type:
+                continue
+            facing = response_facings.get(identity) or (next((facing for at,facing in reversed(lifetime.facings)
+                if at <= presentation_ms),None) if lifetime is not None else None)
+            if facing is not None:
+                layer = layer.model_copy(update={"worldFacing": facing})
+            if (layer.groundShadow is not None and effect.anchor_position is not None and effect.anchor_position in visible
+                    and not any(effect.anchor_position in row.positions for row in effect.suppressions)):
+                support = state.tiles.get(effect.anchor_position)
+                if support is not None:
+                    commands.append(ground_ellipse_command(identity, layer.groundShadow, effect.anchor_position,
+                        support.elevation_steps, camera, maintained_media_alpha(binding,layer,presentation_ms,removed)))
+            if layer.motes is not None and effect.anchor_position is not None and effect.anchor_position in visible:
+                support = state.tiles.get(effect.anchor_position)
+                age = presentation_ms-(start or 0)
+                alpha = maintained_media_alpha(binding,layer,presentation_ms,removed)
+                if layer.motes.formationOnlyMs is not None:
+                    if start is None:
+                        alpha = 0
+                    else:
+                        duration = layer.motes.formationOnlyMs
+                        alpha *= max(0,min(1,(age-.1*duration)/(.25*duration)))
+                        alpha *= max(0,min(1,(duration-age)/(.35*duration)))
+                if support is not None and not any(effect.anchor_position in row.positions for row in effect.suppressions):
+                    commands.extend(rising_mote_commands(str(identity),layer.motes,effect.anchor_position,
+                        support.elevation_steps,age,alpha,camera))
+            if identity in responding:
+                continue
             field_layer = (layer.composition in ("floor", "xy_volume", "clump")
-                or layer.composition == "xyz_volume" and isinstance(geometry, SpherePresentationGeometry))
+                or layer.composition == "xyz_volume" and isinstance(geometry, (SpherePresentationGeometry, CylinderPresentationGeometry)))
             if not field_layer:
                 continue
+            if layer.recipientTrackId is not None:
+                if lifetime is None or geometry is None:
+                    continue
+                origin = spatial_origin(geometry)
+                for endpoint in lifetime.recipient_endpoints:
+                    if endpoint.track_id != layer.recipientTrackId or presentation_ms < endpoint.start_ms:
+                        continue
+                    placed = layer.model_copy(update={"offsetCells": (
+                        endpoint.position[0] - origin[0], endpoint.position[1] - origin[1])})
+                    alpha = maintained_media_alpha(binding, placed, presentation_ms, removed)
+                    selected = maintained_media_frame(data, binding, placed, presentation_ms, endpoint.start_ms, removed)
+                    if alpha <= 0 or selected is None:
+                        continue
+                    asset_id, frame = selected
+                    commands.extend(field_media_commands(state, data, identity, geometry, effect.positions,
+                        binding, placed, layer_index, asset_id, frame, camera, alpha, translation,
+                        anchor_elevation_steps=endpoint.elevation_steps, area=area, exclusions=exclusions,
+                        anchor_position=effect.anchor_position))
+                continue
             alpha = maintained_media_alpha(binding, layer, presentation_ms, removed)
+            if binding.formationFadeMs and start is not None:
+                alpha *= max(0., min(1., (presentation_ms-start)/binding.formationFadeMs))
             if alpha <= 0:
                 continue
             selected = maintained_media_frame(data, binding, layer, presentation_ms, start, removed)
@@ -156,13 +239,21 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
             height = origin_tile.elevation_steps
         facing = view_facing(facing_for_delta(geometry.direction, data) if isinstance(geometry, LinePresentationGeometry)
                              else "E", camera.quadrant, data)
-        anchor = project_screen(origin, camera, elevation_steps=height)
+        drawn_origin = (origin[0] + translation[0], origin[1] + translation[1])
+        anchored = anchors.get(effect.anchor_entity_uuid) if effect.anchor_entity_uuid is not None else None
+        if anchored is not None and effect.anchor_position is not None:
+            drawn_origin = (origin[0] + anchored.grid[0] - effect.anchor_position[0],
+                            origin[1] + anchored.grid[1] - effect.anchor_position[1])
+            height = anchored.elevation_steps
+        anchor = project_screen(drawn_origin, camera, elevation_steps=height)
         observed = frozenset(effect.positions)
         for layer_index, layer in enumerate(binding.layers):
             if (layer.composition in ("floor", "xy_volume", "clump")
-                    or layer.composition == "xyz_volume" and isinstance(geometry, SpherePresentationGeometry)):
+                    or layer.composition == "xyz_volume" and isinstance(geometry, (SpherePresentationGeometry, CylinderPresentationGeometry))):
                 continue
             alpha = maintained_media_alpha(binding, layer, presentation_ms, removed)
+            if binding.formationFadeMs and start is not None:
+                alpha *= max(0., min(1., (presentation_ms - start) / binding.formationFadeMs))
             if alpha <= 0:
                 continue
             selected = maintained_media_frame(data, binding, layer, presentation_ms, start, removed)
@@ -191,7 +282,7 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
                         world_depth_group=(str(identity), "maintained-media")))
                     continue
                 if isinstance(geometry, SpherePresentationGeometry):
-                    rotated = rotate_position(origin, camera.quadrant)
+                    rotated = rotate_position(drawn_origin, camera.quadrant)
                     depth_offset = {"rear": -1, "center": 0, "front": 1}[layer.side] * geometry.radius_feet / 5 / sqrt(2)
                     depth = inverse_rotate_position((rotated[0] + depth_offset, rotated[1] + depth_offset), camera.quadrant)
                     commands.append(DrawCommand(painter_key(depth, elevation_steps=height, quadrant=camera.quadrant,

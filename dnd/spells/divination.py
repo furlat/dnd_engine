@@ -44,14 +44,14 @@ class SeeInvisibilityEffect(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
             raise RuntimeError("Admitted sense recipient disappeared")
-        self._granted_sense_mode = SenseMode(sense_type=SensesType.SEE_INVISIBLE, range_feet=0)
-        target.senses.sense_modes.append(self._granted_sense_mode)
+        self._granted_sense_mode = SenseMode(sense_type=SensesType.SEE_INVISIBLE, range_feet=0, contribution_owner_uuid=self.uuid)
+        target.senses.add_sense_mode_source(self.uuid, self._granted_sense_mode)
         self._sense_changed = True
 
     def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is not None and self._granted_sense_mode is not None:
-            target.senses.sense_modes = [mode for mode in target.senses.sense_modes if mode is not self._granted_sense_mode]
+            target.senses.remove_sense_mode_source(self.uuid)
             self._granted_sense_mode = None
             self._sense_changed = True
 
@@ -128,7 +128,7 @@ class SeeInvisibility(SpellAction):
             target_entity_uuid=caster.uuid
         )
         see_invis.duration.duration_type = DurationType.ROUNDS
-        see_invis.duration.duration = 10
+        see_invis.duration.duration = 600
         caster.add_condition(see_invis, parent_event=effect_event)
 
         return effect_event.with_updates(
@@ -155,14 +155,14 @@ class TrueSeeingEffect(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
             raise RuntimeError("Admitted sense recipient disappeared")
-        self._granted_sense_mode = SenseMode(sense_type=SensesType.TRUESIGHT, range_feet=120)
-        target.senses.sense_modes.append(self._granted_sense_mode)
+        self._granted_sense_mode = SenseMode(contribution_owner_uuid=self.uuid, sense_type=SensesType.TRUESIGHT, range_feet=120)
+        target.senses.add_sense_mode_source(self.uuid, self._granted_sense_mode)
         self._sense_changed = True
 
     def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is not None and self._granted_sense_mode is not None:
-            target.senses.sense_modes = [mode for mode in target.senses.sense_modes if mode is not self._granted_sense_mode]
+            target.senses.remove_sense_mode_source(self.uuid)
             self._granted_sense_mode = None
             self._sense_changed = True
 
@@ -246,7 +246,7 @@ class TrueSeeing(SpellAction):
             target_entity_uuid=target.uuid
         )
         true_seeing.duration.duration_type = DurationType.ROUNDS
-        true_seeing.duration.duration = 10
+        true_seeing.duration.duration = 600
         target.add_condition(true_seeing, parent_event=effect_event)
 
         return effect_event.with_updates(

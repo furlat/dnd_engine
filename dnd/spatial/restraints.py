@@ -206,7 +206,7 @@ class SpatialRestraintSource(SpatialConditionMembershipSource):
             action = action_type(
                 source_entity_uuid=target.uuid,
                 target_entity_uuid=target.uuid,
-                restraint_source_uuid=self.uuid,
+                restraint_source_uuid=self.uuid, contribution_owner_uuid=self.uuid,
                 check_dc=self.check_dc,
                 template=True,
             )
@@ -229,6 +229,14 @@ class SpatialRestraintSource(SpatialConditionMembershipSource):
 
 def preserve_spatial_restraint(event: Event) -> None:
     """Keep remaining leases mechanical when an independent restraint ends."""
+    if isinstance(event, ConditionApplicationEvent) and isinstance(event.condition, Restrained):
+        target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid is not None else None
+        if target is not None and target.active_conditions_by_uuid.get(event.condition.uuid) is event.condition:
+            for source in tuple(target.active_conditions_by_uuid.values()):
+                if isinstance(source, SpatialRestraintSource) and source.applied:
+                    source.add_shared_subcondition(event.condition)
+                    source.restraint_manifestation_uuid = event.condition.uuid
+        return
     if not isinstance(event, ConditionRemovalEvent) or not isinstance(event.condition, Restrained):
         return
     target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid is not None else None

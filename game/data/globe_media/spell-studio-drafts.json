@@ -30,11 +30,11 @@
           "hidden": false,
           "category": "Magic3",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 16770204,
             "secondary": 13802296,
             "tertiary": 7095578,
-            "mode": "tint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {

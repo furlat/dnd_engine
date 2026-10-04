@@ -14,7 +14,7 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity, EntityConfig
 from dnd.spells.divination import TrueSeeing
 from dnd.spells.evocation import FireBolt
-from dnd.spells.transmutation import DarkvisionSpell
+from dnd.spells.transmutation import DarkvisionSpell, Longstrider
 from dnd.types.world import CardinalDirection
 from tests.manual.spell_regression_support import create_spell_regression_actor, reset_spell_regression_arena
 
@@ -25,7 +25,7 @@ def scene(spell_type, *, dark=True):
         for x in range(8):
             for y in range(8):
                 get_map().set_tile(x, y, tile=dark_floor_factory((x, y)), fire_event=False)
-    caster = create_spell_regression_actor("Caster", (2, 2), "heroes", spell_slots={spell_type(source_entity_uuid=uuid4()).spell_level: 2})
+    caster = create_spell_regression_actor("Caster", (2, 2), "heroes", spell_slots={spell_type(source_entity_uuid=uuid4()).spell_level: 2, 2: 2})
     ally = create_spell_regression_actor("Ally", (3, 2), "heroes")
     register_spell(caster, spell_type)
     register_spell(caster, FireBolt)
@@ -38,7 +38,7 @@ def recipients(caster, name):
             if row.display_name.startswith(name) for target in row.valid_targets}
 
 
-@pytest.mark.parametrize("spell_type", [DarkvisionSpell, TrueSeeing])
+@pytest.mark.parametrize("spell_type", [DarkvisionSpell, TrueSeeing, Longstrider])
 @pytest.mark.parametrize("dark", [False, True])
 def test_touch_grants_discover_self_and_neighbors_without_sight(spell_type, dark):
     caster, ally = scene(spell_type, dark=dark)
@@ -53,7 +53,7 @@ def test_touch_grants_discover_self_and_neighbors_without_sight(spell_type, dark
     assert spell_type(source_entity_uuid=uuid4()).name in ally.active_conditions
 
 
-@pytest.mark.parametrize("spell_type", [DarkvisionSpell, TrueSeeing])
+@pytest.mark.parametrize("spell_type", [DarkvisionSpell, TrueSeeing, Longstrider])
 @pytest.mark.parametrize("concealment", ["invisible", "hidden", "distant", "undeployed", "enemy", "dead"])
 def test_touch_grants_do_not_disclose_or_accept_ineligible_recipients(spell_type, concealment):
     caster, ally = scene(spell_type)
@@ -78,7 +78,7 @@ def test_touch_grants_do_not_disclose_or_accept_ineligible_recipients(spell_type
     assert caster.action_economy.actions.normalized_score == before
 
 
-@pytest.mark.parametrize("spell_type", [DarkvisionSpell, TrueSeeing])
+@pytest.mark.parametrize("spell_type", [DarkvisionSpell, TrueSeeing, Longstrider])
 def test_touch_grant_requires_real_window_contact_even_when_window_unseen(spell_type):
     caster, ally = scene(spell_type)
     assembly = place_window("environment.window.fantasy_g8", (2, 2), CardinalDirection.EAST)
@@ -92,7 +92,7 @@ def test_touch_grant_requires_real_window_contact_even_when_window_unseen(spell_
     assert result is not None and not result.canceled
 
 
-@pytest.mark.parametrize("spell_type", [DarkvisionSpell, TrueSeeing])
+@pytest.mark.parametrize("spell_type", [DarkvisionSpell, TrueSeeing, Longstrider])
 def test_touch_grant_cannot_reach_diagonally_around_a_closed_boundary(spell_type):
     caster, ally = scene(spell_type)
     Entity.update_entity_position(ally, (3, 3))
@@ -104,7 +104,7 @@ def test_touch_grant_cannot_reach_diagonally_around_a_closed_boundary(spell_type
     assert caster.action_economy.actions.normalized_score == before
 
 
-@pytest.mark.parametrize("spell_type", [DarkvisionSpell, TrueSeeing])
+@pytest.mark.parametrize("spell_type", [DarkvisionSpell, TrueSeeing, Longstrider])
 def test_item_grant_uses_the_same_unseen_contact_candidates_and_execution(spell_type):
     caster, ally = scene(spell_type)
     grant = spell_type(source_entity_uuid=caster.uuid, template=True)
@@ -118,3 +118,19 @@ def test_item_grant_uses_the_same_unseen_contact_candidates_and_execution(spell_
     result = execute_available_action(caster, row, target)
     assert result is not None and not result.canceled
     assert grant.name in ally.active_conditions and item.charges == 0
+
+
+@pytest.mark.parametrize("slot", [1, 2])
+def test_longstrider_upcast_admits_all_touch_recipients_before_spending(slot):
+    caster, ally = scene(Longstrider)
+    other = create_spell_regression_actor("Other ally", (2, 3), "heroes")
+    Entity.update_all_entities_senses()
+    before = caster.action_economy.actions.normalized_score
+    result = Longstrider(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid,
+        extra_target_entity_uuids=[other.uuid], cast_at_level=slot).apply()
+    assert result is not None
+    assert result.canceled == (slot == 1)
+    assert ("Longstrider" in ally.active_conditions) == (slot == 2)
+    assert ("Longstrider" in other.active_conditions) == (slot == 2)
+    if slot == 1:
+        assert caster.action_economy.actions.normalized_score == before

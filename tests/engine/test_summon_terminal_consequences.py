@@ -10,7 +10,6 @@ from dnd.core.events import Event, EventPhase, EventQueue, EventType
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.items.torches import build_torch
-from dnd.spells.abjuration import AntimagicSuppression
 from dnd.spells.transmutation import HasteEffect
 from dnd.summoning.actions import DismissSummon
 from dnd.spatial.environmental_conditions import WetSurface
@@ -23,12 +22,10 @@ def held_condition(target, source, kind):
     assert not target.add_condition(haste).canceled
     if kind == 'haste':
         return haste, haste
-    # A normal, already-suppressed native Haste instance held by its marker.
-    assert target.remove_condition_by_uuid(haste.uuid)
-    marker = AntimagicSuppression(source_entity_uuid=source.uuid, target_entity_uuid=target.uuid,
-                                 suppressed_condition=haste)
-    assert not target.add_condition(marker).canceled
-    return marker, haste
+    # Suppression retains the live owner; terminal removal still tears it down once.
+    haste.set_suppression(uuid4(), True)
+    assert haste.applied and not haste.contributions_active()
+    return haste, haste
 
 
 def depart(member, caster, method):
@@ -79,8 +76,8 @@ def test_terminal_summon_removal_keeps_normal_consequence_on_surviving_recipient
         assert not haste.applied
         assert 'Haste Lethargy' in recipient.active_conditions
     else:
-        assert haste.applied and recipient.active_conditions['Haste'] is haste
-        assert len(recipient.action_economy.get_restricted_action_grants()) == 1
+        assert not haste.applied and 'Haste' not in recipient.active_conditions
+        assert not recipient.action_economy.get_restricted_action_grants()
 
 
 @pytest.mark.parametrize('method', ['dismiss', 'expire'])

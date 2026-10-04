@@ -1,0 +1,11 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+....F................................
+=================================== FAILURES ===================================
+___ test_later_spatial_damage_reuses_exact_owner_and_committed_contact_dates ___
+tests/game/test_wind_joined_presentation.py:161: in test_later_spatial_damage_reuses_exact_owner_and_committed_contact_dates
+    assert len([row for row in received.values() if row.formation])==2
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError
+=========================== short test summary info ============================
+FAILED tests/game/test_wind_joined_presentation.py::test_later_spatial_damage_reuses_exact_owner_and_committed_contact_dates
+1 failed, 36 passed in 75.61s (0:01:15)

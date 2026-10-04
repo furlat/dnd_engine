@@ -1,0 +1,208 @@
+{
+  "source": "/home/tommaso/Dev/neurodragon_art/sources/solar-lifecycle-v1-20261004",
+  "production_rgba_recaptured": true,
+  "accepted_rgba_byte_exact": false,
+  "adapter": {
+    "program": "beam",
+    "frames": 384,
+    "adapter_sha256": "be663a3913129defad90ce273c56b1d8652c4232e67cc90eadde4bda0ec05a65"
+  },
+  "palette_sha256": "6e26314f95cb8feebe3e3d23d21dd400e4937069d44d1357d971f9bad05f2e29",
+  "bounds": [
+    -64,
+    64
+  ],
+  "verticalScale": 1.224744871391589,
+  "coordinateBasis": "camera_local_xyz",
+  "ownership": "source-rendered surface coordinates with original MSAA coverage; no particle identity or hidden depth",
+  "banks": [
+    {
+      "bank": "beam-0",
+      "file": "beam-0-surface.zip",
+      "sha256": "e3adef8b415da1cdf17cc7b96c6aa71dc4ceb0ec0495618a903766a5de1f01e7",
+      "pivot": [
+        256,
+        192
+      ],
+      "frames": 48,
+      "worldPixels": 30.11764705882353,
+      "source_sha256": "50a81ad07c7ff0ff22c7a01f8394bbd7c7d6757e83d406c5c756c3170b59fe1a",
+      "validation": {
+        "frames": 48,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.4386083249743354
+      }
+    },
+    {
+      "bank": "beam-1",
+      "file": "beam-1-surface.zip",
+      "sha256": "f465bda661b9c29a2f0465b91f6945a80400d2a09c6c3c42884490e474697bc9",
+      "pivot": [
+        256,
+        192
+      ],
+      "frames": 48,
+      "worldPixels": 30.11764705882353,
+      "source_sha256": "e9b8063e53c486a4cd0fe2f07fda997567f4aa691d8c2a588c95e2976c4e849f",
+      "validation": {
+        "frames": 48,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.4507760411498076
+      }
+    },
+    {
+      "bank": "beam-2",
+      "file": "beam-2-surface.zip",
+      "sha256": "bf1cc0989184d7fc2a9eafef46f8e7a1f6a2095552a9311d920cb9e478feb1df",
+      "pivot": [
+        256,
+        192
+      ],
+      "frames": 48,
+      "worldPixels": 30.11764705882353,
+      "source_sha256": "08b91d93206772973b7edc93fd77e48a086b64c91299677d10e4d25ae28d1a41",
+      "validation": {
+        "frames": 48,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.49956024401058047
+      }
+    },
+    {
+      "bank": "beam-3",
+      "file": "beam-3-surface.zip",
+      "sha256": "3e098300e72d92736b71e950febaa75563bddc134a71c8c670957cae98fe7a2f",
+      "pivot": [
+        256,
+        192
+      ],
+      "frames": 48,
+      "worldPixels": 30.11764705882353,
+      "source_sha256": "68b89d5fece010a34dcd179b36262bd0c4341594f14527ceebbaaa3f94bfd5ac",
+      "validation": {
+        "frames": 48,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.44772100801004155
+      }
+    },
+    {
+      "bank": "beam-4",
+      "file": "beam-4-surface.zip",
+      "sha256": "2898e7fca1cfda70035a0f8802d3447696c3a9548da3ed51db89d675e37a6031",
+      "pivot": [
+        256,
+        192
+      ],
+      "frames": 48,
+      "worldPixels": 30.11764705882353,
+      "source_sha256": "2bd26ef9c9a5250fa57930ede4401671c92e2c8c75903ac0bb2c47b678daa0c2",
+      "validation": {
+        "frames": 48,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.4589612571689733
+      }
+    },
+    {
+      "bank": "beam-5",
+      "file": "beam-5-surface.zip",
+      "sha256": "8f895b7166e9eb7680c700915b410f5c2913f1763d330f25abc0b193ae34b206",
+      "pivot": [
+        256,
+        192
+      ],
+      "frames": 48,
+      "worldPixels": 30.11764705882353,
+      "source_sha256": "0ffe99059078f78d252330c4fd393a43df9d25477962add2d5a8e59cf2a4728e",
+      "validation": {
+        "frames": 48,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.4507760411498076
+      }
+    },
+    {
+      "bank": "beam-6",
+      "file": "beam-6-surface.zip",
+      "sha256": "d3478df009ba575e18aa01d5bff45b47fe61e14fe70086c2b7cbc94359a6d1b7",
+      "pivot": [
+        256,
+        192
+      ],
+      "frames": 48,
+      "worldPixels": 30.11764705882353,
+      "source_sha256": "9a5b06b0cf2ede56e1669b0a99f0a19dd9c4a974bd1de401ffa11d4dfe89b842",
+      "validation": {
+        "frames": 48,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.5049982135324892
+      }
+    },
+    {
+      "bank": "beam-7",
+      "file": "beam-7-surface.zip",
+      "sha256": "db20a23414979f42d0e839d108963f5f03f106547634f0975e2d168c01a4c455",
+      "pivot": [
+        256,
+        192
+      ],
+      "frames": 48,
+      "worldPixels": 30.11764705882353,
+      "source_sha256": "0cc92f4e49e2968b051ea5d3e43d32e278bae388cb3ffa5e8a2a0bc1ed8a7658",
+      "validation": {
+        "frames": 48,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.4505240814054967
+      }
+    }
+  ],
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/solar-paired-surfaces-20261004",
+  "identities": [
+    "solar.sunbeam.surface"
+  ],
+  "files": [
+    {
+      "path": "game/assets/weather_solar_media/surfaces/beam-0-surface.zip",
+      "bytes": 1088312,
+      "sha256": "e3adef8b415da1cdf17cc7b96c6aa71dc4ceb0ec0495618a903766a5de1f01e7"
+    },
+    {
+      "path": "game/assets/weather_solar_media/surfaces/beam-1-surface.zip",
+      "bytes": 930950,
+      "sha256": "f465bda661b9c29a2f0465b91f6945a80400d2a09c6c3c42884490e474697bc9"
+    },
+    {
+      "path": "game/assets/weather_solar_media/surfaces/beam-2-surface.zip",
+      "bytes": 1126825,
+      "sha256": "bf1cc0989184d7fc2a9eafef46f8e7a1f6a2095552a9311d920cb9e478feb1df"
+    },
+    {
+      "path": "game/assets/weather_solar_media/surfaces/beam-3-surface.zip",
+      "bytes": 894380,
+      "sha256": "3e098300e72d92736b71e950febaa75563bddc134a71c8c670957cae98fe7a2f"
+    },
+    {
+      "path": "game/assets/weather_solar_media/surfaces/beam-4-surface.zip",
+      "bytes": 1233851,
+      "sha256": "2898e7fca1cfda70035a0f8802d3447696c3a9548da3ed51db89d675e37a6031"
+    },
+    {
+      "path": "game/assets/weather_solar_media/surfaces/beam-5-surface.zip",
+      "bytes": 978072,
+      "sha256": "8f895b7166e9eb7680c700915b410f5c2913f1763d330f25abc0b193ae34b206"
+    },
+    {
+      "path": "game/assets/weather_solar_media/surfaces/beam-6-surface.zip",
+      "bytes": 1255008,
+      "sha256": "d3478df009ba575e18aa01d5bff45b47fe61e14fe70086c2b7cbc94359a6d1b7"
+    },
+    {
+      "path": "game/assets/weather_solar_media/surfaces/beam-7-surface.zip",
+      "bytes": 866655,
+      "sha256": "db20a23414979f42d0e839d108963f5f03f106547634f0975e2d168c01a4c455"
+    }
+  ],
+  "capture_adapters": {
+    "beam-opaque/OwnershipSolar.gd": "be663a3913129defad90ce273c56b1d8652c4232e67cc90eadde4bda0ec05a65"
+  },
+  "source_project": "/mnt/c/Users/tommaso/.codex/tmp/gva/p/c74d652f1d7e",
+  "source_project_sha256": "bb698fba4fefb5dbfcb2a3ef9f1795a91d80208fb37126b0e8a4bddb2c4ff202",
+  "source_project_files": 295
+}

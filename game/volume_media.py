@@ -14,6 +14,7 @@ import pygame
 
 from dnd.types.world_placement import WorldObjectPlacement
 from dnd.core.events import WorldTileState
+from dnd.core.presentation_geometry import LinePresentationGeometry
 from dnd.core.world_edges import SlopeAxis, progressive_elevation_transition
 from game.area_media import AreaSolid, BoundarySprite, boundary_segment
 from game.projection import Camera, inverse_rotate_position, project_world
@@ -50,6 +51,7 @@ class SurfaceVolume:
     # Samples disclosed only above an occluded column. The isometric camera
     # must not turn those grants into cloud in front of the known wall face.
     upper_only: np.ndarray | None = None
+    line_geometry: LinePresentationGeometry | None = None
 
 
 @lru_cache(maxsize=32)
@@ -263,6 +265,19 @@ def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
         for px, pz in volume.admitted:
             admitted |= (cells_x == px) & (cells_z == pz)
         keep &= admitted
+    if volume.line_geometry is not None:
+        line = volume.line_geometry
+        vx, vz = line.direction
+        length = sqrt(vx*vx + vz*vz)
+        if length == 0:
+            keep[:] = False
+        else:
+            ux, uz = vx / length, vz / length
+            relative_x, relative_z = x-line.origin[0], z-line.origin[1]
+            along = relative_x*ux + relative_z*uz
+            across = relative_x*uz - relative_z*ux
+            keep &= ((along >= 0) & (along <= line.length_feet/5)
+                     & (np.abs(across) <= line.width_feet/10))
     # The host projection has direction (1,1,1) in view-grid/height units.
     vx, vz = axis_x[0] + axis_z[0], axis_x[1] + axis_z[1]
     occluders = _barriers(volume.boundaries if visual_boundaries is None else (), volume.solids)
@@ -292,7 +307,8 @@ def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
         extent = sphere.radius * sqrt(2) * 32
         depth = np.where(owned & intersects & (axial > 0), np.maximum(depth, shell_depth + extent + .01), depth)
         depth = np.where(owned & intersects & (axial < 0), np.minimum(depth, shell_depth - extent - .01), depth)
-    if barriers or occluders or visual_boundaries or volume.exclusions or volume.supports or volume.admitted is not None:
+    if (barriers or occluders or visual_boundaries or volume.exclusions or volume.supports
+            or volume.admitted is not None or volume.line_geometry is not None):
         keep &= owned  # Unresolved pixels cannot bypass active spatial clipping.
     else:
         keep |= ~owned  # Raw reference artwork retains its original coverage.

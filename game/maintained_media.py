@@ -9,13 +9,13 @@ def maintained_media_alpha(binding: SpatialMediaBinding, layer: SpatialMediaLaye
                            now_ms: float, removed_ms: float | None) -> float:
     """An authored uniform clear fades the continuing phase, never restarts it."""
     if removed_ms is None or now_ms < removed_ms or layer.removalAssetId is not None:
-        return 1.
+        return layer.alpha
     if not binding.removalFadeMs:
         return 0.
     progress = min(1., (now_ms - removed_ms) / binding.removalFadeMs)
     if binding.removalEasing == "smoothstep":
         progress = progress * progress * (3 - 2 * progress)
-    return 1 - progress
+    return layer.alpha * (1 - progress)
 
 
 def maintained_media_frame(data: AnimationData, binding: SpatialMediaBinding,
@@ -43,7 +43,7 @@ def maintained_media_frame(data: AnimationData, binding: SpatialMediaBinding,
         duration = phase.frames * 1000 / fps
         if applied_ms is not None and age < duration:
             return layer.applicationAssetId, floor(age * fps / 1000)
-    sustained_age = age - duration if applied_ms is not None else age
+    sustained_age = (age - duration if applied_ms is not None else age) + layer.phaseOffsetMs
     return layer.assetId, binding.holdStartFrame + floor(sustained_age * binding.fps / 1000) % binding.holdFrames
 
 
@@ -59,3 +59,30 @@ def maintained_removal_duration(data: AnimationData, binding: SpatialMediaBindin
         assert phase is not None
         duration = max(duration, layer.delayMs + phase.frames * 1000 / (phase.fps or asset.fps))
     return duration
+
+
+def maintained_media_samples(data: AnimationData, binding: SpatialMediaBinding,
+                             layer: SpatialMediaLayer, now_ms: float, applied_ms: float | None,
+                             removed_ms: float | None = None) -> tuple[tuple[str,int,float], ...]:
+    """Original loop windows overlap by complementary premultiplied weights."""
+    selected = maintained_media_frame(data,binding,layer,now_ms,applied_ms,removed_ms)
+    if selected is None:
+        return ()
+    asset_id, frame = selected
+    if not binding.loopCrossfadeMs or asset_id != layer.assetId:
+        return ((asset_id,frame,1.),)
+    intro = 0.
+    if layer.applicationAssetId is not None and applied_ms is not None:
+        asset = data.projectile_assets[layer.applicationAssetId]
+        phase = {'cast':asset.phases.cast,'travel':asset.phases.travel,'impact':asset.phases.impact}[binding.assetPhase]
+        assert phase is not None
+        intro = phase.frames*1000/(phase.fps or asset.fps)
+    age = now_ms-(applied_ms+layer.delayMs if applied_ms is not None else 0)-intro
+    period = binding.holdFrames*1000/binding.fps-binding.loopCrossfadeMs
+    cycle, within = divmod(max(0.,age),period)
+    current = binding.holdStartFrame+floor(within*binding.fps/1000)
+    if cycle == 0 or within >= binding.loopCrossfadeMs:
+        return ((asset_id,current,1.),)
+    weight = within/binding.loopCrossfadeMs
+    previous = binding.holdStartFrame+min(binding.holdFrames-1,floor((period+within)*binding.fps/1000))
+    return tuple((asset_id,index,alpha) for index,alpha in ((previous,1-weight),(current,weight)) if alpha>0)

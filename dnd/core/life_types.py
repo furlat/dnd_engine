@@ -12,6 +12,13 @@ class LifeState(str, Enum):
     DEAD = "dead"
 
 
+class RemainsDisposition(str, Enum):
+    """Committed physical remains, independent of whether death was requested."""
+
+    INTACT = "intact"
+    DISINTEGRATED = "disintegrated"
+
+
 class LifeStateChangeReason(str, Enum):
     """Rules-facing cause of a requested life-state transition."""
 

@@ -561,8 +561,8 @@ def test_banishment_removes_and_restores_spatial_perception() -> None:
     assert target.uuid in observer.senses.entities
 
 
-def test_banishment_return_displaces_an_occupant() -> None:
-    """Old case 21: restoration preserves the banished target's exact cell."""
+def test_banishment_return_uses_nearest_free_space_without_displacing_an_occupant() -> None:
+    """The returning creature takes nearby free support; the occupant stays put."""
     caster, target, _observer = _banishment_scene(save_succeeds=False)
     original_position = target.position
 
@@ -580,11 +580,11 @@ def test_banishment_return_displaces_an_occupant() -> None:
     )
     caster.remove_condition("Concentrating")
 
-    assert target.position == original_position
-    assert occupant.position != original_position
+    assert target.position != original_position
+    assert occupant.position == original_position
     assert max(
-        abs(occupant.position[0] - original_position[0]),
-        abs(occupant.position[1] - original_position[1]),
+        abs(target.position[0] - original_position[0]),
+        abs(target.position[1] - original_position[1]),
     ) == 1
 
 

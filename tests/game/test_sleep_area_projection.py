@@ -51,9 +51,15 @@ def test_sleep_target_keeps_witnessed_incoming_area_and_loses_sight_at_contact(p
             assert before.senses is not None and (8, 5) in before.senses.visible
             assert fact.aoe_position == (8, 5) and fact.area_geometry is not None
             assert fact.source_position == (3, 5)
-            # Actual affected-cell observations retain their completion-time
-            # filtering; knowing the cast shape does not grant a hidden result.
-            assert fact.resolved_area_positions == ()
+            # This is the physical footprint resolved before recipient effects,
+            # not a report of their later condition/HP outcomes. Keep exactly
+            # its witnessed cells even when this incoming effect removes sight.
+            native = next(row.root for row in history.views["target"].lineages
+                if row.root.lineage_uuid == root.root.lineage_uuid)
+            assert isinstance(native, SpellEvent) and native.resolved_area_positions is not None
+            assert set(fact.resolved_area_positions or ()) == (
+                set(native.resolved_area_positions) & set(before.senses.visible))
+            assert fact.resolved_area_positions
             bound = bind_choreography(before, root, data)
             assert not bound.gaps
             node, = bound.nodes
@@ -143,6 +149,8 @@ def test_area_never_borrows_sight_from_before_it_was_declared(case) -> None:
         assert isinstance(node.fact, SpellFact), "The observed cast identity remains independent from its hidden geometry"
     if isinstance(node.fact, SpellFact):
         assert node.fact.aoe_position is None and node.fact.area_geometry is None
+        if case != "unseen-destination":
+            assert node.fact.resolved_area_positions == ()
     after = reduce_lineage(before, root)
     if case != "unseen-destination":
         assert after.senses is not None and not after.senses.visible

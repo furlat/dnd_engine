@@ -29,12 +29,13 @@ from dnd.spells.conjuration import MistyStep
 from dnd.spells.enchantment import HoldPerson
 from dnd.spells.evocation import FireBolt, Fireball, MagicMissile, SacredFlame
 from dnd.spells.illusion import Blur
+from dnd.spells.necromancy import FingerOfDeath
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
 def interruption_history(*, blocker: Literal['sanctuary', 'counterspell'] = 'sanctuary',
-        spell: Literal['fire_bolt', 'magic_missile', 'sacred_flame', 'hold_person', 'fireball', 'blur', 'misty_step'] = 'fire_bolt',
+        spell: Literal['fire_bolt', 'magic_missile', 'sacred_flame', 'hold_person', 'fireball', 'blur', 'misty_step', 'finger_of_death'] = 'fire_bolt',
         blocked: bool = True) -> CapturedHistory:
     random_state = random.getstate()
     reset_engine_runtime()
@@ -47,7 +48,7 @@ def interruption_history(*, blocker: Literal['sanctuary', 'counterspell'] = 'san
             actor = Entity.create(uuid4(), role.title(), config=EntityConfig(
                 position=position, faction=role,
                 ability_scores=AbilityScoresConfig(intelligence=AbilityConfig(ability_score=18)),
-                action_economy=ActionEconomyConfig(spell_slots=({1: 2, 2: 2, 4: 2}
+                action_economy=ActionEconomyConfig(spell_slots=({1: 2, 2: 2, 4: 2, 7: 2}
                     if role == 'caster' else {1: 2, 3: 2})),
                 spellcasting=SpellcastingConfig(spellcasting_ability='intelligence'),
                 health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=20, mode='maximums')]),
@@ -61,7 +62,7 @@ def interruption_history(*, blocker: Literal['sanctuary', 'counterspell'] = 'san
             if role == 'caster':
                 register_spell(actor, {'fire_bolt': FireBolt, 'magic_missile': MagicMissile,
                     'sacred_flame': SacredFlame, 'hold_person': HoldPerson, 'fireball': Fireball,
-                    'blur': Blur, 'misty_step': MistyStep}[spell], caster_level=1)
+                    'blur': Blur, 'misty_step': MistyStep, 'finger_of_death': FingerOfDeath}[spell], caster_level=1)
             elif blocker == 'sanctuary':
                 register_spell(actor, Sanctuary, caster_level=1)
             else:

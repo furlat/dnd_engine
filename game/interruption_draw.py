@@ -37,6 +37,9 @@ def reaction_media_draw_commands(cue: ReactionMediaCue, elapsed_ms: float,
         commands.extend(animation_draw_commands(timeline, cue.sample, media, camera,
             include_bodies=False, projectile_coverage=coverage))
     placements = []
+    if cue.source_point is not None:
+        x,y,height = cue.source_point
+        placements.append(((x,y),height,project_screen((x,y),camera,elevation_steps=height)))
     for effect in cue.sample.projectiles if cue.sample is not None else ():
         assert timeline is not None
         position, height = projectile_contact(timeline, effect, quadrant=camera.quadrant)

@@ -27,6 +27,75 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**October 4 — modular motion/effect authoring reference.**
+The [visual catalog](agent_docs/art/MODULAR_CASTING_CATALOG_2026-10-04.md)
+and adjacent JSON describe 30 body motions and 240 motion/layer combinations,
+preserving source facts, original labels, observations and suggested uses separately.
+The private interactive catalog includes exact spell-palette swaps, layered
+examples, contact sheets and a bounded existing-noise mask comparison.
+This is authoring evidence for the next spell-assignment pass; no production
+bindings, game rules or runtime code changed for this study. Godot remains the
+main VFX and Buff assets remain excluded.
+
+**October 4 — missing modular casting hands corrected.**
+All 125 enabled canonical casts now have Magic layers; True Strike retains one
+real weapon attack with exact charges or matching modular Magic2 fallback sheets.
+The [bounded receipt](agent_docs/audits/SPELL_HANDS_COMPLETION_2026-10-04.md)
+records 79 passing tests, clean scoped typing, independent approvals and six
+native replay clips. No backend or event changes. New human direction: choose
+each spell's full animation + Magic1–3 + optional Effect1–5 combination in existing
+recipes, inheriting its palette automatically. Godot remains the main VFX; Buff
+assets are excluded from this authoring discussion. Effect4/5 have empty idle,
+movement and hit/death sheets, so their condition use would be action accents,
+not persistent auras. That broader selection pass has not been implemented.
+
+**October 4 — automatic casting-hand palette completed.**
+Hands inherit the spell palette through exact replacement unless explicitly
+overridden. Eighteen spell bindings now use this shared path; accepted baked
+palettes remain explicit. No backend/event/artwork changes. The
+[receipt and inventory](agent_docs/audits/SPELL_HAND_PALETTE_IMPLEMENTATION_2026-10-04.md)
+record 86 passing checks, clean changed-file typing, both independent reviews,
+and five standard replay clips with 53 recorder checks and zero gaps.
+
+
+**October 4 — accepted production gaps G1–G4 integrated.**
+The [bounded integration plan](agent_docs/SPELL_GAP_INTEGRATION_PLAN_2026-10-04.md)
+and [feature trace/evidence](agent_docs/SPELL_GAP_INTEGRATION_2026-10-04.md)
+cover Cone of Cold, Call Lightning V5, Wind Wall interception and the accepted
+10-foot Thorns ring. The human explicitly corrected Cone selection to use the
+nearest directional artwork plus residual rotation, preserving arbitrary native
+aim. Original circular Thorns components now support perceived sections using
+the existing renderer. No new events or spell executor were introduced.
+The separate dome-size investigation was canceled and remains out of scope.
+Final delivery checks: 18 passed; existing area replay: 24 passed; importer: 6
+passed; other native/client regressions: 55 and 76 passed; architecture: 37
+passed. Final changed-file typing has zero errors/warnings. The standard
+[review index](http://127.0.0.1:8768/spell-gap-20261004/acceptance/index.html)
+retains eight recordings, 148 passing recorder checks and zero reported gaps.
+The ledger links independent review receipts and preserves the bounded scope
+of these results; the full-suite results below belong to the preceding batch.
+No external chat was contacted and no commit was requested.
+
+**October 4 — accepted spell backlog implemented and final reviews closed.**
+The human approved [the full spell implementation plan](agent_docs/SPELL_VFX_IMPLEMENTATION_PLAN_2026-10-04.md)
+and selected Telekinesis hostile landing damage of4d8 force+2d6 bludgeoning plus
+actual lower-support falling damage. All eight packets are implemented within
+the explicitly available-art/installed-rig scope. The [full change trace](agent_docs/audits/SPELL_FEATURE_CHANGE_TRACE_2026-10-04.md)
+accounts for native rules, shared-core changes, renderer extensions and fixes;
+the [ledger](agent_docs/SPELL_VFX_IMPLEMENTATION_2026-10-04.md) links evidence.
+Final native/AI/progression: 3,009 passed; architecture/packaging: 120 passed;
+active typing: zero errors/warnings. All 3,522 client cases are accounted for by
+the unchanged-source full run (3,517 passed, five failed) plus 167 passing
+complete affected-file checks after four bounded corrections. Independent
+anti-slop and ECS/event reviews closed with no remaining implementation blocker.
+The [final report](agent_docs/audits/SPELL_VFX_FINAL_ACCEPTANCE_2026-10-04.md)
+preserves exact failures, reruns, ownership and limitations. Final source digest:
+`5ac712f84696453b388fbe899515696cecb024e0d35b8aa59dd78b3c1008ad27`.
+The standard gallery has 283 selected passing recordings covering all 34
+spell entries and all 21 class sets, with 4,681 checks/zero reported gaps.
+G1–G4 later artwork and unmeasured fixed-rig sockets remain explicit. Original
+failed attempts are preserved. No external chat was contacted; no commit requested.
+
 **October 4 — human visual corrections following the final gallery.**
 Wolf now uses the requested 2.00 original scale. Original alternate deaths are
 bound for six demons and fifteen Goblins; intact Prone/downed/recovery remains.

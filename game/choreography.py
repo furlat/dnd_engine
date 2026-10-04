@@ -12,17 +12,19 @@ from typing import Iterator, Mapping, cast
 from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
+from dnd.core.dice import AttackOutcome
 from dnd.core.events import EventType, MovementTrajectory, SpatialChangeType
-from dnd.core.life_types import LifeState
+from dnd.core.life_types import LifeState, RemainsDisposition
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.world import MovementMode, OccupancyLayer
 from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH
 from game.connector_motion import passage_point
 from game.animation import (
-    DamageTiming, ActorContact, BodySample, BodyTransition, CastSample, VitalsSample, body_rig, body_clip, body_frame,
+    DamageTiming, ActorContact, ObjectContact, BodySample, BodyTransition, CastSample, VitalsSample, body_rig, body_clip, body_frame,
     sample_cast, sample_damage_body, sample_equipment, facing_for_delta, sample_idle_body, resolve_damage,
     media_track_duration, actor_rest_pose, compile_life_body, sample_body_transition,
     body_context, resolve_body_context, context_duration, context_frame, sample_context_body, death_body_context,
+    airborne_weight, resolve_child_attack_palette,
 )
 from game.animation_types import (AnimationData, Facing8, LifecycleFeedback, StudioCondition,
                                   BodyContext, MovementBodyQualifier, MovementRecovery, RoleDefault)
@@ -32,16 +34,17 @@ from game.mechanism_projectile import (MechanismProjectileCue, mechanism_project
 from game.animation_types import ParticleMediaAsset
 from game.action_media import ActionStripCue, ActionStripSample, bind_action_strips, sample_action_strip
 from game.attack import BoundAttack, AttackSample, bind_attack, sample_attack
-from game.body_action import BodyActionCue, bind_body_action, join_body_action, sample_body_action
+from game.body_action import BodyActionCue, bind_body_action, join_body_action, sample_body_action, intervention_subjects
 from game.body_hop import BodyHopCue, bind_save_hop, sample_body_hop
 from game.portal_animation import (PortalTransferCue, bind_portal_transfer,
-    portal_departure_contact, portal_arrival_contact, portal_actor_hidden)
+    portal_departure_contact, portal_arrival_contact, portal_actor_hidden, portal_body)
+from game.portal_art import PortalArt
 from game.combat import BoundCast, BoundEquipment, actor_contact, actor_is_visible, bind_cast, bind_equipment
 from game.condition_animation import (ConditionTimeline, ConditionSample, compile_condition, sample_condition,
                                       bind_condition_body, sample_condition_body, resolve_condition_appearance,
-                                      ConditionResponseCue, bind_condition_response)
+                                      ConditionResponseCue, bind_event_condition_response, bind_received_damage_responses)
 from game.condition_reaction import bind_condition_interception_media, bind_condition_reaction_bodies
-from game.interruption import (ReactionMediaCue, bind_reaction_media, interruption_rule,
+from game.interruption import (ReactionMediaCue, bind_reaction_media, bind_cancellation_media, interruption_rule,
     interruption_ms, interrupt_body, interrupt_delivery, interrupt_sample)
 from game.damage import DamageCue, bind_damage, sample_damage
 from game.forced_movement import (
@@ -49,12 +52,12 @@ from game.forced_movement import (
     forced_contact, sample_forced_body, sample_shove,
 )
 from game.player_facts import (
-    ActionFact, AreaReachFact, AttackFact, ConditionChangeFact, DamageFact, DeathSaveFact, EquipmentFact, ForcedMovementFact,
-    HealFact, ItemChargeFact, LifeFact, MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerActor, PlayerFact, PlayerLineage, PlayerNode, PlayerObservation, PlayerState,
+    ActionFact, AreaReachFact, AttackFact, ConditionChangeFact, ItemEffectChangeFact, DamageFact, DeathSaveFact, EquipmentFact, ForcedMovementFact,
+    HealFact, ItemChargeFact, LifeFact, MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerObject, PlayerActor, PlayerFact, PlayerLineage, PlayerNode, PlayerObservation, PlayerState,
     SensoryFact, ShoveFact, SpellFact, SpatialEffectStateFact, MechanismActivationFact, PortalTransferFact, SavingThrowFact, SpatialFact, StepFact, TemporaryHitPointsFact, TurnFact, FactionFact,
 )
 from game.world_animation import (
-    DestructionContact, WorldTransition, world_transitions, world_transition_end, merge_world_transitions, surface_reveal_delay,
+    ObjectDustContact, DestructionContact, WorldTransition, world_transitions, world_transition_end, merge_world_transitions, surface_reveal_delay,
     bind_spatial_media_motion,
 )
 from game.device_art import device_bank
@@ -63,25 +66,34 @@ from game.environment_animation import remnant_bank
 from game.entity_lifecycle import EntityLifecycleCue, bind_entity_lifecycle, lifecycle_phase
 from game.player_reduction import copy_target, lineage_branch, reduce_lineage, reduce_nodes, observe_actors, stage_actors, stage_lineage, state_before_event as _before_event
 from game.stationary_media import StationaryMediaCue
+from game.finite_material import BodyMaterialCue
+from game.spatial_response import SpatialResponseCue, damage_spatial_owner, bind_spatial_response
 from game.spatial_contact_media import bind_spatial_contacts, ground_contact_is_authored, bind_suppression_media, damage_sweep_recipe
 from game.construction_media import construction_duration, construction_media_limitation
+from game.directed_contacts import directed_object_contacts, ordinary_object_contact
+from game.world_animation import ConstructionCollapse
 from game.construction_transitions import construction_creation_transitions
 from game.wall_media import wall_media_limitation
 
 
 def _has_standalone_state(fact: PlayerFact | None, effect_ms: float | None) -> bool:
-    return (isinstance(fact, (TemporaryHitPointsFact, FactionFact))
-            or isinstance(fact, SpatialFact) and fact.terminal_departure and effect_ms is None)
+    return (isinstance(fact, (TemporaryHitPointsFact, FactionFact, ItemEffectChangeFact))
+            or isinstance(fact, SpatialFact) and effect_ms is None
+                and (fact.terminal_departure or fact.object_uuid is not None))
 
 
 def _child_timing(fact: PlayerFact | None, at: float, parent_end: float,
                   injury_at: float | None, state_at: float | None,
-                  portal: PortalTransferCue | None, sequence_at: float | None) -> tuple[float, float | None]:
+                  portal: PortalTransferCue | None, sequence_at: float | None,
+                  parent_uuid: UUID, displacement: ForcedMovementCue | None) -> tuple[float, float | None]:
     """Existing contact/arrival anchors, with ordered generic-action groups."""
     effect_at = (injury_at if injury_at is not None and (
         isinstance(fact, TemporaryHitPointsFact) or isinstance(fact, DamageFact) and fact.stage == "applied")
         else state_at)
     start = max(at, parent_end) if isinstance(fact, MovementFact) else at
+    if displacement is not None and displacement.event_uuid == parent_uuid:
+        start = displacement.travel_end_ms
+        effect_at = start
     if portal is not None and portal.arrival is not None and not isinstance(fact, (SpatialFact, SensoryFact)):
         start = max(start, portal.settled_ms)
         effect_at = start
@@ -173,6 +185,8 @@ class BoundChoreography:
     reaction_media: tuple[ReactionMediaCue, ...] = ()
     condition_responses: tuple[ConditionResponseCue, ...] = ()
     entity_lifecycle: tuple[EntityLifecycleCue, ...] = ()
+    finite_materials: tuple[BodyMaterialCue, ...] = ()
+    spatial_responses: tuple[SpatialResponseCue, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +238,7 @@ def _observed_commit(fact: PlayerFact | None, source_lineages: Mapping[UUID, UUI
 def _destruction_transition(before: PlayerState, lineage: PlayerLineage, event: PlayerNode,
                             fact: ObjectDestroyedFact, data: AnimationData,
                             facings: Mapping[str, Facing8], at: float,
+                            collapse_contacts: tuple[tuple[float,float,float], ...] = (),
                             ) -> tuple[WorldTransition | None, float | None, str | None]:
     """Bind the existing fracture and its authored geometry-clear milestone."""
     prior = _before_event(before, lineage, event)
@@ -232,7 +247,19 @@ def _destruction_transition(before: PlayerState, lineage: PlayerLineage, event: 
     body = after.objects.get(body_uuid)
     art = data.devices.get(fact.item_id)
     construction = data.construction_media.get(fact.item_id)
-    original = prior.objects.get(fact.object_uuid)
+    original = (PlayerObject(item=fact.previous_item, placement=fact.placement)
+        if fact.previous_item is not None else prior.objects.get(fact.object_uuid))
+    if fact.remains_disposition is RemainsDisposition.DISINTEGRATED:
+        if construction is not None and construction.surface is not None and construction.surface.material == "force_membrane" and original is not None:
+            return WorldTransition(fact.object_uuid, "destruction", None, None, at,
+                duration_ms=construction.surface.destructionMs,
+                construction_collapse=ConstructionCollapse(original, collapse_contacts)), None, None
+        dust = data.death_context.silhouetteDust
+        if dust is None or original is None:
+            return None, None, "Disintegration requires its witnessed object silhouette and authored dust"
+        return WorldTransition(fact.object_uuid, "destruction", None, None, at,
+            duration_ms=dust.duration_ms, object_dust=ObjectDustContact(original, fact.affected_volume,
+                fact.resulting_placement is not None, event.uuid.int & 0xffffffff)), None, None
     if construction is not None and original is not None:
         limitation = construction_media_limitation(original, construction)
         if limitation is not None:
@@ -343,6 +370,9 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     movements: list[MotionCue] = []
     strips: list[ActionStripCue] = []
     contact_media: list[StationaryMediaCue] = []
+    decorative_contact_media: list[StationaryMediaCue] = []
+    finite_materials: list[BodyMaterialCue] = []
+    spatial_responses: list[SpatialResponseCue] = []
     entity_lifecycle: list[EntityLifecycleCue] = []
     damage_sweep_starts: dict[UUID, float] = {}
     residue_reveals: list[ResidueReveal] = []
@@ -404,7 +434,9 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             media = data.interruptions.reactions.get(reaction.behavior_id or "")
             if media is not None and incoming is not None:
                 reaction_media.append(bind_reaction_media(cue.event_uuid, event.uuid, incoming,
-                    media, reaction.reaction.succeeded, effect_ms + delay, cutoff_ms))
+                    media, reaction.reaction.succeeded, effect_ms + delay, cutoff_ms,
+                    reaction_id=reaction.behavior_id,
+                    outcome_code=event.cancellation.outcome_code if event.cancellation is not None else None))
         return delay
 
     by_uuid = {event.uuid: event for event in lineage.events}
@@ -536,6 +568,126 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                     return cue
         return None
 
+    def bind_standalone_damage(event: PlayerNode, at: float,
+                               placed_contacts: Mapping[str, ActorContact]) -> tuple[DamageCue | None, float]:
+        fact = event.fact
+        assert isinstance(fact, DamageFact) and fact.stage == "taken"
+        standalone_damage = None
+        end = at
+        try:
+            if fact.target_entity_uuid is not None:
+                at = max(at, preceding_damage_commit(event, fact.target_entity_uuid))
+            branch = lineage_branch(lineage, event)
+            prior = _before_event(before, lineage, event)
+            delay = 0.
+            admitted = next((packet for packet in branch.events
+                if isinstance(packet.fact, DamageFact) and packet.fact.stage == "applied"
+                and packet.parent_lineage == event.lineage_uuid and not packet.canceled), event)
+            admitted_fact = admitted.fact
+            assert isinstance(admitted_fact, DamageFact)
+            spatial_owner = damage_spatial_owner(prior, admitted_fact, created_effects)
+            spatial_binding = data.spatial_media.get(spatial_owner.content_ref.content_id) if spatial_owner is not None else None
+            directed = spatial_binding.directedResponse if spatial_binding is not None else None
+            recipient = prior.actors.get(admitted_fact.target_entity_uuid)
+            if (directed is not None and spatial_owner is not None and recipient is not None
+                    and actor_is_visible(prior, recipient) and admitted_fact.source_condition_uuid is not None):
+                spatial_uuid = admitted_fact.source_condition_uuid
+                start = max([at, *(cue.media.end_ms for cue in spatial_responses if cue.owner_uuid == spatial_uuid)])
+                contact = placed_contacts.get(str(recipient.uuid)) or actor_contact(prior, recipient, data)
+                admission = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else event
+                retired = any(isinstance(node.fact, SpatialEffectStateFact)
+                    and node.fact.operation is SpatialEffectChangeOperation.REMOVED
+                    and node.fact.spatial_effect_uuid == spatial_uuid and not node.canceled
+                    and admission is not None and owned_by(node.uuid,admission.uuid) for node in lineage.events)
+                response = bind_spatial_response(admitted.uuid, spatial_uuid, spatial_owner, contact,
+                    directed, data, start, retired=retired)
+                if response is not None:
+                    spatial_responses.append(response)
+                    delay = response.contact_ms-at
+                    end = max(end, response.media.end_ms)
+            for packet in branch.events:
+                if (isinstance(packet.fact, DamageFact) and packet.fact.stage == "applied"
+                        and packet.parent_lineage == event.lineage_uuid and not packet.canceled):
+                    sweep = damage_sweep_recipe(prior, packet.fact, data, created_effects)
+                    if sweep is not None:
+                        delay = sweep.contactDelayMs
+                        damage_sweep_starts[packet.uuid] = at
+            standalone_damage = bind_damage(prior,
+                branch, data, start_ms=at+delay, causal_index=causal_index,
+                contact=placed_contacts.get(str(fact.target_entity_uuid)))
+            if standalone_damage is not None:
+                damage.append(standalone_damage)
+                end = max(end, standalone_damage.timing.end_ms)
+        except (ValueError, NotImplementedError) as error:
+            gaps.append((event.uuid, str(error)))
+        return standalone_damage, end
+
+    def bind_life_transition(event: PlayerNode, fact: DeathSaveFact | LifeFact,
+                             at: float, owner: ActionNode | None,
+                             placed_contacts: Mapping[str, ActorContact]) -> float:
+        """Bind one admitted life transition on its causal contact clock."""
+        end = at
+        prior = _before_event(before, lineage, event)
+        actor = prior.actors.get(fact.entity_uuid)
+        if actor is not None:
+            try:
+                # The native life commit emits sensory removal before its
+                # completion fact. Its causal parent's entry still owns the
+                # admitted visual pose from which this transition plays.
+                contact_state = (_before_event(before, lineage, by_lineage[event.parent_lineage])
+                                 if isinstance(fact, LifeFact)
+                                 and event.parent_lineage is not None
+                                 and event.parent_lineage in by_lineage else prior)
+                contact = actor_contact(contact_state, contact_state.actors[actor.uuid], data,
+                                        (facings or {}).get(str(actor.uuid), "S"))
+                contact = replace(contact, hp=actor.normal_hp, life_state=actor.life_state)
+                placed = placed_contacts.get(contact.actor_uuid)
+                if placed is not None:
+                    contact = replace(contact, grid=placed.grid, elevation_steps=placed.elevation_steps,
+                                      body_lift_px=placed.body_lift_px, facing=placed.facing)
+                feedback = None
+                state_owned = (owner is not None and event.uuid in owner.bound.owned_life_events
+                               or any(event.uuid in cue.owned_life_events for cue in damage))
+                death_end = None
+                life_body = None
+                body_end = None
+                if isinstance(fact, DeathSaveFact):
+                    saves = data.death_save_context
+                    feedback = (saves.criticalSuccess if fact.natural_roll == 20 else
+                                saves.criticalFailure if fact.natural_roll == 1 else
+                                saves.success if fact.succeeded else saves.failure)
+                else:
+                    states = data.life_state_context
+                    feedback = {LifeState.DYING: states.dying, LifeState.STABLE: states.stable,
+                                LifeState.ALIVE: states.revived}.get(fact.new_state)
+                    if fact.new_state is LifeState.ALIVE and fact.previous_state is LifeState.ALIVE:
+                        feedback = None
+                    if not state_owned and fact.new_state is LifeState.DEAD:
+                        death = data.death_context
+                        body = death_body_context(data, contact)
+                        death_end = at if (contact.life_state is LifeState.DEAD
+                                          or actor_rest_pose(data, contact) is not None) else (
+                            at + context_duration(data, contact, body))
+                        if death.hiddenSlots or death.media:
+                            gaps.append((event.uuid, "Standalone death hiddenSlots/media are not bound"))
+                    if not state_owned:
+                        pose = resolve_condition_appearance(actor.conditions, data.condition_recipes).body_pose
+                        life_body = compile_life_body(data, contact, fact.new_state, pose)
+                        if life_body is not None:
+                            body_end = at + life_body.frames * 1000 / life_body.fps
+                if isinstance(fact, LifeFact) and fact.remains_disposition is RemainsDisposition.DISINTEGRATED:
+                    dust = data.death_context.silhouetteDust
+                    if dust is None:
+                        raise ValueError("Disintegrated remains require authored silhouette dust")
+                    end = max(end, at + dust.duration_ms)
+                lifecycle.append(LifecycleCue(event, at, contact, feedback, state_owned, death_end, data,
+                                              life_body, body_end))
+                end = max(end, death_end if death_end is not None else at,
+                          body_end if body_end is not None else at)
+            except (ValueError, NotImplementedError) as error:
+                gaps.append((event.uuid, str(error)))
+        return end
+
     def visit(event: PlayerNode, at: float, owner: ActionNode | None = None,
               override: StudioCondition | None = None,
               displacement: ForcedMovementCue | None = None,
@@ -545,6 +697,12 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
         fact = event.fact
         if owner is not None:
             owner = next((node for node in nodes if node.event_uuid == owner.event_uuid), owner)
+        if (isinstance(fact, ConditionChangeFact) and fact.consumed
+                and owner is not None and isinstance(owner.bound, BoundCast)
+                and str(fact.target_entity_uuid) == owner.bound.timeline.source.caster.actor_uuid):
+            # A retained source effect is spent when released. Its removal and
+            # light children precede the recipient's independent impact clock.
+            at = state_at_effect = owner.start_ms + owner.bound.timeline.release_ms
         if isinstance(fact, AreaReachFact):
             # The native stage gives causality; the existing destruction art
             # supplies the moment the blocking shape has visibly cleared.
@@ -552,8 +710,14 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 for identity in fact.prerequisite_destruction_lineages if identity in by_lineage)])
             state_at_effect = at
             if owner is not None and isinstance(owner.bound, BoundCast):
+                # Formation may occupy the already resolved initial footprint
+                # before contact. Later reach still waits for real obstruction
+                # clearance; no mechanical state/recipient date moves earlier.
+                media_at = (owner.bound.timeline.release_ms
+                    if fact.previous_reach_lineage_uuid is None and not fact.prerequisite_destruction_lineages
+                    else at - owner.start_ms)
                 updated = replace(owner, bound=replace(owner.bound, area_reach=(*owner.bound.area_reach,
-                    (at - owner.start_ms, fact.newly_reached_positions))))
+                    (media_at, fact.newly_reached_positions))))
                 nodes[nodes.index(owner)] = updated
                 owner = updated
         if event.canceled:
@@ -582,7 +746,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                                    if isinstance(fact, AttackFact) else bind_cast(prior, branch, data,
                                        facings=facings, contacts=contacts))
                         if attempt is not None:
-                            attempt = interrupt_delivery(attempt, rule)
+                            attempt = interrupt_delivery(attempt, rule,
+                                outcome_code=event.cancellation.outcome_code if event.cancellation is not None else None)
                             at += join_reactions(event, at + attempt.timeline.complete_ms,
                                 attempt if isinstance(attempt, BoundCast) else None, attempt.timeline.complete_ms)
                             nodes.append(ActionNode(event.uuid, at, attempt, interrupted=True))
@@ -590,6 +755,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                             if isinstance(attempt, BoundCast):
                                 responses = bind_suppression_media(attempt, event.uuid, at,
                                     attempt.timeline.complete_ms)
+                                contact_media.extend(bind_cancellation_media(attempt,event,end))
                                 contact_media.extend(responses)
                                 end = max(end, max((cue.end_ms for cue in responses), default=end))
                         else:
@@ -647,6 +813,12 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
         if (event.uuid == lineage.root.uuid and isinstance(fact, SpatialFact)
                 and fact.change_type is SpatialChangeType.ENTITY_ENTERED):
             state_at_effect = at
+        if isinstance(fact, SpatialFact) and fact.change_type is SpatialChangeType.ENTITY_ENTERED:
+            returning_actor = before.actors.get(fact.entity_uuid) if fact.entity_uuid is not None else None
+            if returning_actor is not None:
+                end = max(end, *(at + echo.returnPortalMs for recipe in data.condition_recipes.values()
+                    if (echo := recipe.persistent.absenceEcho) is not None
+                    and returning_actor.spatial_disposition in echo.dispositions), at)
         if isinstance(fact, PortalTransferFact) and fact.committed:
             prior = _before_event(before, lineage, event)
             branch = lineage_branch(lineage, event)
@@ -758,6 +930,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             state_at_effect = at
             spatial_media = data.spatial_media.get(spatial_contents.get(fact.spatial_effect_uuid, ""))
             if spatial_media is not None:
+                if fact.removed_positions and any(layer.cellVariants for layer in spatial_media.layers):
+                    end = max(end,at+spatial_media.removalFadeMs)
                 if fact.operation is SpatialEffectChangeOperation.CREATED and any(
                         layer.composition == "wall_modules" for layer in spatial_media.layers):
                     effect = spatial_effects.get(fact.spatial_effect_uuid)
@@ -790,7 +964,12 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 if previous is not None and any(obj.item.item_id in data.construction_media
                         and obj.item.construction_owner_uuid == fact.spatial_effect_uuid
                         for obj in before.objects.values()):
-                    recorded_transitions.append(WorldTransition(fact.spatial_effect_uuid, "removal", None, None, at))
+                    duration = max((construction_duration(data, data.construction_media[obj.item.item_id], 'removal')
+                        for obj in before.objects.values() if obj.item.item_id in data.construction_media
+                        and obj.item.construction_owner_uuid == fact.spatial_effect_uuid), default=0.)
+                    recorded_transitions.append(WorldTransition(fact.spatial_effect_uuid, "removal", None, None, at,
+                        duration_ms=duration))
+                    end = max(end, at + duration)
             if fact.previous_pressed is not None and fact.pressed is not None:
                 recorded_transitions.append(WorldTransition(fact.spatial_effect_uuid, "pressed",
                     str(fact.previous_pressed).lower(), str(fact.pressed).lower(), at))
@@ -798,7 +977,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 recorded_transitions.append(WorldTransition(fact.spatial_effect_uuid, "trap_state",
                     fact.previous_state.value, fact.state.value, at))
                 portal_art = data.portals.get(spatial_contents.get(fact.spatial_effect_uuid, ""))
-                if portal_art is not None:
+                if isinstance(portal_art, PortalArt):
                     bank = portal_art.entrance
                     frames = bank.opening_frames if fact.state.value == "activated" else bank.closing_frames
                     end = max(end, at + frames * 1000 / bank.fps)
@@ -840,6 +1019,16 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 end = max(end, at + field_motion.duration_ms)
             if end > at:
                 at = observation_at = state_at_effect = end
+        if (isinstance(fact, SpatialFact) and fact.object_uuid is not None
+                and fact.change_type is SpatialChangeType.OBJECT_REMOVED):
+            original = before.objects.get(fact.object_uuid)
+            binding = data.construction_media.get(original.item.item_id) if original is not None else None
+            if binding is not None:
+                contact_at = state_at_effect if state_at_effect is not None else at
+                duration = construction_duration(data, binding, 'removal')
+                recorded_transitions.append(WorldTransition(fact.object_uuid, 'removal', None, None, contact_at,
+                    duration_ms=duration))
+                end = max(end, contact_at+duration)
         if isinstance(fact, ObjectDamageFact) and fact.applied_damage > 0:
             flash = resolve_damage(data, fact.damage_type.value if fact.damage_type is not None else None).hitFlash
             if flash.enabled:
@@ -848,7 +1037,9 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
         if isinstance(fact, ObjectDestroyedFact):
             state_at_effect = state_at_effect if state_at_effect is not None else at
             transition, clearance, limitation = _destruction_transition(
-                before, lineage, event, fact, data, facings or {}, state_at_effect)
+                before, lineage, event, fact, data, facings or {}, state_at_effect,
+                directed_object_contacts(owner.bound.timeline,str(fact.object_uuid))
+                if owner is not None and isinstance(owner.bound,BoundCast) else ())
             if transition is not None:
                 recorded_transitions.append(transition)
             if clearance is not None:
@@ -864,11 +1055,20 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             if (parent is not None and isinstance(parent.fact, SpellFact)
                     and parent.fact.source_entity_uuid == fact.source_entity_uuid):
                 parent_draft = data.drafts.get(parent.fact.behavior_id or "")
-                attack_presentation = parent_draft.childAttack if parent_draft is not None else None
+                if parent_draft is not None and parent_draft.childAttack is not None:
+                    attack_presentation = resolve_child_attack_palette(
+                        parent_draft.childAttack, parent_draft.elementColors)
         if child_attack is not None and not any(
                 isinstance(by_lineage[identity].fact, AttackFact) for identity in event.children_lineages):
             gaps.append((event.uuid, "Authored child attack has no received attack"))
         body_action = None
+        for subject in intervention_subjects(event,data):
+            response_body = bind_body_action(_before_event(before,lineage,event),event,data,
+                start_ms=at,facings=facings or {},contacts=placed_contacts,subject=subject)
+            if response_body is not None:
+                actor_order.append((event.uuid,len(body_actions),True))
+                body_actions.append(response_body)
+                end = max(end,response_body.complete_ms)
         binding = data.body_action_bindings.get(fact.behavior_id or "") if isinstance(fact, ActionFact) else None
         object_interaction = binding is not None and binding.interaction_target is not None
         linked_effect = (object_interaction and isinstance(fact, ActionFact)
@@ -928,7 +1128,11 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             prior = _before_event(before, lineage, event)
             try:
                 bound = (bind_attack(prior, branch, data, facings=facings, contacts=placed_contacts,
-                                     child_presentation=attack_presentation, causal_index=causal_index)
+                                     child_presentation=attack_presentation, causal_index=causal_index,
+                                     emitting_handlers=tuple(row.behavior_id for node in lineage.events
+                                         for row in node.content_attributions if row.role=='effective_handler'
+                                         and row.source_entity_uuid==fact.source_entity_uuid
+                                         and event.lineage_uuid in row.emitted_lineage_uuids))
                          if isinstance(fact, AttackFact) else bind_cast(prior, branch, data,
                              contacts=placed_contacts, facings=facings, causal_index=causal_index))
             except (ValueError, NotImplementedError) as error:
@@ -940,7 +1144,9 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 rule = next((rule for rule in data.interruptions.rules
                              if rule.actionEconomySpent and "execution" in rule.phases), None)
                 if reactions and rule is not None:
-                    cutoff = interruption_ms(bound, rule)
+                    reaction_id = next((reaction.root.fact.behavior_id for reaction in reactions
+                        if isinstance(reaction.root.fact,ActionFact)),None)
+                    cutoff = interruption_ms(bound, rule, reaction_id=reaction_id)
                     at += join_reactions(event, at + cutoff,
                         bound if isinstance(bound, BoundCast) else None, cutoff)
                 delay, reaction_bodies = bind_condition_reaction_bodies(prior, branch, bound, data,
@@ -964,6 +1170,16 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 if isinstance(bound, BoundAttack):
                     at += bound.timeline.contact_ms
                     state_at_effect = at
+                    # Native hit admission owns the impulse. The ordinary attack
+                    # supplies a physical-band contact, not authored weapon XYZ.
+                    if isinstance(fact, AttackFact) and not event.canceled and fact.attack_outcome in (AttackOutcome.HIT, AttackOutcome.CRIT):
+                        contact = bound.timeline.target
+                        original = prior.objects.get(fact.target_entity_uuid)
+                        binding = data.construction_media.get(original.item.item_id) if original is not None else None
+                        if (isinstance(contact, ObjectContact) and binding is not None and binding.surface is not None
+                                and binding.surface.material == 'force_membrane'):
+                            recorded_transitions.append(WorldTransition(fact.target_entity_uuid, 'activation', None, None, at,
+                                duration_ms=0, membrane_contact=ordinary_object_contact(contact, bound.timeline.source.grid)))
                     gaps.extend((event.uuid, f"Missing media: {name}") for name in bound.timeline.missing_media)
                 else:
                     override = bound.timeline.recipe.condition
@@ -1003,6 +1219,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             except (ValueError, NotImplementedError) as error:
                 gaps.append((event.uuid, str(error)))
         if isinstance(fact, ForcedMovementFact):
+            displacement_layers = (owner.bound.timeline.recipe.displacementLayers
+                if owner is not None and isinstance(owner.bound, BoundCast) else ())
             owner = None  # Its spatial children own their own reached-cell effects.
             if owned_hop is None:
                 state_at_effect = None
@@ -1010,8 +1228,9 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                     if fact.target_entity_uuid is not None:
                         at = max(at, preceding_damage_commit(event, fact.target_entity_uuid))
                     displacement = bind_forced_movement(_before_event(before, lineage, event),
-                        lineage_branch(lineage, event), data, at, placed_contacts)
+                        lineage_branch(lineage, event), data, at, placed_contacts, layers=displacement_layers)
                     forced_movement.append(displacement)
+                    state_at_effect = displacement.travel_end_ms
                     end = max(end, displacement.complete_ms)
                 except (ValueError, NotImplementedError) as error:
                     gaps.append((event.uuid, str(error)))
@@ -1024,27 +1243,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 state_at_effect = None
         standalone_damage = None
         if (isinstance(fact, DamageFact) and fact.stage == "taken") and owner is None:
-            try:
-                if fact.target_entity_uuid is not None:
-                    at = max(at, preceding_damage_commit(event, fact.target_entity_uuid))
-                branch = lineage_branch(lineage, event)
-                prior = _before_event(before, lineage, event)
-                delay = 0.
-                for packet in branch.events:
-                    if (isinstance(packet.fact, DamageFact) and packet.fact.stage == "applied"
-                            and packet.parent_lineage == event.lineage_uuid and not packet.canceled):
-                        sweep = damage_sweep_recipe(prior, packet.fact, data, created_effects)
-                        if sweep is not None:
-                            delay = sweep.contactDelayMs
-                            damage_sweep_starts[packet.uuid] = at
-                standalone_damage = bind_damage(prior,
-                    branch, data, start_ms=at+delay, causal_index=causal_index,
-                    contact=placed_contacts.get(str(fact.target_entity_uuid)))
-                if standalone_damage is not None:
-                    damage.append(standalone_damage)
-                    end = max(end, standalone_damage.timing.end_ms)
-            except (ValueError, NotImplementedError) as error:
-                gaps.append((event.uuid, str(error)))
+            standalone_damage, damage_end = bind_standalone_damage(event, at, placed_contacts)
+            end = max(end, damage_end)
         damage_placement = standalone_damage.timing if standalone_damage is not None else None
         damage_contact = standalone_damage.contact if standalone_damage is not None else None
         if isinstance(fact, DamageFact) and fact.stage == "taken" and owner is not None:
@@ -1086,25 +1286,45 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 state_nodes.append((state_time, replace(event, fact=timed_fact)))
         if event.uuid in facts and facts[event.uuid].category != ConditionCategory.INTERNAL:
             pending_conditions.append((reaction_condition_times.get(event.uuid, at), event, override))
-            if (isinstance(fact, ConditionChangeFact) and fact.event_type is EventType.CONDITION_REMOVAL
-                    and fact.consumed):
-                response = bind_condition_response(event.uuid, fact.target_entity_uuid, fact.condition,
-                    "consumed", reaction_condition_times.get(event.uuid, at), data.condition_recipes)
-                if response is not None:
-                    condition_responses[response.event_uuid, response.owner_uuid] = response
-                    end = max(end, response.end_ms)
         if _has_standalone_state(fact, state_at_effect):
             state_nodes.append((state_at_effect if state_at_effect is not None else at, event))
         if isinstance(fact, DamageFact) and fact.stage == "applied":
             placement = result_placements.get(event.uuid)
+            spatial_owner = damage_spatial_owner(_before_event(before, lineage, event), fact, created_effects)
+            spatial_binding = data.spatial_media.get(spatial_owner.content_ref.content_id) if spatial_owner is not None else None
+            material = spatial_binding.damageMaterials.get(fact.damage_type.value) if spatial_binding is not None else None
+            if material is not None and fact.applied_damage > 0:
+                cue = BodyMaterialCue(event.uuid, str(fact.target_entity_uuid),
+                    placement.hp_ms if placement is not None else at, material)
+                finite_materials.append(cue)
+                end = max(end, cue.end_ms)
             state_nodes.append((placement.hp_ms if placement is not None else
                                 state_at_effect if state_at_effect is not None else at, event))
-        if (isinstance(fact, SpatialFact) and ground_contact_is_authored(before, fact, data)
+        placement = result_placements.get(event.uuid)
+        response = bind_event_condition_response(event, _before_event(before, lineage, event).actors,
+            placement.hp_ms if placement is not None else reaction_condition_times.get(event.uuid, at),
+            data.condition_recipes)
+        if response is not None:
+            condition_responses[response.event_uuid, response.owner_uuid] = response
+            end = max(end, response.end_ms)
+        for received in bind_received_damage_responses(event,_before_event(before,lineage,event).actors,
+                placement.hp_ms if placement is not None else at,data.condition_recipes):
+            condition_responses[received.event_uuid,received.owner_uuid] = received
+            end = max(end,received.end_ms)
+        if (isinstance(fact, SpatialEffectStateFact) and bool(fact.removed_positions)
+                or isinstance(fact, SpatialFact) and ground_contact_is_authored(before, fact, data)
                 or isinstance(fact, DamageFact) and fact.stage == "applied"
-                and (fact.effect_id is not None or fact.spatial_source is not None)):
-            contact_media.extend(bind_spatial_contacts(_before_event(before, lineage, event), event, data,
+                and (fact.effect_id is not None or fact.source_condition_uuid is not None or fact.spatial_source is not None)):
+            contacts_here = bind_spatial_contacts(_before_event(before, lineage, event), event, data,
                 damage_sweep_starts.get(event.uuid,
-                    state_at_effect if state_at_effect is not None else at), placed_contacts, created_effects))
+                    placement.hp_ms if placement is not None else state_at_effect if state_at_effect is not None else at), placed_contacts, created_effects)
+            if isinstance(fact, SpatialFact):
+                # Ground-entry splashes keep their own clock without pausing a
+                # walk. Damage, dousing and other responses still join the head.
+                decorative_contact_media.extend(contacts_here)
+            else:
+                contact_media.extend(contacts_here)
+                end = max(end, max((cue.end_ms for cue in contacts_here),default=end))
         if (isinstance(fact, DamageFact) and fact.stage == "applied" and fact.body_release is not None
                 and fact.target_entity_uuid is not None):
             prior = _before_event(before, lineage, event)
@@ -1158,16 +1378,6 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
         if isinstance(fact, HealFact) and not fact.was_blocked:
             healing_cue = HealingCue(event, at)
             state_nodes.append((at, event))
-            if fact.actual_healing > 0 and fact.source_condition_uuid is not None:
-                prior = _before_event(before, lineage, event)
-                actor = prior.actors.get(fact.target_entity_uuid)
-                member = next((row for row in actor.conditions if row.condition_uuid == fact.source_condition_uuid), None) if actor else None
-                if member is not None:
-                    response = bind_condition_response(event.uuid, fact.target_entity_uuid, member,
-                        "healed", at, data.condition_recipes)
-                    if response is not None:
-                        condition_responses[response.event_uuid, response.owner_uuid] = response
-                        end = max(end, response.end_ms)
             context = data.healing_context
             prior = _before_event(before, lineage, event)
             healed = prior.actors.get(fact.target_entity_uuid)
@@ -1182,60 +1392,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             if context.media:
                 gaps.append((event.uuid, "Healing media tracks are not bound"))
         if isinstance(fact, (DeathSaveFact, LifeFact)):
-            prior = _before_event(before, lineage, event)
-            actor = prior.actors.get(fact.entity_uuid)
-            if actor is not None:
-                try:
-                    # The native life commit emits sensory removal before its
-                    # completion fact. Its causal parent's entry still owns the
-                    # admitted visual pose from which this transition plays.
-                    contact_state = (_before_event(before, lineage, by_lineage[event.parent_lineage])
-                                     if isinstance(fact, LifeFact)
-                                     and event.parent_lineage is not None
-                                     and event.parent_lineage in by_lineage else prior)
-                    contact = actor_contact(contact_state, contact_state.actors[actor.uuid], data,
-                                            (facings or {}).get(str(actor.uuid), "S"))
-                    contact = replace(contact, hp=actor.normal_hp, life_state=actor.life_state)
-                    placed = placed_contacts.get(contact.actor_uuid)
-                    if placed is not None:
-                        contact = replace(contact, grid=placed.grid, elevation_steps=placed.elevation_steps,
-                                          body_lift_px=placed.body_lift_px, facing=placed.facing)
-                    feedback = None
-                    state_owned = (owner is not None and event.uuid in owner.bound.owned_life_events
-                                   or any(event.uuid in cue.owned_life_events for cue in damage))
-                    death_end = None
-                    life_body = None
-                    body_end = None
-                    if isinstance(fact, DeathSaveFact):
-                        saves = data.death_save_context
-                        feedback = (saves.criticalSuccess if fact.natural_roll == 20 else
-                                    saves.criticalFailure if fact.natural_roll == 1 else
-                                    saves.success if fact.succeeded else saves.failure)
-                    else:
-                        states = data.life_state_context
-                        feedback = {LifeState.DYING: states.dying, LifeState.STABLE: states.stable,
-                                    LifeState.ALIVE: states.revived}.get(fact.new_state)
-                        if fact.new_state is LifeState.ALIVE and fact.previous_state is LifeState.ALIVE:
-                            feedback = None
-                        if not state_owned and fact.new_state is LifeState.DEAD:
-                            death = data.death_context
-                            body = death_body_context(data, contact)
-                            death_end = at if (contact.life_state is LifeState.DEAD
-                                              or actor_rest_pose(data, contact) is not None) else (
-                                at + context_duration(data, contact, body))
-                            if death.hiddenSlots or death.media:
-                                gaps.append((event.uuid, "Standalone death hiddenSlots/media are not bound"))
-                        if not state_owned:
-                            pose = resolve_condition_appearance(actor.conditions, data.condition_recipes).body_pose
-                            life_body = compile_life_body(data, contact, fact.new_state, pose)
-                            if life_body is not None:
-                                body_end = at + life_body.frames * 1000 / life_body.fps
-                    lifecycle.append(LifecycleCue(event, at, contact, feedback, state_owned, death_end, data,
-                                                  life_body, body_end))
-                    end = max(end, death_end if death_end is not None else at,
-                              body_end if body_end is not None else at)
-                except (ValueError, NotImplementedError) as error:
-                    gaps.append((event.uuid, str(error)))
+            end = max(end, bind_life_transition(event, fact, at, owner, placed_contacts))
 
         # TakeDamage owns its nested condition callbacks. Direct on-hit riders
         # remain siblings at Attack's contact, exactly as in the source mapper.
@@ -1265,7 +1422,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
         for identity in event.children_lineages:
             child = by_lineage[identity]
             child_start, effect_at = _child_timing(child.fact, child_at, end, injury_at,
-                state_at_effect, portal_arrival, sequence_at if sequence_children else None)
+                state_at_effect, portal_arrival, sequence_at if sequence_children else None,
+                event.uuid, displacement)
             child_end = visit(child, child_start, owner, override, displacement, interaction_actor, effect_at, landed_contact)
             if sequence_children:
                 child_end = max(child_end, finish_conditions(child.uuid), join_actor_subtrees(child.uuid))
@@ -1345,6 +1503,32 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     # release clock remains the relocation owner, including arrival-only views.
     stationary = []
     for index, cue in enumerate(body_actions):
+        action_recipe = data.body_action_recipes.get(cue.recipe_id)
+        if action_recipe is None or by_uuid[cue.event_uuid].canceled:
+            continue
+        descendants = tuple(node for node in lineage.events if owned_by(node.uuid,cue.event_uuid))
+        modes = {effect.presence_mode for node in descendants if isinstance(node.fact,SensoryFact)
+            for effect in node.fact.spatial_effects_changed.values()}
+        for track in action_recipe.media:
+            if track.requireHealingApplied and not any(isinstance(node.fact,HealFact)
+                    and not node.canceled and not node.fact.was_blocked and node.fact.actual_healing > 0
+                    and str(node.fact.target_entity_uuid) == cue.contact.actor_uuid for node in descendants):
+                continue
+            if track.requiredSaveSuccess is not None and track.requiredSaveSuccess != cue.save_success:
+                continue
+            if track.whenPresenceMode is not None and track.whenPresenceMode not in modes:
+                continue
+            if track.requireAppliedConditionId is not None and not any(isinstance(node.fact,ConditionChangeFact)
+                    and not node.canceled and node.fact.event_type is EventType.CONDITION_APPLICATION
+                    and node.fact.condition.behavior_id == track.requireAppliedConditionId for node in descendants):
+                continue
+            media = StationaryMediaCue(cue.event_uuid,track,cue.contact.grid,cue.contact.elevation_steps,
+                cue.contact.facing,max(cue.start_ms,cue.effect_ms+track.startOffsetMs),data,
+                actor_uuid=cue.contact.actor_uuid)
+            stationary.append(media)
+            complete = max(complete,media.end_ms)
+            body_actions[index] = join_body_action(body_actions[index],data,media.end_ms)
+    for index, cue in enumerate(body_actions):
         if not cue.relocates:
             continue
         draft = data.drafts[cue.recipe_id]
@@ -1394,6 +1578,19 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 if media.event_uuid == cue.event_uuid or owned_by(media.event_uuid, cue.event_uuid)]
         if ends:
             body_actions[index] = join_body_action(cue, data, max(ends))
+    for cue in body_actions:
+        material = data.action_materials.get(cue.recipe_id)
+        if material is None or by_uuid[cue.event_uuid].canceled:
+            continue
+        if material.requireAppliedConditionId is not None and not any(
+                isinstance(node.fact, ConditionChangeFact) and not node.canceled
+                and node.fact.event_type is EventType.CONDITION_APPLICATION
+                and node.fact.condition.behavior_id == material.requireAppliedConditionId
+                and owned_by(node.uuid, cue.event_uuid) for node in lineage.events):
+            continue
+        finite = BodyMaterialCue(cue.event_uuid, cue.contact.actor_uuid, cue.effect_ms, material)
+        finite_materials.append(finite)
+        complete = max(complete, finite.end_ms)
     # Linked reactions remain distinct native roots. Their observations and final
     # state are retained in completion order; only their body clocks overlap.
     after = displayed_before
@@ -1403,6 +1600,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     body_actions.extend(external_reactions)
     complete = max(complete, max((cue.complete_ms for cue in external_reactions), default=0.))
     complete = max(complete, max((cue.complete_ms for cue in reaction_media), default=0.))
+    complete = max(complete, max((cue.end_ms for cue in contact_media), default=0.))
     return BoundChoreography(lineage.root.uuid, displayed_before, after,
                              tuple(nodes), tuple(conditions), complete, tuple(gaps), tuple(healing),
                              tuple(lifecycle), tuple(equipment), tuple(shoves), tuple(forced_movement), tuple(damage),
@@ -1412,9 +1610,10 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                                          end_ms=change.end_ms + cue.start_ms)
                                  for cue in movements for change in cue.timeline.residue_reveals),
                              body_hops=tuple(body_hops), portals=tuple(portals), stationary_media=tuple(stationary),
-                             turn_starts=tuple(turn_starts), contact_media=tuple(contact_media),
+                             turn_starts=tuple(turn_starts), contact_media=(*contact_media, *decorative_contact_media),
                              reaction_media=tuple(reaction_media), condition_responses=tuple(condition_responses.values()),
-                             entity_lifecycle=tuple(entity_lifecycle))
+                             entity_lifecycle=tuple(entity_lifecycle), finite_materials=tuple(finite_materials),
+                             spatial_responses=tuple(spatial_responses))
 
 
 def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> ChoreographySample:
@@ -1594,6 +1793,9 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
         contact = portal_departure_contact(cue, elapsed_ms) or portal_arrival_contact(cue, elapsed_ms)
         if contact is not None:
             contacts[cue.actor_uuid] = contact
+            body = portal_body(cue,elapsed_ms)
+            if body is not None:
+                bodies[cue.actor_uuid] = body
         elif cue.arrival is not None and elapsed_ms >= cue.arrival_ms:
             actor = displayed.actors.get(UUID(cue.actor_uuid))
             if actor is not None and actor_is_visible(displayed, actor):
@@ -1621,6 +1823,7 @@ FACT_PRESENTATION = {
     "saving_throw": ("body_hop", "factual save result; optional authored avoidance at parent contact"),
     "equipment": ("equipment", "appearance transition or state"),
     "condition": ("condition", "membership and selected appearance"),
+    "item_effect": ("item_attachment", "native item membership edge and retained application clock"),
     "action": ("body_action", "selected body recipe or causal parent"),
     "spatial_effect_state": ("world_animation", "observed spatial creation or trap transition"),
     "mechanism_activation": ("world_animation", "finite discharge; child consequences at authored contact"),
@@ -2252,8 +2455,7 @@ def motion_leg_contact(actor: ActorContact, leg: MotionLeg, data: AnimationData,
         weight = passage_weight(curve, leg.passage_hold_fraction)
     else:
         takeoff, landing = leg.lift_phase_edges
-        ramp = max(0., min(1., curve / takeoff, (1 - curve) / (1 - landing)))
-        weight = ramp * ramp * (3 - 2 * ramp)
+        weight = airborne_weight(curve, takeoff, landing)
     lift = (leg.arc_height_px * weight
             + leg.initial_lift_px * (1 - curve))
     if leg.support_riser is not None:
@@ -2376,8 +2578,7 @@ def _motion_leg_body(timeline: MotionTimeline, leg: MotionLeg, contact: ActorCon
     if leg.lift_phase_edges is not None and "airborne_support" in body_rig(data, contact).pose_sockets:
         socket = "airborne_support"
         takeoff, landing = leg.lift_phase_edges
-        ramp = max(0., min(1., phase / takeoff, (1-phase)/(1-landing)))
-        weight = ramp*ramp*(3-2*ramp)
+        weight = airborne_weight(phase, takeoff, landing)
     return BodySample(contact.actor_uuid, selected, frame, contact.facing,
         scale=scale, scale_anchor_height_px=leg.passage_body_height_px,
         registration_socket=socket, registration_weight=weight)

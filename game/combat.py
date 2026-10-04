@@ -9,10 +9,11 @@ from typing import Mapping
 from math import atan2, floor, pi
 from uuid import UUID
 
+from dnd.types.actor import SpatialDisposition
 from dnd.core.equipment_types import WeaponSet
 from dnd.core.life_types import LifeState
 from dnd.core.dice import AttackOutcome
-from dnd.core.presentation_geometry import ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry, SpherePresentationGeometry, CylinderPresentationGeometry
+from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry, SpherePresentationGeometry, CylinderPresentationGeometry
 from dnd.types.world import CardinalDirection, WorldEdgeChannel
 from dnd.types.world_placement import WorldObjectPlacement
 from game.animation import (
@@ -59,7 +60,7 @@ class BoundEquipment:
 
 def actor_is_visible(target: PlayerState, actor: PlayerActor) -> bool:
     """Whether retained observation currently supplies this actor's visual pose."""
-    if target.senses is None or not actor.present:
+    if target.senses is None or not actor.present or actor.spatial_disposition is not SpatialDisposition.PRESENT:
         return False
     perceived = target.senses.entities.get(actor.uuid)
     return (actor.uuid == target.observer_uuid or perceived is not None and perceived.visual
@@ -125,7 +126,8 @@ def object_contact(before: PlayerState, object_uuid: UUID, *,
     # sprite padding have no meaning for an item.
     base = base_height_steps if base_height_steps is not None else placement.base_height_steps
     height = base + (placement.top_height_steps - placement.base_height_steps) / 2
-    return ObjectContact(str(object_uuid), grid, height)
+    return ObjectContact(str(object_uuid), grid, height,
+        target.item.construction_geometry if isinstance(target.item.construction_geometry, WallAssemblyPresentationGeometry) else None)
 
 
 
@@ -161,10 +163,12 @@ def bind_cast(
     area_direction = None
     if area:
         assert spell is not None
-        if spell.aoe_position is None or spell.aoe_position not in target.tiles:
-            raise ValueError("area delivery requires an observed destination and support")
-        ground_target = GroundContact(spell.aoe_position, target.tiles[spell.aoe_position].elevation_steps)
         geometry = spell.area_geometry
+        origin = (geometry.origin if isinstance(geometry, (ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry))
+                  else spell.aoe_position)
+        if origin is None or origin not in target.tiles:
+            raise ValueError("area delivery requires an observed destination and support")
+        ground_target = GroundContact(origin, target.tiles[origin].elevation_steps)
         if isinstance(geometry, (ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry)):
             area_direction = geometry.direction
             if isinstance(geometry, CubePresentationGeometry) and not geometry.centered and area_direction is not None:
@@ -181,8 +185,13 @@ def bind_cast(
     )
     if spell_applications and not area:
         assert spell is not None
-        if ([fact.application_index for _, fact in spell_applications] != list(range(len(spell_applications)))
-                or [fact.target_entity_uuid for _, fact in spell_applications] != list(spell.declared_target_entity_uuids)):
+        indices = [fact.application_index for _, fact in spell_applications]
+        targets = [fact.target_entity_uuid for _, fact in spell_applications]
+        propagated = all(fact.propagation is not None for _, fact in spell_applications)
+        if ((not propagated and (indices != list(range(len(spell_applications)))
+                or targets != list(spell.declared_target_entity_uuids)))
+                or propagated and (len(set(indices)) != len(indices)
+                    or any(identity not in spell.declared_target_entity_uuids for identity in targets))):
             raise ValueError("cast application identities disagree with its declared allocation")
     application_roots: list[tuple[PlayerNode, SpellFact | ActionFact]] = list(spell_applications)
     if not application_roots and not area and root.target_entity_uuid is not None and not root_node.canceled:
@@ -231,6 +240,8 @@ def bind_cast(
             application_id=(str(application.application_id)
                 if isinstance(application, SpellFact) and application.application_id is not None else None),
             target=recipient_contact, resolution_ref=reference, results=results,
+            propagation=(application.propagation if isinstance(application, SpellFact)
+                and not application_node.canceled else None),
             damage_applied=damage is not None or object_damage is not None,
             damage_total=(sum(row.applied_damage for row in applied) if applied else
                           sum(row.applied_damage for row in object_packets) if object_packets else None),
@@ -247,6 +258,12 @@ def bind_cast(
                 and event.fact.target_entity_uuid == recipient_uuid
                 and event.fact.event_type is EventType.CONDITION_REMOVAL
                 and event.fact.condition.state is not None for tag in event.fact.condition.state.tags),
+            applied_condition_ids=frozenset(event.fact.condition.behavior_id
+                for event in descendants if not event.canceled
+                and isinstance(event.fact, ConditionChangeFact)
+                and event.fact.target_entity_uuid == recipient_uuid
+                and event.fact.event_type is EventType.CONDITION_APPLICATION
+                and event.fact.condition.behavior_id is not None),
             # Ambiguous/missing disclosures cannot authorize outcome-specific art.
             save_succeeded=received_saves[0].succeeded if len(received_saves) == 1 else None,
         ))
@@ -286,6 +303,8 @@ def bind_cast(
     source = CastInput(root_event_uuid=str(root_node.uuid), caster=source_contact,
                        applications=tuple(applications), ground_target=ground_target, emitter=emitter,
                        area_direction=area_direction,
+                       area_geometry=spell.area_geometry if spell is not None else None,
+                       resolved_area_positions=spell.resolved_area_positions if spell is not None else None,
                        area_propagation=spell.area_propagation if spell is not None else "line_of_effect",
                        area_radius_feet=(spell.area_geometry.radius_feet
                            if spell is not None and isinstance(spell.area_geometry, (SpherePresentationGeometry, CylinderPresentationGeometry)) else 0),

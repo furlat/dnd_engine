@@ -29,10 +29,11 @@ from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
 from game.condition_media_lifetime import register_condition_lifetimes
 from game.construction_media_lifetime import register_construction_lifetimes
 from game.spatial_media_lifetime import register_spatial_lifetimes
+from game.item_attachment_lifetime import register_item_attachment_starts
 from game.concentration_media import register_concentration_lifetimes
 from game.deposit_media import register_deposit_starts
 from game.motion_media import MotionMediaCue, bind_motion_media, choreography_motion_media
-from game.controls import ActionSelection, EndTurn, MenuState, draw_menu, draw_target_preview, handle_menu_event, initial_menu
+from game.controls import ActionSelection, EndTurn, MenuState, draw_menu, draw_target_preview, handle_menu_event, initial_menu, selection_target_pool
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import sample_playback_frame
 from game.presentation import capture_interval, capture_lineage
@@ -169,8 +170,9 @@ async def _run(
         restart_requested = False
         frame = issued = 0
         elapsed_ms = presentation_ms = 0.0
-        condition_lifetimes = register_condition_lifetimes({}, historical, data, absolute_start_ms=0)
+        condition_lifetimes = register_condition_lifetimes({}, historical, data, absolute_start_ms=0, facings=facings)
         spatial_lifetimes = register_spatial_lifetimes({}, historical, data, absolute_start_ms=0)
+        item_starts = register_item_attachment_starts({}, historical, data, absolute_start_ms=0)
         construction_lifetimes = register_construction_lifetimes({}, historical, data, absolute_start_ms=0)
         concentration_lifetimes = register_concentration_lifetimes({}, historical, data, absolute_start_ms=0)
         deposit_starts = register_deposit_starts({}, historical, data, absolute_start_ms=0)
@@ -256,8 +258,8 @@ async def _run(
                         operation = end_player_turn(session, actor_uuid)
                     case ActionSelection():
                         action = choices.all_actions[command.action_index]
-                        selected = tuple(next(target for target in action.valid_targets if target.index == index)
-                                         for index in command.target_indices)
+                        selected = tuple(next(target for target in selection_target_pool(action, command.target_indices)
+                                              if target.index == index) for index in command.target_indices)
                         if not selected:
                             raise ValueError("player command requires its discovered target")
                         operation = execute_player_action(
@@ -319,8 +321,10 @@ async def _run(
                     gaps.extend(choreography.gaps)
                     feedback.extend(choreography_feedback(choreography, data, presentation_ms, contacts=contacts))
                 condition_lifetimes = register_condition_lifetimes(condition_lifetimes, historical, data,
-                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
+                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion, facings=facings)
                 spatial_lifetimes = register_spatial_lifetimes(spatial_lifetimes, historical, data,
+                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
+                item_starts = register_item_attachment_starts(item_starts, historical, data,
                     absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
                 construction_lifetimes = register_construction_lifetimes(construction_lifetimes, historical, data,
                     absolute_start_ms=presentation_ms, choreography=choreography, motion=motion)
@@ -349,7 +353,7 @@ async def _run(
                 camera, facings, body_media, number_font, badge_font,
                 choreography=choreography, choreography_media=choreography_media,
                 motion=motion, reaction_media=reaction_media, feedback=feedback, condition_lifetimes=condition_lifetimes,
-                spatial_lifetimes=spatial_lifetimes, construction_lifetimes=construction_lifetimes, concentration_lifetimes=concentration_lifetimes, deposit_starts=deposit_starts,
+                spatial_lifetimes=spatial_lifetimes, item_starts=item_starts, construction_lifetimes=construction_lifetimes, concentration_lifetimes=concentration_lifetimes, deposit_starts=deposit_starts,
                 positions=positions, feedback_viewport=feedback_viewport, motion_media=motion_media, body_history=body_history,
             )
             displayed, actors, commands = playback.displayed, playback.actors, playback.commands
@@ -359,7 +363,7 @@ async def _run(
             draw_frame(screen, displayed, catalog, cache, camera, presentation_ms / 1000,
                        show_grid=show_grid, show_debug=show_debug, mouse_position=None,
                        objective_lines=tuple(f"[{identity}] {reason}" for identity, reason in gaps[-8:]),
-                       extra_commands=commands,
+                       extra_commands=commands, animation_data=data, item_starts=item_starts,
                        world_transitions=playback.world_transitions, residue_reveals=playback.residue_reveals, deposited_materials=playback.deposited_materials,
                        revisions=(latest.reducer_cursor, latest.reducer_cursor, historical.reducer_cursor))
             ready = waiting_for_player and active is None and not pending and not paused

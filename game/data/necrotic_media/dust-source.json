@@ -1,0 +1,28 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/wall-spells-study/disintegrate-outcomes",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/disintegrate-outcomes-20261004",
+  "files": [
+    {
+      "path": "HANDOFF.md",
+      "bytes": 3590,
+      "sha256": "edddf38d689be5162fd6e39e02c944c95d4706fb1dea97dd0f1d7f095ec5e2e7"
+    },
+    {
+      "path": "DustOutcome.js",
+      "bytes": 2226,
+      "sha256": "ea2b4845d3990b47b6ca544d92463dfe571a75d923751406dc42be9db3b0c6cc"
+    },
+    {
+      "path": "DisintegrateBody.gdshader",
+      "bytes": 826,
+      "sha256": "42b292efed4cdfd1c580b6ed6be27cb40b58be451f2924e3d2eb93ae955abd49"
+    },
+    {
+      "path": "DustOutline.gd",
+      "bytes": 2696,
+      "sha256": "d5e4e162d9632461caf03672a6445d6f7337f413c44f81ecc04f6be8dcddc2f9"
+    }
+  ],
+  "operator": "game/body_effects.py:silhouette_dust",
+  "recipe": "game/data/silhouette-dust.json"
+}

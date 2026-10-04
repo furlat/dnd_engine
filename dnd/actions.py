@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from contextlib import nullcontext
 from types import MappingProxyType
 
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.base_actions import (
     ActionDiscoveryDescription,
     ActionCategory, ActionEvent, ActionOutcomeProfile, BaseAction, BaseCost,
@@ -20,13 +20,13 @@ from dnd.core.condition_types import ConditionRemovalTrigger, DurationType
 from dnd.core.modifiers import AdvantageModifier, AdvantageStatus
 
 from dnd.core.dice import  DiceRoll, AttackOutcome, RollType
-from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, SkillCheckEvent, SpatialChangeEvent, MovementTrajectory
+from dnd.core.events import RangeType, Event, EventQueue, EventType, Range, Damage, EventPhase, DamageRollPacket, DamageRollResultEvent, StepMovementEvent, ForcedMovementEvent, TakeDamageEvent, DamageAppliedEvent, SkillCheckEvent, SpatialChangeEvent, MovementTrajectory
 from dnd.types.abilities import AbilityName
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.summoning import SummonApplication
 from dnd.core.elevation import support_distance_feet
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
-from dnd.core.effect_types import EffectOrigin
+from dnd.core.effect_types import AntimagicException, EffectOrigin
 from dnd.core.action_types import RestrictedActionKind
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
@@ -73,7 +73,7 @@ from dnd.core.traversal_connectors import (
 )
 from dnd.core.creature_types import DamageType
 from dnd.core.gridmap import get_map
-from dnd.core.geometry import grid_distance_feet, position_in_sector
+from dnd.core.geometry import grid_distance_feet, position_in_sector, bresenham_line
 from dnd.core.aoe import (
     Sphere,
     Cone,
@@ -85,6 +85,7 @@ from dnd.core.aoe import (
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.naming import normalize_spell_id
 from dnd.core.base_block import BaseBlock, MovementMode, PreparedConditionApplication
+from dnd.types.event_facts import LandingKind
 from dnd.types.world import OccupancyLayer
 from dnd.core.base_block import LightLevel
 from dnd.action_timing import record_action_elapsed, record_action_timing
@@ -340,32 +341,107 @@ def resolve_paid_entry_retreats(source: Entity, *, since_cursor: int, parent_eve
     return bool(requests)
 
 
+def resolve_fall_damage(target: Entity, *, drop_feet: int, source_entity_uuid: UUID,
+                        parent_event: Event, knock_prone: bool = True) -> int:
+    """Resolve actual support loss through ordinary damage and condition owners."""
+    dice_count = min(20, max(0, drop_feet) // 10)
+    if not dice_count:
+        return 0
+    damage = Damage(name="Fall", source_entity_uuid=source_entity_uuid, target_entity_uuid=target.uuid, damage_dice=6, dice_numbers=dice_count,
+        damage_bonus=ModifiableValue.create(source_entity_uuid=source_entity_uuid, base_value=0), damage_type=DamageType.BLUDGEONING)
+    roll = damage.get_dice(AttackOutcome.HIT).roll
+    cursor = EventQueue.event_cursor()
+    target.receive_damage(roll.total, DamageType.BLUDGEONING,
+        source_entity_uuid=source_entity_uuid, damage_rolls=[roll], damages=[damage],
+        parent_event=parent_event.uuid, independent_resolution=True)
+    resolved = tuple(event for _, event in EventQueue.iter_events_since(cursor))
+    requests = {event.lineage_uuid for event in resolved
+        if isinstance(event, TakeDamageEvent) and event.parent_lineage == parent_event.lineage_uuid
+        and event.target_entity_uuid == target.uuid}
+    applied = sum(event.applied_damage for event in resolved
+        if isinstance(event, DamageAppliedEvent) and event.phase is EventPhase.COMPLETION
+        and event.parent_lineage in requests and event.target_entity_uuid == target.uuid)
+    if applied > 0 and knock_prone and target.health.life_state is not LifeState.DEAD:
+        target.add_condition(Prone(source_entity_uuid=source_entity_uuid,
+            target_entity_uuid=target.uuid), parent_event=parent_event)
+    return applied
+
+
 def commit_forced_movement(target: Entity, event: ForcedMovementEvent, *,
-                           parent_event: Event,
-                           stop_on_incapacitation: bool = False) -> ForcedMovementEvent:
-    """Commit an admitted straight push cell by cell, then settle entry responses."""
+                           parent_event: Event, stop_on_incapacitation: bool = False,
+                           on_landing: Callable[[ForcedMovementEvent], None] | None = None) -> ForcedMovementEvent:
+    """Commit admitted displacement, resolve contact once, then entry responses."""
     if event.canceled:
         return event
-    endpoint = event.start_position
-    moved_cells = 0
+    grid = get_map()
+    start = target.position
+    start_height = grid.get_support_elevation_feet(start)
+    endpoint = start
+    path = [start]
     interrupted = False
+    blocked, blocked_by = event.blocked_by_obstacle, event.blocked_by
+    kind = event.landing_kind
+    drop_feet = 0
     entry_cursor = EventQueue.event_cursor()
-    for _ in range(event.actual_distance // 5):
-        next_pos = (endpoint[0] + event.direction[0], endpoint[1] + event.direction[1])
-        entry_cursor = EventQueue.event_cursor()
-        Entity.update_entity_position(target, next_pos, parent_event=event.uuid)
-        endpoint = next_pos
-        moved_cells += 1
-        if (target.position != next_pos or stop_on_incapacitation and not target.can_take_actions()
-                or any(condition.get_paid_entry_retreat(since_cursor=entry_cursor) is not None
-                       for condition in target.active_conditions.values())):
-            interrupted = True
-            break
-    # This event describes the pushed leg. A nested relocation has its own
-    # endpoints; the enclosing action reports the actor's final position.
-    result = event.with_updates(end_position=endpoint, actual_distance=moved_cells * 5,
-        blocked_by_obstacle=False if interrupted else event.blocked_by_obstacle,
-        blocked_by=None if interrupted else event.blocked_by).phase_to(EventPhase.COMPLETION)
+    if kind in (LandingKind.CONTROLLED, LandingKind.IMPACT):
+        admitted = grid.admit_airborne_transfer(start, event.end_position, target.uuid)
+        if admitted is None:
+            return event.cancel(status_message="Landing is no longer available")
+        admitted_distance = max(0, min(event.actual_distance, event.intended_distance))
+        path = [start]
+        for position in admitted[1:]:
+            if support_distance_feet(start, start_height, position,
+                    grid.get_support_elevation_feet(position)) > admitted_distance:
+                break
+            path.append(position)
+        destination = path[-1]
+        if start != destination:
+            # AIR contact at the origin leaves ground effects; no intermediate
+            # ground cells are entered, and the destination is entered once.
+            Entity.update_entity_position(target, start, parent_event=event.uuid,
+                occupancy_layer=OccupancyLayer.AIR)
+            if target.position != start:
+                return event.cancel(status_message="Transfer interrupted before departure")
+            Entity.update_entity_position(target, destination, parent_event=event.uuid,
+                occupancy_layer=OccupancyLayer.GROUND)
+            endpoint = destination
+    else:
+        for _ in range(event.actual_distance // 5):
+            next_pos = (endpoint[0] + event.direction[0], endpoint[1] + event.direction[1])
+            admitted_kind = grid.admit_forced_step(endpoint, next_pos, target.uuid)
+            if admitted_kind is None:
+                blocked, blocked_by = True, grid.identify_blocker_at(next_pos, target.uuid)
+                break
+            entry_cursor = EventQueue.event_cursor()
+            departure_height = grid.get_support_elevation_feet(endpoint)
+            Entity.update_entity_position(target, next_pos, parent_event=event.uuid)
+            endpoint = next_pos
+            path.append(next_pos)
+            if admitted_kind is LandingKind.FALL:
+                kind = LandingKind.FALL
+                drop_feet = max(0, departure_height - grid.get_support_elevation_feet(endpoint))
+                break
+            if (target.position != next_pos or stop_on_incapacitation and not target.can_take_actions()
+                    or any(condition.get_paid_entry_retreat(since_cursor=entry_cursor) is not None
+                           for condition in target.active_conditions.values())):
+                interrupted = True
+                break
+    end_height = grid.get_support_elevation_feet(endpoint)
+    finite_transfer = kind in (LandingKind.CONTROLLED, LandingKind.IMPACT)
+    result = event.with_updates(start_position=start, end_position=endpoint,
+        actual_distance=(support_distance_feet(start, start_height, endpoint, end_height)
+                         if finite_transfer else (len(path) - 1) * 5), disclosed_path=tuple(path),
+        start_elevation_feet=start_height, end_elevation_feet=end_height,
+        drop_feet=max(0, start_height - end_height) if finite_transfer else drop_feet, landing_kind=kind,
+        blocked_by_obstacle=False if interrupted else blocked,
+        blocked_by=None if interrupted else blocked_by)
+    if endpoint != start:
+        if on_landing is not None:
+            on_landing(result)
+        elif kind is LandingKind.FALL:
+            resolve_fall_damage(target, drop_feet=result.drop_feet,
+                source_entity_uuid=event.source_entity_uuid or target.uuid, parent_event=result)
+    result = result.phase_to(EventPhase.COMPLETION)
     resolve_paid_entry_retreats(target, since_cursor=entry_cursor, parent_event=parent_event)
     return result
 
@@ -1900,6 +1976,9 @@ class Attack(BaseAction):
     name: str = Field(default="Attack", description="Human-readable attack action name.")
     description: str = Field(default="Attack a target", description="Attack action description.")
     target_type: TargetType = Field(default=TargetType.CREATURE_OR_OBJECT, description="Attack targets one entity.")
+    # Attack may strike an invulnerable target. Its ordinary targetability,
+    # sight and reach checks still apply; HP only determines damage response.
+    object_target_policy: Literal["damageable", "active"] = "active"
     weapon_slot: WeaponSlot = Field(description="Weapon slot used by the attack.")
     action_category: ActionCategory = Field(default=ActionCategory.ATTACK, description="Attack action category.")
     restricted_action_kinds: ClassVar[frozenset[RestrictedActionKind]] = (
@@ -1975,6 +2054,8 @@ class Attack(BaseAction):
             return profile
         extra_damage_rolls: list[DamageRollProfile] = []
         for condition in actor.active_conditions.values():
+            if not condition.contributions_active():
+                continue
             for damage_profile in condition.get_action_damage_roll_profiles(self, actor):
                 if isinstance(damage_profile, DamageRollProfile):
                     extra_damage_rolls.append(damage_profile)
@@ -2042,7 +2123,7 @@ class Attack(BaseAction):
 
         target_position = target_entity.position
         if isinstance(target_entity, BaseItem):
-            if not target_entity.is_active or not target_entity.is_targetable or not target_entity.is_breakable():
+            if not target_entity.is_active or not target_entity.is_targetable:
                 return declaration_event.cancel(status_message="Object cannot be attacked")
             contact = get_map().attack_object_contact(source_entity_uuid, target_entity.uuid,
                 range_feet=weapon_range.long or weapon_range.normal,
@@ -2171,7 +2252,20 @@ class Attack(BaseAction):
             source_entity_uuid = source_entity.uuid
             started = time.perf_counter()
             override_ability = execution_event.override_ability
+            weapon = None if execution_event.natural_weapon else source_entity.equipment.get_weapon(weapon_slot)
+            item_suppressions = (SpellProtectionRegistry.get_antimagic_suppressions(set(bresenham_line(
+                source_entity.position, execution_event.target_position or target_entity.position)))
+                if weapon is not None and weapon.antimagic_exception is None else ())
+            if item_suppressions and weapon is not None:
+                override_ability = source_entity.equipment._select_weapon_attack_ability(
+                    source_entity.ability_scores, weapon, override_ability, magical_properties_active=False).name
+                execution_event = execution_event.with_updates(attack_is_magical=False,
+                    item_magic_suppression_provider_uuids=tuple(row.provider_uuid for row in item_suppressions))
             attack_bonus = source_entity.attack_bonus(weapon_slot=weapon_slot, target_entity_uuid=target_entity_uuid, override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
+            if item_suppressions and weapon is not None and weapon.is_magical:
+                modifier = weapon.attack_bonus.get_base_modifier()
+                if modifier is not None:
+                    attack_bonus.remove_modifier(modifier.uuid)
             ac = (target_entity.ac_bonus(source_entity.uuid) if isinstance(target_entity, Entity)
                   else ModifiableValue.create(source_entity_uuid=target_entity.uuid,
                       target_entity_uuid=source_entity.uuid, base_value=target_entity.armor_class, value_name="Object AC"))
@@ -2301,6 +2395,16 @@ class Attack(BaseAction):
 
             started = time.perf_counter()
             damages = source_entity.get_damages(weapon_slot, target_entity_uuid, override_ability=override_ability, natural_weapon=execution_event.natural_weapon)
+            if item_suppressions and weapon is not None:
+                if damages:
+                    damages[0].damage_dice = weapon.damage_dice
+                if weapon.is_magical:
+                    extra_bonus_ids = {value.uuid for value in weapon.extra_damage_bonus}
+                    damages = [damage for damage in damages if damage.damage_bonus is None
+                        or damage.damage_bonus.uuid not in extra_bonus_ids]
+                    modifier = weapon.damage_bonus.get_base_modifier() if weapon.damage_bonus is not None else None
+                    if modifier is not None and damages and damages[0].damage_bonus is not None:
+                        damages[0].damage_bonus.remove_modifier(modifier.uuid)
             damages.extend(execution_event.additional_damages)
             record_action_timing("attack.get_damages_ms", started)
             started = time.perf_counter()
@@ -2420,7 +2524,7 @@ class Attack(BaseAction):
         grid = get_map()
         if isinstance(target, BaseItem):
             limit = (event.range.long or event.range.normal) if event.range else 5
-            return target.is_active and target.is_targetable and target.is_breakable() and grid.attack_object_contact(
+            return target.is_active and target.is_targetable and grid.attack_object_contact(
                 source.uuid, target.uuid, range_feet=limit, access=access) is not None
         return grid.can_reach_between(source.position, target.position, access, source.uuid)
 
@@ -3613,6 +3717,9 @@ class Jump(BaseAction):
                         source_entity, to_pos, parent_event=processed_step.uuid,
                         occupancy_layer=OccupancyLayer.GROUND,
                     )
+                    resolve_fall_damage(source_entity,
+                        drop_feet=execution_event.start_elevation_feet - grid.get_support_elevation_feet(to_pos),
+                        source_entity_uuid=source_entity.uuid, parent_event=processed_step)
                 actual_end_position = source_entity.position
                 traversed_path.append(to_pos)
 
@@ -3635,10 +3742,14 @@ class Jump(BaseAction):
             # airborne cell entries are never reinterpreted as ground contact.
             if source_entity.occupancy_layer is OccupancyLayer.AIR:
                 settlement_cursor = EventQueue.event_cursor()
+                landing_position = source_entity.position
                 Entity.update_entity_position(
-                    source_entity, source_entity.position, parent_event=effect_event.uuid,
+                    source_entity, landing_position, parent_event=effect_event.uuid,
                     occupancy_layer=OccupancyLayer.GROUND,
                 )
+                resolve_fall_damage(source_entity,
+                    drop_feet=execution_event.start_elevation_feet - grid.get_support_elevation_feet(landing_position),
+                    source_entity_uuid=source_entity.uuid, parent_event=effect_event)
                 if resolve_paid_entry_retreats(source_entity, since_cursor=settlement_cursor, parent_event=effect_event):
                     interrupted_by_condition = True
             actual_end_position = source_entity.position
@@ -3931,13 +4042,16 @@ class Shove(BaseAction):
         for _ in range(cells_to_move):
             next_pos = (current[0] + direction[0], current[1] + direction[1])
 
-            if not grid.can_transition(current, next_pos, target_uuid):
+            landing = grid.admit_forced_step(current, next_pos, target_uuid)
+            if landing is None:
                 blocked = True
                 blocked_by = grid.identify_blocker_at(next_pos, target_uuid)
                 break
 
             current = next_pos
             actual_cells += 1
+            if landing is LandingKind.FALL:
+                break
 
         return current, actual_cells * 5, blocked, blocked_by
 
@@ -4163,14 +4277,20 @@ class SpellEvent(ActionEvent):
     projectile_type: Optional[str] = Field(default=None, description="Visual projectile delivery type")
     damage_types: List[DamageType] = Field(default_factory=list, description="Damage types for VFX (populated at declaration, updated on hit)")
 
+    retained_effect_origin: EffectOrigin | None = None
+    antimagic_exception: AntimagicException | None = None
+
     def to_effect_origin(self) -> EffectOrigin:
         """Return dependency-neutral provenance for a persistent spell effect."""
+        if self.retained_effect_origin is not None:
+            return self.retained_effect_origin
         return EffectOrigin.spell(
             source_id=self.spell_id,
             source_event_lineage_uuid=str(self.lineage_uuid),
             source_position=self.effect_source_position or self.source_position,
             base_spell_level=self.spell_level,
             effective_spell_level=self.cast_at_level,
+            antimagic_exception=self.antimagic_exception,
         )
 
     def get_effect_origin(self) -> EffectOrigin:
@@ -4562,6 +4682,8 @@ class SpellAction(BaseAction):
     """
 
     action_category: ActionCategory = Field(default=ActionCategory.SPELL, description="Classifies this action as a spell.")
+
+    antimagic_exception: AntimagicException | None = None
 
     spell_level: int = Field(default=0, description="Base spell level (0 = cantrip)")
     spell_school: str = Field(default="evocation", description="School of magic")
@@ -5345,8 +5467,10 @@ class SpellAction(BaseAction):
                     target_entity.uuid, range_feet=self.effective_range, access=access,
                     subjective=True, origin=self.get_target_origin())
         event = SpellEvent(
+            event_type=EventType.CAST_SPELL if self.is_spell else EventType.BASE_ACTION,
             target_kind="object" if isinstance(target_entity, BaseItem) else "creature",
-            target_position=contact if isinstance(target_entity, BaseItem) else (target_entity.position if target_entity else None),
+            target_position=(self.end_position if self.effective_target_type is TargetType.POSITION
+                else contact if isinstance(target_entity, BaseItem) else target_entity.position if target_entity else None),
             target_base_height_steps=placement.base_height_steps if placement else None,
             name=f"{self.name}",
             spell_id=normalize_spell_id(self.name or ""),
@@ -5365,6 +5489,7 @@ class SpellAction(BaseAction):
             cast_at_level=self.cast_at_level,
             spell_school=self.spell_school,
             verbal=self.verbal,
+            antimagic_exception=self.antimagic_exception,
             cast_origin=self.cast_origin,
             effect_source_position=self.get_target_origin(),
             area_propagation=self.aoe_shape.propagation if self.aoe_shape is not None else "line_of_effect",

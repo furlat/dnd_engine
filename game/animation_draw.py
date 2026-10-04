@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from math import ceil, cos, degrees, floor, hypot, pi, sin, sqrt
 from types import MappingProxyType
 from typing import Literal, Mapping, NamedTuple, Sequence
+from uuid import UUID
 
 import numpy as np
 import pygame
@@ -18,17 +19,19 @@ import pygame
 from dnd.core.life_types import LifeState
 from dnd.core.events import WorldTileState
 from game.animation import (
-    ActorContact, ObjectContact, BodySample, CastSample, CastTimeline, GeometryProjectileSample, NumberSample, feedback_identity, cast_actor_contacts,
+    pose_attachment_anchors, ActorContact, ObjectContact, BodySample, CastSample, CastTimeline, GeometryProjectileSample, NumberSample, feedback_identity, cast_actor_contacts,
     ProjectileSample, body_clip, body_elevation_steps, body_rig, project_geometry_projectile, project_projectile,
     projectile_registration, projectile_phase_scale, projectile_contact, view_facing, cast_deliveries, actor_rest_pose, death_body_context,
 )
-from game.animation_types import AnimationData, BodyRig, DepthMode, ElementColors, Facing8, PaletteTreatment, ParticleMediaAsset, StudioActorLayer, RigLayer as RigLayer
+from game.animation_types import AnimationData, BodyRig, DepthMode, ElementColors, Facing8, ItemAttachmentStart, PaletteTreatment, ParticleMediaAsset, StudioActorLayer, RigLayer as RigLayer
 from game.action_media import ActionStripCue, ActionStripSample
 from game.attack import AttackSample, AttackTimeline, attack_actor_contacts, attack_projectile_contact, project_attack_projectile
+from game.weapon_trail_media import weapon_trail_draw_commands
 from game.condition_animation import ConditionAppearance, ConditionRigLayer, condition_body_pose, condition_contact
 from game.condition_types import ConditionAppearanceLayer, ConditionLiveCopies
 from game.item_effects import item_material
-from game.body_effects import distort_body, ghost_body, reveal_body
+from game.item_draw import compose_item_attachments
+from game.body_effects import distort_body, ghost_body, reveal_body, silhouette_dust, absence_silhouette
 from game.body_pose_types import BodyTrailPose
 from game.condition_draw import (CONDITION_BODY_SLOTS, compose_condition_layers, condition_body_color,
     condition_body_ramp, blend_body_ramp, condition_body_outline)
@@ -40,6 +43,8 @@ from game.particle_media import sample_particles, sample_vapor
 from game.blood_draw import blood_particle_image
 from game.area_media import AreaSolid, AreaLayer, AreaMedia, mask_ground_area
 from game.draw_commands import DrawCommand as AnimationDrawCommand
+from game.media_blend import SCREEN_BLEND, blit_media
+from game.directed_media import directed_draw_commands, preload_directed_media
 from game.registered_media import registered_media_samples
 from game.device_draw import device_draw_command
 from dnd.types.world_placement import WorldObjectPlacement
@@ -185,6 +190,10 @@ def _colored(frame: pygame.Surface, tint: int, source_hue: float | None = None) 
 
 
 def _cast_row_key(layer: StudioActorLayer) -> str:
+    if layer.colors.source == "auto":
+        if layer.palette is None:
+            raise ValueError("automatic cast palette must be resolved from its spell before loading")
+        return f"cast:auto:{layer.sourceSheet or layer.category}:{layer.palette.model_dump_json()}"
     return layer.sourceSheet or f"cast:{layer.category}:{layer.colors.primary}:{layer.colors.secondary}"
 
 
@@ -204,7 +213,11 @@ def load_cast_rows(data: AnimationData, contact: ActorContact, clip_name: str,
         sheet = pygame.image.load(data.resources[layer.sourceSheet or clip.sheets[layer.category]]).convert_alpha()
         for row in missing:
             image = sheet.subsurface((0, row * rig.cell_height, clip.frames * rig.cell_width, rig.cell_height)).copy()
-            if layer.sourceSheet is None:
+            if layer.colors.source == "auto":
+                assert layer.palette is not None  # validated by the row key above
+                image = recolor_palette(image, layer.palette,
+                    cell_size=(rig.cell_width, rig.cell_height))
+            elif layer.sourceSheet is None:
                 image = _colored(image, layer.colors.primary, data.vfx_source_hues.get(layer.category))
                 if layer.category == "Magic3" and layer.colors.secondary is not None:
                     rgb = pygame.surfarray.pixels3d(image)
@@ -333,6 +346,7 @@ def load_animation_media(timeline: CastTimeline,
                          area_supports: tuple[WorldTileState, ...] = ()) -> AnimationMedia:
     """Load selected media, reusing the session's existing body rows."""
     data, source, cast = timeline.data, timeline.source, timeline.recipe.cast
+    preload_directed_media(timeline)
     projectile = timeline.recipe.projectile
     if projectile is not None and projectile.sprite is not None and projectile.sprite.blendMode == "screen":
         raise ValueError("screen blend requires a separate pixel parity proof")
@@ -359,9 +373,8 @@ def load_animation_media(timeline: CastTimeline,
     for layer in (cast.weaponGlow, cast.aura, *(cast.effects or ()), cast.slash):
         if layer is None or not layer.enabled or layer.hidden:
             continue
-        # This selected media cut uses the source colored-VFX path (Magic2).
-        # Other palette policies need their own pixel proof before admission.
-        if layer.sourceSheet is None and (layer.category not in data.vfx_source_hues or layer.category in {"Effect2", "Effect4", "Buff9"}):
+        # Legacy overrides without an isolated export still require a supported source policy.
+        if layer.colors.source == "override" and layer.sourceSheet is None and (layer.category not in data.vfx_source_hues or layer.category in {"Effect2", "Effect4", "Buff9"}):
             raise ValueError(f"cast-layer color policy has no selected pixel proof: {layer.category}")
         if layer.category not in caster_rig.slot_categories.get(layer.slot, ()):
             raise ValueError(f"cast layer is unavailable on rig: {source.caster.rig_id}/{layer.slot}/{layer.category}")
@@ -402,7 +415,9 @@ def load_animation_media(timeline: CastTimeline,
                                bold=data.number_style.fontWeight == "bold")
     return AnimationMedia(MappingProxyType(dict(appearances)), loaded_rows,
                           MappingProxyType(projectile_rows), font,
-                          AreaMedia(area_boundaries, area_solids, area_supports) if timeline.source.ground_target is not None else None)
+                          AreaMedia(area_boundaries, area_solids, area_supports,
+                                    admitted=timeline.source.resolved_area_positions)
+                          if timeline.source.ground_target is not None else None)
 
 
 def _appearance_material(image: pygame.Surface, layer: ConditionAppearanceLayer,
@@ -520,11 +535,16 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             if (layer is not None and overlay is None and flash is None
                     and layer.item_uuid is not None):
                 colored = item_material(frame, layer.item_effects, slot, data.condition_recipes,
-                                        category=category, base_tint=tint)
+                    category=category, base_tint=tint,
+                    owned_modifiers=tuple(row.modifier for row in condition.item_modifiers
+                        if row.item_uuid == layer.item_uuid) if condition is not None else (),
+                    time_ms=condition.time_ms if condition is not None else 0.)
             if (flash is None and condition is not None and condition.body_color is not None
                     and slot in CONDITION_BODY_SLOTS):
                 colored = condition_body_color(colored, condition.body_color)
-        result.blit(colored, (0, 0))
+        blend = (SCREEN_BLEND if overlay is not None and overlay.blendMode == "screen" else
+                 pygame.BLEND_RGB_ADD if overlay is not None and overlay.blendMode == "add" else 0)
+        blit_media(result, colored, (0, 0), blend)
     if treatment is not None:
         noise = palette_noise(data.resources[treatment.noiseSheet]) if treatment.noiseSheet else None
         colored_row = retain_palette(key, recolor_palette(result, treatment, noise=noise,
@@ -546,9 +566,17 @@ def _ramp_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
     material_layers = tuple(layer for layer in appearance if layer.slot in CONDITION_BODY_SLOTS)
     material_body = replace(body, cast_layers=tuple(layer for layer in body.cast_layers if layer.slot in CONDITION_BODY_SLOTS))
     plain_condition = replace(condition, body_ramp=None)
+    if ramp.mapping in {"bark_texture", "flowing_film"}:
+        assert ramp.texture is not None
+        original = _body_image(material_body, contact, material_layers, body_rows, data, None,
+            only_shadow=False, condition=plain_condition)
+        return condition_body_ramp(original, ramp, texture=palette_noise(data.resources[ramp.texture]),
+            cell_size=(rig.cell_width, rig.cell_height), strength=condition.ramp_strength,
+            age_ms=condition.ramp_age_ms)
+    plain_condition = replace(plain_condition, item_modifiers=())
     key = ("condition-ramp", data.media_root, contact.rig_id, body.clip, body.facing, material_layers,
            body.hide_weapon, body.hidden_slots, material_body.cast_layers, condition.body_color,
-           ramp.colors, ramp.mapping, ramp.gain, condition.rig_layers)
+           ramp.colors, ramp.mapping, ramp.gain, ramp.texture, ramp.textureRepeats, ramp.textureWeight, condition.rig_layers)
     row = cached_palette(key)
     if row is None:
         frames = body_clip(data, contact, body.clip).frames
@@ -556,7 +584,9 @@ def _ramp_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
         for frame in range(frames):
             source.blit(_body_image(replace(material_body, frame=frame), contact, material_layers,
                 body_rows, data, None, only_shadow=False, condition=plain_condition), (frame * rig.cell_width, 0))
-        row = retain_palette(key, condition_body_ramp(source, ramp))
+        row = retain_palette(key, condition_body_ramp(source, ramp,
+            texture=palette_noise(data.resources[ramp.texture]) if ramp.texture is not None else None,
+            cell_size=(rig.cell_width, rig.cell_height)))
     mapped = row.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
     if condition.ramp_strength >= 1.:
         return mapped
@@ -579,28 +609,6 @@ def _reference_actor_depth(grid: tuple[float, float], actor_uuid: str) -> float:
     return sum(grid) * 1024 + 120 + hashed % 1000 / 1000
 
 
-def pose_attachment_anchors(rig: BodyRig, viewed_body: BodySample,
-                            ground: tuple[float, float], scale: float, scale_x: float,
-                            ) -> dict[str, tuple[float, float]]:
-    """Project authored cell points from the actual viewed clip and body frame.
-
-    An unmeasured rig or clip provides no socket; it never borrows a standing
-    pose. These points are independent of projectile torso/rest registration.
-    """
-    result = {}
-    for name, clips in rig.pose_sockets.items():
-        rows = clips.get(viewed_body.clip)
-        if rows is None:
-            continue
-        point = rows[viewed_body.facing][viewed_body.frame]
-        if point is None:
-            continue
-        result[name] = (
-            ground[0] + (point.x - rig.cell_width / 2) * scale * scale_x,
-            ground[1] + (point.y - rig.cell_height + rig.origin_y_from_ground) * scale,
-        )
-    return result
-
 
 def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLayer, ...], body_rows: BodyRows,
                 data: AnimationData, camera: Camera, flash: int | PaletteTreatment | None,
@@ -610,6 +618,9 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
                 copy_recipe: ConditionLiveCopies | None = None, copy_slot: int = 0,
                 body_opacity: float = 1.,
                 coverage: float = 1.,
+                dust_elapsed_ms: float | None = None, dust_seed: int = 1,
+                item_starts: Mapping[UUID, ItemAttachmentStart] = MappingProxyType({}),
+                presentation_ms: float = 0.,
                 ) -> tuple[pygame.Surface, tuple[int, int]]:
     material = data.body_materials.get(contact.manifestation) if contact.manifestation is not None else None
     if material is not None and only_shadow is not True:
@@ -625,6 +636,19 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
     viewed_body = replace(body, facing=view_facing(body.facing, camera.quadrant, data))
     image = _body_image(viewed_body, contact, appearance, body_rows, data, flash,
                         only_shadow=only_shadow, condition=condition)
+    if condition is not None and only_shadow is not True:
+        for sample in condition.finite_materials:
+            ramp = sample.material
+            image = condition_body_ramp(image, ramp,
+                texture=palette_noise(data.resources[ramp.texture]) if ramp.texture is not None else None,
+                normal_texture=palette_noise(data.resources[ramp.normalTexture]) if ramp.normalTexture is not None else None,
+                cell_size=(rig.cell_width, rig.cell_height), strength=sample.strength, pulse=sample.pulse, age_ms=sample.age_ms)
+    if condition is not None and condition.absence is not None:
+        if only_shadow:
+            image = reveal_body(image,0.)
+        else:
+            sample=condition.absence
+            image=absence_silhouette(image,sample.recipe,sample.progress,sample.opacity)
     if ghost is not None:
         image = ghost_body(image, *ghost, copies=copy_recipe,
                            time_ms=condition.time_ms if condition else 0., slot=copy_slot)
@@ -632,6 +656,16 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
         image, _ = distort_body(image, condition.distortion, condition.time_ms, condition.distortion_strength)
     if coverage != 1.:
         image = reveal_body(image, coverage)
+    dust_padding = 0
+    if dust_elapsed_ms is not None:
+        recipe = data.death_context.silhouetteDust
+        if recipe is None:
+            raise ValueError("Disintegrated remains require authored silhouette dust")
+        if only_shadow:
+            image = reveal_body(image, max(0., 1-dust_elapsed_ms/recipe.erosionMs))
+        else:
+            image, offset = silhouette_dust(image, recipe, dust_elapsed_ms, dust_seed)
+            dust_padding = -offset[1]
     if body_opacity != 1.:
         image = image.copy()
         alpha = pygame.surfarray.pixels_alpha(image)
@@ -644,7 +678,8 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
     # The support shadow is drawn separately and never receives this squash.
     root_y = ground[1] + (rig.origin_y_from_ground * body_scale[1]
                          - body.scale_anchor_height_px * (1 - body_scale[1])) * scale
-    destination = (round(ground[0] - image.width / 2), round(root_y - image.height))
+    destination = (round(ground[0] - image.width / 2),
+                   round(root_y - image.height + dust_padding * scale * body_scale[1]))
     registration = (0.0, 0.0)
     if not only_shadow and body.registration_socket is not None:
         poses = rig.pose_sockets.get(body.registration_socket, {}).get(body.clip)
@@ -660,6 +695,31 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
                       * scale * body_scale[1] * body.registration_weight,
             )
             destination = (round(destination[0] + registration[0]), round(destination[1] + registration[1]))
+    attachments = []
+    if not only_shadow and ghost is None:
+        item_bounds: dict[UUID, pygame.Rect] = {}
+        item_effects = {}
+        hidden = set(body.hidden_slots) | {layer.slot for layer in body.cast_layers}
+        if body.hide_weapon:
+            hidden.add("weapon")
+        for layer in appearance:
+            if (layer.item_uuid is None or layer.slot in hidden or layer.suppression_provider_uuids
+                    or not any(effect.behavior_id in data.item_attachments for effect in layer.item_effects)):
+                continue
+            row = body_rows[contact.rig_id, body.clip, layer.category, rig.facing_rows[viewed_body.facing]]
+            frame = row.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
+            box = frame.get_bounding_rect(min_alpha=1)
+            if not box:
+                continue
+            if layer.item_uuid in item_bounds:
+                item_bounds[layer.item_uuid].union_ip(box)
+            else:
+                item_bounds[layer.item_uuid] = box
+                item_effects[layer.item_uuid] = layer.item_effects
+        for identity, box in item_bounds.items():
+            anchor = (destination[0] + box.centerx * scale * contact.visual_scale_x * body_scale[0],
+                      destination[1] + box.centery * scale * body_scale[1])
+            attachments.append((item_effects[identity], anchor))
     if condition is not None:
         if condition.body_outline is not None and not only_shadow:
             image.blit(condition_body_outline(image, condition.body_outline, condition.outline_age_ms,
@@ -675,6 +735,11 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
                      - body.scale_anchor_height_px * (1 - body_scale[1]) * scale),
                     scale * body_scale[1], contact.visual_scale_x * body_scale[0] / body_scale[1]),
                 life_state=contact.life_state)
+    if attachments:
+        image, destination = compose_item_attachments(image, destination, data, tuple(attachments),
+            facing=view_facing("E", camera.quadrant, data), scale=scale,
+            time_ms=presentation_ms, starts=item_starts)
+    if condition is not None:
         image.set_alpha(round(condition.alpha * 255))
     return image, destination
 
@@ -845,10 +910,15 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
                         layers: tuple[RigLayer, ...], body_rows: BodyRows, camera: Camera,
                         *, flash: int | PaletteTreatment | None = None,
                         condition: ConditionAppearance | None = None,
-                        coverage: float = 1.) -> tuple[AnimationDrawCommand, ...]:
+                        coverage: float = 1.,
+                        dust_elapsed_ms: float | None = None, dust_seed: int = 1,
+                        item_starts: Mapping[UUID, ItemAttachmentStart] = MappingProxyType({}),
+                        presentation_ms: float = 0.) -> tuple[AnimationDrawCommand, ...]:
     """Compose one explicitly sampled actor using the map's shared painter."""
     contact = condition_contact(contact, condition)
     body = condition_body_pose(data, body, contact, condition)
+    if dust_elapsed_ms is not None and condition is not None:
+        condition = replace(condition, layers=(), body_outline=None, live_copies=None)
     commands: list[AnimationDrawCommand] = []
     for shadow in (True, False):
         if shadow and not any(layer.slot == "shadow" for layer in layers):
@@ -857,7 +927,8 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
         height = contact.elevation_steps if shadow else body_elevation_steps(contact, data)
         image, destination = _actor_blit(
             body, contact, layers, body_rows, data, camera, flash, only_shadow=shadow,
-            coverage=coverage,
+            coverage=coverage, dust_elapsed_ms=dust_elapsed_ms, dust_seed=dust_seed,
+            item_starts=item_starts, presentation_ms=presentation_ms,
             condition=(replace(condition, alpha=condition.alpha * (
                 1 - condition.distortion_strength * (1 - condition.distortion.bodyOpacity)))
                        if condition is not None and condition.distortion is not None and not shadow else condition),
@@ -934,6 +1005,8 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
                             include_bodies: bool = True,
                             actor_bounds: Mapping[str, pygame.Rect] | None = None,
                             projectile_coverage: pygame.Surface | None = None,
+                            body_samples: Mapping[str, BodySample] | None = None,
+                            actor_contacts: Mapping[str, ActorContact] | None = None,
                             ) -> tuple[AnimationDrawCommand, ...]:
     """Join sampled actors and effects to the map's existing painter ordering."""
     data, source = timeline.data, timeline.source
@@ -1018,7 +1091,9 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
             ))
     if sample.delivery_enabled:
         commands.extend(cast_media_draw_commands(timeline, sample, camera, media.area, media.projectile_rows,
-            actor_bounds=actor_screen_bounds(commands) if actor_bounds is None else actor_bounds))
+            actor_bounds=actor_screen_bounds(commands) if actor_bounds is None else actor_bounds,
+            body_samples=body_samples, actor_contacts=actor_contacts))
+        commands.extend(directed_draw_commands(timeline, sample, camera, media.area))
     commands.extend(number_draw_commands(data, sample.numbers, feedback_contacts, media.font, camera))
     return tuple(commands)
 
@@ -1134,7 +1209,8 @@ def attack_draw_commands(timeline: AttackTimeline, sample: AttackSample,
             timeline.projectile.recipe.depthMode, timeline.root_event_uuid, camera,
         ) for reference in sample.projectiles
           for effect in (project_attack_projectile(timeline, reference, camera.quadrant),))
-    return (*commands, *projectile_commands, *number_draw_commands(timeline.data, sample.numbers,
+    return (*commands, *projectile_commands, *weapon_trail_draw_commands(timeline, sample.elapsed_ms, camera),
+        *number_draw_commands(timeline.data, sample.numbers,
             {**contacts, feedback_identity(timeline.target): timeline.target}, font, camera, badge_font=badge_font))
 
 
@@ -1143,7 +1219,7 @@ def draw_animation(surface: pygame.Surface, timeline: CastTimeline, sample: Cast
     """Keep the detached source-stage ordering using the shared image builders."""
     if timeline.recipe.media:
         for command in sorted(animation_draw_commands(timeline, sample, media, camera), key=lambda row: row.key):
-            surface.blit(command.surface, command.destination, special_flags=command.blend)
+            blit_media(surface, command.surface, command.destination, command.blend)
         return
     data, source = timeline.data, timeline.source
     contacts = {contact.actor_uuid: contact for contact in cast_actor_contacts(source)}

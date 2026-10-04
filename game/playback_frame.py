@@ -14,16 +14,17 @@ import pygame
 from dnd.core.life_types import LifeState
 from dnd.core.item_types import ItemIntegrity
 
-from game.animation import ActorContact, NumberSample, feedback_identity
+from game.animation import BodySample, ActorContact, NumberSample, feedback_identity, body_rig, body_elevation_steps, view_facing
 from game.animation_draw import (
     AnimationDrawCommand, BodyRows, actor_draw_commands, actor_screen_bounds,
     arrange_feedback_commands, number_draw_commands,
-    body_trail_draw_command,
+    body_trail_draw_command, pose_attachment_anchors,
 )
 from game.animation_types import AnimationData, Facing8
 from game.choreography import BoundChoreography
 from game.choreography_draw import ChoreographyMedia, choreography_draw_commands
-from game.condition_animation import condition_transition_appearances, resolve_condition_appearance
+from game.directed_media import directed_source_layer_replacements
+from game.condition_animation import condition_body_pose, condition_transition_appearances, resolve_condition_appearance
 from game.condition_media_lifetime import ConditionMediaLifetime, extra_media_members, sample_condition_lifetimes
 from game.condition_types import Activity
 from game.attack import BoundAttack
@@ -31,7 +32,7 @@ from game.feedback import FeedbackTrack, sample_feedback
 from game.motion import MotionTimeline
 from game.motion_media import MotionMediaCue, motion_media_draw_commands
 from game.player_facts import PlayerState
-from game.projection import Camera
+from game.projection import Camera, TILE_WIDTH, project_screen
 from game.scene import SceneActor
 from game.visual_position import VisualPosition
 from game.residue_media import ResidueRevealSample, sample_residue_reveals
@@ -39,8 +40,15 @@ from game.world_animation import WorldTransitionSample, sample_world_transitions
 from game.device_art import DeviceEmission, device_bank
 from game.device_draw import device_draw_command, device_wreck_draw_command
 from game.combat import BoundCast
+from game.cast_media import sample_cast_body_materials
+from game.finite_material import sample_material_track
+from game.component_particles import intake_commands, rising_mote_commands
+from game.spatial_response import spatial_response_draw_commands
+from game.forced_movement import sample_displacement_layers
 from game.spatial_media_draw import spatial_media_draw_commands
 from game.spatial_media_lifetime import SpatialMediaLifetime
+from game.animation_types import ItemAttachmentStart
+from game.item_draw import item_ground_commands
 from game.construction_media import ConstructionMediaLifetime, construction_media_draw_commands
 from game.concentration_media import ConcentrationMediaLifetime, concentration_media_draw_commands
 from game.portal_draw import portal_draw_commands, clip_portal_bodies
@@ -48,6 +56,7 @@ from game.deposit_media import observed_deposits
 from game.deposit_draw import deposit_draw_commands
 from game.body_presentation import sample_body_presentation
 from game.body_history import BodyHistoryHead, sample_body_trails
+from game.absence_media import absence_poses, absence_draw_commands
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +83,7 @@ def sample_playback_frame(
     motion_media: Sequence[MotionMediaCue] = (),
     condition_lifetimes: Mapping[UUID, ConditionMediaLifetime] = MappingProxyType({}),
     spatial_lifetimes: Mapping[UUID, SpatialMediaLifetime] = MappingProxyType({}),
+    item_starts: Mapping[UUID, ItemAttachmentStart] = MappingProxyType({}),
     construction_lifetimes: Mapping[UUID, ConstructionMediaLifetime] = MappingProxyType({}),
     concentration_lifetimes: Mapping[UUID, ConcentrationMediaLifetime] = MappingProxyType({}),
     deposit_starts: Mapping[UUID, float] = MappingProxyType({}),
@@ -136,18 +146,81 @@ def sample_playback_frame(
                              for identity, appearance in condition_appearances.items()}
     if group is not None and group_sample is not None:
         condition_appearances = condition_transition_appearances(group.conditions, group_elapsed, condition_appearances)
-    for pose in body_frame.poses:
+    if group is not None:
+        for cue in group.forced_movement:
+            appearance = condition_appearances.get(cue.actor.actor_uuid)
+            if appearance is not None:
+                condition_appearances[cue.actor.actor_uuid] = replace(appearance,
+                    layers=(*appearance.layers, *sample_displacement_layers(cue, group_elapsed)))
+        for node in group.nodes:
+            if isinstance(node.bound, BoundCast):
+                replaced = directed_source_layer_replacements(node.bound.timeline, group_elapsed-node.start_ms)
+                source_id = node.bound.timeline.source.caster.actor_uuid
+                appearance = condition_appearances.get(source_id)
+                if replaced and appearance is not None:
+                    condition_appearances[source_id] = replace(appearance,
+                        layers=tuple(layer for layer in appearance.layers if layer.layer.assetId not in replaced))
+                for identity, material in sample_cast_body_materials(node.bound.timeline, group_elapsed - node.start_ms):
+                    appearance = condition_appearances.get(identity)
+                    if appearance is not None:
+                        condition_appearances[identity] = replace(appearance,
+                            finite_materials=(*appearance.finite_materials, material))
+    if group is not None:
+        for cue in group.finite_materials:
+            material = sample_material_track(cue.track, group_elapsed-cue.start_ms)
+            appearance = condition_appearances.get(cue.actor_uuid)
+            if material is not None and appearance is not None:
+                condition_appearances[cue.actor_uuid] = replace(appearance,
+                    finite_materials=(*appearance.finite_materials, material))
+        extra = (*extra, *spatial_response_draw_commands(group.spatial_responses, group_elapsed, camera))
+    poses=absence_poses(body_frame.poses,displayed,condition_lifetimes,data,presentation_ms)
+    extra=(*extra,*absence_draw_commands(displayed,condition_lifetimes,data,presentation_ms,camera))
+    body_samples: dict[str, BodySample] = {}
+    actor_contacts: dict[str, ActorContact] = {}
+    for pose in poses:
         actor, body = pose.actor, pose.body
         appearance = pose.appearance_override or condition_appearances.get(body.actor_uuid, actor.condition)
+        if pose.appearance_override is not None and (current := condition_appearances.get(body.actor_uuid)) is not None:
+            appearance = replace(appearance, finite_materials=current.finite_materials)
+        body_samples[body.actor_uuid] = condition_body_pose(data, body, actor.contact, appearance)
+        actor_contacts[body.actor_uuid] = actor.contact
+        if group is not None:
+            for cue in group.finite_materials:
+                if cue.actor_uuid != body.actor_uuid or cue.track.motes is None:
+                    continue
+                sample = sample_material_track(cue.track, group_elapsed-cue.start_ms)
+                if sample is not None:
+                    peak = max(point.strength for point in cue.track.points)
+                    extra = (*extra, *rising_mote_commands(str(cue.event_uuid),cue.track.motes,
+                        actor.contact.grid,actor.contact.elevation_steps,sample.age_ms,
+                        sample.strength/peak if peak else 0,camera))
+            for cue in group.body_actions:
+                intake = data.action_intakes.get(cue.recipe_id)
+                if intake is None or cue.contact.actor_uuid != body.actor_uuid or cue.interaction_object_uuid is None:
+                    continue
+                owner = group.before.objects.get(cue.interaction_object_uuid)
+                if owner is None:
+                    continue
+                rig = body_rig(data,actor.contact)
+                ground = project_screen(actor.contact.grid,camera,elevation_steps=body_elevation_steps(actor.contact,data))
+                anchors = pose_attachment_anchors(rig,replace(body,facing=view_facing(body.facing,camera.quadrant,data)),
+                    ground,actor.contact.visual_scale*TILE_WIDTH/data.rig.TILE_W*camera.zoom,actor.contact.visual_scale_x)
+                hand = anchors.get(intake.socket)
+                if hand is not None and cue.effect_ms > cue.start_ms:
+                    extra = (*extra,*intake_commands(str(cue.event_uuid),intake,owner.placement.position,
+                        owner.placement.base_height_steps,hand,(group_elapsed-cue.start_ms)/(cue.effect_ms-cue.start_ms),camera))
         flash = next((value.flash for value in group_sample.vitals if value.actor_uuid == body.actor_uuid), None
                      ) if group_sample is not None else None
         extra = (*extra, *actor_draw_commands(data, body, actor.contact, actor.layers, body_media,
-                                              camera, flash=flash, condition=appearance, coverage=pose.coverage))
+                                              camera, flash=flash, condition=appearance, coverage=pose.coverage,
+                                              dust_elapsed_ms=pose.dust_elapsed_ms, dust_seed=pose.dust_seed,
+                                              item_starts=item_starts, presentation_ms=presentation_ms))
     if group is not None and group_sample is not None:
         assert group_media is not None
         extra = (*extra, *choreography_draw_commands(group, group_sample, group_media,
             number_font, badge_font, camera, condition_appearances=condition_appearances,
-            include_bodies=False, actor_bounds=actor_screen_bounds(extra)))
+            include_bodies=False, actor_bounds=actor_screen_bounds(extra),
+            body_samples=body_samples, actor_contacts=actor_contacts))
     extra = (*extra, *(body_trail_draw_command(trail, data, body_media, camera)
         for trail in sample_body_trails(body_history, body_frame, condition_appearances, data, presentation_ms)))
     # The caller retains each FloatingText track independently of this head.
@@ -197,10 +270,20 @@ def sample_playback_frame(
                 emitter = DeviceEmission(key, obj.placement.position, obj.placement.base_height_steps,
                                          facing, art, device_bank(art))
                 extra = (*extra, device_draw_command(emitter, 0, camera))
+    for identity, obj in displayed.objects.items():
+        if (displayed.senses is not None and identity in displayed.senses.objects
+                and any(effect.behavior_id in data.item_attachments for effect in obj.item.item_effects)):
+            extra = (*extra, *(command._replace(role="item") for command in item_ground_commands(
+                obj, camera, data=data, time_ms=presentation_ms, starts=item_starts)))
     deposits = observed_deposits(displayed, data)
     extra = (*extra, *deposit_draw_commands(displayed, deposits, deposit_starts, data, presentation_ms, camera),
-             *spatial_media_draw_commands(displayed, data, presentation_ms, camera, transitions, spatial_lifetimes),
-             *construction_media_draw_commands(displayed, data, presentation_ms, camera, construction_lifetimes),
+             *spatial_media_draw_commands(displayed, data, presentation_ms, camera, transitions, spatial_lifetimes,
+                 {UUID(actor.contact.actor_uuid): actor.contact for actor in actors},
+                 frozenset(cue.owner_uuid for cue in group.spatial_responses
+                     if cue.media.start_ms <= group_elapsed < cue.media.end_ms) if group is not None else frozenset(),
+                 {cue.owner_uuid: cue.media.facing for cue in group.spatial_responses
+                     if cue.media.start_ms <= group_elapsed} if group is not None else {}),
+             *construction_media_draw_commands(displayed, data, presentation_ms, camera, construction_lifetimes, transitions),
              *concentration_media_draw_commands(displayed, data, presentation_ms, camera, concentration_lifetimes),
              *motion_media_draw_commands(motion_media, presentation_ms, camera))
     portals = group_sample.portals if group_sample is not None else ()

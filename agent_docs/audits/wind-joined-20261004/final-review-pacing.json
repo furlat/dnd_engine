@@ -1,0 +1,26 @@
+{
+  "fps": 24,
+  "view_size": [
+    640,
+    480
+  ],
+  "settled_hold_ms": 500,
+  "native_sequences_unchanged": [
+    {
+      "case": "wall-assembly-wind-corner-1-0",
+      "sequence_sha256": "6f344c1587b02058fc57939be03b779fd21ae0768118dcce512015cbf13c962a"
+    },
+    {
+      "case": "wall-assembly-wind-corner-1-0--recipient",
+      "sequence_sha256": "ea1c0a22b41df12121877bb7d496578240dc00484ac39cabdc3784d9a684500f"
+    },
+    {
+      "case": "wall-assembly-wind-straight-1-1",
+      "sequence_sha256": "74de221c2d340ecab18df3146428edddb9d7afe9308357631e9aa71d76bc79cf"
+    },
+    {
+      "case": "wall-assembly-wind-straight-1-1--recipient",
+      "sequence_sha256": "f7736968a7fe34915598e83abe79d223f3d7f3b1ebbc35edd5b02843bd92a92a"
+    }
+  ]
+}

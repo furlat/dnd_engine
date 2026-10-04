@@ -1,4 +1,4 @@
-"""Concentration replacement cannot partially return two banished creatures."""
+"""Concentration replacement reserves distinct nearest returns without eviction."""
 
 from uuid import uuid4
 
@@ -11,7 +11,7 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.abjuration import BanishedCondition
 
 
-def test_conflicting_banishment_displacements_preserve_the_entire_old_graph():
+def test_two_banished_returns_reserve_destinations_without_displacing_occupants():
     reset_engine_runtime(grid_size=(8, 8))
     try:
         game = Game()
@@ -27,7 +27,7 @@ def test_conflicting_banishment_displacements_preserve_the_entire_old_graph():
         first.add_condition(first_gone)
         second.add_condition(second_gone)
         occupant_a, occupant_b = actor((2, 3)), actor((3, 2))
-        actor((2, 4))  # Both displaced occupants would otherwise choose (3, 3).
+        actor((2, 4))
         old = Concentrating(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
                             spell_name="Banishment")
         caster.add_condition(old)
@@ -36,13 +36,17 @@ def test_conflicting_banishment_displacements_preserve_the_entire_old_graph():
         incoming = Concentrating(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
                                  spell_name="New concentration")
         result = caster.prepare_condition_application(incoming)
-        assert not isinstance(result, PreparedConditionApplication)
-        assert caster.active_conditions["Concentrating"] is old
-        assert first_gone.applied and second_gone.applied
-        assert first.is_spatially_suspended and second.is_spatially_suspended
+        assert isinstance(result, PreparedConditionApplication)
+        reserved = incoming.prepared_removal_occupancies()
+        assert len(reserved) == len(set(reserved)) == 2
+        assert not set(reserved) & {(2, 3), (3, 2)}
+        with caster.condition_removal_scope():
+            caster.commit_condition_application(result)
+            caster.publish_condition_application(result)
+        assert first.is_deployed and second.is_deployed
+        assert first.position != second.position
         assert get_map().get_entities_at((2, 3)) == {occupant_a.uuid}
         assert get_map().get_entities_at((3, 2)) == {occupant_b.uuid}
-        assert not first_gone.prepared_removal_occupancies()
-        assert not second_gone.prepared_removal_occupancies()
+        assert caster.active_conditions["Concentrating"] is incoming
     finally:
         reset_engine_runtime()

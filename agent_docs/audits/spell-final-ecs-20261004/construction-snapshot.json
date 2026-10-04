@@ -1,0 +1,17 @@
+{
+  "files": {
+    "dnd/core/item_types.py": "f8d5906ba88442d424bd89234e53f8a8d3bdeaebb30dec656c6b40a66f47a942",
+    "dnd/spells/wall_constructions.py": "04dc6e07f341f24749ad4b6526c6efcb9580264739c92d1bf6534af46c287a1f",
+    "game/player_facts.py": "1c90d8ae96ff8e9c09256dda8f41cf6c891fb7220b451a3de30ef422810f940a",
+    "game/player_projection.py": "44bcd95ac9321e9f0eebf2699bedd43a10f7a81884f24f3417396c41acf92bc8",
+    "game/construction_media.py": "9fcca24fe8d4f9d074e70625c9f57598482e72bf3d6058e5dda66c151d1c68be",
+    "game/construction_media_lifetime.py": "cb9557a578850b12d944eea5c5fd7c2b2ee18c88927036289abba01da91fc5b5",
+    "game/construction_transitions.py": "b5efc9a18df57664bcb8b9393be288057013d2285d2963bb501826a02cf8b8ef",
+    "game/construction_surface.py": "16dc7c3337a0baba70acbc3653b546355dca4dd7ba93c2332058d638745a21bc",
+    "game/directed_contacts.py": "3f0295176776aeb53542e1717b722c88b5aea68a2b7be50f0c9025ff6f9d016f",
+    "tests/game/test_construction_suppression.py": "edcda781d29cb6939fb5542a9058acf55eff430161a1801b26c76cf2de154739",
+    "tests/game/test_force_construction_presentation.py": "79a12b5eb820bf3104f766d8767976c8ca763c7dfeb7a9493961c54f3cca49af",
+    "tests/game/construction_scenarios.py": "35062449b45309ff20743180ddb387d644207edd525b06b4951c30087bdc1a3b"
+  },
+  "sha256": "3df786b081e5adc5b758d5d0579ad7b2681bfcab9159824ec922843b166be95f"
+}

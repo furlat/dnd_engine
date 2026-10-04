@@ -411,13 +411,19 @@ def _execute_bound_action(
     """Execute one exact discovered action object against an authorized target."""
 
     selection = template.get_position_selection()
-    if extra_target_positions and (selection is None or selection.kind != "path"):
+    if extra_target_positions and (selection is None or selection.kind not in ("path", "entity_destination")):
         raise ValueError("This action does not select additional positions")
     eff_tt = template.effective_target_type
     if eff_tt in (TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT):
         if target.target_uuid is None:
             raise ValueError("ENTITY action requires target_uuid")
-        instance = _bind_executable_action(template, target_entity_uuid=target.target_uuid)
+        if selection is not None and selection.kind == "entity_destination":
+            if extra_target_positions is None or len(extra_target_positions) != 1:
+                raise ValueError("Choose exactly one destination")
+            instance = _bind_executable_action(template, target_entity_uuid=target.target_uuid,
+                end_position=extra_target_positions[0])
+        else:
+            instance = _bind_executable_action(template, target_entity_uuid=target.target_uuid)
 
     elif eff_tt == TargetType.MULTI_ENTITY:
         if target.target_uuid is None:
@@ -483,6 +489,11 @@ def get_extra_position_options(
                 return []
         else:
             template = _resolve_executable_template(entity, action_info.template_name)
+    selection = template.get_position_selection()
+    if selection is not None and selection.kind == "entity_destination":
+        if target.target_uuid is None:
+            return []
+        template = template.model_copy(deep=True, update={"target_entity_uuid": target.target_uuid})
     return template.get_valid_extra_target_positions(target.position, extra_target_positions or ())
 
 
@@ -504,7 +515,8 @@ def _validated_extra_target_uuids(
         raise ValueError("Additional target UUID is invalid") from exc
     legal_target_uuids = {
         target.target_uuid
-        for target in action_info.valid_targets
+        for target in (primary_target.secondary_targets if primary_target.secondary_targets is not None
+                       else action_info.valid_targets)
         if target.target_uuid is not None
     }
     if any(target_uuid not in legal_target_uuids for target_uuid in selected):
@@ -719,8 +731,12 @@ def execute_use_action(
         raise ValueError(f"Use action '{action_name}' not found on item")
 
     selection = template.get_position_selection()
-    if extra_target_positions and (selection is None or selection.kind != "path"):
+    if extra_target_positions and (selection is None or selection.kind not in ("path", "entity_destination")):
         raise ValueError("This action does not select additional positions")
+
+    if (selection is not None and selection.kind == "entity_destination"
+            and (extra_target_positions is None or len(extra_target_positions) != 1)):
+        raise ValueError("Choose exactly one destination")
 
     charge_cost = template.charge_cost
     if item.charges != -1 and item.charges < charge_cost:
@@ -761,6 +777,9 @@ def execute_use_action(
     else:
         instance = template.instantiate()
 
+    if selection is not None and selection.kind == "entity_destination":
+        assert extra_target_positions is not None
+        instance.end_position = extra_target_positions[0]
     result = instance.apply()
 
     return result

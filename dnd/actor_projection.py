@@ -13,7 +13,7 @@ from dnd.core.events import DamageAppliedEvent, EntityCreatedEvent, EntityFactio
 from dnd.core.item_types import ItemLocation
 from dnd.core.life_types import LifeState
 from dnd.types.actor_facts import ActorState, ConditionFact
-from dnd.types.actor import EntityStatsState
+from dnd.types.actor import EntityStatsState, SpatialDisposition
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent, ConditionStateChangedEvent
 
 
@@ -27,7 +27,7 @@ def actor_from_birth(birth: EntityCreatedEvent) -> ActorState:
         equipment=tuple(birth.equipment), active_weapon_set=birth.active_weapon_set,
         normal_hp=birth.maximum_hit_points - birth.damage_taken,
         maximum_hp=birth.maximum_hit_points, temporary_hp=birth.temporary_hit_points,
-        life_state=LifeState(birth.life_state), armor_class=birth.armor_class,
+        life_state=LifeState(birth.life_state), remains_disposition=birth.remains_disposition, armor_class=birth.armor_class,
         faction=birth.faction, creature_type=birth.creature_type,
         healing_blocked=birth.healing_blocked, damage_affinities=birth.damage_affinities,
         occupancy_layer=birth.occupancy_layer,
@@ -76,6 +76,8 @@ def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact |
                 equipment=tuple((slot, identity) for slot, identity in actor.equipment
                                 if identity != event.item_state.item_uuid))
         case SpatialChangeEvent(change_type=SpatialChangeType.ENTITY_ENTERED | SpatialChangeType.ENTITY_LEFT):
+            if event.change_type is SpatialChangeType.ENTITY_ENTERED:
+                actor = replace(actor, spatial_disposition=SpatialDisposition.PRESENT)
             return (actor if event.occupancy_layer is None
                     else replace(actor, occupancy_layer=event.occupancy_layer))
         case ItemResourceChangeEvent():
@@ -116,7 +118,8 @@ def apply_actor_fact(actor: ActorState, event: Event, condition: ConditionFact |
                            armor_class=actor.armor_class if condition.resulting_ac is None else condition.resulting_ac)
             return apply_stats(actor, condition.resulting_stats)
         case LifeStateChangeEvent():
-            return replace(actor, life_state=event.new_state, normal_hp=event.normal_hit_points)
+            return replace(actor, life_state=event.new_state, normal_hp=event.normal_hit_points,
+                           remains_disposition=event.remains_disposition)
         case TemporaryHitPointsChangedEvent():
             return replace(actor, temporary_hp=event.resulting_temporary_hp, temporary_hp_grant=event.grant)
         case ItemLocationStateEvent(location=ItemLocation.INVENTORY | ItemLocation.EQUIPMENT):
@@ -157,7 +160,7 @@ def apply_stats(actor: ActorState, stats: EntityStatsState | None) -> ActorState
         return actor
     return replace(actor, normal_hp=stats.normal_hp, maximum_hp=stats.maximum_hp,
                    temporary_hp=stats.temporary_hp, temporary_hp_grant=stats.temporary_hp_grant,
-                   armor_class=stats.armor_class,
+                   armor_class=stats.armor_class, spatial_disposition=stats.spatial_disposition,
                    healing_blocked=stats.healing_blocked, damage_affinities=stats.damage_affinities,
                    resolved_size=stats.resolved_size if stats.resolved_size is not None else actor.resolved_size)
 

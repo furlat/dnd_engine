@@ -1451,7 +1451,7 @@
       "granted-action",
       "four-corners"
     ],
-    "description": "The baseline follows a real successful Telekinesis cast and grab. Its discovered, zero-cost Move follow-up retains the complete native action/forced-movement/spatial lineage; no new casting media is authored here.",
+    "description": "A paid retained Telekinesis use selects a creature and landing, travels there, then resolves hostile impact and Prone. Initial cast and repeat consume their native action budgets.",
     "scenario": {
       "kind": "forced-movement",
       "mechanism": "telekinesis",
@@ -13617,14 +13617,14 @@
   },
   {
     "id": "queue-continual-flame-lifecycle",
-    "title": "Continual Flame \u00b7 two permanent anchors and independent removal",
+    "title": "Continual Flame \u00b7 real items, carrying, storage and removal",
     "tags": [
       "spell-queue",
       "continual-flame",
       "four-corners",
       "paired-observers"
     ],
-    "description": "Real native touch-position casts create two heatless permanent light anchors. Movement retains them; each source object removal retires only its own flame. Uses the actual point/tile anchor, without claiming elevated item sockets.",
+    "description": "Native touch casts enchant two real items. The first is looted, equipped, carried, suppressed, uncovered, dropped and equipped by the second carrier; both retire independently. Shared apply/hold media follows the same item and effect UUID on floor and current modular gear pixels.",
     "framing": "actors",
     "scenario": {
       "kind": "continual-flame"
@@ -13996,7 +13996,7 @@
       "paired-observers",
       "thorns"
     ],
-    "description": "Native multi-recipient formation, actual turn behavior and concentration clear. Original registered modular RGBA; contact-specific deformation remains a source integration gap.",
+    "description": "Native multi-recipient formation, actual end-turn damage and concentration clear. Original living vine mesh/material; visible bodies part the nearby vines, and exact recorded damage drives only the recipient's local pull. Existing opaque-section visibility and four camera views.",
     "framing": "actors",
     "scenario": {
       "kind": "wall-assembly",
@@ -14020,7 +14020,7 @@
       "paired-observers",
       "thorns"
     ],
-    "description": "Native multi-recipient formation, actual turn behavior and concentration clear. Original registered modular RGBA; contact-specific deformation remains a source integration gap.",
+    "description": "Native multi-recipient formation, actual end-turn damage and concentration clear. Original living vine mesh/material; visible bodies part the nearby vines, and exact recorded damage drives only the recipient's local pull. Existing opaque-section visibility and four camera views.",
     "framing": "actors",
     "scenario": {
       "kind": "wall-assembly",
@@ -14068,7 +14068,7 @@
       "paired-observers",
       "wind"
     ],
-    "description": "Native multi-recipient formation, actual turn behavior and concentration clear. Original registered modular RGBA; contact-specific deformation remains a source integration gap.",
+    "description": "Native multi-recipient formation, ordinary passage without repeat damage and concentration clear. Original continuous joined Wind sheets use received body contacts, real XYZ and shared owner clocks.",
     "framing": "actors",
     "scenario": {
       "kind": "wall-assembly",
@@ -14092,7 +14092,7 @@
       "paired-observers",
       "wind"
     ],
-    "description": "Native multi-recipient formation, actual turn behavior and concentration clear. Original registered modular RGBA; contact-specific deformation remains a source integration gap.",
+    "description": "Native multi-recipient formation, ordinary passage without repeat damage and concentration clear. Original continuous joined Wind sheets use received body contacts, real XYZ and shared owner clocks.",
     "framing": "actors",
     "scenario": {
       "kind": "wall-assembly",
@@ -14116,7 +14116,7 @@
       "paired-observers",
       "wind"
     ],
-    "description": "Native multi-recipient formation, actual turn behavior and concentration clear. Original registered modular RGBA; contact-specific deformation remains a source integration gap.",
+    "description": "Native multi-recipient formation, ordinary passage without repeat damage and concentration clear. Original continuous joined Wind sheets use received body contacts, real XYZ and shared owner clocks.",
     "framing": "actors",
     "scenario": {
       "kind": "wall-assembly",
@@ -14773,5 +14773,2301 @@
       "program": "ordinary_injury"
     },
     "settled_hold_ms": 1500
+  },
+  {
+    "id": "sensory-darkvision",
+    "title": "Darkvision \u00b7 cast, movement and removal",
+    "tags": [
+      "sensory-handoff",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Actual registered cast, owned sense grant, recipient movement and native removal. Original four-camera eye banks follow the resolved head socket.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "darkvision"
+    },
+    "tail_duration_ms": 1600,
+    "settled_hold_ms": 250
+  },
+  {
+    "id": "sensory-see-invisibility",
+    "title": "See Invisibility \u00b7 cast, movement and removal",
+    "tags": [
+      "sensory-handoff",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Actual registered cast, owned sense grant, recipient movement and native removal. Original four-camera eye banks follow the resolved head socket.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "see_invisibility"
+    },
+    "tail_duration_ms": 1600,
+    "settled_hold_ms": 250
+  },
+  {
+    "id": "sensory-true-seeing",
+    "title": "True Seeing \u00b7 cast, movement and removal",
+    "tags": [
+      "sensory-handoff",
+      "paired-observers",
+      "four-corners",
+      "32fps-media"
+    ],
+    "description": "Actual registered cast, owned sense grant, recipient movement and native removal. Original four-camera eye banks follow the resolved head socket.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "true_seeing"
+    },
+    "tail_duration_ms": 1600,
+    "settled_hold_ms": 250
+  },
+  {
+    "id": "support-longstrider",
+    "title": "Longstrider \u00b7 ankle wind and movement",
+    "tags": [
+      "support-handoff",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Actual +10-foot spell, movement and native removal with accepted source wind. Shared bank bytes are reused from the installed Fly dependency.",
+    "scenario": {
+      "kind": "support-condition",
+      "program": "longstrider"
+    },
+    "settled_hold_ms": 1000,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "power-word-kill-applied",
+    "title": "Power Word Kill \u00b7 applied",
+    "tags": [
+      "power-words",
+      "native-outcomes",
+      "four-corners"
+    ],
+    "description": "Native target threshold and result; finite contact before the committed condition or life change.",
+    "scenario": {
+      "kind": "power-word",
+      "program": "kill",
+      "outcome": "applied"
+    },
+    "tail_duration_ms": 1500,
+    "settled_hold_ms": 400
+  },
+  {
+    "id": "power-word-kill-threshold",
+    "title": "Power Word Kill \u00b7 threshold",
+    "tags": [
+      "power-words",
+      "native-outcomes",
+      "four-corners"
+    ],
+    "description": "Native target threshold and result; finite contact before the committed condition or life change.",
+    "scenario": {
+      "kind": "power-word",
+      "program": "kill",
+      "outcome": "threshold"
+    },
+    "tail_duration_ms": 1500,
+    "settled_hold_ms": 400
+  },
+  {
+    "id": "power-word-kill-ward",
+    "title": "Power Word Kill \u00b7 ward",
+    "tags": [
+      "power-words",
+      "native-outcomes",
+      "four-corners"
+    ],
+    "description": "Native target threshold and result; finite contact before the committed condition or life change.",
+    "scenario": {
+      "kind": "power-word",
+      "program": "kill",
+      "outcome": "ward"
+    },
+    "tail_duration_ms": 1500,
+    "settled_hold_ms": 400
+  },
+  {
+    "id": "power-word-kill-prone",
+    "title": "Power Word Kill \u00b7 prone",
+    "tags": [
+      "power-words",
+      "native-outcomes",
+      "four-corners"
+    ],
+    "description": "Native target threshold and result; finite contact before the committed condition or life change.",
+    "scenario": {
+      "kind": "power-word",
+      "program": "kill",
+      "outcome": "prone"
+    },
+    "tail_duration_ms": 1500,
+    "settled_hold_ms": 400
+  },
+  {
+    "id": "power-word-stun-applied",
+    "title": "Power Word Stun \u00b7 applied",
+    "tags": [
+      "power-words",
+      "native-outcomes",
+      "four-corners"
+    ],
+    "description": "Native target threshold and result; finite contact before the committed condition or life change.",
+    "scenario": {
+      "kind": "power-word",
+      "program": "stun",
+      "outcome": "applied"
+    },
+    "tail_duration_ms": 1500,
+    "settled_hold_ms": 400
+  },
+  {
+    "id": "power-word-stun-threshold",
+    "title": "Power Word Stun \u00b7 threshold",
+    "tags": [
+      "power-words",
+      "native-outcomes",
+      "four-corners"
+    ],
+    "description": "Native target threshold and result; finite contact before the committed condition or life change.",
+    "scenario": {
+      "kind": "power-word",
+      "program": "stun",
+      "outcome": "threshold"
+    },
+    "tail_duration_ms": 1500,
+    "settled_hold_ms": 400
+  },
+  {
+    "id": "shared-petrified",
+    "title": "Petrified \u00b7 shared condition application and removal",
+    "tags": [
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Native condition membership drives the accepted common cue and source-owned removal. Stone preserves the captured pose and original sprite alpha.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "petrified"
+    },
+    "settled_hold_ms": 1400,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "shared-restrained",
+    "title": "Restrained \u00b7 shared condition application and removal",
+    "tags": [
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Native condition membership drives the accepted common cue and source-owned removal. Stone preserves the captured pose and original sprite alpha.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "restrained"
+    },
+    "settled_hold_ms": 1400,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "shared-incapacitated",
+    "title": "Incapacitated \u00b7 shared condition application and removal",
+    "tags": [
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Native condition membership drives the accepted common cue and source-owned removal. Stone preserves the captured pose and original sprite alpha.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "incapacitated"
+    },
+    "settled_hold_ms": 1400,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "shared-stunned",
+    "title": "Stunned \u00b7 shared condition application and removal",
+    "tags": [
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Native condition membership drives the accepted common cue and source-owned removal. Stone preserves the captured pose and original sprite alpha.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "stunned"
+    },
+    "settled_hold_ms": 1400,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "shared-sickened",
+    "title": "Sickened \u00b7 shared condition application and removal",
+    "tags": [
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Native condition membership drives the accepted common cue and source-owned removal. Stone preserves the captured pose and original sprite alpha.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "sickened"
+    },
+    "settled_hold_ms": 1400,
+    "tail_duration_ms": 1600
+  },
+  {
+    "id": "nature-shillelagh",
+    "title": "Shillelagh",
+    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "tags": [
+      "nature-spells",
+      "spell-vfx-packet2",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "nature-spell",
+      "program": "shillelagh",
+      "immune": false
+    }
+  },
+  {
+    "id": "nature-barkskin",
+    "title": "Barkskin",
+    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "tags": [
+      "nature-spells",
+      "spell-vfx-packet2",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "nature-spell",
+      "program": "barkskin",
+      "immune": false
+    }
+  },
+  {
+    "id": "nature-warm",
+    "title": "Warm",
+    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "tags": [
+      "nature-spells",
+      "spell-vfx-packet2",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "nature-spell",
+      "program": "warm",
+      "immune": false
+    }
+  },
+  {
+    "id": "nature-warm-immune",
+    "title": "Warm \u00b7 immune attacker",
+    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "tags": [
+      "nature-spells",
+      "spell-vfx-packet2",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "nature-spell",
+      "program": "warm",
+      "immune": true
+    }
+  },
+  {
+    "id": "nature-chill",
+    "title": "Chill",
+    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "tags": [
+      "nature-spells",
+      "spell-vfx-packet2",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "nature-spell",
+      "program": "chill",
+      "immune": false
+    }
+  },
+  {
+    "id": "nature-chill-immune",
+    "title": "Chill \u00b7 immune attacker",
+    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "tags": [
+      "nature-spells",
+      "spell-vfx-packet2",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "nature-spell",
+      "program": "chill",
+      "immune": true
+    }
+  },
+  {
+    "id": "nature-produce-hit",
+    "title": "Produce Hit",
+    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "tags": [
+      "nature-spells",
+      "spell-vfx-packet2",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "nature-spell",
+      "program": "produce_hit",
+      "immune": false
+    }
+  },
+  {
+    "id": "nature-produce-miss",
+    "title": "Produce Miss",
+    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "tags": [
+      "nature-spells",
+      "spell-vfx-packet2",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "nature-spell",
+      "program": "produce_miss",
+      "immune": false
+    }
+  },
+  {
+    "id": "nature-produce-initial",
+    "title": "Produce Initial",
+    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "tags": [
+      "nature-spells",
+      "spell-vfx-packet2",
+      "paired-observers",
+      "four-corners"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "nature-spell",
+      "program": "produce_initial",
+      "immune": false
+    }
+  },
+  {
+    "id": "necrotic-blight-hit",
+    "title": "Blight \u00b7 hit",
+    "tags": [
+      "necrotic-handoff",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real native cast, committed save and damage outcomes, current-pose material and original accepted media. Circle recipients resolve together; no persistent damaging smoke.",
+    "scenario": {
+      "kind": "necrotic-spell",
+      "program": "blight",
+      "saved": false,
+      "immune": false
+    }
+  },
+  {
+    "id": "necrotic-blight-save",
+    "title": "Blight \u00b7 save",
+    "tags": [
+      "necrotic-handoff",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real native cast, committed save and damage outcomes, current-pose material and original accepted media. Circle recipients resolve together; no persistent damaging smoke.",
+    "scenario": {
+      "kind": "necrotic-spell",
+      "program": "blight",
+      "saved": true,
+      "immune": false
+    }
+  },
+  {
+    "id": "necrotic-blight-immune",
+    "title": "Blight \u00b7 immune",
+    "tags": [
+      "necrotic-handoff",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real native cast, committed save and damage outcomes, current-pose material and original accepted media. Circle recipients resolve together; no persistent damaging smoke.",
+    "scenario": {
+      "kind": "necrotic-spell",
+      "program": "blight",
+      "saved": false,
+      "immune": true
+    }
+  },
+  {
+    "id": "necrotic-harm-hit",
+    "title": "Harm \u00b7 hit",
+    "tags": [
+      "necrotic-handoff",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real native cast, committed save and damage outcomes, current-pose material and original accepted media. Circle recipients resolve together; no persistent damaging smoke.",
+    "scenario": {
+      "kind": "necrotic-spell",
+      "program": "harm",
+      "saved": false,
+      "immune": false
+    }
+  },
+  {
+    "id": "necrotic-harm-save",
+    "title": "Harm \u00b7 save",
+    "tags": [
+      "necrotic-handoff",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real native cast, committed save and damage outcomes, current-pose material and original accepted media. Circle recipients resolve together; no persistent damaging smoke.",
+    "scenario": {
+      "kind": "necrotic-spell",
+      "program": "harm",
+      "saved": true,
+      "immune": false
+    }
+  },
+  {
+    "id": "necrotic-harm-immune",
+    "title": "Harm \u00b7 immune",
+    "tags": [
+      "necrotic-handoff",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real native cast, committed save and damage outcomes, current-pose material and original accepted media. Circle recipients resolve together; no persistent damaging smoke.",
+    "scenario": {
+      "kind": "necrotic-spell",
+      "program": "harm",
+      "saved": false,
+      "immune": true
+    }
+  },
+  {
+    "id": "necrotic-circle-of-death-hit",
+    "title": "Circle Of Death \u00b7 hit",
+    "tags": [
+      "necrotic-handoff",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real native cast, committed save and damage outcomes, current-pose material and original accepted media. Circle recipients resolve together; no persistent damaging smoke.",
+    "scenario": {
+      "kind": "necrotic-spell",
+      "program": "circle_of_death",
+      "saved": false,
+      "immune": false
+    }
+  },
+  {
+    "id": "necrotic-circle-of-death-save",
+    "title": "Circle Of Death \u00b7 save",
+    "tags": [
+      "necrotic-handoff",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real native cast, committed save and damage outcomes, current-pose material and original accepted media. Circle recipients resolve together; no persistent damaging smoke.",
+    "scenario": {
+      "kind": "necrotic-spell",
+      "program": "circle_of_death",
+      "saved": true,
+      "immune": false
+    }
+  },
+  {
+    "id": "necrotic-circle-of-death-immune",
+    "title": "Circle Of Death \u00b7 immune",
+    "tags": [
+      "necrotic-handoff",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Real native cast, committed save and damage outcomes, current-pose material and original accepted media. Circle recipients resolve together; no persistent damaging smoke.",
+    "scenario": {
+      "kind": "necrotic-spell",
+      "program": "circle_of_death",
+      "saved": false,
+      "immune": true
+    }
+  },
+  {
+    "id": "ice-storm-lifecycle",
+    "title": "Ice Storm \u00b7 contact and terrain expiry",
+    "tags": [
+      "spell",
+      "weather",
+      "packet4"
+    ],
+    "description": "Native Ice Storm: accepted falling modules, recipient damage at contact, settled terrain through source next-turn expiry. All four native camera views.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "weather-solar",
+      "program": "ice_storm",
+      "empty": false,
+      "expire": true
+    },
+    "tail_duration_ms": 1000,
+    "settled_hold_ms": 1200
+  },
+  {
+    "id": "ice-storm-empty",
+    "title": "Ice Storm \u00b7 empty area",
+    "tags": [
+      "spell",
+      "weather",
+      "packet4"
+    ],
+    "description": "Native Ice Storm: accepted falling modules, recipient damage at contact, settled terrain through source next-turn expiry. All four native camera views.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "weather-solar",
+      "program": "ice_storm",
+      "empty": true,
+      "expire": true
+    },
+    "tail_duration_ms": 1000,
+    "settled_hold_ms": 1200
+  },
+  {
+    "id": "telekinesis-initial",
+    "title": "Telekinesis \u00b7 Initial hostile transfer",
+    "tags": [
+      "gameplay",
+      "forced-movement",
+      "telekinesis",
+      "granted-action",
+      "four-corners"
+    ],
+    "description": "Real paid initial cast and selected landing. Hostile impact follows arrival; resisted and willing allied transfers cause no spell impact.",
+    "scenario": {
+      "kind": "forced-movement",
+      "mechanism": "telekinesis",
+      "seed": 1,
+      "destination": [
+        6,
+        4
+      ],
+      "initial_cast": true
+    }
+  },
+  {
+    "id": "telekinesis-resisted",
+    "title": "Telekinesis \u00b7 Resisted initial cast",
+    "tags": [
+      "gameplay",
+      "forced-movement",
+      "telekinesis",
+      "granted-action",
+      "four-corners"
+    ],
+    "description": "Real paid initial cast and selected landing. Hostile impact follows arrival; resisted and willing allied transfers cause no spell impact.",
+    "scenario": {
+      "kind": "forced-movement",
+      "mechanism": "telekinesis",
+      "seed": 1,
+      "destination": [
+        6,
+        4
+      ],
+      "initial_cast": true,
+      "resisted": true
+    }
+  },
+  {
+    "id": "telekinesis-ally",
+    "title": "Telekinesis \u00b7 Safe allied transfer",
+    "tags": [
+      "gameplay",
+      "forced-movement",
+      "telekinesis",
+      "granted-action",
+      "four-corners"
+    ],
+    "description": "Real paid initial cast and selected landing. Hostile impact follows arrival; resisted and willing allied transfers cause no spell impact.",
+    "scenario": {
+      "kind": "forced-movement",
+      "mechanism": "telekinesis",
+      "seed": 1,
+      "destination": [
+        6,
+        4
+      ],
+      "initial_cast": true,
+      "allied": true
+    }
+  },
+  {
+    "id": "sleet-storm-lifecycle",
+    "title": "Sleet Storm Lifecycle",
+    "tags": [
+      "spell",
+      "weather",
+      "solar",
+      "packet4"
+    ],
+    "description": "Native spell, exact accepted source clock and finite/maintained owners; full area, actual recipients and all four camera views.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "weather-solar",
+      "program": "sleet_storm",
+      "expire": true,
+      "repeat": false,
+      "empty": false
+    },
+    "tail_duration_ms": 1200,
+    "settled_hold_ms": 1600
+  },
+  {
+    "id": "sunbeam-lifecycle",
+    "title": "Sunbeam Lifecycle",
+    "tags": [
+      "spell",
+      "weather",
+      "solar",
+      "packet4"
+    ],
+    "description": "Native spell, exact accepted source clock and finite/maintained owners; full area, actual recipients and all four camera views.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "weather-solar",
+      "program": "sunbeam",
+      "expire": true,
+      "repeat": true,
+      "empty": false
+    },
+    "tail_duration_ms": 1200,
+    "settled_hold_ms": 1600
+  },
+  {
+    "id": "sunburst-area",
+    "title": "Sunburst Area",
+    "tags": [
+      "spell",
+      "weather",
+      "solar",
+      "packet4"
+    ],
+    "description": "Native spell, exact accepted source clock and finite/maintained owners; full area, actual recipients and all four camera views.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "weather-solar",
+      "program": "sunburst",
+      "expire": true,
+      "repeat": false,
+      "empty": false
+    },
+    "tail_duration_ms": 1200,
+    "settled_hold_ms": 1600
+  },
+  {
+    "id": "sunburst-empty",
+    "title": "Sunburst Empty",
+    "tags": [
+      "spell",
+      "weather",
+      "solar",
+      "packet4"
+    ],
+    "description": "Native spell, exact accepted source clock and finite/maintained owners; full area, actual recipients and all four camera views.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "weather-solar",
+      "program": "sunburst",
+      "expire": true,
+      "repeat": false,
+      "empty": true
+    },
+    "tail_duration_ms": 1200,
+    "settled_hold_ms": 1600
+  },
+  {
+    "id": "electric-lightning-bolt",
+    "title": "Lightning Bolt \u00b7 full line and three recipients",
+    "description": "Native cast and ordinary damage facts; original electric components follow the admitted line or recorded primary-to-secondary links.",
+    "tags": [
+      "electric-handoff",
+      "four-corners",
+      "paired-observers"
+    ],
+    "scenario": {
+      "kind": "electric-spell",
+      "program": "lightning_bolt",
+      "empty": false
+    }
+  },
+  {
+    "id": "electric-lightning-bolt-empty",
+    "title": "Lightning Bolt \u00b7 empty line",
+    "description": "Native cast and ordinary damage facts; original electric components follow the admitted line or recorded primary-to-secondary links.",
+    "tags": [
+      "electric-handoff",
+      "four-corners",
+      "paired-observers"
+    ],
+    "scenario": {
+      "kind": "electric-spell",
+      "program": "lightning_bolt",
+      "empty": true
+    }
+  },
+  {
+    "id": "electric-chain-lightning",
+    "title": "Chain Lightning \u00b7 primary and selected branches",
+    "description": "Native cast and ordinary damage facts; original electric components follow the admitted line or recorded primary-to-secondary links.",
+    "tags": [
+      "electric-handoff",
+      "four-corners",
+      "paired-observers"
+    ],
+    "scenario": {
+      "kind": "electric-spell",
+      "program": "chain_lightning",
+      "empty": false
+    }
+  },
+  {
+    "id": "antimagic-moving-field",
+    "title": "Antimagic \u00b7 retained buff suppression and restoration",
+    "description": "Native paid Barkskin and Antimagic, movement through the boundary, same-owner restoration and concentration removal. Both independent observers, four cameras.",
+    "tags": [
+      "spell-utility",
+      "antimagic",
+      "four-corners",
+      "paired-observers"
+    ],
+    "scenario": {
+      "kind": "antimagic"
+    }
+  },
+  {
+    "id": "queue-holy-spirit-radiant",
+    "title": "Spirit Guardians radiant: moving field and actual hostile contact",
+    "tags": [
+      "spell-queue",
+      "holy",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native spell owner, recorded effect and actual recipient consequences. Original accepted component artwork on the standard compositor.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "holy-spell",
+      "program": "spirit_radiant",
+      "expire": false
+    },
+    "settled_hold_ms": 300,
+    "tail_duration_ms": 1400
+  },
+  {
+    "id": "queue-holy-spirit-necrotic",
+    "title": "Spirit Guardians necrotic: moving field and actual hostile contact",
+    "tags": [
+      "spell-queue",
+      "holy",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native spell owner, recorded effect and actual recipient consequences. Original accepted component artwork on the standard compositor.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "holy-spell",
+      "program": "spirit_necrotic",
+      "expire": false
+    },
+    "settled_hold_ms": 300,
+    "tail_duration_ms": 1400
+  },
+  {
+    "id": "queue-holy-guardian",
+    "title": "Guardian of Faith: three actual strikes and budget retirement",
+    "tags": [
+      "spell-queue",
+      "holy",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native spell owner, recorded effect and actual recipient consequences. Original accepted component artwork on the standard compositor.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "holy-spell",
+      "program": "guardian",
+      "expire": false
+    },
+    "settled_hold_ms": 300,
+    "tail_duration_ms": 1400
+  },
+  {
+    "id": "queue-holy-feast",
+    "title": "Heroes Feast: real prop, eating and beneficiary expiry",
+    "tags": [
+      "spell-queue",
+      "holy",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native spell owner, recorded effect and actual recipient consequences. Original accepted component artwork on the standard compositor.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "holy-spell",
+      "program": "feast",
+      "expire": true
+    },
+    "settled_hold_ms": 300,
+    "tail_duration_ms": 1400
+  },
+  {
+    "id": "dimension-door",
+    "title": "Dimension Door \u00b7 lone transfer",
+    "description": "Native cast and committed transfer, original doorway material in four camera views. Both participants share the actual transfer clock.",
+    "tags": [
+      "transport",
+      "dimension-door",
+      "four-corners",
+      "paired-observers"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "transport-spell",
+      "program": "door"
+    }
+  },
+  {
+    "id": "dimension-door-passenger",
+    "title": "Dimension Door \u00b7 simultaneous companion",
+    "description": "Native cast and committed transfer, original doorway material in four camera views. Both participants share the actual transfer clock.",
+    "tags": [
+      "transport",
+      "dimension-door",
+      "four-corners",
+      "paired-observers"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "transport-spell",
+      "program": "door_passenger"
+    }
+  },
+  {
+    "id": "dimension-door-mishap",
+    "title": "Dimension Door \u00b7 blocked arrival, actual mishap",
+    "description": "Native cast and committed transfer, original doorway material in four camera views. Both participants share the actual transfer clock.",
+    "tags": [
+      "transport",
+      "dimension-door",
+      "four-corners",
+      "paired-observers"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "transport-spell",
+      "program": "door_mishap"
+    }
+  },
+  {
+    "id": "banish-return",
+    "title": "Banishment \u00b7 actual departure and return",
+    "description": "Original silhouette and gate, driven by recorded native absence and actual return. The echo retains the actual departure pose and gear.",
+    "tags": [
+      "transport",
+      "banishment",
+      "four-corners",
+      "paired-observers"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "transport-spell",
+      "program": "banish_return"
+    }
+  },
+  {
+    "id": "banish-saved",
+    "title": "Banishment \u00b7 successful save",
+    "description": "Original silhouette and gate, driven by recorded native absence and actual return. The echo retains the actual departure pose and gear.",
+    "tags": [
+      "transport",
+      "banishment",
+      "four-corners",
+      "paired-observers"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "transport-spell",
+      "program": "banish_saved"
+    }
+  },
+  {
+    "id": "construction-ice-retirement",
+    "title": "Ice \u00b7 intact concentration retirement",
+    "tags": [
+      "packet-7",
+      "construction",
+      "four-corners"
+    ],
+    "description": "Native formation then concentration removal uses the original 850 ms intact sink/fade; no fracture.",
+    "scenario": {
+      "kind": "construction",
+      "material": "ice",
+      "break_section": false
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "construction-stone-retirement",
+    "title": "Stone \u00b7 intact concentration retirement",
+    "tags": [
+      "packet-7",
+      "construction",
+      "four-corners"
+    ],
+    "description": "Native formation then concentration removal uses the original 850 ms intact sink/fade; no fracture.",
+    "scenario": {
+      "kind": "construction",
+      "material": "stone",
+      "break_section": false
+    },
+    "tail_duration_ms": 1200
+  },
+  {
+    "id": "surface-ignition-native-lifecycle",
+    "title": "Surface fire \u00b7 ignition, partial douse, expiry",
+    "tags": [
+      "packet-7",
+      "surface-ignition",
+      "four-corners"
+    ],
+    "description": "Native oil/web ignition, overlapping independent fire, ordinary damaging ground entry, two partial douse operations, then native expiry.",
+    "scenario": {
+      "kind": "surface-ignition"
+    },
+    "tail_duration_ms": 2800
+  },
+  {
+    "id": "eyebite-asleep",
+    "title": "Eyebite asleep",
+    "tags": [
+      "eyebite",
+      "directed",
+      "spell-packet3"
+    ],
+    "description": "Native initial gaze, repeat on a distinct recipient and exact concentration cleanup. Four cameras consume retained paired observer histories.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Eyebite",
+      "mode": "asleep",
+      "repeat": true,
+      "cleanup": true
+    },
+    "tail_duration_ms": 600,
+    "settled_hold_ms": 1000
+  },
+  {
+    "id": "eyebite-panicked",
+    "title": "Eyebite panicked",
+    "tags": [
+      "eyebite",
+      "directed",
+      "spell-packet3"
+    ],
+    "description": "Native initial gaze, repeat on a distinct recipient and exact concentration cleanup. Four cameras consume retained paired observer histories.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Eyebite",
+      "mode": "panicked",
+      "repeat": true,
+      "cleanup": true
+    },
+    "tail_duration_ms": 600,
+    "settled_hold_ms": 1000
+  },
+  {
+    "id": "eyebite-sickened",
+    "title": "Eyebite sickened",
+    "tags": [
+      "eyebite",
+      "directed",
+      "spell-packet3"
+    ],
+    "description": "Native initial gaze, repeat on a distinct recipient and exact concentration cleanup. Four cameras consume retained paired observer histories.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Eyebite",
+      "mode": "sickened",
+      "repeat": true,
+      "cleanup": true
+    },
+    "tail_duration_ms": 600,
+    "settled_hold_ms": 1000
+  },
+  {
+    "id": "disintegrate-saved",
+    "title": "Disintegrate saved",
+    "tags": [
+      "disintegrate",
+      "directed",
+      "spell-packet3"
+    ],
+    "description": "Native Disintegrate crosses paired player histories: retained endpoints and committed outcome drive the original plasma and finite source-alpha dust.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Disintegrate",
+      "saved": true
+    },
+    "tail_duration_ms": 600,
+    "settled_hold_ms": 1000
+  },
+  {
+    "id": "disintegrate-survives",
+    "title": "Disintegrate survives",
+    "tags": [
+      "disintegrate",
+      "directed",
+      "spell-packet3"
+    ],
+    "description": "Native Disintegrate crosses paired player histories: retained endpoints and committed outcome drive the original plasma and finite source-alpha dust.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Disintegrate"
+    },
+    "tail_duration_ms": 600,
+    "settled_hold_ms": 1000
+  },
+  {
+    "id": "disintegrate-prone-dust",
+    "title": "Disintegrate prone dust",
+    "tags": [
+      "disintegrate",
+      "directed",
+      "spell-packet3"
+    ],
+    "description": "Native Disintegrate crosses paired player histories: retained endpoints and committed outcome drive the original plasma and finite source-alpha dust.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Disintegrate",
+      "lethal": true,
+      "prone": true,
+      "magical_weapon": true
+    },
+    "tail_duration_ms": 600,
+    "settled_hold_ms": 1000
+  },
+  {
+    "id": "disintegrate-stove-dust",
+    "title": "Disintegrate stove dust",
+    "tags": [
+      "disintegrate",
+      "directed",
+      "spell-packet3"
+    ],
+    "description": "Native Disintegrate crosses paired player histories: retained endpoints and committed outcome drive the original plasma and finite source-alpha dust.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Disintegrate",
+      "target_item_id": "environment.furniture.clay_stove"
+    },
+    "tail_duration_ms": 600,
+    "settled_hold_ms": 1000
+  },
+  {
+    "id": "disintegrate-lever-dust",
+    "title": "Disintegrate lever dust",
+    "tags": [
+      "disintegrate",
+      "directed",
+      "spell-packet3"
+    ],
+    "description": "Native Disintegrate crosses paired player histories: retained endpoints and committed outcome drive the original plasma and finite source-alpha dust.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Disintegrate",
+      "target_item_id": "environment.trap_lever"
+    },
+    "tail_duration_ms": 600,
+    "settled_hold_ms": 1000
+  },
+  {
+    "id": "finger-survives",
+    "title": "Finger of Death \u00b7 survives",
+    "tags": [
+      "finger",
+      "necromancy",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native damage-only Finger of Death, preserving the original skeletal hand, directed donor meshes and committed contact outcome.",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Finger of Death"
+    }
+  },
+  {
+    "id": "finger-saved",
+    "title": "Finger of Death \u00b7 saved",
+    "tags": [
+      "finger",
+      "necromancy",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native damage-only Finger of Death, preserving the original skeletal hand, directed donor meshes and committed contact outcome.",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Finger of Death",
+      "saved": true
+    }
+  },
+  {
+    "id": "finger-prone",
+    "title": "Finger of Death \u00b7 prone",
+    "tags": [
+      "finger",
+      "necromancy",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native damage-only Finger of Death, preserving the original skeletal hand, directed donor meshes and committed contact outcome.",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Finger of Death",
+      "prone": true
+    }
+  },
+  {
+    "id": "finger-lethal",
+    "title": "Finger of Death \u00b7 lethal",
+    "tags": [
+      "finger",
+      "necromancy",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native damage-only Finger of Death, preserving the original skeletal hand, directed donor meshes and committed contact outcome.",
+    "scenario": {
+      "kind": "directed-spell",
+      "program": "Finger of Death",
+      "lethal": true
+    }
+  },
+  {
+    "id": "finger-countered",
+    "title": "Finger of Death \u00b7 countered",
+    "tags": [
+      "finger",
+      "necromancy",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native Counterspell outcome selects the finite wrist cameo only when the incoming cast is actually interrupted.",
+    "scenario": {
+      "kind": "interruption",
+      "blocker": "counterspell",
+      "spell": "finger_of_death",
+      "blocked": true
+    }
+  },
+  {
+    "id": "finger-counterspell-failed",
+    "title": "Finger of Death \u00b7 counterspell-failed",
+    "tags": [
+      "finger",
+      "necromancy",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Native Counterspell outcome selects the finite wrist cameo only when the incoming cast is actually interrupted.",
+    "scenario": {
+      "kind": "interruption",
+      "blocker": "counterspell",
+      "spell": "finger_of_death",
+      "blocked": false
+    }
+  },
+  {
+    "id": "construction-stone-cut-retirement",
+    "title": "Construction Stone Cut Retirement",
+    "tags": [
+      "packet-7",
+      "disintegrate",
+      "four-corners"
+    ],
+    "description": "Actual cast, exact observed object cut/dust, then ordinary fracture or owner retirement.",
+    "scenario": {
+      "kind": "construction",
+      "material": "stone",
+      "break_section": false,
+      "disintegrate": true,
+      "fracture_after_cut": false
+    },
+    "framing": "scene",
+    "tail_duration_ms": 5000
+  },
+  {
+    "id": "construction-stone-cut-fracture",
+    "title": "Construction Stone Cut Fracture",
+    "tags": [
+      "packet-7",
+      "disintegrate",
+      "four-corners"
+    ],
+    "description": "Actual cast, exact observed object cut/dust, then ordinary fracture or owner retirement.",
+    "scenario": {
+      "kind": "construction",
+      "material": "stone",
+      "break_section": false,
+      "disintegrate": true,
+      "fracture_after_cut": true
+    },
+    "framing": "scene",
+    "tail_duration_ms": 5000
+  },
+  {
+    "id": "construction-ice-disintegration",
+    "title": "Construction Ice Disintegration",
+    "tags": [
+      "packet-7",
+      "disintegrate",
+      "four-corners"
+    ],
+    "description": "Actual cast, exact observed object cut/dust, then ordinary fracture or owner retirement.",
+    "scenario": {
+      "kind": "construction",
+      "material": "ice",
+      "break_section": false,
+      "disintegrate": true,
+      "fracture_after_cut": false
+    },
+    "framing": "scene",
+    "tail_duration_ms": 5000
+  },
+  {
+    "id": "banish-foreign-return",
+    "title": "Banishment \u00b7 foreign creature returns early",
+    "description": "Concentration ends before ten rounds; the original displaced creature returns through its committed entry.",
+    "tags": [
+      "transport",
+      "banishment",
+      "four-corners",
+      "paired-observers"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "transport-spell",
+      "program": "banish_foreign_return"
+    }
+  },
+  {
+    "id": "banish-permanent",
+    "title": "Banishment \u00b7 completed foreign departure",
+    "description": "Ten native duration ticks complete the foreign departure. Ownership expires without an invented return portal.",
+    "tags": [
+      "transport",
+      "banishment",
+      "four-corners",
+      "paired-observers"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "transport-spell",
+      "program": "banish_permanent"
+    }
+  },
+  {
+    "id": "banish-pending",
+    "title": "Banishment \u00b7 return waits for real placement",
+    "description": "No landing cell is available when concentration ends. Return waits until the native placement succeeds.",
+    "tags": [
+      "transport",
+      "banishment",
+      "four-corners",
+      "paired-observers"
+    ],
+    "framing": "actors",
+    "scenario": {
+      "kind": "transport-spell",
+      "program": "banish_pending"
+    }
+  },
+  {
+    "id": "telekinesis-ledge-enemy",
+    "title": "Telekinesis \u00b7 enemy landing ten feet lower",
+    "tags": [
+      "landing",
+      "forced-movement",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Actual supported ten-foot descent from the existing rendered terrace. Native landing damage and Prone resolve at contact; controlled allied Telekinesis is safe. Both observers have native Darkvision. Original ground art and body animation, all four camera views.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "forced-movement",
+      "mechanism": "telekinesis",
+      "source_position": [
+        17,
+        20
+      ],
+      "target_position": [
+        18,
+        20
+      ],
+      "battlefield_id": "battlefield.visual_vertical_seam",
+      "seed": 1,
+      "allied": false,
+      "destination": [
+        20,
+        20
+      ],
+      "initial_cast": true
+    }
+  },
+  {
+    "id": "telekinesis-ledge-ally",
+    "title": "Telekinesis \u00b7 safe allied descent",
+    "tags": [
+      "landing",
+      "forced-movement",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Actual supported ten-foot descent from the existing rendered terrace. Native landing damage and Prone resolve at contact; controlled allied Telekinesis is safe. Both observers have native Darkvision. Original ground art and body animation, all four camera views.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "forced-movement",
+      "mechanism": "telekinesis",
+      "source_position": [
+        17,
+        20
+      ],
+      "target_position": [
+        18,
+        20
+      ],
+      "battlefield_id": "battlefield.visual_vertical_seam",
+      "seed": 1,
+      "allied": true,
+      "destination": [
+        20,
+        20
+      ],
+      "initial_cast": true
+    }
+  },
+  {
+    "id": "shove-ledge-fall",
+    "title": "Shove \u00b7 ten-foot ledge fall",
+    "tags": [
+      "landing",
+      "forced-movement",
+      "paired-observers",
+      "four-corners"
+    ],
+    "description": "Actual supported ten-foot descent from the existing rendered terrace. Native landing damage and Prone resolve at contact; controlled allied Telekinesis is safe. Both observers have native Darkvision. Original ground art and body animation, all four camera views.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "forced-movement",
+      "mechanism": "shove",
+      "source_position": [
+        17,
+        20
+      ],
+      "target_position": [
+        18,
+        20
+      ],
+      "battlefield_id": "battlefield.visual_vertical_seam",
+      "seed": 0,
+      "allied": false
+    }
+  },
+  {
+    "id": "construction-ice-dome-5-retirement",
+    "title": "Ice Dome 5 Feet \u00b7 Early Retirement",
+    "tags": [
+      "packet-7",
+      "ice-dome",
+      "four-corners"
+    ],
+    "description": "Actual native radius, shared object owner, original shell material and admitted finite retirement or shared fracture with real residual air.",
+    "scenario": {
+      "kind": "construction",
+      "material": "ice",
+      "break_section": false,
+      "dome_radius": 5
+    },
+    "framing": "scene",
+    "tail_duration_ms": 3000
+  },
+  {
+    "id": "construction-ice-dome-5-break",
+    "title": "Ice Dome 5 Feet \u00b7 Shared Break",
+    "tags": [
+      "packet-7",
+      "ice-dome",
+      "four-corners"
+    ],
+    "description": "Actual native radius, shared object owner, original shell material and admitted finite retirement or shared fracture with real residual air.",
+    "scenario": {
+      "kind": "construction",
+      "material": "ice",
+      "break_section": true,
+      "dome_radius": 5
+    },
+    "framing": "scene",
+    "tail_duration_ms": 3000
+  },
+  {
+    "id": "construction-ice-dome-10-retirement",
+    "title": "Ice Dome 10 Feet \u00b7 Early Retirement",
+    "tags": [
+      "packet-7",
+      "ice-dome",
+      "four-corners"
+    ],
+    "description": "Actual native radius, shared object owner, original shell material and admitted finite retirement or shared fracture with real residual air.",
+    "scenario": {
+      "kind": "construction",
+      "material": "ice",
+      "break_section": false,
+      "dome_radius": 10
+    },
+    "framing": "scene",
+    "tail_duration_ms": 3000
+  },
+  {
+    "id": "construction-ice-dome-10-break",
+    "title": "Ice Dome 10 Feet \u00b7 Shared Break",
+    "tags": [
+      "packet-7",
+      "ice-dome",
+      "four-corners"
+    ],
+    "description": "Actual native radius, shared object owner, original shell material and admitted finite retirement or shared fracture with real residual air.",
+    "scenario": {
+      "kind": "construction",
+      "material": "ice",
+      "break_section": true,
+      "dome_radius": 10
+    },
+    "framing": "scene",
+    "tail_duration_ms": 3000
+  },
+  {
+    "id": "construction-force-panels-retirement",
+    "title": "Force Joined Panels \u00b7 Contact and Retirement",
+    "tags": [
+      "packet-7",
+      "force-membrane",
+      "four-corners"
+    ],
+    "description": "Public native casting, See Invisibility, admitted ordinary contact and exact whole-owner collapse. Original connected membrane and source material; no collision event is invented.",
+    "scenario": {
+      "kind": "construction",
+      "material": "force",
+      "break_section": true,
+      "disintegrate": false
+    },
+    "framing": "scene",
+    "tail_duration_ms": 1600,
+    "settled_hold_ms": 500
+  },
+  {
+    "id": "construction-force-panels-disintegrate",
+    "title": "Force Joined Panels \u00b7 Disintegrate",
+    "tags": [
+      "packet-7",
+      "force-membrane",
+      "four-corners"
+    ],
+    "description": "Public native casting, See Invisibility, admitted ordinary contact and exact whole-owner collapse. Original connected membrane and source material; no collision event is invented.",
+    "scenario": {
+      "kind": "construction",
+      "material": "force",
+      "break_section": true,
+      "disintegrate": true
+    },
+    "framing": "scene",
+    "tail_duration_ms": 1600,
+    "settled_hold_ms": 500
+  },
+  {
+    "id": "construction-force-dome-5-disintegrate",
+    "title": "Force Dome 5 Feet \u00b7 Disintegrate",
+    "tags": [
+      "packet-7",
+      "force-membrane",
+      "four-corners"
+    ],
+    "description": "Public native casting, See Invisibility, admitted ordinary contact and exact whole-owner collapse. Original connected membrane and source material; no collision event is invented.",
+    "scenario": {
+      "kind": "construction",
+      "material": "force",
+      "break_section": true,
+      "disintegrate": true,
+      "dome_radius": 5
+    },
+    "framing": "scene",
+    "tail_duration_ms": 1600,
+    "settled_hold_ms": 500
+  },
+  {
+    "id": "construction-force-dome-10-disintegrate",
+    "title": "Force Dome 10 Feet \u00b7 Disintegrate",
+    "tags": [
+      "packet-7",
+      "force-membrane",
+      "four-corners"
+    ],
+    "description": "Public native casting, See Invisibility, admitted ordinary contact and exact whole-owner collapse. Original connected membrane and source material; no collision event is invented.",
+    "scenario": {
+      "kind": "construction",
+      "material": "force",
+      "break_section": true,
+      "disintegrate": true,
+      "dome_radius": 10
+    },
+    "framing": "scene",
+    "tail_duration_ms": 1600,
+    "settled_hold_ms": 500
+  },
+  {
+    "id": "queue-class-rage",
+    "title": "Class feature: rage",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "rage"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-frenzy",
+    "title": "Class feature: frenzy",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "frenzy"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-reckless",
+    "title": "Class feature: reckless",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "reckless"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-intimidate",
+    "title": "Class feature: intimidate",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "intimidate"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-relentless",
+    "title": "Class feature: relentless",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "relentless"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-mindless",
+    "title": "Class feature: mindless",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "mindless"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-native-martial",
+    "title": "Class feature: native martial",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "native_martial"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-second-wind",
+    "title": "Class feature: second wind",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "second_wind"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-action-surge",
+    "title": "Class feature: action surge",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "action_surge"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-protection",
+    "title": "Class feature: protection",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "protection"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-indomitable",
+    "title": "Class feature: indomitable",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "indomitable"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-survivor",
+    "title": "Class feature: survivor",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "survivor"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-font-gather",
+    "title": "Class feature: font gather",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "font_gather"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-font-shape",
+    "title": "Class feature: font shape",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "font_shape"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-quickened",
+    "title": "Class feature: quickened",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "quickened"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-twinned",
+    "title": "Class feature: twinned",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "twinned"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-distant",
+    "title": "Class feature: distant",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "distant"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-affinity",
+    "title": "Class feature: affinity",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "affinity"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-wings",
+    "title": "Class feature: wings",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "wings"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-awe",
+    "title": "Class feature: awe",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "awe"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-draconic-fear",
+    "title": "Class feature: draconic fear",
+    "tags": [
+      "spell-queue",
+      "class-features",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Actual direct progression, native action or intervention, retained public observer facts, accepted roar-cast-v5 artwork.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "draconic_fear"
+    },
+    "tail_duration_ms": 1400,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-branch-retaliation",
+    "title": "Class outcome: retaliation",
+    "tags": [
+      "spell-queue",
+      "class-branches",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Real native outcome and actual attack/intervention owner; no synthetic action or success inference.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "native_martial",
+      "martial_route": "retaliation"
+    },
+    "tail_duration_ms": 1200,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-branch-extra",
+    "title": "Class outcome: extra",
+    "tags": [
+      "spell-queue",
+      "class-branches",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Real native outcome and actual attack/intervention owner; no synthetic action or success inference.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "native_martial",
+      "martial_route": "extra"
+    },
+    "tail_duration_ms": 1200,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-branch-martial-miss",
+    "title": "Class outcome: martial miss",
+    "tags": [
+      "spell-queue",
+      "class-branches",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Real native outcome and actual attack/intervention owner; no synthetic action or success inference.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "native_martial",
+      "succeeded": false
+    },
+    "tail_duration_ms": 1200,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-branch-indomitable-failed",
+    "title": "Class outcome: indomitable failed",
+    "tags": [
+      "spell-queue",
+      "class-branches",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Real native outcome and actual attack/intervention owner; no synthetic action or success inference.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "indomitable",
+      "succeeded": false
+    },
+    "tail_duration_ms": 1200,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "queue-class-branch-relentless-failed",
+    "title": "Class outcome: relentless failed",
+    "tags": [
+      "spell-queue",
+      "class-branches",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Real native outcome and actual attack/intervention owner; no synthetic action or success inference.",
+    "framing": "actors",
+    "scenario": {
+      "kind": "class-feature",
+      "program": "relentless",
+      "succeeded": false
+    },
+    "tail_duration_ms": 1200,
+    "settled_hold_ms": 300
+  },
+  {
+    "id": "gap-cone-h0",
+    "title": "Cone of Cold \u00b7 direction 0",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native 60-foot cone, failed and successful saves; original eight-direction art, cold contact and finite body chill.",
+    "scenario": {
+      "kind": "cone-of-cold",
+      "heading": 0
+    }
+  },
+  {
+    "id": "gap-cone-h1",
+    "title": "Cone of Cold \u00b7 direction 1",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native 60-foot cone, failed and successful saves; original eight-direction art, cold contact and finite body chill.",
+    "scenario": {
+      "kind": "cone-of-cold",
+      "heading": 1
+    }
+  },
+  {
+    "id": "gap-cone-h2",
+    "title": "Cone of Cold \u00b7 direction 2",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native 60-foot cone, failed and successful saves; original eight-direction art, cold contact and finite body chill.",
+    "scenario": {
+      "kind": "cone-of-cold",
+      "heading": 2
+    }
+  },
+  {
+    "id": "gap-cone-h3",
+    "title": "Cone of Cold \u00b7 direction 3",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native 60-foot cone, failed and successful saves; original eight-direction art, cold contact and finite body chill.",
+    "scenario": {
+      "kind": "cone-of-cold",
+      "heading": 3
+    }
+  },
+  {
+    "id": "gap-cone-h4",
+    "title": "Cone of Cold \u00b7 direction 4",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native 60-foot cone, failed and successful saves; original eight-direction art, cold contact and finite body chill.",
+    "scenario": {
+      "kind": "cone-of-cold",
+      "heading": 4
+    }
+  },
+  {
+    "id": "gap-cone-h5",
+    "title": "Cone of Cold \u00b7 direction 5",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native 60-foot cone, failed and successful saves; original eight-direction art, cold contact and finite body chill.",
+    "scenario": {
+      "kind": "cone-of-cold",
+      "heading": 5
+    }
+  },
+  {
+    "id": "gap-cone-h6",
+    "title": "Cone of Cold \u00b7 direction 6",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native 60-foot cone, failed and successful saves; original eight-direction art, cold contact and finite body chill.",
+    "scenario": {
+      "kind": "cone-of-cold",
+      "heading": 6
+    }
+  },
+  {
+    "id": "gap-cone-h7",
+    "title": "Cone of Cold \u00b7 direction 7",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native 60-foot cone, failed and successful saves; original eight-direction art, cold contact and finite body chill.",
+    "scenario": {
+      "kind": "cone-of-cold",
+      "heading": 7
+    }
+  },
+  {
+    "id": "gap-cone-oblique",
+    "title": "Cone of Cold \u00b7 oblique aim",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native (2,1) aim uses the nearest directional bank with a small angle correction. Exact native membership and save results are retained.",
+    "scenario": {
+      "kind": "cone-of-cold",
+      "oblique": true
+    }
+  },
+  {
+    "id": "gap-call",
+    "title": "Call Lightning \u00b7 initial cast and repeat",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "One complete V5 strike at each selected ground point; actual recipients receive the original electric contact. Native concentration removal ends repeat access.",
+    "scenario": {
+      "kind": "call-lightning"
+    }
+  },
+  {
+    "id": "gap-call-moved-empty",
+    "title": "Call Lightning \u00b7 move and aim at empty ground",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Initial multi-recipient cast, native caster movement, then a retained repeat at a different empty position.",
+    "scenario": {
+      "kind": "call-lightning",
+      "repeat_position": [
+        9,
+        8
+      ],
+      "move_before_repeat": true
+    }
+  },
+  {
+    "id": "gap-wind-cardinal",
+    "title": "Wind Wall \u00b7 cardinal interception",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "An ordinary bow shot meets the retained native wall intersection; its arrow retires there and the delivered local gust dissipates.",
+    "scenario": {
+      "kind": "wind-interception",
+      "direction": [
+        0,
+        1
+      ]
+    }
+  },
+  {
+    "id": "gap-wind-diagonal",
+    "title": "Wind Wall \u00b7 diagonal interception",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "An ordinary bow shot meets the retained native wall intersection; its arrow retires there and the delivered local gust dissipates.",
+    "scenario": {
+      "kind": "wind-interception",
+      "direction": [
+        1,
+        1
+      ]
+    }
+  },
+  {
+    "id": "gap-wind-oblique",
+    "title": "Wind Wall \u00b7 oblique interception",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "An ordinary bow shot meets the retained native wall intersection; its arrow retires there and the delivered local gust dissipates.",
+    "scenario": {
+      "kind": "wind-interception",
+      "direction": [
+        1,
+        2
+      ]
+    }
+  },
+  {
+    "id": "gap-wind-clear",
+    "title": "Wind Wall \u00b7 clear arrow control",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "The wall is off the arrow path. The ordinary bow attack continues to its recipient.",
+    "scenario": {
+      "kind": "wind-interception",
+      "blocked": false
+    }
+  },
+  {
+    "id": "gap-thorns-ring",
+    "title": "Wall of Thorns \u00b7 original circular geometry",
+    "tags": [
+      "production-gap",
+      "four-corners",
+      "paired-observers"
+    ],
+    "description": "Native 10-foot ring with the accepted original living geometry; only received sections are rendered. Formation, contact, and concentration removal share the ordinary wall lifecycle.",
+    "scenario": {
+      "kind": "wall-assembly",
+      "program": "thorns",
+      "form": "ring"
+    }
   }
 ]

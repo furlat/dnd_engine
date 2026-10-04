@@ -1,0 +1,41 @@
+{
+  "installed_and_private_verified": [
+    {
+      "path": "game/assets/wind_flow/Color1DGradient.rgba32f",
+      "bytes": 4096,
+      "sha256": "17564f7d6136038118e657ddd92e77deb88cd2894ea696f5ec37408a43a2eebf"
+    },
+    {
+      "path": "game/assets/wind_flow/sprite_sheet.rgba32f",
+      "bytes": 67108848,
+      "sha256": "ff490cb3400398795b23a3a4e6cef8a3808c2c920fae804e4ba0ae5af0f747f8"
+    },
+    {
+      "path": "game/assets/wind_flow/wind-components.json",
+      "bytes": 13755,
+      "sha256": "486386d47d3f1e149755d8c28e3d31d9db64037af15e1f96806658d3e8e5f7c2"
+    },
+    {
+      "path": "game/assets/wind_flow/Wind_1_texture.rgba32f",
+      "bytes": 5592400,
+      "sha256": "4a1f547c5c51c5f33623e6220c7010cb20fd17e20077fbaaac370eea9cb5bf17"
+    },
+    {
+      "path": "game/assets/wind_flow/Wind_2_texture_subs.rgba32f",
+      "bytes": 22369616,
+      "sha256": "c1742774dea49cb0cb624c47164b3352ff5d4d702f673cebee9d4cd5fe1b3c52"
+    }
+  ],
+  "originals_verified": {
+    "WindModules.gd": "43903d1fd00b294b905d9a30f0d9a9612579896f86df3ce43dfdb4132f4cdecf",
+    "authoring/Postprocess.gd.txt": "895c8dd05ccfe7c04af25cf00e30656bb96e1e6b134ce22e43081a5f220fd31c",
+    "authoring/capture.py": "097cfbcb471c3acec17b3a06316201916e2ca2d4909cc30a51ae4ce09a70b1ec",
+    "VFX/materials/m_windstreaks13.tres": "f6ea9fc6706a19eb026ceb742130d299c8caea2c5d0118bb505881b46add9cb2",
+    "VFX/shaders/s_windpanner_1_p_ds.tres": "f1c94278fb6425e5010926f24e063adee3584f3247ed33d41352a5cf932dbb57",
+    "VFX/textures/T_PerlinNoise_Tiled11_inv.png": "8b50d862e875547c469399d5a9f60ee9a2fc50a1b4a96cdb49e107362c840cfd",
+    "VFX/textures/T_VFX_Noise_531.png": "bbbefac0deb7154eff4bb3296c1818cdd638f9afaaa04e53df2516620bfd8091",
+    "VFX/Scenes/VFX_WindHit_K2.tscn": "85867f04d373eb74576dc3f0bf24e1b59ee8439b16f6d339e999ef4725a82fb6",
+    "VFX/shaders/s_animated_ds_toon.gdshader": "d954bebd5b6374b06e079d6d819f04d007cddb9330d2c6d30ce4416365e24f44",
+    "VFX/textures/T_WindWaveAnim.png": "6f803e6629eddabdb57fd8023f7624d5846e8a2429e509bb0b501873b3c4d0dc"
+  }
+}

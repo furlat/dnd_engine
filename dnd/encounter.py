@@ -667,13 +667,16 @@ class Encounter(BaseObject):
         return event
 
     def _fire_round_end(self) -> RoundEndEvent:
-        """Fire round end event."""
+        """Resolve round-end rules, then publish one completed boundary."""
         event = RoundEndEvent(
             source_entity_uuid=self.uuid,
             encounter_uuid=self.uuid,
             round_number=self.round_number,
-            phase=EventPhase.COMPLETION
+            phase=EventPhase.DECLARATION
         )
+        event = event.phase_to(EventPhase.EXECUTION)
+        event = event.phase_to(EventPhase.EFFECT)
+        event = event.phase_to(EventPhase.COMPLETION)
         return event
 
     def _environment_step(self) -> None:

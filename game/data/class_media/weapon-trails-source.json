@@ -1,0 +1,820 @@
+{
+  "source": "/home/tommaso/Dev/neurodragon_art/sources/class-actions-roar-cast-v5-20261004/authoring/prepare_strike.py",
+  "source_sha256": "8d1c6a18e8c759eadbec3e42bdad3b1bd21163e5abde254f1968a97dde7d23d5",
+  "method": "Original alpha>120; outer 16 percent of squared source-pixel distance from (64,66), mean and round to 3 decimals; same accepted method for each actual category/pose. Empty cells remain null.",
+  "original_Melee1_Attack1_all_120_points_exact": true,
+  "source_sheets": [
+    {
+      "category": "Melee1",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee1/Attack1.png",
+      "sha256": "8a908b0d2f4641c2f696a526c67de5e1bead9e455eb10377ee68d09e6c52ff58"
+    },
+    {
+      "category": "Melee10",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee10/Attack1.png",
+      "sha256": "6c44d7338cb0d790f0d3c32e87c50fb6811c4cff2784fa3fc9dafacf5b8d4e24"
+    },
+    {
+      "category": "Melee11",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee11/Attack1.png",
+      "sha256": "fdbc4cbbf11297a34e3b38778c84b50d0e5a8e426c6de5f138e722783e4500c2"
+    },
+    {
+      "category": "Melee12",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee12/Attack1.png",
+      "sha256": "d02dec681576b46b31c69ed6870b3452fa91df880b8a1f70594ccee36b109441"
+    },
+    {
+      "category": "Melee13",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee13/Attack1.png",
+      "sha256": "2d4b8ce71f164709fe1e04db3d9f9898853310ebfd16693d2d2565bea958db2d"
+    },
+    {
+      "category": "Melee14",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee14/Attack1.png",
+      "sha256": "df2155db8a2434742b25219eb2f350ade8ba7551ba7dd629689a708be78d9fd8"
+    },
+    {
+      "category": "Melee15",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee15/Attack1.png",
+      "sha256": "a1b9d85e386274f42a1773de943ea469b1262b44ae7eb6d9644e7a2471b5c62f"
+    },
+    {
+      "category": "Melee16",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee16/Attack1.png",
+      "sha256": "962997daf0660ab926306a79400122bdc1675689ebaf54c2862c26d01874290d"
+    },
+    {
+      "category": "Melee17",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee17/Attack1.png",
+      "sha256": "9c48a34d32a84ca82418088cd1f4e9dac00f3a0686d426f2d5324ab02039c2aa"
+    },
+    {
+      "category": "Melee18",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee18/Attack1.png",
+      "sha256": "2a99f60b73cefc5a56b922039ef97bdb82ecfc16957d7761725461ae1b409110"
+    },
+    {
+      "category": "Melee19",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee19/Attack1.png",
+      "sha256": "ecfb8209e864361abe83c8fc8e8256e4ceb4f86a287ee2452e079b84dd2f1411"
+    },
+    {
+      "category": "Melee2",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee2/Attack1.png",
+      "sha256": "ef07b818d85a9bcb082595b0624cff3311d7040cba99271e34655c3928047fa2"
+    },
+    {
+      "category": "Melee20",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee20/Attack1.png",
+      "sha256": "6e58605a7f5a4d42efa9542c520ce052a42e58af44977ee5dee963ee653a97b6"
+    },
+    {
+      "category": "Melee21",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee21/Attack1.png",
+      "sha256": "68436c30c158ce9ee7f51be918f80b3de56e150ae26819c630fd7ec7a1729677"
+    },
+    {
+      "category": "Melee22",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee22/Attack1.png",
+      "sha256": "3c8e8412b3e652c007892a64db8db9d39303d85b70f5301fd38f69ced56ca3af"
+    },
+    {
+      "category": "Melee23",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee23/Attack1.png",
+      "sha256": "4a394926c033d77c1e905b45bb0971379718db242701ba57af37fcc2bae48f6f"
+    },
+    {
+      "category": "Melee24",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee24/Attack1.png",
+      "sha256": "07f7e27cc2fd55eb39485fbe2711b26f689879fdeb44f41956dce14914293c0c"
+    },
+    {
+      "category": "Melee25",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee25/Attack1.png",
+      "sha256": "2b7edcb858764a3a200f244f5c0295342b07759e72f5946d431a3fb6d1423aef"
+    },
+    {
+      "category": "Melee3",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee3/Attack1.png",
+      "sha256": "2d26d89adc04f84f95306976fd4c7d0ad445f4e1dcf7aab7b94ff29fa211ab48"
+    },
+    {
+      "category": "Melee4",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee4/Attack1.png",
+      "sha256": "a24ae21b007994c431789b433a2e7c4b716500c1786efbe14e9880ef1daa4502"
+    },
+    {
+      "category": "Melee5",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee5/Attack1.png",
+      "sha256": "df7d6b957ec8e30e9401a9c8c47e96b55dd630edce6f03ab295709497162c819"
+    },
+    {
+      "category": "Melee6",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee6/Attack1.png",
+      "sha256": "ef57000f676b4ee58a1368c5380abd91e33fe1fb0435be517b99418ea7ba8997"
+    },
+    {
+      "category": "Melee7",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee7/Attack1.png",
+      "sha256": "2dfe25fb8ac133f38db22ad70a83eefac85038b188d97b3d9163502d637b9400"
+    },
+    {
+      "category": "Melee8",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee8/Attack1.png",
+      "sha256": "aca0b345d6b7702fba51cc66ef989c9026ea860040a426b652de63c17df69666"
+    },
+    {
+      "category": "Melee9",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Melee9/Attack1.png",
+      "sha256": "fe00f56556666ba93398d58570a2001bd44c18a4848ad537a59568f2c5feaef8"
+    },
+    {
+      "category": "Offhand1",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Offhand1/Attack1.png",
+      "sha256": "21da0d01f21e4cf7e355263367007b9072f14ab893a3f32bb84874dfcd1b553a"
+    },
+    {
+      "category": "Offhand2",
+      "clip": "Attack1",
+      "file": "game/assets/neuroclient/spritesheets/Offhand2/Attack1.png",
+      "sha256": "43bb8fe758840c8ce6af0011181c6480cd7f925fd318f25446a17e4e4c568f15"
+    },
+    {
+      "category": "Melee1",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee1/Attack2.png",
+      "sha256": "e1ed48f6f4aeb4d4457ae600aadb43dd58b1d2eca38389d6b7680323a040320e"
+    },
+    {
+      "category": "Melee10",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee10/Attack2.png",
+      "sha256": "7b37c31e0425e90b947320e1eb6e5ff577b956f444f854e743cd4da681e167f3"
+    },
+    {
+      "category": "Melee11",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee11/Attack2.png",
+      "sha256": "66639c72c6248bf3eeade9357c77c75b6dcf2001708bb9e0d4c96e70029ae904"
+    },
+    {
+      "category": "Melee12",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee12/Attack2.png",
+      "sha256": "f45a3b8b667b525d241d37dfc6e6d4b2aa0047bdbe6d8caa8dc13beb27fd1f75"
+    },
+    {
+      "category": "Melee13",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee13/Attack2.png",
+      "sha256": "45eb204ae22222c213ab0edfe0c543080f290707b8d560f21a5e351c6d896260"
+    },
+    {
+      "category": "Melee14",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee14/Attack2.png",
+      "sha256": "afc57b690383d5fefda701240f1ec796beea7f1140bf9eb028e1c4071f5a0f55"
+    },
+    {
+      "category": "Melee15",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee15/Attack2.png",
+      "sha256": "c09fb96170f408be15ce8373242e7682c560295a2e88a55e6b3412bfbc8ca84d"
+    },
+    {
+      "category": "Melee16",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee16/Attack2.png",
+      "sha256": "b83271ef0ef2d7a59b489b9968042e64f412b329c28d79e98ee6d495add3a497"
+    },
+    {
+      "category": "Melee17",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee17/Attack2.png",
+      "sha256": "ad0fdd759f4349e01ca959580e15f19be157cd50fb2de51f275458ea77a2ea9e"
+    },
+    {
+      "category": "Melee18",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee18/Attack2.png",
+      "sha256": "d03b6ba2a53a83d0fc0ae16085c12730f1b6a71d468a2b1bf8ee6a1d7f188b32"
+    },
+    {
+      "category": "Melee19",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee19/Attack2.png",
+      "sha256": "59f0515bcb3c8a60d9592d089bc7014f689e75e89974d5cdf6e48730b0a785b3"
+    },
+    {
+      "category": "Melee2",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee2/Attack2.png",
+      "sha256": "ac5fd3fd14c11a35d149cef9d93179ce62a50efbc39eebb5ae1722e3c5b2726b"
+    },
+    {
+      "category": "Melee20",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee20/Attack2.png",
+      "sha256": "c3620fc809c83c88e829e18ed03dd3eb643b77b3bd15fe49f82cf06905b8c9bc"
+    },
+    {
+      "category": "Melee21",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee21/Attack2.png",
+      "sha256": "0e8892cd4722192582e87b7c03b109caaf54a2e6eccc454692ed092e643a7c56"
+    },
+    {
+      "category": "Melee22",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee22/Attack2.png",
+      "sha256": "81b2e51eee90813852dc348b051abe2880fa75a36f1147dc9618f19ac10e414a"
+    },
+    {
+      "category": "Melee23",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee23/Attack2.png",
+      "sha256": "f14f4fd55419f58077572bfeb06ac505b91536792f48af23443a6866cbc53277"
+    },
+    {
+      "category": "Melee24",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee24/Attack2.png",
+      "sha256": "fb024f50efc7a44c69e911e30adcacc8f5e55b172670699b6b859ffcd984650a"
+    },
+    {
+      "category": "Melee25",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee25/Attack2.png",
+      "sha256": "eb41b30088921434e93d0e2978a57a4b776690982c0be60eae495f6d9e39e258"
+    },
+    {
+      "category": "Melee3",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee3/Attack2.png",
+      "sha256": "3c7e7bfe9dca6e511bd9cc28744064141b290ff91e043d454698a49764fdfa7a"
+    },
+    {
+      "category": "Melee4",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee4/Attack2.png",
+      "sha256": "0807a4ea423f17266495f7e9aebdcf96c288b4bba591ce872b31f585e195fb53"
+    },
+    {
+      "category": "Melee5",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee5/Attack2.png",
+      "sha256": "51714963b5d7d1dfedb1963c25ea5350c27caf33f43d55f9dd983568a2d61174"
+    },
+    {
+      "category": "Melee6",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee6/Attack2.png",
+      "sha256": "f6e092dbecd11bf07c01d9a6c642053d880b52f9598472e09856a39d99b523fe"
+    },
+    {
+      "category": "Melee7",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee7/Attack2.png",
+      "sha256": "9108cd80de80bcf2345fb76eea553b1dc3dceed79eb896f799570c0b13b3083f"
+    },
+    {
+      "category": "Melee8",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee8/Attack2.png",
+      "sha256": "4993e9ef8138437b89278bedb74b4c87b5ba9eb1800c72d5fc957896468a1301"
+    },
+    {
+      "category": "Melee9",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Melee9/Attack2.png",
+      "sha256": "c34bcf71215f2dfc1d74ca5b2ed6fdc2edf71b6fef9fa9d4cdddb8c9c98438c9"
+    },
+    {
+      "category": "Offhand1",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Offhand1/Attack2.png",
+      "sha256": "2ed1e6d34cb6461b63396d89a050cc42f51afeef1a0b4eb9f110407bd8d7bcbf"
+    },
+    {
+      "category": "Offhand2",
+      "clip": "Attack2",
+      "file": "game/assets/neuroclient/spritesheets/Offhand2/Attack2.png",
+      "sha256": "cffc8d6c75257d46c0938489ea2404221791dd14420261fdc67aaa7e36ebe7b2"
+    },
+    {
+      "category": "Melee1",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee1/Attack4.png",
+      "sha256": "2ff224da68cfac301b0eada062f2c9ca766c490e4b626331da5a87a2fe0b5335"
+    },
+    {
+      "category": "Melee10",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee10/Attack4.png",
+      "sha256": "21c52aa0ef719be4dc7f2f8428a406ce909828e77989730b943b876595d63c81"
+    },
+    {
+      "category": "Melee11",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee11/Attack4.png",
+      "sha256": "b3486b8ac952a97a174ebdd6a1f687f05c40589e3ba3cfb17603eadefcb3bc42"
+    },
+    {
+      "category": "Melee12",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee12/Attack4.png",
+      "sha256": "2aaf3b4729b0ded293e4a4ad92159f8a4ff30dadeb58c2c3e8f0bbd6ae3f4969"
+    },
+    {
+      "category": "Melee13",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee13/Attack4.png",
+      "sha256": "cd20c59a7c893fa1e41f49c958c88cd1349ef3e2badee0c95e03fdf9053ab9b0"
+    },
+    {
+      "category": "Melee14",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee14/Attack4.png",
+      "sha256": "ce475ce00e3ddbec1afa97b8061d0ac2ab19d643418289b4d4506a84f1b8dd02"
+    },
+    {
+      "category": "Melee15",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee15/Attack4.png",
+      "sha256": "5d6b3f952f9883e4fed88786a26a8d499263fcc709e971eca81832c5852e6464"
+    },
+    {
+      "category": "Melee16",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee16/Attack4.png",
+      "sha256": "04b96ed2cb46fff29a4be8f27742a85e5e7c6462decdc40c2fb28f637639ab61"
+    },
+    {
+      "category": "Melee17",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee17/Attack4.png",
+      "sha256": "86c1f5f7da1c1b817d0775243bd16a7de2a8a56ec36041223cbd48f5aa253a53"
+    },
+    {
+      "category": "Melee18",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee18/Attack4.png",
+      "sha256": "d887e1f82d9472d3065d9fdec555a9e13c8cc865498c5a1d091afbef2366d40e"
+    },
+    {
+      "category": "Melee19",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee19/Attack4.png",
+      "sha256": "39a7b9db92a07dd870d60c75aff41daa73d4deba631488875302159b10a48a3a"
+    },
+    {
+      "category": "Melee2",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee2/Attack4.png",
+      "sha256": "a559bea44ba720f9b929c8e99f7c707dd8cc8cf4a1c5ca2036d9ddcd61071ca5"
+    },
+    {
+      "category": "Melee20",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee20/Attack4.png",
+      "sha256": "afc780f3f07a476a2e038f39c7b78cd8d97cacf208b982033503e58ef3cbd7dc"
+    },
+    {
+      "category": "Melee21",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee21/Attack4.png",
+      "sha256": "ddcdb9771ff5145c3823fa91b26abad3f90efddabd791da2d6158e54307036ac"
+    },
+    {
+      "category": "Melee22",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee22/Attack4.png",
+      "sha256": "2e856551ed204958661cb6fdafb8dd5c6d0fa8e8c8921b5ed43456a61a81009b"
+    },
+    {
+      "category": "Melee23",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee23/Attack4.png",
+      "sha256": "933b9ed30aaeb802dbb11985234685c4189ada3a511a4b605c7b4747d7ebc68c"
+    },
+    {
+      "category": "Melee24",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee24/Attack4.png",
+      "sha256": "b924585d735374d217b6a085a8d126dc97bbee2f2f3bf53249e48399ce17359d"
+    },
+    {
+      "category": "Melee25",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee25/Attack4.png",
+      "sha256": "064293cd4f4dca2bdef68616776861c6c3d576d81ffd828fa1bbf039afffd0c9"
+    },
+    {
+      "category": "Melee3",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee3/Attack4.png",
+      "sha256": "67bef1ed7c760e3a21130b93c38c60179d9be150eb712118433d127e7c616842"
+    },
+    {
+      "category": "Melee4",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee4/Attack4.png",
+      "sha256": "e80d7f0b7da6f10405016fe48bbc477c3c4dd6a93ff4ee66382f632daee963da"
+    },
+    {
+      "category": "Melee5",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee5/Attack4.png",
+      "sha256": "cc2dc3a57518ebd1afb5d4be58d99bf8dbc20bcff35cca4cd509f6f8076668d5"
+    },
+    {
+      "category": "Melee6",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee6/Attack4.png",
+      "sha256": "4ec9699258afdd0fb7fa10202ccede8c9c0a3c18145bbb9717625d75f87f360e"
+    },
+    {
+      "category": "Melee7",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee7/Attack4.png",
+      "sha256": "170807fdaaa6d6ac4e39d227ed78a2df9f17064a97248cde2f98aac3603c1f27"
+    },
+    {
+      "category": "Melee8",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee8/Attack4.png",
+      "sha256": "93d78bcac37501f07571aa71d4ee0db07ff250b7adeaeb22a99806131950a1e1"
+    },
+    {
+      "category": "Melee9",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Melee9/Attack4.png",
+      "sha256": "232e3890cca87550b2fe2300af86080ec39ce7a69762e521a2fc412754024112"
+    },
+    {
+      "category": "Offhand1",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Offhand1/Attack4.png",
+      "sha256": "c2f9a94bbe509cb24908b8d35151a028a1e0f106bd598fc720ff1299e8baaf5a"
+    },
+    {
+      "category": "Offhand2",
+      "clip": "Attack4",
+      "file": "game/assets/neuroclient/spritesheets/Offhand2/Attack4.png",
+      "sha256": "4ca8a736c5922a2ca8896295ff3589335d898c95a5b0aa785692812b20ad1e6f"
+    },
+    {
+      "category": "Melee1",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee1/Attack5.png",
+      "sha256": "c765c0add4d77a6689fa0fd93db50225e465bd201ed28bc70a6ae5385261dc9a"
+    },
+    {
+      "category": "Melee10",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee10/Attack5.png",
+      "sha256": "9c90661c534d1d7179f8cc4a4a844b231fc8037d73e4b82f67b89148feacc914"
+    },
+    {
+      "category": "Melee11",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee11/Attack5.png",
+      "sha256": "5c0c8e09406f709a47ca2e07533d23f1731191a08575aa675b5cb4fa74ac8b98"
+    },
+    {
+      "category": "Melee12",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee12/Attack5.png",
+      "sha256": "7b643d82b2b18336faf4afba666553fbd8e358828e166377cba1021e024478c1"
+    },
+    {
+      "category": "Melee13",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee13/Attack5.png",
+      "sha256": "1e7cf2c8adcd4d9e686e7f57c4939888ad9afdcaee75281a45341823bae23c16"
+    },
+    {
+      "category": "Melee14",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee14/Attack5.png",
+      "sha256": "c94b870d169f8ee7e86ca0bd5035414bc7f0af6f5b75b21fdbb16319414c1f5b"
+    },
+    {
+      "category": "Melee15",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee15/Attack5.png",
+      "sha256": "263c8ef8e7515a73e33158637dfa4e949751d282dfc7dd35ac90513ab8861234"
+    },
+    {
+      "category": "Melee16",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee16/Attack5.png",
+      "sha256": "1e02294813f170c944a790e8939f8ecab9633bda4976b7f18a5ce3b8626179dc"
+    },
+    {
+      "category": "Melee17",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee17/Attack5.png",
+      "sha256": "158461f4c16ee0867004421de07e646cee4861ba31bb44982ed873505a4fd36f"
+    },
+    {
+      "category": "Melee18",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee18/Attack5.png",
+      "sha256": "a0c95e62387b7cddfe32b647cda4c12b3c84156be2fbd0c07fa83577e0a6331d"
+    },
+    {
+      "category": "Melee19",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee19/Attack5.png",
+      "sha256": "b6675cc1ad657f7a119486252a31c7ca6740517c0a5812b9b989920bbe34ae12"
+    },
+    {
+      "category": "Melee2",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee2/Attack5.png",
+      "sha256": "fdf430f455754582de9ef46c6a001c5e8a0fb74c80da563a5fac3e9375af604c"
+    },
+    {
+      "category": "Melee20",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee20/Attack5.png",
+      "sha256": "27aec0aad33e92024c4ef55022922c7ee29151366cb694cf21d16d4ce36627f3"
+    },
+    {
+      "category": "Melee21",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee21/Attack5.png",
+      "sha256": "64542c6b4b29415219292c468a83805ab4f6700f1632efe6b0c6333ff86e47f8"
+    },
+    {
+      "category": "Melee22",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee22/Attack5.png",
+      "sha256": "9c6710c1ad314af53da7bf3c15358b689af9654314eb358e5dfea9d43f052ad9"
+    },
+    {
+      "category": "Melee23",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee23/Attack5.png",
+      "sha256": "76e3511611fd239c71a0e5a9d2cf08e4be2f15e479091e6a73664d88511970b4"
+    },
+    {
+      "category": "Melee24",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee24/Attack5.png",
+      "sha256": "0d191f85a181cd5ef7a140e718dc09bb29e1319b15cb812f8088ffa2ae1d5ab7"
+    },
+    {
+      "category": "Melee25",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee25/Attack5.png",
+      "sha256": "bbf15c05becdcec9f34a3361310bb2dc96a280d5ca314802e9b7f3a2d46f2a00"
+    },
+    {
+      "category": "Melee3",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee3/Attack5.png",
+      "sha256": "6c6c003121593528ef68cfc22a170824e60f7d88112dd4d4d77423bee8dcedab"
+    },
+    {
+      "category": "Melee4",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee4/Attack5.png",
+      "sha256": "10cf01b6d56932ad57b83c67f1ce5ec15378201b7382669f3bbdbce86ae7a25a"
+    },
+    {
+      "category": "Melee5",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee5/Attack5.png",
+      "sha256": "69a9b59c22fe411840bc0f63b12aa0b4f2a1ba9205ba9ead94fbb825dcc7122b"
+    },
+    {
+      "category": "Melee6",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee6/Attack5.png",
+      "sha256": "5b4f8904218e867534fba3d0a6b87b7c9d9aa2f5058635e8bc949f1df65d95db"
+    },
+    {
+      "category": "Melee7",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee7/Attack5.png",
+      "sha256": "bf45d8450bea2794e202531e7438eb5de53274c2905e8c8f14429da24903f1e7"
+    },
+    {
+      "category": "Melee8",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee8/Attack5.png",
+      "sha256": "5f7041957af2064925d26e05e852014c5070a0eca61341aba95e62b82962306f"
+    },
+    {
+      "category": "Melee9",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Melee9/Attack5.png",
+      "sha256": "6a60a758a3891e5dbd4a3ae6c6df87089a5fa23e6f355c6d3870f4db9522cf3d"
+    },
+    {
+      "category": "Offhand1",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Offhand1/Attack5.png",
+      "sha256": "5f61d853306561aeb43a47453d7d4d9795ef53149ec5649ae41c710e138e9883"
+    },
+    {
+      "category": "Offhand2",
+      "clip": "Attack5",
+      "file": "game/assets/neuroclient/spritesheets/Offhand2/Attack5.png",
+      "sha256": "1a864f48143dbd0923e1eab30f3f7195b4f19f1d152958d6822223b56f552607"
+    },
+    {
+      "category": "Melee1",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee1/Attack6.png",
+      "sha256": "a6012134fec0ca5ebb66b193c375e26f1c0212bfe4d64b188adb37ae941455a0"
+    },
+    {
+      "category": "Melee10",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee10/Attack6.png",
+      "sha256": "ed1637c766bcd52bb08d55a0210184602cc65f7f314772b8dff9a62abb350da7"
+    },
+    {
+      "category": "Melee11",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee11/Attack6.png",
+      "sha256": "6c8568cf5ffdf83bc061076fbc1be51044df523e3095d15aff43405b5d83e3c3"
+    },
+    {
+      "category": "Melee12",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee12/Attack6.png",
+      "sha256": "836aa5a186e9f43c7692aa719c0615880c466d2cf17b5df103c057923ead7e4c"
+    },
+    {
+      "category": "Melee13",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee13/Attack6.png",
+      "sha256": "48cc7fb0eed524902a2c276c76b8e47c3f1930e5e7e51c559e9fb13edb3b1762"
+    },
+    {
+      "category": "Melee14",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee14/Attack6.png",
+      "sha256": "f4379f3ffccd903e59946361528e387468c014847a1460db7d30f4eb446cf520"
+    },
+    {
+      "category": "Melee15",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee15/Attack6.png",
+      "sha256": "919ff5f61bb1dc1aa129084abb4884b5ccab4c6e14f4e4e5e87879c97ca50064"
+    },
+    {
+      "category": "Melee16",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee16/Attack6.png",
+      "sha256": "dc7da2c87182784901321eb7cd57adb20b575c9b55ffa9ceaa98ca567f54537c"
+    },
+    {
+      "category": "Melee17",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee17/Attack6.png",
+      "sha256": "06572a7614a1442554c529fa417b829a8e09144106596c928b67041f24ced887"
+    },
+    {
+      "category": "Melee18",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee18/Attack6.png",
+      "sha256": "fcbbb1986d053697d95bcb75b0c4c7d51ea56bbd4231dde6a0aef290f326a3a8"
+    },
+    {
+      "category": "Melee19",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee19/Attack6.png",
+      "sha256": "21b8cb6a3848c1151b507b9417a0f3ed5d3eb6f0dc5ba13206c179248602f910"
+    },
+    {
+      "category": "Melee2",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee2/Attack6.png",
+      "sha256": "e79b13e7ede523e9ca96217c69c2acee817d3c46b70973ac894d8be7fcfe5926"
+    },
+    {
+      "category": "Melee20",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee20/Attack6.png",
+      "sha256": "b166ca07022efc55703370b4cf91cca7e8c937bd86ec2ecb7f9b4f7aaa424970"
+    },
+    {
+      "category": "Melee21",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee21/Attack6.png",
+      "sha256": "96611e3479b618eb75a4b5f02bff67d075a9b5bd043a05d94682d245f638a5de"
+    },
+    {
+      "category": "Melee22",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee22/Attack6.png",
+      "sha256": "9eb5359bd1be7353f899d308594b4cfd93af315ba139cc49b5ca5194de62a94b"
+    },
+    {
+      "category": "Melee23",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee23/Attack6.png",
+      "sha256": "70258159a75914bb8aaeb34be6d8b2896543a90d1dc8d9555bf10c38db601ffd"
+    },
+    {
+      "category": "Melee24",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee24/Attack6.png",
+      "sha256": "c89a7809f51abac12b6d533ebae1f61c596add4dc81b9a28e3fdce33f4243a24"
+    },
+    {
+      "category": "Melee25",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee25/Attack6.png",
+      "sha256": "9a890c6c930266135f658af3e8f80449358d8bb2568bbf390b077e4d85ee0b70"
+    },
+    {
+      "category": "Melee3",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee3/Attack6.png",
+      "sha256": "ac41349bdb1e302107dd2862a5acdc8fa0ff8db85d5e21c70509bcd97a36b04e"
+    },
+    {
+      "category": "Melee4",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee4/Attack6.png",
+      "sha256": "f13b26c056118f1d4325cee886c4ae6bcdefeafae9172cb263299431e8927103"
+    },
+    {
+      "category": "Melee5",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee5/Attack6.png",
+      "sha256": "7e67c132fa43ee5538f9859be73206d67fbe4085f57383c4838dc8290412ee64"
+    },
+    {
+      "category": "Melee6",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee6/Attack6.png",
+      "sha256": "e393ea6a41d704b540035bb5aa9ccbae8f23d94a976650403c0e5c15646308e0"
+    },
+    {
+      "category": "Melee7",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee7/Attack6.png",
+      "sha256": "9fd352045b1c0810b3e0901ef82dddfc97d84cc4cb036f10dee6948ed13262f3"
+    },
+    {
+      "category": "Melee8",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee8/Attack6.png",
+      "sha256": "312351ca99ecabfb3f5cd24280fe087b99ebcdeba23dcc4bfc5173fede315ccb"
+    },
+    {
+      "category": "Melee9",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Melee9/Attack6.png",
+      "sha256": "30ad5bd99c5ded5888f88a43e45728a6151a84f0704f107b3479ede272abf596"
+    },
+    {
+      "category": "Offhand1",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Offhand1/Attack6.png",
+      "sha256": "06cd30bbd85d55593db24e9d8d3b1fed29e74122d7360017d03fc7bf73224232"
+    },
+    {
+      "category": "Offhand2",
+      "clip": "Attack6",
+      "file": "game/assets/neuroclient/spritesheets/Offhand2/Attack6.png",
+      "sha256": "b38e7bb87a14e644a41c3650a11dbd44785c4a0c9cae5d92155da09369872a7f"
+    }
+  ],
+  "poses": 135,
+  "unmeasured": "Fixed sheets have no separable weapon pixels and retain existing authored attack layers."
+}

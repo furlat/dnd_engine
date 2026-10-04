@@ -1,0 +1,329 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/solar-spells-study",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/solar-lifecycle-v1-20261004",
+  "approval": {
+    "date": "2026-10-03",
+    "revision": "solar-lifecycle-v1",
+    "status": "both_artworks_approved_with_production_followups",
+    "spells": [
+      "spell.sunbeam",
+      "spell.sunburst"
+    ],
+    "userStatement": "sunbeam has some alignemnet problems where it starts etc and in what direcitons is avove or below the caster but this can be fixed in production / ensure sunbeam does not goes over the actual covered area looks good otherwise to me",
+    "approvalScope": "Sunbeam artwork and Sunburst ground-coverage-v2 presentation approved. Sunbeam attachment, sorting and covered-area fixes remain mandatory production work. Approval is not runtime installation.",
+    "requiredProductionWork": [
+      "Anchor the launch to the actual animated casting hand for every direction and camera.",
+      "Correct front/back and above/below caster occlusion and Y sorting.",
+      "Keep all discharge geometry, sparks and visible beam extent within the authoritative covered volume/mask: 60 feet long, 5 feet wide, respecting backend clipping.",
+      "Measure range from the gameplay origin; an offset hand socket must never extend the endpoint or shift the covered corridor.",
+      "Check eight directions across four cameras, boundary recipients, an empty line and obstruction-clipped coverage."
+    ],
+    "sentToProduction": false,
+    "productionInstalledByThisBatch": false,
+    "coverageAudit": "authoring/coverage-audit.json",
+    "sunburstApproval": {
+      "date": "2026-10-03",
+      "review": "ground-coverage-v2",
+      "nativeArtRevision": "solar-lifecycle-v1",
+      "userStatement": "perfect -- then we are done I guess?? let's do a ful lpass of improvement of the handowns",
+      "scope": "Accepted after inspecting the actual ground-hit area; no new art export."
+    }
+  },
+  "metadata_sha256": "deef685d3a5d9002a62f043b29195135299b5f530024f47dbed5886707367760",
+  "identities": [
+    "solar.sunbeam",
+    "solar.sunburst.back",
+    "solar.sunburst.front"
+  ],
+  "files": [
+    {
+      "path": "game/assets/weather_solar_media/solar/assets/beam-0.png",
+      "bytes": 320970,
+      "sha256": "50a81ad07c7ff0ff22c7a01f8394bbd7c7d6757e83d406c5c756c3170b59fe1a"
+    },
+    {
+      "path": "game/assets/weather_solar_media/solar/assets/beam-1.png",
+      "bytes": 118359,
+      "sha256": "e9b8063e53c486a4cd0fe2f07fda997567f4aa691d8c2a588c95e2976c4e849f"
+    },
+    {
+      "path": "game/assets/weather_solar_media/solar/assets/beam-2.png",
+      "bytes": 338814,
+      "sha256": "08b91d93206772973b7edc93fd77e48a086b64c91299677d10e4d25ae28d1a41"
+    },
+    {
+      "path": "game/assets/weather_solar_media/solar/assets/beam-3.png",
+      "bytes": 137562,
+      "sha256": "68b89d5fece010a34dcd179b36262bd0c4341594f14527ceebbaaa3f94bfd5ac"
+    },
+    {
+      "path": "game/assets/weather_solar_media/solar/assets/beam-4.png",
+      "bytes": 357099,
+      "sha256": "2bd26ef9c9a5250fa57930ede4401671c92e2c8c75903ac0bb2c47b678daa0c2"
+    },
+    {
+      "path": "game/assets/weather_solar_media/solar/assets/beam-5.png",
+      "bytes": 124404,
+      "sha256": "0ffe99059078f78d252330c4fd393a43df9d25477962add2d5a8e59cf2a4728e"
+    },
+    {
+      "path": "game/assets/weather_solar_media/solar/assets/beam-6.png",
+      "bytes": 360550,
+      "sha256": "9a5b06b0cf2ede56e1669b0a99f0a19dd9c4a974bd1de401ffa11d4dfe89b842"
+    },
+    {
+      "path": "game/assets/weather_solar_media/solar/assets/beam-7.png",
+      "bytes": 125694,
+      "sha256": "0cc92f4e49e2968b051ea5d3e43d32e278bae388cb3ffa5e8a2a0bc1ed8a7658"
+    },
+    {
+      "path": "game/assets/weather_solar_media/solar/assets/burst-back.png",
+      "bytes": 1406181,
+      "sha256": "8bf97776569076099b4d9f12cdcc8fcd25153e1cc142822b64f821062f06bf42"
+    },
+    {
+      "path": "game/assets/weather_solar_media/solar/assets/burst-front.png",
+      "bytes": 2838376,
+      "sha256": "b2e5bf60a893558c5c2c4eb9379e33887bb7a444497ced81468fc6b5a7be840d"
+    }
+  ],
+  "originals": [
+    {
+      "path": "HANDOFF.md",
+      "sha256": "f114b56d39ca2d1ec96e016ef7813a324c48ef3b416d1a34e9405c51d053fa96"
+    },
+    {
+      "path": "approval.json",
+      "sha256": "d851c2672a0778590da349d753457bd5b1cc97e7c548dae8ef4589b308144fda"
+    },
+    {
+      "path": "assets/beam-0.png",
+      "sha256": "50a81ad07c7ff0ff22c7a01f8394bbd7c7d6757e83d406c5c756c3170b59fe1a"
+    },
+    {
+      "path": "assets/beam-1.png",
+      "sha256": "e9b8063e53c486a4cd0fe2f07fda997567f4aa691d8c2a588c95e2976c4e849f"
+    },
+    {
+      "path": "assets/beam-2.png",
+      "sha256": "08b91d93206772973b7edc93fd77e48a086b64c91299677d10e4d25ae28d1a41"
+    },
+    {
+      "path": "assets/beam-3.png",
+      "sha256": "68b89d5fece010a34dcd179b36262bd0c4341594f14527ceebbaaa3f94bfd5ac"
+    },
+    {
+      "path": "assets/beam-4.png",
+      "sha256": "2bd26ef9c9a5250fa57930ede4401671c92e2c8c75903ac0bb2c47b678daa0c2"
+    },
+    {
+      "path": "assets/beam-5.png",
+      "sha256": "0ffe99059078f78d252330c4fd393a43df9d25477962add2d5a8e59cf2a4728e"
+    },
+    {
+      "path": "assets/beam-6.png",
+      "sha256": "9a5b06b0cf2ede56e1669b0a99f0a19dd9c4a974bd1de401ffa11d4dfe89b842"
+    },
+    {
+      "path": "assets/beam-7.png",
+      "sha256": "0cc92f4e49e2968b051ea5d3e43d32e278bae388cb3ffa5e8a2a0bc1ed8a7658"
+    },
+    {
+      "path": "assets/burst-back.png",
+      "sha256": "8bf97776569076099b4d9f12cdcc8fcd25153e1cc142822b64f821062f06bf42"
+    },
+    {
+      "path": "assets/burst-front.png",
+      "sha256": "b2e5bf60a893558c5c2c4eb9379e33887bb7a444497ced81468fc6b5a7be840d"
+    },
+    {
+      "path": "authoring/SolarBeamCapture.gd",
+      "sha256": "92b75f290ffabf978bda95ea231772fdbb3c7651a12ba005a81ef86ee9ff8b03"
+    },
+    {
+      "path": "authoring/SunburstCapture.gd",
+      "sha256": "df68c294ffc97956fee1586ee6bb33d44ca8ff3af8c59d77c6972f4b3a90aaa9"
+    },
+    {
+      "path": "authoring/area-camera-0.png",
+      "sha256": "b6b6c3b6a9bbda1ee521bde820b8a88f4c8c88e4ab040bdbb309a348f940de23"
+    },
+    {
+      "path": "authoring/area-camera-1.png",
+      "sha256": "b74045e586bcf2c5a8defa97335cc3f385ae2b5e1310b2400d9bc4f01868b21d"
+    },
+    {
+      "path": "authoring/area-camera-2.png",
+      "sha256": "2cdb9c9e6a9427397cd434068f4ea4f2887002f13500fb3751e14976703db4e9"
+    },
+    {
+      "path": "authoring/area-camera-3.png",
+      "sha256": "167431bd84a3f94ee1e2ee479e40c0c492db057931b7a9bea1e475d6a553beac"
+    },
+    {
+      "path": "authoring/asset-validation.json",
+      "sha256": "08cb8a4fe48f575e50fed5960b06171ae254f9c3137c8830a00eefb264081496"
+    },
+    {
+      "path": "authoring/beam-alpha-probe.jpg",
+      "sha256": "d25603e1ef84f587aaca42fd7be5984b512ab3cf0b297289891f4b5bc2f04d7c"
+    },
+    {
+      "path": "authoring/beam-camera-0.png",
+      "sha256": "754be9b85daf669dd164e82e1b2b6cc2e47fce9e0e4eff0ea9a81f1c3c4fd5b7"
+    },
+    {
+      "path": "authoring/beam-camera-1.png",
+      "sha256": "df02f9307eba88fd846f0865d6d9f9aa805e6a227bef58f35f85659e8ab6a422"
+    },
+    {
+      "path": "authoring/beam-camera-2.png",
+      "sha256": "35e2f4e553fc89ab51ec637c44f7c6dec122d61f2a5fa8c3439fb4d41c608927"
+    },
+    {
+      "path": "authoring/beam-camera-3.png",
+      "sha256": "b2df937e7d253930de31c0b1f1294e86233fc750f0d050b25e0602889ec46240"
+    },
+    {
+      "path": "authoring/beam-capture.log",
+      "sha256": "9abb3101af67cdd1f4b944968ccb5a420d5d2a08435327fa046197090cdd8c7e"
+    },
+    {
+      "path": "authoring/beam-probe.jpg",
+      "sha256": "e826794a68eb68ab89c43ebfb489cb5519c5eea955c0ed2a719396e9698e1745"
+    },
+    {
+      "path": "authoring/browser-check.json",
+      "sha256": "60f5533b912bbbef142ea85da8a524cae02cf3bc145df928598c0cc5d5389692"
+    },
+    {
+      "path": "authoring/burst-camera-0.png",
+      "sha256": "74406fe0e10c1261bf100fd51cab6e571e8cfb3b4ced1378c1e9556ee6e881d9"
+    },
+    {
+      "path": "authoring/burst-camera-1.png",
+      "sha256": "6c7e019526c2d6e92ad65f2b4845d7fcbf93413a4d0850a39a6824a463a76f00"
+    },
+    {
+      "path": "authoring/burst-camera-2.png",
+      "sha256": "a51832d0a144ad26cd1be5adf200c3bcf14d68cbb33365bbd867bb452f276fb0"
+    },
+    {
+      "path": "authoring/burst-camera-3.png",
+      "sha256": "664658f8d45bbf8c710a680ec97fe37c583138975d06154fb0c322263e46e0c8"
+    },
+    {
+      "path": "authoring/burst-capture.log",
+      "sha256": "0ec8824a916eed944f637ce710554b5dd5156329846d9846af7eff59397d3b73"
+    },
+    {
+      "path": "authoring/burst-impact-detail.png",
+      "sha256": "bf0781a68b5c5c2c448f5d75ed1c3c413f065e6f25104a27f900ae46976914d9"
+    },
+    {
+      "path": "authoring/capture_beam.py",
+      "sha256": "a8f16ea73ebe83593d10a90f1c875bd56dc2ac22f5275d6bfc17020faa9e987d"
+    },
+    {
+      "path": "authoring/capture_burst.py",
+      "sha256": "4a7198c35e42438731d813ea65cb8257bfc503dda207b5864cd25679d42fc1d2"
+    },
+    {
+      "path": "authoring/check-area.cjs",
+      "sha256": "6eaf55bfcd0d1f71bd4b987e8286a0edff01ec1bfc45df8125741b69aad2469d"
+    },
+    {
+      "path": "authoring/check-directions.cjs",
+      "sha256": "de82d67a10987f28fb0b42a8921d0c98c654532756510e1d26f073d2e1802039"
+    },
+    {
+      "path": "authoring/check.cjs",
+      "sha256": "fd6a86c18df767f1af1c0c9ac892175d2ab982515c5c161c3565f4287893991b"
+    },
+    {
+      "path": "authoring/coverage-audit.json",
+      "sha256": "418cf3416e62bd186c83353798390b39e2c07b5276e1c97985ffac46e5d74b50"
+    },
+    {
+      "path": "authoring/direction-validation.json",
+      "sha256": "cc9eff113944df9edc45447df1ac3e37056ee36001411c2d33b0be9afe8ffd60"
+    },
+    {
+      "path": "authoring/export_coverage.py",
+      "sha256": "e62cd071d2a32b9ef6615fcfc584a16970fdb1d2101f0670657ab993ecce0e3f"
+    },
+    {
+      "path": "authoring/four-camera-review.jpg",
+      "sha256": "b19d490676d18ed3f2c6f53fab887023b35a6058561ad77f705a7738fd817f9a"
+    },
+    {
+      "path": "authoring/ground-area-only.png",
+      "sha256": "c1e78de4d3540e600b19448da34749a9947b9306ef58567e07f1d6a6618c6bb9"
+    },
+    {
+      "path": "authoring/ground-area-validation.json",
+      "sha256": "8b17a1ce0e3c48a4fcc09ee7633900debe76f6edf70303b51dba58236317b62b"
+    },
+    {
+      "path": "authoring/pack.py",
+      "sha256": "ef69f7f835ef51291d7bc930bd24681f2e0085b7d73dff8543798e219bb48412"
+    },
+    {
+      "path": "authoring/solar-burst.gdshader",
+      "sha256": "3ad39a4d7268e3cacaf4249316a1e9f042906f9b83d24adf201c72a28faab5be"
+    },
+    {
+      "path": "authoring/sunbeam-1.55.png",
+      "sha256": "6398798216fb151dd596d27afd8ca9efe7d8d5491e61ceca7391452e3a22db78"
+    },
+    {
+      "path": "authoring/sunbeam-2.25.png",
+      "sha256": "728d06af7ea4fd379b55d9d0f39fe0fe990d968081b1beacf8e0fde4deff578b"
+    },
+    {
+      "path": "authoring/sunbeam-3.2.png",
+      "sha256": "241db68e29faa0a4b3c6e642d5f11bb13f0b5d6fd16b7a9a81c4302d076ebe7e"
+    },
+    {
+      "path": "authoring/sunbeam-4.9.png",
+      "sha256": "c2c2ef367a126e4d11257f9cb176de93adebe9facabaea6e8c37edacaa7220de"
+    },
+    {
+      "path": "authoring/sunburst-1.55.png",
+      "sha256": "c699f01a93a60f167f1b12a178e4fe100eb83406fe3ea1f2e1bd12505f074597"
+    },
+    {
+      "path": "authoring/sunburst-2.25.png",
+      "sha256": "3cb88fa70c675047ef095ad5f306162f4050b10d61f3fec4c232dd4e88001931"
+    },
+    {
+      "path": "authoring/sunburst-3.2.png",
+      "sha256": "b8a08ce1baad1b7ddce7b2083d34d88382cd5427906461dea39d71b8dc42bc50"
+    },
+    {
+      "path": "authoring/sunburst-4.9.png",
+      "sha256": "a33500e6f96c5e6e4e4219c3a7564ae36336b9a7096c22039a8feb71c0c48d86"
+    },
+    {
+      "path": "blinded.json",
+      "sha256": "ed4d023366ec665c3fb188b49427def5a5b44b8d16e3bb4aeca23d5da20c0a39"
+    },
+    {
+      "path": "index.html",
+      "sha256": "2b8c50c46dc09c8bf96cc3ccbb35e861c0bea11d6541ee55cad2f1c32bfaad51"
+    },
+    {
+      "path": "manifest.json",
+      "sha256": "deef685d3a5d9002a62f043b29195135299b5f530024f47dbed5886707367760"
+    },
+    {
+      "path": "review.js",
+      "sha256": "df1c410d6d490037e05b6264ed999434473ce79127986fc9bdbe3decd77366b2"
+    },
+    {
+      "path": "sunburst-coverage.json",
+      "sha256": "62517c4a2907f8f702c39401c3645d8464df59739685f2acc942286c6f24945f"
+    }
+  ],
+  "camera_registration": "Source-authored camera-relative banks; no additional views or pixels generated."
+}

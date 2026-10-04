@@ -12,6 +12,24 @@ Keep pixels, binary geometry and generated previews private. Keep code and
 authored JSON contracts public. Put review output in `.runtime/` or `output/`.
 Importers update media registration/storage, never rewrite selected recipes.
 
+October 4 spell-hand completion selects six unchanged original modular
+`Magic2/Attack1–6.png` sheets from the existing NeuroClient authoring directory.
+They are registered as `/support-spells/cast-hands/Magic2-AttackN.png`, installed
+under `game/assets/support_spells/cast-hands/` and retained in the private
+production release (1,496,267 bytes total). These support True Strike's real
+weapon poses; existing exact shortsword/shortbow charges remain selected first.
+Other newly enabled casts reuse already installed isolated casting sheets.
+
+October4 production-gap intake preserves originals under
+`sources/production-gaps-20261004/`. `devtools/import_production_gap_media.py`
+installs116 selected files into the existing weather/solar, lightning and wall
+bundles: eight Cone headings, four complete Call Lightning views and Wind's
+isolated block response with its original mesh/texture. Source registrations
+and hashes are in each bundle's `production-gap-source.json` and the
+[intake receipt](agent_docs/audits/SPELL_GAP_ASSET_INTAKE_2026-10-04.md).
+The human permits Cone's nearest-direction bank plus a small residual rotation;
+this does not alter its native targeting or authorize arbitrary asset stretching.
+
 October 2 Holds/Fear/Scorching sources are preserved under
 `sources/holds-eefffc58e8c5/`, `sources/fear-eyebite-deb28a4f625f/`,
 `sources/fear-diagonal-v7-20261002/` and `sources/scorching-isolated-v23-16a3b4f1525d/`.
@@ -246,3 +264,16 @@ packer preserves748 exact crops in24 pages (4,096,916bytes); use
 the duplicate endpoint. Two approved Incapacitated cue pages (823bytes) come from
 `devtools/bake_incapacitated_media.py` and its pinned artist reference. The26-file
 private install receipt is `hypnotic-private-install-receipt.json` in the spell queue.
+
+October 4 Finger of Death preserves the complete accepted normal/cameo source in
+`sources/finger-of-death-20261004/`. Original native heading captures retain all
+128 banks / 13,312 RGBA cells; the unrotated camera-zero branches match all416
+accepted original frames exactly. `devtools/export_finger_media.py` captures the
+unchanged models/materials; `devtools/export_finger_components.py` exports the
+three original Darkness meshes, HDR gradients, noise and splinters. The existing
+lossless packer/verified installer in `devtools/import_finger_media.py` installs
+156 payloads (34,101,016 bytes), with local/private hashes and preserved prior
+manifest. Public selections are in `game/data/finger_media/`. Keep independent
+camera resources, owner headings, paired layers, original pivots and32FPS clocks;
+do not rotate a 2D isometric hand to invent another heading. The procedural donor
+uses the existing world compositor; its palette differs from the bone hand.

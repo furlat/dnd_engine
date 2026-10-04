@@ -3,13 +3,14 @@
 from dataclasses import dataclass, replace
 from uuid import UUID
 
-from game.animation import ActorContact, CastSample, CastTimeline, cast_deliveries, sample_cast, projectile_contact
+from game.animation import ActorContact, CastSample, CastTimeline, cast_deliveries, sample_cast, projectile_contact, body_elevation_steps
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from game.animation_types import AnimationData, InterruptionRule, ReactionMedia
 from game.attack import AttackSample, BoundAttack
 from game.body_action import BodyActionCue
 from game.combat import BoundCast
 from game.player_facts import PlayerNode
+from game.stationary_media import StationaryMediaCue
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +24,7 @@ class ReactionMediaCue:
     succeeded: bool
     start_ms: float
     sample: CastSample | None
+    source_point: tuple[float, float, float] | None = None
 
     @property
     def complete_ms(self) -> float:
@@ -31,11 +33,22 @@ class ReactionMediaCue:
 
 def bind_reaction_media(event_uuid: UUID, incoming_event_uuid: UUID,
                         bound: BoundCast | BodyActionCue, recipe: ReactionMedia, succeeded: bool,
-                        start_ms: float, cutoff_ms: float) -> ReactionMediaCue:
+                        start_ms: float, cutoff_ms: float, *, reaction_id: str | None = None,
+                        outcome_code: str | None = None) -> ReactionMediaCue:
     if isinstance(bound, BodyActionCue):
         return ReactionMediaCue(event_uuid, incoming_event_uuid, None, bound.data, bound.contact,
                                 recipe, succeeded, start_ms, None)
     sample = sample_cast(bound.timeline, max(0., cutoff_ms - 1e-6))
+    source_point = None
+    profile = bound.timeline.recipe.cancellationMedia
+    if profile is not None and reaction_id == profile.reactionId:
+        source = bound.timeline.source.caster
+        x,y,height = profile.reactionOffsetsByFacing[bound.timeline.facing]
+        source_point = (source.grid[0]+x, source.grid[1]+y,
+            body_elevation_steps(source, bound.timeline.data)+height)
+        if succeeded and outcome_code == profile.outcomeCode:
+            recipe = recipe.model_copy(update={"successByCamera": profile.successByCamera,
+                "scale": profile.reactionScale})
     # Logical samples retain their original flight progress and registration.
     # Reprojection remains camera-local; no retained screenshot or new emission.
     sample = replace(sample, bodies=(), numbers=(), vitals=(), device_frame=None,
@@ -43,7 +56,19 @@ def bind_reaction_media(event_uuid: UUID, incoming_event_uuid: UUID,
         delivery_enabled=False)
     return ReactionMediaCue(event_uuid, incoming_event_uuid, bound.timeline, bound.timeline.data,
                             bound.timeline.source.caster, recipe,
-                            succeeded, start_ms, sample)
+                            succeeded, start_ms, sample, source_point)
+
+
+def bind_cancellation_media(bound: BoundCast, event: PlayerNode,
+                            start_ms: float) -> tuple[StationaryMediaCue, ...]:
+    profile = bound.timeline.recipe.cancellationMedia
+    if (profile is None or event.cancellation is None
+            or event.cancellation.outcome_code != profile.outcomeCode):
+        return ()
+    source = bound.timeline.source.caster
+    return tuple(StationaryMediaCue(event.uuid, track, source.grid, source.elevation_steps,
+        bound.timeline.facing, start_ms+track.startOffsetMs, bound.timeline.data)
+        for track in profile.media)
 
 
 def interruption_rule(event: PlayerNode, data: AnimationData) -> InterruptionRule | None:
@@ -66,15 +91,20 @@ def interrupt_body(cue: BodyActionCue, rule: InterruptionRule) -> BodyActionCue:
 
 
 def interrupt_delivery(bound: BoundAttack | BoundCast,
-                       rule: InterruptionRule) -> BoundAttack | BoundCast:
-    stop = interruption_ms(bound, rule)
+                       rule: InterruptionRule, *, outcome_code: str | None = None) -> BoundAttack | BoundCast:
+    stop = interruption_ms(bound, rule, outcome_code=outcome_code)
     return replace(bound, timeline=replace(bound.timeline,
         body_end_ms=min(bound.timeline.body_end_ms, stop), complete_ms=stop))
 
 
-def interruption_ms(bound: BoundAttack | BoundCast, rule: InterruptionRule) -> float:
+def interruption_ms(bound: BoundAttack | BoundCast, rule: InterruptionRule, *,
+                    outcome_code: str | None = None, reaction_id: str | None = None) -> float:
     """A presentation anchor; a failed reaction uses it without cutting the cast."""
     timeline = bound.timeline
+    if isinstance(bound, BoundCast):
+        profile = bound.timeline.recipe.cancellationMedia
+        if profile is not None and (outcome_code == profile.outcomeCode or reaction_id == profile.reactionId):
+            return max(0., bound.timeline.release_ms + profile.cutoffOffsetMs)
     if isinstance(bound, BoundCast) and bound.timeline.source.protections:
         return protection_contact_ms(bound)
     if isinstance(bound, BoundAttack):

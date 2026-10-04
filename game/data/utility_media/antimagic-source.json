@@ -1,0 +1,21 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/final-utility-batch",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/final-utility-grounded-layering-v2",
+  "files": [
+    {
+      "path": "game/assets/utility_media/assets/antimagic-back.png",
+      "bytes": 1126578,
+      "sha256": "5aaa41a092128434d548f4b0861bab780ea7afb7cc709998539cadfba7bb678a"
+    },
+    {
+      "path": "game/assets/utility_media/assets/antimagic-front.png",
+      "bytes": 2927414,
+      "sha256": "7eb304a4091e5d6ac925f2d961767cfa4c902cda48c8985d801bfe232df7b067"
+    }
+  ],
+  "identities": [
+    "utility.antimagic.hold.back",
+    "utility.antimagic.hold.front"
+  ],
+  "manifest_sha256": "eb2535824c2f92e2fdd013283e178ada4003fb80434c2f1b7c6e5343c95ee990"
+}

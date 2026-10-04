@@ -1,0 +1,162 @@
+{
+  "schema": "neuroclient.spellStudioDrafts",
+  "version": 6,
+  "spells": [
+    {
+      "definitionRef": {
+        "content_id": "spell.spirit_guardians",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "elementColors": {
+        "primary": 16777215,
+        "secondary": 16777215,
+        "tertiary": 16777215
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/weather-solar/Attack5-hand-glow.png",
+          "colors": {
+            "source": "override",
+            "primary": 16777215,
+            "secondary": 16777215,
+            "tertiary": 16777215,
+            "mode": "tint"
+          }
+        }
+      },
+      "media": [],
+      "contact": {
+        "delayMs": 0
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    },
+    {
+      "definitionRef": {
+        "content_id": "spell.guardian_of_faith",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "elementColors": {
+        "primary": 16777215,
+        "secondary": 16777215,
+        "tertiary": 16777215
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/weather-solar/Attack5-hand-glow.png",
+          "colors": {
+            "source": "override",
+            "primary": 16777215,
+            "secondary": 16777215,
+            "tertiary": 16777215,
+            "mode": "tint"
+          }
+        }
+      },
+      "media": [],
+      "contact": {
+        "delayMs": 0
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    },
+    {
+      "definitionRef": {
+        "content_id": "spell.heroes_feast",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "elementColors": {
+        "primary": 16777215,
+        "secondary": 16777215,
+        "tertiary": 16777215
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/weather-solar/Attack5-hand-glow.png",
+          "colors": {
+            "source": "override",
+            "primary": 16777215,
+            "secondary": 16777215,
+            "tertiary": 16777215,
+            "mode": "tint"
+          }
+        }
+      },
+      "media": [],
+      "contact": {
+        "delayMs": 0
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    }
+  ]
+}

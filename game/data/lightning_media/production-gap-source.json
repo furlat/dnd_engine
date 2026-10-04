@@ -1,0 +1,556 @@
+{
+  "revision": "production-gaps-20261004-v1",
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/production-gap-delivery-2026-10-04",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/production-gaps-20261004",
+  "mediaSha256": "46c1ed40e37dd25191a198a355d2340e3130a6c540cb5165e4486aff36cfae49",
+  "deliveryReceiptSha256": "941f36df34d9be54884579bef87737bb875513cc0941ece62ad860927022fc52",
+  "identities": [
+    "lightning.call_lightning.v5.q0",
+    "lightning.call_lightning.v5.q1",
+    "lightning.call_lightning.v5.q2",
+    "lightning.call_lightning.v5.q3"
+  ],
+  "registrations": {
+    "lightning.call_lightning.v5.q0": {
+      "banksByFacing": {
+        "E": "q0",
+        "SE": "q0",
+        "S": "q0",
+        "SW": "q0",
+        "W": "q0",
+        "NW": "q0",
+        "N": "q0",
+        "NE": "q0"
+      },
+      "captureZoom": 0.75,
+      "referencePixelScale": 1.3333333333333333,
+      "frameCount": 48,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          384.0,
+          560.3632614803888
+        ],
+        "SE": [
+          384.0,
+          560.3632614803888
+        ],
+        "S": [
+          384.0,
+          560.3632614803888
+        ],
+        "SW": [
+          384.0,
+          560.3632614803888
+        ],
+        "W": [
+          384.0,
+          560.3632614803888
+        ],
+        "NW": [
+          384.0,
+          560.3632614803888
+        ],
+        "N": [
+          384.0,
+          560.3632614803888
+        ],
+        "NE": [
+          384.0,
+          560.3632614803888
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "lightning.call_lightning.v5.q1": {
+      "banksByFacing": {
+        "E": "q1",
+        "SE": "q1",
+        "S": "q1",
+        "SW": "q1",
+        "W": "q1",
+        "NW": "q1",
+        "N": "q1",
+        "NE": "q1"
+      },
+      "captureZoom": 0.75,
+      "referencePixelScale": 1.3333333333333333,
+      "frameCount": 48,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          384.0,
+          560.3632614803888
+        ],
+        "SE": [
+          384.0,
+          560.3632614803888
+        ],
+        "S": [
+          384.0,
+          560.3632614803888
+        ],
+        "SW": [
+          384.0,
+          560.3632614803888
+        ],
+        "W": [
+          384.0,
+          560.3632614803888
+        ],
+        "NW": [
+          384.0,
+          560.3632614803888
+        ],
+        "N": [
+          384.0,
+          560.3632614803888
+        ],
+        "NE": [
+          384.0,
+          560.3632614803888
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "lightning.call_lightning.v5.q2": {
+      "banksByFacing": {
+        "E": "q2",
+        "SE": "q2",
+        "S": "q2",
+        "SW": "q2",
+        "W": "q2",
+        "NW": "q2",
+        "N": "q2",
+        "NE": "q2"
+      },
+      "captureZoom": 0.75,
+      "referencePixelScale": 1.3333333333333333,
+      "frameCount": 48,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          384.0,
+          560.3632614803888
+        ],
+        "SE": [
+          384.0,
+          560.3632614803888
+        ],
+        "S": [
+          384.0,
+          560.3632614803888
+        ],
+        "SW": [
+          384.0,
+          560.3632614803888
+        ],
+        "W": [
+          384.0,
+          560.3632614803888
+        ],
+        "NW": [
+          384.0,
+          560.3632614803888
+        ],
+        "N": [
+          384.0,
+          560.3632614803888
+        ],
+        "NE": [
+          384.0,
+          560.3632614803888
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "lightning.call_lightning.v5.q3": {
+      "banksByFacing": {
+        "E": "q3",
+        "SE": "q3",
+        "S": "q3",
+        "SW": "q3",
+        "W": "q3",
+        "NW": "q3",
+        "N": "q3",
+        "NE": "q3"
+      },
+      "captureZoom": 0.75,
+      "referencePixelScale": 1.3333333333333333,
+      "frameCount": 48,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          384.0,
+          560.3632614803888
+        ],
+        "SE": [
+          384.0,
+          560.3632614803888
+        ],
+        "S": [
+          384.0,
+          560.3632614803888
+        ],
+        "SW": [
+          384.0,
+          560.3632614803888
+        ],
+        "W": [
+          384.0,
+          560.3632614803888
+        ],
+        "NW": [
+          384.0,
+          560.3632614803888
+        ],
+        "N": [
+          384.0,
+          560.3632614803888
+        ],
+        "NE": [
+          384.0,
+          560.3632614803888
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    }
+  },
+  "contracts": {
+    "groundAnchor": [
+      0,
+      0,
+      0
+    ],
+    "nativeScale": [
+      0.65,
+      0.5307227776030219,
+      0.65
+    ],
+    "mainMeshPhysicalYBoundsCells": [
+      -0.5362214000000001,
+      6.7985736
+    ],
+    "visualBoundsMeaning": "resource bounds of main three-surface mesh, not cloud geometry or gameplay range; secondary particles retain their original blue-local-v4 envelope",
+    "emitters": 2,
+    "mainMeshSurfaces": 3,
+    "sourceParticleCounts": [
+      3,
+      90
+    ],
+    "durationSeconds": 1.5,
+    "contactMilestoneSeconds": 0.03125,
+    "bodyFeedbackEndSeconds": 1.15125,
+    "localGroundFeedbackEndSeconds": 0.51125,
+    "loop": false
+  },
+  "files": [
+    {
+      "path": "game/assets/lightning_media/production-gaps/call/q0/0.png",
+      "bytes": 494540,
+      "sha256": "5b5ec93a9996d8a143bc530d400dd6efbafb23e4bababdd2c480a25743897054"
+    },
+    {
+      "path": "game/assets/lightning_media/production-gaps/call/q1/0.png",
+      "bytes": 510525,
+      "sha256": "e4c9a71789eba4c40b53550ed81f9abf219c14e4ce806acda2450be02bb38017"
+    },
+    {
+      "path": "game/assets/lightning_media/production-gaps/call/q2/0.png",
+      "bytes": 486819,
+      "sha256": "6146c5c0c63a0ff7b60ee9f51bfb42f698dd906520ce20c90bc27421a3691f30"
+    },
+    {
+      "path": "game/assets/lightning_media/production-gaps/call/q3/0.png",
+      "bytes": 515255,
+      "sha256": "4b6a643d5e946e2ab63741ed71cc0beb4a2ccbd0f102362ed12eb7d8c37d4068"
+    }
+  ],
+  "originals": [
+    {
+      "path": "production-gap-delivery-2026-10-04/media.json",
+      "sha256": "46c1ed40e37dd25191a198a355d2340e3130a6c540cb5165e4486aff36cfae49"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q1/adapter.gd",
+      "sha256": "3949f74094637cee8658780e029cb577261ec0e52932afa06642ac4d2a80eab8"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q1/registration.json",
+      "sha256": "449fee1c94a983e8d4450e3be37807b8894fb0b51ba839f97905bdd04f4c5008"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q1/command.json",
+      "sha256": "4a0371abf742b28af3fdf9c15d7c22d401a1f57f593532da2f16d6806eac9980"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q1/capture.json",
+      "sha256": "380e6c7109f8b9031fa0cffda52cae55686d86e5f4f6f17bbf144386386c16c1"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q2/adapter.gd",
+      "sha256": "3949f74094637cee8658780e029cb577261ec0e52932afa06642ac4d2a80eab8"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q2/registration.json",
+      "sha256": "b5483e9b74d0fe901df23f83540f02e0c72a76ca8bd3f4fe950c00cee353d8bc"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q2/command.json",
+      "sha256": "5698b58440418a2eee5910ca67954fafa00768873429c9b5fd57317797a8c420"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q2/capture.json",
+      "sha256": "bb0a9b8ef41fee5da4a77d45c4e241b227f20cb177c6933ca080f64692172aaf"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q3/adapter.gd",
+      "sha256": "3949f74094637cee8658780e029cb577261ec0e52932afa06642ac4d2a80eab8"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q3/registration.json",
+      "sha256": "51ed99dd62d30fca8caa4946079300184ad871e2f909d28e065e4dabf859a4a6"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q3/command.json",
+      "sha256": "8c0a897206c914fd5f79663783d28ac5e1068ae847f1f98883935f1f260e3b88"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/call/q3/capture.json",
+      "sha256": "21d6a875c786d81f6b2d0512d196c9a37d2f35b2e258e736405e1a537e6df678"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/THORNS_HEIGHT_DECISION.md",
+      "sha256": "6af9f694da6ba89327014bf057790adc1e9caeaab768fb4378f6271037f82edf"
+    },
+    {
+      "path": "electric-live-study/assets/arc-material.png",
+      "sha256": "b25b09b424b6919fe9c045c692525afecf90e4a2c09c3f834360c067429d1502"
+    },
+    {
+      "path": "electric-live-study/cast-assets/lightning-hands.png",
+      "sha256": "0d6639e471d7506c7bc34a627ecb76c55379ffde9d1f721e5854b17fc6132015"
+    },
+    {
+      "path": "electric-live-study/cast-assets/hand-sockets.json",
+      "sha256": "9d024faeaf5c40bd6030ce906f057e5a1258e031b5adffd5f83e2df87503f2f2"
+    },
+    {
+      "path": "electric-live-study/components.json",
+      "sha256": "847f4e36c8c221c849974702d666425bedd55dd43839d53d0346247d54746a9f"
+    },
+    {
+      "path": "electric-live-study/contact-renderer.js",
+      "sha256": "96869a30d2af4c85141a34bb51d3f821813e36291f638b80cb02e065f329c2a3"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/contact-renderer-camera.js",
+      "sha256": "4b6c47cb2c770155a7f5c6386178af7c73a4ccf361fbd960370c806970611807"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/WindBlockComponent.gd",
+      "sha256": "be90d442df5f092743f0d56e54ed27a40c70aa52a5e13ba9e9da73a63fea0114"
+    },
+    {
+      "path": "godot-library/projects/lelu-electricity/VFX/Scenes/VFX_ElectricRay_blue.tscn",
+      "sha256": "ccc65ef0ff4f600a32e3896b9acd1e556778e753db76b95807374cb60b1480c3"
+    },
+    {
+      "path": "godot-library/projects/lelu-electricity/VFX/Objects/thunder2.tres",
+      "sha256": "6d8b7b688475f1586f357f52a25f1d364095bd74959abdd5f55a81e14d5b4f70"
+    },
+    {
+      "path": "godot-library/projects/lelu-electricity/VFX/Shaders/s_special_shader.tres",
+      "sha256": "6ef20335aa86623afbdbc206265fa02f3224aa9181f197b277f709196151e100"
+    },
+    {
+      "path": "godot-library/projects/lelu-electricity/VFX/Textures/T_Electric_d222.png",
+      "sha256": "7dfc32dc0d940271c5f36417eab6851b45db809771e340fd6c47bd43fc3a9ab4"
+    },
+    {
+      "path": "godot-library/projects/lelu-electricity/VFX/Shaders/s_mark.tres",
+      "sha256": "fb63b79c7d3b2cffe151a3729a6bf5591b5d1d0a75feedb9e4cda8b5e8cd7e1e"
+    },
+    {
+      "path": "godot-library/projects/lelu-electricity/VFX/Textures/gradients/g_thunder_blue1.tres",
+      "sha256": "47b27422a6da899e550e204371eeac9aad43d69b7dbdf3399e3e05816cec7e6d"
+    },
+    {
+      "path": "godot-library/projects/lelu-electricity/VFX/Textures/T_VFX_Flare_3.PNG",
+      "sha256": "ad8df5af62e266d140186a2038d309fa325f4008f898abc09744f56b8de10755"
+    },
+    {
+      "path": "godot-library/projects/lelu-electricity/VFX/Shaders/s_ChunkOut.tres",
+      "sha256": "ebe6ca497e026b076d9f46b523fc77e269951b4b50bb6d82c4cafe23788f501a"
+    },
+    {
+      "path": "godot-library/projects/lelu-electricity/VFX/Textures/T_expansive_wave_texture.png",
+      "sha256": "94ceccb139759b0b748a09c71bb1b1921001367d71919ec93caa3259f2dc1223"
+    },
+    {
+      "path": "godot-library/projects/lelu-electricity/VFX/Objects/sm_chunks.obj",
+      "sha256": "be047fc9a036f9ee9d4e135e166d951773ef63a0b0efbba12494052903d43ef9"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/HANDOFF.md",
+      "sha256": "1d61668b9c4402db717df8d70c11d273929648281467ef4b768f049832f9a9e2"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/PLAN.md",
+      "sha256": "f3807d781a75f8dca6a4440f5739af7bb6c88650f5cf4702bccec87d207d56a7"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/accepted-supplement-receipt.json",
+      "sha256": "914d4bf161c84aeb607967df773237b827890f90e02dac60391a8bd63cd5e07e"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/acceptance-notice.json",
+      "sha256": "83a5326324187183afd7bdaac713d4d0cdd87042a9c266c8bccde316537fcdd0"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native-validation.json",
+      "sha256": "ffbb021ff86ab2f20f876858a32b7c717d11f1c8ce284bc24f0d0f7230ab488c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/delivery-validation.json",
+      "sha256": "1d062a336ae9efcc730bc28ec1929f6523a7a3e1f3cda4e9d23bd62772e837cb"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/browser-validation.json",
+      "sha256": "87d3722316a5344f2974226a1c3002b00f9978770c414d6b51c99382529e6218"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/call-browser-validation.json",
+      "sha256": "fd6d6f6840d477badd2152f59696335960ddb52783103a3c7b932a1ac222475d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/resource-monitor.jsonl",
+      "sha256": "fd69e46747d0c7cc53c4e4dd3fe33472b17b8867a8ddb4054b2252dd28d8e25d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/windows-resource-samples.json",
+      "sha256": "ef9ec6413a3595221e96f1e42d4dc803e21891ee659c6d75213f5426a46b396c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native-component-validation.log",
+      "sha256": "17ab60211accc9a64f1aa9b1c041579bc704e3c971ce13fbe6a972a44a836a6d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/validate-browser.cjs",
+      "sha256": "c6beba9ed25636732ab680149a6c55bff9fa6c09a0336cea03ec1e5ccf27df95"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/validate-call.cjs",
+      "sha256": "5bb8c422df9ccf69631af12bb8a858d45af8b6376003496f52e255b4a2e34c75"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/probe-native.gd",
+      "sha256": "c66111aff58d457ac57f5d72edc1b0d38a0ac068dcd3bf899ac4dde5e5ef55f6"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/WindBlock.gd",
+      "sha256": "841ed4d4e9a0eb25c4b26217c3ddcd3618d9722e64c512ec36e5967aa31ce72a"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/monitor-windows.ps1",
+      "sha256": "4c34ce4690de0bbc6926d8f7ae8d16113f2182e01330847991aff1ca907cbce7"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/build.py",
+      "sha256": "b89497de835caeec6800a7cc35e3e32fea9a08d0add53baac33d51a5de8559e5"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/pack.py",
+      "sha256": "4593da003c9d403cb913a0f43cc84fa02931c7a48c4d69235fc6e921c9408e0b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/validate.py",
+      "sha256": "1abaf1ace4cf3ef6b31582bd04a6349a4ab64ab450254ede88d89defc8816d33"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/finalize.py",
+      "sha256": "13400a58853b955f318d383036eb06af6800fde01334f65256ca23a57a901c54"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/delivery-receipt.json",
+      "sha256": "941f36df34d9be54884579bef87737bb875513cc0941ece62ad860927022fc52"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/NOTES.md",
+      "sha256": "0dea83cc0a52e95dd48b80e1f5396e382de20ab00f5b08a10b7157853e471242"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/review.js",
+      "sha256": "3ad1f3c32c7272214bd2dd3c3f28c3738f956015566ee8f26b539bb84310450e"
+    },
+    {
+      "path": "call-lightning-rework/media/blue-local-v4-0.png",
+      "sha256": "5b5ec93a9996d8a143bc530d400dd6efbafb23e4bababdd2c480a25743897054"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/call/q1/0.png",
+      "sha256": "e4c9a71789eba4c40b53550ed81f9abf219c14e4ce806acda2450be02bb38017"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/call/q2/0.png",
+      "sha256": "6146c5c0c63a0ff7b60ee9f51bfb42f698dd906520ce20c90bc27421a3691f30"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/call/q3/0.png",
+      "sha256": "4b6a643d5e946e2ab63741ed71cc0beb4a2ccbd0f102362ed12eb7d8c37d4068"
+    },
+    {
+      "path": "extracted/wind/wind-mesh.json",
+      "sha256": "527c6a41e597b6c4b74ec6c5cd06a55d27d3df322992ab2f41bcfe8d1a2e3d55"
+    },
+    {
+      "path": "extracted/wind/export-wind-mesh.gd",
+      "sha256": "1a2df2daaf2faac1e2f4299fa5d6e8652ee48f62148271e1fad25ac77bd6cdec"
+    },
+    {
+      "path": "extracted/wind/export-command.json",
+      "sha256": "d4d6d6e54a06a03f552c9fd9114d55991a39ccfb6f633799a4ea792dbc16b346"
+    },
+    {
+      "path": "extracted/wind/export.log",
+      "sha256": "3da6ef11e5ccfff7a9fbf0aa103199516887bfd22ef315581bc6893fdaa1701c"
+    }
+  ],
+  "scope": "Original selected RGBA/crops and source components; no recipes, rescaling, recoloring or render capture."
+}

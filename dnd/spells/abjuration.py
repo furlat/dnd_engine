@@ -28,20 +28,19 @@ from dnd.core.base_actions import (
     Cost,
 )
 from dnd.core.base_block import BaseBlock
-from dnd.core.base_conditions import BaseCondition, ConditionApplicationEvent, OutcomeProtection, SpellProtectionRegistry, SpellProtection
+from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent, Duration, ConditionApplicationEvent, OutcomeProtection, SpellProtectionRegistry, SpellProtection
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
     ConditionCategory,
     ConditionTag,
     DurationType,
 )
-from dnd.core.base_object import BaseObject
 from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import RuntimeBehaviorKind
-from dnd.core.effect_types import EffectOriginKind
-from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
-from dnd.types.actor import ConditionState
+from dnd.core.effect_types import EffectOriginKind, AntimagicException
+from dnd.core.events import Event, EventPhase, EventType, EventHandler, Trigger, RangeType, Range, EventQueue, SpatialChangeEvent, ForcedMovementEvent, PortalTransferEvent, TakeDamageEvent, InstantDeathEvent, D20RollResultEvent, HealRollResultEvent
+from dnd.types.actor import ConditionState, PendingSpatialReturn, SpatialDisposition
 from dnd.types.abilities import AbilityName
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.creature_types import DamageType
@@ -54,11 +53,15 @@ from dnd.core.modifiers import (
     AdvantageStatus,
     ContextualAdvantageModifier,
 )
+from dnd.core.geometry import bresenham_line
+from dnd.core.elevation import support_distance_feet
 from dnd.core.aoe import Sphere
 from dnd.core.gridmap import get_map
 from dnd.spatial.restraints import SpatialRestraintSource
-from dnd.core.positioning import PositionCommitError, PositionPublicationError
+from dnd.core.positioning import PositionPublicationError
 from dnd.blocks.equipment import ArmorEquipEvent
+from dnd.blocks.base_item import BaseItem, EquippableItem
+from dnd.core.item_types import ItemLocation
 from dnd.blocks.action_economy import ActionEconomyChannelCost
 from dnd.core.equipment_types import UnarmoredAc
 
@@ -75,8 +78,6 @@ from dnd.spells.content_metadata import (
     srd_reaction_identity,
     srd_spell_identity,
 )
-from dnd.spells.spell_utils import validate_line_of_sight
-from dnd.spells.transmutation import HasteEffect
 from dnd.spells.effect_ids import (
     COUNTERSPELL_FAILURE_OUTCOME_CODE,
     COUNTERSPELL_INTERRUPTION_OUTCOME_CODE,
@@ -1201,7 +1202,7 @@ class GlobeZone(AreaCondition):
         globe = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if event.event_type != EventType.CAST_SPELL:
+            if event.event_type not in (EventType.CAST_SPELL, EventType.BASE_ACTION):
                 return None
             if not isinstance(event, SpellEvent):
                 return None
@@ -1242,13 +1243,9 @@ class GlobeZone(AreaCondition):
         return EventHandler(
             name="Globe Spell Blocker",
             source_entity_uuid=self.source_entity_uuid,
-            trigger_conditions=[Trigger(
-                event_type=EventType.CAST_SPELL,
-                event_phase=EventPhase.EXECUTION
-            ), Trigger(
-                event_type=EventType.CAST_SPELL,
-                event_phase=EventPhase.EFFECT
-            )],
+            trigger_conditions=[Trigger(event_type=kind, event_phase=phase)
+                for kind in (EventType.CAST_SPELL, EventType.BASE_ACTION)
+                for phase in (EventPhase.EXECUTION, EventPhase.EFFECT)],
             event_processor=processor
         )
 
@@ -1375,117 +1372,111 @@ class GlobeOfInvulnerability(SpellAction):
 
 
 class BanishedCondition(BaseCondition):
-    """Remove a banished entity from spatial play until cleanup.
-
-    The condition owns incapacitation and suspends the target's world presence.
-    """
-    name: str = Field(default="Banished", description="Condition name.")
-    description: str = Field(default="Banished to another plane - removed from play", description="Rules-facing condition summary.")
-    condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, description="Condition category.")
-    tags: Set[ConditionTag] = Field(
-        default_factory=lambda: {ConditionTag.MAGICAL},
-        description="Condition tags used by cleanup, suppression, and rules filters.",
-    )
-    agency_denial: ConditionAgencyDenial = Field(
-        default=ConditionAgencyDenial.FULL_TURN,
-        description="Banishment removes the target's turn agency.",
-    )
+    """Retain one absent actor and the authored plane-dependent return rule."""
+    name: str = "Banished"
+    description: str = "Absent from the battlefield until return or completed home-plane banishment"
+    condition_category: ConditionCategory = ConditionCategory.STATUS
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
+    agency_denial: ConditionAgencyDenial = ConditionAgencyDenial.FULL_TURN
+    temporary_demiplane: bool = True
+    original_plane_id: str = "material"
     _prepared_return: PreparedSpatialReturn | None = PrivateAttr(default=None)
+    _pending_return: PendingSpatialReturn | None = PrivateAttr(default=None)
+    _terminal_departure: bool = PrivateAttr(default=False)
+    _permanent_departure: bool = PrivateAttr(default=False)
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not isinstance(target, Entity):
-            return [], [], [], [], None
-
+        if target is None or not target.is_deployed:
+            return [], [], [], [], declaration_event.cancel(status_message="Target is not present")
+        self.original_plane_id = target.current_plane_id
+        self.temporary_demiplane = target.native_plane_id == target.current_plane_id
+        self.agency_denial = (ConditionAgencyDenial.FULL_TURN if self.temporary_demiplane
+                             else ConditionAgencyDenial.NONE)
+        target.current_plane_id = "banishment_demiplane" if self.temporary_demiplane else target.native_plane_id
         target.suspend_spatial_presence(parent_event=declaration_event.uuid)
-        outs = apply_incapacitated_transform(
-            target,
-            name=self.name,
-            effect_source_uuid=self.source_entity_uuid,
-        )
+        modifiers = (apply_incapacitated_transform(target, name=self.name,
+            effect_source_uuid=self.source_entity_uuid) if self.temporary_demiplane else [])
         try:
-            effect_event = declaration_event.phase_to(
-                EventPhase.EFFECT,
-                status_message=f"{target.name} banished from the battlefield"
-            )
+            effect = declaration_event.phase_to(EventPhase.EFFECT,
+                status_message=f"{target.name} leaves the battlefield")
         except BaseException:
-            remove_modifier_ownership(outs)
+            remove_modifier_ownership(modifiers)
             raise
-        return outs, [], [], [], effect_event
+        return modifiers, [], [], [], effect
 
-    def _release_owned_runtime_state(
-        self,
-        *,
-        parent_event: Optional[Event] = None,
-    ) -> None:
-        """Compensate only uncommitted application, never committed removal."""
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
         if self.applied:
             return
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not isinstance(target, Entity) or not target.is_spatially_suspended:
+        if target is None:
+            return
+        target.current_plane_id = self.original_plane_id
+        if not target.is_spatially_suspended:
             return
         try:
-            target.restore_spatial_presence(
-                target.position,
-                parent_event=parent_event.uuid if parent_event else None,
-            )
-        except PositionPublicationError as error:
-            grid = get_map()
-            if not (
-                target.is_deployed
-                and not target.is_spatially_suspended
-                and grid.get_entity_position(target.uuid) == target.position
-                and target.uuid in grid.get_entities_at(target.position)
-            ):
-                raise RuntimeError(
-                    "Banishment compensation did not restore objective presence"
-                ) from error
-        except PositionCommitError as error:
-            raise RuntimeError(
-                "Banishment compensation failed before restoring objective presence"
-            ) from error
+            target.restore_spatial_presence(target.position,
+                parent_event=parent_event.uuid if parent_event else None)
+        except PositionPublicationError:
+            if not target.is_deployed or target.is_spatially_suspended:
+                raise
 
-    def prepare_removal_state(self, declaration_event: Event) -> Event:
+    def prepare_removal_state(self, event: Event) -> Event:
         release = BaseBlock._terminal_release.get()
-        if release is not None and release.entity_uuid == self.target_entity_uuid:
-            return declaration_event
+        self._terminal_departure = release is not None and release.entity_uuid == self.target_entity_uuid
+        self._permanent_departure = not self.temporary_demiplane and self.duration.is_expired
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target is not None and target.is_spatially_suspended:
-            self._prepared_return = target.prepare_spatial_return(parent_event=declaration_event.uuid)
-        return declaration_event
+        if (target is not None and target.is_spatially_suspended
+                and not self._terminal_departure and not self._permanent_departure):
+            self._prepared_return = target.prepare_spatial_return(parent_event=event.uuid,
+                reserved=BaseBlock.prepared_return_reservations())
+            if self._prepared_return is None:
+                self._pending_return = PendingSpatialReturn(target.position, self.original_plane_id, event.uuid)
+        return event
 
     def cancel_prepared_removal(self, reason: str) -> None:
         self._prepared_return = None
+        self._pending_return = None
+        self._terminal_departure = self._permanent_departure = False
 
     def prepared_removal_occupancies(self) -> tuple[tuple[int, int], ...]:
-        prepared = self._prepared_return
-        if prepared is None:
-            return ()
-        return (prepared.position, *(destination for _, _, destination in prepared.displaced))
+        return (self._prepared_return.position,) if self._prepared_return is not None else ()
 
     def validate_prepared_removal(self) -> bool:
         prepared = self._prepared_return
         return prepared is None or prepared.entity.validate_spatial_return(prepared)
 
-    def _remove(self, removal_event: Event | None = None) -> Event | None:
-        if self._prepared_return is not None:
-            self._prepared_return.entity.commit_spatial_return(self._prepared_return)
-        return removal_event
+    def _remove(self, event: Event | None = None) -> Event | None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None and not self._terminal_departure:
+            if self._permanent_departure:
+                target.spatial_disposition = SpatialDisposition.HOME_PLANE
+            elif self._prepared_return is not None:
+                target.commit_spatial_return(self._prepared_return)
+                target.current_plane_id = self.original_plane_id
+            elif self._pending_return is not None:
+                target.pending_spatial_return = self._pending_return
+                target.spatial_disposition = SpatialDisposition.RETURN_PENDING
+        return event
 
     def on_membership_changed(self, event: Event) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if self.applied:
+            if self.temporary_demiplane and target is not None:
+                target.remove_condition("Concentrating", parent_event=event)
             return
         prepared, self._prepared_return = self._prepared_return, None
+        pending, self._pending_return = self._pending_return, None
         if prepared is not None:
             try:
                 prepared.entity.publish_spatial_return(prepared)
             except PositionPublicationError:
-                # Preserve the established Banishment return contract: observer
-                # failures do not turn an authoritative return into a retry.
                 if not (prepared.committed and prepared.entity.is_deployed
-                        and not prepared.entity.is_spatially_suspended
-                        and get_map().get_entity_position(prepared.entity.uuid) == prepared.position):
+                        and not prepared.entity.is_spatially_suspended):
                     raise
+        elif pending is not None and target is not None:
+            target.retain_pending_spatial_return(pending)
 
 class Banishment(SpellAction):
     """Banish one failed-save target and link it to concentration.
@@ -1498,13 +1489,14 @@ class Banishment(SpellAction):
     spell_level: int = Field(default=4, description="Base spell level.")
     spell_school: str = Field(default="abjuration", description="Spell school.")
     concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
+    target_type: TargetType = Field(default=TargetType.MULTI_ENTITY, description="Targeting mode.")
     spell_range: Range = Field(
         default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
         description="Maximum range for each target.",
     )
-    valid_target_filter: str = Field(default="enemies", description="Target filter key for available action discovery.")
-    include_self: bool = Field(default=False, description="Whether self-targeting is allowed.")
+    valid_target_filter: str = Field(default="all", description="Target filter key for available action discovery.")
+    include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
+    allow_same_target: bool = False
 
     def get_target_effect_profile(self, actor: Any) -> Optional[ActionTargetEffectProfile]:
         """Declare Banishment's save-based removal branch."""
@@ -1530,23 +1522,27 @@ class Banishment(SpellAction):
         return 1 + self.get_upcast_bonus()
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
         source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not source or not target:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        distance = self.get_target_distance(target.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        targets = self.get_all_targets()
+        if source is None or not source.is_deployed:
+            return declaration_event.cancel(status_message="Caster is not present")
+        if not 1 <= len(targets) <= self.get_multi_target_count() or len(set(targets)) != len(targets):
+            return declaration_event.cancel(status_message="Choose distinct creatures within the slot's target count")
+        grid = get_map()
+        for identity in targets:
+            target = Entity.get(identity)
+            if target is None or not target.is_deployed:
+                return declaration_event.cancel(status_message="Target is not present")
+            contact = source.senses.entities.get(identity)
+            visible = (source.senses.visual_access.normalized_score > 0 if source is target
+                       else contact is not None and contact.visual)
+            if not visible:
+                return declaration_event.cancel(status_message="Caster cannot see a chosen creature")
+            distance = support_distance_feet(source.position, grid.get_support_elevation_feet(source.position),
+                target.position, grid.get_support_elevation_feet(target.position))
+            if distance > self.effective_range:
+                return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
+        return declaration_event.phase_to(EventPhase.EXECUTION)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1554,27 +1550,13 @@ class Banishment(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Entity not found")
 
+        owner = self.get_concentration_owner()
+        if (self.cast_concentrating_uuid is not None
+                and (owner is None or self.cast_concentrating_uuid not in owner.active_conditions_by_uuid)):
+            return execution_event.phase_to(EventPhase.EFFECT, status_message="Banishment concentration already ended")
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-        save_request = caster.create_saving_throw_request(
-            target_entity_uuid=target.uuid,
-            ability_name="charisma",
-            dc=dc,
-            parent_event=execution_event.uuid
-        )
-        _, save_roll, success = target.saving_throw(save_request)
-
-        save_bonus = target.saving_throw_bonus(caster.uuid, "charisma").normalized_score
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            save_ability="charisma",
-            save_dc=dc,
-            save_success=success,
-            save_roll=save_roll,
-            save_bonus=save_bonus,
-            target_entity_name=target.name,
-            status_message=f"CHA save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
-        )
+        effect_event, _save_roll, success = self.resolve_saving_throw(
+            execution_event, caster=caster, target=target, ability_name="charisma", dc=dc)
 
         if success:
             return effect_event.with_updates(
@@ -1583,17 +1565,9 @@ class Banishment(SpellAction):
 
         banished = BanishedCondition(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=target.uuid
+            target_entity_uuid=target.uuid, effect_origin=execution_event.get_effect_origin(),
         )
-        target.add_condition(banished, parent_event=effect_event)
-
-        concentration = self.ensure_concentration(effect_event)
-        if banished.applied:
-            concentration.add_linked_condition(target.uuid, banished.uuid)
-
-        return effect_event.with_updates(
-            status_message=f"{target.name} banished!"
-        )
+        return self.apply_owned_condition(effect_event, banished)
 
 _LESSER_RESTORATION_CONDITIONS = ("Blinded", "Deafened", "Paralyzed", "Poisoned")
 _GREATER_RESTORATION_CONDITIONS = (
@@ -1913,7 +1887,7 @@ class ProtectionFromPoisonEffect(BaseCondition):
             )
             outs.append((save.bonus.uuid, save_mod_uuid))
 
-        target.add_condition_immunity("Poisoned", immunity_name="Protection from Poison")
+        target.add_condition_immunity_source("Poisoned", self.uuid)
 
         effect_event = declaration_event.phase_to(
             EventPhase.EFFECT,
@@ -1925,7 +1899,7 @@ class ProtectionFromPoisonEffect(BaseCondition):
         """Clean up condition immunity on removal."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
-            target._remove_static_condition_immunity("Poisoned", "Protection from Poison")
+            target.remove_condition_immunity_source("Poisoned", self.uuid)
         return super()._remove(event)
 
 
@@ -2351,6 +2325,10 @@ class FreedomOfMovementEscape(BaseAction):
 
 class FreedomOfMovementEffect(BaseCondition):
     """Ignores difficult terrain and blocks key movement-impairing conditions."""
+    ignores_difficult_terrain: bool = True
+    ignores_magical_speed_reduction: bool = True
+    ignores_underwater_penalties: bool = True
+
     name: str = Field(default="Freedom of Movement", description="Condition name.")
     description: str = Field(default="Unaffected by difficult terrain, magical speed reduction, underwater penalties, Grappled, Restrained, magical paralysis, and can spend 5 feet of movement to escape nonmagical restraints", description="Rules-facing condition summary.")
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, description="Condition category.")
@@ -2367,16 +2345,12 @@ class FreedomOfMovementEffect(BaseCondition):
         if not target or not isinstance(target, Entity):
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
 
-        target.ignore_difficult_terrain = True
-        target.ignore_magical_speed_reduction = True
-        target.ignore_underwater_penalties = True
         target.senses._paths_dirty = True
 
-        target.add_condition_immunity("Grappled", immunity_name="Freedom of Movement")
-        target.add_condition_immunity("Restrained", immunity_name="Freedom of Movement")
-        target.add_condition_immunity(
-            "Paralyzed",
-            immunity_name="Freedom of Movement",
+        target.add_condition_immunity_source("Grappled", self.uuid)
+        target.add_condition_immunity_source("Restrained", self.uuid)
+        target.add_condition_immunity_source(
+            "Paralyzed", self.uuid,
             immunity_check=_freedom_of_movement_magical_condition_immunity,
         )
 
@@ -2390,13 +2364,10 @@ class FreedomOfMovementEffect(BaseCondition):
         """Clean up flag and condition immunities on removal."""
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
-            target.ignore_difficult_terrain = False
-            target.ignore_magical_speed_reduction = False
-            target.ignore_underwater_penalties = False
             target.senses._paths_dirty = True
-            target._remove_static_condition_immunity("Grappled", "Freedom of Movement")
-            target._remove_static_condition_immunity("Restrained", "Freedom of Movement")
-            target._remove_contextual_condition_immunity("Paralyzed", "Freedom of Movement")
+            target.remove_condition_immunity_source("Grappled", self.uuid)
+            target.remove_condition_immunity_source("Restrained", self.uuid)
+            target.remove_condition_immunity_source("Paralyzed", self.uuid)
             target.unregister_action(FREEDOM_OF_MOVEMENT_ESCAPE_ACTION_NAME)
         return super()._remove(event)
 
@@ -2478,7 +2449,8 @@ class FreedomOfMovement(SpellAction):
         )
         target.add_condition(condition, parent_event=effect_event)
         target.unregister_action(FREEDOM_OF_MOVEMENT_ESCAPE_ACTION_NAME)
-        target.register_action(FreedomOfMovementEscape(source_entity_uuid=target.uuid, template=True))
+        target.register_action(FreedomOfMovementEscape(source_entity_uuid=target.uuid, template=True,
+            contribution_owner_uuid=condition.uuid))
 
         return effect_event.with_updates(
             status_message=f"{self.name} cast on {target.name}"
@@ -2882,6 +2854,8 @@ class SanctuaryEffect(BaseCondition):
         dc = self.spell_dc
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.event_type is EventType.BASE_ACTION and not isinstance(event, SpellEvent):
+                return None
             if isinstance(event, SpellEvent):
                 if event.target_type not in (
                     TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT, TargetType.MULTI_ENTITY,
@@ -2920,6 +2894,7 @@ class SanctuaryEffect(BaseCondition):
             name="Sanctuary Ward",
             source_entity_uuid=warded_uuid,
             trigger_conditions=[
+                Trigger(event_type=EventType.BASE_ACTION, event_phase=EventPhase.DECLARATION),
                 Trigger(
                     event_type=EventType.ATTACK,
                     event_phase=EventPhase.DECLARATION,
@@ -2940,6 +2915,8 @@ class SanctuaryEffect(BaseCondition):
         condition_uuid = self.uuid
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
+            if event.event_type is EventType.BASE_ACTION and not isinstance(event, SpellEvent):
+                return None
             if event.source_entity_uuid != warded_uuid:
                 return None
 
@@ -2984,6 +2961,8 @@ class SanctuaryEffect(BaseCondition):
             name="Sanctuary Self-Break",
             source_entity_uuid=warded_uuid,
             trigger_conditions=[
+                Trigger(event_type=EventType.BASE_ACTION, event_phase=EventPhase.EFFECT,
+                    event_source_entity_uuid=warded_uuid),
                 Trigger(
                     event_type=EventType.ATTACK,
                     event_phase=EventPhase.EFFECT,
@@ -3204,63 +3183,6 @@ class BeaconOfHope(SpellAction):
         )
 
 
-class AntimagicSuppression(BaseCondition):
-    """Hold one magical condition suppressed by Antimagic Field.
-
-    The marker has a unique condition name per suppressed condition. Removing
-    the marker attempts to restore the saved condition and reconnect its parent
-    concentration link if that parent is still active.
-    """
-    name: str = Field(default="Antimagic Suppression", description="Condition name.")
-    condition_category: ConditionCategory = Field(default=ConditionCategory.INTERNAL, description="Condition category.")
-    suppressed_condition: BaseCondition = Field(description="The condition object being suppressed")
-    saved_parent_link: Optional[Tuple[UUID, UUID]] = Field(
-        default=None,
-        description="Saved (parent_block_uuid, parent_condition_uuid) for reconnection"
-    )
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
-    ]:
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Antimagic Suppression stores {self.suppressed_condition.name}"
-        )
-        return [], [], [], [], effect_event
-
-    def on_membership_changed(self, event: Event) -> None:
-        """Restore only after the complete removal authority has committed."""
-        if self.applied:
-            return
-        release = BaseBlock._terminal_release.get()
-        if release is not None and release.entity_uuid == self.target_entity_uuid:
-            return
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        cond = self.suppressed_condition
-        if target and target.is_active and not cond.duration.is_expired:
-            if self.saved_parent_link:
-                _, parent_cond_uuid = self.saved_parent_link
-                parent_cond = BaseObject.get(parent_cond_uuid)
-                if not isinstance(parent_cond, BaseCondition) or not parent_cond.applied:
-                    return
-
-            cond.modifers_uuids.clear()
-            cond.event_handlers_uuids.clear()
-            cond.spatial_handler_uuids.clear()
-            cond.sub_conditions.clear()
-            cond.linked_conditions.clear()
-
-            target.add_condition(cond, parent_event=event)
-
-            if self.saved_parent_link and cond.applied:
-                _, parent_cond_uuid = self.saved_parent_link
-                parent_cond = BaseObject.get(parent_cond_uuid)
-                if isinstance(parent_cond, BaseCondition) and parent_cond.applied:
-                    parent_cond.add_linked_condition(target.uuid, cond.uuid)
-
-        return
-
-
 ANTIMAGIC_FIELD_ZONE_CONTENT_REF = ContentRef(
     pack_id="content.srd_5_1_cc",
     definition_kind=ContentDefinitionKind.CONDITION,
@@ -3273,297 +3195,339 @@ ANTIMAGIC_FIELD_ZONE_CONTENT_REF = ContentRef(
 )
 
 
-class AntimagicFieldZone(AreaCondition):
-    """Maintain the caster-following Antimagic Field suppression zone.
+def _refresh_antimagic_summon_presence(event: Event, _source_uuid: UUID, *, entity_uuid: UUID) -> Event | None:
+    entity = Entity.get(entity_uuid)
+    if entity is None or entity.antimagic_presence_owner_uuid is None:
+        return None
+    condition = entity.active_conditions_by_uuid.get(entity.antimagic_presence_owner_uuid)
+    if condition is None or not condition.applied or not condition.contributions_active():
+        return None
+    grid = get_map()
+    if (entity.is_spatially_suspended and not grid.get_entities_at(entity.position)
+            and grid.is_walkable_for(*entity.position, entity.uuid)):
+        entity.antimagic_presence_owner_uuid = None
+        entity.restore_spatial_presence(entity.position, parent_event=event.uuid)
+        grid.refresh_contribution_lights(parent_event=event.uuid)
+    return None
 
-    The zone blocks spell casts from or into the area, suppresses existing
-    magical conditions with `AntimagicSuppression` markers, restores those
-    conditions when entities leave, and updates spell-protection positions as
-    the caster moves.
-    """
-    name: str = Field(default="Antimagic Field Zone", description="Condition name.")
-    description: str = Field(default="10ft sphere suppresses all magic", description="Rules-facing condition summary.")
-    condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, description="Condition category.")
-    tags: Set[ConditionTag] = Field(
-        default_factory=lambda: {ConditionTag.MAGICAL},
-        description="Condition tags used by cleanup, suppression, and rules filters.",
-    )
+
+def _refresh_antimagic_created_object(event: Event, _source_uuid: UUID, *, item_uuid: UUID) -> Event | None:
+    item = BaseBlock.get(item_uuid)
+    if not isinstance(item, BaseItem) or not item.magically_created:
+        return None
+    grid = get_map()
+    saved = item.antimagic_suspended_placement
+    if item.suppression_provider_uuids:
+        if saved is None and (placement := grid.get_object_placement(item.uuid)) is not None:
+            item.antimagic_suspended_placement = placement
+            if not grid.remove_object(item.uuid, parent_event=event.uuid):
+                item.antimagic_suspended_placement = None
+    elif saved is not None:
+        if any(grid.get_entities_at(position) for position in saved.positions):
+            return None
+        item.antimagic_suspended_placement = None
+        try:
+            item.place_on_grid(saved.position, boundary_direction=saved.boundary_direction,
+                base_height_steps=saved.base_height_steps, orientation=saved.orientation, parent_event=event.uuid)
+        except ValueError:
+            item.antimagic_suspended_placement = saved
+    return None
+
+
+class AntimagicFieldZone(AreaCondition):
+    """Exact provider tokens gate retained magic within this moving footprint."""
+    name: str = "Antimagic Field Zone"
+    has_visible_presence: bool = True
+    description: str = "10ft sphere suppresses magic while native durations continue."
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     content_ref: ContentRef = Field(default=ANTIMAGIC_FIELD_ZONE_CONTENT_REF)
     position: Tuple[int, int]
-    anchor_kind: SpatialEffectAnchorKind = Field(
-        default=SpatialEffectAnchorKind.ENTITY,
-    )
+    anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.ENTITY
     anchor_uuid: UUID = Field(default=PydanticUndefined, validate_default=True)
-    layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
-    occupancy_policy: SpatialEffectOccupancyPolicy = Field(
-        default=SpatialEffectOccupancyPolicy.OVERLAPPING,
-    )
-    trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
-        default_factory=lambda: frozenset({
-            SpatialEffectTriggerKind.APPEAR,
-            SpatialEffectTriggerKind.ENTER,
-            SpatialEffectTriggerKind.LEAVE,
-        }),
-    )
-    zone_shape: str = Field(default="sphere")
-    zone_radius_feet: int = Field(default=10, description="Zone radius in feet.")
-    suppression_markers: Dict[UUID, List[UUID]] = Field(
-        default_factory=dict,
-        description="Suppression marker condition UUIDs keyed by suppressed entity UUID.",
-    )
+    layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
+    occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
+    trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
+        SpatialEffectTriggerKind.APPEAR, SpatialEffectTriggerKind.ENTER, SpatialEffectTriggerKind.LEAVE})
+    zone_shape: str = "sphere"
+    zone_radius_feet: int = 10
+    antimagic_exception: AntimagicException | None = AntimagicException.FIELD
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=600))
+    suppressed_conditions: Dict[UUID, Set[UUID]] = Field(default_factory=dict)
 
-    model_config = {"arbitrary_types_allowed": True}
-
-    def _compute_positions(self) -> Set[Tuple[int, int]]:
-        """Compute positions in the 10ft radius sphere around center."""
-        shape = Sphere(
-            source_entity_uuid=self.source_entity_uuid,
-            target=self.position,
-            radius_feet=self.zone_radius_feet
-        )
-        shape.compute_objective(self.position)
-        return set(shape.affected_positions)
-
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
-    ]:
-        modifiers, handler_uuids, children, spatial_handlers, effect_event = super()._apply(
-            declaration_event,
-        )
-
+    def _apply(self, event: Event):
+        modifiers, handlers, children, spatial_handlers, effect = super()._apply(event)
         blocker = self._create_spell_blocker()
         EventQueue.add_event_handler(blocker)
-        handler_uuids.append(blocker.uuid)
+        handlers.append(blocker.uuid)
+        items = EventHandler(source_entity_uuid=self.source_entity_uuid,
+            name="Antimagic item ownership", event_processor=self._item_changed,
+            trigger_conditions=[Trigger(event_type=kind, event_phase=EventPhase.EFFECT)
+                for kind in (EventType.ITEM_LOCATION_STATE, EventType.SPATIAL_OBJECT_PLACED,
+                             EventType.SPATIAL_OBJECT_CHANGED, EventType.SPATIAL_OBJECT_REMOVED)])
+        EventQueue.add_event_handler(items)
+        handlers.append(items.uuid)
+        SpellProtectionRegistry.register(SpellProtection(uuid=self.uuid,
+            positions=set(self.affected_positions), max_blocked_level=9, suppresses_magic=True))
+        if effect is not None:
+            self._refresh_areas(effect)
+            self._refresh_items(effect)
+            for entity in Entity.get_all_entities():
+                if entity.position in self.affected_positions:
+                    self._suppress_entity(entity.uuid, parent_event=effect)
+        return modifiers, handlers, children, spatial_handlers, effect
 
-        SpellProtectionRegistry.register(SpellProtection(
-            uuid=self.uuid,
-            positions=set(self.affected_positions),
-            max_blocked_level=9,
-        ))
+    def _refresh_items(self, parent_event: Event | None) -> None:
+        grid = get_map()
+        for item in BaseItem.get_all_items():
+            position = (item.antimagic_suspended_placement.position
+                if item.antimagic_suspended_placement is not None else item.get_position())
+            suppressed = position in self.affected_positions
+            magic_suppressed = suppressed and not item.antimagic_exempt()
+            before = item.to_item_presentation_state()
+            previous_tokens = set(item.suppression_provider_uuids)
+            if magic_suppressed:
+                item.suppression_provider_uuids.add(self.uuid)
+                self.suppressed_conditions.setdefault(item.uuid, set())
+            else:
+                item.suppression_provider_uuids.discard(self.uuid)
+            for condition in tuple(item.active_conditions_by_uuid.values()):
+                if not condition.applied or not condition.magical_origin or condition.antimagic_exempt():
+                    continue
+                condition.set_suppression(self.uuid, suppressed)
+                if suppressed:
+                    self.suppressed_conditions.setdefault(item.uuid, set()).add(condition.uuid)
+            if not suppressed:
+                self.suppressed_conditions.pop(item.uuid, None)
+            if item.magically_created and parent_event is not None:
+                condition = BaseCondition.get(item.creation_condition_uuid) if item.creation_condition_uuid else None
+                if isinstance(condition, BaseCondition) and condition.presence_return_handler_uuid is None:
+                    handler = EventHandler(source_entity_uuid=item.source_entity_uuid, runs_while_suppressed=True,
+                        contribution_owner_uuid=condition.uuid, name="Retained creation presence return",
+                        trigger_conditions=[Trigger(event_type=kind, event_phase=EventPhase.EFFECT)
+                            for kind in (EventType.SPATIAL_ENTITY_LEFT, EventType.SPATIAL_OBJECT_REMOVED)],
+                        event_processor=partial(_refresh_antimagic_created_object, item_uuid=item.uuid))
+                    EventQueue.add_event_handler(handler)
+                    condition.event_handlers_uuids.append(handler.uuid)
+                    condition.presence_return_handler_uuid = handler.uuid
+                _refresh_antimagic_created_object(parent_event, self.source_entity_uuid, item_uuid=item.uuid)
+            if (item.antimagic_suspended_placement is None and
+                    (before != item.to_item_presentation_state() or previous_tokens != item.suppression_provider_uuids)):
+                self._publish_item(item, parent_event)
+        grid.refresh_contribution_lights(parent_event=parent_event.uuid if parent_event else None)
 
-        return modifiers, handler_uuids, children, spatial_handlers, effect_event
+    @staticmethod
+    def _publish_item(item: BaseItem, parent_event: Event | None) -> None:
+        slot = (next((slot for slot in item.compatible_equipment_slots()
+            if slot.value == item.equipped_slot), None) if isinstance(item, EquippableItem) else None)
+        location = (ItemLocation.EQUIPMENT if item.is_equipped else ItemLocation.INVENTORY
+            if item.owner_uuid is not None else ItemLocation.FLOOR)
+        item.publish_location_state(location, owner_uuid=item.owner_uuid, container_uuid=item.stored_in_uuid,
+            equipment_slot=slot, parent_event=parent_event)
 
-    def _release_owned_runtime_state(
-        self,
-        *,
-        parent_event: Optional[Event] = None,
-    ) -> None:
-        """Release suppression and protection state owned by this field."""
+    def _item_changed(self, event: Event, _source_uuid: UUID) -> Event | None:
+        self._refresh_items(event)
+        return None
+
+    def _refresh_areas(self, parent_event: Event) -> None:
+        for condition in tuple(get_map().get_spatial_conditions()):
+            if isinstance(condition, AreaCondition) and condition.uuid != self.uuid:
+                condition.refresh_antimagic_suppression(parent_event=parent_event)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
         SpellProtectionRegistry.unregister(self.uuid)
-        if not self.applied:
+        if self._removal_publication is None:
             self._unsuppress_all_entities(parent_event=parent_event)
-        self.suppression_markers.clear()
         super()._release_owned_runtime_state(parent_event=parent_event)
 
-    def _apply_appearance_effect(
-        self,
-        entity: Entity,
-        *,
-        parent_event: Event,
-    ) -> None:
+    def publish_runtime_owner_removal(self, effect: Event) -> None:
+        self._unsuppress_all_entities(parent_event=effect)
+        self._refresh_areas(effect)
+        super().publish_runtime_owner_removal(effect)
+
+    def _apply_appearance_effect(self, entity: Entity, *, parent_event: Event) -> None:
         self._suppress_entity(entity.uuid, parent_event=parent_event)
 
-    def _suppress_entity(self, entity_uuid: UUID, parent_event: Optional[Event] = None) -> None:
-        """Suppress all top-level magical conditions on an entity."""
-        entity = Entity.get(entity_uuid)
-        if not entity:
+    def _set_suppression(self, entity: Entity, condition: BaseCondition, suppressed: bool,
+                         parent_event: Event | None) -> None:
+        before_hp = entity.get_normal_hp()
+        before_states = {identity: effect.snapshot_state()
+            for identity, effect in entity.active_conditions_by_uuid.items()}
+        if not condition.set_suppression(self.uuid, suppressed):
             return
+        entity.health.preserve_normal_hit_points(before_hp, maximum_hp=entity.get_max_hp())
+        get_map().refresh_contribution_lights(parent_event=parent_event.uuid if parent_event else None)
+        entity._notify_perceivability_changed(parent_event=parent_event.uuid if parent_event else None)
+        for identity, effect in tuple(entity.active_conditions_by_uuid.items()):
+            state = effect.snapshot_state()
+            if state != before_states.get(identity):
+                ConditionStateChangedEvent(source_entity_uuid=effect.source_entity_uuid,
+                    target_entity_uuid=entity.uuid, phase=EventPhase.COMPLETION,
+                    parent_event=parent_event.uuid if parent_event is not None else None,
+                    condition_state=state, resulting_stats=entity.snapshot_entity_stats(),
+                    behavior_id=effect.behavior_binding.behavior_id if effect.behavior_binding else None)
 
-        to_suppress: List[BaseCondition] = []
-        for cond in list(entity.active_conditions_by_uuid.values()):
-            if not cond.magical_origin:
-                continue
-            if cond.parent_condition is not None:
-                continue
-            if cond.name == "Concentrating":
-                continue
-            if cond.uuid == self.uuid:
-                continue
-            if not cond.applied:
-                continue
-            to_suppress.append(cond)
-
-        for cond in to_suppress:
-            if not cond.applied:
-                continue
-
-            saved_parent_link: Optional[Tuple[UUID, UUID]] = None
-            if cond.parent_link:
-                saved_parent_link = cond.parent_link
-                _, parent_cond_uuid = cond.parent_link
-                parent_cond = BaseObject.get(parent_cond_uuid)
-                if isinstance(parent_cond, BaseCondition):
-                    parent_cond.linked_conditions = [
-                        lc for lc in parent_cond.linked_conditions
-                        if lc[1] != cond.uuid
-                    ]
-                cond.parent_link = None
-
-            if isinstance(cond, HasteEffect):
-                cond.apply_lethargy = False
-
-            entity.remove_condition_by_uuid(cond.uuid, parent_event=parent_event)
-
-            if isinstance(cond, HasteEffect):
-                cond.apply_lethargy = True
-
-            marker = AntimagicSuppression(
-                name=f"Antimagic Suppression: {cond.name}",
-                source_entity_uuid=type_cast(UUID, self.source_entity_uuid),
-                target_entity_uuid=entity.uuid,
-                suppressed_condition=cond,
-                saved_parent_link=saved_parent_link
-            )
-            entity.add_condition(marker, parent_event=parent_event)
-
-            if marker.applied:
-                if entity.uuid not in self.suppression_markers:
-                    self.suppression_markers[entity.uuid] = []
-                self.suppression_markers[entity.uuid].append(marker.uuid)
-                self.add_linked_condition(entity.uuid, marker.uuid)
-                marker.parent_link = (self.uuid, self.uuid)
-
-    def _unsuppress_entity(self, entity_uuid: UUID, parent_event: Optional[Event] = None) -> None:
-        """Remove all suppression markers from an entity, restoring conditions."""
-        marker_uuids = self.suppression_markers.pop(entity_uuid, [])
+    def _suppress_entity(self, entity_uuid: UUID, parent_event: Event | None = None) -> None:
         entity = Entity.get(entity_uuid)
-        if not entity:
+        if entity is None:
             return
+        self.suppressed_conditions.setdefault(entity.uuid, set())
+        for condition in tuple(entity.active_conditions_by_uuid.values()):
+            if (not condition.applied or not condition.magical_origin or condition.antimagic_exempt()
+                    or ConditionTag.CONCENTRATION in condition.tags):
+                continue
+            if condition.parent_condition is not None:
+                parent = BaseCondition.get(condition.parent_condition)
+                if isinstance(parent, BaseCondition) and parent.magical_origin:
+                    continue
+            self.suppressed_conditions.setdefault(entity.uuid, set()).add(condition.uuid)
+            self._set_suppression(entity, condition, True, parent_event)
+        existence = next((condition for condition in entity.active_conditions_by_uuid.values()
+            if condition.snapshot_summon_origin() is not None and not condition.contributions_active()), None)
+        if existence is not None and entity.is_deployed:
+            entity.antimagic_presence_owner_uuid = existence.uuid
+            if existence.presence_return_handler_uuid is None:
+                handler = EventHandler(source_entity_uuid=entity.uuid, runs_while_suppressed=True,
+                    contribution_owner_uuid=existence.uuid, name="Retained summon presence return",
+                    trigger_conditions=[Trigger(event_type=EventType.SPATIAL_ENTITY_LEFT,
+                        event_phase=EventPhase.EFFECT)],
+                    event_processor=partial(_refresh_antimagic_summon_presence, entity_uuid=entity.uuid))
+                entity.add_event_handler(handler)
+                existence.event_handlers_uuids.append(handler.uuid)
+                existence.presence_return_handler_uuid = handler.uuid
+            entity.suspend_spatial_presence(parent_event=parent_event.uuid if parent_event else None)
+            get_map().refresh_contribution_lights(parent_event=parent_event.uuid if parent_event else None)
 
-        for marker_uuid in list(marker_uuids):
-            entity.remove_condition_by_uuid(marker_uuid, parent_event=parent_event)
+    def _unsuppress_entity(self, entity_uuid: UUID, parent_event: Event | None = None) -> None:
+        identities = self.suppressed_conditions.pop(entity_uuid, set())
+        entity = Entity.get(entity_uuid)
+        if entity is None:
+            return
+        identities.update(condition.uuid for condition in entity.active_conditions_by_uuid.values()
+            if self.uuid in condition.suppression_provider_uuids)
+        for identity in identities:
+            condition = entity.active_conditions_by_uuid.get(identity)
+            if condition is not None and condition.applied:
+                self._set_suppression(entity, condition, False, parent_event)
+        if parent_event is not None:
+            _refresh_antimagic_summon_presence(parent_event, self.source_entity_uuid, entity_uuid=entity.uuid)
 
-    def _unsuppress_all_entities(self, parent_event: Optional[Event] = None) -> None:
-        """Unsuppress all tracked entities."""
-        for entity_uuid in list(self.suppression_markers.keys()):
-            self._unsuppress_entity(entity_uuid, parent_event=parent_event)
+    def _unsuppress_all_entities(self, parent_event: Event | None = None) -> None:
+        for item in BaseItem.get_all_items():
+            if self.uuid in item.suppression_provider_uuids:
+                self.suppressed_conditions.setdefault(item.uuid, set()).update(item.active_conditions_by_uuid)
+        for identity in tuple(self.suppressed_conditions):
+            item = BaseBlock.get(identity)
+            if isinstance(item, BaseItem):
+                item.suppression_provider_uuids.discard(self.uuid)
+                for owned in self.suppressed_conditions.pop(identity):
+                    condition = item.active_conditions_by_uuid.get(owned)
+                    if condition is not None:
+                        condition.set_suppression(self.uuid, False)
+                if parent_event is not None:
+                    _refresh_antimagic_created_object(parent_event, self.source_entity_uuid, item_uuid=item.uuid)
+                if item.antimagic_suspended_placement is None:
+                    self._publish_item(item, parent_event)
+            else:
+                self._unsuppress_entity(identity, parent_event=parent_event)
+        get_map().refresh_contribution_lights(parent_event=parent_event.uuid if parent_event else None)
 
     def _create_spell_blocker(self) -> EventHandler:
-        """Block ALL spells when caster or target is in the zone."""
-        zone = self
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if not isinstance(event, SpellEvent):
+        def block(event: Event, _source_uuid: UUID) -> Event | None:
+            if isinstance(event, PortalTransferEvent):
+                origin = event.effect_origin
+                if origin is not None and origin.kind is EffectOriginKind.SPELL and origin.antimagic_exception is None:
+                    if {event.start_position, event.end_position} & self.affected_positions:
+                        return event.cancel(status_message="Antimagic Field blocks the magical transfer endpoint")
                 return None
-
-            source = Entity.get(event.source_entity_uuid)
-            if source and source.position in zone.affected_positions:
-                return event.cancel(
-                    status_message=f"Antimagic Field blocks {event.name}"
-                )
-
-            if event.target_entity_uuid:
-                target = Entity.get(event.target_entity_uuid)
-                if target and target.position in zone.affected_positions:
-                    return event.cancel(
-                        status_message=f"Antimagic Field blocks {event.name}"
-                    )
-
+            if isinstance(event, ForcedMovementEvent):
+                origin = event.effect_origin
+                if origin is not None and origin.kind is EffectOriginKind.SPELL and origin.antimagic_exception is None:
+                    path = event.disclosed_path or tuple(bresenham_line(event.start_position, event.end_position))
+                    if set(path) & self.affected_positions:
+                        return event.cancel(status_message="Antimagic Field blocks the magical transfer")
+                return None
+            if not isinstance(event, SpellEvent) or event.to_effect_origin().antimagic_exception is not None:
+                return None
+            source = (event.propagation.source.position if event.propagation is not None
+                else event.effect_source_position or event.source_position)
+            if source in self.affected_positions:
+                return event.cancel(status_message="Antimagic Field blocks this magical effect")
+            if event.phase is EventPhase.EFFECT and event.resolved_area_positions is not None:
+                excluded = tuple(cell for cell in event.resolved_area_positions if cell in self.affected_positions)
+                if excluded:
+                    return event.with_updates(resolved_area_positions=tuple(cell
+                        for cell in event.resolved_area_positions if cell not in self.affected_positions),
+                        suppressions=(*event.suppressions, SpellSuppression(provider_uuid=self.uuid, positions=excluded, antimagic=True)))
+                return None
+            target = Entity.get(event.target_entity_uuid) if event.target_entity_uuid else None
+            destination = (event.propagation.target.position if event.propagation is not None
+                else event.target_position if event.target_type is TargetType.POSITION
+                else target.position if target is not None else event.target_position)
+            if destination in self.affected_positions:
+                return event.cancel(status_message="Antimagic Field blocks this magical effect")
+            if source is not None and destination is not None and event.target_type in (
+                    TargetType.ENTITY, TargetType.MULTI_ENTITY):
+                if set(bresenham_line(source, destination)) & self.affected_positions:
+                    return event.cancel(status_message="Antimagic Field blocks the magical effect's path")
             return None
+        return EventHandler(source_entity_uuid=self.source_entity_uuid, name="Antimagic effect admission",
+            trigger_conditions=[Trigger(event_type=kind, event_phase=phase)
+                for kind in (EventType.CAST_SPELL, EventType.BASE_ACTION)
+                for phase in (EventPhase.EXECUTION, EventPhase.EFFECT)] + [
+                Trigger(event_type=EventType.FORCED_MOVEMENT, event_phase=EventPhase.EXECUTION),
+                Trigger(event_type=EventType.PORTAL_TRANSFER, event_phase=EventPhase.EXECUTION)], event_processor=block)
 
-        return EventHandler(
-            name="Antimagic Spell Blocker",
-            source_entity_uuid=type_cast(UUID, self.source_entity_uuid),
-            trigger_conditions=[Trigger(
-                event_type=EventType.CAST_SPELL,
-                event_phase=EventPhase.EXECUTION
-            )],
-            event_processor=processor
-        )
-
-    def _change_footprint(
-        self,
-        positions: Set[Tuple[int, int]],
-        *,
-        parent_event: Event,
-    ):
-        """Move protection and suppression under the footprint-change effect."""
-        previous = set(self.affected_positions)
-        change_effect = super()._change_footprint(
-            positions,
-            parent_event=parent_event,
-        )
-        if change_effect is None:
+    def _change_footprint(self, positions: Set[Tuple[int, int]], *, parent_event: Event):
+        changed = super()._change_footprint(positions, parent_event=parent_event)
+        if changed is None:
             return None
         SpellProtectionRegistry.unregister(self.uuid)
-        SpellProtectionRegistry.register(SpellProtection(
-            uuid=self.uuid,
-            positions=set(self.affected_positions),
-            max_blocked_level=9,
-        ))
-        for entity_uuid in tuple(self.suppression_markers):
-            entity = Entity.get(entity_uuid)
+        SpellProtectionRegistry.register(SpellProtection(uuid=self.uuid,
+            positions=set(self.affected_positions), max_blocked_level=9, suppresses_magic=True))
+        self._refresh_areas(changed)
+        self._refresh_items(changed)
+        for identity in tuple(self.suppressed_conditions):
+            block = BaseBlock.get(identity)
+            entity = block if isinstance(block, Entity) else None
+            if isinstance(block, BaseItem):
+                continue
             if entity is None or entity.position not in self.affected_positions:
-                self._unsuppress_entity(entity_uuid, parent_event=change_effect)
-        grid = get_map()
-        for position in self.affected_positions - previous:
-            for entity_uuid in grid.get_entities_at(position):
-                if entity_uuid != self.source_entity_uuid:
-                    self._suppress_entity(
-                        entity_uuid,
-                        parent_event=change_effect,
-                    )
-        return change_effect
+                self._unsuppress_entity(identity, parent_event=changed)
+        for entity in Entity.get_all_entities():
+            if entity.position in self.affected_positions:
+                self._suppress_entity(entity.uuid, parent_event=changed)
+        return changed
 
     def _create_zone_entry_handler(self) -> EventHandler:
-        """Suppress magical conditions when an entity enters the zone."""
-        caster_uuid = type_cast(UUID, self.source_entity_uuid)
-        zone = self
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
-                return None
-            if event.entity_uuid == caster_uuid:
-                return None
-            if event.position not in zone.affected_positions:
-                return None
-            zone._suppress_entity(event.entity_uuid, parent_event=event)
+        def entered(event: Event, _source_uuid: UUID) -> Event | None:
+            if isinstance(event, SpatialChangeEvent) and event.entity_uuid is not None:
+                self._suppress_entity(event.entity_uuid, parent_event=event)
+                self._refresh_items(event)
             return None
-
-        return EventHandler(
-            name="Antimagic Entry Suppress",
-            source_entity_uuid=caster_uuid,
-            trigger_conditions=[Trigger(
-                event_type=EventType.SPATIAL_ENTITY_ENTERED,
-                event_phase=EventPhase.EFFECT
-            )],
-            event_processor=processor
-        )
+        return EventHandler(source_entity_uuid=self.source_entity_uuid, name="Antimagic entry",
+            trigger_conditions=[Trigger(event_type=EventType.SPATIAL_ENTITY_ENTERED,
+                event_phase=EventPhase.EFFECT)], event_processor=entered)
 
     def _create_zone_exit_handler(self) -> EventHandler:
-        """Restore suppressed conditions when an entity leaves the zone."""
-        caster_uuid = type_cast(UUID, self.source_entity_uuid)
-        zone = self
-
-        def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
-            if not isinstance(event, SpatialChangeEvent) or not event.entity_uuid:
-                return None
-            if event.entity_uuid == caster_uuid:
-                return None
-            entity = Entity.get(event.entity_uuid)
-            if entity is not None and entity.position in zone.affected_positions:
-                return None
-            if event.entity_uuid in zone.suppression_markers:
-                zone._unsuppress_entity(event.entity_uuid, parent_event=event)
+        def left(event: Event, _source_uuid: UUID) -> Event | None:
+            if isinstance(event, SpatialChangeEvent) and event.entity_uuid is not None:
+                entity = Entity.get(event.entity_uuid)
+                if entity is None or entity.position not in self.affected_positions:
+                    self._unsuppress_entity(event.entity_uuid, parent_event=event)
+                    self._refresh_items(event)
             return None
-
-        return EventHandler(
-            name="Antimagic Exit Restore",
-            source_entity_uuid=caster_uuid,
-            trigger_conditions=[Trigger(
-                event_type=EventType.SPATIAL_ENTITY_LEFT,
-                event_phase=EventPhase.EFFECT
-            )],
-            event_processor=processor
-        )
+        return EventHandler(source_entity_uuid=self.source_entity_uuid, name="Antimagic exit",
+            trigger_conditions=[Trigger(event_type=EventType.SPATIAL_ENTITY_LEFT,
+                event_phase=EventPhase.EFFECT)], event_processor=left)
 
 
 class AntimagicField(SpellAction):
     """Create a caster-following field that suppresses magic.
 
-    The maintained zone blocks spell casts and temporarily removes magical
-    conditions while preserving concentration parents for restoration.
+    The maintained zone gates retained magical contributions while their
+    identities, duration clocks, and final cleanup remain intact.
     """
+    antimagic_exception: AntimagicException | None = AntimagicException.FIELD
     name: str = Field(default="Antimagic Field", description="Spell name.")
     description: str = Field(default="10ft sphere suppresses all magic, concentration", description="Rules-facing spell summary.")
     spell_level: int = Field(default=8, description="Base spell level.")
@@ -3579,10 +3543,7 @@ class AntimagicField(SpellAction):
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return declaration_event.cancel(status_message="Caster not found")
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        return type_cast(Optional[SpellEvent], super()._validate(declaration_event))
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -3594,6 +3555,8 @@ class AntimagicField(SpellAction):
             status_message=f"{caster.name} casts Antimagic Field"
         )
 
+        if effect_event.canceled:
+            return effect_event
         zone = AntimagicFieldZone(
             source_entity_uuid=caster.uuid,
             position=caster.position,

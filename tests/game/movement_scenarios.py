@@ -13,7 +13,7 @@ from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.controller import HumanController
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.equipment_types import BodyPart
-from dnd.core.events import EventPhase, EventQueue, StepMovementEvent
+from dnd.core.events import DamageAppliedEvent, EventPhase, EventQueue, StepMovementEvent
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
@@ -195,7 +195,16 @@ def movement_history(
             retain(cursor)
             assert mover.position == destination
             spent = sum(event.movement_cost for event in history[-1].events if isinstance(event, StepMovementEvent))
-            assert mover.action_economy.movement_remaining() == movement_before - spent
+            # A damaging ledge landing also invokes the existing own-turn
+            # Prone recovery, which spends half movement independently of steps.
+            recovery = 0
+            if (isinstance(result, JumpEvent)
+                    and result.start_elevation_feet - result.end_elevation_feet >= 10):
+                assert any(isinstance(event, DamageAppliedEvent) and event.applied_damage > 0
+                    for event in history[-1].events)
+                assert mover.get_hp() > 0 and "Prone" not in mover.active_conditions
+                recovery = base_speed // 2
+            assert mover.action_economy.movement_remaining() == movement_before - spent - recovery
         return capture_history(before, tuple(history), observers=tuple(ObserverCapture("mover" if actor is mover else "haste-caster", actor.uuid, before.reducer_cursor)
             for actor in actors))
     finally:

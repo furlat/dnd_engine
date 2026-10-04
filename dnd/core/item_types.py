@@ -13,6 +13,7 @@ from dnd.types.world_placement import BoundaryStructure, WorldPlacementSpec
 from dnd.types.residues import ObjectResidueState
 from dnd.types.traps import TrapState
 from dnd.types.physical_access import ContactPassage
+from dnd.types.spell_suppression import SpellSuppression
 
 class EquippedSourceRequirement(BaseModel):
     """A usable possession must occupy this slot on the actor using it."""
@@ -134,10 +135,11 @@ class ItemEffectPresentationState(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     effect_uuid: UUID
-    contribution_uuid: UUID
+    contribution_uuid: UUID | None = None
     behavior_id: str
-    damage_type: DamageType
+    damage_type: DamageType | None = None
     applied_source_event_cursor: int | None = None
+    suppression_provider_uuids: tuple[UUID, ...] = ()
 
 
 class ItemPresentationState(BaseModel):
@@ -151,6 +153,7 @@ class ItemPresentationState(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    suppression_provider_uuids: tuple[UUID, ...] = ()
     item_uuid: UUID = Field(description="Stable item instance identity.")
     item_id: str = Field(
         pattern=r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$",
@@ -204,6 +207,7 @@ class ItemPresentationState(BaseModel):
     boundary_structure: Optional[BoundaryStructure] = None
     construction_owner_uuid: UUID | None = None
     construction_geometry: AoEPresentationGeometry | None = None
+    construction_suppressions: tuple[SpellSuppression, ...] = Field(default=(), exclude_if=lambda rows: not rows)
     known_to_creator: bool = False
     supported_by_uuid: Optional[UUID] = None
     contact_passage: ContactPassage = ContactPassage.STRUCTURAL

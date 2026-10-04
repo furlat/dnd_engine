@@ -168,10 +168,13 @@ def validate_policy_intent(
             row_id=intent.row_id,
         ) from error
     selected_positions: list[tuple[int, int]] = []
+    selection = binding.action_info.position_selection
+    if (selection is not None and selection.kind == "entity_destination"
+            and len(intent.extra_target_positions) != 1):
+        raise AIDecisionValidationError("choose exactly one destination", row_id=intent.row_id)
     if intent.extra_target_positions:
-        selection = binding.action_info.position_selection
-        if selection is None or selection.kind != "path":
-            raise AIDecisionValidationError("additional positions require a position-path action", row_id=intent.row_id)
+        if selection is None or selection.kind not in ("path", "entity_destination"):
+            raise AIDecisionValidationError("additional positions require explicit position selection", row_id=intent.row_id)
         actor = Entity.get(UUID(epoch.actor_uuid))
         if actor is None:
             raise AIDecisionValidationError("decision actor is unavailable", row_id=intent.row_id)

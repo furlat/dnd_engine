@@ -1,0 +1,7 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+Capture once: sunbeam-lifecycle
+[1/3] sunbeam-lifecycle
+[2/3] sunbeam-lifecycle--recipient
+[3/3] sunbeam-lifecycle--second
+3/3 cases passed; gallery: /mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/spell-packet4-review/runs/20261004T063717Z-b9641d/index.html
+Serve: /home/tommaso/.cache/dnd-engine/venv/bin/python3 -m devtools.animation_review.serve --directory /mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/spell-packet4-review

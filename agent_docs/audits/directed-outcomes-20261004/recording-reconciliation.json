@@ -1,0 +1,97 @@
+{
+  "disintegrate-lever-dust": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/disintegrate-20261004/runs/20261004T082919Z-8012fd/cases/disintegrate-lever-dust/trace.json",
+    "checks": 8,
+    "gaps": 0
+  },
+  "disintegrate-lever-dust--recipient": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/disintegrate-20261004/runs/20261004T082919Z-8012fd/cases/disintegrate-lever-dust--recipient/trace.json",
+    "checks": 8,
+    "gaps": 0
+  },
+  "disintegrate-prone-dust": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/disintegrate-20261004/runs/20261004T082500Z-04e71a/cases/disintegrate-prone-dust/trace.json",
+    "checks": 8,
+    "gaps": 0
+  },
+  "disintegrate-prone-dust--recipient": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/disintegrate-20261004/runs/20261004T082500Z-04e71a/cases/disintegrate-prone-dust--recipient/trace.json",
+    "checks": 8,
+    "gaps": 0
+  },
+  "disintegrate-saved": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/disintegrate-20261004/runs/20261004T082047Z-ae10f3/cases/disintegrate-saved/trace.json",
+    "checks": 8,
+    "gaps": 0
+  },
+  "disintegrate-saved--recipient": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/disintegrate-20261004/runs/20261004T082047Z-ae10f3/cases/disintegrate-saved--recipient/trace.json",
+    "checks": 8,
+    "gaps": 0
+  },
+  "disintegrate-stove-dust": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/disintegrate-20261004/runs/20261004T082500Z-04e71a/cases/disintegrate-stove-dust/trace.json",
+    "checks": 8,
+    "gaps": 0
+  },
+  "disintegrate-stove-dust--recipient": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/disintegrate-20261004/runs/20261004T082500Z-04e71a/cases/disintegrate-stove-dust--recipient/trace.json",
+    "checks": 8,
+    "gaps": 0
+  },
+  "disintegrate-survives": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/disintegrate-20261004/runs/20261004T082047Z-ae10f3/cases/disintegrate-survives/trace.json",
+    "checks": 8,
+    "gaps": 0
+  },
+  "disintegrate-survives--recipient": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/disintegrate-20261004/runs/20261004T082047Z-ae10f3/cases/disintegrate-survives--recipient/trace.json",
+    "checks": 8,
+    "gaps": 0
+  },
+  "eyebite-asleep": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/eyebite-20261004/runs/20261004T083030Z-96c913/cases/eyebite-asleep/trace.json",
+    "checks": 18,
+    "gaps": 0
+  },
+  "eyebite-asleep--recipient": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/eyebite-20261004/runs/20261004T083030Z-96c913/cases/eyebite-asleep--recipient/trace.json",
+    "checks": 17,
+    "gaps": 0
+  },
+  "eyebite-asleep--second": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/eyebite-20261004/runs/20261004T083030Z-96c913/cases/eyebite-asleep--second/trace.json",
+    "checks": 18,
+    "gaps": 0
+  },
+  "eyebite-panicked": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/eyebite-20261004/runs/20261004T083030Z-96c913/cases/eyebite-panicked/trace.json",
+    "checks": 19,
+    "gaps": 0
+  },
+  "eyebite-panicked--recipient": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/eyebite-20261004/runs/20261004T083030Z-96c913/cases/eyebite-panicked--recipient/trace.json",
+    "checks": 19,
+    "gaps": 0
+  },
+  "eyebite-panicked--second": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/eyebite-20261004/runs/20261004T083030Z-96c913/cases/eyebite-panicked--second/trace.json",
+    "checks": 19,
+    "gaps": 0
+  },
+  "eyebite-sickened": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/eyebite-20261004/runs/20261004T082716Z-39e359/cases/eyebite-sickened/trace.json",
+    "checks": 18,
+    "gaps": 0
+  },
+  "eyebite-sickened--recipient": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/eyebite-20261004/runs/20261004T082716Z-39e359/cases/eyebite-sickened--recipient/trace.json",
+    "checks": 18,
+    "gaps": 0
+  },
+  "eyebite-sickened--second": {
+    "trace": "/mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/eyebite-20261004/runs/20261004T082716Z-39e359/cases/eyebite-sickened--second/trace.json",
+    "checks": 18,
+    "gaps": 0
+  }
+}

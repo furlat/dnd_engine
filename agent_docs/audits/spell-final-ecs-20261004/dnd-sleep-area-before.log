@@ -1,0 +1,17 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+FF...................
+=================================== FAILURES ===================================
+_ test_sleep_target_keeps_witnessed_incoming_area_and_loses_sight_at_contact[actor] _
+tests/game/test_sleep_area_projection.py:56: in test_sleep_target_keeps_witnessed_incoming_area_and_loses_sight_at_contact
+    assert fact.resolved_area_positions == ()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError
+_ test_sleep_target_keeps_witnessed_incoming_area_and_loses_sight_at_contact[device] _
+tests/game/test_sleep_area_projection.py:56: in test_sleep_target_keeps_witnessed_incoming_area_and_loses_sight_at_contact
+    assert fact.resolved_area_positions == ()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError
+=========================== short test summary info ============================
+FAILED tests/game/test_sleep_area_projection.py::test_sleep_target_keeps_witnessed_incoming_area_and_loses_sight_at_contact[actor]
+FAILED tests/game/test_sleep_area_projection.py::test_sleep_target_keeps_witnessed_incoming_area_and_loses_sight_at_contact[device]
+2 failed, 19 passed in 63.73s (0:01:03)

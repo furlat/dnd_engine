@@ -1,0 +1,320 @@
+{
+  "schema": "dnd.spellStudioDrafts",
+  "version": 3,
+  "spells": [
+    {
+      "definitionRef": {
+        "content_id": "spell.finger_of_death",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "elementColors": {
+        "primary": 14207914,
+        "secondary": 8679765,
+        "tertiary": 2499101
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        },
+        "holdUntilContact": true,
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/spell-palettes/ray_of_frost-weaponGlow.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
+        }
+      },
+      "contact": {
+        "speedTilesPerSecond": 6.153846153846153,
+        "launchDelayMs": 916.6666666666666
+      },
+      "directed": {
+        "material": "darkness_mesh",
+        "geometry": "/finger/darkness-mesh.json",
+        "palette": [
+          1841176,
+          4401450,
+          7617589,
+          11495506,
+          14266248,
+          16246725
+        ],
+        "nativeUnitsPerCell": 1.885618083,
+        "verticalScale": 1.224744871391589,
+        "sourceOffsetNativeXYZ": [
+          0.2105243369936943,
+          2.062067713588476,
+          2.4470988512039185
+        ],
+        "targetPlaneHeightCells": 0.6625094339527613,
+        "contactFadeMs": 90
+      },
+      "media": [
+        {
+          "id": "finger.hand.back",
+          "assetId": "finger.hand.normal.back.q0",
+          "assetIdsByCamera": [
+            "finger.hand.normal.back.q0",
+            "finger.hand.normal.back.q1",
+            "finger.hand.normal.back.q2",
+            "finger.hand.normal.back.q3"
+          ],
+          "attachment": "source_ground",
+          "scale": 0.75,
+          "durationMs": 3250,
+          "depth": "behind_body",
+          "fps": 32,
+          "startOffsetMs": -183.33333333333337
+        },
+        {
+          "id": "finger.hand.front",
+          "assetId": "finger.hand.normal.front.q0",
+          "assetIdsByCamera": [
+            "finger.hand.normal.front.q0",
+            "finger.hand.normal.front.q1",
+            "finger.hand.normal.front.q2",
+            "finger.hand.normal.front.q3"
+          ],
+          "attachment": "source_ground",
+          "scale": 0.75,
+          "durationMs": 3250,
+          "depth": "front_body",
+          "fps": 32,
+          "startOffsetMs": -183.33333333333337
+        },
+        {
+          "id": "finger.contact.back",
+          "assetId": "finger.contact.back.q0",
+          "assetIdsByCamera": [
+            "finger.contact.back.q0",
+            "finger.contact.back.q1",
+            "finger.contact.back.q2",
+            "finger.contact.back.q3"
+          ],
+          "attachment": "target_body",
+          "scale": 0.46875,
+          "durationMs": 2000,
+          "depth": "behind_body",
+          "fps": 32,
+          "clock": "contact",
+          "requireDamageApplied": true,
+          "emissionPointByFacing": {
+            "E": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "SE": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "S": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "SW": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "W": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "NW": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "N": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "NE": {
+              "x": 0,
+              "y": -44.340500673536
+            }
+          }
+        },
+        {
+          "id": "finger.contact.front",
+          "assetId": "finger.contact.front.q0",
+          "assetIdsByCamera": [
+            "finger.contact.front.q0",
+            "finger.contact.front.q1",
+            "finger.contact.front.q2",
+            "finger.contact.front.q3"
+          ],
+          "attachment": "target_body",
+          "scale": 0.46875,
+          "durationMs": 2000,
+          "depth": "front_body",
+          "fps": 32,
+          "clock": "contact",
+          "requireDamageApplied": true,
+          "emissionPointByFacing": {
+            "E": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "SE": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "S": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "SW": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "W": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "NW": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "N": {
+              "x": 0,
+              "y": -44.340500673536
+            },
+            "NE": {
+              "x": 0,
+              "y": -44.340500673536
+            }
+          }
+        }
+      ],
+      "cancellationMedia": {
+        "outcomeCode": "spell.counterspell.interrupted",
+        "reactionId": "reaction.spell.counterspell",
+        "cutoffOffsetMs": 691.6666666666666,
+        "media": [
+          {
+            "id": "finger.cameo.back",
+            "assetId": "finger.hand.cameo.back.q0",
+            "assetIdsByCamera": [
+              "finger.hand.cameo.back.q0",
+              "finger.hand.cameo.back.q1",
+              "finger.hand.cameo.back.q2",
+              "finger.hand.cameo.back.q3"
+            ],
+            "attachment": "source_ground",
+            "scale": 0.75,
+            "durationMs": 2375,
+            "depth": "behind_body",
+            "fps": 32,
+            "timeMap": [
+              {
+                "elapsedMs": 0,
+                "sourceFrame": 28
+              },
+              {
+                "elapsedMs": 2375,
+                "sourceFrame": 104
+              }
+            ]
+          },
+          {
+            "id": "finger.cameo.front",
+            "assetId": "finger.hand.cameo.front.q0",
+            "assetIdsByCamera": [
+              "finger.hand.cameo.front.q0",
+              "finger.hand.cameo.front.q1",
+              "finger.hand.cameo.front.q2",
+              "finger.hand.cameo.front.q3"
+            ],
+            "attachment": "source_ground",
+            "scale": 0.75,
+            "durationMs": 2375,
+            "depth": "front_body",
+            "fps": 32,
+            "timeMap": [
+              {
+                "elapsedMs": 0,
+                "sourceFrame": 28
+              },
+              {
+                "elapsedMs": 2375,
+                "sourceFrame": 104
+              }
+            ]
+          }
+        ],
+        "reactionOffsetsByFacing": {
+          "E": [
+            0.8441839356697289,
+            -1.0026095566285185,
+            1.4122265214263277
+          ],
+          "SE": [
+            1.3058802018552766,
+            -0.11202383089364966,
+            1.4122265214263277
+          ],
+          "S": [
+            1.0026095566285185,
+            0.8441839356697289,
+            1.4122265214263277
+          ],
+          "SW": [
+            0.11202383089364974,
+            1.3058802018552766,
+            1.4122265214263277
+          ],
+          "W": [
+            -0.8441839356697287,
+            1.0026095566285185,
+            1.4122265214263277
+          ],
+          "NW": [
+            -1.3058802018552766,
+            0.11202383089364981,
+            1.4122265214263277
+          ],
+          "N": [
+            -1.0026095566285185,
+            -0.8441839356697287,
+            1.4122265214263277
+          ],
+          "NE": [
+            -0.1120238308936499,
+            -1.3058802018552766,
+            1.4122265214263277
+          ]
+        },
+        "successByCamera": [
+          "finger.counterspell.front.q0",
+          "finger.counterspell.front.q1",
+          "finger.counterspell.front.q2",
+          "finger.counterspell.front.q3"
+        ],
+        "reactionScale": 0.5625
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    }
+  ]
+}

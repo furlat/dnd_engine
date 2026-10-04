@@ -12,7 +12,7 @@ from dnd.content.characters.class_definitions import (
     ResolvedBarbarianLevel,
     resolve_barbarian_level,
 )
-from dnd.core.content.runtime import BehaviorBinding
+from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
 from dnd.core.equipment_types import ArmorType, WeaponProperty
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.feature_grants import AttackMultiplicityGrant
@@ -500,6 +500,7 @@ def _apply_level_features(
                     f"{step_id}.{_RELENTLESS_RAGE}.handler",
                 ),
                 name="Relentless Rage",
+                content_kind=RuntimeBehaviorKind.CLASS_FEATURE,
                 semantic_key=_RELENTLESS_RAGE,
                 source_entity_uuid=entity.uuid,
                 trigger_conditions=[Trigger(

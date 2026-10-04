@@ -71,7 +71,9 @@ def test_other_actor_keeps_existing_idle_or_final_death_pose(data: AnimationData
     contact = ActorContact("recipient", (2, 1), "NW", 0.82, rig_id="smallscale.goblin01")
     assert sample_idle_body(data, contact, 250) == BodySample("recipient", "Idle", 3, "NW")
     dead = replace(contact, life_state=LifeState.DEAD)
-    assert sample_idle_body(data, dead, 0) == BodySample("recipient", "Die", 14, "NW")
+    # The original alternate death stays distinct from the reversible Die/prone pose.
+    assert data.rigs[contact.rig_id].clips["Death"].source_clip == "Die 2"
+    assert sample_idle_body(data, dead, 0) == BodySample("recipient", "Death", 14, "NW")
     assert sample_idle_body(data, dead, 5000) == sample_idle_body(data, dead, 0)
 
 

@@ -1,0 +1,156 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/sensory-fps32-delivery",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/sensory-fps32-20261004",
+  "source_manifest_sha256": "eb39bfd1c39113937e9670bd1addc824d0c413894a68a5acd740bcef9d0a9b5e",
+  "identities": [
+    "sensory.see_invisibility.application.back",
+    "sensory.see_invisibility.application.front",
+    "sensory.see_invisibility.sustain.back",
+    "sensory.see_invisibility.sustain.front",
+    "sensory.darkvision.application.back",
+    "sensory.darkvision.application.front",
+    "sensory.darkvision.sustain.back",
+    "sensory.darkvision.sustain.front",
+    "sensory.true_seeing.application.back",
+    "sensory.true_seeing.application.front",
+    "sensory.true_seeing.sustain.back",
+    "sensory.true_seeing.sustain.front"
+  ],
+  "files": [
+    {
+      "path": "game/assets/sensory_spells/cast-hands/darkvision-hands.png",
+      "bytes": 24401,
+      "sha256": "49bbdc1fb670b4fd5abe07d574450c6d1296d7f0c85ac627ab4cad8fb1ec6171"
+    },
+    {
+      "path": "game/assets/sensory_spells/cast-hands/see_invisibility-hands.png",
+      "bytes": 24386,
+      "sha256": "17e7c41b0a31b99b35bc21a51d000173847a21345b097d593a9d652065b8b8db"
+    },
+    {
+      "path": "game/assets/sensory_spells/cast-hands/true_seeing-hands.png",
+      "bytes": 24891,
+      "sha256": "d27db9dc3a61159fcf64c6241e2e1f45eb2a9d577740f8e355641cda35328495"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/darkvision/q0/back/000.png",
+      "bytes": 36356,
+      "sha256": "137206b5fd02695908c6672b4f98347c943f434498ea1f7e8d38617ec5702aa3"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/darkvision/q0/front/000.png",
+      "bytes": 68900,
+      "sha256": "55f3c95ea013fa913711c56119af9713e0a7d6757b0bc01784a197d607dfd9ba"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/darkvision/q1/back/000.png",
+      "bytes": 49447,
+      "sha256": "56d8e75014186211a38804ad2840019753cc42800d71cff3766d0915c16f2eea"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/darkvision/q1/front/000.png",
+      "bytes": 51626,
+      "sha256": "1fad14398175dbbbc40b945f8fd630e9a55bc4a48cdaf4d214ac6e3c821a8245"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/darkvision/q2/back/000.png",
+      "bytes": 56827,
+      "sha256": "a5496a8a4a54a2b256b5d0b586c7813b80fa710fb3d16f23258cc6f5b3da661e"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/darkvision/q2/front/000.png",
+      "bytes": 52612,
+      "sha256": "c10b1ea957b71017dd9dde0480f5d01e6a5f60ac3d3211a355efb64427f159e2"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/darkvision/q3/back/000.png",
+      "bytes": 35489,
+      "sha256": "e91ed3760580e2ac951775bd1b95bcc21bfcf66d68211b4d610704c7a37faacb"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/darkvision/q3/front/000.png",
+      "bytes": 69633,
+      "sha256": "37ac705fe8b6ca66e11dcce850c66916295d484d0d20ff0fd29da28d026328a9"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/see_invisibility/q0/back/000.png",
+      "bytes": 34493,
+      "sha256": "bc1ac2cebe5679f8e8a4058ec7f67359d94585a9405451211a1ebb83d6219751"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/see_invisibility/q0/front/000.png",
+      "bytes": 60495,
+      "sha256": "5b51ff6ab3e879198685759287f65e4b7f7c173d8fff889586be1be0aa585fd7"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/see_invisibility/q1/back/000.png",
+      "bytes": 40905,
+      "sha256": "b991f302af4b13dc12341b23d0744aaa28e879ad952026362de21d7f8f8745f9"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/see_invisibility/q1/front/000.png",
+      "bytes": 52130,
+      "sha256": "a5942dd95d4262b5c19c407323f2bf0ab0c69093e2dc5fb6bbb889bf46c348a8"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/see_invisibility/q2/back/000.png",
+      "bytes": 51267,
+      "sha256": "b0d995d22e3d0b1c5f1c97f64683de55c221695a9c7a255093ea2f139cc31f07"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/see_invisibility/q2/front/000.png",
+      "bytes": 51502,
+      "sha256": "43215fd7641a787debf61f2a088489f43dfcf0180a95689c0b172e99035ec61f"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/see_invisibility/q3/back/000.png",
+      "bytes": 38745,
+      "sha256": "dbcc81f7a8f08a9f5cd51fbaef9a0bda26c3d880cc7f54fcbf4944ad953634d1"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/see_invisibility/q3/front/000.png",
+      "bytes": 59832,
+      "sha256": "f8bbc8a44b37c331d620e2762717c03ec9f74cdec09fc20e4b4ec7a8f1cc2372"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/true_seeing/q0/back/000.png",
+      "bytes": 32722,
+      "sha256": "d1b0a9cb76b46d00904aa0d1ec61dc80e780c054c0d00492312056ba6ac6d217"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/true_seeing/q0/front/000.png",
+      "bytes": 63624,
+      "sha256": "dfa65a8f79ae710e2f4e8eb9b161dfad14613b8afa8988812ca8fd6048e8a19f"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/true_seeing/q1/back/000.png",
+      "bytes": 38527,
+      "sha256": "8c14086fcbd2f25f5ad44cb6c368e9ca8416c8e436308d149e94edee8a86dc59"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/true_seeing/q1/front/000.png",
+      "bytes": 55753,
+      "sha256": "22e39fd012feb66956a03d2cd025b89e4cb040753edcce600fd1bd092f952be3"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/true_seeing/q2/back/000.png",
+      "bytes": 48640,
+      "sha256": "dded9e64af2875d30b7e1d162dc80da7f191df0e08377b211e6de17f932e295d"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/true_seeing/q2/front/000.png",
+      "bytes": 53214,
+      "sha256": "415cd9cc53b6d1ca81e7a9df52ff0c2163187f2b7b839cbf7f2cb19c750ca6bc"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/true_seeing/q3/back/000.png",
+      "bytes": 36652,
+      "sha256": "09473084cc28c7ff239ccdac6d9091c0471ea2c6b9a35ea669a4b99710c43580"
+    },
+    {
+      "path": "game/assets/sensory_spells/media/true_seeing/q3/front/000.png",
+      "bytes": 60314,
+      "sha256": "9e272283bb9b05392caa1c9d5c37367e5c16e95f37f04e23ff310e9901ef1a71"
+    }
+  ]
+}

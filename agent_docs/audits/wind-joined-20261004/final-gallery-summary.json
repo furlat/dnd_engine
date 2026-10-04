@@ -1,0 +1,33 @@
+{
+  "run": ".runtime/wind-joined-20261004/runs/20261004T094853Z-d27a3c",
+  "cases": [
+    {
+      "id": "wall-assembly-wind-corner-1-0",
+      "status": "passed",
+      "frames": 350,
+      "checks": 34,
+      "gaps": 0
+    },
+    {
+      "id": "wall-assembly-wind-corner-1-0--recipient",
+      "status": "passed",
+      "frames": 350,
+      "checks": 34,
+      "gaps": 0
+    },
+    {
+      "id": "wall-assembly-wind-straight-1-1",
+      "status": "passed",
+      "frames": 358,
+      "checks": 34,
+      "gaps": 0
+    },
+    {
+      "id": "wall-assembly-wind-straight-1-1--recipient",
+      "status": "passed",
+      "frames": 358,
+      "checks": 34,
+      "gaps": 0
+    }
+  ]
+}

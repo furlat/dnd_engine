@@ -9,7 +9,7 @@ import pytest
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent
 from dnd.core.base_actions import ActionEvent
-from dnd.core.events import EventPhase, EventQueue, StepMovementEvent
+from dnd.core.events import EventPhase, EventQueue, EventType, StepMovementEvent
 from dnd.core.life_types import LifeState
 from game.animation import body_clip
 from game.animation_draw import LoadedBodyRows
@@ -69,8 +69,17 @@ def test_native_routes_keep_actual_costs_conditions_terrain_and_replayable_steps
     motions = []
     for lineage, public_root in zip(roots, received, strict=True):
         assert EventQueue.get_event_by_uuid(lineage.root.uuid) is None
-        assert not lineage.dispositions and lineage.root.parent_lineage is None
-        assert all(event.phase is EventPhase.COMPLETION for event in lineage.events)
+        assert lineage.root.parent_lineage is None
+        # The existing immediate recovery cancels only the Prone application
+        # after a damaging lower landing; the Jump itself still completes.
+        canceled = tuple(event for event in lineage.events if event.phase is EventPhase.CANCEL)
+        if canceled:
+            assert isinstance(lineage.root, JumpEvent)
+            assert lineage.root.start_elevation_feet - lineage.root.end_elevation_feet >= 10
+            assert len(canceled) == 1 and canceled[0].event_type is EventType.CONDITION_APPLICATION
+        else:
+            assert not lineage.dispositions
+        assert all(event.phase in (EventPhase.COMPLETION, EventPhase.CANCEL) for event in lineage.events)
         identities = {event.lineage_uuid for event in lineage.events}
         assert all(event.parent_lineage in identities for event in lineage.events if event is not lineage.root)
         assert all(child in identities for event in lineage.events for child in event.children_lineages)

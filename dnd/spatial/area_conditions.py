@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from pydantic import Field, PrivateAttr, StrictInt, model_validator
 
+from dnd.blocks.base_item import BaseItem
 from dnd.core.base_block import BaseBlock, LightLevel, MovementMode, PreparedConditionRemovals
 from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.condition_types import DurationType, HazardFilter
@@ -86,7 +87,8 @@ class SpatialCondition(BaseCondition):
 
     def movement_extra_cost_at(self, position: Tuple[int, int], mode: MovementMode) -> float:
         return (self.movement_expenditure_extra
-                if position in self.affected_positions and mode is not MovementMode.BURROWING else 0)
+                if position in self.affected_positions and self.allows_contribution_at(position)
+                and mode is not MovementMode.BURROWING else 0)
     deposit_source: MaterialDepositSource | None = None
 
     def blocks_crossing_between(self, start: Tuple[int, int], end: Tuple[int, int],
@@ -142,10 +144,17 @@ class SpatialCondition(BaseCondition):
             return None
         if not discovered and not self.is_hazard_perceived_by(observer_uuid):
             return None
+        observer = Entity.get(observer_uuid)
+        contact = observer.senses.entities.get(self.anchor_uuid) if observer is not None and self.anchor_uuid is not None else None
         return PerceivedSpatialEffect(
             content_ref=self.content_ref, name=self.name, description=self.description,
             positions=tuple(sorted(positions)),
             anchor_position=self.position if self.position in positions else None,
+            anchor_elevation_steps=get_map().get_support_elevation_feet(self.position)//5 if self.position in positions else None,
+            anchor_item_uuid=(self.anchor_uuid if self.anchor_kind is SpatialEffectAnchorKind.WORLD_OBJECT
+                and observer is not None and self.anchor_uuid in observer.senses.objects else None),
+            anchor_entity_uuid=(self.anchor_uuid if self.anchor_kind is SpatialEffectAnchorKind.ENTITY
+                and (self.anchor_uuid == observer_uuid or contact is not None and contact.visual) else None),
             deposit_source=self.deposit_source,
         )
 
@@ -163,6 +172,13 @@ class SpatialCondition(BaseCondition):
         )
         return self.arbitration_potency, spell_level
 
+    def contributions_active(self) -> bool:
+        if not super().contributions_active():
+            return False
+        anchor = BaseBlock.get(self.anchor_uuid) if self.anchor_uuid else None
+        return not ((isinstance(anchor, Entity) and anchor.is_spatially_suspended)
+            or (isinstance(anchor, BaseItem) and anchor.antimagic_suspended_placement is not None))
+
     def is_active_spatial_condition(self) -> bool:
         """Verify activity against the authoritative map collection."""
         return get_map().get_spatial_condition(self.uuid) is self
@@ -172,13 +188,13 @@ class SpatialCondition(BaseCondition):
         position: Tuple[int, int],
     ) -> Optional[OpticalObscurement]:
         """Return this condition's optical contribution in its footprint."""
-        if position not in self.affected_positions:
+        if position not in self.affected_positions or not self.allows_contribution_at(position):
             return None
         return self.optical_obscurement
 
     def blocks_physical_optics_at(self, position: Tuple[int, int]) -> bool:
         """Return whether this condition physically blocks optics here."""
-        return self.blocks_physical_optics and position in self.affected_positions
+        return self.blocks_physical_optics and position in self.affected_positions and self.allows_contribution_at(position)
 
     def blocks_walking_at(
         self,
@@ -188,6 +204,8 @@ class SpatialCondition(BaseCondition):
     ) -> bool:
         """Apply the condition's explicit traversal-blocking policy."""
         del requesting_entity_uuid, mode
+        if not self.allows_contribution_at(position):
+            return False
         if self.blocking_policy is SpatialEffectBlockingPolicy.NONE:
             return False
         if self.blocking_policy is SpatialEffectBlockingPolicy.ANCHOR:
@@ -479,9 +497,14 @@ class SpatialCondition(BaseCondition):
                 if event.event_type is EventType.SPATIAL_ENTITY_ENTERED:
                     condition.relocate_anchor(event.position, parent_event=event)
                 elif event.old_position is None:
-                    condition.deactivate(parent_event=event)
+                    anchor = Entity.get(anchor_uuid)
+                    if anchor is None or not anchor.is_spatially_suspended:
+                        condition.deactivate(parent_event=event)
                 return None
             if event.object_uuid != anchor_uuid:
+                return None
+            anchor = BaseBlock.get(anchor_uuid)
+            if isinstance(anchor, BaseItem) and anchor.antimagic_suspended_placement is not None:
                 return None
             if (event.event_type is EventType.SPATIAL_OBJECT_REMOVED
                     or event.object_state is not None
@@ -497,6 +520,7 @@ class SpatialCondition(BaseCondition):
 
         return EventHandler(
             name=f"{self.name} Anchor Movement",
+            runs_while_suppressed=True,
             source_entity_uuid=self.source_entity_uuid,
             trigger_conditions=[
                 Trigger(
@@ -613,6 +637,9 @@ class SpatialCondition(BaseCondition):
             positions=normalized,
         )
         self.affected_positions = normalized
+        if self.magical_origin and not self.antimagic_exempt():
+            self.spatial_suppressions = (*tuple(row for row in self.spatial_suppressions if not row.antimagic),
+                *SpellProtectionRegistry.get_antimagic_suppressions(normalized))
         for handler_uuid in self.spatial_handler_uuids:
             EventQueue.update_spatial_handler_positions(
                 handler_uuid,
@@ -1061,12 +1088,14 @@ class AreaCondition(SpatialCondition):
         """Resolve once, retaining the cause beside the resulting native cells."""
         spell_level = self._protection_spell_level()
         origin = self.effect_origin
-        self.spatial_suppressions = ()
-        if spell_level is not None and self.magical_origin and origin is not None and origin.source_position is not None:
+        self.spatial_suppressions = (SpellProtectionRegistry.get_antimagic_suppressions(positions)
+            if self.magical_origin and not self.antimagic_exempt() else ())
+        if spell_level is not None and self.magical_origin and not self.antimagic_exempt() and origin is not None and origin.source_position is not None:
             self.spatial_suppressions = SpellProtectionRegistry.get_suppressions(
                 origin.source_position, spell_level, positions)
             for suppression in self.spatial_suppressions:
-                positions.difference_update(suppression.positions)
+                if not suppression.antimagic:
+                    positions.difference_update(suppression.positions)
         return positions
 
     def move_zone(
@@ -1103,6 +1132,30 @@ class AreaCondition(SpatialCondition):
         ):
             return None
         return self.effect_origin.base_spell_level
+
+    def refresh_antimagic_suppression(self, *, parent_event: Event) -> None:
+        if not self.magical_origin or self.antimagic_exempt():
+            return
+        previous = self.spatial_suppressions
+        current = tuple(row for row in previous if not row.antimagic) + (
+            SpellProtectionRegistry.get_antimagic_suppressions(set(self.affected_positions)))
+        if current == previous:
+            return
+        before = {position for row in previous if row.antimagic for position in row.positions}
+        after = {position for row in current if row.antimagic for position in row.positions}
+        self.spatial_suppressions = current
+        change = self._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
+            previous_positions=set(self.affected_positions), affected_positions=set(self.affected_positions),
+            parent_event=parent_event)
+        self._remove_light_positions(after, parent_event=change)
+        self._apply_light_positions(before - after, parent_event=change)
+        grid = get_map()
+        grid.invalidate_spatial_caches({"movement", "optical", "propagation"})
+        for position in before ^ after:
+            grid.publish_tile_mechanics_changed(position, source_entity_uuid=self.source_entity_uuid,
+                parent_event=change.uuid)
+        spatial_senses_system(change)
+        self._complete_change(change)
 
     def _create_zone_entry_handler(self) -> EventHandler:
         raise NotImplementedError
@@ -1145,7 +1198,9 @@ class AreaCondition(SpatialCondition):
 
     def get_trigger_positions(self, kind: SpatialEffectTriggerKind) -> Set[Tuple[int, int]]:
         """Return this trigger's subregion before its turn allowance is consumed."""
-        return set(self.affected_positions)
+        return {position for position in self.affected_positions
+            if kind in (SpatialEffectTriggerKind.LEAVE, SpatialEffectTriggerKind.EFFECT_LEAVES_OCCUPANT)
+            or self.allows_contribution_at(position)}
 
     def _occupancy_admits_trigger(
         self,
@@ -1285,6 +1340,8 @@ class AreaCondition(SpatialCondition):
                 name=f"{self.name} Difficult Terrain",
                 value=1,
             )
+            modifier.contribution_owner_uuid = self.uuid
+            modifier.contribution_position = position
             value = tile.edit_movement_cost(MovementMode.WALKING)
             modifier_uuid = value.self_static.add_value_modifier(
                 modifier,
@@ -1358,6 +1415,7 @@ class AreaCondition(SpatialCondition):
         """Apply one source-owned objective light contribution."""
         if self.sets_light_level is None:
             return
+        positions = {position for position in positions if self.allows_contribution_at(position)}
         get_map().apply_light_modifier(
             self.uuid,
             set(positions),
@@ -1488,6 +1546,9 @@ class AreaCondition(SpatialCondition):
             positions=normalized,
         )
         self.affected_positions = normalized
+        if self.magical_origin and not self.antimagic_exempt():
+            self.spatial_suppressions = (*tuple(row for row in self.spatial_suppressions if not row.antimagic),
+                *SpellProtectionRegistry.get_antimagic_suppressions(normalized))
         for handler_uuid in self.spatial_handler_uuids:
             EventQueue.update_spatial_handler_positions(handler_uuid, normalized)
         new_modifiers = self._apply_terrain_positions(

@@ -10,16 +10,20 @@ from typing import Mapping
 from uuid import UUID
 
 from dnd.core.events import SpatialChangeType
+from dnd.types.event_facts import LandingKind, MovementTrajectory
+from dnd.types.world import MovementMode, OccupancyLayer
 from game.animation import (
     ActorContact, BodySample, facing_for_delta,
     sample_idle_body, body_context, resolve_body_context, context_duration, context_anchor_ms,
-    sample_context_body,
+    sample_context_body, airborne_weight, body_clip, body_rig, context_frame,
 )
 from game.animation_types import (AnimationData, LifecycleFeedback, BodyContext, ActionFrameAnchor,
-                                  ContentBodyQualifier, RoleDefault)
+                                  ContentBodyQualifier, RoleDefault, MovementBodyQualifier, FlightMovementProfile)
 from game.combat import actor_contact
 from game.player_facts import ForcedMovementFact, PlayerLineage, PlayerNode, PlayerState, ShoveFact, SpatialFact
 from game.player_reduction import reduce_lineage
+from game.condition_media import ResolvedConditionLayer
+from game.condition_types import ConditionLayer
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +65,9 @@ class ForcedMovementCue:
     data: AnimationData
     body_context: BodyContext | None = None
     recovery_body: BodyContext | None = None
+    flight: FlightMovementProfile | None = None
+    flight_body: BodyContext | None = None
+    layers: tuple[ConditionLayer, ...] = ()
 
 
 def bind_shove(before: PlayerState, node: PlayerNode, data: AnimationData,
@@ -101,7 +108,8 @@ def motion_progress(value: float, curve: str, *, inverse: bool = False) -> float
 
 def bind_forced_movement(before: PlayerState, lineage: PlayerLineage,
                          data: AnimationData, start_ms: float,
-                         contacts: Mapping[str, ActorContact]) -> ForcedMovementCue:
+                         contacts: Mapping[str, ActorContact], *,
+                         layers: tuple[ConditionLayer, ...] = ()) -> ForcedMovementCue:
     node = lineage.root
     event = node.fact
     assert isinstance(event, ForcedMovementFact) and event.target_entity_uuid is not None
@@ -130,7 +138,20 @@ def bind_forced_movement(before: PlayerState, lineage: PlayerLineage,
                     and row.fact.entity_uuid == target.uuid and row.parent_lineage == node.lineage_uuid
                     and row.fact.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT))
     entered = tuple(fact for _, fact in spatial if fact.change_type is SpatialChangeType.ENTITY_ENTERED)
-    grids = [actor.grid, *(row.position for row in entered)]
+    finite_transfer = event.landing_kind in (LandingKind.CONTROLLED, LandingKind.IMPACT)
+    flight = data.movement_context.flight if finite_transfer else None
+    flight_body = (resolve_body_context(data, actor, "movement",
+        MovementBodyQualifier(movement_mode=MovementMode.FLYING, trajectory=MovementTrajectory.PATH,
+            connector_presentation_key=None),
+        flight.body) if flight is not None else None)
+    # Finite transfers traverse the admitted straight segment. Its disclosed
+    # supercover cells certify clearance; their centres are not zigzag waypoints.
+    path = ((event.end_position,) if finite_transfer else
+            event.disclosed_path[1:] if event.disclosed_path else tuple(row.position for row in entered))
+    grids = [event.start_position]
+    for grid in path:
+        if grid != grids[-1]:
+            grids.append(grid)
     if grids[-1] != event.end_position:
         grids.append(event.end_position)
     lengths = [hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(grids, grids[1:])]
@@ -140,27 +161,62 @@ def bind_forced_movement(before: PlayerState, lineage: PlayerLineage,
     cumulative = [0.0]
     for length in lengths:
         cumulative.append(cumulative[-1] + length)
+    first_height = (event.start_elevation_feet / 5 if event.start_elevation_feet is not None
+                    else actor.elevation_steps)
+    last_height = (event.end_elevation_feet / 5 if event.end_elevation_feet is not None
+                   else after.tiles[event.end_position].elevation_steps)
     points = tuple(DisplacementPoint(grid,
-        actor.elevation_steps if index == 0 else after.tiles[grid].elevation_steps,
+        first_height + (last_height - first_height) * cumulative[index] / total if finite_transfer else
+        first_height if index == 0 else last_height if index == len(grids) - 1 else after.tiles[grid].elevation_steps,
         cumulative[index] / total) for index, grid in enumerate(grids))
     speed = selected.actor.playbackSpeed
     brace_frame = next(row.frame for row in selected.anchors if row.name == "brace")
     travel_start = start_ms + context_anchor_ms(data, actor, selected, "brace")
+    for layer in layers:
+        media = data.condition_media[layer.assetId]
+        if media.application_asset_id is not None:
+            asset = data.projectile_assets[media.application_asset_id]
+            phase = asset.phases.impact
+            assert phase is not None
+            travel_start = max(travel_start, start_ms + phase.frames * 1000 / (phase.fps or asset.fps))
     duration = profile.duration_ms * context.durationScale
-    body_end = start_ms + context_duration(data, actor, selected) + duration
+    body_end = travel_start + duration + context_duration(data, actor, selected) - context_anchor_ms(data, actor, selected, "brace")
     complete = body_end + context_duration(data, actor, recovery)
+    for layer in layers:
+        media = data.condition_media[layer.assetId]
+        if media.removal_asset_id is not None:
+            asset = data.projectile_assets[media.removal_asset_id]
+            phase = asset.phases.impact
+            assert phase is not None
+            complete = max(complete, travel_start + duration + phase.frames * 1000 / (phase.fps or asset.fps))
     arrivals: list[tuple[UUID, float]] = []
-    entered_index = 1
+    entered_index = 0
     for identity, row in spatial:
         # LEFT is published after committing its destination, immediately
         # before that destination's ENTERED fact. Both share the reached point.
-        index = min(entered_index, len(points) - 1)
-        at = travel_start + duration * motion_progress(points[index].progress, context.motionCurve, inverse=True)
+        destination = entered[min(entered_index, len(entered) - 1)].position if entered else event.end_position
+        progress = next(point.progress for point in points if point.grid == destination)
+        if finite_transfer:
+            progress = 0. if row.occupancy_layer is OccupancyLayer.AIR else 1.
+        at = travel_start + duration * motion_progress(progress, context.motionCurve, inverse=True)
         arrivals.append((identity, at))
         if row.change_type is SpatialChangeType.ENTITY_ENTERED:
             entered_index += 1
     return ForcedMovementCue(node.uuid, actor, points, tuple(arrivals), selected.actor.clip,
-        brace_frame, speed, start_ms, travel_start, travel_start + duration, body_end, complete, data, selected, recovery)
+        brace_frame, speed, start_ms, travel_start, travel_start + duration, body_end, complete,
+        data, selected, recovery, flight, flight_body, layers)
+
+
+def sample_displacement_layers(cue: ForcedMovementCue, elapsed_ms: float) -> tuple[ResolvedConditionLayer, ...]:
+    """Reuse registered body attachments over this finite motion's own dates."""
+    if not cue.start_ms <= elapsed_ms < cue.complete_ms:
+        return ()
+    return tuple(ResolvedConditionLayer(layer, cue.data.condition_media[layer.assetId], cue.event_uuid,
+        min(elapsed_ms, cue.travel_end_ms) - cue.start_ms, application=True,
+        alpha=min(1., (cue.complete_ms - elapsed_ms) / fade) if
+            (fade := cue.data.condition_media[layer.assetId].removal_fade_ms) else 1.,
+        removal_age_ms=elapsed_ms - cue.travel_end_ms if elapsed_ms >= cue.travel_end_ms else None)
+        for layer in cue.layers)
 
 
 def forced_contact(cue: ForcedMovementCue, data: AnimationData, elapsed_ms: float) -> ActorContact:
@@ -170,27 +226,42 @@ def forced_contact(cue: ForcedMovementCue, data: AnimationData, elapsed_ms: floa
     first, last = cue.points[index - 1:index + 1]
     span = last.progress - first.progress
     local = (progress - first.progress) / span if span else 1
+    lift = (cue.flight.clearancePx * airborne_weight(progress, cue.flight.takeoffFraction,
+            1 - cue.flight.landingFraction) if cue.flight is not None else 0.)
     return replace(cue.actor,
         grid=(first.grid[0] + (last.grid[0] - first.grid[0]) * local,
               first.grid[1] + (last.grid[1] - first.grid[1]) * local),
         elevation_steps=first.elevation_steps + (last.elevation_steps - first.elevation_steps) * local,
-        body_lift_px=cue.actor.body_lift_px * (1 - progress))
+        body_lift_px=lift + cue.actor.body_lift_px * (1 - progress))
 
 
 def sample_forced_body(cue: ForcedMovementCue, data: AnimationData, elapsed_ms: float) -> BodySample:
     selected = cue.body_context or body_context(cue.clip, cue.playback_speed)
     if elapsed_ms < cue.travel_start_ms:
-        return sample_context_body(data, cue.actor, selected, elapsed_ms - cue.start_ms)
+        return sample_context_body(data, cue.actor, selected, min(elapsed_ms - cue.start_ms,
+            context_anchor_ms(data, cue.actor, selected, "brace")))
     elif elapsed_ms < cue.travel_end_ms:
+        if cue.flight is not None and cue.flight_body is not None:
+            progress = (elapsed_ms - cue.travel_start_ms) / (cue.travel_end_ms - cue.travel_start_ms)
+            flight_body = cue.flight_body
+            frame = context_frame(flight_body, body_clip(data, cue.actor, flight_body.actor.clip),
+                elapsed_ms - cue.travel_start_ms, progress=progress)
+            registered = "airborne_support" in body_rig(data, cue.actor).pose_sockets
+            return BodySample(cue.actor.actor_uuid, flight_body.actor.clip, frame, cue.actor.facing,
+                registration_socket="airborne_support" if registered else None,
+                registration_weight=airborne_weight(progress, cue.flight.takeoffFraction,
+                    1 - cue.flight.landingFraction) if registered else 0.)
         frame = cue.brace_frame
     elif elapsed_ms < cue.body_end_ms:
         return sample_context_body(data, cue.actor, selected,
-            elapsed_ms - cue.start_ms - (cue.travel_end_ms - cue.travel_start_ms))
+            elapsed_ms - cue.travel_end_ms + context_anchor_ms(data, cue.actor, selected, "brace"))
     else:
         recovery = cue.recovery_body
-        if recovery is not None and recovery.actor.enabled and elapsed_ms < cue.complete_ms:
+        recovery_end = cue.body_end_ms + (context_duration(data, cue.actor, recovery)
+            if recovery is not None and recovery.actor.enabled else 0.)
+        if recovery is not None and recovery.actor.enabled and elapsed_ms < recovery_end:
             return sample_context_body(data, cue.actor, recovery, elapsed_ms - cue.body_end_ms)
-        return sample_idle_body(data, cue.actor, elapsed_ms - cue.complete_ms)
+        return sample_idle_body(data, cue.actor, elapsed_ms - recovery_end)
     return BodySample(cue.actor.actor_uuid, cue.clip, frame, cue.actor.facing)
 
 

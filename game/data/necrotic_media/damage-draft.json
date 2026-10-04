@@ -1,0 +1,583 @@
+{
+  "schema": "dnd.spellStudioDrafts",
+  "version": 3,
+  "spells": [
+    {
+      "definitionRef": {
+        "content_id": "spell.blight",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "elementColors": {
+        "primary": 13875195,
+        "secondary": 10001839,
+        "tertiary": 4592519
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/spell-palettes/ray_of_frost-weaponGlow.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
+        }
+      },
+      "contact": {
+        "delayMs": 120
+      },
+      "media": [
+        {
+          "id": "blight.back.False",
+          "assetId": "necrotic.blight.back",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 120,
+          "scale": 0.44,
+          "scaleWithActor": true,
+          "alpha": 1,
+          "depth": "behind_body",
+          "requiredSaveSuccess": false,
+          "requireDamageApplied": true,
+          "rigIds": [
+            "neuroclient.modular"
+          ]
+        },
+        {
+          "id": "blight.front.False",
+          "assetId": "necrotic.blight.front",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 120,
+          "scale": 0.44,
+          "scaleWithActor": true,
+          "alpha": 1,
+          "depth": "front_body",
+          "requiredSaveSuccess": false,
+          "requireDamageApplied": true,
+          "rigIds": [
+            "neuroclient.modular"
+          ]
+        },
+        {
+          "id": "blight.back.True",
+          "assetId": "necrotic.blight.back",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 120,
+          "scale": 0.44,
+          "scaleWithActor": true,
+          "alpha": 0.55,
+          "depth": "behind_body",
+          "requiredSaveSuccess": true,
+          "requireDamageApplied": true,
+          "rigIds": [
+            "neuroclient.modular"
+          ]
+        },
+        {
+          "id": "blight.front.True",
+          "assetId": "necrotic.blight.front",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 120,
+          "scale": 0.44,
+          "scaleWithActor": true,
+          "alpha": 0.55,
+          "depth": "front_body",
+          "requiredSaveSuccess": true,
+          "requireDamageApplied": true,
+          "rigIds": [
+            "neuroclient.modular"
+          ]
+        }
+      ],
+      "bodyMaterials": [
+        {
+          "id": "blight.wither.False",
+          "material": {
+            "colors": [
+              2239282,
+              7106168,
+              12860731,
+              16762786
+            ],
+            "mapping": "wither_texture",
+            "texture": "/necrotic/blight-noise.png"
+          },
+          "startOffsetMs": 120,
+          "requireDamageApplied": true,
+          "requiredSaveSuccess": false,
+          "points": [
+            {
+              "elapsedMs": 0,
+              "strength": 0,
+              "pulse": 0
+            },
+            {
+              "elapsedMs": 35,
+              "strength": 0,
+              "pulse": 1
+            },
+            {
+              "elapsedMs": 180,
+              "strength": 0.7,
+              "pulse": 1
+            },
+            {
+              "elapsedMs": 300,
+              "strength": 1,
+              "pulse": 0.05
+            },
+            {
+              "elapsedMs": 320,
+              "strength": 1,
+              "pulse": 0
+            },
+            {
+              "elapsedMs": 780,
+              "strength": 1,
+              "pulse": 0
+            },
+            {
+              "elapsedMs": 1480,
+              "strength": 0,
+              "pulse": 0
+            }
+          ]
+        },
+        {
+          "id": "blight.wither.True",
+          "material": {
+            "colors": [
+              2239282,
+              7106168,
+              12860731,
+              16762786
+            ],
+            "mapping": "wither_texture",
+            "texture": "/necrotic/blight-noise.png"
+          },
+          "startOffsetMs": 120,
+          "requireDamageApplied": true,
+          "requiredSaveSuccess": true,
+          "points": [
+            {
+              "elapsedMs": 0,
+              "strength": 0.0,
+              "pulse": 0.0
+            },
+            {
+              "elapsedMs": 35,
+              "strength": 0.0,
+              "pulse": 0.5
+            },
+            {
+              "elapsedMs": 180,
+              "strength": 0.35,
+              "pulse": 0.5
+            },
+            {
+              "elapsedMs": 300,
+              "strength": 0.5,
+              "pulse": 0.025
+            },
+            {
+              "elapsedMs": 320,
+              "strength": 0.5,
+              "pulse": 0.0
+            },
+            {
+              "elapsedMs": 780,
+              "strength": 0.5,
+              "pulse": 0.0
+            },
+            {
+              "elapsedMs": 1480,
+              "strength": 0.0,
+              "pulse": 0.0
+            }
+          ]
+        }
+      ],
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    },
+    {
+      "definitionRef": {
+        "content_id": "spell.harm",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "elementColors": {
+        "primary": 13875195,
+        "secondary": 10001839,
+        "tertiary": 4592519
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/spell-palettes/ray_of_frost-weaponGlow.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
+        }
+      },
+      "contact": {
+        "delayMs": 120
+      },
+      "media": [
+        {
+          "id": "harm.back.False",
+          "assetId": "necrotic.harm.back",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 120,
+          "scale": 0.43,
+          "scaleWithActor": true,
+          "alpha": 1,
+          "depth": "behind_body",
+          "requiredSaveSuccess": false,
+          "requireDamageApplied": true
+        },
+        {
+          "id": "harm.front.False",
+          "assetId": "necrotic.harm.front",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 120,
+          "scale": 0.43,
+          "scaleWithActor": true,
+          "alpha": 1,
+          "depth": "front_body",
+          "requiredSaveSuccess": false,
+          "requireDamageApplied": true
+        },
+        {
+          "id": "harm.back.True",
+          "assetId": "necrotic.harm.back",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 120,
+          "scale": 0.43,
+          "scaleWithActor": true,
+          "alpha": 0.55,
+          "depth": "behind_body",
+          "requiredSaveSuccess": true,
+          "requireDamageApplied": true
+        },
+        {
+          "id": "harm.front.True",
+          "assetId": "necrotic.harm.front",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 120,
+          "scale": 0.43,
+          "scaleWithActor": true,
+          "alpha": 0.55,
+          "depth": "front_body",
+          "requiredSaveSuccess": true,
+          "requireDamageApplied": true
+        }
+      ],
+      "bodyMaterials": [
+        {
+          "id": "spell.harm.fracture.False",
+          "material": {
+            "colors": [
+              2240831,
+              14505538
+            ],
+            "mapping": "fracture_wave"
+          },
+          "startOffsetMs": 120,
+          "requireDamageApplied": true,
+          "requiredSaveSuccess": false,
+          "points": [
+            {
+              "elapsedMs": 0,
+              "strength": 0
+            },
+            {
+              "elapsedMs": 100,
+              "strength": 1
+            },
+            {
+              "elapsedMs": 620,
+              "strength": 1
+            },
+            {
+              "elapsedMs": 1150,
+              "strength": 0
+            }
+          ]
+        },
+        {
+          "id": "spell.harm.fracture.True",
+          "material": {
+            "colors": [
+              2240831,
+              14505538
+            ],
+            "mapping": "fracture_wave"
+          },
+          "startOffsetMs": 120,
+          "requireDamageApplied": true,
+          "requiredSaveSuccess": true,
+          "points": [
+            {
+              "elapsedMs": 0,
+              "strength": 0.0
+            },
+            {
+              "elapsedMs": 100,
+              "strength": 0.55
+            },
+            {
+              "elapsedMs": 620,
+              "strength": 0.55
+            },
+            {
+              "elapsedMs": 1150,
+              "strength": 0.0
+            }
+          ]
+        }
+      ],
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    },
+    {
+      "definitionRef": {
+        "content_id": "spell.circle_of_death",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+        "definition_kind": "spell",
+        "pack_id": "content.srd_5_1_cc"
+      },
+      "elementColors": {
+        "primary": 13875195,
+        "secondary": 10001839,
+        "tertiary": 4592519
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/spell-palettes/ray_of_frost-weaponGlow.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
+        }
+      },
+      "contact": {
+        "delayMs": 375
+      },
+      "media": [
+        {
+          "id": "circle.field",
+          "assetId": "necrotic.circle.front",
+          "attachment": "area_ground",
+          "fps": 32,
+          "scale": 1.4285714285714286,
+          "depth": "world"
+        },
+        {
+          "id": "circle_of_death.back.False",
+          "assetId": "necrotic.blight.back",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 375,
+          "scale": 0.44,
+          "scaleWithActor": true,
+          "alpha": 1,
+          "depth": "behind_body",
+          "requiredSaveSuccess": false,
+          "requireDamageApplied": true,
+          "rigIds": [
+            "neuroclient.modular"
+          ]
+        },
+        {
+          "id": "circle_of_death.front.False",
+          "assetId": "necrotic.blight.front",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 375,
+          "scale": 0.44,
+          "scaleWithActor": true,
+          "alpha": 1,
+          "depth": "front_body",
+          "requiredSaveSuccess": false,
+          "requireDamageApplied": true,
+          "rigIds": [
+            "neuroclient.modular"
+          ]
+        },
+        {
+          "id": "circle_of_death.back.True",
+          "assetId": "necrotic.blight.back",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 375,
+          "scale": 0.44,
+          "scaleWithActor": true,
+          "alpha": 0.55,
+          "depth": "behind_body",
+          "requiredSaveSuccess": true,
+          "requireDamageApplied": true,
+          "rigIds": [
+            "neuroclient.modular"
+          ]
+        },
+        {
+          "id": "circle_of_death.front.True",
+          "assetId": "necrotic.blight.front",
+          "attachment": "target_ground",
+          "fps": 32,
+          "startOffsetMs": 375,
+          "scale": 0.44,
+          "scaleWithActor": true,
+          "alpha": 0.55,
+          "depth": "front_body",
+          "requiredSaveSuccess": true,
+          "requireDamageApplied": true,
+          "rigIds": [
+            "neuroclient.modular"
+          ]
+        }
+      ],
+      "bodyMaterials": [
+        {
+          "id": "spell.circle_of_death.fracture.False",
+          "material": {
+            "colors": [
+              2240831,
+              14505538
+            ],
+            "mapping": "fracture_wave"
+          },
+          "startOffsetMs": 375,
+          "requireDamageApplied": true,
+          "requiredSaveSuccess": false,
+          "points": [
+            {
+              "elapsedMs": 0,
+              "strength": 0
+            },
+            {
+              "elapsedMs": 100,
+              "strength": 1
+            },
+            {
+              "elapsedMs": 900,
+              "strength": 1
+            },
+            {
+              "elapsedMs": 1400,
+              "strength": 0
+            }
+          ]
+        },
+        {
+          "id": "spell.circle_of_death.fracture.True",
+          "material": {
+            "colors": [
+              2240831,
+              14505538
+            ],
+            "mapping": "fracture_wave"
+          },
+          "startOffsetMs": 375,
+          "requireDamageApplied": true,
+          "requiredSaveSuccess": true,
+          "points": [
+            {
+              "elapsedMs": 0,
+              "strength": 0.0
+            },
+            {
+              "elapsedMs": 100,
+              "strength": 0.55
+            },
+            {
+              "elapsedMs": 900,
+              "strength": 0.55
+            },
+            {
+              "elapsedMs": 1400,
+              "strength": 0.0
+            }
+          ]
+        }
+      ],
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    }
+  ]
+}

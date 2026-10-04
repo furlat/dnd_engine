@@ -31,11 +31,11 @@
           "category": "Magic3",
           "sourceSheet": "/healing-spells/aid/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 14137464,
             "secondary": 16773320,
             "tertiary": 6571873,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -83,11 +83,11 @@
           "category": "Magic3",
           "sourceSheet": "/healing-spells/aid/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 15235113,
             "secondary": 16179093,
             "tertiary": 3679018,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {

@@ -1,0 +1,28 @@
+Traceback (most recent call last):
+  File "/tmp/dnd-construction-disclosure-review.py", line 8, in <module>
+    sequence=construction_history(material='force',break_section=False,antimagic=True).views['caster']
+             ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/users/tommaso/documents/dev/dnd_engine/tests/game/construction_scenarios.py", line 65, in construction_history
+    choices=[(a,t) for a in get_available_actions(caster).all_actions if a.behavior_id=='spell.see_invisibility' for t in a.valid_targets]
+                            ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/mnt/c/users/tommaso/documents/dev/dnd_engine/dnd/actions_functional.py", line 268, in get_available_actions
+    return entity.get_available_actions(legal_only=legal_only)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/users/tommaso/documents/dev/dnd_engine/dnd/entity.py", line 7741, in get_available_actions
+    result.self_actions = self._collect_self_actions(discovery_variants, legal_only)
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/users/tommaso/documents/dev/dnd_engine/dnd/entity.py", line 6039, in _collect_self_actions
+    actions.append(self._make_action_info(
+                   ~~~~~~~~~~~~~~~~~~~~~~^
+        template_name=template_name,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+        display_name=display_name,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ))
+    ^
+  File "/mnt/c/users/tommaso/documents/dev/dnd_engine/dnd/entity.py", line 5431, in _make_action_info
+    raise ValueError(
+    ...<2 lines>...
+    )
+ValueError: Action template 'See Invisibility__slot_2' has no exact authored behavior binding

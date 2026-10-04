@@ -1,0 +1,1303 @@
+{
+  "schema": "spell-native-feature-trace.v1",
+  "captured_utc": "2026-10-04T11:11:33.784755+00:00",
+  "baseline_commit": "95a47cd5ca508838bce8a2e67d6fe1fc591ce4e6",
+  "current_head": "95a47cd5ca508838bce8a2e67d6fe1fc591ce4e6",
+  "plan_path": "agent_docs/SPELL_VFX_IMPLEMENTATION_PLAN_2026-10-04.md",
+  "plan_sha256": "605ced75825d5ba20c5664683a252d8af01223d8b880359b930b1334e8208a35",
+  "tracked_modified_count": 58,
+  "new_file_count": 1,
+  "covered_file_count": 59,
+  "feature_count": 50,
+  "missing_files": [],
+  "extra_files": [],
+  "files": [
+    {
+      "path": "dnd/actions.py",
+      "status": "modified",
+      "baseline_sha256": "2934d3374572188a6e152e5d6b042ddaa994ace500d2af249d181ddb4b2b2ad3",
+      "current_sha256": "8badef01ada00bfafd1cb0f462d362e0ee51f1b43b609dee2f63d700e75846e9",
+      "feature_ids": [
+        "CORE-03",
+        "CORE-06",
+        "CORE-10",
+        "CORE-11"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/actions_functional.py",
+      "status": "modified",
+      "baseline_sha256": "18dc90b1a9d795daf001194148682143c57fe701de40a198142dcf498c6a733a",
+      "current_sha256": "4161e28c8733721369fbe7bae2095bfb102847a24c4e08c2e9b166fc4a575f88",
+      "feature_ids": [
+        "CORE-05"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/actor_projection.py",
+      "status": "modified",
+      "baseline_sha256": "0a47331787fbb59e8490d3bb4ca530404d9dec673f19d0c820c58daa9be2d5f0",
+      "current_sha256": "5509ad5ece38c711e15bc0ed8607d585633b64ee1ab5f0e8f54eda114d2211c4",
+      "feature_ids": [
+        "CORE-07",
+        "CORE-14"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/ai/contracts/control.py",
+      "status": "modified",
+      "baseline_sha256": "ca4c24e0adab46d9e84c2ad9cda3335e15e67cc9e206d8a206b89d7df7633b42",
+      "current_sha256": "39afb9dcfee006a5c341d9711aa2f89c6b74f93040ea72d055b7ceea44fbc67b",
+      "feature_ids": [
+        "CORE-05"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/ai/runtime/decision_epoch.py",
+      "status": "modified",
+      "baseline_sha256": "aa38db5224c207d43b11378bffe919b37f6b232d47a2f4c722af1fd1a34d409c",
+      "current_sha256": "ec6a97ac9caae1ef302e47ac578706059f57e805c372f0863ff5e42666b00b92",
+      "feature_ids": [
+        "CORE-05"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/ai/runtime/execution.py",
+      "status": "modified",
+      "baseline_sha256": "07655e3872a2f1aee509422975f256dbfd902a2b9a2f83d26e5bea1f8e40b67b",
+      "current_sha256": "c1270143ba0494b738b6c0464258dbe0c792d289b54f9d9f83925bb5f11566fc",
+      "feature_ids": [
+        "CORE-05"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/blocks/abilities.py",
+      "status": "modified",
+      "baseline_sha256": "1a5cc9e75b9015de830ec18cc96458371d9bf5d9fd01b13ce34835ca18908f1d",
+      "current_sha256": "79e321da6519a61cbe473afaa2f7839a0532f3faff7095c1d212445b316304ad",
+      "feature_ids": [
+        "CORE-12"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/blocks/action_economy.py",
+      "status": "modified",
+      "baseline_sha256": "ab7b4b7f28bebf984b3ad79dc865fcc09c11e294924d73683770142acff97b9a",
+      "current_sha256": "3b288b4f4ae6e9b65dc1f70fa18b361e8bed3e3e3558ee90c89450de796eaa46",
+      "feature_ids": [
+        "CORE-03"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/blocks/base_item.py",
+      "status": "modified",
+      "baseline_sha256": "187528f66182b6028ee7079e75a8a9112311b22b31dc60798827455dc935fe7e",
+      "current_sha256": "7f3a47023875fd6fbf82b485ff7612851a955e7e68e0c03eb551f8b203d8c8a7",
+      "feature_ids": [
+        "CORE-03",
+        "CORE-09",
+        "S08",
+        "S16",
+        "S27"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/blocks/equipment.py",
+      "status": "modified",
+      "baseline_sha256": "c4fc444fe9fde70638210ce96f5d8e3c1ac47a654abfe07834f4240b2c1b027f",
+      "current_sha256": "7981584b4e523cd0b23412dcf5c92168e789dcc62c202cbaa4190859ee596987",
+      "feature_ids": [
+        "CORE-03",
+        "S05"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/blocks/health.py",
+      "status": "modified",
+      "baseline_sha256": "248550df9b5b301e85ec6751c16f11083b183cfc0c6fcfce88b146ae49f041a0",
+      "current_sha256": "366736611a498a1b4789739fd0737b683872135cecfb2aecadfc618e182a1f59",
+      "feature_ids": [
+        "CORE-08",
+        "S13",
+        "S23"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/blocks/sensory.py",
+      "status": "modified",
+      "baseline_sha256": "4ae4fbbe3c8b2ca1216537ef8fe219e26c3fadb3e60c89fc03ede1797e344f3f",
+      "current_sha256": "b1a084aa5b19834ca7d5c23b44f511b3b841823d78c9cf94d38371a7444b0e31",
+      "feature_ids": [
+        "CORE-02"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/classes/barbarian.py",
+      "status": "modified",
+      "baseline_sha256": "fff06a46b3723936a194443c69477a647920a18348fb241829c6ec1487001dcd",
+      "current_sha256": "62fa729967defc964bfbbc725fccac1204193f0b8de34a2584052898cf220666",
+      "feature_ids": [
+        "K01",
+        "K05"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/classes/fighter.py",
+      "status": "modified",
+      "baseline_sha256": "e2edec507e2e3e505f44759fc58b33ecbe025e7c649ac00b03e3e0c66a532f63",
+      "current_sha256": "07f3899a056f23a49b1b923c072c6d51d1eec8ef6ac64ae1abc4066e226b1aa9",
+      "feature_ids": [
+        "K01"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/classes/rage.py",
+      "status": "modified",
+      "baseline_sha256": "08eb6cdaf237d50976db893730e98d038407ef4197e2564ebd85d511e22e102c",
+      "current_sha256": "ab4745bcfe2962686ac307c20d18ec27e8ab7f32ed1adec502e8ef4c271178aa",
+      "feature_ids": [
+        "K04"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/classes/sorcerer.py",
+      "status": "modified",
+      "baseline_sha256": "6bdbc3be60a1c3f9cdf980d356ff9059ae65dd3af4ca9cd4fb3fc8fbf7691efb",
+      "current_sha256": "97bf30a96587987e4e9a21d062d5f91838901fb9bebb5b7262a3085d02014794",
+      "feature_ids": [
+        "CORE-11",
+        "K02",
+        "K03"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/conditions.py",
+      "status": "modified",
+      "baseline_sha256": "332700c8e3d2870f42f4c968ea879ea9c74df7fb044528c0364af28b403eb4b4",
+      "current_sha256": "52bcad9561f7c05d34320d72291d512839857fa4d7fac5fa2853cc4395d7387e",
+      "feature_ids": [
+        "CORE-02",
+        "CORE-03",
+        "CORE-11",
+        "CORE-12",
+        "S14"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/content/characters/barbarian_grants.py",
+      "status": "modified",
+      "baseline_sha256": "434045bd0e0d30170f205ef9df1c23b930e873e46bbcfdaada9533b95bbec32c",
+      "current_sha256": "19a6e28fb1eb781193f878248a86e306a77bc88ba5009765924b74323d3e4bc3",
+      "feature_ids": [
+        "K01"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/content_system/action_definitions.py",
+      "status": "modified",
+      "baseline_sha256": "fac7705cca5ab10c4be54758b6a295bdc5f6690047f812c90c36edef3c36914c",
+      "current_sha256": "0edf9e491001e4497ed3ce42c3ab1ff383156f3203d5c875265a3b89f5f15e2e",
+      "feature_ids": [
+        "S26",
+        "D01"
+      ],
+      "category": "catalog_composition"
+    },
+    {
+      "path": "dnd/content_system/condition_definitions.py",
+      "status": "modified",
+      "baseline_sha256": "48fc9f1fd7bde42b0031b4fc72eb349ed0fe770d9b7823165abaf768d761c951",
+      "current_sha256": "2c714de7ed197fbf8bda8cbf77a860c0cdde7f2a67fb8f470d21662dcc292583",
+      "feature_ids": [
+        "S13",
+        "S14",
+        "S19",
+        "D01"
+      ],
+      "category": "catalog_composition"
+    },
+    {
+      "path": "dnd/core/action_types.py",
+      "status": "modified",
+      "baseline_sha256": "868a8aa62a240e12dea86594432a387edf35e10aef662a26fc343f9a3edd92c5",
+      "current_sha256": "ac7478166394722fbcde4f1bfa04db7a605826bc84e7242fed12d0995d60179a",
+      "feature_ids": [
+        "CORE-05"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/core/base_actions.py",
+      "status": "modified",
+      "baseline_sha256": "439fdf1467a825a54c5c48b99b50ba5b28535419c3d0b5415f03b43a73101ee5",
+      "current_sha256": "c0ca8c2b4ebc61401d7c44a1d00713f5631c8211fe43edf1b08fcb664aed015a",
+      "feature_ids": [
+        "CORE-03",
+        "CORE-05",
+        "CORE-11",
+        "CORE-14",
+        "S04",
+        "S08",
+        "S10",
+        "K02"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/core/base_block.py",
+      "status": "modified",
+      "baseline_sha256": "0ea5a0b5160eb38d6745be9541e220b98c74272f413fa1a71d06e360547ff405",
+      "current_sha256": "eaf7c768b4dc068c55be29d0e885b33060fb424db67dab302fd9784128359c04",
+      "feature_ids": [
+        "CORE-01",
+        "CORE-02",
+        "CORE-07",
+        "CORE-11"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/core/base_conditions.py",
+      "status": "modified",
+      "baseline_sha256": "79d0f951653e22db97834b2c69e82aa202716bd38ebbff4b905a60c87d7d129f",
+      "current_sha256": "818ebffd95761d68968f350f8d921ae43470714f8028847e2af04531c4901ac7",
+      "feature_ids": [
+        "CORE-01",
+        "CORE-04",
+        "S27"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/core/base_object.py",
+      "status": "modified",
+      "baseline_sha256": "83c13eaf496e653c31fee4f35c0fb861dd6c747b6c597310e3a92e44ee8d194f",
+      "current_sha256": "d0d1e33f832277d206e8a28b68d04cc4c67e6a586dce18aed1875151e20e25a4",
+      "feature_ids": [
+        "CORE-01"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/core/effect_types.py",
+      "status": "modified",
+      "baseline_sha256": "f27d6b0e4235deed2cde5c90bb3d860d7770aa8c2cea0e7cab2b6470103bca91",
+      "current_sha256": "003b984729417818bc16c9c9da706676108e5c92eb0b450211d2caec6de8af0b",
+      "feature_ids": [
+        "CORE-05",
+        "CORE-09",
+        "CORE-14",
+        "S10",
+        "S27"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/core/events.py",
+      "status": "modified",
+      "baseline_sha256": "7bf91ba0330a9882a3b54c27c0d93d1cdba3c87806ce99c3b85b9ce986dbbf59",
+      "current_sha256": "d8c04b24e92e670a60da0d263428ed905496d8e7fb3831ee260f9f936d6bf515",
+      "feature_ids": [
+        "CORE-01",
+        "CORE-06",
+        "CORE-07",
+        "CORE-08",
+        "CORE-09",
+        "CORE-14",
+        "S07",
+        "S16",
+        "S25",
+        "K01"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/core/gridmap.py",
+      "status": "modified",
+      "baseline_sha256": "c5808bfba32961491a86c5ded8847ce51c8f0e7434de82e252020197f4eeea23",
+      "current_sha256": "4b44955725053d097c3eba768db88008071da7a42354e209f52268ffbd003d90",
+      "feature_ids": [
+        "CORE-04",
+        "CORE-06",
+        "CORE-09",
+        "S19"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/core/item_types.py",
+      "status": "modified",
+      "baseline_sha256": "fc4dcb8ea6c5229210947d559c8ff3c4458c2f67ea56cb2e2172e0028b27b290",
+      "current_sha256": "f8d5906ba88442d424bd89234e53f8a8d3bdeaebb30dec656c6b40a66f47a942",
+      "feature_ids": [
+        "CORE-04",
+        "CORE-14",
+        "S08",
+        "S28"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/core/life_types.py",
+      "status": "modified",
+      "baseline_sha256": "e7996e884219660aa796b6c0341c4f365b94ec842668105af608df1c9e005b38",
+      "current_sha256": "2bf7ea8776842791d69a9ca9afcacaa57c42f9fae26c43cc4cf74c87f76d5f0d",
+      "feature_ids": [
+        "CORE-08"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/core/modifiers.py",
+      "status": "modified",
+      "baseline_sha256": "328ca7eafa6ab7c6f3c58e97301f510ce1f2c0ad94a11f0c39962d3254dbcaca",
+      "current_sha256": "aa21ed166dcfd38f1b66f2d8875b4cd7bab0745291750e6c409b7ac4601c97ae",
+      "feature_ids": [
+        "CORE-01"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/core/presentation_geometry.py",
+      "status": "modified",
+      "baseline_sha256": "8d3d621e2fddd26b8870e558da2914087c5274b8dd8eca89900cb03d0215a9a2",
+      "current_sha256": "2a19b41f3c1d67b7c810775accb95a659b992e1fa515de3106755b20dd266438",
+      "feature_ids": [
+        "CORE-09",
+        "S28"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/core/values.py",
+      "status": "modified",
+      "baseline_sha256": "3c8ac004dc669bec37ffe15a1efae20afc06aec04ff62eb472677961f6e2a122",
+      "current_sha256": "91d42838462561aa07982199d54cd6a3f566bcd2429badbe79a3be895a5d318e",
+      "feature_ids": [
+        "CORE-01"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/core/wall_geometry.py",
+      "status": "modified",
+      "baseline_sha256": "3039cfc80ecc7a811e889900b2bb656fc8dcf6df04d2f5b654e697045631d3d6",
+      "current_sha256": "67b5a9b6e7149508b70336bfde72b04eddf3f96c2271add3fc5806ece76e36d2",
+      "feature_ids": [
+        "CORE-09",
+        "S28"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/encounter.py",
+      "status": "modified",
+      "baseline_sha256": "71bc0ef26342e47e8faeb671b9d4f18c9d75583addabbecbdb869c4ea473576c",
+      "current_sha256": "a7e70fc1c11f1721cd4a2a62ada9ddba81292b75a41f6118746b44ae06235107",
+      "feature_ids": [
+        "CORE-13"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/entity.py",
+      "status": "modified",
+      "baseline_sha256": "b8ed7d53b137a0bb9f9a81c672523908b81c17acb963bf9759962568118df82b",
+      "current_sha256": "4186122bea0ce5590b59f69a761f7aa5c3637f17e5f0bc3122634d47c3dcb988",
+      "feature_ids": [
+        "CORE-02",
+        "CORE-05",
+        "CORE-07",
+        "CORE-08",
+        "CORE-09",
+        "CORE-12",
+        "S03",
+        "S07",
+        "S08",
+        "S13",
+        "S16",
+        "S27"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/items/property_composition.py",
+      "status": "modified",
+      "baseline_sha256": "2036cfed295b0ca2039c20e44dca590964eca77d481c21211ad709fe60c0631e",
+      "current_sha256": "861c786a820eb043d0772d7aad503e087da5c2b22c8f68633ede44018e334ff7",
+      "feature_ids": [
+        "CORE-03"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/monsters/traits.py",
+      "status": "modified",
+      "baseline_sha256": "9c524d7b59cde21a0e399fd5e9f14d90cd192f792066d2c1005fc9e4b5494137",
+      "current_sha256": "ca85432e9972742b7294d4aaf5ee7eb356387335247a7cf55ab1b6cd7ef64bc3",
+      "feature_ids": [
+        "S19"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/scenarios/battlefield_catalog.py",
+      "status": "modified",
+      "baseline_sha256": "03775a5b956c4bda47dc96f2c8985beb0721602a8de552dcf91f19801ef253b8",
+      "current_sha256": "667b35ecb605a9dc5ac6859956e26d290cfad11af391d8dd9c9c663031f652d3",
+      "feature_ids": [
+        "D02"
+      ],
+      "category": "review_support"
+    },
+    {
+      "path": "dnd/spatial/area_conditions.py",
+      "status": "modified",
+      "baseline_sha256": "21dc0944eac2c088699da3eea81949d9e8d9ba186f5e53de1e6ecb162f599c00",
+      "current_sha256": "b69fb12ed0e4586ee074a5fcdd357b1069b93e97dd87e9a6108812dc4c9546bb",
+      "feature_ids": [
+        "CORE-04"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/spatial/restraints.py",
+      "status": "modified",
+      "baseline_sha256": "dfcfa4618e5f497d315723436b35008fc2724f1b2bb3c27e65ada4a86d825cba",
+      "current_sha256": "6773dab37853e60cf7a863497f0f45103a3ddbf42bd07a8c46df7c4187bad5ed",
+      "feature_ids": [
+        "S29"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/spells/abjuration.py",
+      "status": "modified",
+      "baseline_sha256": "ab475a88c457f025c4c335c1e6fce33dc8dae03f8c7f81e38e8406df4f437f8f",
+      "current_sha256": "61c9bb7fbe7c1730caba062bb6fd961a50d0e6a42bce242d3856599afc1684bf",
+      "feature_ids": [
+        "CORE-02",
+        "CORE-11",
+        "S10",
+        "S24",
+        "S27"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/spells/catalog_content.py",
+      "status": "modified",
+      "baseline_sha256": "f5507ea9530e71933d7bd4f7fa5d03663e948b4b4d90e6523c2a0aa69255e5f3",
+      "current_sha256": "39a9b4a874e629a211052098eef7816e76da6fec7eb4f4cc9bfbc4cefcbcb11a",
+      "feature_ids": [
+        "S01",
+        "S08",
+        "S17",
+        "S19",
+        "S24",
+        "S25",
+        "S26",
+        "D01"
+      ],
+      "category": "catalog_composition"
+    },
+    {
+      "path": "dnd/spells/conjuration.py",
+      "status": "modified",
+      "baseline_sha256": "d104472865b7981718699d1def12136d74429d5e69f7abf2ffb2aa03f18757b7",
+      "current_sha256": "aff667d432a7281880e877f596948aaf0cd985716c1fd064230cd6ef7efcda07",
+      "feature_ids": [
+        "S06",
+        "S18",
+        "S21",
+        "S22",
+        "S23",
+        "S25"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/spells/content_metadata.py",
+      "status": "modified",
+      "baseline_sha256": "f08f369a5337e9bccda4d2129b095fbe214dc2d460fb2fcd0819e764d98972af",
+      "current_sha256": "17c5c667c18409b60464388973b1d9b6a40d8f1f2887cbdd237dc1915f1da377",
+      "feature_ids": [
+        "S08",
+        "D01"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/spells/divination.py",
+      "status": "modified",
+      "baseline_sha256": "d4f487f1de7a6298d5ee344162814b79ce8ab08d47afdf69a48404e151d33210",
+      "current_sha256": "1eeec3aa840448137d00b9787d029e9472d3a7b1bc507b4965d0a6a4c15eeb92",
+      "feature_ids": [
+        "CORE-02",
+        "S01"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/spells/enchantment.py",
+      "status": "modified",
+      "baseline_sha256": "797cc10b142adbfe3cf75135da000a95c2e420b59404e49248a6856f6b929580",
+      "current_sha256": "31720b4024fbf517b6186101e07dd925b77b1d1155d520141966dd10ba0137c7",
+      "feature_ids": [
+        "S02",
+        "S03"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/spells/evocation.py",
+      "status": "modified",
+      "baseline_sha256": "27dc2e30b07b74ec3c7ef07476f2dece4a6202f6d1b113c6610c813908203d70",
+      "current_sha256": "d389e5831cb1813133ee3ced52034aec6575567d2d574d5b0edfa53fd6bdaf2f",
+      "feature_ids": [
+        "CORE-06",
+        "CORE-13",
+        "S07",
+        "S08",
+        "S09",
+        "S10",
+        "S12",
+        "S17",
+        "S19",
+        "S20"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/spells/necromancy.py",
+      "status": "modified",
+      "baseline_sha256": "e9d4966ea5aa0368fa78bf560e5d83e22a1878a69998255ae127bbfabc36910f",
+      "current_sha256": "8c54a7f8b0ea084c8996fb0f4e46681fec0b6094d80e55beed5f8bfa0dcff4f5",
+      "feature_ids": [
+        "CORE-12",
+        "S11",
+        "S13",
+        "S14",
+        "S15"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/spells/transmutation.py",
+      "status": "modified",
+      "baseline_sha256": "4704405af6bba947d0d796fee58b5aedd246c98ef8df62e642a068bfef8703d9",
+      "current_sha256": "89c222f2df6df9c98d5031194d539cd79d526148a57def6cb9e7208a6e557dd6",
+      "feature_ids": [
+        "CORE-02",
+        "CORE-06",
+        "S01",
+        "S04",
+        "S05",
+        "S16",
+        "S26"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/spells/wall_constructions.py",
+      "status": "modified",
+      "baseline_sha256": "e712beea40faa8b5cfe7fd9c6484650519e8bd1658deb4b3499b91ee52803c24",
+      "current_sha256": "04dc6e07f341f24749ad4b6526c6efcb9580264739c92d1bf6534af46c287a1f",
+      "feature_ids": [
+        "CORE-04",
+        "CORE-09",
+        "S28"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/spells/wall_fields.py",
+      "status": "modified",
+      "baseline_sha256": "30b24fbc7a48eca91d8fdf93d2b94494129dbb821571ae36ee66441f197be3e1",
+      "current_sha256": "88bf9423289cba485ff03f8e73bb780a61210682e394bc1896ea6266f7dae023",
+      "feature_ids": [
+        "CORE-04",
+        "S29"
+      ],
+      "category": "native_behavior_or_projection"
+    },
+    {
+      "path": "dnd/types/actor.py",
+      "status": "modified",
+      "baseline_sha256": "41468a97b2d6c0336a32c6dbcc3f2c44fa7e7fb37aa6e26d488ac354077fb54a",
+      "current_sha256": "28c46928c300899d60f9f7dde8822c2bd3c5d61c312c2bf28d62bfeda60c9b4b",
+      "feature_ids": [
+        "CORE-07",
+        "CORE-14",
+        "S05",
+        "K03"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/types/actor_facts.py",
+      "status": "modified",
+      "baseline_sha256": "19b6977c0a4becb368276af5fda3e431932d50c8bea5fe005fbb38be8946a2b4",
+      "current_sha256": "c28fe8415de5970d64f7a9cb41da02136065e02bebe42cb480125d71b780b12f",
+      "feature_ids": [
+        "CORE-07",
+        "CORE-14"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/types/class_features.py",
+      "status": "new",
+      "baseline_sha256": null,
+      "current_sha256": "0ac018e50dfd918fdc9a94ebd640e041531b1e0819b3acb39a314b134dc1ff56",
+      "feature_ids": [
+        "K01",
+        "K02",
+        "K03"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/types/event_facts.py",
+      "status": "modified",
+      "baseline_sha256": "ead2190dd9803beaba12846d21c962a93a4ffb83c12dd3d51489274a6e6b7257",
+      "current_sha256": "f00bb72fb9262a4d22a5c9aedf51c7bac453f98e029eb261cd0700d45c63b886",
+      "feature_ids": [
+        "CORE-06",
+        "CORE-14"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/types/senses.py",
+      "status": "modified",
+      "baseline_sha256": "90ebba5723f923fc54ecee7f9b5d174895ef6462cd5aeed2aea2152adb510c10",
+      "current_sha256": "f0b7c6841d7ac376e449aed4e3f775c222f5e09f78b8bc51daf25ee761d356a0",
+      "feature_ids": [
+        "CORE-02",
+        "CORE-14",
+        "S21",
+        "K03"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/types/spell_suppression.py",
+      "status": "modified",
+      "baseline_sha256": "e53b244e946ffa62b0eb4b3a9e35530d7e81c1b38edf16dc9c16d0b8c69e04b4",
+      "current_sha256": "f9b85cc40a4080991bc4785b81ecc4c213233c069879c609ce55f3e6cc7f3a38",
+      "feature_ids": [
+        "CORE-04",
+        "S27"
+      ],
+      "category": "passive_schema"
+    },
+    {
+      "path": "dnd/types/world_placement.py",
+      "status": "modified",
+      "baseline_sha256": "8853c0ef0a87371c9d7e5d31ae9d4a03fe74ba831002684d0715b34213d6dde7",
+      "current_sha256": "0dcd032f8a859984c1bd671bc43361b5e0b03042a62048573474cdd5d38c21e4",
+      "feature_ids": [
+        "CORE-09"
+      ],
+      "category": "passive_schema"
+    }
+  ],
+  "features": [
+    {
+      "id": "CORE-01",
+      "group": "Shared engine changes",
+      "title": "Retained magical contributions can be suspended without reapplication",
+      "authority": "P6: explicit retained Antimagic ownership requirement",
+      "files": [
+        "dnd/core/base_object.py",
+        "dnd/core/base_conditions.py",
+        "dnd/core/base_block.py",
+        "dnd/core/values.py",
+        "dnd/core/modifiers.py",
+        "dnd/core/events.py"
+      ]
+    },
+    {
+      "id": "CORE-02",
+      "group": "Shared engine changes",
+      "title": "Direct senses, invisibility, movement exemptions and immunities remain source owned",
+      "authority": "P6 direct-contribution suppression; P1 sensory ownership",
+      "files": [
+        "dnd/core/base_block.py",
+        "dnd/entity.py",
+        "dnd/blocks/sensory.py",
+        "dnd/conditions.py",
+        "dnd/spells/abjuration.py",
+        "dnd/spells/divination.py",
+        "dnd/spells/transmutation.py",
+        "dnd/types/senses.py"
+      ]
+    },
+    {
+      "id": "CORE-03",
+      "group": "Shared engine changes",
+      "title": "Granted budgets/actions and magical equipment obey the same suppression owner",
+      "authority": "P6 action, item and direct-contribution gates",
+      "files": [
+        "dnd/blocks/action_economy.py",
+        "dnd/blocks/equipment.py",
+        "dnd/blocks/base_item.py",
+        "dnd/items/property_composition.py",
+        "dnd/core/base_actions.py",
+        "dnd/actions.py",
+        "dnd/conditions.py"
+      ]
+    },
+    {
+      "id": "CORE-04",
+      "group": "Shared engine changes",
+      "title": "Partially suppressed areas and lights keep their existing lifetime and geometry",
+      "authority": "P6 active areas/items/created-presence coverage; P7 wall suppression",
+      "files": [
+        "dnd/spatial/area_conditions.py",
+        "dnd/core/gridmap.py",
+        "dnd/core/base_conditions.py",
+        "dnd/spells/wall_constructions.py",
+        "dnd/spells/wall_fields.py",
+        "dnd/core/item_types.py",
+        "dnd/types/spell_suppression.py"
+      ]
+    },
+    {
+      "id": "CORE-05",
+      "group": "Shared engine changes",
+      "title": "Creature-plus-destination and primary-dependent target choices reach both human and AI execution",
+      "authority": "P3 Chain Lightning; P6 Telekinesis/Dimension Door; explicit selection dependencies",
+      "files": [
+        "dnd/core/action_types.py",
+        "dnd/core/base_actions.py",
+        "dnd/entity.py",
+        "dnd/actions_functional.py",
+        "dnd/ai/contracts/control.py",
+        "dnd/ai/runtime/decision_epoch.py",
+        "dnd/ai/runtime/execution.py",
+        "dnd/core/effect_types.py"
+      ]
+    },
+    {
+      "id": "CORE-06",
+      "group": "Shared engine changes",
+      "title": "Ordinary ledge falls and finite forced movement share supported landing resolution",
+      "authority": "P6 human request for actual Shove/Telekinesis ledge damage; tabletop fall choice",
+      "files": [
+        "dnd/actions.py",
+        "dnd/core/gridmap.py",
+        "dnd/core/events.py",
+        "dnd/types/event_facts.py",
+        "dnd/spells/evocation.py",
+        "dnd/spells/transmutation.py"
+      ]
+    },
+    {
+      "id": "CORE-07",
+      "group": "Shared engine changes",
+      "title": "Absence, nearest-free return and paired teleport commit preserve real identities",
+      "authority": "P6 Banishment, Dimension Door and Antimagic presence",
+      "files": [
+        "dnd/entity.py",
+        "dnd/core/base_block.py",
+        "dnd/types/actor.py",
+        "dnd/types/actor_facts.py",
+        "dnd/actor_projection.py",
+        "dnd/core/events.py"
+      ]
+    },
+    {
+      "id": "CORE-08",
+      "group": "Shared engine changes",
+      "title": "Normal HP caps, max-HP changes and actual disintegration death use the existing health transaction",
+      "authority": "P3 Harm/Disintegrate; P5 Feast",
+      "files": [
+        "dnd/entity.py",
+        "dnd/blocks/health.py",
+        "dnd/core/life_types.py",
+        "dnd/core/events.py"
+      ]
+    },
+    {
+      "id": "CORE-09",
+      "group": "Shared engine changes",
+      "title": "Disintegrated objects retain real apertures and actual item survivors",
+      "authority": "P3 Disintegrate object/gear rules; P7 remaining walls",
+      "files": [
+        "dnd/blocks/base_item.py",
+        "dnd/entity.py",
+        "dnd/core/gridmap.py",
+        "dnd/core/effect_types.py",
+        "dnd/core/presentation_geometry.py",
+        "dnd/core/wall_geometry.py",
+        "dnd/types/world_placement.py",
+        "dnd/spells/wall_constructions.py",
+        "dnd/core/events.py"
+      ]
+    },
+    {
+      "id": "CORE-10",
+      "group": "Shared engine changes",
+      "title": "Healthless but targetable objects can be struck by ordinary Attack",
+      "authority": "P7 Force ordinary contact acceptance; root review correction",
+      "files": [
+        "dnd/actions.py"
+      ]
+    },
+    {
+      "id": "CORE-11",
+      "group": "Shared engine changes",
+      "title": "Retained spell actions keep magical protections without recasting",
+      "authority": "P2 Produce Flame; P3 Eyebite; P4 Sunbeam; P6 Telekinesis",
+      "files": [
+        "dnd/actions.py",
+        "dnd/core/base_actions.py",
+        "dnd/core/base_block.py",
+        "dnd/spells/abjuration.py",
+        "dnd/classes/sorcerer.py",
+        "dnd/conditions.py"
+      ]
+    },
+    {
+      "id": "CORE-12",
+      "group": "Shared engine changes",
+      "title": "Checks and independent fear sources use exact contributions",
+      "authority": "P3 Eyebite; final plan clarification preserving generic Frightened",
+      "files": [
+        "dnd/blocks/abilities.py",
+        "dnd/entity.py",
+        "dnd/conditions.py",
+        "dnd/spells/necromancy.py"
+      ]
+    },
+    {
+      "id": "CORE-13",
+      "group": "Shared engine changes",
+      "title": "Native round-end rules now receive normal event phases",
+      "authority": "P4 exact source-turn expiry with departed-caster fallback; P5 world lifetimes",
+      "files": [
+        "dnd/encounter.py",
+        "dnd/spells/evocation.py"
+      ]
+    },
+    {
+      "id": "CORE-14",
+      "group": "Shared engine changes",
+      "title": "Published facts retain outcomes and source ownership for replay",
+      "authority": "All packets: existing retained event \u2192 projection \u2192 shared presentation contract",
+      "files": [
+        "dnd/core/events.py",
+        "dnd/core/base_actions.py",
+        "dnd/core/effect_types.py",
+        "dnd/types/actor.py",
+        "dnd/types/actor_facts.py",
+        "dnd/actor_projection.py",
+        "dnd/types/senses.py",
+        "dnd/core/item_types.py",
+        "dnd/types/event_facts.py"
+      ]
+    },
+    {
+      "id": "S01",
+      "group": "Spell and wall behavior",
+      "title": "Darkvision, See Invisibility and True Seeing durations and exact sense sources",
+      "authority": "P1",
+      "files": [
+        "dnd/spells/transmutation.py",
+        "dnd/spells/divination.py",
+        "dnd/spells/catalog_content.py"
+      ]
+    },
+    {
+      "id": "S02",
+      "group": "Spell and wall behavior",
+      "title": "Hold Monster validates the complete selected group and shares paralysis",
+      "authority": "P1",
+      "files": [
+        "dnd/spells/enchantment.py"
+      ]
+    },
+    {
+      "id": "S03",
+      "group": "Spell and wall behavior",
+      "title": "Power Word thresholds and source-independent Stun repeat",
+      "authority": "P1",
+      "files": [
+        "dnd/spells/enchantment.py",
+        "dnd/entity.py"
+      ]
+    },
+    {
+      "id": "S04",
+      "group": "Spell and wall behavior",
+      "title": "Longstrider and Barkskin use actual touch admission",
+      "authority": "P1 Longstrider; P2 Barkskin; scoped regression fix for SELF touch",
+      "files": [
+        "dnd/spells/transmutation.py",
+        "dnd/core/base_actions.py"
+      ]
+    },
+    {
+      "id": "S05",
+      "group": "Spell and wall behavior",
+      "title": "Shillelagh selects and releases the actual held wooden weapon",
+      "authority": "P2",
+      "files": [
+        "dnd/spells/transmutation.py",
+        "dnd/blocks/equipment.py",
+        "dnd/types/actor.py"
+      ]
+    },
+    {
+      "id": "S06",
+      "group": "Spell and wall behavior",
+      "title": "Produce Flame retained hurl pays once and consumes the correct flame",
+      "authority": "P2",
+      "files": [
+        "dnd/spells/conjuration.py"
+      ]
+    },
+    {
+      "id": "S07",
+      "group": "Spell and wall behavior",
+      "title": "Fire Shield retaliation names its true owner and uses support-height range",
+      "authority": "P2",
+      "files": [
+        "dnd/spells/evocation.py",
+        "dnd/core/events.py",
+        "dnd/entity.py"
+      ]
+    },
+    {
+      "id": "S08",
+      "group": "Spell and wall behavior",
+      "title": "Continual Flame attaches to an actual item through ownership changes",
+      "authority": "P2",
+      "files": [
+        "dnd/spells/evocation.py",
+        "dnd/blocks/base_item.py",
+        "dnd/core/base_actions.py",
+        "dnd/entity.py",
+        "dnd/core/item_types.py",
+        "dnd/spells/catalog_content.py",
+        "dnd/spells/content_metadata.py"
+      ]
+    },
+    {
+      "id": "S09",
+      "group": "Spell and wall behavior",
+      "title": "Lightning Bolt resolves empty-area coverage and native ignition",
+      "authority": "P3",
+      "files": [
+        "dnd/spells/evocation.py"
+      ]
+    },
+    {
+      "id": "S10",
+      "group": "Spell and wall behavior",
+      "title": "Chain Lightning uses chosen branches from one primary",
+      "authority": "P3",
+      "files": [
+        "dnd/spells/evocation.py",
+        "dnd/core/effect_types.py",
+        "dnd/core/base_actions.py",
+        "dnd/spells/abjuration.py"
+      ]
+    },
+    {
+      "id": "S11",
+      "group": "Spell and wall behavior",
+      "title": "Blight plant saves and canceled outcomes resolve correctly",
+      "authority": "P3",
+      "files": [
+        "dnd/spells/necromancy.py"
+      ]
+    },
+    {
+      "id": "S12",
+      "group": "Spell and wall behavior",
+      "title": "Circle of Death records its existing damage and respects effect cancellation",
+      "authority": "P3",
+      "files": [
+        "dnd/spells/evocation.py"
+      ]
+    },
+    {
+      "id": "S13",
+      "group": "Spell and wall behavior",
+      "title": "Harm cannot kill through normal HP and owns its timed max-HP disease",
+      "authority": "P3 explicit Harm overlap paragraph",
+      "files": [
+        "dnd/spells/necromancy.py",
+        "dnd/blocks/health.py",
+        "dnd/entity.py",
+        "dnd/content_system/condition_definitions.py"
+      ]
+    },
+    {
+      "id": "S14",
+      "group": "Spell and wall behavior",
+      "title": "Eyebite pays its initial gaze once and retains all three exact modes",
+      "authority": "P3; Frightened clarification",
+      "files": [
+        "dnd/spells/necromancy.py",
+        "dnd/conditions.py",
+        "dnd/content_system/condition_definitions.py"
+      ]
+    },
+    {
+      "id": "S15",
+      "group": "Spell and wall behavior",
+      "title": "Finger of Death stays fixed damage and creates no zombie",
+      "authority": "P3 explicit human damage-only adaptation",
+      "files": [
+        "dnd/spells/necromancy.py"
+      ]
+    },
+    {
+      "id": "S16",
+      "group": "Spell and wall behavior",
+      "title": "Disintegrate requests dust only from its actual lethal result",
+      "authority": "P3 plus accepted outcome supplement",
+      "files": [
+        "dnd/spells/transmutation.py",
+        "dnd/entity.py",
+        "dnd/blocks/base_item.py",
+        "dnd/core/events.py"
+      ]
+    },
+    {
+      "id": "S17",
+      "group": "Spell and wall behavior",
+      "title": "Ice Storm range, empty-area terrain and exact expiry",
+      "authority": "P4",
+      "files": [
+        "dnd/spells/evocation.py",
+        "dnd/spells/catalog_content.py"
+      ]
+    },
+    {
+      "id": "S18",
+      "group": "Spell and wall behavior",
+      "title": "Sleet Storm affects all occupants with independently admitted entry/turn checks",
+      "authority": "P4",
+      "files": [
+        "dnd/spells/conjuration.py"
+      ]
+    },
+    {
+      "id": "S19",
+      "group": "Spell and wall behavior",
+      "title": "Sunbeam has an initial line, paid repeats, brief shared blindness and actual sunlight",
+      "authority": "P4",
+      "files": [
+        "dnd/spells/evocation.py",
+        "dnd/core/gridmap.py",
+        "dnd/monsters/traits.py",
+        "dnd/spells/catalog_content.py",
+        "dnd/content_system/condition_definitions.py"
+      ]
+    },
+    {
+      "id": "S20",
+      "group": "Spell and wall behavior",
+      "title": "Sunburst keeps timed blindness and removes actual spell darkness",
+      "authority": "P4",
+      "files": [
+        "dnd/spells/evocation.py"
+      ]
+    },
+    {
+      "id": "S21",
+      "group": "Spell and wall behavior",
+      "title": "Spirit Guardians uses declared exclusions and correct entry semantics",
+      "authority": "P5",
+      "files": [
+        "dnd/spells/conjuration.py",
+        "dnd/types/senses.py"
+      ]
+    },
+    {
+      "id": "S22",
+      "group": "Spell and wall behavior",
+      "title": "Guardian of Faith occupies Large space and spends its actual damage budget",
+      "authority": "P5",
+      "files": [
+        "dnd/spells/conjuration.py"
+      ]
+    },
+    {
+      "id": "S23",
+      "group": "Spell and wall behavior",
+      "title": "Heroes\u2019 Feast is paid once per eater with all benefits for ten turns",
+      "authority": "P5 explicit human quick-cast/eat and10-turn adaptation; separate full-plan prop lifetime choice",
+      "files": [
+        "dnd/spells/conjuration.py",
+        "dnd/blocks/health.py"
+      ]
+    },
+    {
+      "id": "S24",
+      "group": "Spell and wall behavior",
+      "title": "Banishment chooses temporary return versus completed home-plane departure",
+      "authority": "P6",
+      "files": [
+        "dnd/spells/abjuration.py",
+        "dnd/spells/catalog_content.py"
+      ]
+    },
+    {
+      "id": "S25",
+      "group": "Spell and wall behavior",
+      "title": "Dimension Door permits unseen destinations, companion travel and real mishaps",
+      "authority": "P6",
+      "files": [
+        "dnd/spells/conjuration.py",
+        "dnd/spells/catalog_content.py",
+        "dnd/core/events.py"
+      ]
+    },
+    {
+      "id": "S26",
+      "group": "Spell and wall behavior",
+      "title": "Telekinesis is finite supported movement with the selected hostile impact",
+      "authority": "P6 explicit human final damage/landing decision, superseding earlier recommendations",
+      "files": [
+        "dnd/spells/transmutation.py",
+        "dnd/content_system/action_definitions.py",
+        "dnd/spells/catalog_content.py"
+      ]
+    },
+    {
+      "id": "S27",
+      "group": "Spell and wall behavior",
+      "title": "Antimagic covers moving fields, items, retained creations and transport",
+      "authority": "P6 exact approved suppression scope",
+      "files": [
+        "dnd/spells/abjuration.py",
+        "dnd/core/base_conditions.py",
+        "dnd/core/effect_types.py",
+        "dnd/blocks/base_item.py",
+        "dnd/entity.py",
+        "dnd/types/spell_suppression.py"
+      ]
+    },
+    {
+      "id": "S28",
+      "group": "Spell and wall behavior",
+      "title": "Existing Force/Ice/Stone walls retain suppression and local disintegration geometry",
+      "authority": "P7 preservation plus P3/P6 dependencies",
+      "files": [
+        "dnd/spells/wall_constructions.py",
+        "dnd/core/wall_geometry.py",
+        "dnd/core/presentation_geometry.py",
+        "dnd/core/item_types.py"
+      ]
+    },
+    {
+      "id": "S29",
+      "group": "Spell and wall behavior",
+      "title": "Wind and shared restraint contributions honor current native owners",
+      "authority": "P6 partial suppression; P7 preserve Wind and existing surface ownership",
+      "files": [
+        "dnd/spells/wall_fields.py",
+        "dnd/spatial/restraints.py"
+      ]
+    },
+    {
+      "id": "K01",
+      "group": "Class mechanics and result attribution",
+      "title": "Indomitable, Relentless Rage and Survivor expose their actual intervention",
+      "authority": "P8 C1/C4 missing typed outcomes; ordinary progression must stay canonical",
+      "files": [
+        "dnd/classes/fighter.py",
+        "dnd/classes/barbarian.py",
+        "dnd/content/characters/barbarian_grants.py",
+        "dnd/types/class_features.py",
+        "dnd/core/events.py"
+      ]
+    },
+    {
+      "id": "K02",
+      "group": "Class mechanics and result attribution",
+      "title": "Font of Magic publishes actual conversion direction and deltas",
+      "authority": "P8 C3",
+      "files": [
+        "dnd/classes/sorcerer.py",
+        "dnd/core/base_actions.py",
+        "dnd/types/class_features.py"
+      ]
+    },
+    {
+      "id": "K03",
+      "group": "Class mechanics and result attribution",
+      "title": "Selected metamagic, affinity and Draconic Presence modes are passive facts",
+      "authority": "P8 C4/C5",
+      "files": [
+        "dnd/classes/sorcerer.py",
+        "dnd/types/class_features.py",
+        "dnd/types/actor.py",
+        "dnd/types/senses.py"
+      ]
+    },
+    {
+      "id": "K04",
+      "group": "Class mechanics and result attribution",
+      "title": "Mindless Rage cleanse has a still-live causal parent",
+      "authority": "P8 C2 required actual cleanse; defect found during native class acceptance",
+      "files": [
+        "dnd/classes/rage.py"
+      ]
+    },
+    {
+      "id": "K05",
+      "group": "Class mechanics and result attribution",
+      "title": "Retaliation executes one canonically bound ordinary Attack and records provenance",
+      "authority": "P8 C5 required equipped Retaliation; defect found during actual progression acceptance",
+      "files": [
+        "dnd/classes/barbarian.py"
+      ]
+    },
+    {
+      "id": "D01",
+      "group": "Catalog and review support",
+      "title": "Canonical metadata matches corrected action and condition identities",
+      "authority": "P1\u2013P6 integration requirement; no parallel spell registry",
+      "files": [
+        "dnd/spells/catalog_content.py",
+        "dnd/spells/content_metadata.py",
+        "dnd/content_system/action_definitions.py",
+        "dnd/content_system/condition_definitions.py"
+      ]
+    },
+    {
+      "id": "D02",
+      "group": "Catalog and review support",
+      "title": "A bounded open-field review battlefield is registered",
+      "authority": "P4 production-resolution weather/solar acceptance",
+      "files": [
+        "dnd/scenarios/battlefield_catalog.py"
+      ]
+    }
+  ]
+}

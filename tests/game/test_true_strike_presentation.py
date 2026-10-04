@@ -2,12 +2,13 @@
 
 import pygame
 import pytest
+import numpy as np
 
 from dnd.actions import AttackEvent
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY, BaseObject
 from dnd.core.events import EventQueue
 from game.animation_data import load_animation_data
-from game.animation_draw import actor_draw_commands, load_attack_media
+from game.animation_draw import actor_draw_commands, load_attack_media, load_cast_rows
 from game.attack import BoundAttack, bind_attack, sample_attack
 from game.choreography import bind_choreography, sample_choreography
 from game.player_facts import AttackFact, SpellFact
@@ -120,14 +121,52 @@ def test_literal_weapon_charge_draws_in_rig_slots_and_preserves_baked_on_off_fra
             assert (images[0][1] != images[1][1]) is (frame == 7), (ranged, quadrant, frame)
 
 
-def test_unprovided_weapon_pose_stays_its_own_attack_and_reports_missing_charge(data):
-    history = true_strike_history(weapon="weapon.longsword")
+@pytest.mark.parametrize("miss", (False, True))
+@pytest.mark.parametrize("weapon,ranged", (("weapon.longsword", False), ("weapon.heavy_crossbow", True)))
+def test_other_weapons_keep_their_attack_with_spell_colored_hands(data, miss, weapon, ranged):
+    history = true_strike_history(weapon=weapon, ranged=ranged, miss=miss)
     before, root = player_cast(history.views["caster"])
+    attack, = [node for node in root.events if isinstance(node.fact, AttackFact)]
+    ordinary = bind_attack(before, lineage_branch(root, attack), data)
+    assert ordinary is not None
     choreography = bind_choreography(before, root, data)
+    assert not choreography.gaps and not choreography.body_actions
     node, = choreography.nodes
     assert isinstance(node.bound, BoundAttack)
-    assert node.bound.timeline.clip == "Attack1"
-    assert not any(layer.sourceSheet is not None for layer in node.bound.timeline.layers)
-    assert len(choreography.gaps) == 1
-    assert "child_attack/neuroclient.modular/" in choreography.gaps[0][1]
-    assert choreography.gaps[0][1].endswith("/Attack1")
+    charged = node.bound
+    timeline, baseline = charged.timeline, ordinary.timeline
+    assert (timeline.clip, timeline.profile_id, timeline.release_ms, timeline.contact_ms, timeline.complete_ms) == (
+        baseline.clip, baseline.profile_id, baseline.release_ms, baseline.contact_ms, baseline.complete_ms)
+    assert timeline.projectile == baseline.projectile and charged.appearances == ordinary.appearances
+    layer, = [layer for layer in timeline.layers if layer.slot == "weaponGlow"]
+    palette = data.drafts["spell.true_strike"].elementColors
+    assert layer.palette is not None
+    assert layer.palette.colors == (palette.tertiary, palette.primary, palette.secondary)
+    rows = {}
+    load_cast_rows(data, timeline.source, timeline.clip, timeline.facing, (layer,), rows)
+    assert layer.sourceSheet is not None
+    source = pygame.image.load(data.resources[layer.sourceSheet]).convert_alpha()
+    rig = data.rigs[timeline.source.rig_id]
+    expected = {((c >> 16) & 255, (c >> 8) & 255, c & 255) for c in layer.palette.colors}
+    for key, image in rows.items():
+        raw = source.subsurface((0, key[3] * rig.cell_height, image.width, image.height))
+        alpha = pygame.surfarray.array_alpha(image)
+        assert np.array_equal(alpha, pygame.surfarray.array_alpha(raw))
+        pixels = {tuple(pixel) for pixel in pygame.surfarray.array3d(image)[alpha > 0]}
+        assert pixels and pixels <= expected
+    charged_rows = load_attack_media(timeline, charged.appearances)
+    plain_rows = load_attack_media(baseline, ordinary.appearances)
+    for quadrant in range(4):
+        camera = Camera(quadrant=quadrant, zoom=.5).with_focus(timeline.source.grid)
+        differences = 0
+        for frame in range(15):
+            images = []
+            for bound, media in ((charged, charged_rows), (ordinary, plain_rows)):
+                body = sample_attack(bound.timeline, (frame + .1) * 1000 / 12).bodies[0]
+                draws = actor_draw_commands(data, body, bound.timeline.source,
+                    bound.appearances[body.actor_uuid], media, camera)
+                actor, = [draw for draw in draws if draw.evidence[6] == "actor"]
+                images.append((actor.destination, pygame.image.tobytes(actor.surface, "RGBA")))
+            assert images[0][0] == images[1][0]
+            differences += images[0][1] != images[1][1]
+        assert differences, (weapon, miss, quadrant)

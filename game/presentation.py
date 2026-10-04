@@ -42,7 +42,7 @@ from dnd.core.events import (
     SensoryUpdateEvent,
     SpatialChangeEvent,
     SpatialChangeType,
-    SpatialEffectChangeEvent,
+    SpatialEffectChangeEvent, SpatialEffectInteractionEvent,
     StepMovementEvent,
     TakeDamageEvent,
     TileElevationChangeEvent,
@@ -641,7 +641,7 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
             copied = event.model_copy(update=common)
         case DeathSaveEvent() | ReviveEvent() | InstantDeathEvent() | TurnEvent() | RoundEvent() | EncounterEvent():
             copied = event.model_copy(update=common)
-        case WorldInitializedEvent() | WorldModifiedEvent() | SpatialEffectChangeEvent() | SpatialChangeEvent():
+        case WorldInitializedEvent() | WorldModifiedEvent() | SpatialEffectChangeEvent() | SpatialEffectInteractionEvent() | SpatialChangeEvent():
             copied = event.model_copy(update=common)
         case ActionEvent() if type(event) is ActionEvent:
             copied = event.model_copy(update=common)
@@ -985,7 +985,7 @@ def reduce_lineage(target: PresentationTarget, lineage: CompletedLineage) -> Pre
                 pass
             case TurnEvent() | RoundEvent() | EncounterEvent():
                 _reduce_turn_fact(result, event)
-            case AreaReachEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | SpatialEffectChangeEvent():
+            case AreaReachEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent() | SpatialEffectChangeEvent() | SpatialEffectInteractionEvent():
                 # Senses supplies committed positions and observed fixture state.
                 # Spatial lifecycle events retain causality, not another state writer.
                 pass

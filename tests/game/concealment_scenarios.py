@@ -154,8 +154,8 @@ def concealment_history(
             grant_sight()
             assert subject.uuid in perceiver.senses.entities
             perform(subject, "action.move", destination=(9, 3))
-            # Real turns advance the spell's existing ten-round duration.
-            for _ in range(24):
+            # Two actors advance the actual one-hour spell through real turns.
+            for _ in range(1204):
                 if "True Seeing" not in perceiver.active_conditions:
                     break
                 encounter.next_turn()

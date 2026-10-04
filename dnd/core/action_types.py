@@ -31,8 +31,15 @@ class PositionPathSelection(BaseModel):
     origin_start_offset_cells: int = Field(default=0, ge=0)
 
 
+class EntityDestinationSelection(BaseModel):
+    """One creature followed by one independently selected destination."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["entity_destination"] = "entity_destination"
+
+
 PositionSelection: TypeAlias = Annotated[
-    Union[SinglePositionSelection, PositionPathSelection], Field(discriminator="kind"),
+    Union[SinglePositionSelection, PositionPathSelection, EntityDestinationSelection], Field(discriminator="kind"),
 ]
 
 

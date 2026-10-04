@@ -65,19 +65,40 @@ def initial_menu(actions: AvailableActionsResult, panel_rect: pygame.Rect) -> Me
     return _select_action(MenuState(), index, len(actions.all_actions), panel_rect)
 
 
+def selection_target_pool(action: AvailableActionInfo, selected: tuple[int, ...]) -> list[AvailableTarget]:
+    if selected:
+        primary = next((target for target in action.valid_targets if target.index == selected[0]), None)
+        if primary is not None and primary.secondary_targets is not None:
+            return [primary, *primary.secondary_targets]
+    return action.valid_targets
+
+
+def _target_options(action: AvailableActionInfo, selected: tuple[int, ...]) -> list[AvailableTarget]:
+    pool = selection_target_pool(action, selected)
+    if selected and pool and pool[0].secondary_targets is not None:
+        return [target for target in pool[1:] if target.index not in selected]
+    return pool
+
+
 def _choose_target(state: MenuState, action: AvailableActionInfo,
                    target: AvailableTarget) -> tuple[MenuState, ActionSelection | None]:
-    if action.position_selection is not None and action.position_selection.kind == "path":
+    if action.position_selection is not None and action.position_selection.kind in ("path", "entity_destination"):
         if target.position is None:
             return replace(state, status="Choose a position."), None
+        status = ("Choose a destination." if action.position_selection.kind == "entity_destination"
+                  else "Click another point or Enter to confirm.")
         return replace(state, selected_targets=(target.index,), selected_positions=(target.position,),
-                       target_cursor=0, status="Click another point or Enter to confirm."), None
+                       target_cursor=0, status=status), None
     if action.allow_same_target is False and target.index in state.selected_targets:
         return replace(state, status="Choose a different target."), None
     allocation = (*state.selected_targets, target.index)
     count = (action.num_projectiles or 1) if action.target_type is TargetType.MULTI_ENTITY else 1
     if len(allocation) < count:
-        return replace(state, selected_targets=allocation, status=f"Selected {len(allocation)} of {count}."), None
+        if not _target_options(action, allocation):
+            return replace(state, selected_targets=(), status=""), ActionSelection(state.selected_action, allocation)
+        dependent = selection_target_pool(action, allocation)[0].secondary_targets is not None
+        return replace(state, selected_targets=allocation, target_cursor=0 if dependent else state.target_cursor,
+                       status=f"Selected {len(allocation)} of {count}. Space confirms selection."), None
     return replace(state, selected_targets=(), status=""), ActionSelection(state.selected_action, allocation)
 
 
@@ -105,6 +126,7 @@ def handle_menu_event(
     if not 0 <= state.selected_action < len(rows):
         state = _select_action(state, 0, len(rows), panel_rect)
     action = rows[state.selected_action]
+    options = _target_options(action, state.selected_targets)
     if event.type == pygame.MOUSEWHEEL and panel_rect.collidepoint(pygame.mouse.get_pos()):
         visible = _rows_rect(panel_rect).height // _ROW_HEIGHT
         return replace(state, scroll=max(0, min(len(rows) - visible, state.scroll - event.y * 3))), None
@@ -125,8 +147,10 @@ def handle_menu_event(
             return replace(state, selected_targets=(), status=""), None
         if event.key == pygame.K_TAB and state.selected_positions:
             return replace(state, target_cursor=(state.target_cursor + 1) % max(1, len(next_position_options))), None
-        if event.key == pygame.K_TAB and action.valid_targets:
-            return replace(state, target_cursor=(state.target_cursor + 1) % len(action.valid_targets), status=""), None
+        if event.key == pygame.K_TAB and options:
+            return replace(state, target_cursor=(state.target_cursor + 1) % len(options), status=""), None
+        if event.key == pygame.K_SPACE and state.selected_targets and not state.selected_positions:
+            return replace(state, selected_targets=(), status=""), ActionSelection(state.selected_action, state.selected_targets)
         if event.key == pygame.K_p and state.selected_positions:
             if not next_position_options:
                 return replace(state, status="No further points; Enter confirms."), None
@@ -135,11 +159,14 @@ def handle_menu_event(
                            target_cursor=0, status="Enter confirms; Backspace removes the last point."), None
         if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
             if state.selected_positions:
+                if (action.position_selection is not None and action.position_selection.kind == "entity_destination"
+                        and len(state.selected_positions) != 2):
+                    return replace(state, status="Choose a destination before confirming."), None
                 command = ActionSelection(state.selected_action, state.selected_targets, state.selected_positions[1:])
                 return replace(state, selected_targets=(), selected_positions=(), status=""), command
-            if not action.valid_targets:
+            if not options:
                 return replace(state, status=action.availability_status.value.replace("_", " ")), None
-            return _choose_target(state, action, action.valid_targets[state.target_cursor % len(action.valid_targets)])
+            return _choose_target(state, action, options[state.target_cursor % len(options)])
     elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
         area = _rows_rect(panel_rect)
         if area.collidepoint(event.pos):
@@ -147,9 +174,11 @@ def handle_menu_event(
             if index < len(rows):
                 return _select_action(state, index, len(rows), panel_rect), None
         elif not panel_rect.collidepoint(event.pos):
-            if visible_objects is not None and action.target_type in (TargetType.OBJECT, TargetType.CREATURE_OR_OBJECT):
+            if visible_objects is not None and (
+                    action.target_type in (TargetType.OBJECT, TargetType.CREATURE_OR_OBJECT)
+                    or any(target.target_kind == "object" for target in options)):
                 chosen = pick_environment_target(event.pos, visible_objects, camera)
-                for index, target in enumerate(action.valid_targets):
+                for index, target in enumerate(options):
                     if chosen is not None and target.target_uuid == chosen:
                         return _choose_target(replace(state, target_cursor=index), action, target)
                 if chosen is not None:
@@ -162,7 +191,7 @@ def handle_menu_event(
                         return replace(state, status="Choose an admitted next point, or Enter to confirm."), None
                     return replace(state, selected_positions=(*state.selected_positions, support.position),
                                    target_cursor=0, status="Enter confirms; Backspace removes the last point."), None
-                for index, target in enumerate(action.valid_targets):
+                for index, target in enumerate(options):
                     if (visible_objects is not None and target.target_uuid is not None
                             and target.target_uuid in visible_objects
                             and environment_selection_command(visible_objects[target.target_uuid], camera) is not None):
@@ -198,7 +227,8 @@ def draw_target_preview(
     """Mark only disclosed targets and area cells on retained visible supports."""
     if actions is None or not 0 <= state.selected_action < len(actions.all_actions):
         return
-    targets = actions.all_actions[state.selected_action].valid_targets
+    action = actions.all_actions[state.selected_action]
+    targets = _target_options(action, state.selected_targets)
     if not targets:
         return
     supports = {tile.position: tile for tile in visible_tiles}
@@ -247,7 +277,7 @@ def draw_target_preview(
     if state.selected_targets:
         counts = Counter(state.selected_targets)
         font = pygame.font.Font(None, 17)
-        for target in targets:
+        for target in selection_target_pool(action, state.selected_targets):
             if target.index not in counts or target.position not in supports:
                 continue
             tile = supports[target.position]
@@ -302,12 +332,14 @@ def draw_menu(
         text(costs or f"{action.cost_amount} {action.cost_type.replace('_', ' ')}", y + 20)
         if action.valid_targets:
             if state.selected_positions:
-                text("Ordered positions", y + 40)
+                text("Creature → destination" if action.position_selection is not None
+                     and action.position_selection.kind == "entity_destination" else "Ordered positions", y + 40)
                 text(" → ".join(str(point) for point in state.selected_positions), y + 60)
                 text(f"{len(state.selected_positions)} points · P adds · Enter confirms", y + 80)
             else:
-                target = action.valid_targets[state.target_cursor % len(action.valid_targets)]
-                text(f"Target {state.target_cursor % len(action.valid_targets) + 1}/{len(action.valid_targets)}", y + 40)
+                options = _target_options(action, state.selected_targets)
+                target = options[state.target_cursor % len(options)]
+                text(f"Target {state.target_cursor % len(options) + 1}/{len(options)}", y + 40)
                 text(_target_text(target), y + 60)
                 if action.target_type is TargetType.MULTI_ENTITY:
                     text(f"Allocation {len(state.selected_targets)}/{action.num_projectiles or 1}", y + 80)

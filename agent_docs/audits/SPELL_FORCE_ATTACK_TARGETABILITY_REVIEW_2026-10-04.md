@@ -1,0 +1,9 @@
+# Force-wall normal Attack review — October 4
+
+Bounded independent review approves the native targetability correction. Snapshot SHA256 `0f3140f0220c36ab5fc5474227a87f2988f123bc45c62c5d454312fdab1fd838`; exact files are in `wind-joined-20261004/force-attack-review-snapshot.json`. This does not approve the still separate Force presentation work or the full spell plan.
+
+Normal Attack now admits an active, targetable object with no health. Existing subjective object contact still requires the observer's received object contact (or the established creator knowledge), actual footprint range and physical reach. Execution rechecks active/targetable state and objective contact. Breakability remains a damage response; no health component, duplicate attack action, event route or Force-specific dispatcher was added. The broader candidate pool is subsequently filtered by the normal declaration validation, including `is_targetable`.
+
+Fresh public-boundary wall/object/weapon/window tests: **67 passed**. The actual See Invisibility + public-menu attack against a Force section spends one action, reports a committed hit with zero damage, preserves no-health section identities and keeps the physical barrier. Existing armed/unarmed/ranged attacks still damage ordinary breakable objects; canceled damage retains the existing spent-attack behavior.
+
+Five independent public-menu/direct-or-stale-command probes also passed: undisclosed invisible section, targetability revoked after choice, owner deactivated, actor moved out of reach, and See Invisibility removed after choice. Each disappears from available attacks, rejects the stale/direct command before an action debit and preserves invulnerable damage semantics. Initial probe setup mistakes (read-only active property, condition label and removal API) are preserved in separate logs; they were corrected to actual owner deactivation and public condition removal. No production code changed during this review.

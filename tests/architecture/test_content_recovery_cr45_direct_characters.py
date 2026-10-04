@@ -627,7 +627,7 @@ def test_direct_martial_paths_are_explicit_and_have_no_runtime_routing_devices()
                     imported = {
                         alias.name for alias in node.names
                     } if isinstance(node, ast.ImportFrom) else set()
-                    if imported != {"BehaviorBinding"}:
+                    if not imported or not imported <= {"BehaviorBinding", "RuntimeBehaviorKind"}:
                         forbidden_imports.append((relative_path, module))
 
             if isinstance(node, (ast.Import, ast.ImportFrom)):

@@ -149,19 +149,21 @@ class WindWallZone(WallFieldZone):
 
 
     def blocks_crossing_between(self, start, end, channel, requester_uuid, mode, terminal_provider_uuid=None) -> bool:
-        if channel != "movement" or wall_path_contact(self.geometry, start, end, self.affected_positions) is None:
+        if channel != "movement" or wall_path_contact(self.geometry, start, end,
+                {cell for cell in self.affected_positions if self.allows_contribution_at(cell)}) is None:
             return False
         actor = Entity.get(requester_uuid) if requester_uuid is not None else None
         return actor is not None and (actor.gaseous_body
             or mode is MovementMode.FLYING and actor.size in {Size.TINY, Size.SMALL})
 
     def missile_deflection_contact(self, start, end, missile_size) -> tuple[float, float] | None:
-        return wall_path_contact(self.geometry, start, end, self.affected_positions) if missile_size == "ordinary" else None
+        return wall_path_contact(self.geometry, start, end,
+                {cell for cell in self.affected_positions if self.allows_contribution_at(cell)}) if missile_size == "ordinary" else None
 
     def _emit_wind_exposure(self, parent_event: Event) -> None:
         interaction = EventQueue.publish_declaration(SpatialEffectInteractionEvent(
             source_entity_uuid=self.source_entity_uuid, operation=SpatialEffectInteractionOperation.DISPERSE,
-            positions=tuple(sorted(self.affected_positions)), intensity=SpatialEffectInteractionIntensity.STRONG,
+            positions=tuple(sorted(cell for cell in self.affected_positions if self.allows_contribution_at(cell))), intensity=SpatialEffectInteractionIntensity.STRONG,
             parent_event=parent_event.uuid, phase=EventPhase.DECLARATION, use_register=False))
         for phase in (EventPhase.EXECUTION, EventPhase.EFFECT, EventPhase.COMPLETION):
             if interaction.canceled:
@@ -258,7 +260,7 @@ class WallOfThorns(SpellAction):
         cost=1, evaluator=entity_action_economy_cost_evaluator)])
 
     def wall_geometry(self) -> WallAssemblyPresentationGeometry | None:
-        return field_geometry(self, form=self.wall_form, height=20 if self.wall_form == "ring" else 10, width=5)
+        return field_geometry(self, form=self.wall_form, height=10, width=5)
 
     def get_position_selection(self) -> PositionSelection:
         return (SinglePositionSelection() if self.wall_form == "ring" else PositionPathSelection(

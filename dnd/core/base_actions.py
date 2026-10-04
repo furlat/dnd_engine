@@ -16,10 +16,11 @@ from dnd.core.action_types import (
     RestrictedActionGrantProvider,
     RestrictedActionKind,
 )
-from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRef, EventResolutionRef
+from dnd.core.effect_types import ApplicationMembership, ApplicationResolutionRef, EventResolutionRef, EffectPropagationLink
 from dnd.core.events import Event, EventType, EventPhase, EventProcessor, Range, EventQueue
 from dnd.core.base_object import BaseObject, PASSIVE_EVENT_REPLAY
 from dnd.types.world import MovementMode
+from dnd.types.class_features import FontConversion
 from dnd.core.base_block import BaseBlock
 from dnd.core.combat_log import ActionLogData, CombatLogEntry, CombatLogEntryType, MultiEntityLogData, md_color
 from dnd.core.content.identities import ContentRef, validate_namespaced_id
@@ -614,6 +615,8 @@ class Cost(BaseCost):
 
 
 class ActionEvent(Event):
+    font_conversion: FontConversion | None = None
+    item_magic_suppression_provider_uuids: tuple[UUID, ...] = ()
     """Event emitted by the base action pipeline."""
 
     action_economy_spent: bool = Field(
@@ -666,6 +669,7 @@ class ActionEvent(Event):
         description="Complete entity target selection captured when the action is declared.",
     )
     application: ApplicationMembership | None = None
+    propagation: EffectPropagationLink | None = None
 
     @property
     def application_id(self) -> UUID | None:
@@ -936,6 +940,8 @@ class BaseAction(BaseObject):
     )
     costs: List[Cost] = Field(default_factory=list, description="Runtime costs required by this action.")
     object_target_policy: Literal["damageable", "active"] = "damageable"
+    include_owned_item_targets: bool = Field(default=False,
+        description="Include the actor's inventory and equipment in object selection.")
     target_type: TargetType = Field(
         default=TargetType.SELF,
         description="Target category used by discovery and instantiation.",
@@ -1111,6 +1117,7 @@ class BaseAction(BaseObject):
         default=True,
         description="Whether a multi-entity action can target the same entity more than once.",
     )
+    multi_target_objects: bool = False
     valid_target_filter: str = Field(
         default="enemies",
         description="Entity relationship filter: enemies, allies, self_or_allies, or all.",
@@ -1369,6 +1376,14 @@ class BaseAction(BaseObject):
         selection = self.get_position_selection()
         if selection is None or selection.kind == "single":
             return "This action does not select additional positions" if self.extra_target_positions else None
+        if selection.kind == "entity_destination":
+            if self.effective_target_type is not TargetType.ENTITY:
+                return "Creature and destination selection requires entity targeting"
+            if self.target_entity_uuid is None or self.end_position is None:
+                return "Choose a creature and a destination"
+            if self.extra_target_positions:
+                return "Choose exactly one destination"
+            return self.target_position_error(self.end_position)
         if self.effective_target_type != TargetType.POSITION_LOS:
             return "Path selection requires position targeting"
         path = self.get_selected_position_path()
@@ -1399,6 +1414,14 @@ class BaseAction(BaseObject):
     ) -> Iterator[Tuple[int, int]]:
         """Grow explicit selection from admitted points without enumerating all paths."""
         selection = self.get_position_selection()
+        if selection is not None and selection.kind == "entity_destination":
+            if selected or self.target_entity_uuid is None:
+                return
+            for position in self.get_valid_positions():
+                bound = self.model_copy(deep=True, update={"end_position": position})
+                if bound.validate_requirements_for_discovery(subjective=subjective):
+                    yield position
+            return
         if selection is None or selection.kind != "path" or len(selected) >= selection.max_segments:
             return
         for position in self.get_valid_positions():
@@ -1458,7 +1481,9 @@ class BaseAction(BaseObject):
         Returns:
             List of valid positions this action can target.
         """
-        if self.effective_target_type not in (TargetType.POSITION_LOS, TargetType.POSITION_AOE):
+        selection = self.get_position_selection()
+        if (self.effective_target_type not in (TargetType.POSITION_LOS, TargetType.POSITION_AOE)
+                and (selection is None or selection.kind != "entity_destination")):
             return []
 
         entity = BaseBlock.get(self.source_entity_uuid)
@@ -1524,6 +1549,14 @@ class BaseAction(BaseObject):
         if self.effective_target_type != TargetType.MULTI_ENTITY:
             return None
         return 1
+
+    def get_secondary_target_options(self, primary_uuid: UUID) -> Optional[List["AvailableTarget"]]:
+        """None uses the ordinary target pool; a list supplies primary-dependent choices."""
+        return None
+
+    def get_application_propagation(self, target_uuid: UUID,
+                                    membership: ApplicationMembership) -> EffectPropagationLink | None:
+        return None
 
     def get_all_targets(self) -> List[UUID]:
         """Get all target UUIDs for multi-target actions.
@@ -1933,13 +1966,18 @@ class BaseAction(BaseObject):
             Execution event on success, canceled event on validation failure, or
             `None` if a subclass declines validation.
         """
+        if not self.contributions_active():
+            return declaration_event.cancel(status_message="This granted action's owner is suppressed or absent")
         effective_tt = self.effective_target_type
         if self.entity_target_perception is EntityTargetPerception.TOUCH_CONTACT:
-            if effective_tt != TargetType.ENTITY or self.target_entity_uuid is None:
-                return declaration_event.cancel(status_message="Touch contact requires one entity target")
-            if not self.admits_touch_target(self.target_entity_uuid):
+            targets = ([self.source_entity_uuid] if effective_tt == TargetType.SELF else
+                       self.get_all_targets() if effective_tt == TargetType.MULTI_ENTITY else
+                       [self.target_entity_uuid] if self.target_entity_uuid is not None else [])
+            if effective_tt not in (TargetType.SELF, TargetType.ENTITY, TargetType.MULTI_ENTITY) or not targets:
+                return declaration_event.cancel(status_message="Touch contact requires entity targets")
+            if any(not self.admits_touch_target(target) for target in targets):
                 return declaration_event.cancel(status_message="Target is not within physical touch contact")
-            filter_error = self._validate_target_filter([self.target_entity_uuid])
+            filter_error = self._validate_target_filter(targets)
             if filter_error:
                 return declaration_event.cancel(status_message=filter_error)
         if effective_tt in (TargetType.MULTI_ENTITY, TargetType.POSITION_AOE):
@@ -1974,6 +2012,13 @@ class BaseAction(BaseObject):
         reporting affordability independently through ``check_costs()``.
         """
         selection = self.get_position_selection()
+        if (selection is not None and selection.kind == "entity_destination"
+                and self.end_position is None):
+            target = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+            position = target.get_position() if target is not None else None
+            return position is not None and next(
+                self._valid_extra_target_positions(position, (), subjective=subjective), None,
+            ) is not None
         if (allow_partial_position and selection is not None
                 and selection.kind == "path" and not self.extra_target_positions):
             if self.validate_requirements_for_discovery(subjective=subjective):
@@ -2010,7 +2055,7 @@ class BaseAction(BaseObject):
     def pre_validate(self) -> bool:
         """Validate affordability and non-cost requirements without execution."""
         return (
-            self.check_costs()
+            self.contributions_active() and self.check_costs()
             and self.validate_requirements_for_discovery(subjective=False)
         )
 
@@ -2059,6 +2104,7 @@ class BaseAction(BaseObject):
                     'target_entity_name': target_block.name if target_block else None,
                     'children_events': [], 'lineage_children_events': [], 'children_lineages': [],
                     'application': membership,
+                    'propagation': self.get_application_propagation(target_uuid, membership),
                     'resolution_ref': ApplicationResolutionRef(lineage_uuid=membership.lineage_uuid,
                         application_id=membership.application_id),
                 })
@@ -2250,6 +2296,8 @@ class BaseAction(BaseObject):
                 f"{type(published_declaration).__name__}, expected ActionEvent"
             )
         declaration_event = published_declaration
+        if not self.contributions_active():
+            return declaration_event.cancel(status_message="The owning magical effect is suppressed or absent")
         if declaration_event.canceled:
             record_total()
             return declaration_event
@@ -2544,6 +2592,7 @@ class AvailableTarget(BaseModel):
         description="Exact selected-target movement cost for a position action.",
     )
     extra_target_uuids: Optional[List[UUID]] = Field(default=None, description="Additional targets for MULTI_ENTITY actions")
+    secondary_targets: Optional[List["AvailableTarget"]] = None
     is_path_hazardous: bool = Field(default=False, description="Whether shortest path crosses a hazardous tile")
     safe_path_cost: Optional[int] = Field(default=None, description="Movement cost of safe alternative path (None if no safe path)")
     path: Optional[List[Tuple[int, int]]] = Field(default=None, description="Shortest path to this target")

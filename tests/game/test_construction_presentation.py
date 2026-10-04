@@ -56,8 +56,11 @@ def test_real_cast_attack_and_removal_keep_sections_independent(data,material):
                 if record.removed_ms is not None:
                     retired=True
                     assert record.destroyed_ms is None
+                    own=[c for c in construction_media_draw_commands(after,data,
+                        record.removed_ms+50,Camera(zoom=1),records) if c.owner==str(identity)]
+                    assert own and all('.removal.' in str(c.evidence[2]) for c in own)
                     assert all(c.owner!=str(identity) for c in construction_media_draw_commands(after,data,
-                        record.removed_ms+50,Camera(zoom=1),records))
+                        record.removed_ms+850,Camera(zoom=1),records))
             before=after;now+=group.complete_ms+250
     assert observed and broken and retired
 
@@ -83,6 +86,23 @@ def test_real_formation_and_concentration_removal_do_not_fracture(data,material)
                     assert any(c.owner==str(identity) and '.hold.' in str(c.evidence[2]) for c in commands)
             if record.removed_ms is not None:
                 retired=True
-                assert all(c.owner!=str(identity) for c in construction_media_draw_commands(after,data,record.removed_ms,Camera(zoom=1),records))
+                for q in range(4):
+                    start=[c for c in construction_media_draw_commands(after,data,record.removed_ms,
+                        Camera(quadrant=q,zoom=1),records) if c.owner==str(identity)]
+                    mid=[c for c in construction_media_draw_commands(after,data,record.removed_ms+500,
+                        Camera(quadrant=q,zoom=1),records) if c.owner==str(identity)]
+                    assert start and mid and all('.removal.' in str(c.evidence[2]) for c in (*start,*mid))
+                    assert sum(pygame.surfarray.array_alpha(c.surface).sum() for c in mid) < sum(
+                        pygame.surfarray.array_alpha(c.surface).sum() for c in start)
+                    assert all(c.owner!=str(identity) for c in construction_media_draw_commands(after,data,
+                        record.removed_ms+850,Camera(quadrant=q,zoom=1),records))
+                retained=register_construction_lifetimes(records,after,data,absolute_start_ms=record.removed_ms+500)
+                assert identity in retained
+                retired_records=register_construction_lifetimes(records,after,data,absolute_start_ms=record.removed_ms+850)
+                assert identity not in retired_records
+                assert after.senses is not None
+                unseen=replace(after,senses=replace(after.senses,visible=()))
+                assert all(c.owner!=str(identity) for c in construction_media_draw_commands(unseen,data,
+                    record.removed_ms+100,Camera(zoom=1),records))
         before=after;now+=group.complete_ms+250
     assert observed and retired

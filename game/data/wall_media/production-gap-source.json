@@ -1,0 +1,890 @@
+{
+  "revision": "production-gaps-20261004-v1",
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/production-gap-delivery-2026-10-04",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/production-gaps-20261004",
+  "mediaSha256": "46c1ed40e37dd25191a198a355d2340e3130a6c540cb5165e4486aff36cfae49",
+  "deliveryReceiptSha256": "941f36df34d9be54884579bef87737bb875513cc0941ece62ad860927022fc52",
+  "identities": [
+    "wall.wind.block.h0",
+    "wall.wind.block.h1",
+    "wall.wind.block.h2",
+    "wall.wind.block.h3",
+    "wall.wind.block.h4",
+    "wall.wind.block.h5",
+    "wall.wind.block.h6",
+    "wall.wind.block.h7"
+  ],
+  "registrations": {
+    "wall.wind.block.h0": {
+      "banksByFacing": {
+        "E": "h0",
+        "SE": "h0",
+        "S": "h0",
+        "SW": "h0",
+        "W": "h0",
+        "NW": "h0",
+        "N": "h0",
+        "NE": "h0"
+      },
+      "captureZoom": 1,
+      "referencePixelScale": 1.0,
+      "frameCount": 32,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          192.0,
+          210.47520861406804
+        ],
+        "SE": [
+          192.0,
+          210.47520861406804
+        ],
+        "S": [
+          192.0,
+          210.47520861406804
+        ],
+        "SW": [
+          192.0,
+          210.47520861406804
+        ],
+        "W": [
+          192.0,
+          210.47520861406804
+        ],
+        "NW": [
+          192.0,
+          210.47520861406804
+        ],
+        "N": [
+          192.0,
+          210.47520861406804
+        ],
+        "NE": [
+          192.0,
+          210.47520861406804
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "wall.wind.block.h1": {
+      "banksByFacing": {
+        "E": "h1",
+        "SE": "h1",
+        "S": "h1",
+        "SW": "h1",
+        "W": "h1",
+        "NW": "h1",
+        "N": "h1",
+        "NE": "h1"
+      },
+      "captureZoom": 1,
+      "referencePixelScale": 1.0,
+      "frameCount": 32,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          192.0,
+          210.47520861406804
+        ],
+        "SE": [
+          192.0,
+          210.47520861406804
+        ],
+        "S": [
+          192.0,
+          210.47520861406804
+        ],
+        "SW": [
+          192.0,
+          210.47520861406804
+        ],
+        "W": [
+          192.0,
+          210.47520861406804
+        ],
+        "NW": [
+          192.0,
+          210.47520861406804
+        ],
+        "N": [
+          192.0,
+          210.47520861406804
+        ],
+        "NE": [
+          192.0,
+          210.47520861406804
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "wall.wind.block.h2": {
+      "banksByFacing": {
+        "E": "h2",
+        "SE": "h2",
+        "S": "h2",
+        "SW": "h2",
+        "W": "h2",
+        "NW": "h2",
+        "N": "h2",
+        "NE": "h2"
+      },
+      "captureZoom": 1,
+      "referencePixelScale": 1.0,
+      "frameCount": 32,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          192.0,
+          210.47520861406804
+        ],
+        "SE": [
+          192.0,
+          210.47520861406804
+        ],
+        "S": [
+          192.0,
+          210.47520861406804
+        ],
+        "SW": [
+          192.0,
+          210.47520861406804
+        ],
+        "W": [
+          192.0,
+          210.47520861406804
+        ],
+        "NW": [
+          192.0,
+          210.47520861406804
+        ],
+        "N": [
+          192.0,
+          210.47520861406804
+        ],
+        "NE": [
+          192.0,
+          210.47520861406804
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "wall.wind.block.h3": {
+      "banksByFacing": {
+        "E": "h3",
+        "SE": "h3",
+        "S": "h3",
+        "SW": "h3",
+        "W": "h3",
+        "NW": "h3",
+        "N": "h3",
+        "NE": "h3"
+      },
+      "captureZoom": 1,
+      "referencePixelScale": 1.0,
+      "frameCount": 32,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          192.0,
+          210.47520861406804
+        ],
+        "SE": [
+          192.0,
+          210.47520861406804
+        ],
+        "S": [
+          192.0,
+          210.47520861406804
+        ],
+        "SW": [
+          192.0,
+          210.47520861406804
+        ],
+        "W": [
+          192.0,
+          210.47520861406804
+        ],
+        "NW": [
+          192.0,
+          210.47520861406804
+        ],
+        "N": [
+          192.0,
+          210.47520861406804
+        ],
+        "NE": [
+          192.0,
+          210.47520861406804
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "wall.wind.block.h4": {
+      "banksByFacing": {
+        "E": "h4",
+        "SE": "h4",
+        "S": "h4",
+        "SW": "h4",
+        "W": "h4",
+        "NW": "h4",
+        "N": "h4",
+        "NE": "h4"
+      },
+      "captureZoom": 1,
+      "referencePixelScale": 1.0,
+      "frameCount": 32,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          192.0,
+          210.47520861406804
+        ],
+        "SE": [
+          192.0,
+          210.47520861406804
+        ],
+        "S": [
+          192.0,
+          210.47520861406804
+        ],
+        "SW": [
+          192.0,
+          210.47520861406804
+        ],
+        "W": [
+          192.0,
+          210.47520861406804
+        ],
+        "NW": [
+          192.0,
+          210.47520861406804
+        ],
+        "N": [
+          192.0,
+          210.47520861406804
+        ],
+        "NE": [
+          192.0,
+          210.47520861406804
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "wall.wind.block.h5": {
+      "banksByFacing": {
+        "E": "h5",
+        "SE": "h5",
+        "S": "h5",
+        "SW": "h5",
+        "W": "h5",
+        "NW": "h5",
+        "N": "h5",
+        "NE": "h5"
+      },
+      "captureZoom": 1,
+      "referencePixelScale": 1.0,
+      "frameCount": 32,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          192.0,
+          210.47520861406804
+        ],
+        "SE": [
+          192.0,
+          210.47520861406804
+        ],
+        "S": [
+          192.0,
+          210.47520861406804
+        ],
+        "SW": [
+          192.0,
+          210.47520861406804
+        ],
+        "W": [
+          192.0,
+          210.47520861406804
+        ],
+        "NW": [
+          192.0,
+          210.47520861406804
+        ],
+        "N": [
+          192.0,
+          210.47520861406804
+        ],
+        "NE": [
+          192.0,
+          210.47520861406804
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "wall.wind.block.h6": {
+      "banksByFacing": {
+        "E": "h6",
+        "SE": "h6",
+        "S": "h6",
+        "SW": "h6",
+        "W": "h6",
+        "NW": "h6",
+        "N": "h6",
+        "NE": "h6"
+      },
+      "captureZoom": 1,
+      "referencePixelScale": 1.0,
+      "frameCount": 32,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          192.0,
+          210.47520861406804
+        ],
+        "SE": [
+          192.0,
+          210.47520861406804
+        ],
+        "S": [
+          192.0,
+          210.47520861406804
+        ],
+        "SW": [
+          192.0,
+          210.47520861406804
+        ],
+        "W": [
+          192.0,
+          210.47520861406804
+        ],
+        "NW": [
+          192.0,
+          210.47520861406804
+        ],
+        "N": [
+          192.0,
+          210.47520861406804
+        ],
+        "NE": [
+          192.0,
+          210.47520861406804
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "wall.wind.block.h7": {
+      "banksByFacing": {
+        "E": "h7",
+        "SE": "h7",
+        "S": "h7",
+        "SW": "h7",
+        "W": "h7",
+        "NW": "h7",
+        "N": "h7",
+        "NE": "h7"
+      },
+      "captureZoom": 1,
+      "referencePixelScale": 1.0,
+      "frameCount": 32,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          192.0,
+          210.47520861406804
+        ],
+        "SE": [
+          192.0,
+          210.47520861406804
+        ],
+        "S": [
+          192.0,
+          210.47520861406804
+        ],
+        "SW": [
+          192.0,
+          210.47520861406804
+        ],
+        "W": [
+          192.0,
+          210.47520861406804
+        ],
+        "NW": [
+          192.0,
+          210.47520861406804
+        ],
+        "N": [
+          192.0,
+          210.47520861406804
+        ],
+        "NE": [
+          192.0,
+          210.47520861406804
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    }
+  },
+  "contracts": {
+    "localX": "oriented wall tangent",
+    "localZ": "incoming side of wall",
+    "origin": "actual native projectile/wall intersection including height",
+    "startAt": "admitted interception event",
+    "lastEmissionStartSeconds": 0.088,
+    "opacityClearSeconds": 0.788,
+    "durationSeconds": 1,
+    "loop": false,
+    "splitLayers": false,
+    "arbitraryTangents": "WindBlockComponent.gd continuous native recipe; do not rotate isometric PNGs or silently round a tangent",
+    "spriteLayer": "world effect at actual intersection; order against actual stopped projectile and visible actor; no baked actor-depth split",
+    "headingStepDegrees": 45,
+    "nativeHorizontalUnitsPerCell": 2.121320344,
+    "nativeVerticalUnitsPerCell": 1.7320508075688772
+  },
+  "files": [
+    {
+      "path": "game/assets/wall_media/production-gaps/wind/h0/0.png",
+      "bytes": 33267,
+      "sha256": "5c0ddc4db795b4b60b20238b0161e1d5bb1344b24b4506f2e16abddfc19632c3"
+    },
+    {
+      "path": "game/assets/wall_media/production-gaps/wind/h1/0.png",
+      "bytes": 30136,
+      "sha256": "4a36776e227614fb75ee1b09ce9e925e451208280b0f08bda97929d69e7f89a8"
+    },
+    {
+      "path": "game/assets/wall_media/production-gaps/wind/h2/0.png",
+      "bytes": 33142,
+      "sha256": "f251f012fc52f771c65b9f554e290fc6f523579c45f7e71e8534ddb1720acda8"
+    },
+    {
+      "path": "game/assets/wall_media/production-gaps/wind/h3/0.png",
+      "bytes": 33730,
+      "sha256": "0f77ed190535df689fb943f96120763193d8ef786bf9f99c4c0ed57713bb223a"
+    },
+    {
+      "path": "game/assets/wall_media/production-gaps/wind/h4/0.png",
+      "bytes": 28892,
+      "sha256": "fda13cda051dc9afaa148c7ebf12955934f0a36321346b78b2a4f85912a43752"
+    },
+    {
+      "path": "game/assets/wall_media/production-gaps/wind/h5/0.png",
+      "bytes": 23553,
+      "sha256": "5c51f7aa24715ce19e4dd48141c0685742028aa6dcf5b15ee1594d08f6f0c5de"
+    },
+    {
+      "path": "game/assets/wall_media/production-gaps/wind/h6/0.png",
+      "bytes": 29200,
+      "sha256": "d2be99fc3284a8c1a748d114297caacaa4624f0f8903717a678b1478500aedcb"
+    },
+    {
+      "path": "game/assets/wall_media/production-gaps/wind/h7/0.png",
+      "bytes": 33546,
+      "sha256": "615dbc76f62bd91a354cea9e17fea6c6247e18035eac3bfacc7be78f1b118bec"
+    },
+    {
+      "path": "game/assets/wall_media/production-gaps/wind/block-texture.png",
+      "bytes": 227011,
+      "sha256": "2631336c1b52d1d66060771a70dd13012a4be55b673d4c4a9f5deb2d438f2d57"
+    },
+    {
+      "path": "game/assets/wall_media/production-gaps/wind/block-components.json",
+      "bytes": 708,
+      "sha256": "5585236fdb02169ec640bf62a589be8b4d35d030e10463867ae1a92d5366778e"
+    }
+  ],
+  "originals": [
+    {
+      "path": "production-gap-delivery-2026-10-04/media.json",
+      "sha256": "46c1ed40e37dd25191a198a355d2340e3130a6c540cb5165e4486aff36cfae49"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h0/adapter.gd",
+      "sha256": "8e1b64896f616a13570bda200044b987aeb432fc60dd4da1e20161c49d56d706"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h0/registration.json",
+      "sha256": "702ae776d5a8648fd1a1a6ceeb932332d403505398f066296c691dee9c79bfbc"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h0/command.json",
+      "sha256": "8312adc93c80c4441b52ee8a2b52281ce9c02a484d3afceb9f03075e51e345fd"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h0/capture.json",
+      "sha256": "9ef1b05c6089d6f105626fa4fbc83dcbb36039345eb4c89df6c4121b4ee80eac"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h1/adapter.gd",
+      "sha256": "f77716f78fd4c17daf1bae8375f90c46591fa54610f8511a2e2e6c7ec192114c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h1/registration.json",
+      "sha256": "4953dbbeec5ca11c83f99793a473ab28a55eaf2ebafce3b09f0726f84fcb7679"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h1/command.json",
+      "sha256": "2623ebb5c84973b238ce17264d424d4275d12d47dd144058359d673335bd7d28"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h1/capture.json",
+      "sha256": "e7f05f6b02830bcac9d22008de62ee6eda326d901402722d9d1de0329cfb8400"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h2/adapter.gd",
+      "sha256": "40c91f483bf3906e6779c7725efd4b7f0be384d66af357c534884ddd50b30e0f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h2/registration.json",
+      "sha256": "4dce6b1af80e3afad2b61432ae418c0c785fdcc669fa615b481ca1815aacafad"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h2/command.json",
+      "sha256": "012624afed3ef191a9233a64b3221f96d9266e811cdf0f05b9f740869ffd7cae"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h2/capture.json",
+      "sha256": "b92ce4188818a6edb7c696608db0dfdba1b398d0148e548f06a6720ff8de4ca4"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h3/adapter.gd",
+      "sha256": "e1545d6b627440350efe12daa47235cc672257c8c0343a1757838a74e265376b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h3/registration.json",
+      "sha256": "d7cae4b33f2251e932c189ef48180f558595b185e00b342fbd63dd7081b8b6bd"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h3/command.json",
+      "sha256": "6cfcd0d2bda45e3932f8159c3b377c6d7939f22fc844eae87f17684d7883fb16"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h3/capture.json",
+      "sha256": "26992746e75a3708aa1f1f1b46c752c01a4f9a9ff332d7dab43ac7cc9a12dbf9"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h4/adapter.gd",
+      "sha256": "0a5ac8b86aebbc1035ec78dfdcf0bb5a2201361599cf8a985cf5f89386626aa6"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h4/registration.json",
+      "sha256": "8271c68e8a2eff120a54b4a1fc78de480576c31580aeea3036a74c5291de1e96"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h4/command.json",
+      "sha256": "0a041a87d0a24f3cbeedd94c6d2ff2d334952991ee9dbfc30dcb804e5bd29046"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h4/capture.json",
+      "sha256": "be9553b278cbcf3f12283e2154d14fe0c3c2c366e9ca0e2c6ed05e2e4f50b968"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h5/adapter.gd",
+      "sha256": "ee5351eeac5e5fce31284761a637c54a4c0be5926d0a3a61e090e321f74dbf1f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h5/registration.json",
+      "sha256": "81939e0e1ec9d9ac2cb7797c38e57b5aa7cd0d999f222e97ec087b598480ce29"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h5/command.json",
+      "sha256": "b50bb65f62b2c3806f91f353b614c64dc2d6e3f5ae7b7d0d7c13adb0d989ce47"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h5/capture.json",
+      "sha256": "7de809009b7cc7aab55e2e06c2bbebbc153c09dc1c0560e8bb05480125d0324b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h6/adapter.gd",
+      "sha256": "93895c0e8958d9d8e7a3876db2ae5dd2026ebd68ec281f0696727103340a2869"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h6/registration.json",
+      "sha256": "8ca031b25cb17da15143d252a770093da251c40a9f425cce261e86f8c0d9d52f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h6/command.json",
+      "sha256": "a46ed182c7409523fdce2143a9d9105e62c7b613a40d44799a3812904f4c4d83"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h6/capture.json",
+      "sha256": "64da5acf3a8671fde45431d97d95c4f5099373a81286498ad850c9261036dc7d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h7/adapter.gd",
+      "sha256": "146968c0d050ed24a3eb23a92e993f16497cf201694b5709e79918e020a2afab"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h7/registration.json",
+      "sha256": "2b9974cd3319857a9cbe8cd97b47b7c7b16f3ca1ed43824326d1485aa169e2b4"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h7/command.json",
+      "sha256": "ed8937d2bedfd9bf8a66a404cee45547335c95b69e265411634d37fc8e64b14e"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/wind/h7/capture.json",
+      "sha256": "bce374003db9ed77bfcf356a018e9773cc8010ee2d197ccb5d4a84ae9ae00f31"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/THORNS_HEIGHT_DECISION.md",
+      "sha256": "6af9f694da6ba89327014bf057790adc1e9caeaab768fb4378f6271037f82edf"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/vector-contract.js",
+      "sha256": "873a9d3df1ac254aaac3a98b0412f633777dd00527a4e5b3d246218e12599778"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/WindBlockComponent.gd",
+      "sha256": "be90d442df5f092743f0d56e54ed27a40c70aa52a5e13ba9e9da73a63fea0114"
+    },
+    {
+      "path": "godot-library/projects/lelu-godot-wind-premium-1/VFX/Scenes/VFX_WindHit_K1.tscn",
+      "sha256": "d78161a0374ebea1f641089fac2fec19333f376ecfb4a518c8c92c4080362ca3"
+    },
+    {
+      "path": "godot-library/projects/lelu-godot-wind-premium-1/VFX/shaders/s_animated_ds_toon.gdshader",
+      "sha256": "d954bebd5b6374b06e079d6d819f04d007cddb9330d2c6d30ce4416365e24f44"
+    },
+    {
+      "path": "godot-library/projects/lelu-godot-wind-premium-1/VFX/textures/T_WindWave_Single_A1.png",
+      "sha256": "2631336c1b52d1d66060771a70dd13012a4be55b673d4c4a9f5deb2d438f2d57"
+    },
+    {
+      "path": "godot-library/projects/lelu-godot-wind-premium-1/VFX/objects/sm_plane_cross1a.obj",
+      "sha256": "895362998370a23db8d3da35e98b380694f840aed6b835fe2bc5e34d858b9d18"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/HANDOFF.md",
+      "sha256": "1d61668b9c4402db717df8d70c11d273929648281467ef4b768f049832f9a9e2"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/PLAN.md",
+      "sha256": "f3807d781a75f8dca6a4440f5739af7bb6c88650f5cf4702bccec87d207d56a7"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/accepted-supplement-receipt.json",
+      "sha256": "914d4bf161c84aeb607967df773237b827890f90e02dac60391a8bd63cd5e07e"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/acceptance-notice.json",
+      "sha256": "83a5326324187183afd7bdaac713d4d0cdd87042a9c266c8bccde316537fcdd0"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native-validation.json",
+      "sha256": "ffbb021ff86ab2f20f876858a32b7c717d11f1c8ce284bc24f0d0f7230ab488c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/delivery-validation.json",
+      "sha256": "1d062a336ae9efcc730bc28ec1929f6523a7a3e1f3cda4e9d23bd62772e837cb"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/browser-validation.json",
+      "sha256": "87d3722316a5344f2974226a1c3002b00f9978770c414d6b51c99382529e6218"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/call-browser-validation.json",
+      "sha256": "fd6d6f6840d477badd2152f59696335960ddb52783103a3c7b932a1ac222475d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/resource-monitor.jsonl",
+      "sha256": "fd69e46747d0c7cc53c4e4dd3fe33472b17b8867a8ddb4054b2252dd28d8e25d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/windows-resource-samples.json",
+      "sha256": "ef9ec6413a3595221e96f1e42d4dc803e21891ee659c6d75213f5426a46b396c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native-component-validation.log",
+      "sha256": "17ab60211accc9a64f1aa9b1c041579bc704e3c971ce13fbe6a972a44a836a6d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/validate-browser.cjs",
+      "sha256": "c6beba9ed25636732ab680149a6c55bff9fa6c09a0336cea03ec1e5ccf27df95"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/validate-call.cjs",
+      "sha256": "5bb8c422df9ccf69631af12bb8a858d45af8b6376003496f52e255b4a2e34c75"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/probe-native.gd",
+      "sha256": "c66111aff58d457ac57f5d72edc1b0d38a0ac068dcd3bf899ac4dde5e5ef55f6"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/WindBlock.gd",
+      "sha256": "841ed4d4e9a0eb25c4b26217c3ddcd3618d9722e64c512ec36e5967aa31ce72a"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/monitor-windows.ps1",
+      "sha256": "4c34ce4690de0bbc6926d8f7ae8d16113f2182e01330847991aff1ca907cbce7"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/build.py",
+      "sha256": "b89497de835caeec6800a7cc35e3e32fea9a08d0add53baac33d51a5de8559e5"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/pack.py",
+      "sha256": "4593da003c9d403cb913a0f43cc84fa02931c7a48c4d69235fc6e921c9408e0b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/validate.py",
+      "sha256": "1abaf1ace4cf3ef6b31582bd04a6349a4ab64ab450254ede88d89defc8816d33"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/finalize.py",
+      "sha256": "13400a58853b955f318d383036eb06af6800fde01334f65256ca23a57a901c54"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/delivery-receipt.json",
+      "sha256": "941f36df34d9be54884579bef87737bb875513cc0941ece62ad860927022fc52"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/NOTES.md",
+      "sha256": "0dea83cc0a52e95dd48b80e1f5396e382de20ab00f5b08a10b7157853e471242"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/review.js",
+      "sha256": "3ad1f3c32c7272214bd2dd3c3f28c3738f956015566ee8f26b539bb84310450e"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/wind/h0/0.png",
+      "sha256": "5c0ddc4db795b4b60b20238b0161e1d5bb1344b24b4506f2e16abddfc19632c3"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/wind/h1/0.png",
+      "sha256": "4a36776e227614fb75ee1b09ce9e925e451208280b0f08bda97929d69e7f89a8"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/wind/h2/0.png",
+      "sha256": "f251f012fc52f771c65b9f554e290fc6f523579c45f7e71e8534ddb1720acda8"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/wind/h3/0.png",
+      "sha256": "0f77ed190535df689fb943f96120763193d8ef786bf9f99c4c0ed57713bb223a"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/wind/h4/0.png",
+      "sha256": "fda13cda051dc9afaa148c7ebf12955934f0a36321346b78b2a4f85912a43752"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/wind/h5/0.png",
+      "sha256": "5c51f7aa24715ce19e4dd48141c0685742028aa6dcf5b15ee1594d08f6f0c5de"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/wind/h6/0.png",
+      "sha256": "d2be99fc3284a8c1a748d114297caacaa4624f0f8903717a678b1478500aedcb"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/wind/h7/0.png",
+      "sha256": "615dbc76f62bd91a354cea9e17fea6c6247e18035eac3bfacc7be78f1b118bec"
+    },
+    {
+      "path": "extracted/wind/wind-mesh.json",
+      "sha256": "527c6a41e597b6c4b74ec6c5cd06a55d27d3df322992ab2f41bcfe8d1a2e3d55"
+    },
+    {
+      "path": "extracted/wind/export-wind-mesh.gd",
+      "sha256": "1a2df2daaf2faac1e2f4299fa5d6e8652ee48f62148271e1fad25ac77bd6cdec"
+    },
+    {
+      "path": "extracted/wind/export-command.json",
+      "sha256": "d4d6d6e54a06a03f552c9fd9114d55991a39ccfb6f633799a4ea792dbc16b346"
+    },
+    {
+      "path": "extracted/wind/export.log",
+      "sha256": "3da6ef11e5ccfff7a9fbf0aa103199516887bfd22ef315581bc6893fdaa1701c"
+    }
+  ],
+  "scope": "Original selected RGBA/crops and source components; no recipes, rescaling, recoloring or render capture.",
+  "componentOperator": {
+    "resource": "/wind/block-components.json",
+    "texture": "/wind/block-texture.png",
+    "phase": "u=clamp((age-i*.022)/.70,0,1)",
+    "position": "[(i-2)*.20*smoothstep(0,.5,u), -.22+u*.9, .10+sin(i)*.04]",
+    "scale": "[.33,.48,.33]*(1+u*.35)",
+    "rotationY": "i*1.1",
+    "opacity": "smoothstep(0,.10,u)*(1-smoothstep(.55,1,u))*.66",
+    "frame": "floor(u*9)",
+    "uv": "UV/[5,2]+[frame%5/5,floor(frame/5)/2]",
+    "alpha": "texture.a*opacity",
+    "albedo": [
+      0.78,
+      0.87,
+      0.91
+    ],
+    "paletteSampling": "Original lower-right RGB in each 2x2 capture pixel block; nearest sRGB palette color, keep original alpha, alpha<3 becomes zero.",
+    "orientation": "Normalize tangent w and incoming v; reverse when v.dot([-w.y,w.x])>1e-8 or when abs(side)<=1e-8 and v.dot(w)>0; heading=atan2(w.y,w.x)+PI if reversed; root.rotation.y=-heading.",
+    "geometry": "Exact Godot imported arrays, including mesh compression coordinates; no raster capture."
+  }
+}

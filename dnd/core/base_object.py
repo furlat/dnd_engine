@@ -1,11 +1,19 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Any, ClassVar, Dict, Final, List, Optional
+from typing import Any, ClassVar, Dict, Final, List, Optional, Protocol
 from uuid import UUID, uuid4
 
 
 # Explicit Pydantic validation context for detached event values and their
 # passive nested records. This does not restore executable engine graphs.
 PASSIVE_EVENT_REPLAY: Final[object] = object()
+
+
+class ContributionOwner(Protocol):
+    """A retained native owner; blocks and conditions share only this gate."""
+    uuid: UUID
+
+    def contributions_active(self) -> bool: ...
+    def allows_contribution_at(self, position: tuple[int, int] | None) -> bool: ...
 
 
 class BaseObject(BaseModel):
@@ -16,7 +24,7 @@ class BaseObject(BaseModel):
     useful for transient metadata objects and dry-run declarations.
     """
 
-    _registry: ClassVar[Dict[UUID, 'BaseObject']] = {}
+    _registry: ClassVar[Dict[UUID, ContributionOwner]] = {}
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     name: Optional[str] = Field(
@@ -52,6 +60,25 @@ class BaseObject(BaseModel):
         description="Whether to register this object in the class registry."
     )
 
+    contribution_owner_uuid: UUID | None = Field(default=None, exclude=True,
+        description="Existing runtime owner whose retained contributions gate this payload.")
+
+    contribution_position: tuple[int, int] | None = Field(default=None, exclude=True)
+
+    def allows_contribution_at(self, position: tuple[int, int] | None) -> bool:
+        return self.contributions_active()
+
+    def contributions_active(self) -> bool:
+        """Read the existing owner graph; a missing bound owner cannot contribute."""
+        if self.contribution_owner_uuid is None:
+            return True
+        owner = BaseObject.get_contribution_owner(self.contribution_owner_uuid)
+        return owner is not None and owner.allows_contribution_at(self.contribution_position)
+
+    @classmethod
+    def get_contribution_owner(cls, uuid: UUID) -> ContributionOwner | None:
+        return BaseObject._registry.get(uuid)
+
     def model_post_init(self, __context: Any) -> None:
         """Register the object by UUID when registry participation is enabled."""
         if __context is not PASSIVE_EVENT_REPLAY and self.use_register:
@@ -78,7 +105,7 @@ class BaseObject(BaseModel):
         return obj
 
     @classmethod
-    def register(cls, obj: 'BaseObject') -> None:
+    def register(cls, obj: ContributionOwner) -> None:
         """Register an object in this class registry.
 
         Args:
@@ -127,7 +154,7 @@ class BaseObject(BaseModel):
         """
         for uuid in uuids:
             obj = cls._registry.get(uuid)
-            if obj is not None:
+            if isinstance(obj, BaseObject):
                 if permanent_delete:
                     cls._registry.pop(uuid)
                     del obj

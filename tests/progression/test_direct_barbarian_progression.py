@@ -717,10 +717,8 @@ def test_mindless_rage_purges_conditions_after_root_completion() -> None:
         "Charmed",
         "Frightened",
     }
-    assert all(
-        event.parent_event == raging_completion.uuid
-        for event in purge_declarations
-    )
+    assert all(event.parent_lineage == result.lineage_uuid for event in purge_declarations)
+    assert all(events.index(raging_completion) < events.index(event) for event in purge_declarations)
 
 
 @pytest.mark.parametrize("vetoed_name", ("Charmed", "Frightened"))

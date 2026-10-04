@@ -1,4 +1,4 @@
-"""Native permanent light anchors, independent retirement and paired replay."""
+"""Native item-owned permanent light, independent retirement and paired replay."""
 
 import random
 from uuid import uuid4
@@ -11,22 +11,22 @@ from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.controller import HumanController
-from dnd.core.base_block import BaseBlock
 from dnd.core.dice import fixed_dice_faces
-from dnd.core.equipment_types import BodyPart
+from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.core.events import EventPhase, EventQueue
 from dnd.core.gridmap import get_map
+from dnd.core.item_types import ItemLocation
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
-from dnd.spells.evocation import ContinualFlame, ContinualFlameObject
+from dnd.spells.evocation import ContinualFlame
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
-def continual_flame_history() -> CapturedHistory:
+def continual_flame_history(*, initially_covered: bool = False) -> CapturedHistory:
     random_state = random.getstate()
     reset_engine_runtime()
     battlefield = "battlefield.open_floor_bright"
@@ -72,22 +72,54 @@ def continual_flame_history() -> CapturedHistory:
                 result = execute_available_action(actor, *choices[0])
             assert result is not None and not result.canceled and result.phase is EventPhase.COMPLETION
 
+        flames = tuple(build_authored_item("weapon.club", caster.uuid) for _ in range(2))
+        for index, (item, position) in enumerate(zip(flames, ((4, 6), (3, 7)))):
+            if initially_covered and index == 0:
+                assert caster.loot_item(item)
+            else:
+                item.place_on_grid(position)
+
         initial_hp = {role: actor.get_normal_hp() for role, actor in actors.items()}
         baseline = EventQueue.event_cursor()
         initial = capture_interval(name="Permanent light initialization", start_cursor=0, end_cursor=baseline,
             observer_uuid=caster.uuid, battlefield_id=battlefield)
         before, _ = reduce_interval(None, initial)
-        perform(caster, "spell.continual_flame", (4, 6))
+        perform(caster, "spell.continual_flame", (3, 6) if initially_covered else (4, 6))
         perform(recipient, "action.move", (5, 7))
         perform(caster, "spell.continual_flame", (3, 7))
         perform(recipient, "action.move", (5, 8))
-        assert len(get_map().get_spatial_conditions()) == 2
+        assert all("Continual Flame" in item.active_conditions for item in flames)
         assert "Concentrating" not in caster.active_conditions
-        for position in ((4, 6), (3, 7)):
-            flame, = (BaseBlock.get(identity) for identity in get_map().get_objects_at(position))
-            assert isinstance(flame, ContinualFlameObject)
-            flame.destroy()
-            assert not get_map().get_objects_at(position)
+        first = flames[0]
+        if not initially_covered:
+            assert caster.loot_item(first)
+        assert caster.equip_item(first.uuid, WeaponSlot.MELEE_MAIN)
+        perform(caster, "action.move", (4, 6))
+        condition = first.active_conditions["Continual Flame"]
+        provider = uuid4()
+        condition.set_suppression(provider, True)
+        get_map().refresh_contribution_lights()
+        first.publish_location_state(ItemLocation.EQUIPMENT, owner_uuid=caster.uuid,
+            equipment_slot=WeaponSlot.MELEE_MAIN)
+        condition.set_suppression(provider, False)
+        get_map().refresh_contribution_lights()
+        first.publish_location_state(ItemLocation.EQUIPMENT, owner_uuid=caster.uuid,
+            equipment_slot=WeaponSlot.MELEE_MAIN)
+        assert caster.unequip_item(WeaponSlot.MELEE_MAIN) is first
+        assert caster.equip_item(first.uuid, WeaponSlot.MELEE_MAIN)
+        assert caster.unequip_item(WeaponSlot.MELEE_MAIN) is first
+        assert caster.drop_item(first.uuid, (4, 7)) is first
+        perform(recipient, "action.move", (5, 7))
+        assert recipient.loot_item(first)
+        assert recipient.equip_item(first.uuid, WeaponSlot.MELEE_MAIN)
+        perform(recipient, "action.move", (6, 7))
+        for item in flames:
+            position = item.get_position()
+            assert position is not None
+            condition = item.active_conditions["Continual Flame"]
+            item.destroy()
+            assert not condition.applied
+            assert item.uuid not in get_map().get_objects_at(position)
         assert not get_map().get_spatial_conditions()
         assert {role: actor.get_normal_hp() for role, actor in actors.items()} == initial_hp
         captured = capture_history(before, (), observers=tuple(

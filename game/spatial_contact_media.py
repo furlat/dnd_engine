@@ -8,12 +8,14 @@ from types import MappingProxyType
 from dnd.core.events import SpatialChangeType
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.types.world import OccupancyLayer
+from dnd.types.spatial_effects import SpatialEffectInteractionOperation
 from dnd.types.senses import PerceivedSpatialEffect
-from game.animation import ActorContact
+from game.animation import ActorContact, media_track_duration
 from game.animation_types import AnimationData, StudioMediaTrack, Facing8, ContactSweep
 from game.combat import BoundCast, actor_contact, actor_is_visible
-from game.player_facts import DamageResultFact, PlayerNode, PlayerState, SpatialFact
+from game.player_facts import DamageResultFact, PlayerNode, PlayerState, SpatialFact, SpatialEffectStateFact
 from game.stationary_media import StationaryMediaCue
+from game.spatial_response import damage_spatial_owner
 
 
 def bind_suppression_media(bound: BoundCast, event_uuid: UUID, at_ms: float,
@@ -64,12 +66,30 @@ def bind_spatial_contacts(state: PlayerState, event: PlayerNode, data: Animation
     senses, fact = state.senses, event.fact
     if senses is None:
         return ()
+    if isinstance(fact,SpatialEffectStateFact):
+        effect = senses.spatial_effects.get(fact.spatial_effect_uuid)
+        binding = data.spatial_media.get(effect.content_ref.content_id) if effect is not None else None
+        if (event.canceled or fact.interaction_operation is not SpatialEffectInteractionOperation.DOUSE
+                or binding is None or not binding.quenchVariants):
+            return ()
+        cues = []
+        for cell in fact.removed_positions:
+            if cell not in senses.visible or cell not in state.tiles:
+                continue
+            variant = binding.quenchVariants[(fact.spatial_effect_uuid.int+cell[0]*73856093+cell[1]*19349663)%len(binding.quenchVariants)]
+            for side,asset_id in ((-1,variant.rearAssetId),(1,variant.frontAssetId)):
+                track = StudioMediaTrack(id=f'quench:{fact.spatial_effect_uuid}:{cell}:{side}',assetId=asset_id,
+                    attachment='area_ground',scale=binding.scale)
+                cues.append(StationaryMediaCue(event.uuid,track,cell,state.tiles[cell].elevation_steps,
+                    'E',at_ms,data,side*.01,native_pixels=True))
+        return tuple(cues)
     sweep = bind_damage_sweep(state, event, data, at_ms, created_effects)
     trigger: Literal["ground_entry", "damage"]
     if isinstance(fact, SpatialFact) and ground_contact_is_authored(state, fact, data):
         identity, position, effect_id, trigger = fact.entity_uuid, fact.position, None, "ground_entry"
     elif (isinstance(fact, DamageResultFact) and fact.stage == "applied"
-          and fact.applied_damage is not None and fact.applied_damage > 0 and fact.effect_id is not None):
+          and fact.applied_damage is not None and fact.applied_damage > 0
+          and (fact.effect_id is not None or fact.source_condition_uuid is not None)):
         identity, position, effect_id, trigger = fact.target_entity_uuid, None, fact.effect_id, "damage"
     else:
         return sweep
@@ -82,17 +102,23 @@ def bind_spatial_contacts(state: PlayerState, event: PlayerNode, data: Animation
     if cell not in senses.visible or cell not in state.tiles:
         return ()
     cues = {}
-    for effect in senses.spatial_effects.values():
-        if cell not in effect.positions or effect_id is not None and effect.content_ref.identity_key != effect_id:
+    exact = damage_spatial_owner(state, fact, created_effects) if isinstance(fact, DamageResultFact) else None
+    effects = (exact,) if exact is not None else senses.spatial_effects.values()
+    for effect in effects:
+        if cell not in effect.positions or exact is None and effect_id is not None and effect.content_ref.identity_key != effect_id:
             continue
         binding = data.spatial_media.get(effect.content_ref.content_id)
-        track = binding.contactMedia.get(trigger) if binding is not None else None
-        if track is None:
-            continue
+        tracks = (binding.contactMediaByEnergy.get(fact.damage_type.value, ()) if binding is not None
+            and isinstance(fact, DamageResultFact) else ())
+        if not tracks and binding is not None and (fallback := binding.contactMedia.get(trigger)) is not None:
+            tracks = (fallback,)
         # Several observed owners of the same content do not duplicate one
-        # actual damage packet. The victim's disclosed contact owns this media.
-        cues[track.id] = StationaryMediaCue(event.uuid, track, position, state.tiles[cell].elevation_steps,
-            contact.facing, at_ms+track.startOffsetMs, data)
+        # actual packet. Authored back/front layers share its contact and clock.
+        for track in tracks:
+            duration = media_track_duration(data,track)
+            cues[track.id] = StationaryMediaCue(event.uuid, track, position, state.tiles[cell].elevation_steps,
+                contact.facing, at_ms+track.startOffsetMs, data,
+                fade_out_ms=(duration-track.fadeOutMs,duration) if track.fadeOutMs else None)
     return (*sweep, *cues.values())
 
 

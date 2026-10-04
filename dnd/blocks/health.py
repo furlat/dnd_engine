@@ -2,7 +2,7 @@ from typing import Optional, List, Literal, Tuple
 from uuid import UUID, uuid4, uuid5
 from pydantic import BaseModel, Field, computed_field, field_validator
 from dnd.core.damage import DamageComponentResolution, DamageResolution
-from dnd.core.life_types import LifeState
+from dnd.core.life_types import LifeState, RemainsDisposition
 from dnd.core.values import ModifiableValue
 from dnd.core.creature_types import DamageType
 from dnd.core.modifiers import (
@@ -281,6 +281,7 @@ class HealthConfig(BaseModel):
         default=LifeState.ALIVE,
         description="Initial authoritative life state.",
     )
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
     hit_dices: List[HitDiceConfig] = Field(default_factory=list, description="Hit-dice blocks used for HP and short rests.")
     max_hit_points_bonus: int = Field(default=0, description="Static bonus added to maximum hit points.")
     max_hit_points_bonus_modifiers: List[Tuple[str, int]] = Field(
@@ -323,6 +324,7 @@ class Health(BaseBlock):
         default=LifeState.ALIVE,
         description="Authoritative lifecycle state for the owning entity.",
     )
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
     hit_dices: List[HitDice] = Field(
         default_factory=lambda: [HitDice.create(source_entity_uuid=uuid4(),name="HitDice")],
         description="Hit-dice blocks used for maximum HP and short rests.",
@@ -785,6 +787,14 @@ class Health(BaseBlock):
 
             self.temporary_hit_points.self_static.add_value_modifier(modifier)
 
+    def preserve_normal_hit_points(self, previous_normal_hp: int, *, maximum_hp: int) -> None:
+        """Reconcile a changed maximum without healing or dealing damage again.
+
+        The owning modifier changes first; its existing state event publishes
+        the result. Temporary hit points and life/death state are unaffected.
+        """
+        self.damage_taken = max(0, maximum_hp - max(0, min(previous_normal_hp, maximum_hp)))
+
     def get_max_hit_dices_points(self, constitution_modifier: int) -> int:
         """
         Calculate the maximum hit points based on hit dice and constitution modifier.
@@ -839,4 +849,4 @@ class Health(BaseBlock):
             return cls(source_entity_uuid=source_entity_uuid, name=name, source_entity_name=source_entity_name,
                        target_entity_uuid=target_entity_uuid, target_entity_name=target_entity_name,
                        hit_dices=hit_dices, max_hit_points_bonus=max_hit_points_bonus, temporary_hit_points=temporary_hit_points, damage_reduction=damage_reduction,
-                       life_state=config.life_state)
+                       life_state=config.life_state, remains_disposition=config.remains_disposition)

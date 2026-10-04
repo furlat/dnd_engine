@@ -368,6 +368,7 @@ def _expected_entity_created_fields(entity: Entity) -> dict[str, object]:
         ),
         "temporary_hit_points_grant": entity.health.temporary_hit_points_grant,
         "damage_taken": entity.health.damage_taken,
+        "remains_disposition": entity.health.remains_disposition,
         "healing_blocked": entity.health.is_healing_blocked(),
         "hit_dice": tuple(
             (

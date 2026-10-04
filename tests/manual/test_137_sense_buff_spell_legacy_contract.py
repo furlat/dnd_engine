@@ -158,8 +158,8 @@ def _fire_bolt_target_index(
     return target_row.index, available
 
 
-def test_darkvision_self_lifecycle_and_concentration_cleanup() -> None:
-    """Old case 1: self grant and linked concentration cleanup are reactive."""
+def test_darkvision_self_lifecycle_and_owned_cleanup() -> None:
+    """Self grant is nonconcentration and owned removal is reactive."""
     reset_spell_regression_arena(14, 7)
     caster = _caster("Darkvision Caster", (2, 3), spell_slots={2: 1})
     Entity.update_all_entities_senses(max_distance=60)
@@ -170,11 +170,11 @@ def test_darkvision_self_lifecycle_and_concentration_cleanup() -> None:
     assert not result.canceled
     assert _has_sense(caster, SensesType.DARKVISION, range_feet=60)
     assert has_condition(caster, "Darkvision")
-    concentration = caster.active_conditions.get("Concentrating")
-    assert isinstance(concentration, Concentrating)
-    assert concentration.spell_name == "Darkvision"
-
+    assert not has_condition(caster, "Concentrating")
+    assert caster.active_conditions["Darkvision"].duration.duration == 4800
     _break_concentration(caster)
+    assert has_condition(caster, "Darkvision")
+    caster.remove_condition("Darkvision")
     assert not _has_sense(caster, SensesType.DARKVISION)
     assert not has_condition(caster, "Darkvision")
     assert not has_condition(caster, "Concentrating")
@@ -198,8 +198,8 @@ def test_darkvision_ally_touch_range_accepts_adjacent_and_rejects_far() -> None:
     assert not has_condition(far_ally, "Darkvision")
 
 
-def test_darkvision_concentration_replacement_removes_linked_ally_effect() -> None:
-    """Old case 3: a new concentration slot replaces the linked sense grant."""
+def test_darkvision_survives_a_new_concentration_spell() -> None:
+    """Darkvision on an ally survives starting another concentration spell."""
     reset_spell_regression_arena(14, 7)
     caster = _caster("Replacing Caster", (2, 3), spell_slots={2: 2})
     ally = _caster("Darkvision Ally", (3, 3), spell_slots={})
@@ -215,8 +215,8 @@ def test_darkvision_concentration_replacement_removes_linked_ally_effect() -> No
 
     assert isinstance(replacement, SpellEvent)
     assert not replacement.canceled
-    assert not has_condition(ally, "Darkvision")
-    assert not _has_sense(ally, SensesType.DARKVISION)
+    assert has_condition(ally, "Darkvision")
+    assert _has_sense(ally, SensesType.DARKVISION)
     concentration = caster.active_conditions.get("Concentrating")
     assert isinstance(concentration, Concentrating)
     assert concentration.spell_name == "Invisibility"
@@ -242,10 +242,10 @@ def test_see_invisibility_reveals_invisible_entity_without_concentration() -> No
     effect = caster.active_conditions.get("See Invisibility")
     assert effect is not None
     assert effect.duration.duration_type is DurationType.ROUNDS
-    assert effect.duration.duration == 10
+    assert effect.duration.duration == 600
 
 
-def test_see_invisibility_ten_round_expiry_removes_sense_and_visibility() -> None:
+def test_see_invisibility_one_hour_expiry_removes_sense_and_visibility() -> None:
     """Old case 5: duration cleanup reactively hides the invisible target."""
     reset_spell_regression_arena(14, 7)
     caster = _caster("Expiring Sight", (2, 3), spell_slots={2: 1})
@@ -256,7 +256,7 @@ def test_see_invisibility_ten_round_expiry_removes_sense_and_visibility() -> Non
     )
     assert not _cast_see_invisibility(caster).canceled
 
-    for _ in range(9):
+    for _ in range(599):
         caster.advance_duration("See Invisibility")
     assert has_condition(caster, "See Invisibility")
     assert enemy.uuid in caster.senses.entities
@@ -288,7 +288,7 @@ def test_true_seeing_ally_grants_120_foot_truesight_without_concentration() -> N
     effect = ally.active_conditions.get("True Seeing")
     assert effect is not None
     assert effect.duration.duration_type is DurationType.ROUNDS
-    assert effect.duration.duration == 10
+    assert effect.duration.duration == 600
 
 
 def test_true_seeing_ten_round_expiry_removes_truesight() -> None:
@@ -299,7 +299,7 @@ def test_true_seeing_ten_round_expiry_removes_truesight() -> None:
     Entity.update_all_entities_senses(max_distance=60)
     assert not _cast_true_seeing(caster, ally).canceled
 
-    for _ in range(10):
+    for _ in range(600):
         ally.advance_duration("True Seeing")
 
     assert not has_condition(ally, "True Seeing")
@@ -372,7 +372,7 @@ def test_darkvision_reactively_reveals_dark_target_and_cleanup_hides_it() -> Non
     )
     assert tile.resolved_light_level is LightLevel.DARKNESS
 
-    _break_concentration(caster)
+    caster.remove_condition("Darkvision")
     assert enemy.uuid not in caster.senses.entities
 
 
@@ -395,7 +395,7 @@ def test_see_invisibility_emits_reactive_add_and_remove_deltas() -> None:
     ]
     assert additions
 
-    for _ in range(10):
+    for _ in range(600):
         caster.advance_duration("See Invisibility")
     removals = [
         event
@@ -420,13 +420,13 @@ def test_true_seeing_reactively_pierces_darkness_and_invisibility() -> None:
     assert not _cast_true_seeing(caster, ally).canceled
     assert enemy.uuid in ally.senses.entities
 
-    for _ in range(10):
+    for _ in range(600):
         ally.advance_duration("True Seeing")
     assert enemy.uuid not in ally.senses.entities
 
 
-def test_darkvision_on_ally_reactively_tracks_caster_concentration() -> None:
-    """Old case 14: the linked ally, not only the caster, recomputes senses."""
+def test_darkvision_on_ally_reactively_tracks_owned_removal() -> None:
+    """The affected ally recomputes senses on removal."""
     _reset_dark_arena()
     caster = _caster("Ally Reactive Caster", (2, 3), spell_slots={2: 1})
     ally = _caster("Ally Reactive Target", (3, 3), spell_slots={})
@@ -437,7 +437,7 @@ def test_darkvision_on_ally_reactively_tracks_caster_concentration() -> None:
     assert not _cast_darkvision(caster, ally).canceled
     assert enemy.uuid in ally.senses.entities
 
-    _break_concentration(caster)
+    ally.remove_condition("Darkvision")
     assert not has_condition(ally, "Darkvision")
     assert enemy.uuid not in ally.senses.entities
 
@@ -474,7 +474,7 @@ def test_darkvision_controls_discovery_and_real_spell_execution_in_darkness() ->
     assert get_hp(enemy) < hp_before
 
     caster.action_economy.reset_all_costs()
-    _break_concentration(caster)
+    caster.remove_condition("Darkvision")
     assert all(
         enemy.uuid not in {target.target_uuid for target in row.valid_targets}
         for row in caster.get_available_actions().entity_actions
@@ -512,7 +512,7 @@ def test_see_invisibility_controls_discovery_and_real_spell_execution() -> None:
     assert isinstance(attack, SpellEvent)
     assert not attack.canceled
 
-    for _ in range(10):
+    for _ in range(600):
         caster.advance_duration("See Invisibility")
     caster.action_economy.reset_all_costs()
     assert all(

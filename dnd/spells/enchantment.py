@@ -17,24 +17,24 @@ from dnd.core.base_actions import (
     TargetType,
 )
 from dnd.core.base_conditions import (
-    BaseCondition,
+    BaseCondition, Duration,
 )
 from dnd.core.condition_types import (
     ConditionAgencyDenial,
     ConditionRemovalTrigger,
-    ConditionTag,
+    ConditionTag, DurationType,
 )
 from dnd.types.character_progression import OriginCapability
 from dnd.core.events import (
     Event, EventPhase, RangeType, Range, EventType, EventHandler, Trigger,
-    D20RollResultEvent,
+    D20RollResultEvent, SavingThrowEvent,
 )
 from dnd.core.creature_types import CreatureType, DamageType
 from dnd.core.modifiers import (
     AdvantageModifier,
     AdvantageStatus,
 )
-from dnd.core.saving_throw_types import SavingThrowEffectTag
+from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag
 from dnd.core.aoe import AoEShape, Sphere
 
 from dnd.entity import Entity
@@ -434,6 +434,7 @@ class HoldMonsterEffect(BaseCondition):
         default_factory=lambda: {ConditionTag.MAGICAL},
         description="Condition tags used by cleanup and spell interactions.",
     )
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
     caster_uuid: Optional[UUID] = Field(default=None, description="Caster that owns the repeat-save DC.")
     spell_dc: int = Field(default=10, description="Wisdom save DC to end the condition.")
 
@@ -451,15 +452,20 @@ class HoldMonsterEffect(BaseCondition):
 
         execution_event = declaration_event
 
-        paralyzed = Paralyzed(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid,
-            tags={ConditionTag.MAGICAL}
-        )
-        sub_event = target.add_condition(paralyzed, parent_event=execution_event)
-        if sub_event and sub_event.phase == EventPhase.COMPLETION:
-            sub_condition_uuids.append(paralyzed.uuid)
+        existing = target.active_conditions.get("Paralyzed")
+        if existing is not None:
+            self.add_shared_subcondition(existing)
+        else:
+            paralyzed = Paralyzed(
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                parent_condition=self.uuid,
+                tags={ConditionTag.MAGICAL},
+            )
+            sub_event = target.add_condition(paralyzed, parent_event=execution_event)
+            if sub_event is None or sub_event.canceled or sub_event.phase != EventPhase.COMPLETION:
+                return [], [], [], [], declaration_event.cancel(status_message="Paralyzed was not applied")
+            self.add_shared_subcondition(paralyzed)
 
         if self.caster_uuid:
             handler = self._create_repeat_save_handler()
@@ -583,29 +589,28 @@ class HoldMonster(SpellAction):
         )
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        """Validate line of sight, range, and undead exclusion."""
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source_entity = Entity.get(self.source_entity_uuid)
-        target_entity = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not source_entity or not target_entity:
-            return declaration_event.cancel(status_message="Source or target entity not found")
-
-        if target_entity.creature_type == CreatureType.UNDEAD:
-            return declaration_event.cancel(
-                status_message=f"Hold Monster has no effect on undead"
-            )
-
-        distance = self.get_target_distance(target_entity.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(
-                status_message=f"Target out of range ({distance}ft > {self.effective_range}ft)"
-            )
-
-        return los_event.phase_to(new_phase=EventPhase.EXECUTION, status_message=f"Validated {self.name}")
+        """Admit the whole selected group before spending or applying any hold."""
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return declaration_event.cancel(status_message="Caster not found")
+        targets: list[Entity] = []
+        for target_uuid in self.get_all_targets():
+            target = Entity.get(target_uuid)
+            if target is None:
+                return declaration_event.cancel(status_message="Target not found")
+            contact = caster.senses.entities.get(target_uuid)
+            if contact is None or not contact.visual:
+                return declaration_event.cancel(status_message="Target is not visible")
+            if target.creature_type == CreatureType.UNDEAD:
+                return declaration_event.cancel(status_message="Hold Monster has no effect on undead")
+            if self.get_target_distance(target.position) > self.effective_range:
+                return declaration_event.cancel(status_message="Target out of range")
+            if any(other.senses.get_feet_distance(target.position) > 30 for other in targets):
+                return declaration_event.cancel(status_message="Targets must be within 30 feet of each other")
+            targets.append(target)
+        if not targets:
+            return declaration_event.cancel(status_message="Choose at least one target")
+        return declaration_event.phase_to(EventPhase.EXECUTION, status_message=f"Validated {self.name}")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Resolve the save and link a failed hold effect to concentration."""
@@ -698,7 +703,7 @@ class PowerWordKill(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        current_hp = target.get_hp()
+        current_hp = target.get_normal_hp()
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,
@@ -1081,15 +1086,20 @@ class PowerWordStunEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        stunned = Stunned(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid,
-            tags={ConditionTag.MAGICAL}
-        )
-        sub_event = target.add_condition(stunned, parent_event=declaration_event)
-        if sub_event and sub_event.phase == EventPhase.COMPLETION:
-            sub_condition_uuids.append(stunned.uuid)
+        existing = target.active_conditions.get("Stunned")
+        if existing is not None:
+            self.add_shared_subcondition(existing)
+        else:
+            stunned = Stunned(
+                source_entity_uuid=self.source_entity_uuid,
+                target_entity_uuid=self.target_entity_uuid,
+                parent_condition=self.uuid,
+                tags={ConditionTag.MAGICAL},
+            )
+            sub_event = target.add_condition(stunned, parent_event=declaration_event)
+            if sub_event is None or sub_event.canceled or sub_event.phase != EventPhase.COMPLETION:
+                return [], [], [], [], declaration_event.cancel(status_message="Stunned was not applied")
+            self.add_shared_subcondition(stunned)
 
         if self.caster_uuid:
             handler = self._create_repeat_save_handler()
@@ -1124,16 +1134,20 @@ class PowerWordStunEffect(BaseCondition):
             if not pw_stun or pw_stun.uuid != effect_uuid:
                 return None
 
-            caster = Entity.get(caster_uuid)
-            if not caster:
-                target.remove_condition("Power Word Stun", parent_event=event)
-                return None
-
-            save_request = caster.create_saving_throw_request(
+            save_request = SavingThrowEvent(
+                source_entity_uuid=caster_uuid,
                 target_entity_uuid=target.uuid,
+                target_entity_name=target.name,
                 ability_name="constitution",
                 dc=dc,
-                parent_event=event.uuid
+                parent_event=event.uuid,
+                condition_context="Stunned",
+                saving_throw_context=SavingThrowContext(
+                    cause_id="spell.power_word_stun",
+                    effect_id="spell.power_word_stun.repeat_save",
+                    condition_id="condition.stunned",
+                    is_magical=True,
+                ),
             )
             _, _, success = target.saving_throw(save_request)
 
@@ -1199,7 +1213,7 @@ class PowerWordStun(SpellAction):
         if not caster or not target:
             return execution_event.cancel(status_message="Caster or target not found")
 
-        current_hp = target.get_hp()
+        current_hp = target.get_normal_hp()
 
         effect_event = execution_event.phase_to(
             new_phase=EventPhase.EFFECT,

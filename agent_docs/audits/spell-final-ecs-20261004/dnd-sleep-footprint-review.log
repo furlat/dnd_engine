@@ -1,0 +1,6 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+Traceback (most recent call last):
+  File "/tmp/dnd-sleep-footprint-review.py", line 20, in <module>
+    assert effect<min(r.source_index for r in native.objective_rows if any(e.lineage_uuid==r.lineage_uuid for e in applications))
+                  ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: min() iterable argument is empty

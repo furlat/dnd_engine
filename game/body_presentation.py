@@ -1,13 +1,16 @@
 """Pure current/past actor poses from already-bound subjective playback inputs."""
 
 from dataclasses import dataclass, replace
+import zlib
+
+from dnd.core.life_types import RemainsDisposition
 from typing import Mapping
 
 from game.animation import cast_actor_contacts, BodySample, sample_idle_body
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, Facing8
 from game.choreography import BoundChoreography, ChoreographySample, MotionTimeline, MotionSample, sample_choreography, sample_motion
-from game.player_facts import PlayerState
+from game.player_facts import PlayerState, LifeFact
 from game.condition_animation import condition_contact, condition_transition_appearances, resolve_condition_appearance
 from game.attack import attack_actor_contacts, BoundAttack
 from game.scene import SceneActor, available_clips, scene_actors
@@ -166,6 +169,35 @@ def sample_body_presentation(before: PlayerState, after: PlayerState | None, dat
             elif identity in visible_poses:
                 visible_poses[identity] = replace(visible_poses[identity],
                                                   coverage=lifecycle_body_progress(cue, age))
+        poses = tuple(visible_poses.values())
+    if group is not None:
+        # Sample this same value pipeline immediately before the native life
+        # anchor. No second body clock or independently inferred death pose.
+        visible_poses = {pose.actor.contact.actor_uuid: pose for pose in poses}
+        for cue in group.lifecycle:
+            fact = cue.event.fact
+            if not isinstance(fact, LifeFact) or fact.remains_disposition is not RemainsDisposition.DISINTEGRATED:
+                continue
+            identity = str(fact.entity_uuid)
+            if group_elapsed < cue.start_ms:
+                continue
+            visible_poses.pop(identity, None)
+            dust = data.death_context.silhouetteDust
+            if dust is None or group_elapsed >= cue.start_ms + dust.duration_ms:
+                continue
+            prior_time = max(0., cue.start_ms - .001)
+            prior_frame = sample_body_presentation(before, after if cue.start_ms > 0 else None, data, prior_time,
+                presentation_ms - (group_elapsed-prior_time), facings,
+                choreography=group if cue.start_ms > 0 else None, positions=positions)
+            prior_pose = next((pose for pose in prior_frame.poses if pose.actor.contact.actor_uuid == identity), None)
+            if prior_pose is None:
+                continue
+            retained_actor = replace(prior_pose.actor, layers=tuple(layer for layer in prior_pose.actor.layers
+                if layer.item_uuid not in fact.preserved_equipped_item_uuids))
+            visible_poses[identity] = replace(prior_pose, actor=retained_actor,
+                appearance_override=prior_pose.appearance_override or prior_pose.actor.condition,
+                dust_elapsed_ms=group_elapsed-cue.start_ms,
+                dust_seed=zlib.crc32(str(cue.event.uuid).encode()))
         poses = tuple(visible_poses.values())
     return BodyPresentation(displayed, actors, poses, complete, shown_hp, resulting_facings,
                             resulting_positions, group, group_sample, group_elapsed, movement_sample)

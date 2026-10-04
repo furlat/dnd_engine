@@ -1,0 +1,12 @@
+invisible passed: absent public choice, stale/direct command rejected before action cost
+non_targetable passed: absent public choice, stale/direct command rejected before action cost
+inactive passed: absent public choice, stale/direct command rejected before action cost
+out_of_range passed: absent public choice, stale/direct command rejected before action cost
+Traceback (most recent call last):
+  File "/tmp/dnd-force-targetability-probe.py", line 45, in <module>
+    for mode in ('invisible','non_targetable','inactive','out_of_range','sight_lost'):check(mode)
+                                                                                      ~~~~~^^^^^^
+  File "/tmp/dnd-force-targetability-probe.py", line 34, in check
+    elif mode=='sight_lost':attacker.active_conditions['SeeInvisibility'].remove()
+                            ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+KeyError: 'SeeInvisibility'

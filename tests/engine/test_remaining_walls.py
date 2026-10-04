@@ -6,7 +6,8 @@ No media, mocked collaborators or private ownership layout is part of acceptance
 
 import pytest
 
-from dnd.actions import Attack, SpellEvent
+from dnd.actions import Attack, AttackEvent, SpellEvent
+from dnd.actions_functional import execute_available_action, get_available_actions, setup_standard_actions
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_tiles import Tile
@@ -148,6 +149,34 @@ def test_solid_panels_block_physical_crossings_with_independent_optics(spell, zo
     zone.deactivate()
     assert grid.can_transition((7, 4), (7, 5), caster.uuid)
     assert not any(get_map().get_object_placement(identity) for identity in zone.sections)
+
+
+def test_visible_force_wall_receives_normal_attack_without_becoming_damageable():
+    caster = scene(5)
+    targeter = create_spell_regression_actor('Attacker', (5, 4), 'monsters', spell_slots={2: 2})
+    setup_standard_actions(targeter)
+    cast(WallOfForce, caster)
+    zone = next(o for o in get_map().get_spatial_conditions() if isinstance(o, WallOfForceZone))
+    sections = tuple(zone.sections)
+    Entity.update_all_entities_senses()
+    assert not any(target.target_uuid in sections for row in get_available_actions(targeter).all_actions
+        if row.behavior_id == 'action.attack' for target in row.valid_targets)
+    seeing = SeeInvisibility(source_entity_uuid=targeter.uuid).apply()
+    assert seeing is not None and not seeing.canceled
+    targeter.on_turn_start()
+    Entity.update_all_entities_senses()
+    choice = next(((row, target) for row in get_available_actions(targeter).all_actions
+        if row.template_name == f'Attack_{WeaponSlot.MELEE_MAIN.value}' for target in row.valid_targets
+        if target.target_uuid in sections), None)
+    assert choice is not None
+    with fixed_dice_faces(19, 4):
+        result = execute_available_action(targeter, *choice)
+    assert isinstance(result, AttackEvent) and not result.canceled
+    assert result.attack_outcome is AttackOutcome.HIT and result.total_damage == 0
+    assert targeter.action_economy.actions.normalized_score == 0
+    assert tuple(zone.sections) == sections
+    assert all(BaseBlock.get(identity).health is None for identity in sections)
+    assert not get_map().can_transition((5, 4), (5, 5), targeter.uuid)
 
 
 def test_ice_section_breaks_locally_and_fridge_air_hurts_only_passage():

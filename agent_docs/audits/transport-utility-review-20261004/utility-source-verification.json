@@ -1,0 +1,12 @@
+{
+  "hand-glow.png": true,
+  "review.js": true,
+  "game/assets/utility_media/antimagic-Attack5-hands.png": {
+    "local": true,
+    "private": true
+  },
+  "game/assets/utility_media/telekinesis-Attack5-hands.png": {
+    "local": true,
+    "private": true
+  }
+}

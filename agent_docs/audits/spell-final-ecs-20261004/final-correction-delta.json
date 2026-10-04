@@ -1,0 +1,18 @@
+{
+  "game/choreography.py": {
+    "before": "a224e505ea3ea80318881496a8436221fe42e7b6796a9fcae7c702852c9325c2",
+    "after": "c85f1b8178a1ce2593129992673a41088bed36b2b69bb1b9eafbde4d5b7772d2"
+  },
+  "game/controls.py": {
+    "before": "e862da869482041363d78c028e38639f5db9ee24f99dceac6befaad1b56add77",
+    "after": "826669d4a99653dce5a5e38f7a7237c4f678027fd356bb521566fe43ca6d75e3"
+  },
+  "tests/game/concealment_scenarios.py": {
+    "before": "548ef38fba746bd6ea6de7466e82b11b2b6f2b268ed513eec7464cd7ca99142c",
+    "after": "31ad6283ac410ee220fcfd4030f2eb94bea7d8b6891d5b7260de631a9abd9cee"
+  },
+  "tests/game/test_packaged_creature_rigs.py": {
+    "before": "d4a60b8a2fbf6c3a386c3e2360db19b28aa6c1b49dad49dada6adc2c96eb5ac1",
+    "after": "96594ed091b23758cd430718a4a1a60da4bd0568bcae9f6b87fe348a9d34b235"
+  }
+}

@@ -80,3 +80,65 @@ def import_registered_bank(source: Path, row: dict, program: str,
         (folder / name).write_text(json.dumps(value, indent=2) + "\n")
     return tuple(identities)
 
+
+
+def validate_billboard_bank(row: dict, *, paired: bool = True) -> None:
+    """Admit complete bank metadata before any artwork is installed."""
+    if (row["fps"] != 32 or type(row["frames"]) is not int or row["frames"] <= 0
+            or type(row["cell"]) is not int or row["cell"] <= 0
+            or (set(row["layers"]) != {"back", "front"} if paired
+                else not set(row["layers"]) or not set(row["layers"]) <= {"back", "front"})):
+        raise ValueError("Billboard requires positive dimensions and complete back/front layers at 32 FPS")
+    cell = row["cell"]
+    if len(row["pivot"]) != 2 or not all(0 <= n <= cell for n in row["pivot"]):
+        raise ValueError("Billboard pivot is outside its canvas")
+    if not row["palette"] or any(not 0 <= int(color, 16) <= 0xffffff for color in row["palette"]):
+        raise ValueError("Billboard palette is invalid")
+    for layer in row["layers"].values():
+        if not layer["pages"] or len(layer["frames"]) != row["frames"]:
+            raise ValueError("Billboard layer is incomplete")
+        for frame in layer["frames"]:
+            if frame is None:
+                continue
+            page, rect, offset = frame["page"], frame["source"], frame["offset"]
+            if type(page) is not int or not 0 <= page < len(layer["pages"]):
+                raise ValueError("Billboard page index is invalid")
+            if (len(rect) != 4 or len(offset) != 2 or any(type(n) is not int for n in (*rect, *offset))
+                    or min(rect[:2]) < 0 or min(rect[2:]) <= 0 or min(offset) < 0
+                    or offset[0] + rect[2] > cell or offset[1] + rect[3] > cell):
+                raise ValueError("Billboard crop is outside its canvas")
+
+
+def register_billboard_bank(row: dict, identity: str, *, media_root: str,
+                            bundle: Path, loop: bool = False, default_scale: float = .5,
+                            paired: bool = True) -> tuple[str, ...]:
+    """Register a source-authored billboard; no claim of four native perspectives.
+
+    Callers validate/preserve selected source bytes before publishing these
+    addresses. Used by finite Power Word contacts and the shared Stunned loop.
+    """
+    validate_billboard_bank(row, paired=paired)
+    bindings_path = bundle / "bindings.json"
+    assets_path = bundle / "projectile-assets.json"
+    bindings = json.loads(bindings_path.read_text()) if bindings_path.exists() else {"resources": {}, "spells": {}}
+    assets = {asset["assetId"]: asset for asset in json.loads(assets_path.read_text())} if assets_path.exists() else {}
+    identities = []
+    for side, layer in row["layers"].items():
+        if side not in ("back", "front") or len(layer["frames"]) != row["frames"]:
+            raise ValueError("Billboard requires explicit, complete back/front layers")
+        asset_id = f"{identity}.{side}"
+        identities.append(asset_id)
+        parts = [[] if frame is None else [{"file": f"{media_root}/{layer['pages'][frame['page']]}",
+                  "rect": frame["source"], "offset": frame["offset"]}] for frame in layer["frames"]]
+        cell = row["cell"]
+        assets[asset_id] = {"assetId": asset_id, "displayName": asset_id, "kind": "projectile",
+            "sheet": f"/{asset_id}.png", "frame": {"width": cell, "height": cell, "rows": 8, "cols": row["frames"]},
+            "fps": 32, "rowOrder": list(DIRECTIONS), "phases": {"impact": {"start": 0, "frames": row["frames"], "fps": 32, "loop": loop}},
+            "anchor": {"x": row["pivot"][0] / cell, "y": row["pivot"][1] / cell}, "defaultScale": default_scale,
+            "palettePreview": {"colors": [int(color, 16) for color in row["palette"]]}}
+        bindings.setdefault("projectileStorage", {})[asset_id] = {"phases": {"impact": {"layers": [
+            {"partsByFacing": {facing: parts for facing in DIRECTIONS}, "blendMode": "normal"}]}}}
+    bundle.mkdir(parents=True, exist_ok=True)
+    bindings_path.write_text(json.dumps(bindings, separators=(",", ":")) + "\n")
+    assets_path.write_text(json.dumps(list(assets.values()), separators=(",", ":")) + "\n")
+    return tuple(identities)

@@ -1,0 +1,39 @@
+{
+  "project": "/mnt/c/Users/tommaso/.codex/tmp/gva/p/39c5316af053",
+  "handoff": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/wall-spells-study/force-disintegrate-v2",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/disintegrate-plasma-components-20261004",
+  "files": [
+    {
+      "path": "game/assets/necrotic_media/plasma/trail.jpg",
+      "bytes": 150276,
+      "sha256": "d398229a9fe6541ac31f3bbdee1bd3461e2360a0740893a84a8f5b94530991de"
+    },
+    {
+      "path": "game/assets/necrotic_media/plasma/noise.png",
+      "bytes": 59427,
+      "sha256": "9fb31deef39536e38753b71e6f0098967d2c9e24f598906abe54d901a524744c"
+    },
+    {
+      "path": "game/assets/necrotic_media/plasma/plasma-particles.json",
+      "bytes": 15826,
+      "sha256": "d159fe25372f486a9b9af294898fc1f6afb693838ff70fbf1cd9a54c8e7cdbbb"
+    },
+    {
+      "path": "game/assets/necrotic_media/plasma/sphere.json",
+      "bytes": 36074,
+      "sha256": "a3b049da8166a0efc83379144569a501e6887ff241d20694e3bc94450dba1f10"
+    }
+  ],
+  "sources": {
+    "trail.jpg": "d398229a9fe6541ac31f3bbdee1bd3461e2360a0740893a84a8f5b94530991de",
+    "noise.png": "9fb31deef39536e38753b71e6f0098967d2c9e24f598906abe54d901a524744c",
+    "plasma-particles.json": "d159fe25372f486a9b9af294898fc1f6afb693838ff70fbf1cd9a54c8e7cdbbb",
+    "sphere.json": "a3b049da8166a0efc83379144569a501e6887ff241d20694e3bc94450dba1f10",
+    "ExportPlasmaParticles.gd": "ad1975c4f52e753a4e7991b16efac32c28fcdb271035def41e3dbf0c1a1b0438",
+    "command.json": "0420c0fd49a247566648df26dea808b8cb1e487cebc55e2fe31b9c086b5c9596",
+    "capture.log": "0808b57a9b440840dd26518419c7ec03e2523a5c845cdef3600174551c786144",
+    "ForceCapture.gd": "9c05c4b078db495d049a2b932a0ec88231bb965ef8c515ec96a48cbd59f93c3d",
+    "DisintegrateTrail.gdshader": "1cdf233739ff2e90b491d6469a21bdf2bdc0b896405172d7bfacaaf04b8fae0c",
+    "HANDOFF.md": "f0f5f255eed2a33de48db32e0046734ebe2becb60bb5f6ebdfa3c480a92b7323"
+  }
+}

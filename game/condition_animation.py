@@ -16,13 +16,14 @@ from dnd.core.events import EventType
 from dnd.core.life_types import LifeState
 from game.animation import (ActorContact, BodySample, BodyTransition, NumberSample, body_clip,
                             compile_body_transition, sample_body_transition, body_context, resolve_body_context)
-from game.animation_types import AnimationData, FloatingFeedbackStyle, StudioCondition, ContentBodyQualifier
+from game.animation_types import BodyMaterialSample, AnimationData, FloatingFeedbackStyle, StudioCondition, ContentBodyQualifier
 from game.condition_types import (Activity, ConditionBodyColor, ConditionLabel, ConditionRecipe, ConditionTransition,
                                   ConditionBodyDistortion, ConditionLiveCopies, ConditionBodyRamp, ConditionTransitionEffect,
-                                  ConditionFrozenPose, ConditionBodyOutline, ConditionAppearanceLayer)
+                                  ConditionFrozenPose, ConditionBodyOutline, ConditionAppearanceLayer,
+                                  ConditionEquipmentModifier, ConditionAbsenceEcho)
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer, supported_layer
 from game.actor_facts import ConditionFact
-from game.player_facts import ConditionChangeFact, PlayerNode
+from game.player_facts import ConditionChangeFact, DamageFact, HealFact, PlayerActor, PlayerNode
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +44,19 @@ class ConditionRigLayer:
 
 
 @dataclass(frozen=True, slots=True)
+class ConditionItemModifier:
+    item_uuid: UUID
+    modifier: ConditionEquipmentModifier
+
+
+@dataclass(frozen=True, slots=True)
+class AbsenceBodySample:
+    recipe: ConditionAbsenceEcho
+    progress: float
+    opacity: float = 1.
+
+
+@dataclass(frozen=True, slots=True)
 class ConditionAppearance:
     alpha: float = 1.0
     body_color: ConditionBodyColor | None = None
@@ -59,13 +73,19 @@ class ConditionAppearance:
     time_ms: float = 0.
     body_ramp: ConditionBodyRamp | None = None
     ramp_strength: float = 1.
+    ramp_age_ms: float = 0.
     frozen_pose: ConditionFrozenPose | None = None
     body_outline: ConditionBodyOutline | None = None
     outline_owner_uuid: UUID | None = None
     outline_age_ms: float | None = None
     body_pose_ref: ContentRef | None = None
     frozen_pose_ref: ContentRef | None = None
+    frozen_body: BodySample | None = None
+    frozen_owner_uuid: UUID | None = None
     rig_layers: tuple[ConditionRigLayer, ...] = ()
+    item_modifiers: tuple[ConditionItemModifier, ...] = ()
+    finite_materials: tuple[BodyMaterialSample, ...] = ()
+    absence: AbsenceBodySample | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,9 +96,10 @@ class ConditionResponseCue:
     owner_uuid: UUID
     actor_uuid: UUID
     behavior_id: str
-    trigger: Literal["consumed", "healed"]
+    trigger: Literal["consumed", "healed", "damage_requested", "damage_applied", "damage_received"]
     start_ms: float
     effects: tuple[ConditionTransitionEffect, ...]
+    recipient_uuid: UUID | None = None
 
     @property
     def end_ms(self) -> float:
@@ -86,14 +107,59 @@ class ConditionResponseCue:
 
 
 def bind_condition_response(event_uuid: UUID, actor_uuid: UUID, member: ConditionFact,
-                            trigger: Literal["consumed", "healed"], start_ms: float,
-                            recipes: Mapping[str, ConditionRecipe]) -> ConditionResponseCue | None:
+                            trigger: Literal["consumed", "healed", "damage_requested", "damage_applied", "damage_received"], start_ms: float,
+                            recipes: Mapping[str, ConditionRecipe], *,
+                            recipient_uuid: UUID | None = None) -> ConditionResponseCue | None:
     recipe = recipes.get(member.behavior_id or "")
     if recipe is None:
         return None
-    effects = tuple(effect for response in recipe.responses if response.trigger == trigger for effect in response.effects)
+    effects = tuple(effect for response in recipe.responses if response.trigger == trigger for effect in response.effects
+        if (effect.participant == "owner" or recipient_uuid is not None)
+        and (effect.whenEnergyType is None or member.state is not None and member.state.energy_type is effect.whenEnergyType))
     return (ConditionResponseCue(event_uuid, member.condition_uuid, actor_uuid,
-        recipe.definitionRef.content_id, trigger, start_ms, effects) if effects else None)
+        recipe.definitionRef.content_id, trigger, start_ms, effects, recipient_uuid) if effects else None)
+
+
+def bind_event_condition_response(event: PlayerNode,
+        actors: Mapping[UUID, PlayerActor], start_ms: float,
+        recipes: Mapping[str, ConditionRecipe]) -> ConditionResponseCue | None:
+    """Bind only recorded consumption, healing or source-owned damage outcomes."""
+    fact = event.fact
+    if (isinstance(fact, ConditionChangeFact) and fact.consumed
+            and fact.event_type is EventType.CONDITION_REMOVAL
+            and fact.condition.category is not ConditionCategory.INTERNAL):
+        return bind_condition_response(event.uuid, fact.target_entity_uuid,
+            fact.condition, "consumed", start_ms, recipes)
+    if isinstance(fact, HealFact):
+        if fact.was_blocked or fact.actual_healing <= 0 or fact.source_condition_uuid is None:
+            return None
+        owner = actors.get(fact.target_entity_uuid)
+        member = next((row for row in owner.conditions
+            if row.condition_uuid == fact.source_condition_uuid), None) if owner else None
+        return bind_condition_response(event.uuid, fact.target_entity_uuid,
+            member, "healed", start_ms, recipes) if member is not None else None
+    if isinstance(fact, DamageFact) and fact.source_condition_uuid is not None:
+        source = actors.get(fact.source_entity_uuid) if fact.source_entity_uuid is not None else None
+        member = next((row for row in source.conditions
+            if row.condition_uuid == fact.source_condition_uuid), None) if source else None
+        if member is not None and source is not None:
+            return bind_condition_response(event.uuid, source.uuid, member,
+                "damage_requested" if fact.stage == "taken" else "damage_applied",
+                start_ms, recipes, recipient_uuid=fact.target_entity_uuid)
+    return None
+
+
+def bind_received_damage_responses(event: PlayerNode, actors: Mapping[UUID,PlayerActor], start_ms: float,
+        recipes: Mapping[str,ConditionRecipe]) -> tuple[ConditionResponseCue,...]:
+    fact = event.fact
+    if event.canceled or not isinstance(fact,DamageFact) or fact.stage != 'applied':
+        return ()
+    actor = actors.get(fact.target_entity_uuid)
+    if actor is None:
+        return ()
+    return tuple(cue for member in actor.conditions if member.state is not None
+        and not member.state.suppression_provider_uuids and member.state.energy_type is fact.damage_type
+        if (cue := bind_condition_response(event.uuid,actor.uuid,member,'damage_received',start_ms,recipes)) is not None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +197,7 @@ def persistent_limitations(recipe: ConditionRecipe,
           if not supported_layer(layer, media)),
         *(f"Condition equipment modifier unsupported: {identity}/{modifier.id}"
           for modifier in persistent.equipmentModifiers
-          if recipe.classification.runtimeRole != "equipment_or_weapon_state"),
+          if recipe.classification.runtimeRole != "equipment_or_weapon_state" and not modifier.affectedItemOnly),
         *(f"Condition rig layer colors unsupported: {identity}/{layer.id}" for layer in persistent.appearanceLayers
           if layer.tint2 is not None or layer.tint3 is not None),
         *(f"Condition response strip unsupported: {identity}/{effect.id}"
@@ -158,7 +224,8 @@ def resolve_condition_appearance(
     facts = {member.condition_uuid: member for member in members}
     unsupported: list[str] = []
     for member in members:
-        if member.category is ConditionCategory.INTERNAL:
+        if (member.category is ConditionCategory.INTERNAL
+                or member.state is not None and member.state.suppression_provider_uuids):
             continue
         recipe = recipes.get(member.behavior_id) if member.behavior_id is not None else None
         if recipe is None:
@@ -182,9 +249,10 @@ def resolve_condition_appearance(
     copies, distortion, ramp = None, None, None
     frozen, outline = None, None
     pose_ref = frozen_ref = None
-    outline_owner = None
+    outline_owner = frozen_owner = None
     layers: list[ResolvedConditionLayer] = []
     rig_layers: dict[tuple[str, str], ConditionRigLayer] = {}
+    item_modifiers: list[ConditionItemModifier] = []
     for recipe in ordered:
         composition = recipe.composition
         if (composition.exclusiveGroup and composition.exclusiveGroup in claimed
@@ -202,6 +270,9 @@ def resolve_condition_appearance(
                 rig_layers.setdefault((layer.slot, layer.category), ConditionRigLayer(layer, owner))
         member = facts.get(owner)
         if member is not None and member.state is not None:
+            if member.state.affected_item_uuid is not None:
+                item_modifiers.extend(ConditionItemModifier(member.state.affected_item_uuid, modifier)
+                    for modifier in persistent.equipmentModifiers if modifier.affectedItemOnly)
             if persistent.bodyScale is not None:
                 if member.state.size_change == "enlarge":
                     scale *= persistent.bodyScale.enlarge
@@ -218,6 +289,7 @@ def resolve_condition_appearance(
         if frozen is None and persistent.frozenPose is not None:
             frozen = persistent.frozenPose
             frozen_ref = recipe.definitionRef
+            frozen_owner = owner
         if outline is None and persistent.bodyOutline is not None:
             outline = persistent.bodyOutline
             outline_owner = owner
@@ -234,14 +306,16 @@ def resolve_condition_appearance(
                       and (layer.whenEnergyType is None or member is not None and member.state is not None
                            and layer.whenEnergyType is member.state.energy_type)
                       and (layer.whenAbility is None or member is not None and member.state is not None
-                           and layer.whenAbility == member.state.enhanced_ability))
+                           and layer.whenAbility == member.state.enhanced_ability)
+                      and (layer.whenMetamagicMode is None or member is not None and member.state is not None
+                           and layer.whenMetamagicMode == member.state.metamagic_mode))
         unsupported.extend(persistent_limitations(recipe, media))
     selected_layers = tuple(sorted(layers, key=lambda value: (-value.layer.priority, value.layer.id)))
     return ConditionAppearance(alpha, body, tuple(selected), tuple(dict.fromkeys(unsupported)), pose, label,
                                selected_layers, scale=scale, live_copies=copies, distortion=distortion, body_ramp=ramp,
                                frozen_pose=frozen, body_outline=outline, outline_owner_uuid=outline_owner,
-                               body_pose_ref=pose_ref, frozen_pose_ref=frozen_ref,
-                               rig_layers=tuple(rig_layers.values()))
+                               body_pose_ref=pose_ref, frozen_pose_ref=frozen_ref, frozen_owner_uuid=frozen_owner,
+                               rig_layers=tuple(rig_layers.values()), item_modifiers=tuple(item_modifiers))
 
 
 def condition_contact(contact: ActorContact, appearance: ConditionAppearance | None) -> ActorContact:
@@ -257,6 +331,8 @@ def condition_body_pose(data: AnimationData, body: BodySample, contact: ActorCon
     """A retained condition replaces idle only; actions and death keep ownership."""
     if appearance is not None and appearance.frozen_pose is not None and contact.life_state is not LifeState.DEAD:
         pose = appearance.frozen_pose
+        if pose.captureCurrent and appearance.frozen_body is not None:
+            return appearance.frozen_body
         frame = pose.framesByRig.get(contact.rig_id, pose.frame)
         selected = (resolve_body_context(data, contact, "condition_hold",
             ContentBodyQualifier(contentRef=appearance.frozen_pose_ref)) if appearance.frozen_pose_ref is not None else None)
@@ -366,6 +442,8 @@ def compile_condition(
     appearance_duration = (transition.durationMs if
         {(row.layer.slot, row.layer.category) for row in old_appearance.rig_layers}
         != {(row.layer.slot, row.layer.category) for row in new_appearance.rig_layers} else 0.)
+    if changed and recipe.persistent.absenceEcho is not None:
+        appearance_duration = max(appearance_duration, transition.durationMs)
     unsupported = tuple(dict.fromkeys((
         *old_appearance.unsupported, *new_appearance.unsupported,
         *transition_limitations(recipe.definitionRef.content_id, transition, media),

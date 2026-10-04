@@ -1,0 +1,78 @@
+{
+  "source": "/home/tommaso/Dev/neurodragon_art/sources/solar-lifecycle-v1-20261004",
+  "production_rgba_recaptured": false,
+  "accepted_rgba_byte_exact": true,
+  "adapter": {
+    "program": "burst",
+    "frames": 128,
+    "adapter_sha256": "14565ddc9bd0b71d415dfcb90a30e3f1cb9246130262aeec84a2b0d9ed34c588"
+  },
+  "palette_sha256": null,
+  "bounds": [
+    -64,
+    64
+  ],
+  "verticalScale": 1.224744871391589,
+  "coordinateBasis": "camera_local_xyz",
+  "ownership": "source-rendered surface coordinates with original MSAA coverage; no particle identity or hidden depth",
+  "banks": [
+    {
+      "bank": "burst-back",
+      "file": "burst-back-surface.zip",
+      "sha256": "9ac857fccfe9b60f6ec622992f54e0a38e4822677284952186937245aa2de271",
+      "pivot": [
+        256,
+        237.86948345538207
+      ],
+      "frames": 64,
+      "worldPixels": 17.655172413793103,
+      "source_sha256": "8bf97776569076099b4d9f12cdcc8fcd25153e1cc142822b64f821062f06bf42",
+      "validation": {
+        "frames": 64,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.2805033266431549
+      }
+    },
+    {
+      "bank": "burst-front",
+      "file": "burst-front-surface.zip",
+      "sha256": "cb880b974e11d4c85b105d2b0e748ba5e70fdfaae04b1cc15a80798e97de856a",
+      "pivot": [
+        256,
+        237.86948345538207
+      ],
+      "frames": 64,
+      "worldPixels": 17.655172413793103,
+      "source_sha256": "b2e5bf60a893558c5c2c4eb9379e33887bb7a444497ced81468fc6b5a7be840d",
+      "validation": {
+        "frames": 64,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.3986051876373092
+      }
+    }
+  ],
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/solar-paired-surfaces-20261004",
+  "identities": [
+    "solar.sunburst.back.surface",
+    "solar.sunburst.front.surface"
+  ],
+  "files": [
+    {
+      "path": "game/assets/weather_solar_media/surfaces/burst-back-surface.zip",
+      "bytes": 5353076,
+      "sha256": "9ac857fccfe9b60f6ec622992f54e0a38e4822677284952186937245aa2de271"
+    },
+    {
+      "path": "game/assets/weather_solar_media/surfaces/burst-front-surface.zip",
+      "bytes": 12081044,
+      "sha256": "cb880b974e11d4c85b105d2b0e748ba5e70fdfaae04b1cc15a80798e97de856a"
+    }
+  ],
+  "capture_adapters": {
+    "burst-opaque/OwnershipBurst.gdshader": "b4f2520e51e8c04419e76956fbdbe985c6cf2c3ac487d294c4c9af2c18f83daf",
+    "burst-opaque/OwnershipSolar.gd": "14565ddc9bd0b71d415dfcb90a30e3f1cb9246130262aeec84a2b0d9ed34c588"
+  },
+  "source_project": "/mnt/c/Users/tommaso/.codex/tmp/gva/p/c74d652f1d7e",
+  "source_project_sha256": "bb698fba4fefb5dbfcb2a3ef9f1795a91d80208fb37126b0e8a4bddb2c4ff202",
+  "source_project_files": 295
+}

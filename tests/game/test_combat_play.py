@@ -108,6 +108,6 @@ def test_canonical_goblin_uses_fixed_rig_and_actual_gear_health_on_the_map(
         )
         assert second.source.applications[0].target.hp == 3 and second.source.applications[0].target.life_state is LifeState.ALIVE
         assert summary.frames[-1].sample.vitals[0].life_state is LifeState.DEAD
-        assert summary.frames[-1].sample.bodies[1].clip == "Die"
+        assert summary.frames[-1].sample.bodies[1].clip == "Death"
         assert summary.frames[-1].sample.bodies[1].frame == 14
         assert summary.latest.senses is not None and actor.uuid not in summary.latest.senses.entities

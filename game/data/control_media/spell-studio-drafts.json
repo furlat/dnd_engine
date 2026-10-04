@@ -31,11 +31,11 @@
           "category": "Magic3",
           "sourceSheet": "/healing-spells/aid/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 11619920,
             "secondary": 15579052,
             "tertiary": 2696486,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -83,11 +83,11 @@
           "category": "Magic3",
           "sourceSheet": "/pending-spells/haste/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 14059302,
             "secondary": 16766076,
             "tertiary": 3162959,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -135,11 +135,11 @@
           "category": "Magic3",
           "sourceSheet": "/pending-spells/haste/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 14059302,
             "secondary": 16766076,
             "tertiary": 3162959,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -187,11 +187,11 @@
           "category": "Magic3",
           "sourceSheet": "/pending-spells/haste/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 7693414,
             "secondary": 15721936,
             "tertiary": 2368294,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -261,11 +261,11 @@
           "category": "Magic3",
           "sourceSheet": "/pending-spells/haste/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 15305898,
             "secondary": 16772566,
             "tertiary": 13207609,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -324,11 +324,11 @@
           "category": "Magic3",
           "sourceSheet": "/pending-spells/haste/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 15305898,
             "secondary": 16772566,
             "tertiary": 13207609,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -376,11 +376,11 @@
           "category": "Magic3",
           "sourceSheet": "/pending-spells/haste/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 15305898,
             "secondary": 16772566,
             "tertiary": 13207609,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -428,11 +428,11 @@
           "category": "Magic3",
           "sourceSheet": "/pending-spells/haste/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 15305898,
             "secondary": 16772566,
             "tertiary": 13207609,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -480,11 +480,11 @@
           "category": "Magic3",
           "sourceSheet": "/pending-spells/haste/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 15305898,
             "secondary": 16772566,
             "tertiary": 13207609,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {

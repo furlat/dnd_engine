@@ -1,0 +1,127 @@
+spell,policy,source,resolved_or_baked_palette,disposition
+spell.acid_splash,override,/spell-palettes/acid_splash-weaponGlow.png,#051c07 #0e2218 #06262a #09330a #163d23 #0a4645 #0d4e0c #225c30 #146f0f #166f5d #327f3e #1f9414 #3aa378 #49a54f #2fbc1b #69cc63 #4be026 #7efb35 #98f082 #b4ff4b #e2ff76 #f7ffb5,preserve explicitly authored source colors
+spell.aid,override,/healing-spells/aid/cast.png,,preserve explicitly authored source colors
+spell.antimagic_field,override,/utility/antimagic/Attack5-hands.png,,preserve explicitly authored source colors
+spell.bane,override,/pending-spells/bane/cast.png,,preserve explicitly authored source colors
+spell.banishment,auto,/spell-palettes/ray_of_frost-weaponGlow.png,#265e8e #73e3f6 #59a9c9,automatic exact palette replacement
+spell.barkskin,auto,/pending-spells/haste/cast.png,#ffffff #ffffff #ffffff,automatic exact palette replacement
+spell.beacon_of_hope,auto,/healing-spells/aid/cast.png,#453052 #d5ae62 #f4e5b8,automatic exact palette replacement
+spell.bestow_curse,auto,/spell-palettes/ray_of_frost-weaponGlow.png,#63212c #b92e38 #fa6755,automatic exact palette replacement
+spell.bless,override,/pending-spells/bless/cast.png,,preserve explicitly authored source colors
+spell.blight,auto,/spell-palettes/ray_of_frost-weaponGlow.png,#461387 #d3b7fb #989daf,automatic exact palette replacement
+spell.blindness_deafness,override,/control-spells/blinded/cast.png,,preserve explicitly authored source colors
+spell.blur,override,/persistent-spells/body-cast.png,#303047 #4b4b70 #73769f #9798c0 #b8b6e5 #e1daf1,preserve explicitly authored source colors
+spell.burning_hands,override,/area-media/burning_hands-weaponGlow.png,,preserve explicitly authored source colors
+spell.call_lightning,override,/electric/lightning-hands.png,,preserve explicitly authored source colors
+spell.chain_lightning,override,/electric/lightning-hands.png,,preserve explicitly authored source colors
+spell.charm_person,override,/control-spells/charmed/cast.png,,preserve explicitly authored source colors
+spell.chill_touch,override,/spell-palettes/chill_touch-weaponGlow.png,#000000 #000100 #040203 #010d00 #052002 #082c03 #0e3d04 #0f5105 #185408 #176c08 #1d7309 #24780f #22910a #2e9a17 #30b311 #4be327 #87e877 #88ff5d #aaf79b #b7ff8d #ddffa8 #f9ffdb,preserve explicitly authored source colors
+spell.circle_of_death,auto,/spell-palettes/ray_of_frost-weaponGlow.png,#461387 #d3b7fb #989daf,automatic exact palette replacement
+spell.cloudkill,override,/persistent-spells/cloudkill/cast.png,#526332 #526332 #82912a #82912a #82912a #82912a #82912a #a9b847 #a9b847 #a9b847 #a9b847 #cad35a,preserve explicitly authored source colors
+spell.color_spray,override,/control-spells/color_spray/cast.png,,preserve explicitly authored source colors
+spell.command,override,/control-spells/command/cast.png,,preserve explicitly authored source colors
+spell.cone_of_cold,auto,/spell-palettes/ray_of_frost-weaponGlow.png,#2d536e #609eb8 #c0dce2,automatic exact palette replacement
+spell.conjure_animals,auto,/pending-spells/haste/cast.png,#ffdd88 #ffeeaa #ffdd44,automatic exact palette replacement
+spell.conjure_fey,auto,/pending-spells/haste/cast.png,#ffdd88 #ffeeaa #ffdd44,automatic exact palette replacement
+spell.conjure_fiend,auto,/pending-spells/haste/cast.png,#ffdd88 #ffeeaa #ffdd44,automatic exact palette replacement
+spell.continual_flame,auto,/healing-spells/aid/cast.png,#644761 #d7b878 #fff0c8,automatic exact palette replacement
+spell.cure_wounds,override,/support-spells/cure_wounds/cast.png,,preserve explicitly authored source colors
+spell.darkness,override,/persistent-spells/darkness/cast.png,#10151d #10151d #202832 #202832 #202832 #202832 #202832 #303b47 #303b47 #303b47 #303b47 #424d58,preserve explicitly authored source colors
+spell.darkvision,override,/sensory-spells/darkvision/cast.png,,preserve explicitly authored source colors
+spell.daylight,auto,/healing-spells/aid/cast.png,#574451 #e4c585 #f8ebc5,automatic exact palette replacement
+spell.death_ward,override,/support-conditions/death_ward/cast.png,,preserve explicitly authored source colors
+spell.dimension_door,auto,/spell-palettes/ray_of_frost-weaponGlow.png,#265e8e #73e3f6 #59a9c9,automatic exact palette replacement
+spell.disintegrate,auto,/spell-palettes/ray_of_frost-weaponGlow.png,#20482b #cefbd2 #73de90,automatic exact palette replacement
+spell.divine_word,auto,/healing-spells/aid/cast.png,#4d3437 #e2b766 #f8e8b7,automatic exact palette replacement
+spell.eldritch_blast,override,/spell-palettes/eldritch_blast-weaponGlow.png,#0a181f #0c1e44 #1c232c #112a34 #0f377c #18414c #424e5b #1f5b69 #165bb8 #287786 #2d88e0 #708291 #3895a0 #46a3e6 #4cb3bc #54bede #60bef6 #65cdd3 #68cdf0 #77d0fc #7ed8fa #96e0ff,preserve explicitly authored source colors
+spell.enhance_ability,auto,/pending-spells/haste/cast.png,#223e51 #78c4c7 #d6ece2,automatic exact palette replacement
+spell.enlarge_reduce,override,/persistent-spells/body-cast.png,#303047 #4b4b70 #73769f #9798c0 #b8b6e5 #e1daf1,preserve explicitly authored source colors
+spell.expeditious_retreat,override,/pending-spells/expeditious_retreat/cast.png,#283d49 #466373 #6e96a4 #99c0c7 #c1dadd #e2eeeb,preserve explicitly authored source colors
+spell.eyebite,auto,/spell-palettes/ray_of_frost-weaponGlow.png,#241c1d #d7a78a #854347,automatic exact palette replacement
+spell.false_life,override,/pending-spells/false_life/cast.png,,preserve explicitly authored source colors
+spell.fear,auto,/pending-spells/haste/cast.png,#242326 #756466 #efe5d0,automatic exact palette replacement
+spell.finger_of_death,auto,/spell-palettes/ray_of_frost-weaponGlow.png,#26221d #d8cbaa #847155,automatic exact palette replacement
+spell.fire_bolt,override,/spell-palettes/fire_bolt-weaponGlow.png,#370902 #2f0f06 #580f02 #461714 #591f0a #821804 #773026 #b22707 #843410 #e03e0a #b25218 #b5563e #fa5c10 #db7924 #ff8018 #ef986b #ffa826 #faab3f #ffcf4c #ffee89 #ffffe0,preserve explicitly authored source colors
+spell.fire_shield,auto,/pending-spells/haste/cast.png,#ffffff #ffffff #ffffff,automatic exact palette replacement
+spell.fireball,override,/spell-palettes/fireball-weaponGlow.png,#370902 #2f0f06 #580f02 #461714 #591f0a #821804 #773026 #b22707 #843410 #a54426 #e03e0a #b25218 #fa5c10 #d36930 #db7924 #ff8018 #f59628 #ffa826 #ffb42a #ffc23a #ffe070,preserve explicitly authored source colors
+spell.flame_strike,auto,/healing-spells/aid/cast.png,#38232a #e87829 #f6df95,automatic exact palette replacement
+spell.fly,auto,/pending-spells/haste/cast.png,#367b9e #c8f4ff #6bd7ed,automatic exact palette replacement
+spell.fog_cloud,override,/persistent-spells/fog_cloud/cast.png,#738994 #738994 #738994 #738994 #738994 #95a9b3 #95a9b3 #95a9b3 #95a9b3 #95a9b3 #95a9b3 #c0cbd0,preserve explicitly authored source colors
+spell.freedom_of_movement,override,/support-conditions/freedom_of_movement/cast.png,,preserve explicitly authored source colors
+spell.globe_of_invulnerability,auto,Magic3,#6c451a #ffe49c #d29b38,automatic exact palette replacement
+spell.grease,override,/persistent-spells/grease/cast.png,,preserve explicitly authored source colors
+spell.greater_invisibility,auto,/pending-spells/haste/cast.png,#ccddff #aabbdd #8889cc,automatic exact palette replacement
+spell.greater_restoration,override,/healing-spells/greater_restoration/cast.png,,preserve explicitly authored source colors
+spell.guardian_of_faith,override,/weather-solar/Attack5-hand-glow.png,,preserve explicitly authored source colors
+spell.guidance,override,/support-spells/guidance/cast.png,,preserve explicitly authored source colors
+spell.guiding_bolt,override,/spell-palettes/guiding_bolt-weaponGlow.png,#160d02 #2e1c03 #4d3104 #704a06 #966809 #bb8a11 #d9aa22 #edc64a #f5da73 #fae69a,preserve explicitly authored source colors
+spell.gust_of_wind,override,/area-media/gust_of_wind-weaponGlow.png,,preserve explicitly authored source colors
+spell.harm,auto,/spell-palettes/ray_of_frost-weaponGlow.png,#461387 #d3b7fb #989daf,automatic exact palette replacement
+spell.haste,override,/pending-spells/haste/cast.png,#313b56 #526681 #7899b6 #9fc2d1 #c8dedf #e5eddf,preserve explicitly authored source colors
+spell.heal,override,/healing-spells/heal/cast.png,,preserve explicitly authored source colors
+spell.healing_word,override,/support-spells/healing_word/cast.png,,preserve explicitly authored source colors
+spell.hellish_rebuke,override,/pending-spells/hellish_rebuke/cast.png,#392526 #733b30 #ac6040 #dd824a #eca577 #ffe1ae,preserve explicitly authored source colors
+spell.heroes_feast,override,/weather-solar/Attack5-hand-glow.png,,preserve explicitly authored source colors
+spell.hold_monster,auto,/pending-spells/haste/cast.png,#30434f #d68726 #ffd47c,automatic exact palette replacement
+spell.hold_person,auto,/pending-spells/haste/cast.png,#30434f #d68726 #ffd47c,automatic exact palette replacement
+spell.hypnotic_pattern,auto,/pending-spells/haste/cast.png,#c98839 #e98caa #ffedd6,automatic exact palette replacement
+spell.ice_knife,override,/spell-palettes/ice_knife-weaponGlow.png,#0c162a #213557 #2f52a5 #4066af #527abc #5588d8 #7391bf #529cf6 #70a2e0 #84a3d3 #68b2f7 #8bb5eb #73c1ff #66c5ff #70cbff #8dc6fd #80ccff #91ccff #87d0ff #99ccff #a9cdf0 #8fdeff #a9eaff,preserve explicitly authored source colors
+spell.ice_storm,auto,/pending-spells/haste/cast.png,#2e5067 #86bdd4 #56869f,automatic exact palette replacement
+spell.incendiary_cloud,override,/persistent-spells/incendiary_cloud/cast.png,#fa9b23 #fa9b23 #fa9b23 #fa9b23 #fa9b23 #fa9b23 #fa9b23 #fa9b23 #fa9b23 #fa9b23 #fa9b23 #ffd559,preserve explicitly authored source colors
+spell.inflict_wounds,override,/pending-spells/inflict_wounds/cast.png,#0b1510 #14321e #275b32 #4a8b49 #82c973 #bceba0,preserve explicitly authored source colors
+spell.insect_plague,override,/persistent-spells/insect_plague/cast.png,#424b34 #798459 #a2a15f #a2a06f,preserve explicitly authored source colors
+spell.invisibility,auto,/pending-spells/haste/cast.png,#ccddff #aabbdd #8889cc,automatic exact palette replacement
+spell.jump,override,/pending-spells/jump/cast.png,#26483f #426b59 #65977e #8dbda0 #b7dbb5 #d8ead1,preserve explicitly authored source colors
+spell.lesser_restoration,override,/healing-spells/lesser_restoration/cast.png,,preserve explicitly authored source colors
+spell.light,override,/support-spells/light/cast.png,,preserve explicitly authored source colors
+spell.lightning_bolt,override,/electric/lightning-hands.png,,preserve explicitly authored source colors
+spell.longstrider,auto,/pending-spells/haste/cast.png,#367b9e #c8f4ff #6bd7ed,automatic exact palette replacement
+spell.mage_armor,override,/persistent-spells/mage_armor/cast.png,,preserve explicitly authored source colors
+spell.magic_missile,auto,/pending-spells/haste/cast.png,#ff88aa #ee3344 #aa1122,automatic exact palette replacement
+spell.mass_cure_wounds,override,/healing-spells/mass_cure_wounds/cast.png,,preserve explicitly authored source colors
+spell.mass_heal,override,/healing-spells/mass_heal/cast.png,,preserve explicitly authored source colors
+spell.mass_healing_word,auto,/healing-spells/aid/cast.png,#303955 #70bbc9 #b8ebe6,automatic exact palette replacement
+spell.mirror_image,override,/persistent-spells/body-cast.png,#303047 #4b4b70 #73769f #9798c0 #b8b6e5 #e1daf1,preserve explicitly authored source colors
+spell.misty_step,override,/pending-spells/misty_step/cast.png,#303047 #4b4b70 #73769f #9798c0 #b8b6e5 #e1daf1,preserve explicitly authored source colors
+spell.poison_spray,override,/cantrips/poison_spray/cast.png,,preserve explicitly authored source colors
+spell.power_word_kill,auto,/pending-spells/haste/cast.png,#460c87 #d3b7fb #988eef,automatic exact palette replacement
+spell.power_word_stun,auto,/pending-spells/haste/cast.png,#460c87 #d3b7fb #988eef,automatic exact palette replacement
+spell.prayer_of_healing,override,/support-spells/prayer_of_healing/cast.png,,preserve explicitly authored source colors
+spell.produce_flame,auto,/spell-palettes/ray_of_frost-weaponGlow.png,#ffffff #ffffff #ffffff,automatic exact palette replacement
+spell.protection_from_energy,override,/persistent-spells/energy.fire/cast.png,#392526 #733b30 #ac6040 #dd824a #f5c68a,preserve explicitly authored source colors
+spell.protection_from_poison,override,/support-conditions/protection_from_poison/cast.png,,preserve explicitly authored source colors
+spell.ray_of_frost,override,/spell-palettes/ray_of_frost-weaponGlow.png,#070d11 #0c1419 #111a20 #1a242c #22303a #2a3641 #314250 #3b5163 #435c71 #426888 #52697b #597487 #61839c #6993b4 #7a9db5 #84b1d0 #8ec7e6 #7bcbff #8accff #96ccff #99ccff #a4d3f2 #abeefe,preserve explicitly authored source colors
+spell.regenerate,override,/support-conditions/regenerate/cast.png,,preserve explicitly authored source colors
+spell.remove_curse,override,/support-conditions/remove_curse/cast.png,,preserve explicitly authored source colors
+spell.resistance,override,/support-spells/resistance/cast.png,,preserve explicitly authored source colors
+spell.sacred_flame,override,/cantrips/sacred_flame/cast.png,,preserve explicitly authored source colors
+spell.sanctuary,override,/persistent-spells/sanctuary/cast.png,,preserve explicitly authored source colors
+spell.scorching_ray,override,/spell-palettes/fire_bolt-weaponGlow.png,#370902 #2f0f06 #580f02 #461714 #591f0a #821804 #773026 #b22707 #843410 #e03e0a #b25218 #b5563e #fa5c10 #db7924 #ff8018 #ef986b #ffa826 #faab3f #ffcf4c #ffee89 #ffffe0,preserve explicitly authored source colors
+spell.see_invisibility,override,/sensory-spells/see_invisibility/cast.png,,preserve explicitly authored source colors
+spell.shatter,override,/pending-spells/shatter/cast.png,#211731 #493064 #77529b #a37aca #c4a4e9 #e7d7fa,preserve explicitly authored source colors
+spell.shield,override,/persistent-spells/shield/cast.png,,preserve explicitly authored source colors
+spell.shield_of_faith,override,/support-spells/shield_of_faith/cast.png,,preserve explicitly authored source colors
+spell.shillelagh,auto,/pending-spells/haste/cast.png,#ffffff #ffffff #ffffff,automatic exact palette replacement
+spell.shocking_grasp,override,/cantrips/shocking_grasp/cast.png,,preserve explicitly authored source colors
+spell.silence,override,/control-spells/silence/cast.png,,preserve explicitly authored source colors
+spell.sleep,override,/spell-palettes/sleep-weaponGlow.png,#0c1034 #141854 #201f77 #302696 #4330b2 #583ec9 #7052dc #8f6deb #b393f6,preserve explicitly authored source colors
+spell.sleet_storm,auto,/pending-spells/haste/cast.png,#2e5067 #86bdd4 #56869f,automatic exact palette replacement
+spell.slow,auto,/healing-spells/aid/cast.png,#292526 #b14e50 #edb7ac,automatic exact palette replacement
+spell.spike_growth,override,/persistent-spells/spike_growth/cast.png,,preserve explicitly authored source colors
+spell.spirit_guardians,override,/weather-solar/Attack5-hand-glow.png,,preserve explicitly authored source colors
+spell.stinking_cloud,override,/persistent-spells/stinking_cloud/cast.png,#574d21 #574d21 #867b33 #867b33 #867b33 #867b33 #867b33 #afa349 #afa349 #afa349 #afa349 #cdc06c,preserve explicitly authored source colors
+spell.stoneskin,override,/support-conditions/stoneskin/cast.png,,preserve explicitly authored source colors
+spell.sunbeam,override,/weather-solar/Attack5-hand-glow.png,,preserve explicitly authored source colors
+spell.sunburst,override,/weather-solar/Attack5-hand-glow.png,,preserve explicitly authored source colors
+spell.telekinesis,override,/utility/telekinesis/Attack5-hands.png,,preserve explicitly authored source colors
+spell.thaumaturgy,override,/support-spells/thaumaturgy/cast.png,,preserve explicitly authored source colors
+spell.thunderwave,override,/area-media/thunderwave-weaponGlow.png,,preserve explicitly authored source colors
+spell.true_seeing,override,/sensory-spells/true_seeing/cast.png,,preserve explicitly authored source colors
+spell.true_strike,child attack,exact charges / modular Magic2 Attack1–6,#fff0ca #dbc183 #f1dfac,"one actual weapon attack; exact charge first, matching rig/clip fallback otherwise"
+spell.wall_of_fire,auto,/pending-spells/haste/cast.png,#793129 #f6df95 #e87829,automatic exact palette replacement
+spell.wall_of_force,auto,/pending-spells/haste/cast.png,#163955 #609dd0 #e2f0ff,automatic exact palette replacement
+spell.wall_of_ice,auto,/pending-spells/haste/cast.png,#8298ac #a8c4d6 #e6f2fa,automatic exact palette replacement
+spell.wall_of_stone,auto,/pending-spells/haste/cast.png,#8298ac #a8c4d6 #e6f2fa,automatic exact palette replacement
+spell.wall_of_thorns,auto,/pending-spells/haste/cast.png,#473823 #69713d #d0c096,automatic exact palette replacement
+spell.web,override,/spell-palettes/web-weaponGlow.png,#cdd2c7,preserve explicitly authored source colors
+spell.wind_wall,auto,/pending-spells/haste/cast.png,#8298ac #a8c4d6 #e6f2fa,automatic exact palette replacement

@@ -235,7 +235,9 @@ def missing_observed_bindings(inventory: list[dict[str, Any]], evidence: list[di
     missing = []
     for row in evidence:
         key = row["family"], row["identity"]
-        if row["family"] not in {"spell", "action", "attack", "shove", "condition"} or key in known:
+        if (row["family"] not in {"spell", "action", "attack", "shove", "condition"}
+                or key in known
+                or row["family"] == "spell" and ("action", row["identity"]) in known):
             continue
         known.add(key)
         missing.append(_row(*key, row["owner"], "content binding", "missing_binding",

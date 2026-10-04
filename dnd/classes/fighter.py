@@ -16,6 +16,7 @@ Level 18: Champion - Survivor (DEFERRED)
 from typing import Any, ClassVar, Dict
 from dnd.core.action_types import RestrictedActionKind
 from dnd.core.base_conditions import BaseCondition
+from dnd.types.class_features import IndomitableReroll
 from dnd.core.condition_types import ConditionCategory, DurationType
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost
@@ -1363,10 +1364,13 @@ def indomitable_processor(
 
     new_outcome = determine_attack_outcome(new_roll, dc)
     new_success = new_outcome not in [AttackOutcome.MISS, AttackOutcome.CRIT_MISS]
+    owner = entity.active_conditions.get("Indomitable")
 
     return event.with_updates(
         dice_roll=new_roll,
         result=new_success,
+        indomitable_reroll=IndomitableReroll(condition_uuid=owner.uuid if owner is not None else None,
+            succeeded=new_success),
         status_message=(
             f"{entity.name} uses Indomitable! Reroll: {new_roll.total} "
             f"vs DC {dc} - {'Success' if new_success else 'Failure'}"
@@ -1383,6 +1387,7 @@ def create_indomitable_handler(
     return EventHandler(
         uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Indomitable",
+        content_kind=RuntimeBehaviorKind.CLASS_FEATURE,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(
@@ -1539,11 +1544,13 @@ def survivor_processor(
 
     con_mod = entity.ability_scores.constitution.modifier
     healing = 5 + con_mod
+    owner = entity.active_conditions.get("Survivor")
 
     actual_healed = entity.receive_healing(
         healing, entity.uuid,
         source_description=f"Survivor: 5+{con_mod}",
-        parent_event=event.uuid
+        parent_event=event.uuid,
+        source_condition_uuid=owner.uuid if owner is not None else None,
     )
 
     return event.with_updates(
@@ -1560,6 +1567,7 @@ def create_survivor_handler(
     return EventHandler(
         uuid=handler_uuid if handler_uuid is not None else uuid4(),
         name="Survivor",
+        content_kind=RuntimeBehaviorKind.CLASS_FEATURE,
         source_entity_uuid=source_entity_uuid,
         trigger_conditions=[
             Trigger(

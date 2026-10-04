@@ -20,8 +20,9 @@ Level 20: Primal Champion
 """
 
 from dnd.core.base_conditions import BaseCondition
+from dnd.types.class_features import RelentlessRageIntervention
 from dnd.core.condition_types import DurationType
-from dnd.core.content.runtime import RuntimeBehaviorKind
+from dnd.core.content.runtime import BehaviorBinding, RuntimeBehaviorKind
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_actions import (
     BaseAction, ActionEvent, Cost, TargetType, BaseCost
@@ -780,6 +781,10 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
     )
     total = dice_roll.total
 
+    owner = entity.active_conditions.get("Relentless Rage")
+    intervention = RelentlessRageIntervention(condition_uuid=owner.uuid if owner is not None else None,
+        succeeded=total >= current_dc)
+
     if total >= current_dc:
         entity.action_economy.consume_resource("relentless_rage", 1)
 
@@ -788,6 +793,7 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
             damage_cap = min(damage_cap, event.normal_hit_point_damage_cap)
         return event.with_updates(
             normal_hit_point_damage_cap=damage_cap,
+            relentless_rage=intervention,
             status_message=(
                 f"Relentless Rage! (CON save {total} vs DC {current_dc}) "
                 "- survives with 1 HP"
@@ -795,6 +801,7 @@ def relentless_rage_processor(event: Event, source_entity_uuid: UUID) -> Optiona
         )
     else:
         return event.with_updates(
+            relentless_rage=intervention,
             status_message=(
                 f"Relentless Rage failed "
                 f"(CON save {total} vs DC {current_dc})"
@@ -843,6 +850,7 @@ class RelentlessRage(BaseCondition):
 
         handler = EventHandler(
             name="Relentless Rage",
+            content_kind=RuntimeBehaviorKind.CLASS_FEATURE,
             source_entity_uuid=target.uuid,
             trigger_conditions=[
                 Trigger(
@@ -1099,6 +1107,11 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
         source_entity_uuid=source_entity_uuid,
         target_entity_uuid=event.source_entity_uuid,
         weapon_slot=WeaponSlot.MELEE_MAIN,
+        behavior_binding=BehaviorBinding(
+            behavior_id="action.attack",
+            provided_by_id="class_feature.barbarian.retaliation",
+            runtime_owner_uuid=source_entity_uuid,
+        ),
         costs=[Cost(
             name="Retaliation reaction",
             cost_type="reactions",
@@ -1108,7 +1121,7 @@ def retaliation_processor(event: Event, source_entity_uuid: UUID) -> Optional[Ev
     )
     attack.apply(parent_event=event)
 
-    return None
+    return event
 
 
 class RetaliationReactionHandler(EventHandler):

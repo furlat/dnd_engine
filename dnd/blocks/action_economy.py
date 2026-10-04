@@ -11,6 +11,7 @@ from dnd.core.action_types import ActionEconomyCostType, HasteActionPolicy, Rest
 from dnd.core.feature_grants import AttackMultiplicityGrant
 
 from dnd.types.world import MovementMode
+from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 
 
@@ -457,6 +458,8 @@ class ActionEconomy(BaseBlock):
         return tuple(
             self._restricted_action_grants[grant_id]
             for grant_id in sorted(self._restricted_action_grants)
+            if (owner := BaseObject.get(self._restricted_action_grants[grant_id].owner_uuid)) is not None
+            and owner.contributions_active()
         )
 
     def add_attack_multiplicity_grant(
@@ -1020,11 +1023,13 @@ class ActionEconomy(BaseBlock):
         if base is None:
             raise RuntimeError("Flying speed is missing its base value")
         base.value = max((grant.get(MovementMode.FLYING, 0)
-            for grant in self.movement_speed_grants.values()), default=0)
+            for identity, grant in self.movement_speed_grants.items()
+            if (owner := BaseObject.get(identity)) is not None and owner.contributions_active()), default=0)
 
     def current_speed(self, mode: MovementMode = MovementMode.WALKING) -> int:
         """Pure resolved speed; swimming/climbing retain their walking fallback."""
         if mode is MovementMode.FLYING:
+            self._update_flying_base()
             if not self.movement_speed_grants:
                 return 0
             return max(0, self.flying_speed.normalized_score)

@@ -9,7 +9,13 @@
     "/support-spells/light/cast.png": "game/assets/support_spells/actors/light/Attack5-glow.png",
     "/support-spells/thaumaturgy/cast.png": "game/assets/support_spells/actors/thaumaturgy/Special1-glow.png",
     "/support-spells/true_strike/Melee3-Attack6-charge.png": "game/assets/support_spells/weapon-charge/Melee3-Attack6-charge.png",
-    "/support-spells/true_strike/Ranged1-Attack3-charge.png": "game/assets/support_spells/weapon-charge/Ranged1-Attack3-charge.png"
+    "/support-spells/true_strike/Ranged1-Attack3-charge.png": "game/assets/support_spells/weapon-charge/Ranged1-Attack3-charge.png",
+    "/support-spells/cast-hands/Magic2-Attack1.png": "game/assets/support_spells/cast-hands/Magic2-Attack1.png",
+    "/support-spells/cast-hands/Magic2-Attack2.png": "game/assets/support_spells/cast-hands/Magic2-Attack2.png",
+    "/support-spells/cast-hands/Magic2-Attack3.png": "game/assets/support_spells/cast-hands/Magic2-Attack3.png",
+    "/support-spells/cast-hands/Magic2-Attack4.png": "game/assets/support_spells/cast-hands/Magic2-Attack4.png",
+    "/support-spells/cast-hands/Magic2-Attack5.png": "game/assets/support_spells/cast-hands/Magic2-Attack5.png",
+    "/support-spells/cast-hands/Magic2-Attack6.png": "game/assets/support_spells/cast-hands/Magic2-Attack6.png"
   },
   "spells": {
     "spell.cure_wounds": {

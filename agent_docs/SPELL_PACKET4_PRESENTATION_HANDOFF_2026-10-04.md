@@ -1,0 +1,63 @@
+# Packet 4 presentation handoff — 2026-10-04
+
+Implemented scope: Ice Storm, Sleet Storm, Sunbeam and Sunburst, using the accepted source artwork and the existing cast, condition, registered-media and maintained-spatial owners. This is an implementation checkpoint for independent review, not its own approval or whole-plan completion. Native spell numerics were handled in the earlier packet-4 native lane; this handoff covers the presentation and the narrow observable-owner corrections needed to display it.
+
+## Source provenance and disclosed adaptations
+
+Originals remain under `/home/tommaso/Dev/neurodragon_art/sources/`; selected payloads are also installed in `/home/tommaso/Dev/neurodragon_art-production` and ignored `game/assets/weather_solar_media`. Public registrations and source receipts are in `game/data/weather_solar_media`. Importers merge storage/asset registrations without rewriting selected recipes. No new artwork was commissioned or generated.
+
+| Selection | Preserved original / production archive | Actual adaptation |
+| --- | --- | --- |
+| Ice Storm `textured-fracture-v3` | `weather-ice-textured-fracture-v3-20261004` | Original four ground and two contact banks, back/front, 96 frames at 32 FPS. Original deterministic ground layout/stagger and scale are registered. Ground placements use disclosed native cells; contact placements come only from actual disclosed recipients. Source frame 95 is retained after the finite fall under the exact terrain owner. No XYZ or fragment trajectories are inferred from the RGBA. |
+| Sleet Storm `soft-ground-contact-v5` | `weather-sleet-soft-ground-contact-v5-20261004`; `sleet-surface-companions-20261004` | Original RGBA stays byte-exact. A private export of the delivered deterministic Godot operator records its actual source surface coordinates at each matching 144 Hz simulation / 32 FPS sample. Ground/back/front, application 0–31, hold 32–95, removal 96–127 use the existing packed surface format. |
+| Sunbeam `solar-lifecycle-v1` | `solar-lifecycle-v1-20261004`; `solar-paired-surfaces-20261004` | **Production beam RGBA is recaptured, not byte-exact original atlas pixels.** Each native particle state is frozen once and both colour and coordinates are captured from that same state, with original source shaders, settings, seed, clock, camera and palette packing. This avoids pairing different GPU-particle states. The original accepted RGBA is preserved separately. No seed selection or visual tuning was performed. All eight heading banks are registered. |
+| Sunburst `solar-lifecycle-v1` | Same solar archives | Original RGBA stays byte-exact. Its source shader is exported for actual matched surface coordinates, retaining the delivered clock and camera. Original back/front banks remain separate. |
+| Solar contact and held hand | `solar-contact-originals-20261004` | `holy.contact.radiant` is the unchanged shared holy contact bank, SHA256 `eb99bbf86c78fb197241fb9de3b65245f9b041ef5cd1b616359cdc27688c3461`. Held Sunbeam uses a literal 23×23 crop of the forward cluster in original Attack5 frame 7, one per facing, anchored to the current hand. The complete original glow sheet is also preserved and used for Attack5 casting. The second original hand cluster is not fabricated into the held attachment. |
+
+`ice-source.json`, `sleet-source.json`, `solar-source.json`, `contacts-source.json` record original metadata/payload hashes. `beam-surfaces-source.json`, `burst-surfaces-source.json`, `sleet-surfaces-source.json` additionally record each packed archive hash, original source-project input hashes (excluding `.godot`/`.git`), saved generated adapters and whether RGBA was recaptured. The source-project manifests refuse silently relabeling an existing capture with changed inputs. Original external authoring projects remain at their original paths, pinned by those hashes.
+
+Coordinate companions represent actual visible source surfaces, not particle identity or hidden volumetric depth. Visible samples must be owned, finite and within the declared encoding range; paired capture validation checks camera reprojection within 0.8 pixels after quantization. Bounds `[-64, 64]` preserve source/MSAA interpolation values; runtime clips those coordinates to admitted native geometry. No alpha-derived nearest-point or generated geometry substitute is used.
+
+## Ownership and runtime behavior
+
+- **Ice Storm:** the existing finite cast owns original falling modules and actual recipient contact modules. Formation begins before damage. Ordinary recorded `resolved_area_positions` admits its ground modules. Settled ground modules and passive contact endpoints then belong to the exact `IceStormTerrain` UUID. Retained endpoint records contain track ID, disclosed position/elevation and completion time, not actors or backend casts. Removing the terrain retires them. Countered casts create none. Cold acquisition does not replay formation or invent recipient endpoints. Ice's delivered contact obstacle is the original normal-sized source module; this does not claim a newly authored Ogre/large-body collision fit.
+- **Sleet Storm:** the actual received `SleetStormZone` owns original formation, loop and removal. Its real heavy obscuration controls actor disclosure. Ground/back/front source XYZ is clipped through existing field surfaces and recorded native geometry; no recipient sprite is placed to suggest damage.
+- **Sunbeam:** original Attack5 release and source hand registration lead into the finite paired beam bank. Authored world offsets put the source's centred 12-cell beam six cells ahead of the real hand. The actual recorded 60×5-foot native Line clips it after that placement, for all eight headings and four cameras. Repeat `action.spell.sunbeam.strike` selects the same draft through the existing explicit action-delivery alias. The exact retained `SunbeamEffect` now overrides the generic internal action marker to `STATUS`, making its real hand-light condition observable. One condition owner persists between shots and is removed on concentration release. Blindness wrappers are state-only recipes; existing shared Blinded owns the visual condition.
+- **Sunburst:** original finite back/front surfaces form before simultaneous actual-recipient contact; shared holy contact is attached only to disclosed affected actors. No maintained zone is invented. The finite source clears independently of the native Blinded condition.
+
+Narrow generic changes: `CastInput` retains passive native area geometry and resolved cells; the existing surface compositor accepts a native Line clip; `clump` separates falling source art from flat-floor clipping; passive recipient endpoints extend the existing spatial lifetime record. Initial staged AreaReach is visually available at release, while later destruction-gated expansion and native state/contact clocks retain their causal dates. Existing maintained-field framing recognizes Cylinder and current `xy_volume`/`xyz_volume` spellings. No new effect executor, scheduler or renderer owner was introduced.
+
+Parent-owned projection corrections preserve a witnessed declaration footprint if a consequence blinds the caster, and use recorded Line/Cone/non-centred-Cube origin as the disclosure/support anchor. The added regression also verifies that cells unseen both before and after remain withheld. These facts never authorize live-world queries or hidden-recipient placement.
+
+Ice/Sleet native classes now expose their visible spatial presence through the ordinary perception owner. Sunbeam's STATUS override exposes only its already-real retained hand effect. Coverage reporting accepts an explicitly selected action inventory binding for a structured spell-shaped repeat fact; it does not infer action identity from a name.
+
+## Files to review
+
+- Source intake/export: `devtools/import_weather_solar_media.py`, `import_weather_solar_surfaces.py`, `import_solar_contacts.py`, `export_solar_ownership.py`, `export_sleet_ownership.py`; public `game/data/weather_solar_media/*`.
+- Existing client seams: narrow changes in `game/animation_types.py`, `animation.py`, `animation_draw.py`, `combat.py`, `cast_media.py`, `volume_media.py`, `choreography.py`, `spatial_media_lifetime.py`, `spatial_media_draw.py`, `spatial_field_media.py`, `presentation_coverage.py`. These files also contain concurrent other-packet changes; review only the contracts above.
+- Authored bindings: packet-4 records in `game/data/world_bindings.json`, `condition-media.json`, `condition-recipes.json`; default weather bundle inclusion is parent-owned.
+- Observable native owners: IceStormTerrain/SunbeamEffect in `dnd/spells/evocation.py`, SleetStormZone in `conjuration.py`.
+- Review support: `devtools/animation_review/weather_solar_cases.py` plus narrow catalog/producer/record framing changes; `dnd/scenarios/battlefield_catalog.py` adds an ordinary 28×28 real-floor battlefield using existing initialization, not synthetic replay facts.
+- Tests: `tests/game/test_weather_solar_import.py`, `test_weather_solar_surface_import.py`, `test_weather_solar_delivery.py`, native `weather_solar_scenarios.py`; narrow additions in `test_aoe_surfaces.py` and `test_fireball_breach_presentation.py`.
+
+## Verification
+
+Durable copies of the listed logs are under `agent_docs/audits/packet4-presentation-20261004/`.
+
+All commands use the documented uv environment at `/home/tommaso/.cache/dnd-engine/venv`, workspace on `/mnt/c`, Python 3.13.12 and dummy SDL for tests. Windows Godot 4.6.2 performs the offline accepted-source exports; it is not a runtime dependency.
+
+- `/tmp/dnd-weather-packet4-regressions.log`: **87 passed** — original and surface import integrity/preflight, native delivery, line/area surface composition, XYZ media, and existing Fireball breach timing.
+- `/tmp/dnd-weather-coverage-regression.log`: **9 passed** — existing presentation coverage after the structured-repeat reporting correction.
+- `/tmp/dnd-sunbeam-hand-coverage.log`: **1 passed**, 24 deselected — native exact hand ownership, repeat and removal, and positive/negative selected-action coverage after the STATUS correction.
+- `/tmp/dnd-weather-final-delivery-v2.log`: **16 passed** — final native delivery suite after the hand-owner correction and explicit sensed-state assertions.
+- `/tmp/dnd-weather-last-types-v2.log`: **0 errors, 0 warnings** for the final touched native/coverage/export/import/test files. Earlier `/tmp/dnd-weather-final-types-v2.log` covers the rest of this packet's client/export changes.
+
+Saved native-input gallery runs (normal recorder, no manual fact edits):
+
+1. Ice Storm: `.runtime/spell-packet4-review/runs/20261004T061850Z-6629ae/index.html` — **3/3 passed** (caster/recipient/second), each four cameras. Full original fall, actual contact, retained hail and expiry checked. This is the final Ice run; earlier failed formation captures are obsolete evidence.
+2. Sleet/Solar: `.runtime/spell-packet4-review/runs/20261004T062819Z-2faa58/index.html` — **9/9 passed**, zero playback gaps. Sleet formation/hold/removal, Sunburst formation/contact/dissolution/clear, recipient observer views and hidden-state consequences were inspected at sampled saved frames. Its Sunbeam hold is superseded by the final STATUS-corrected run below.
+3. Final Sunbeam hand/repeat/expiry: `.runtime/spell-packet4-review/runs/20261004T063717Z-b9641d/index.html` — **3/3 passed**, zero playback gaps. Saved four-camera frames at held hand (4.958 seconds), changed-direction repeat (19.458 seconds) and expired state (24.875 seconds) inspected; `inspection/hand-hold-detail.png` is a nearest-neighbour enlargement of the original recorded frame for the small unchanged hand cluster. No source pixels were changed.
+
+Inspected frames are under the second and final Sunbeam runs' `inspection/` directories. The standard gallery conservatively fits the source canvas and whole native field, making actors small in full-area Sleet/Sunburst views. This is review framing, not source rescaling or visual retuning. Inspection covers named moments in all four cameras; it does not claim every recorded frame was manually watched. Final assets also retain the accepted source's own changing silhouettes during dissolution.
+
+Independent review should check source-to-camera registration, strict native area/line clipping, terrain lifetime and hidden/countered/cold-acquisition behavior, hand owner presence/removal, initial-vs-expanded AreaReach timing, source provenance and import transaction preflight. Tests and this implementation author's screenshots are evidence for that review, not independent acceptance.

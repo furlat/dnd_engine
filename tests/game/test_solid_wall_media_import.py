@@ -6,7 +6,7 @@ import json
 from PIL import Image
 import pytest
 
-from devtools.import_solid_wall_media import import_solid_sections, normalize_solid_sections
+from devtools.import_solid_wall_media import import_solid_sections, import_solid_retirement, normalize_solid_sections
 
 
 def solid_source(folder):
@@ -69,3 +69,45 @@ def test_corrupted_solid_source_fails_before_creating_output(tmp_path):
     with pytest.raises(ValueError, match='checksum'):
         normalize_solid_sections(source, output)
     assert not output.exists()
+
+
+def retirement_source(folder):
+    folder.mkdir()
+    page=folder/'packed/page.png';page.parent.mkdir()
+    Image.new('RGBA',(1,1),(50,70,90,120)).save(page)
+    digest=hashlib.sha256(page.read_bytes()).hexdigest()
+    layer={'pages':['packed/page.png'],'frames':[{'page':0,'source':[0,0,1,1],'offset':[256,260]}]*28+[None]}
+    row={'fps':32,'frames':29,'cell':512,'pivot':[256,311.425626],'palette':['383b34'],
+        'cameras':{str(q):{'layers':{'back':layer,'front':layer}} for q in range(4)}}
+    rows={f'{kind}_v{v}_d{d}':row for kind in ('stone','ice') for v in range(3) for d in range(4)}
+    (folder/'media.json').write_text(json.dumps(rows))
+    (folder/'SHA256SUMS').write_text(digest+'  packed/page.png\n')
+    (folder/'validation.json').write_text(json.dumps({'durationMs':850,
+        'samples':[{'intact_byte_exact':True,'final_empty':True}]*192}))
+
+
+def test_intact_retirement_installs_separately_and_preserves_selected_recipe(tmp_path):
+    source=tmp_path/'export';retirement_source(source)
+    repo,production,preserved=tmp_path/'repo',tmp_path/'production',tmp_path/'preserved'
+    bundle=repo/'game/data/wall_media';bundle.mkdir(parents=True)
+    (bundle/'bindings.json').write_text('{"resources":{},"projectileStorage":{}}')
+    (bundle/'projectile-assets.json').write_text('[]')
+    recipe=bundle/'drafts.json';recipe.write_text('{"selected":"unchanged"}')
+    production.mkdir();(production/'art-manifest.json').write_text('{"files":[],"total_bytes":0}')
+    identities=import_solid_retirement(source,preserved=preserved,production=production,repo=repo)
+    assert len(identities)==48 and all('.removal.' in identity for identity in identities)
+    assert recipe.read_text()=='{"selected":"unchanged"}'
+    for root in (repo,production):
+        assert (root/'game/assets/wall_media/retirement/packed/page.png').read_bytes()==(source/'packed/page.png').read_bytes()
+    assert (preserved/'validation.json').read_bytes()==(source/'validation.json').read_bytes()
+    assert import_solid_retirement(source,preserved=preserved,production=production,repo=repo)==identities
+
+
+def test_retirement_missing_proof_cannot_partly_install(tmp_path):
+    source=tmp_path/'export';retirement_source(source)
+    validation=json.loads((source/'validation.json').read_text())
+    validation['samples'][-1]['intact_byte_exact']=False
+    (source/'validation.json').write_text(json.dumps(validation))
+    with pytest.raises(ValueError,match='preserve every intact'):
+        import_solid_retirement(source,preserved=tmp_path/'archive',production=tmp_path/'production',repo=tmp_path/'repo')
+    assert not (tmp_path/'archive').exists() and not (tmp_path/'production').exists() and not (tmp_path/'repo').exists()

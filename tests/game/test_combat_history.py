@@ -338,10 +338,10 @@ def test_canonical_goblin_marker_and_cast_history_survive_turns_and_runtime_rese
         at_effect = sample_cast(second.timeline, effect)
         assert (before.vitals[0].hp, before.vitals[0].life_state) == (3, LifeState.ALIVE)
         assert (at_effect.vitals[0].hp, at_effect.vitals[0].life_state) == (-4, LifeState.DEAD)
-        assert at_effect.bodies[1].clip == data.death_context.bodyClip
+        assert at_effect.bodies[1].clip == "Death"
         assert at_effect.bodies[1].frame == 0
-        death_clip = body_clip(data, second.timeline.source.applications[0].target, data.death_context.bodyClip)
-        assert final_sample.bodies[1].clip == data.death_context.bodyClip
+        death_clip = body_clip(data, second.timeline.source.applications[0].target, "Death")
+        assert final_sample.bodies[1].clip == "Death"
         assert final_sample.bodies[1].frame == death_clip.frames - 1
         assert sample_cast(second.timeline, second.timeline.complete_ms + 1000).bodies[1] == final_sample.bodies[1]
     else:

@@ -10,6 +10,7 @@ from dnd.actions import AttackEvent, ShoveEvent
 from dnd.core.base_actions import ActionEvent
 from dnd.core.events import EventPhase, EventQueue, ForcedMovementEvent, SpatialChangeEvent, SpatialChangeType, StepMovementEvent, TakeDamageEvent
 from dnd.core.life_types import LifeState
+from dnd.types.world import OccupancyLayer
 from game.presentation import reduce_lineage
 
 
@@ -24,7 +25,7 @@ from game.presentation import reduce_lineage
     ("shove-goblin", (6, 3), 10, False, ()),
     ("shove-spikes", (2, 12), 10, False, (5, 7)),
     ("shove-spikes-lethal", (2, 11), 5, False, (5,)),
-    ("telekinesis-displacement", (6, 4), 15, False, ()),
+    ("telekinesis-displacement", (6, 4), 10, False, (17, 8)),
 ])
 def test_discovered_forced_actions_preserve_native_outcomes_after_runtime_reset(
     case_id: str, expected_end: tuple[int, int], distance: int, blocked: bool, damage: tuple[int, ...],
@@ -66,19 +67,20 @@ def test_discovered_forced_actions_preserve_native_outcomes_after_runtime_reset(
         assert event.parent_lineage == lineage.root.lineage_uuid
         assert (event.start_position, event.end_position) == (scenario.target_position, expected_end)
         assert event.actual_distance == distance
-        assert event.intended_distance == (15 if scenario.mechanism == "telekinesis" else 10)
+        assert event.intended_distance == 10
         assert event.blocked_by_obstacle is blocked
         assert event.cause == scenario.mechanism
 
     entries = tuple(event for event in lineage.events if isinstance(event, SpatialChangeEvent)
-                    and event.change_type is SpatialChangeType.ENTITY_ENTERED and event.entity_uuid == target_uuid)
+                    and event.change_type is SpatialChangeType.ENTITY_ENTERED and event.entity_uuid == target_uuid
+                    and event.occupancy_layer is OccupancyLayer.GROUND)
     assert len(entries) == (1 if scenario.mechanism == "telekinesis" else distance // 5)
     assert all(event.parent_lineage == forced[0].lineage_uuid for event in entries)
     if entries:
         assert entries[-1].position == expected_end
     damage_events = tuple(event for event in lineage.events if isinstance(event, TakeDamageEvent))
     assert tuple(event.final_damage for event in damage_events) == damage
-    if damage:
+    if damage and scenario.mechanism == "shove":
         assert tuple(event.position for event in entries) == ((2, 11), (2, 12))[:len(damage)]
         # Raising a ready trap is a causal child between entry and damage;
         # already-raised spikes can apply their payload directly on entry.
@@ -89,6 +91,10 @@ def test_discovered_forced_actions_preserve_native_outcomes_after_runtime_reset(
                 assert ancestor.parent_lineage is not None
                 ancestor = by_lineage[ancestor.parent_lineage]
         assert lineage.events.index(damage_events[-1]) < lineage.events.index(forced[0])
+    if scenario.mechanism == "telekinesis":
+        assert all(event.parent_lineage == forced[0].lineage_uuid for event in damage_events)
+        assert [(roll.effective_dice_count, roll.die_size)
+                for event in damage_events for roll in event.damage_rolls] == [(4, 8), (2, 6)]
 
     before = sequence.before.actors[target_uuid]
     after = reduce_lineage(sequence.before, lineage).actors[target_uuid]

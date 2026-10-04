@@ -1,0 +1,12 @@
+{
+  "files": {
+    "game/data/condition-recipes.json": "b529499b0e50d92e72031be8d79070a0d07ac1d669a6a94e487f095364dcb269",
+    "game/directed_contacts.py": "cfbef5634ea912dcbc9676217d6379a0b742914283e41de0144e9589442081a3",
+    "tests/game/test_force_construction_presentation.py": "22899db4813df52206b87de3538048f0dc6be0b82f96afaa6c723cea6e8877bd",
+    "tests/game/test_web_condition_layers.py": "32ae7de5aaf5a72f3791fab511495949bf0c89b1d84372a7a284a8e2f5ede138",
+    "tests/game/test_pending_spell_facts.py": "5a76916cbc7a4ddc0d7833ef2badf704dc26a6e7ebf0e53fbaba4f0fa0aef59b",
+    "tests/game/test_movement_routes.py": "12fc9ff2e101b371a471069d4255b7b3242200f13d1052a80002d89617d9ee47",
+    "tests/game/movement_scenarios.py": "db2a9ad4ff6efef854c9ce7a2d61587d4125509cff855f4ca7d9ac642f699bb6"
+  },
+  "sha256": "39dadf68b8298b62e96c08370394f1dd767e3aba4b5a493cd28c613bf8259343"
+}

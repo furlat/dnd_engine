@@ -1,0 +1,100 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/holy-guardians-study",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/holy-guardians-20261004",
+  "files": [
+    {
+      "path": "game/assets/holy_media/assets/radiant.png",
+      "bytes": 850071,
+      "sha256": "3de98a0f55980611908b0b64d3b87f8e8960855e1c551e852055dfac30a1d349"
+    },
+    {
+      "path": "game/assets/holy_media/assets/necrotic.png",
+      "bytes": 1070552,
+      "sha256": "dde2eb4e706f778f984d0d83ca7ffcaa90bcb098ce2bb176ac4ba916e880b05b"
+    },
+    {
+      "path": "game/assets/holy_media/assets/contact-necrotic.png",
+      "bytes": 200543,
+      "sha256": "79340e5fa1bf3128d7f52b784d705dd6d915959e0d856b109ea020186b6a4a61"
+    },
+    {
+      "path": "game/assets/holy_media/guardian-of-faith/assets/guardian-0.png",
+      "bytes": 985772,
+      "sha256": "d42d171d0663f753bc8ef33b77f0540181618421e157c25e53d8adcd0c06175c"
+    },
+    {
+      "path": "game/assets/holy_media/guardian-of-faith/assets/guardian-1.png",
+      "bytes": 991802,
+      "sha256": "ed4b19fcb406674624de63e39a05c5f6d2e63a2eff1df203e30a5988d37eb69f"
+    },
+    {
+      "path": "game/assets/holy_media/guardian-of-faith/assets/guardian-2.png",
+      "bytes": 871520,
+      "sha256": "544e9e7495394c295f4eb35c046d200c689f1c3ab289be98266e2e7d388c727e"
+    },
+    {
+      "path": "game/assets/holy_media/guardian-of-faith/assets/guardian-3.png",
+      "bytes": 717733,
+      "sha256": "c1f0566acf16e3492fc273eea9241a4c91b2222d6478fe322845125d76b290d4"
+    },
+    {
+      "path": "game/assets/holy_media/guardian-of-faith/assets/guardian-4.png",
+      "bytes": 929534,
+      "sha256": "6e2e88de4cc5b937616c96f30484b3679605ddf9e23d169ba993bed7a9ba9751"
+    },
+    {
+      "path": "game/assets/holy_media/guardian-of-faith/assets/guardian-5.png",
+      "bytes": 921460,
+      "sha256": "05ebb83a175e3c5159757b1744c2acb417cbc3b4c18c2053ba50f196213c2c96"
+    },
+    {
+      "path": "game/assets/holy_media/guardian-of-faith/assets/guardian-6.png",
+      "bytes": 889042,
+      "sha256": "8aa659c5141853d9a4e9bd4e7a7cbc5a8f4c0a97bb1c8dc68bb988a44889d9cb"
+    },
+    {
+      "path": "game/assets/holy_media/guardian-of-faith/assets/guardian-7.png",
+      "bytes": 799723,
+      "sha256": "1c6acaadc6c39741085165c62d1d5911f957ffdd81e9eab5525b5756aecdcc5f"
+    },
+    {
+      "path": "game/assets/holy_media/heroes-feast/assets/feast-0.png",
+      "bytes": 477412,
+      "sha256": "57923384c93693bc652d688b457f5136f24504d12e39ff06cd9fca05ef914107"
+    },
+    {
+      "path": "game/assets/holy_media/heroes-feast/assets/feast-1.png",
+      "bytes": 476031,
+      "sha256": "0af22dc7e7d08602ef1e4348a64d2722248c4ee6310928588a1abe4e8ec9c5d6"
+    },
+    {
+      "path": "game/assets/holy_media/heroes-feast/assets/feast-2.png",
+      "bytes": 461362,
+      "sha256": "cf10924628759bc54ea23dc06277187e021d911a5c78cccc67e6fb73c5065db5"
+    },
+    {
+      "path": "game/assets/holy_media/heroes-feast/assets/feast-3.png",
+      "bytes": 455709,
+      "sha256": "75b2442079dfb15cba0a15528ee9905732b1b71ed781552e237868e33c900828"
+    }
+  ],
+  "revisions": [
+    "relaxed-flow-v5",
+    "lean-horned-v3",
+    "spectral-material-v2"
+  ],
+  "identities": [
+    "holy.spirit.radiant",
+    "holy.spirit.necrotic",
+    "holy.contact.necrotic",
+    "holy.guardian",
+    "holy.feast"
+  ],
+  "shared_radiant_contact": "holy.contact.radiant from weather_solar_media/contacts-source.json",
+  "blade_motion_sha256": "750cde162e56e1b79210abfd5ba012e3dc938bd1bdb9e075739c7d1e8126d2a2",
+  "manifest_sha256": {
+    ".": "c95a6a981216dd717ee5650c3d93116fb59158288570e36630badc2ebffdf358",
+    "guardian-of-faith": "1b8dce4d7e968398700eb5c7789e32ff3d44a7f9d50dc238a173b356a3978209",
+    "heroes-feast": "bb7c57fc790923698ef0903da4756d50b55757f595671a3b1e953145f40255e6"
+  }
+}

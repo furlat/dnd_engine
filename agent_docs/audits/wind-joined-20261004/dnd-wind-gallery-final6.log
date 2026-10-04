@@ -1,0 +1,7 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+[1/4] wall-assembly-wind-corner-1-0
+[2/4] wall-assembly-wind-corner-1-0--recipient
+[3/4] wall-assembly-wind-straight-1-1
+[4/4] wall-assembly-wind-straight-1-1--recipient
+4/4 cases passed; gallery: /mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/wind-joined-20261004/runs/20261004T094853Z-d27a3c/index.html
+Serve: /home/tommaso/.cache/dnd-engine/venv/bin/python3 -m devtools.animation_review.serve --directory /mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/wind-joined-20261004

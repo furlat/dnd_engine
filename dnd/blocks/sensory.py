@@ -11,6 +11,7 @@ import time
 
 from dnd.core.effect_types import ObservedChangeRef, ObservedField
 from dnd.action_timing import action_timing_enabled, record_action_timing
+from dnd.core.base_object import BaseObject
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import ConditionApplicationEvent, ConditionRemovalEvent
 from dnd.core.gridmap import SpatialConditionOwner, get_map
@@ -182,6 +183,10 @@ class Senses(BaseBlock):
         """Return this block's sense modes. Override of BaseBlock.get_sense_modes()."""
         ranges: Dict[SensesType, int] = {}
         for mode in (*self.sense_modes, *self.sense_mode_sources.values()):
+            if mode.contribution_owner_uuid is not None:
+                owner = BaseObject.get_contribution_owner(mode.contribution_owner_uuid)
+                if owner is None or not owner.contributions_active():
+                    continue
             current = ranges.get(mode.sense_type)
             if current is None:
                 ranges[mode.sense_type] = mode.range_feet

@@ -561,6 +561,19 @@
               }
             ]
           }
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/pending-spells/haste/cast.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
         }
       },
       "condition": {
@@ -1158,6 +1171,19 @@
               }
             ]
           }
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/pending-spells/haste/cast.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
         }
       },
       "condition": {
@@ -1754,6 +1780,19 @@
                 "y": 57.4
               }
             ]
+          }
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/pending-spells/haste/cast.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
           }
         }
       },

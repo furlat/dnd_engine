@@ -223,18 +223,7 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _srd(evocation.SunbeamStrike, "action.spell.sunbeam.strike", "Sunbeam Strike", "Fire another beam from an active Sunbeam spell."),
     _srd(necromancy.EyebiteStrike, "action.spell.eyebite.strike", "Eyebite Strike", "Apply another selected gaze effect from an active Eyebite spell."),
     _srd(transmutation.BonusDash, "action.spell.expeditious_retreat.dash", "Dash (Bonus)", "Take the Dash action as a bonus action."),
-    _srd(transmutation.TelekinesisMove, "action.spell.telekinesis.move", "Telekinesis: Move", "Move the creature currently held by Telekinesis."),
-    _srd(transmutation.TelekinesisRestrain, "action.spell.telekinesis.restrain", "Telekinesis: Restrain", "Restrain the creature currently held by Telekinesis."),
-    _srd(
-        transmutation.TelekinesisGrab,
-        "action.spell.telekinesis.grab",
-        "Telekinesis",
-        "Attempt to grab a creature with an active Telekinesis spell.",
-        granted_action_types=(
-            transmutation.TelekinesisMove,
-            transmutation.TelekinesisRestrain,
-        ),
-    ),
+    _srd(transmutation.TelekinesisMove, "action.spell.telekinesis.move", "Telekinesis: Move", "Spend an action to move one creature to a supported destination."),
 )
 
 

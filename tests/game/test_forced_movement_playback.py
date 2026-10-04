@@ -27,6 +27,8 @@ from game.playback_frame import PlaybackFrame, sample_playback_frame
 from game.projection import Camera, TILE_WIDTH, project_screen
 from game.scene import load_scene_media, scene_actors
 from game.animation_draw import LoadedBodyRows
+from game.condition_sampling import sample_condition_media
+from game.forced_movement import sample_displacement_layers
 
 
 @pytest.fixture(scope="module")
@@ -89,7 +91,7 @@ def body_pixels(command: AnimationDrawCommand) -> bytes:
 
 @pytest.mark.parametrize("case_id,brace_frame", [
     ("shove-success", 3), ("shove-partly-blocked", 3),
-    ("shove-goblin", 5), ("telekinesis-displacement", 3),
+    ("shove-goblin", 5),
 ])
 def test_native_displacement_plays_brace_travel_release_and_idle_without_latest_leaking(
     data: AnimationData, fonts: tuple[pygame.font.Font, pygame.font.Font], case_id: str, brace_frame: int,
@@ -289,3 +291,66 @@ def test_stair_map_keeps_above_terrace_pixels_and_foreground_occlusion(
         assert not np.any(exposed & np.any(with_actor != body_pixels, axis=2)), (case_id, quadrant, tmp_path)
         hidden = opaque & ~np.any(with_actor != without_actor, axis=2)
         assert np.any(hidden & ~above_terrace), "Foreground terrace must continue covering the lower body"
+
+
+def test_telekinetic_transfer_lands_before_damage_and_keeps_one_finite_hand_clock(data, fonts):
+    scene = load_scene('telekinesis-displacement', data)
+    group = scene.group
+    cue, = group.forced_movement
+    identity = cue.actor.actor_uuid
+    target = UUID(identity)
+    assert group.nodes and cue.layers and cue.flight_body is not None
+    opening = sample_displacement_layers(cue, cue.start_ms + 1)
+    holding = sample_displacement_layers(cue, cue.travel_start_ms)
+    closing = sample_displacement_layers(cue, cue.complete_ms - 1)
+    assert all(sample.alpha < .01 for layer in opening for sample in sample_condition_media(data, layer))
+    assert all(sample.alpha == 1 for layer in holding for sample in sample_condition_media(data, layer))
+    assert all(sample.alpha < .01 for layer in closing for sample in sample_condition_media(data, layer))
+    assert all(damage.timing.start_ms == pytest.approx(cue.travel_end_ms) for damage in group.damage)
+    tracks = choreography_feedback(group, data, 5000)
+    assert all(track.start_ms >= 5000 + cue.travel_end_ms for track in tracks)
+    halfway = (cue.travel_start_ms + cue.travel_end_ms) / 2
+    start, end = cue.points[0].grid, cue.points[-1].grid
+    expected = tuple(a + .75 * (b - a) for a, b in zip(start, end))
+    for quadrant in range(4):
+        camera = Camera(quadrant=quadrant, viewport=(960, 640)).with_focus((4.5, 3.5))
+        before_impact = frame_at(scene, data, fonts, cue.travel_end_ms - .001, camera)
+        travelling = frame_at(scene, data, fonts, halfway, camera)
+        contact = actor_contact(travelling, identity)
+        assert contact.grid == pytest.approx(expected)
+        assert contact.body_lift_px > 0
+        assert actor_body(travelling, identity)[4][8] == cue.flight_body.actor.clip
+        assert before_impact.displayed.actors[target].normal_hp == group.before.actors[target].normal_hp
+        landed = frame_at(scene, data, fonts, cue.travel_end_ms + .001, camera)
+        assert actor_contact(landed, identity).grid == end
+        assert actor_contact(landed, identity).body_lift_px == 0
+        assert landed.displayed.actors[target].normal_hp == group.after.actors[target].normal_hp
+        assert body_pixels(actor_body(travelling, identity)) == body_pixels(
+            actor_body(frame_at(scene, data, fonts, halfway, camera), identity))
+    # Every captured frame must be sampleable, including hand phase boundaries.
+    camera = Camera(viewport=(960, 640)).with_focus((4.5, 3.5))
+    for frame in range(int(group.complete_ms * 32 / 1000) + 2):
+        frame_at(scene, data, fonts, frame * 1000 / 32, camera)
+
+
+@pytest.mark.parametrize('case_id,moved,harmed', [
+    ('telekinesis-initial', True, True),
+    ('telekinesis-resisted', False, False),
+    ('telekinesis-ally', True, False),
+])
+def test_initial_transfer_and_resistance_use_recorded_outcome(data, fonts, case_id, moved, harmed):
+    scene = load_scene(case_id, data)
+    group = scene.group
+    target = next(actor for actor in group.before.actors.values() if actor.name == 'Recipient')
+    assert bool(group.forced_movement) is moved
+    assert bool(group.damage) is harmed
+    assert (group.after.actors[target.uuid].normal_hp < target.normal_hp) is harmed
+    camera = Camera(quadrant=0, viewport=(960, 640)).with_focus((4.5, 3.5))
+    frames = [frame_at(scene, data, fonts, at, camera) for at in range(0, int(group.complete_ms) + 32, 32)]
+    hand = [command for frame in frames for command in frame.commands
+            if str(command[4][2]).startswith('utility.telekinesis.grab')]
+    if not moved:
+        assert hand, 'Resisted native attempt needs its open-hand cue'
+        assert all(actor_contact(frame, str(target.uuid)).grid == target.last_visual_position for frame in frames)
+        assert not any('utility.telekinesis.hold' in str(command[4][2])
+                       for frame in frames for command in frame.commands)

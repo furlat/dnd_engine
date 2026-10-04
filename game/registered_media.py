@@ -29,6 +29,7 @@ class RegisteredMediaSample:
     positions: np.ndarray | None = None
     ownership: np.ndarray | None = None
     vertical_scale: float = 1
+    material_positions: np.ndarray | None = None
 
 
 def _nearest_indices(source_size: int, output_size: int) -> np.ndarray:
@@ -85,7 +86,7 @@ def registered_media_samples(data: AnimationData, asset_id: str,
             if footpoint_image is not None:
                 footpoint_image = pygame.transform.rotate(footpoint_image, -degrees(rotation))
             destination = round(anchor[0]+dx-image.width/2), round(anchor[1]+dy-image.height/2)
-        positions, ownership = None, None
+        positions, ownership, material_positions = None, None, None
         if layer.positions is not None:
             if rotation:
                 raise ValueError("registered XYZ media uses authored camera banks, not residual screen rotation")
@@ -100,6 +101,8 @@ def registered_media_samples(data: AnimationData, asset_id: str,
             ownership = layer.positions.ownership[ix[:, None], iy[None, :]]
             positions.setflags(write=False)
             ownership.setflags(write=False)
+            if layer.positions.coordinate_basis == "material_rest_xyz":
+                material_positions, positions = positions, None
         footpoints = None
         if footpoint_image is not None:
             assert layer.footpoint is not None
@@ -111,7 +114,7 @@ def registered_media_samples(data: AnimationData, asset_id: str,
             footpoints = low + packed.astype(np.float32) * ((high - low) / 65535)
             footpoints.setflags(write=False)
         result.append(RegisteredMediaSample(image, destination, layer.blend, footpoints,
-            positions, ownership, layer.positions.vertical_scale if layer.positions is not None else 1))
+            positions, ownership, layer.positions.vertical_scale if layer.positions is not None else 1, material_positions))
     return tuple(result)
 
 

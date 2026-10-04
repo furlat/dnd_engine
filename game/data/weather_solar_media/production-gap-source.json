@@ -1,0 +1,1957 @@
+{
+  "revision": "production-gaps-20261004-v1",
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/production-gap-delivery-2026-10-04",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/production-gaps-20261004",
+  "mediaSha256": "46c1ed40e37dd25191a198a355d2340e3130a6c540cb5165e4486aff36cfae49",
+  "deliveryReceiptSha256": "941f36df34d9be54884579bef87737bb875513cc0941ece62ad860927022fc52",
+  "identities": [
+    "weather.cone.near",
+    "weather.cone.middle",
+    "weather.cone.far",
+    "weather.cone.ground",
+    "weather.cone.contact.back",
+    "weather.cone.contact.front"
+  ],
+  "registrations": {
+    "weather.cone.near": {
+      "banksByFacing": {
+        "E": "h7/near",
+        "SE": "h0/near",
+        "S": "h1/near",
+        "SW": "h2/near",
+        "W": "h3/near",
+        "NW": "h4/near",
+        "N": "h5/near",
+        "NE": "h6/near"
+      },
+      "captureZoom": 0.67,
+      "referencePixelScale": 1.4925373134328357,
+      "frameCount": 96,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          196.6643167162968,
+          554.0136480682171
+        ],
+        "SE": [
+          289.024,
+          442.5256480682171
+        ],
+        "S": [
+          512.0,
+          396.34580642636547
+        ],
+        "SW": [
+          734.976,
+          442.5256480682171
+        ],
+        "W": [
+          827.3356832837032,
+          554.0136480682171
+        ],
+        "NW": [
+          734.976,
+          665.501648068217
+        ],
+        "N": [
+          512.0,
+          711.6814897100687
+        ],
+        "NE": [
+          289.02400000000006,
+          665.5016480682172
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": -5.048151990408858,
+        "SE": 2.25,
+        "S": 2.82842712474619,
+        "SW": 2.25,
+        "W": -5.048151990408858,
+        "NW": -13.411321747118338,
+        "N": -14.142135623730953,
+        "NE": -13.411321747118338
+      }
+    },
+    "weather.cone.middle": {
+      "banksByFacing": {
+        "E": "h7/middle",
+        "SE": "h0/middle",
+        "S": "h1/middle",
+        "SW": "h2/middle",
+        "W": "h3/middle",
+        "NW": "h4/middle",
+        "N": "h5/middle",
+        "NE": "h6/middle"
+      },
+      "captureZoom": 0.67,
+      "referencePixelScale": 1.4925373134328357,
+      "frameCount": 96,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          196.6643167162968,
+          554.0136480682171
+        ],
+        "SE": [
+          289.024,
+          442.5256480682171
+        ],
+        "S": [
+          512.0,
+          396.34580642636547
+        ],
+        "SW": [
+          734.976,
+          442.5256480682171
+        ],
+        "W": [
+          827.3356832837032,
+          554.0136480682171
+        ],
+        "NW": [
+          734.976,
+          665.501648068217
+        ],
+        "N": [
+          512.0,
+          711.6814897100687
+        ],
+        "NE": [
+          289.02400000000006,
+          665.5016480682172
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": -3.9968028886505635e-15,
+        "SE": 6.75,
+        "S": 8.48528137423857,
+        "SW": 6.75,
+        "W": 1.3322676295501878e-15,
+        "NW": -8.046793048271002,
+        "N": -8.485281374238571,
+        "NE": -8.046793048271002
+      }
+    },
+    "weather.cone.far": {
+      "banksByFacing": {
+        "E": "h7/far",
+        "SE": "h0/far",
+        "S": "h1/far",
+        "SW": "h2/far",
+        "W": "h3/far",
+        "NW": "h4/far",
+        "N": "h5/far",
+        "NE": "h6/far"
+      },
+      "captureZoom": 0.67,
+      "referencePixelScale": 1.4925373134328357,
+      "frameCount": 96,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          196.6643167162968,
+          554.0136480682171
+        ],
+        "SE": [
+          289.024,
+          442.5256480682171
+        ],
+        "S": [
+          512.0,
+          396.34580642636547
+        ],
+        "SW": [
+          734.976,
+          442.5256480682171
+        ],
+        "W": [
+          827.3356832837032,
+          554.0136480682171
+        ],
+        "NW": [
+          734.976,
+          665.501648068217
+        ],
+        "N": [
+          512.0,
+          711.6814897100687
+        ],
+        "NE": [
+          289.02400000000006,
+          665.5016480682172
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": 5.048151990408849,
+        "SE": 12,
+        "S": 14.14213562373095,
+        "SW": 12.546793048271002,
+        "W": 5.04815199040886,
+        "NW": -2.6822643494236678,
+        "N": -2.8284271247461907,
+        "NE": -2.6822643494236678
+      }
+    },
+    "weather.cone.ground": {
+      "banksByFacing": {
+        "E": "h7/ground",
+        "SE": "h0/ground",
+        "S": "h1/ground",
+        "SW": "h2/ground",
+        "W": "h3/ground",
+        "NW": "h4/ground",
+        "N": "h5/ground",
+        "NE": "h6/ground"
+      },
+      "captureZoom": 0.67,
+      "referencePixelScale": 1.4925373134328357,
+      "frameCount": 96,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          196.6643167162968,
+          554.0136480682171
+        ],
+        "SE": [
+          289.024,
+          442.5256480682171
+        ],
+        "S": [
+          512.0,
+          396.34580642636547
+        ],
+        "SW": [
+          734.976,
+          442.5256480682171
+        ],
+        "W": [
+          827.3356832837032,
+          554.0136480682171
+        ],
+        "NW": [
+          734.976,
+          665.501648068217
+        ],
+        "N": [
+          512.0,
+          711.6814897100687
+        ],
+        "NE": [
+          289.02400000000006,
+          665.5016480682172
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "weather.cone.contact.back": {
+      "banksByFacing": {
+        "E": "contact-back",
+        "SE": "contact-back",
+        "S": "contact-back",
+        "SW": "contact-back",
+        "W": "contact-back",
+        "NW": "contact-back",
+        "N": "contact-back",
+        "NE": "contact-back"
+      },
+      "captureZoom": 0.85,
+      "referencePixelScale": 1.1764705882352942,
+      "frameCount": 48,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          256.0,
+          309.300896802962
+        ],
+        "SE": [
+          256.0,
+          309.300896802962
+        ],
+        "S": [
+          256.0,
+          309.300896802962
+        ],
+        "SW": [
+          256.0,
+          309.300896802962
+        ],
+        "W": [
+          256.0,
+          309.300896802962
+        ],
+        "NW": [
+          256.0,
+          309.300896802962
+        ],
+        "N": [
+          256.0,
+          309.300896802962
+        ],
+        "NE": [
+          256.0,
+          309.300896802962
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    },
+    "weather.cone.contact.front": {
+      "banksByFacing": {
+        "E": "contact-front",
+        "SE": "contact-front",
+        "S": "contact-front",
+        "SW": "contact-front",
+        "W": "contact-front",
+        "NW": "contact-front",
+        "N": "contact-front",
+        "NE": "contact-front"
+      },
+      "captureZoom": 0.85,
+      "referencePixelScale": 1.1764705882352942,
+      "frameCount": 48,
+      "fps": 32,
+      "pivotByFacing": {
+        "E": [
+          256.0,
+          309.300896802962
+        ],
+        "SE": [
+          256.0,
+          309.300896802962
+        ],
+        "S": [
+          256.0,
+          309.300896802962
+        ],
+        "SW": [
+          256.0,
+          309.300896802962
+        ],
+        "W": [
+          256.0,
+          309.300896802962
+        ],
+        "NW": [
+          256.0,
+          309.300896802962
+        ],
+        "N": [
+          256.0,
+          309.300896802962
+        ],
+        "NE": [
+          256.0,
+          309.300896802962
+        ]
+      },
+      "sortDepthByFacing": {
+        "E": null,
+        "SE": null,
+        "S": null,
+        "SW": null,
+        "W": null,
+        "NW": null,
+        "N": null,
+        "NE": null
+      }
+    }
+  },
+  "contracts": {
+    "physicalRadialRangeFt": 60,
+    "halfAngleDegrees": 26.5,
+    "origin": "caster ground apex",
+    "localForwardAxis": "+X",
+    "ground": "separate transient visual layer",
+    "layerOrder": "ascending canonical camera depth; three coarse bands do not solve arbitrary actor occlusion",
+    "sampleTimes": "(frameIndex+1)/32",
+    "durationSeconds": 3,
+    "loop": false,
+    "releaseDelayPreviewOnly": 0.6,
+    "recipientContactDurationSeconds": 1.5
+  },
+  "files": [
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/near/0.png",
+      "bytes": 436157,
+      "sha256": "b199fc37b3060fe10657ee570a3d9877b2a09e96e7796890c41eb386ee1125f1"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/near/1.png",
+      "bytes": 307917,
+      "sha256": "e41553cccbaa67cf6227dc1c438c83d7eba3b754fd633372e962dc3fb934d7ce"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/near/2.png",
+      "bytes": 285517,
+      "sha256": "a9b4ccfd6aa83c51e98837d633e66b2d7d9b1d6306b58e231e68b55bf5b24e6b"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/near/3.png",
+      "bytes": 291605,
+      "sha256": "80cf1b2b93d9bea473c10bd44e4dd1a769936fce3367c8efceee419fbf32c74c"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/near/4.png",
+      "bytes": 2519,
+      "sha256": "a4a4f32aa775f273206089ad2357621b755a425276e4b079015e6189b6952561"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/middle/0.png",
+      "bytes": 396733,
+      "sha256": "a24344832d6332f32b5271264ddb38f8006bc6494c7f4ea7bb3a828851fdd211"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/middle/1.png",
+      "bytes": 413462,
+      "sha256": "0ecd5fb1653920e0207650479a832dcb232c836b001b04caafc48ac4c52344b4"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/middle/2.png",
+      "bytes": 409480,
+      "sha256": "194a5ae157e83d1901d0919cddca11f491f9c77a4e0d7af8092be469c90d7797"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/middle/3.png",
+      "bytes": 386051,
+      "sha256": "cb0678908f0a1e661d0bcf0d684b133808e17132da7de4041962b51fb5db3680"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/middle/4.png",
+      "bytes": 366075,
+      "sha256": "54b16f3a7c8940b01f54958dfc30b63bc880c400bc36ddb17dd70d4c114796e1"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/middle/5.png",
+      "bytes": 298890,
+      "sha256": "5ca261cb847f58d869b574ddc48d874d33313f1db9b441760d6f973a57afca9c"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/middle/6.png",
+      "bytes": 151292,
+      "sha256": "aa15b2b2020054d5752b7967ee83ec2214a5872d080b3a3dddfb48508bfdde3b"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/far/0.png",
+      "bytes": 358326,
+      "sha256": "607c70582b0bab08caf9c6fa69f5d31ed22ba8ec34dc25d063b82d1c45e49e77"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/far/1.png",
+      "bytes": 415545,
+      "sha256": "f1015f1f651baef47debb51454cec9433a2ae8569c6d1554774b149b1cef3ae1"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/far/2.png",
+      "bytes": 394834,
+      "sha256": "d8f7c29c9f30789d4210f17b56b6f937b7cfc76cb5c319b38776d72d81dbf2d0"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/far/3.png",
+      "bytes": 379059,
+      "sha256": "40ae08bee33ba16d83fab00a6836a33b24f7172fdfaa3abec68071729d8fe4e3"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/far/4.png",
+      "bytes": 321567,
+      "sha256": "80ad8906edb5c234e4dd5ed7f198b0cc10f4445ef04591a00564c6f115bda69f"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/far/5.png",
+      "bytes": 116193,
+      "sha256": "ce4b241872d6262f6085e0adff50f42f45f063c6f95da47730a4a83d5179f0c5"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/0.png",
+      "bytes": 112664,
+      "sha256": "79004f0c9df965658a3e7bdcacd8e14c318d9d209c190b5c2ec0a204256683ab"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/1.png",
+      "bytes": 112397,
+      "sha256": "4c9a329488e6ffadd1eae845bb6761c578924db44932c175af70517304978738"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/2.png",
+      "bytes": 151619,
+      "sha256": "7615571ec6a9f933c9f4c201b4d6ddec09622f14c94bf921b3934a552d61b081"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/3.png",
+      "bytes": 157690,
+      "sha256": "faef62dbdb9ab7fad3a38832ef065b7b357374cabc1287964d9093aaf938e8a4"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/4.png",
+      "bytes": 157508,
+      "sha256": "9efadce66fddda1f38c1f425a66e8df5f296ceba51981afd2ebed75784e54e37"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/5.png",
+      "bytes": 157481,
+      "sha256": "d32a1be0fb1f433ef8093c3f3dbd2b0b0c2e0010a552e31624958cbbcd3113b0"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/6.png",
+      "bytes": 157218,
+      "sha256": "738e3aba6f1304a5b7e448b69d47c7bb9ad586aecbd18ff64a4478fc1ab23ff8"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/7.png",
+      "bytes": 156774,
+      "sha256": "c2914c3a2a04ae6aad01bc59235a2a3e69e1a92086b3f44a0d91fa2c24ad238b"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/8.png",
+      "bytes": 156395,
+      "sha256": "9b72a6c78bfe9408dfabc72799856c429a917651b8b728fa70201153916574e6"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/9.png",
+      "bytes": 154856,
+      "sha256": "fb31be61ce0ac91873c876b17a8a09643fbca07b06203086dabce33ca668ddf1"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/10.png",
+      "bytes": 153250,
+      "sha256": "a1f0c9f737793464f99cacf16e0e22f472bcdfc8b0d8593bd0ef631601378f86"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/11.png",
+      "bytes": 150453,
+      "sha256": "29250e523c340d7faa0b3278a0d5ed5f4c7b0a3a7b419600307554ec7456f58a"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/12.png",
+      "bytes": 146103,
+      "sha256": "476ed8934484a88b62fa3e0793de69301c5ad4628d0a8e62580d4bfa4be140e8"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/13.png",
+      "bytes": 140190,
+      "sha256": "fc78aa0135b3778fbe0074fbfdadacbc4a38fe336c1fc65687b8a43a2b15d650"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/14.png",
+      "bytes": 132116,
+      "sha256": "a511a2569956d4d22b60650233cf4b89d145fd7321224bc3b33eda629f218027"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/15.png",
+      "bytes": 121311,
+      "sha256": "cbbb54684a235ff7a7ad5c5da1228b24aaf6797d62db16a7625733a9fe4371fd"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/16.png",
+      "bytes": 104504,
+      "sha256": "bc83102ec6e6ea6e36d4f3af1d54ebdafb32bdd88e9852240b3e22ec1ccdac10"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/17.png",
+      "bytes": 83852,
+      "sha256": "d010dabd518e72453ff8fbfd2ad2fbe8512dd122e2fbc2bad53a9d3a80696c79"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/18.png",
+      "bytes": 96717,
+      "sha256": "17aa446eb6ea38aeec2eacede48a1b9776bfdb3cce5a031f451f1a5f1e5fa528"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h0/ground/19.png",
+      "bytes": 7440,
+      "sha256": "1a83451664052d707368412841f3c1d084de2faf828543e318e1ae3b80a55f9f"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/contact-back/0.png",
+      "bytes": 68088,
+      "sha256": "73d1bb128cf5387b5b7ce7aab537fa6016c4317dc7c19b2dddbe98e194c83795"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/contact-front/0.png",
+      "bytes": 96021,
+      "sha256": "eb6a305e683ba785b4cdba56f28d15bc23c6bb03146c3d22afa4323d440653d3"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h1/far/0.png",
+      "bytes": 1895078,
+      "sha256": "3185dab8588cce086c8a83d3b206b34204af943ba08d824332a4e2483041982a"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h1/far/1.png",
+      "bytes": 441589,
+      "sha256": "2d42ff3da53c2340605444867febd1079e9b5fadc067f9f4acf400b7f6ba4b97"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h1/ground/0.png",
+      "bytes": 350434,
+      "sha256": "8fd9f3c1bca7ec7c0e19aa1e323beac6ebe7f41f4d973e659e1acca79c4ac872"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h1/ground/1.png",
+      "bytes": 419490,
+      "sha256": "30c45fa398425e40c38faa46060180a45b82bf47c0e2f6138829559c4bc3eb56"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h1/ground/2.png",
+      "bytes": 482013,
+      "sha256": "bcb1289e442af060faa70b4dbea033059b900769f93ee89e886cf5abedb0da55"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h1/ground/3.png",
+      "bytes": 233977,
+      "sha256": "cc80b0f01ea49071e6cf7e547be7f198c39e26f83d1339235819e3c76016f8b6"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h1/middle/0.png",
+      "bytes": 1790857,
+      "sha256": "2dd1cfca8c2c7aec60e5d85de4b985ed660f9d4ee758ba0dcad82479d2329b5c"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h1/near/0.png",
+      "bytes": 742710,
+      "sha256": "f234f7d93e70d94203d3c99820d303300eeac1b7457d6a5f41f11c4d866e157d"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h2/far/0.png",
+      "bytes": 1683971,
+      "sha256": "9bb9cdec21d3e8bf51aa3b4494a220f44e41856778e32ebf6ca0297a7282ce13"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h2/far/1.png",
+      "bytes": 336109,
+      "sha256": "ead1e010d693b37c977cb746fbb552f5878bad62e804882fa7043011d97d29ec"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h2/ground/0.png",
+      "bytes": 399994,
+      "sha256": "7a0d47c1a6a89e14681de7b19ec00af86404e14bf67f55ea7eb2b400c7c907a1"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h2/ground/1.png",
+      "bytes": 564669,
+      "sha256": "0f2ac478c7b5426db31e1268eb6dbdbc4405e4560317ccfb2f2836d08cd6a37b"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h2/ground/2.png",
+      "bytes": 672525,
+      "sha256": "f8f8afc9eb7988a1b00ce8d627d31f2f1a61a92e0bd114747a0571d248342fe1"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h2/ground/3.png",
+      "bytes": 141578,
+      "sha256": "1013e0c5125fde2de91a39e224e993721329a30889faf47309a3861529c1a0e3"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h2/middle/0.png",
+      "bytes": 2148211,
+      "sha256": "8c1052ab0586a080c2e968e7aca181cb28c3d47d09fa54299aaea8f467620aac"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h2/middle/1.png",
+      "bytes": 267254,
+      "sha256": "97c3816dd2c316b355ced3779055d609557fe04ce4b1b1415932bc6014d2a445"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h2/near/0.png",
+      "bytes": 1383176,
+      "sha256": "48bea13dcdfa335c441d1cef78ca72a0a8a151fbe2f77037a05505bd553bf025"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h3/far/0.png",
+      "bytes": 1366072,
+      "sha256": "4e9ac8eebe99d95a8c505f09325187df627549f93186626fe8741dd31159e0d2"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h3/ground/0.png",
+      "bytes": 543973,
+      "sha256": "391278ecc297ccc820f8b1f639fe95d227cef2f6d13eb8d831706435867a5e66"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h3/ground/1.png",
+      "bytes": 407644,
+      "sha256": "9c31f9cb5c81f77863051ad219c022af8409db53a9c65b81c862f043eb978191"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h3/ground/2.png",
+      "bytes": 519392,
+      "sha256": "bfffa12e2dd704ac637cfa7ed61d72195f02719fe34abd65daee1ce09ecf1560"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h3/ground/3.png",
+      "bytes": 564652,
+      "sha256": "d31736f98460def6cfa481696df023e740274dc6713eba5f2df5f928ce2ae613"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h3/ground/4.png",
+      "bytes": 74058,
+      "sha256": "f1d3b2fb3031b7e23f41f870f99307e20e6a1800790a3d11112f4be4110eef13"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h3/middle/0.png",
+      "bytes": 1785542,
+      "sha256": "f1d991ae1a258bb063b13654e980aa59282512e2bafb7b0d6fc33875d7512aaa"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h3/middle/1.png",
+      "bytes": 1169750,
+      "sha256": "47a8ed86dda92574fcdc64f0472ffd1a5630c888e49d340677d74640fa5a040f"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h3/near/0.png",
+      "bytes": 1274196,
+      "sha256": "19997d279caa70d0ad0c33c8f1f32a9b09840b94225b4859a848604e4e118e02"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h4/far/0.png",
+      "bytes": 1830901,
+      "sha256": "f1fd082e56ea0bcdb95849d1f6b7e177350f9c104ed657c6ea9774eaa654a33b"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h4/far/1.png",
+      "bytes": 45814,
+      "sha256": "d851cd8ee10dc96265fa16e5ed23ee42decfe1992750dacbef546cc4e1f95d1a"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h4/ground/0.png",
+      "bytes": 516463,
+      "sha256": "7683bffc7aa3621157fc030e302633b21d09023ae24b441f173752985a2f1807"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h4/ground/1.png",
+      "bytes": 597096,
+      "sha256": "c3991ed54463c190157b04a7638fccbf400d0130316bda17ea6fef42ab6ac786"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h4/ground/2.png",
+      "bytes": 678125,
+      "sha256": "73aa0682c12e71db253cd8d1ec7adf5a3a2f0fe4d2e303975a8512ba3a54c2b6"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h4/ground/3.png",
+      "bytes": 150254,
+      "sha256": "abce653ad0e35885f7f816e690bc143a7f280e4d303d15e117b2450e41c207bb"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h4/middle/0.png",
+      "bytes": 2004149,
+      "sha256": "9372fc40f74f23b272159da2d7331db471b91a1a749e89285bb3aeaa533193db"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h4/middle/1.png",
+      "bytes": 805989,
+      "sha256": "b544548a116403732bed4af1ea2ec201402815285feb0b080e02f91cbe26409d"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h4/near/0.png",
+      "bytes": 1219339,
+      "sha256": "5395e346f6e977db155767b6c54e00d672c54e65b12f989fffcb90f726b375a3"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h5/far/0.png",
+      "bytes": 759757,
+      "sha256": "f613be0bb923de018bb488346ef5d647a8ac999d4b42e37a7c1bed72ab9e144e"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h5/ground/0.png",
+      "bytes": 465645,
+      "sha256": "82d8f523f064b9c37f83af21df4fd0c1dd71664b627986d30af0c87559731098"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h5/ground/1.png",
+      "bytes": 417251,
+      "sha256": "6f6330b8ba045448db0ace946a5cb4394f5e37686477cae20d8645f6eab84071"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h5/ground/2.png",
+      "bytes": 468977,
+      "sha256": "2f51bb16c3141a49455ede0b335e8a7104fffc1e9e511fe4982c74999385a6f2"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h5/ground/3.png",
+      "bytes": 220215,
+      "sha256": "6a0e51f5886094413ba3f78e3f2065de3c787014fc23bcb6e794af47fc85456d"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h5/middle/0.png",
+      "bytes": 1935060,
+      "sha256": "490fed06b7c9482d4a3d386da0b2b2c3bb1ca9dc2b300091fecf01560ecde33f"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h5/near/0.png",
+      "bytes": 1783094,
+      "sha256": "251522d8d4a969760fd989cddb336742ed162250fe0e63e11c29c5400710b906"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h5/near/1.png",
+      "bytes": 702522,
+      "sha256": "d1c1372b84446f3d183c8d589e486671c526c5f4638138bd8f2fd6fb0859594c"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h6/far/0.png",
+      "bytes": 1886014,
+      "sha256": "2aa3e2276270ed617df8f4a1a9a8d3b1d1e452b2080eb254a4fd1bcf8ecc6067"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h6/ground/0.png",
+      "bytes": 506369,
+      "sha256": "beefec7e905d6549c2962251ed1f423406fb6e9eb0cefa763de9bcf608d489a6"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h6/ground/1.png",
+      "bytes": 564209,
+      "sha256": "57944ffc437adf2e40a2a4360df88810ed26e64ef59c2dce253234cb45d4fe71"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h6/ground/2.png",
+      "bytes": 647067,
+      "sha256": "ad8202bcd2c522c328265a1800c2895151a69cdfa550ddb8266b852023cb5caf"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h6/ground/3.png",
+      "bytes": 136548,
+      "sha256": "cea75b0a343763facf8a7266bfcca3038d512f2c1570eb29b254a75209911a99"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h6/middle/0.png",
+      "bytes": 2069680,
+      "sha256": "85fd13b9ac9dcfa4c39e2b48ff68c8fb039d8719a3e6b8e6179ebfbbabcbeb40"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h6/middle/1.png",
+      "bytes": 818842,
+      "sha256": "ab3485fb99dcec708485784c10afb5e51491f7d026c7274b249846f5cef1a6b5"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h6/near/0.png",
+      "bytes": 1376611,
+      "sha256": "77bf9ac53c1a8cb647f3e723991931ebd690605882969ef2b7b5e1690324c04d"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h7/far/0.png",
+      "bytes": 1445282,
+      "sha256": "128a29d12bef8f4a8f7e8a0f112eea90a49f6077e22ba9eeb444677d83fc181c"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h7/ground/0.png",
+      "bytes": 542580,
+      "sha256": "724ee9bcfc21be93b0483e746154d38b42003fced120201b68c67068434486ba"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h7/ground/1.png",
+      "bytes": 405858,
+      "sha256": "2166f790d23450e71d92dc2efb3882ed57f1f2fc7c2901737bf634ae8c081a25"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h7/ground/2.png",
+      "bytes": 515535,
+      "sha256": "49262c870133956a4be3e0d511b73ea6b10080ae0f4ebeb0da71adb50aec0474"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h7/ground/3.png",
+      "bytes": 560904,
+      "sha256": "04654103eab68f7e9b529e3af0c787f15b9b4dc833e921fb070e17dfd802952d"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h7/ground/4.png",
+      "bytes": 70811,
+      "sha256": "f7d47fe0be6d5c2bedef108f9fb9197f29188234c530af61cd956affaa87ea04"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h7/middle/0.png",
+      "bytes": 1561854,
+      "sha256": "2e5507ea5f519a15d235628b4579d4a8e82224520672cf3263f4041934de6efe"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h7/middle/1.png",
+      "bytes": 1342748,
+      "sha256": "a94273d7f28f40ad8c5027755a4aa9a726140c9067cc313209d77daf309f0f30"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cone/h7/near/0.png",
+      "bytes": 1311420,
+      "sha256": "ab6e65e779f3f15acaa676ccaece4bc8d6bd32fc14830de91b4dd2a2e7f1c13a"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cold/freeze-noise.png",
+      "bytes": 441001,
+      "sha256": "9cd820fc0e056d10127a518d840627e222af68010816cba963bbfec468bde5f8"
+    },
+    {
+      "path": "game/assets/weather_solar_media/production-gaps/cold/freeze-normal.webp",
+      "bytes": 67218,
+      "sha256": "200f813f31da7cdfc8aed56a76d3a8efca1427eb14a432c7a9564c6901de19fa"
+    }
+  ],
+  "originals": [
+    {
+      "path": "production-gap-delivery-2026-10-04/media.json",
+      "sha256": "46c1ed40e37dd25191a198a355d2340e3130a6c540cb5165e4486aff36cfae49"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/far/adapter.gd",
+      "sha256": "70c3e4d65e98fa49137839f086531f917abfe52777f7710e9a454bdd44c6c552"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/far/registration.json",
+      "sha256": "d2193f4b5d3c2c98e2cefb20770b090367d5cac9e30f03b465d39670ea6797d4"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/far/command.json",
+      "sha256": "5d5473d88fa4f2338571be7bd7c89b96ed230042ac1693d22632f82169f0066e"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/far/capture.json",
+      "sha256": "712b97fc9631e3793fdd6efc7e3a209bc6ba4f4c335f19a0ba67e135e754d4c1"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/ground/adapter.gd",
+      "sha256": "48b4b9eec8158edebeff1cebc461cedba7e392301bacf0650b7ad36bbb65b933"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/ground/registration.json",
+      "sha256": "f4c5e1ff3099450f434134f6e1eada9b7d57bd026b39b0d836c24af204be47a2"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/ground/command.json",
+      "sha256": "e31142b6aa876452307ad43d51a6c34f3127f4a4bb3db29dd552201d55e89a8d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/ground/capture.json",
+      "sha256": "583a7b0e4c79081ee8e5306e538f56624ef0584425b53d059ecb936746091043"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/middle/adapter.gd",
+      "sha256": "4418c685028499a9e71b2c31a48bf225447391ab5bc91c7e2960379322201474"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/middle/registration.json",
+      "sha256": "f4864e888522dfd328874667dcff04731f6f603c2c1c514c26fcc5168da12861"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/middle/command.json",
+      "sha256": "2cc41de9ec8fe6580d3786cfb8498996533942b3b24651c40cecd90302d6bf11"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/middle/capture.json",
+      "sha256": "587f14bae8662ccd6cb018c736f1388af4a6f6717fc5d1d1e7518b7c1e8d3191"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/near/adapter.gd",
+      "sha256": "331dbc97c98a4971c1a580f0e4fed71cec56e2f9f55507dde265b5d9858faae8"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/near/registration.json",
+      "sha256": "0447b5510a4e873145418f5987fb0e4c92bdff2b84f6999547009b427ec72d9a"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/near/command.json",
+      "sha256": "3d04b02e6f76be35fed8bacb5dac372dd94fb5973cdd61cd5647bf101a9f8f8c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h1/near/capture.json",
+      "sha256": "cc8c133f62b85ab48f57d2570470931837ef9318ce4c3464d3dee4a5f79eb2e9"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/far/adapter.gd",
+      "sha256": "230afbd92c560624bd3ffee0cfa5705497eedfa8daf508de4651f50b1cc914cf"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/far/registration.json",
+      "sha256": "8779acc0043d5716d964a0b56247bcaea9e11711d4ba3b50ac386c3aac80eb0b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/far/command.json",
+      "sha256": "7d9c8f1a114e55de9e9f88d77faf9494f763c99b75408948ae4f4ef33823c752"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/far/capture.json",
+      "sha256": "6a76838b349f967b1b4af3384c4ca39c72324fdf39ed4b9e3319ba1aa6de768a"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/ground/adapter.gd",
+      "sha256": "b80a74f77faa5b4ed429b1adcdc76f1ca46fc11449e6d12652106ad1bd0d868b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/ground/registration.json",
+      "sha256": "ec403ce119aef94f410d6ab344ec6d4163b20cd1d292deae971ee09892b1bd61"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/ground/command.json",
+      "sha256": "b94dcec4ec3d8d19846ea6eaae520d9aee6d7b05b278d519924d5aea27001c05"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/ground/capture.json",
+      "sha256": "d6e362ec85669eaa118a3c745814bbb31bf5ae198b15c89112f10c1fd36c2fbe"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/middle/adapter.gd",
+      "sha256": "95df98ad9c576f0c6dc4cf3cc72eca31a71ccf1316c49991fd414943dddcc493"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/middle/registration.json",
+      "sha256": "904420af3bed28a5baea796c638f6f8ae414b016dd7768b20ae620a39f26e24f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/middle/command.json",
+      "sha256": "665e84c13349b351954b808dffff49b5a93e1b3c5d1d3bfe9e65b86fd0418d21"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/middle/capture.json",
+      "sha256": "9762b15a1fd9a95cfe9838f7fbf755a95de2f8c4480dde8b364b7177608a5142"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/near/adapter.gd",
+      "sha256": "32616a8e698f8afa9fd1f132976afcbfb44adb619985b225345dcc2c659620a8"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/near/registration.json",
+      "sha256": "206b6f0cea29101cb03015a3345d3c781a62317c0b68cbea6bbdbb791a9f1007"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/near/command.json",
+      "sha256": "8d0f50819a1d04e04561ef17291784b4ec5b17fb66d2c382c91e4063924b5e73"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h2/near/capture.json",
+      "sha256": "69c8f25754689c96a945fe5fe77fc757ceddd957ec0c4e97707afe668caeb39c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/far/adapter.gd",
+      "sha256": "142ceb470750a7bda7c4b7ae3fc6e5ba4a40ce5d93e345f4b9a74c02b0e146fa"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/far/registration.json",
+      "sha256": "d14aee2637e2c8b9adb6d7c1993922e6eaee9b6b1fafe0fdab96fbb65a3ed9a4"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/far/command.json",
+      "sha256": "08f8235c25a19955c9eaf7ec936d5bf4d500949e66afa2241c3db28c4affcdd2"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/far/capture.json",
+      "sha256": "eb319304110a3d5ec6e60a9762a168067d6ff87d59085d57c835cd23bb57e81c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/ground/adapter.gd",
+      "sha256": "a6e090be4a4331ac8d63432955836adffff5828aa441fe8a339c3169456186c8"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/ground/registration.json",
+      "sha256": "9a9dddb9bad09b4865e4f82ef12cc9710eb8b08c4904d4fe3acca03b86e725e0"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/ground/command.json",
+      "sha256": "f8dc58058d38ea8258a8d93fb35d12b9ad7e1e060c510cfe6ef7e7e947ef29d5"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/ground/capture.json",
+      "sha256": "07bafbb8fde0d70cfa2fc82c36f5d0f231473e3e6f5be46348ffb74f40416c5d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/middle/adapter.gd",
+      "sha256": "8a92e66f0caf69fc79382647c78420ce1327a34877c6e196ad1fd180ae5734ba"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/middle/registration.json",
+      "sha256": "01cc4e7b8c1f6acf0e5fbae86014a37209165fe959e138f3269362471a1bff46"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/middle/command.json",
+      "sha256": "c4545f2c04b206248219ccc562c5a23979296a3db73f1540093faf61f39a804f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/middle/capture.json",
+      "sha256": "504661badae9c4f7e4ae342ad20b644b213af236bc78f4162cf0321485e3e28a"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/near/adapter.gd",
+      "sha256": "ba900d97ea2978599068c8ba42b84c21ee8e4e3d4180c3a5e1d4f32e9355185e"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/near/registration.json",
+      "sha256": "aa8ccf5cd8b4a9d510dd0ee505e115fdde515de2919c713a3c8603bac572c361"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/near/command.json",
+      "sha256": "0ce655e569374742cfac3b938781eb313eb4867076416c78b66af3fa807fc42b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h3/near/capture.json",
+      "sha256": "6a4cff14a199c1bfad49217940ccc3543625f9543a57b47265ce4adf6a0ef115"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/far/adapter.gd",
+      "sha256": "bdf474fcc8a4aaa63dbec71d26fbd132b63dc148f902868b2b443e8b9dcd9796"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/far/registration.json",
+      "sha256": "6818840a5a351e7f1c3a601449e964f3c2d143128979cff070c1c88e306b3a0e"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/far/command.json",
+      "sha256": "701c9a81daaafd1ca89dc5f951b475b4738b70d14730c6ccf1d943006759d2d1"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/far/capture.json",
+      "sha256": "f5ee3022521c49097056e10e9934daa314a19afb204d79449620e023d44d2462"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/ground/adapter.gd",
+      "sha256": "3c4da3d1ccdf2f069cf8a6b925c5c684675864ec6fa4fc8f578ac9849b9f59f4"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/ground/registration.json",
+      "sha256": "2c4d5bce1ad31bb1ca017fd90eeb2d1f98c20bd7a255fd0e24f84332e3f83204"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/ground/command.json",
+      "sha256": "8d9084fffe54678ff690ce2d409e96c748d62fef4dcc0e97f6853519cc61c693"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/ground/capture.json",
+      "sha256": "c02dc201f9bb0c7770cf4f8ecf193e85e26fc326b27efb556c612877edfbccd7"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/middle/adapter.gd",
+      "sha256": "36ccba2e5602294fbc665f3bad3cd606d6e356cc00381b3f6aa6817f6793ce29"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/middle/registration.json",
+      "sha256": "07637b6f6e49d6ba276687696d12dc10b21c7b83ae8a74dcb4fed90cdbc737af"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/middle/command.json",
+      "sha256": "d3b86331263e1f000b526ee0d1302e8e0f9da1abf25bf6b98b8238eb0828eac8"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/middle/capture.json",
+      "sha256": "9ae17b1667d60d601de33557a09171d3fa9b27928f98665d66a306d072f0e899"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/near/adapter.gd",
+      "sha256": "4e08ccfd20fa6d149110b71a74167ece83cbd271199c37171ae004bb47f79b08"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/near/registration.json",
+      "sha256": "bf1ff1a14faaeabf8d640351c2c2f1c016337ecd2f686e7aed23c96ece69b07d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/near/command.json",
+      "sha256": "5d6255c98a043b7e75f5d6ca254391c6c173ab0b7b81ebc8b0fddbb866d0ecbe"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h4/near/capture.json",
+      "sha256": "0e627d06a2e3568c65a078540d64d53f03c462fd0f02ee4da196ebda2359aee1"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/far/adapter.gd",
+      "sha256": "b6e8ac44480367b78c7502184b032810ebb2624f9cea2c35fa32d040feff7b70"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/far/registration.json",
+      "sha256": "bc3fb9cedbe5887a0e783b5216fecc75fa8d6b3f4d24850677b80d01a27b6453"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/far/command.json",
+      "sha256": "fd5722670a14baffd12d591b7bc10fcbdf703625165ddb840d5e0c36c430efe7"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/far/capture.json",
+      "sha256": "9735d7b7386a1cc3c19a866d26ee8c574d1e2ef0e72435bc6f4151ef9d216fba"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/ground/adapter.gd",
+      "sha256": "18dc5fda1b8ca53156fe694fd9212049889d5fcf663eed07613f74eecc3c3e52"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/ground/registration.json",
+      "sha256": "f1e033ac0cb9c24abf1ac61cc0dec4fa83502a02fc11dce57dec5dd72de2cd4a"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/ground/command.json",
+      "sha256": "2d5f12a45da5b98b8fdfeed2f374fc1056cc075a6ecf2f08f1e2729ec706f7f6"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/ground/capture.json",
+      "sha256": "117eff2a108209fe8313e46336ace212dfbbadfea5ee4f4bc63c7346613d847f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/middle/adapter.gd",
+      "sha256": "d725015517522a5519cfc09922ebe3348cd244082cde3165fe0463b57622893d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/middle/registration.json",
+      "sha256": "de9f1183d53eb937b391eeb84b9b735d1275c3e6635b88492892952fa8e94b28"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/middle/command.json",
+      "sha256": "b0e47b3a1a84eb5aff00d9447ddf75d6babd9eb2f90dabae625c1be50ddd507b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/middle/capture.json",
+      "sha256": "6da32aac7c3ace657406a698608bef7e7a8fe05dbb6c7cbd11711f8c571cfc05"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/near/adapter.gd",
+      "sha256": "d2154046dc71d8a511483fc8037720405c50795c225b60bed821808d68e9dca5"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/near/registration.json",
+      "sha256": "fa58d275138e09acb978e3819c8c306a6fb1cae4b4f4894e8ddf63b3615be141"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/near/command.json",
+      "sha256": "d6a0e163fb686cdfffba73180d2d48da84e4e1c02cd88903533c6723d70bb20f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h5/near/capture.json",
+      "sha256": "829162240e729f59e263fc191451d6f20e8ac9d290b23f7e3fa2a86c1a8d9950"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/far/adapter.gd",
+      "sha256": "4992e5ab66b0372edb5c9251d8983ff5d8cec91ec78e1ecbc96cfc4e280e9a33"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/far/registration.json",
+      "sha256": "380568ac737aec9ad07fd2b2e0201256afb14dc3ab79bb58eec807608da7b1e6"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/far/command.json",
+      "sha256": "ebf20520773bf49ec0f9463030cd48f05a4551ce5923464ec25eb55684bdb70e"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/far/capture.json",
+      "sha256": "81731f772fa53154c0543c511bcac630f0d5c33664ed3ba59b14035cce9a5b66"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/ground/adapter.gd",
+      "sha256": "b1058dcae0c7e73180180efb2aa6fb1c45d9b60c9c271f9cc7748ca213513bb0"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/ground/registration.json",
+      "sha256": "85a9b7a7fb58b4c07af9f9fcf4fc5c46f925c645fcadd7d2c2a30b6d1e77c92f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/ground/command.json",
+      "sha256": "e9c01a32703517133f778d933be11cf41afbeace01b9c14cec4e5f2dcaea4de2"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/ground/capture.json",
+      "sha256": "aa7733cbd026838031ec38a1100cbbeabf652e1f43f91124e9d29bba9bdae85f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/middle/adapter.gd",
+      "sha256": "ff259a1a157a6062b5e319104c2f71f46805ebe4e2b57c4f41b36309206f594d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/middle/registration.json",
+      "sha256": "14a404a638e8a3b4ad48a2db6bb636d365b1945b97feddd9d7efacf70c064110"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/middle/command.json",
+      "sha256": "95696c97af86e20503dcf6b5e92f02ffb38b3a9f2cdd543f2f1b625db3d41e73"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/middle/capture.json",
+      "sha256": "e3a21c81a555aa531ca03f9cdeba521f690a649d53acbcc220f1a56cbcea08a5"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/near/adapter.gd",
+      "sha256": "0fc5c49c0cba2efa1a190e6541c2884f000fa3039d340582dd5bba1aae74e2a7"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/near/registration.json",
+      "sha256": "6f349e93f717c5506ee89804f1ddccac81fb7291f8e54f9d4c66ba292999ecb9"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/near/command.json",
+      "sha256": "f539b78800c2998b23ad590e0a72547a5d6f8fcda8259404039e8b750da3f29e"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h6/near/capture.json",
+      "sha256": "2f081a6ee41c1d7d45b716582a8890e1d49ff039f456bfa1c71626c72fa32bf8"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/far/adapter.gd",
+      "sha256": "0d5dcbc8d0d05090de1a415128b4eae065101fbfaa99e6c04887ca69d1424fb0"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/far/registration.json",
+      "sha256": "a9f399c4c4555d9ee0ba031b920d1e5579dd6d7c0ea330aebb457b97c820aa21"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/far/command.json",
+      "sha256": "7fc6244255a4a92a5e116a31e187f54f6eb8e0c60300067d877d256cc0b4e832"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/far/capture.json",
+      "sha256": "4a977e92571f4b5b5fd7a04f9810f30b6aa32bbad30f30a3e95cacfbf91ba2f5"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/ground/adapter.gd",
+      "sha256": "b2cc91536d36ecc94899e46a19161d930d66cef40db4cd3f49be1c2c4848ff5b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/ground/registration.json",
+      "sha256": "083ab48c132346762b9611561dad545a51aaa29584867795dc8d67015bfd911f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/ground/command.json",
+      "sha256": "9ec43e7fb6faa9a72408770b4f7608c8f5e791368b547b700e8aaa08e958e5bf"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/ground/capture.json",
+      "sha256": "261805d7dff1d9ccc43a2f055f739ee6dc4cdab4cd1e1bbc6a9db522736d3ef3"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/middle/adapter.gd",
+      "sha256": "084ee893c6221ea72d58c83c7c42bc0be660d06aa03a9972b83d9e37bf3e34c4"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/middle/registration.json",
+      "sha256": "ad766746ff1e1df22e8fba929294dae540756d7245ddec9f243a9a1072193e18"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/middle/command.json",
+      "sha256": "95aacad93f11706fa821069aa346c93cedcb55b752708d8f4d8a6dde7bc19668"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/middle/capture.json",
+      "sha256": "89885746f30986d794c35d439e2df327c744533e7893cdcbf72581f75bc3e571"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/near/adapter.gd",
+      "sha256": "3dd1415524063d8468e67112492a45859562b2c100737a560426ea14b35ae064"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/near/registration.json",
+      "sha256": "f07f5264617dade3de51c21b0712c16d940a67a87b2cd8ee79461ce96874e6fd"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/near/command.json",
+      "sha256": "a8deafd71c2cc164ceec8131cb66fbd77e7e00e163355ff974fd52b8aca1de40"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native/cone/h7/near/capture.json",
+      "sha256": "2c3ac40f9f36e7f23d54536014727e33c481791ccb035b216fe0213d544b0db4"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/THORNS_HEIGHT_DECISION.md",
+      "sha256": "6af9f694da6ba89327014bf057790adc1e9caeaab768fb4378f6271037f82edf"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/body-material.js",
+      "sha256": "4159ab3b46d9e9e013fb9f069ea4b77988f9ad071337ff3af3ac6fea56a81b71"
+    },
+    {
+      "path": "wall-spells-study/cold-conditions-demo/assets/freeze-noise.png",
+      "sha256": "9cd820fc0e056d10127a518d840627e222af68010816cba963bbfec468bde5f8"
+    },
+    {
+      "path": "wall-spells-study/cold-conditions-demo/assets/freeze-normal.webp",
+      "sha256": "200f813f31da7cdfc8aed56a76d3a8efca1427eb14a432c7a9564c6901de19fa"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/WindBlockComponent.gd",
+      "sha256": "be90d442df5f092743f0d56e54ed27a40c70aa52a5e13ba9e9da73a63fea0114"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/SleetSources/mist.tres",
+      "sha256": "6bf92e99ff8cd9bb788daff25f3a0c4a40681419c929f80d9e757605ecf3f876"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/SleetSources/particle.gdshader",
+      "sha256": "bb3a3c4b598bd07f49c017aa9b0e107efff39bca48822b60e10ce643b4a8d831"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/SleetSources/blotch.tres",
+      "sha256": "d08df6abda0cee7df4c68f40b01cc0cb64fd4f59f401f6e2a4e372d324656b5a"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/SleetSources/brush.tres",
+      "sha256": "4e4c77b90a4ea5037b8772f8b4e94dcbe9a2e8d714625ca44b7cddfde80a00a3"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/SleetSources/circle.tres",
+      "sha256": "0563189dcd626e2be0aee8736589cd770e83fb1254c3aba5389ed36449545623"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/DeathElementary/textures/T_VFX_Noise_075.png",
+      "sha256": "900721c102c94ad02849da1619429cefd7dc62031c9c1c52a7044a457a3d6b79"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/DeathCommunity/objects/sm_ice004uv2.obj",
+      "sha256": "bb7bfb46d7f1a942d3bf21563332f1c43d0e9f2761831dd1cc8e079fe2b97a49"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/DeathCommunity/objects/sm_plane_coned_spiked_waved1.obj",
+      "sha256": "0d08c64ea3173f8860d1cadec0b3005d1df7681ebe45b0876e8ff770460a50cc"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/IceStormSources/ice-noise.png",
+      "sha256": "9dd4b1e9c98d16632575cd947db96311a36a2e58935e4201ce912b0729cee96b"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/ConeColdSources/muzzle-mask.jpg",
+      "sha256": "ef5c68317e3e127c3045ae3319872bab74e457162121730eaef1cc90d8df5251"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/ConeColdSources/noise.png",
+      "sha256": "900721c102c94ad02849da1619429cefd7dc62031c9c1c52a7044a457a3d6b79"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/SleetSources/util/blend.gdshaderinc",
+      "sha256": "9ee43e3c82be1c32d015f1ab1ed40794c6ba36bd553fd6bd701ef7c514025f93"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/SleetSources/util/uvtools.gdshaderinc",
+      "sha256": "d004a204c41b65e6b267f1d879aca0fec6e8099929e8d5b6f7f322db251567ab"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/SleetSources/util/freshnel.gdshaderinc",
+      "sha256": "8cb64f2727807371713aa3b754829b696e4a33d94fd233730dd6c098e31a44bd"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/SleetSources/util/alpha.gdshaderinc",
+      "sha256": "e96ad3782009ee296d044bb9802f45003e4b3be0bf5424559ca21015ee588b05"
+    },
+    {
+      "path": "godot-library/projects/lelu-portal/SleetSources/util/dithering.gdshaderinc",
+      "sha256": "5e32891f6fb4e625f92388b6edc7d3aad8261fb0103ab9a88c67140212195cab"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/source-lineage.json",
+      "sha256": "b63fceb02772f2a7fd75dfa74069c35580a33e9b49c1e1b452fa6e5e008c555b"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/authoring/ColdConeCapture.gd",
+      "sha256": "324828ef32071ff0ee379da3eb8e3fbcae6ba35a36d5cb0cf7b911230a17a0aa"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/HANDOFF.md",
+      "sha256": "1d61668b9c4402db717df8d70c11d273929648281467ef4b768f049832f9a9e2"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/PLAN.md",
+      "sha256": "f3807d781a75f8dca6a4440f5739af7bb6c88650f5cf4702bccec87d207d56a7"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/accepted-supplement-receipt.json",
+      "sha256": "914d4bf161c84aeb607967df773237b827890f90e02dac60391a8bd63cd5e07e"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/acceptance-notice.json",
+      "sha256": "83a5326324187183afd7bdaac713d4d0cdd87042a9c266c8bccde316537fcdd0"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native-validation.json",
+      "sha256": "ffbb021ff86ab2f20f876858a32b7c717d11f1c8ce284bc24f0d0f7230ab488c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/delivery-validation.json",
+      "sha256": "1d062a336ae9efcc730bc28ec1929f6523a7a3e1f3cda4e9d23bd62772e837cb"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/browser-validation.json",
+      "sha256": "87d3722316a5344f2974226a1c3002b00f9978770c414d6b51c99382529e6218"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/call-browser-validation.json",
+      "sha256": "fd6d6f6840d477badd2152f59696335960ddb52783103a3c7b932a1ac222475d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/resource-monitor.jsonl",
+      "sha256": "fd69e46747d0c7cc53c4e4dd3fe33472b17b8867a8ddb4054b2252dd28d8e25d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/windows-resource-samples.json",
+      "sha256": "ef9ec6413a3595221e96f1e42d4dc803e21891ee659c6d75213f5426a46b396c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/native-component-validation.log",
+      "sha256": "17ab60211accc9a64f1aa9b1c041579bc704e3c971ce13fbe6a972a44a836a6d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/validate-browser.cjs",
+      "sha256": "c6beba9ed25636732ab680149a6c55bff9fa6c09a0336cea03ec1e5ccf27df95"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/validate-call.cjs",
+      "sha256": "5bb8c422df9ccf69631af12bb8a858d45af8b6376003496f52e255b4a2e34c75"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/probe-native.gd",
+      "sha256": "c66111aff58d457ac57f5d72edc1b0d38a0ac068dcd3bf899ac4dde5e5ef55f6"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/WindBlock.gd",
+      "sha256": "841ed4d4e9a0eb25c4b26217c3ddcd3618d9722e64c512ec36e5967aa31ce72a"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/monitor-windows.ps1",
+      "sha256": "4c34ce4690de0bbc6926d8f7ae8d16113f2182e01330847991aff1ca907cbce7"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/build.py",
+      "sha256": "b89497de835caeec6800a7cc35e3e32fea9a08d0add53baac33d51a5de8559e5"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/pack.py",
+      "sha256": "4593da003c9d403cb913a0f43cc84fa02931c7a48c4d69235fc6e921c9408e0b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/validate.py",
+      "sha256": "1abaf1ace4cf3ef6b31582bd04a6349a4ab64ab450254ede88d89defc8816d33"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/authoring/finalize.py",
+      "sha256": "13400a58853b955f318d383036eb06af6800fde01334f65256ca23a57a901c54"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/delivery-receipt.json",
+      "sha256": "941f36df34d9be54884579bef87737bb875513cc0941ece62ad860927022fc52"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/NOTES.md",
+      "sha256": "0dea83cc0a52e95dd48b80e1f5396e382de20ab00f5b08a10b7157853e471242"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/review.js",
+      "sha256": "3ad1f3c32c7272214bd2dd3c3f28c3738f956015566ee8f26b539bb84310450e"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/near/0.png",
+      "sha256": "b199fc37b3060fe10657ee570a3d9877b2a09e96e7796890c41eb386ee1125f1"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/near/1.png",
+      "sha256": "e41553cccbaa67cf6227dc1c438c83d7eba3b754fd633372e962dc3fb934d7ce"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/near/2.png",
+      "sha256": "a9b4ccfd6aa83c51e98837d633e66b2d7d9b1d6306b58e231e68b55bf5b24e6b"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/near/3.png",
+      "sha256": "80cf1b2b93d9bea473c10bd44e4dd1a769936fce3367c8efceee419fbf32c74c"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/near/4.png",
+      "sha256": "a4a4f32aa775f273206089ad2357621b755a425276e4b079015e6189b6952561"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/middle/0.png",
+      "sha256": "a24344832d6332f32b5271264ddb38f8006bc6494c7f4ea7bb3a828851fdd211"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/middle/1.png",
+      "sha256": "0ecd5fb1653920e0207650479a832dcb232c836b001b04caafc48ac4c52344b4"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/middle/2.png",
+      "sha256": "194a5ae157e83d1901d0919cddca11f491f9c77a4e0d7af8092be469c90d7797"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/middle/3.png",
+      "sha256": "cb0678908f0a1e661d0bcf0d684b133808e17132da7de4041962b51fb5db3680"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/middle/4.png",
+      "sha256": "54b16f3a7c8940b01f54958dfc30b63bc880c400bc36ddb17dd70d4c114796e1"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/middle/5.png",
+      "sha256": "5ca261cb847f58d869b574ddc48d874d33313f1db9b441760d6f973a57afca9c"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/middle/6.png",
+      "sha256": "aa15b2b2020054d5752b7967ee83ec2214a5872d080b3a3dddfb48508bfdde3b"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/far/0.png",
+      "sha256": "607c70582b0bab08caf9c6fa69f5d31ed22ba8ec34dc25d063b82d1c45e49e77"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/far/1.png",
+      "sha256": "f1015f1f651baef47debb51454cec9433a2ae8569c6d1554774b149b1cef3ae1"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/far/2.png",
+      "sha256": "d8f7c29c9f30789d4210f17b56b6f937b7cfc76cb5c319b38776d72d81dbf2d0"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/far/3.png",
+      "sha256": "40ae08bee33ba16d83fab00a6836a33b24f7172fdfaa3abec68071729d8fe4e3"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/far/4.png",
+      "sha256": "80ad8906edb5c234e4dd5ed7f198b0cc10f4445ef04591a00564c6f115bda69f"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/far/5.png",
+      "sha256": "ce4b241872d6262f6085e0adff50f42f45f063c6f95da47730a4a83d5179f0c5"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/0.png",
+      "sha256": "79004f0c9df965658a3e7bdcacd8e14c318d9d209c190b5c2ec0a204256683ab"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/1.png",
+      "sha256": "4c9a329488e6ffadd1eae845bb6761c578924db44932c175af70517304978738"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/2.png",
+      "sha256": "7615571ec6a9f933c9f4c201b4d6ddec09622f14c94bf921b3934a552d61b081"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/3.png",
+      "sha256": "faef62dbdb9ab7fad3a38832ef065b7b357374cabc1287964d9093aaf938e8a4"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/4.png",
+      "sha256": "9efadce66fddda1f38c1f425a66e8df5f296ceba51981afd2ebed75784e54e37"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/5.png",
+      "sha256": "d32a1be0fb1f433ef8093c3f3dbd2b0b0c2e0010a552e31624958cbbcd3113b0"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/6.png",
+      "sha256": "738e3aba6f1304a5b7e448b69d47c7bb9ad586aecbd18ff64a4478fc1ab23ff8"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/7.png",
+      "sha256": "c2914c3a2a04ae6aad01bc59235a2a3e69e1a92086b3f44a0d91fa2c24ad238b"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/8.png",
+      "sha256": "9b72a6c78bfe9408dfabc72799856c429a917651b8b728fa70201153916574e6"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/9.png",
+      "sha256": "fb31be61ce0ac91873c876b17a8a09643fbca07b06203086dabce33ca668ddf1"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/10.png",
+      "sha256": "a1f0c9f737793464f99cacf16e0e22f472bcdfc8b0d8593bd0ef631601378f86"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/11.png",
+      "sha256": "29250e523c340d7faa0b3278a0d5ed5f4c7b0a3a7b419600307554ec7456f58a"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/12.png",
+      "sha256": "476ed8934484a88b62fa3e0793de69301c5ad4628d0a8e62580d4bfa4be140e8"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/13.png",
+      "sha256": "fc78aa0135b3778fbe0074fbfdadacbc4a38fe336c1fc65687b8a43a2b15d650"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/14.png",
+      "sha256": "a511a2569956d4d22b60650233cf4b89d145fd7321224bc3b33eda629f218027"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/15.png",
+      "sha256": "cbbb54684a235ff7a7ad5c5da1228b24aaf6797d62db16a7625733a9fe4371fd"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/16.png",
+      "sha256": "bc83102ec6e6ea6e36d4f3af1d54ebdafb32bdd88e9852240b3e22ec1ccdac10"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/17.png",
+      "sha256": "d010dabd518e72453ff8fbfd2ad2fbe8512dd122e2fbc2bad53a9d3a80696c79"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/18.png",
+      "sha256": "17aa446eb6ea38aeec2eacede48a1b9776bfdb3cce5a031f451f1a5f1e5fa528"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/ground/19.png",
+      "sha256": "1a83451664052d707368412841f3c1d084de2faf828543e318e1ae3b80a55f9f"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/contact-back/0.png",
+      "sha256": "73d1bb128cf5387b5b7ce7aab537fa6016c4317dc7c19b2dddbe98e194c83795"
+    },
+    {
+      "path": "cold-weather-batch/cone-of-cold-v1/media/contact-front/0.png",
+      "sha256": "eb6a305e683ba785b4cdba56f28d15bc23c6bb03146c3d22afa4323d440653d3"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h1/far/0.png",
+      "sha256": "3185dab8588cce086c8a83d3b206b34204af943ba08d824332a4e2483041982a"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h1/far/1.png",
+      "sha256": "2d42ff3da53c2340605444867febd1079e9b5fadc067f9f4acf400b7f6ba4b97"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h1/ground/0.png",
+      "sha256": "8fd9f3c1bca7ec7c0e19aa1e323beac6ebe7f41f4d973e659e1acca79c4ac872"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h1/ground/1.png",
+      "sha256": "30c45fa398425e40c38faa46060180a45b82bf47c0e2f6138829559c4bc3eb56"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h1/ground/2.png",
+      "sha256": "bcb1289e442af060faa70b4dbea033059b900769f93ee89e886cf5abedb0da55"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h1/ground/3.png",
+      "sha256": "cc80b0f01ea49071e6cf7e547be7f198c39e26f83d1339235819e3c76016f8b6"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h1/middle/0.png",
+      "sha256": "2dd1cfca8c2c7aec60e5d85de4b985ed660f9d4ee758ba0dcad82479d2329b5c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h1/near/0.png",
+      "sha256": "f234f7d93e70d94203d3c99820d303300eeac1b7457d6a5f41f11c4d866e157d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h2/far/0.png",
+      "sha256": "9bb9cdec21d3e8bf51aa3b4494a220f44e41856778e32ebf6ca0297a7282ce13"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h2/far/1.png",
+      "sha256": "ead1e010d693b37c977cb746fbb552f5878bad62e804882fa7043011d97d29ec"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h2/ground/0.png",
+      "sha256": "7a0d47c1a6a89e14681de7b19ec00af86404e14bf67f55ea7eb2b400c7c907a1"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h2/ground/1.png",
+      "sha256": "0f2ac478c7b5426db31e1268eb6dbdbc4405e4560317ccfb2f2836d08cd6a37b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h2/ground/2.png",
+      "sha256": "f8f8afc9eb7988a1b00ce8d627d31f2f1a61a92e0bd114747a0571d248342fe1"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h2/ground/3.png",
+      "sha256": "1013e0c5125fde2de91a39e224e993721329a30889faf47309a3861529c1a0e3"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h2/middle/0.png",
+      "sha256": "8c1052ab0586a080c2e968e7aca181cb28c3d47d09fa54299aaea8f467620aac"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h2/middle/1.png",
+      "sha256": "97c3816dd2c316b355ced3779055d609557fe04ce4b1b1415932bc6014d2a445"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h2/near/0.png",
+      "sha256": "48bea13dcdfa335c441d1cef78ca72a0a8a151fbe2f77037a05505bd553bf025"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h3/far/0.png",
+      "sha256": "4e9ac8eebe99d95a8c505f09325187df627549f93186626fe8741dd31159e0d2"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h3/ground/0.png",
+      "sha256": "391278ecc297ccc820f8b1f639fe95d227cef2f6d13eb8d831706435867a5e66"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h3/ground/1.png",
+      "sha256": "9c31f9cb5c81f77863051ad219c022af8409db53a9c65b81c862f043eb978191"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h3/ground/2.png",
+      "sha256": "bfffa12e2dd704ac637cfa7ed61d72195f02719fe34abd65daee1ce09ecf1560"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h3/ground/3.png",
+      "sha256": "d31736f98460def6cfa481696df023e740274dc6713eba5f2df5f928ce2ae613"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h3/ground/4.png",
+      "sha256": "f1d3b2fb3031b7e23f41f870f99307e20e6a1800790a3d11112f4be4110eef13"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h3/middle/0.png",
+      "sha256": "f1d991ae1a258bb063b13654e980aa59282512e2bafb7b0d6fc33875d7512aaa"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h3/middle/1.png",
+      "sha256": "47a8ed86dda92574fcdc64f0472ffd1a5630c888e49d340677d74640fa5a040f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h3/near/0.png",
+      "sha256": "19997d279caa70d0ad0c33c8f1f32a9b09840b94225b4859a848604e4e118e02"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h4/far/0.png",
+      "sha256": "f1fd082e56ea0bcdb95849d1f6b7e177350f9c104ed657c6ea9774eaa654a33b"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h4/far/1.png",
+      "sha256": "d851cd8ee10dc96265fa16e5ed23ee42decfe1992750dacbef546cc4e1f95d1a"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h4/ground/0.png",
+      "sha256": "7683bffc7aa3621157fc030e302633b21d09023ae24b441f173752985a2f1807"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h4/ground/1.png",
+      "sha256": "c3991ed54463c190157b04a7638fccbf400d0130316bda17ea6fef42ab6ac786"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h4/ground/2.png",
+      "sha256": "73aa0682c12e71db253cd8d1ec7adf5a3a2f0fe4d2e303975a8512ba3a54c2b6"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h4/ground/3.png",
+      "sha256": "abce653ad0e35885f7f816e690bc143a7f280e4d303d15e117b2450e41c207bb"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h4/middle/0.png",
+      "sha256": "9372fc40f74f23b272159da2d7331db471b91a1a749e89285bb3aeaa533193db"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h4/middle/1.png",
+      "sha256": "b544548a116403732bed4af1ea2ec201402815285feb0b080e02f91cbe26409d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h4/near/0.png",
+      "sha256": "5395e346f6e977db155767b6c54e00d672c54e65b12f989fffcb90f726b375a3"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h5/far/0.png",
+      "sha256": "f613be0bb923de018bb488346ef5d647a8ac999d4b42e37a7c1bed72ab9e144e"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h5/ground/0.png",
+      "sha256": "82d8f523f064b9c37f83af21df4fd0c1dd71664b627986d30af0c87559731098"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h5/ground/1.png",
+      "sha256": "6f6330b8ba045448db0ace946a5cb4394f5e37686477cae20d8645f6eab84071"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h5/ground/2.png",
+      "sha256": "2f51bb16c3141a49455ede0b335e8a7104fffc1e9e511fe4982c74999385a6f2"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h5/ground/3.png",
+      "sha256": "6a0e51f5886094413ba3f78e3f2065de3c787014fc23bcb6e794af47fc85456d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h5/middle/0.png",
+      "sha256": "490fed06b7c9482d4a3d386da0b2b2c3bb1ca9dc2b300091fecf01560ecde33f"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h5/near/0.png",
+      "sha256": "251522d8d4a969760fd989cddb336742ed162250fe0e63e11c29c5400710b906"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h5/near/1.png",
+      "sha256": "d1c1372b84446f3d183c8d589e486671c526c5f4638138bd8f2fd6fb0859594c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h6/far/0.png",
+      "sha256": "2aa3e2276270ed617df8f4a1a9a8d3b1d1e452b2080eb254a4fd1bcf8ecc6067"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h6/ground/0.png",
+      "sha256": "beefec7e905d6549c2962251ed1f423406fb6e9eb0cefa763de9bcf608d489a6"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h6/ground/1.png",
+      "sha256": "57944ffc437adf2e40a2a4360df88810ed26e64ef59c2dce253234cb45d4fe71"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h6/ground/2.png",
+      "sha256": "ad8202bcd2c522c328265a1800c2895151a69cdfa550ddb8266b852023cb5caf"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h6/ground/3.png",
+      "sha256": "cea75b0a343763facf8a7266bfcca3038d512f2c1570eb29b254a75209911a99"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h6/middle/0.png",
+      "sha256": "85fd13b9ac9dcfa4c39e2b48ff68c8fb039d8719a3e6b8e6179ebfbbabcbeb40"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h6/middle/1.png",
+      "sha256": "ab3485fb99dcec708485784c10afb5e51491f7d026c7274b249846f5cef1a6b5"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h6/near/0.png",
+      "sha256": "77bf9ac53c1a8cb647f3e723991931ebd690605882969ef2b7b5e1690324c04d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h7/far/0.png",
+      "sha256": "128a29d12bef8f4a8f7e8a0f112eea90a49f6077e22ba9eeb444677d83fc181c"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h7/ground/0.png",
+      "sha256": "724ee9bcfc21be93b0483e746154d38b42003fced120201b68c67068434486ba"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h7/ground/1.png",
+      "sha256": "2166f790d23450e71d92dc2efb3882ed57f1f2fc7c2901737bf634ae8c081a25"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h7/ground/2.png",
+      "sha256": "49262c870133956a4be3e0d511b73ea6b10080ae0f4ebeb0da71adb50aec0474"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h7/ground/3.png",
+      "sha256": "04654103eab68f7e9b529e3af0c787f15b9b4dc833e921fb070e17dfd802952d"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h7/ground/4.png",
+      "sha256": "f7d47fe0be6d5c2bedef108f9fb9197f29188234c530af61cd956affaa87ea04"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h7/middle/0.png",
+      "sha256": "2e5507ea5f519a15d235628b4579d4a8e82224520672cf3263f4041934de6efe"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h7/middle/1.png",
+      "sha256": "a94273d7f28f40ad8c5027755a4aa9a726140c9067cc313209d77daf309f0f30"
+    },
+    {
+      "path": "production-gap-delivery-2026-10-04/media/cone/h7/near/0.png",
+      "sha256": "ab6e65e779f3f15acaa676ccaece4bc8d6bd32fc14830de91b4dd2a2e7f1c13a"
+    },
+    {
+      "path": "extracted/wind/wind-mesh.json",
+      "sha256": "527c6a41e597b6c4b74ec6c5cd06a55d27d3df322992ab2f41bcfe8d1a2e3d55"
+    },
+    {
+      "path": "extracted/wind/export-wind-mesh.gd",
+      "sha256": "1a2df2daaf2faac1e2f4299fa5d6e8652ee48f62148271e1fad25ac77bd6cdec"
+    },
+    {
+      "path": "extracted/wind/export-command.json",
+      "sha256": "d4d6d6e54a06a03f552c9fd9114d55991a39ccfb6f633799a4ea792dbc16b346"
+    },
+    {
+      "path": "extracted/wind/export.log",
+      "sha256": "3da6ef11e5ccfff7a9fbf0aa103199516887bfd22ef315581bc6893fdaa1701c"
+    }
+  ],
+  "scope": "Original selected RGBA/crops and source components; no recipes, rescaling, recoloring or render capture."
+}

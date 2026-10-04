@@ -1,0 +1,55 @@
+{
+  "sources": [
+    {
+      "source": "/mnt/c/Users/tommaso/.codex/tmp/gva/p/39c5316af053/codexfx_exporter/ForceDisintegrateV2_ice_dome_lifecycle_0_back.gd",
+      "sourceSha256": "bf372aea08df00541eabc82f0507980c47a96c120898915ab6445bdd6e13bda3",
+      "radiusFeet": 5,
+      "adaptation": "Original constructor at native selected radius; original Godot rigid-body physics at 144 Hz. No raster-derived coordinates.",
+      "hashes": {
+        "adapter.gd": "cff9ffe511a75082689225509e17fc91072868b83aeeccb3fea8dc60d4810a9c",
+        "geometry.json": "70ff8fe76212b2e9c98ec8a69ecffba2c3d309868c3abd7df68a83c38d85d8bd",
+        "poses.json": "60aac176c23d4210f550e7f9778fd4ed06c2520ec14f3338d7752c11917fb1e2",
+        "command.json": "08f3944300808db35f4ad610fa27e0d11249dd683f66403a638801821bbe8c1f"
+      }
+    },
+    {
+      "source": "/mnt/c/Users/tommaso/.codex/tmp/gva/p/39c5316af053/codexfx_exporter/ForceDisintegrateV2_ice_dome_lifecycle_0_back.gd",
+      "sourceSha256": "bf372aea08df00541eabc82f0507980c47a96c120898915ab6445bdd6e13bda3",
+      "radiusFeet": 10,
+      "adaptation": "Original constructor at native selected radius; original Godot rigid-body physics at 144 Hz. No raster-derived coordinates.",
+      "hashes": {
+        "adapter.gd": "86aa906aa31fa47cb69e0a261460e7d16040e71e0f14209fdbb383c41f03558b",
+        "geometry.json": "3b3a90d4a7570f3d841b2856f63b1c0b0023336821b174ac1c016672cc22044f",
+        "poses.json": "a4d2ad244a14e573ead936084cc8159374da5e1af7d4bbde0550a854b60bd8bf",
+        "command.json": "f0fcbd0c41a153ae47eb2be81bbad9e082308b9758dd4766e8212aeb19ec5be8"
+      }
+    }
+  ],
+  "geometrySource": "/mnt/c/Users/tommaso/.codex/tmp/ice-dome-geometry-20261004",
+  "donorSource": "/mnt/c/Users/tommaso/.codex/tmp/wall-operator-donors-20261004",
+  "donorHashes": {
+    "adapter.gd": "354ea158d47a67576f610521dc28f75402deb83b4eceb277fb6d8c6a2509330b",
+    "force-Disolver_Noise_Line.rgba32f": "6cfefee4c950efa367b102f9afef62868d2048aa513f55641d59574850558eac",
+    "force-Gradient_1D_Color.rgba32f": "a17305458865ac7c81fc1b43f0e4d57c681132fe23d1ab4c9af25ec5d1d8b844",
+    "force-Gradient_Disappear.rgba32f": "2f33e9993cf1b0e991442745ecddea1d3e2ff5188d0856727e45612b39394833",
+    "force-Line_Gradient.rgba32f": "dea694a79aa6c57dfef691325c1e9630a7837effe7f8b61d09f796b35ff28bcf",
+    "force-Overlay_Texture.rgba32f": "d5972943bedf79d7242f12ac56874a73a024a8a0b92827d91bce032f054d7255",
+    "force.gdshader": "dee43ce95d8e4533b5b301f9d34e9212dc6042080761f538bf166f3f640cc660",
+    "force.json": "3c80f2833b2aa224391ad808b6845e34eaabfd379fd56f8662c9395ec5240fe6",
+    "ice-AddTexture.rgba32f": "d987688b789f5a42855cac5dd1f6011792cd836acab50bfc6602e31c82d976cf",
+    "ice-AddTexture2.rgba32f": "f6c78b087fc5309ad91b2157b38aaf9872da2b37c4952139b1c500bce8d96895",
+    "ice-Color1DGradient.rgba32f": "7609336cdb2b42b25a7f4eec5b625fe4e59401c4c577858bfae8a0ce8a823ed9",
+    "ice-DetailsTexture.rgba32f": "c889af66ba608c523307f3b80d0db387d57050b22b02801fd8936c56bc41968b",
+    "ice.gdshader": "e73859811d44540012d77130dcce1cf61d168283c8bc2e33dc363ce44125e344",
+    "ice.json": "6dd48cc925eed7e6b1f4da31ee07a1c490770f45d5712d31fa2b6b43326ddd3f",
+    "original-construction.geometry.json": "0a072d2f3bf31f08b3f39459caab291d8f605a1d69bde61360b92867ea9b2846"
+  },
+  "payloads": {
+    "force-Overlay_Texture.rgba32f": "d5972943bedf79d7242f12ac56874a73a024a8a0b92827d91bce032f054d7255",
+    "ice-AddTexture.rgba32f": "d987688b789f5a42855cac5dd1f6011792cd836acab50bfc6602e31c82d976cf",
+    "ice-DetailsTexture.rgba32f": "c889af66ba608c523307f3b80d0db387d57050b22b02801fd8936c56bc41968b",
+    "ice-Color1DGradient.rgba32f": "7609336cdb2b42b25a7f4eec5b625fe4e59401c4c577858bfae8a0ce8a823ed9",
+    "components.json": "ac588cd70f1280a7bf8ea6a09101f8769d525444655ca37915a44ebda6cf02e9"
+  },
+  "adaptation": "Original textures, triangle geometry and recorded Godot transforms; production source-material evaluation on native admitted dimensions."
+}

@@ -115,7 +115,8 @@ def test_disintegrate_range() -> None:
     assert isinstance(too_far, SpellEvent)
     assert too_far.canceled
     assert too_far.status_message is not None
-    assert "out of range" in too_far.status_message.lower()
+    assert "range" in too_far.status_message.lower()
+    assert caster.action_economy.spell_slot_6.normalized_score == 1
 
     with fixed_dice_faces(10):
         in_range = Disintegrate(

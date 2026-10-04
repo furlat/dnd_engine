@@ -1,0 +1,41 @@
+{
+  "installed_and_private_verified": [
+    {
+      "path": "game/assets/thorns_flow/DisolverDetailsTexture.rgba32f",
+      "bytes": 5592400,
+      "sha256": "538f1a4afb214f47b49625edec46597c851c2e312c4a086c813471cfe02c9608"
+    },
+    {
+      "path": "game/assets/thorns_flow/EnergyColor2DGradient.rgba32f",
+      "bytes": 65536,
+      "sha256": "d90f730c934e0c74dda7376ec384cf2db86682957299ebc5422ca7140ef73813"
+    },
+    {
+      "path": "game/assets/thorns_flow/thorns-components.json",
+      "bytes": 2208043,
+      "sha256": "87675e17140bff801f808e786d80bb19d4416f1661204081091a8fe9bf6fb2d1"
+    },
+    {
+      "path": "game/assets/thorns_flow/DetailsNoiseTexture.rgba32f",
+      "bytes": 5592400,
+      "sha256": "02c789e83cf976b744b88b41365b56a94cf2abd2e426854c3496ab45e069791e"
+    },
+    {
+      "path": "game/assets/thorns_flow/VinesTexture.rgba32f",
+      "bytes": 5592400,
+      "sha256": "36457e8ec16ada99a7ea32e77a6ccf28c73bdc21ff007aa97a9af537fa82317d"
+    }
+  ],
+  "originals_verified": {
+    "VFX/Scenes/VFX_Nature_Vines_Wall.tscn": "4601fe22c5e0b410c54facf059e111ee24258277df85348301c61bd2b2ae47e8",
+    "VFX/objects/sm_vine_plants11.obj": "6225caaa98bf7adc377b933ec0efde6151a1c3bc66f35d12f4b7b55f247668fb",
+    "VFX/shaders/ss_vines.gdshader": "497583d0175ba64e34fbdcff8180bff8fc0f1f2316d56b348613fedc0920aa8b",
+    "VFX/textures/T_VFX_Noise_5.PNG": "e1a0e0dfc4cb8c8bc962f969500508369eae3aabc5484daa6906d6d63506562a",
+    "VFX/textures/T_Noise_6Yu1.png": "c0a2515abc39856316d03015657fddfe3b50314c01aa959754e31d44d1cd554a",
+    "VFX/textures/misc/T_BarkA1_col.png": "c3db941ca0009cd4d57e5546c94952b3cc10a0d010eb809b322a545b898da2c6",
+    "ThornsModules.gd": "7b9050cc3971bb28a119b22143770635757524f245169344f950ca88e6d3d6b5",
+    "codexfx_exporter/postprocess/pixel_lab_palette_preserve_alpha.gdshader": "9587a10825ff9942a29e914e3a894bdc115b38365d1586f2d69e556ad73b824f",
+    "authoring/capture.py": "8c5522c1d21ba421aa4182b7641b8f3e513019a9c410e877d8cf9fd6c4ea9e40",
+    "multi/d0/q0/capture.json": "55b0ae505ef6d651a5bd2d2936b6b51b2a2e35bf8f4f8dadb9f3cfed55ef8008"
+  }
+}

@@ -9,11 +9,14 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 
+from dnd.types.event_facts import LandingKind
 from dnd.core.geometry import circle_positions, supercover_line, supercover_line_offsets
 from dnd.core.elevation import support_distance_feet
+from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.shadowcast import compute_fov
 from dnd.core.dijkstra import breadth_first_paths, dijkstra
 from dnd.core.base_block import BaseBlock, MovementMode, LightLevel
+from dnd.core.base_object import BaseObject
 from dnd.core.condition_types import HazardFilter
 from dnd.core.creature_types import Size
 from dnd.core.item_types import ItemPresentationProvider, ItemPresentationState
@@ -151,6 +154,8 @@ class LightSourceData(BaseModel):
     anchor_uuid: Optional[UUID] = Field(default=None, description="BaseBlock this light is attached to (follows its movement)")
     affected_tiles: Dict[Tuple[int, int], LightLevel] = Field(default_factory=dict, description="pos -> level applied")
     is_active: bool = Field(default=True, description="Whether this light currently illuminates tiles.")
+    sunlight: bool = Field(default=False, description="Whether this source's illumination counts as sunlight.")
+    contribution_owner_uuid: Optional[UUID] = Field(default=None, description="Optional condition owner gating this light's contribution.")
 
 
 class GridMap:
@@ -2021,6 +2026,43 @@ class GridMap:
             movement_mode,
         )
 
+    def admit_forced_step(self, start: Tuple[int, int], end: Tuple[int, int],
+                          requester_uuid: UUID) -> LandingKind | None:
+        """Admit a normal push step or a supported downward ledge contact.
+
+        Walking admission stays unchanged. A drop must still clear the same
+        structural edges and land on an existing, unoccupied ground support.
+        """
+        if self.can_transition(start, end, requester_uuid):
+            return LandingKind.GROUND
+        if start not in self._tiles or end not in self._tiles:
+            return None
+        if self.get_support_elevation_feet(end) >= self.get_support_elevation_feet(start):
+            return None
+        if (self.can_transition(start, end, requester_uuid, MovementMode.FLYING)
+                and self.is_walkable_for(*end, requester_uuid)):
+            return LandingKind.FALL
+        return None
+
+    def admit_airborne_transfer(self, start: Tuple[int, int], end: Tuple[int, int],
+                                requester_uuid: UUID) -> Tuple[Tuple[int, int], ...] | None:
+        """Admit a finite transfer with one supported ground destination.
+
+        Existing flying edge checks reject walls and rails; this does not infer
+        vertical clearance over obstacles or search for a different landing.
+        """
+        if start not in self._tiles or not self.is_walkable_for(*end, requester_uuid):
+            return None
+        path = tuple(supercover_line(start, end))
+        highest_support = max(self.get_support_elevation_feet(start), self.get_support_elevation_feet(end))
+        if any(position not in self._tiles or self.get_support_elevation_feet(position) > highest_support
+               for position in path):
+            return None
+        if not all(self.can_transition(first, second, requester_uuid, MovementMode.FLYING)
+                   for first, second in zip(path, path[1:])):
+            return None
+        return path
+
     def can_optical_transition(
         self,
         from_pos: Tuple[int, int],
@@ -2642,7 +2684,17 @@ class GridMap:
             if len(spec.footprint_offsets) > 1 and support.height != tile.height:
                 raise ValueError("multi-cell footprint requires one support elevation")
             supports.append(WorldObjectSupport(position=covered_position, tile_uuid=support.uuid))
+        removed_bands = []
+        for dx, dy, height in spec.removed_local_bands:
+            if orientation is CardinalDirection.SOUTH:
+                dx, dy = dy, -dx
+            elif orientation is CardinalDirection.WEST:
+                dx, dy = -dx, -dy
+            elif orientation is CardinalDirection.NORTH:
+                dx, dy = -dy, dx
+            removed_bands.append((position[0] + dx, position[1] + dy, base_height_steps + height))
         candidate = WorldObjectPlacement(
+            removed_bands=tuple(removed_bands),
             object_uuid=object_uuid,
             covered_supports=tuple(supports),
             tile_uuid=tile.uuid,
@@ -2687,7 +2739,7 @@ class GridMap:
             tile = self._tiles.get(support.position)
             if tile is None or tile.uuid != support.tile_uuid:
                 raise ValueError("placement support Tile is no longer current")
-            for height in range(placement.base_height_steps, placement.top_height_steps):
+            for height in placement.band_heights(support.position):
                 band = self._placement_band(tile, placement, height)
                 if (
                     placement.occupies_bands
@@ -2723,10 +2775,7 @@ class GridMap:
         """Replace every immutable local band touched by one placement."""
         for support in placement.covered_supports:
             tile = self._tiles[support.position]
-            for height in range(
-                placement.base_height_steps,
-                placement.top_height_steps,
-            ):
+            for height in placement.band_heights(support.position):
                 old = self._placement_band(tile, placement, height)
                 object_uuids = set(old.object_uuids if old is not None else ())
                 occupant_uuid = old.occupant_uuid if old is not None else None
@@ -3442,6 +3491,48 @@ class GridMap:
                 directional_channels=sorted(changed_channels),
             )
         )
+
+    def remove_object_section(self, object_uuid: UUID, volume: ObjectSectionVolume,
+                              parent_event: Event) -> bool:
+        """Subtract admitted native object bands; retain the live identity and anchor."""
+        previous = self._object_placements.get(object_uuid)
+        provider = BaseBlock.get(object_uuid)
+        if previous is None or provider is None:
+            return False
+        removed = tuple((x, y, height) for x, y in previous.positions
+            for height in previous.band_heights((x, y)) if volume.contains_band((x, y), height))
+        if not removed:
+            return False
+        candidate = previous.model_copy(update={"removed_bands": (*previous.removed_bands, *removed)})
+        if not candidate.positions:
+            return False  # Whole retirement belongs to the item's existing owner.
+        channels = self._object_revision_channels(provider)
+        declaration = SpatialChangeEvent.object_changed(previous.position, object_uuid,
+            placement=candidate, previous_placement=previous, parent_event=parent_event.uuid,
+            blocks_optics_changed="optical" in channels,
+            blocks_propagation_changed="propagation" in channels,
+            blocks_walking_changed="movement" in channels,
+            object_name=provider.name, object_map_char=provider.get_map_char(),
+            object_blocks_movement=provider.blocks_walking(),
+            object_blocks_optics=provider.blocks_optics_at_center(),
+            object_blocks_propagation=provider.blocks_propagation(),
+        ).with_updates(removed_object_volume=volume)
+        effect = self._accept_event_effect(declaration) if self._events_enabled else None
+        if self._events_enabled and effect is None:
+            return False
+        if self._object_placements.get(object_uuid) != previous:
+            if effect is not None:
+                effect.cancel("Object changed before section removal")
+            return False
+        self._replace_placement_bands(previous, add=False)
+        self._replace_placement_bands(candidate, add=True)
+        self._object_placements[object_uuid] = candidate
+        provider.on_grid_object_placed(candidate)
+        provider.on_object_section_removed(volume, effect or parent_event)
+        self._bump_spatial_revisions(channels)
+        if effect is not None:
+            self._complete_event_effect(effect)
+        return True
 
     def refresh_object_state(
         self, previous: ItemPresentationState, current: ItemPresentationState,
@@ -4489,7 +4580,8 @@ class GridMap:
                          dim_radius_feet: int, anchor_uuid: Optional[UUID] = None,
                          very_bright_radius_feet: int = 0,
                          parent_event: Optional[UUID] = None,
-                         publish_event: bool = True) -> UUID:
+                         publish_event: bool = True, sunlight: bool = False,
+                         contribution_owner_uuid: Optional[UUID] = None) -> UUID:
         """Add a light source at a position.
 
         Computes illuminated area via FOV from position.
@@ -4510,7 +4602,9 @@ class GridMap:
             very_bright_radius_feet=very_bright_radius_feet,
             bright_radius_feet=bright_radius_feet,
             dim_radius_feet=dim_radius_feet,
-            anchor_uuid=anchor_uuid
+            anchor_uuid=anchor_uuid,
+            sunlight=sunlight,
+            contribution_owner_uuid=contribution_owner_uuid,
         )
         self._light_sources[source.uuid] = source
 
@@ -4527,6 +4621,11 @@ class GridMap:
             )
 
         return source.uuid
+
+    def is_sunlit(self, position: Tuple[int, int]) -> bool:
+        """Read active sunlight through the existing occluded light footprint."""
+        return any(source.sunlight and self._is_light_effectively_active(source)
+                   and position in source.affected_tiles for source in self._light_sources.values())
 
     def get_light_source_position(
         self,
@@ -4573,7 +4672,11 @@ class GridMap:
         self._block_light_suppressions.pop(block_uuid, None)
 
     def _is_light_effectively_active(self, source: LightSourceData) -> bool:
-        """Return desired activation after anchor-owned suppressions."""
+        """Compose authored state, condition ownership and anchor suppression."""
+        if source.contribution_owner_uuid is not None:
+            owner = BaseObject.get_contribution_owner(source.contribution_owner_uuid)
+            if owner is None or not owner.contributions_active():
+                return False
         return bool(
             source.is_active
             and (
@@ -4581,6 +4684,12 @@ class GridMap:
                 or not self._block_light_suppressions.get(source.anchor_uuid)
             )
         )
+
+    def refresh_contribution_lights(self, parent_event: Optional[UUID] = None) -> None:
+        """Refresh condition-gated illumination without changing retained light data."""
+        for source in list(self._light_sources.values()):
+            if source.contribution_owner_uuid is not None:
+                self.move_light_source(source.uuid, source.position, parent_event=parent_event)
 
     def set_block_light_suppressed(
         self,
@@ -4632,8 +4741,8 @@ class GridMap:
             return
 
         if not self._is_light_effectively_active(source):
+            self._remove_light_source_tiles(source, parent_event=parent_event)
             source.position = new_position
-            source.affected_tiles.clear()
             return
 
         timing = action_timing_enabled()

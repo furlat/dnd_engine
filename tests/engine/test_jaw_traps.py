@@ -251,11 +251,11 @@ def test_antimagic_suppresses_web_but_preserves_jaw_mechanics(arena):
         anchor_uuid=target.uuid, affected_positions={target.position})
     result = field.activate(parent_event=control(jaw))
     assert result is not None and not result.canceled
-    assert web.uuid not in target.active_conditions_by_uuid
+    assert target.active_conditions_by_uuid[web.uuid] is web and not web.contributions_active()
     assert jaw_source(target).applied and "Restrained" in target.active_conditions
     assert target.action_economy.movement_remaining() == 0
     assert any(isinstance(action, ForceJawOpen) for action in target.registered_actions)
-    assert not any(isinstance(action, EscapeWebAction) for action in target.registered_actions)
+    assert not any(isinstance(action, EscapeWebAction) and action.contributions_active() for action in target.registered_actions)
     field.deactivate()
     assert web.uuid in target.active_conditions_by_uuid
     assert jaw_source(target).applied and "Restrained" in target.active_conditions
@@ -362,9 +362,9 @@ def test_antimagic_of_independent_restraint_preserves_mundane_capture_in_both_or
     result = field.activate(parent_event=cause)
     cause.phase_to(EventPhase.COMPLETION)
     assert result is not None and not result.canceled
-    assert standalone.uuid not in target.active_conditions_by_uuid
+    assert target.active_conditions_by_uuid[standalone.uuid] is standalone
     assert jaw_source(target).applied and target.action_economy.movement_remaining() == 0
-    assert target.active_conditions["Restrained"].tags == set()
+    assert target.active_conditions["Restrained"].contributions_active()
     field.deactivate()
     assert standalone.uuid in target.active_conditions_by_uuid and standalone.tags == {ConditionTag.MAGICAL}
     assert jaw_source(target).applied and target.action_economy.movement_remaining() == 0

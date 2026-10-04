@@ -1,0 +1,35 @@
+{
+  "source": "/home/tommaso/Dev/neurodragon_art/sources/solid-modular-55f231b700c1",
+  "sphereExport": "/mnt/c/Users/tommaso/.codex/tmp/ice-air-geometry-20261004",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/frigid-air-20261004",
+  "sourceHashes": {
+    "HANDOFF.md": "2ef62ca2810a9afa1db365c2d661db00e2a0ec9dc52a17178bf43011b926317b",
+    "media.json": "55f231b700c1148e27886173cda28c6bf3f3b27fdb5b4e3aeaa6b31115f876d2",
+    "ice-v0-hazard/d0/q0/back/adapter.gd": "0b1caa0dab8da7897c17c8303cea9e636395a1ff894c6193f32f766b8f65eece",
+    "air-sphere-export.gd": "cdd6f0961c7665a5963774c591b7c6fa12900b5f0fe732f4113b5eee0a05c99b"
+  },
+  "rgba": "Original d0 quiet bank preserved byte-exact; four native views, no fabricated heading banks.",
+  "operator": "Original flat16-step stationary density +14flakes, original dome SphereMesh+24flakes; native owner transform through existing triangle compositor.",
+  "payloads": {
+    "ice-v0-hazard/d0/q0/back/atlas-0.png": "16ae50bc10e4aa005cd51f80725866b4ff7c3612a9acd182f0f2d39fcbf50d14",
+    "ice-v0-hazard/d0/q0/front/atlas-0.png": "bea33834a170a798ba82f454b88a55a4f1275055713588edf234c165afec2473",
+    "ice-v0-hazard/d0/q0/front/atlas-1.png": "798e1689a223ec3f9fc7351b509a3e5e5d214b02bee44b1789820daa86211e5f",
+    "ice-v0-hazard/d0/q0/front/atlas-2.png": "e37aaffc5e9927b7e55c1876c40cf611cc04fc76729a197f166725118f22cc0a",
+    "ice-v0-hazard/d0/q3/back/atlas-0.png": "c6aa210ff12481abdeaf048b8b5cb607f6d8000fa389e7115d0d5ef2a8fde19d",
+    "ice-v0-hazard/d0/q3/back/atlas-1.png": "7ccc9e16020e746b31488b7e3fc610edc3f55958b93ee7bb2ec98dab89cd775c",
+    "ice-v0-hazard/d0/q3/back/atlas-2.png": "94d44efbffec91129c4942f3165023c3a850afc17086fdcaa11d6fecc336b5b6",
+    "ice-v0-hazard/d0/q3/back/atlas-3.png": "9cde85dfaf48e7c8c6ca38208063810502eb43c416da281fe340c49326c10f03",
+    "ice-v0-hazard/d0/q3/front/atlas-0.png": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6",
+    "ice-v0-hazard/d0/q2/back/atlas-0.png": "212a7f12bb08e42fc4723ad97dedbb5a23346d989d62be4877ca3f6d9e6d0212",
+    "ice-v0-hazard/d0/q2/back/atlas-1.png": "cce2b69ae1e6d005f04f4588ffac4844147c606a1c9bcc3d68bdd0ac1edeb8f7",
+    "ice-v0-hazard/d0/q2/back/atlas-2.png": "15e405d977c34ab729f6ed10c3e05f80d404ac89c206e9b3210437cd9f3c8cbe",
+    "ice-v0-hazard/d0/q2/front/atlas-0.png": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6",
+    "ice-v0-hazard/d0/q1/back/atlas-0.png": "9e5a86b82e74c9e1c73d6cf0ee3ca37b13aca741c143f6d47ab710fce8e4ee10",
+    "ice-v0-hazard/d0/q1/back/atlas-1.png": "e4332f609efcaed9d5d1ac5a6c6bee781ce6e40119e8fe3b60ca9322968730e7",
+    "ice-v0-hazard/d0/q1/front/atlas-0.png": "5a6f674b82822beafa9558930a33dba2638953adf60c04feb24784cabe4da9ac",
+    "ice-v0-hazard/d0/q1/front/atlas-1.png": "a38f586694a094c5dc7cd99e7fdd2324cce632bdbae01b05a5095b0659cae8c5",
+    "ice-v0-hazard/d0/q1/front/atlas-2.png": "5a5fe2794a9468771bbb4457300436a8ddf9d463a00757c044f2b20c5993af57",
+    "ice-v0-hazard/d0/q1/front/atlas-3.png": "26bef8af30085c7bc1d91d6b83b4a9df38bb6db8b6fdb8ebd4dec7f16ce6582d"
+  },
+  "sphereSha256": "a73657f4784ccf2f37bf578ee555aa88f1885942b3a990a0438b089838f3da52"
+}

@@ -1,0 +1,31 @@
+{
+  "files": {
+    "game/attack.py": "56f8d0d2ab8bcf56e54f63d29dea09ccd19df75674b465db93baa19e9eac1fbb",
+    "game/player_projection.py": "b84b18e8f1e592b6502e63cc442a8b4ad60ac1d8ef159f0c5bdf79e15ba805af",
+    "game/wind_flow_media.py": "2baa0233cbc0916d14ba48f4de9c0a6de117e6bdc493013d0c66dac905d2fc1e",
+    "game/choreography_draw.py": "16bfdfaf540864b265e6cc9fb809e083a22a9d426f202008b00295a7191d2355",
+    "game/cast_media.py": "c323b47dc5c8914f40929bbea70081953afd8974b61f81ea5ca3dfa1fb2881f5",
+    "game/animation_types.py": "a0884360afad2f3b7e562ecbd6143ebb74aedf6782cb427a3d450bdbf8a7a871",
+    "game/wall_assembly_media.py": "1972bc005f15bb9185cb20a58cd43e7b33d991cd79b503eea96aa38349f79009",
+    "dnd/spells/wall_fields.py": "f6f1945af77f6cf56319f1f716961cc79fdb45dad70a52cd08827a6436b31391",
+    "game/data/weather_solar_media/cone-draft.json": "a7e855930538509443529ed04f159c88f84a8534fb0620aacb06b47d6364d5b8",
+    "game/data/lightning_media/spell-studio-drafts.json": "7239a0eec4f8c42ec28f687749000a2f0c553469f21d35a062bd02a12c1d5644",
+    "game/data/world_bindings.json": "9b564280b3b19d7ef7d6cf154d534e08261ef17e883beff920b5889f780d345c",
+    "agent_docs/SPELL_GAP_INTEGRATION_PLAN_2026-10-04.md": "bc429dcdb7b3872b5446834d0e62061d89c287981cffe3958dd1246bebfaec5d",
+    "game/animation.py": "66fde184d620096012899d9c73b21746db0d5fa8fd858d851fdc166fc392089d",
+    "game/thorns_surface.py": "902e56b3d0c28a473fd81e420f8da742cbf35bef526ce374a7bb13e52c54ff00",
+    "game/condition_draw.py": "f06fa1306466ff36d45b9a4dce3a9f27323c3dbfe24982d67bf0b382643a5b57",
+    "dnd/core/presentation_geometry.py": "2a19b41f3c1d67b7c810775accb95a659b992e1fa515de3106755b20dd266438",
+    "tests/game/production_gap_scenarios.py": "c86f3ef6e34b826377f91fb11d3b628f2e20beda7f70cfcf07bd183497cafe34",
+    "tests/game/test_production_gap_delivery.py": "c8ad833ba3f24409d19e80c206327c8d371115003ab1c9a4da2d691e89b838c2",
+    "tests/game/area_spell_scenarios.py": "f7bafcbf682df2da658e4608df743fafbc7da4661be4327fb84b0ce385004dd6"
+  },
+  "sha256": "015505988090b2b82bcada645363c60f994b52350b20181cc18c4922fc45261d",
+  "encoding": "sha256(json.dumps(files,sort_keys=True,separators=(comma,colon)))",
+  "evidence_files": {
+    ".runtime/spell-gap-20261004/dnd-production-gap-delivery-closed.log": "142ac788ea5d0774d1d5d28ab5d226407e1cbadec1d3b6dde950fe2efda1fb49",
+    ".runtime/spell-gap-20261004/dnd-production-gap-delivery-final.log": "adb9e115c11d9bd2cbf074dc79676717b63501c5f43cd4a74bbc984ef71be478",
+    ".runtime/spell-gap-20261004/typing-closed.log": "46a6c7834c9080ada23a415afd925abecc37d531f5c6e3d14ad0a7ff579096cb",
+    ".runtime/spell-gap-20261004/acceptance-summary.json": "6a4efc43c16001e5b39378b9412dfde50dc2736e2b415f25e97f8e86ac255bbc"
+  }
+}

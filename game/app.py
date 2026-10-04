@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from typing import Mapping, Sequence, cast
+from types import MappingProxyType
 from uuid import UUID
 
 import pygame
 import numpy as np
 
 from dnd.core.events import WorldObjectState, WorldTileState
-from dnd.core.item_types import ItemIntegrity
+from dnd.core.item_types import ItemIntegrity, ItemPresentationState
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.types.materials import Material
 from dnd.types.world import CardinalDirection, LightLevel
@@ -18,10 +19,12 @@ from dnd.types.world_placement import BoundaryStructureKind
 
 from game.area_media import BoundarySprite, compose_area
 from game.mechanism_projectile import sample_mechanism_projectile, mechanism_projectile_draw_command
+from game.media_blend import blit_media_commands
 from game.draw_commands import DrawCommand
+from game.object_dust import object_dust_commands
 from game.assets import AssetCatalog, SurfaceCache, flame_frame_index, prop_animation_frame
 from game.actor_facts import PresentationTarget
-from game.player_facts import PlayerObject, PlayerState
+from game.player_facts import FloorItem, PlayerObject, PlayerState
 from game.projection import (
     Camera,
     HEIGHT_STEP_PIXELS,
@@ -48,7 +51,8 @@ from game.volume_media import compose_volume
 from game.environment_art import load_environment_art, prop_state_key, sample_environment_frame
 from game.environment_animation import door_pose, trap_pose, remnant_bank
 from game.environment_draw import environment_command, environment_depth_sample, environment_aperture_image
-from game.item_draw import item_ground_commands
+from game.item_draw import item_ground_commands, item_attachment_commands
+from game.animation_types import AnimationData, ItemAttachmentStart
 from game.boundary_occlusion import clip_actor_boundaries
 
 
@@ -352,6 +356,8 @@ def draw_frame(
     deposited_materials: frozenset[tuple[UUID, str]] = frozenset(),
     show_debug: bool = True,
     collect_evidence: bool = False,
+    animation_data: AnimationData | None = None,
+    item_starts: Mapping[UUID, ItemAttachmentStart] = MappingProxyType({}),
 ) -> FrameEvidence | None:
     """Draw disclosed state; duplicate calculation/draw evidence is opt-in."""
     screen.fill(BACKGROUND)
@@ -362,10 +368,32 @@ def draw_frame(
     screen_rect = screen.get_rect()
     authored_treatment_id, authored_multiplier = _authored_treatment(catalog)
 
+    # Retired silhouettes are finite historical inputs, never legal world state.
+    dust_objects = {sample.transition.identity:sample.transition.object_dust.object
+        for sample in world_transitions if sample.transition.object_dust is not None
+        and sample.transition.duration_ms is not None and sample.elapsed_ms < sample.transition.duration_ms
+        and not sample.transition.object_dust.partial
+        and sample.transition.object_dust.object.item.construction_geometry is None}
+    visual_objects = {**target.objects, **dust_objects}
     device_commands = {command.owner: command for command in extra_commands
                        if command.role in ("device", "device_wreck")}
+    item_commands: dict[str, list[DrawCommand]] = {}
+    for command in extra_commands:
+        if command.role == "item":
+            item_commands.setdefault(command.owner, []).append(command)
     commands: list[DrawCommand] = [command for command in extra_commands
-                                  if command.role not in ("device", "device_wreck")]
+                                  if command.role not in ("device", "device_wreck", "item")]
+
+    def append_object(command: DrawCommand, item: ItemPresentationState | FloorItem) -> int:
+        command = command._replace(owner=str(item.item_uuid))
+        rear, front = ((), ()) if item.item_uuid in dust_objects else item_attachment_commands(
+            command, item, animation_data, camera, time_ms=presentation_time * 1000, starts=item_starts)
+        commands.extend(rear)
+        body_index = len(commands)
+        commands.append(command)
+        commands.extend(front)
+        return body_index
+
     for index, command in enumerate(commands):
         if command.role in ("deposit_floor", "deposit_air"):
             position = command.cell
@@ -759,7 +787,7 @@ def draw_frame(
     open_bindings = cast(Mapping[str, str], catalog.bindings["wood_door_open"])
     environment = load_environment_art()
     environment_objects: set[UUID] = set()
-    for identity, obj in target.objects.items():
+    for identity, obj in visual_objects.items():
         door = environment.doors.get(obj.item.item_id)
         trap = environment.traps.get(obj.item.item_id)
         prop = environment.props.get(obj.item.item_id)
@@ -781,7 +809,7 @@ def draw_frame(
             and parent.item.remnant_state is not None else ())
         if prop is not None and prop.omit_with_destroyed_parent and identity in incorporated:
             continue
-        current_contact = identity in senses.objects
+        current_contact = identity in senses.objects or identity in dust_objects
         position = obj.placement.position
         base_height = obj.placement.base_height_steps
         direction = obj.placement.boundary_direction or obj.placement.orientation or CardinalDirection.EAST
@@ -869,12 +897,12 @@ def draw_frame(
                 transition is None or frame in (0, bank.frame_count - 1)))
         if parent_uuid is not None:
             command = command._replace(key=(*command.key[:4], (str(parent_uuid), "attached", str(identity))))
-        depth = environment_depth_sample(command, len(commands), bank, pose, frame, camera,
+        body_index = append_object(command, obj.item)
+        depth = environment_depth_sample(command, body_index, bank, pose, frame, camera,
             position=position)
-        commands.append(command)
-        if depth is not None:
+        if depth is not None and identity not in dust_objects:
             fixture_depths.append(depth)
-        if physical_boundary is not None:
+        if physical_boundary is not None and identity not in dust_objects:
             aperture = environment_aperture_image(obj.item.item_id,pose,camera) if not destroyed else None
             boundary_sprites.append(BoundarySprite((obj.placement,), command.surface, command.destination,
                 command.key,actor_aperture=aperture,
@@ -893,7 +921,7 @@ def draw_frame(
             ]
         ],
     ] = {}
-    for object_uuid, world_object in sorted(target.objects.items(), key=lambda row: str(row[0])):
+    for object_uuid, world_object in sorted(visual_objects.items(), key=lambda row: str(row[0])):
         if object_uuid in environment_objects:
             continue
         structure = world_object.item.boundary_structure
@@ -966,7 +994,7 @@ def draw_frame(
             if prepared_leaf is not None:
                 leaf, leaf_destination = prepared_leaf
                 leaf = _marked_wall_surface(leaf, leaf_id, (world_object,), catalog, cache, camera, multiplier)
-                commands.append(DrawCommand(
+                command = DrawCommand(
                     painter_key(
                         position,
                         elevation_steps=base_height,
@@ -990,8 +1018,9 @@ def draw_frame(
                         base_height,
                         is_open,
                     ),
-                ))
-                boundary_sprites.append(BoundarySprite((world_object.placement,), prepared_leaf[0], leaf_destination, commands[-1].key))
+                )
+                append_object(command, world_object.item)
+                boundary_sprites.append(BoundarySprite((world_object.placement,), prepared_leaf[0], leaf_destination, command.key))
         elif structure.structure is BoundaryStructureKind.WALL:
             if structure.material not in {Material.STONE, Material.WOOD}:
                 raise RuntimeError(
@@ -1051,7 +1080,7 @@ def draw_frame(
                 surface, destination = prepared
                 surface = _marked_wall_surface(surface, asset_id, tuple(row[1] for row in rows),
                                                 catalog, cache, camera, rows[0][6])
-                commands.append(DrawCommand(
+                command = DrawCommand(
                     painter_key(
                         position,
                         elevation_steps=base_height,
@@ -1074,8 +1103,27 @@ def draw_frame(
                         "wall_corner",
                         base_height,
                     ),
-                ))
-                boundary_sprites.append(BoundarySprite(tuple(row[1].placement for row in rows), prepared[0], destination, commands[-1].key))
+                )
+                rear, front = [], []
+                for identity, obj, direction, _, _, _, multiplier in rows:
+                    if identity not in senses.objects:
+                        continue
+                    # The merged corner stays intact; each real item uses its
+                    # own original straight-wall pixels as its attachment anchor.
+                    item_pose = camera_pose(direction.value, camera.quadrant)
+                    original = _static_blit(cache, straight_bindings[item_pose], camera,
+                        contact, multiplier, screen)
+                    if original is None:
+                        continue
+                    back, fore = item_attachment_commands(command._replace(
+                        surface=original[0], destination=original[1]), obj.item,
+                        animation_data, camera, time_ms=presentation_time * 1000, starts=item_starts)
+                    rear.extend(back)
+                    front.extend(fore)
+                commands.extend(rear)
+                commands.append(command)
+                commands.extend(front)
+                boundary_sprites.append(BoundarySprite(tuple(row[1].placement for row in rows), prepared[0], destination, command.key))
             continue
 
         for object_uuid, world_object, direction, state, level, treatment_id, multiplier in rows:
@@ -1090,7 +1138,7 @@ def draw_frame(
                 continue
             surface, destination = prepared
             surface = _marked_wall_surface(surface, asset_id, (world_object,), catalog, cache, camera, multiplier)
-            commands.append(DrawCommand(
+            command = DrawCommand(
                 painter_key(
                     position,
                     elevation_steps=base_height,
@@ -1113,26 +1161,31 @@ def draw_frame(
                     "wall",
                     base_height,
                 ),
-            ))
-            boundary_sprites.append(BoundarySprite((world_object.placement,), prepared[0], destination, commands[-1].key))
+            )
+            if object_uuid in senses.objects:
+                append_object(command, world_object.item)
+            else:
+                commands.append(command)
+            boundary_sprites.append(BoundarySprite((world_object.placement,), prepared[0], destination, command.key))
     animated_fixtures = 0
     displayed_devices: dict[UUID, tuple[DeviceEmission, int]] = {}
     flame_index: int | None = None
-    for fixture_uuid, fixture in target.objects.items():
+    for fixture_uuid, fixture in visual_objects.items():
         if fixture_uuid in environment_objects:
             continue
         binding = catalog.props.get(fixture.item.item_id)
         device_art = load_device_art().get(fixture.item.item_id)
         wreck_art = (device_art if fixture.item.integrity is ItemIntegrity.DESTROYED
                      else load_device_wrecks().get(fixture.item.item_id))
-        if binding is None and device_art is None and wreck_art is None and fixture_uuid in senses.objects:
+        if binding is None and device_art is None and wreck_art is None and (fixture_uuid in senses.objects or fixture_uuid in dust_objects):
             disclosure = _disclosure(target, (fixture.placement.position,))
             if disclosure is not None:
                 _, level = disclosure
                 _, multiplier = _treatment(catalog, level)
                 commands.extend(command._replace(surface=device_treatment(command.surface, multiplier))
-                                for command in item_ground_commands(fixture, camera))
-        if (binding is None and device_art is None and wreck_art is None) or fixture_uuid not in senses.objects:
+                                for command in item_commands.get(str(fixture_uuid), ())
+                                    or item_ground_commands(fixture, camera))
+        if (binding is None and device_art is None and wreck_art is None) or fixture_uuid not in senses.objects and fixture_uuid not in dust_objects:
             continue
         fixture_state = fixture.item
         position = fixture.placement.position
@@ -1172,7 +1225,7 @@ def draw_frame(
                 assert command.device_pose is not None
                 displayed_devices[fixture_uuid] = emitter, command.device_pose.frame
                 image = device_treatment(command.surface, multiplier, flashes.get(fixture_uuid))
-                commands.append(command._replace(surface=image))
+                append_object(command._replace(surface=image), fixture.item)
                 continue
             assert binding is not None
             pose = camera_pose((fixture.placement.orientation or CardinalDirection.EAST).value, camera.quadrant)
@@ -1208,7 +1261,7 @@ def draw_frame(
                 flash = flashes.get(fixture_uuid)
                 if flash is not None:
                     body = device_treatment(body, (1, 1, 1), flash)
-                commands.append(DrawCommand(
+                append_object(DrawCommand(
                     painter_key(
                         position,
                         elevation_steps=base_height,
@@ -1220,9 +1273,9 @@ def draw_frame(
                     destination,
                     0,
                     body_evidence,
-                ))
+                ), fixture.item)
             loop = binding.lit_animation
-            if fixture_state.is_lit and loop is not None:
+            if fixture_state.is_lit and loop is not None and fixture_uuid not in dust_objects:
                 flame_index = flame_frame_index(
                     presentation_time,
                     frame_count=len(loop.frames),
@@ -1442,6 +1495,8 @@ def draw_frame(
             commands.append(mechanism_projectile_draw_command(cue, sample,
                 cache.scaled(sample.asset_id, camera.zoom), catalog.resources[sample.asset_id], camera))
 
+    commands = object_dust_commands(commands,world_transitions,
+        animation_data.death_context.silhouetteDust if animation_data is not None else None)
     commands = compose_floor_coverings(commands)
     commands = clip_actor_boundaries(commands,boundary_sprites,camera)
     commands = split_actor_fixtures(commands, fixture_depths)
@@ -1467,8 +1522,8 @@ def draw_frame(
     commands.sort(key=lambda row: row[0])
     expected_draws = tuple(command[4] for command in commands) if collect_evidence else ()
     actual_draws: list[tuple[object, ...]] | None = [] if collect_evidence else None
+    blit_media_commands(screen, commands)
     for command in commands:
-        screen.blit(command.surface, command.destination, special_flags=command.blend)
         if actual_draws is not None:
             actual_draws.append(command.evidence)
         static_draws += 1

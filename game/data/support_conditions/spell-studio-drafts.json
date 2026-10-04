@@ -179,7 +179,19 @@
           "kind": "hidden"
         },
         "effects": [],
-        "weaponGlow": null,
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic3",
+          "sourceSheet": "/pending-spells/haste/cast.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
+        },
         "recovery": {
           "enabled": false,
           "bodyClip": "Taunt",

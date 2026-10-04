@@ -76,5 +76,10 @@
   "action.summon.dismiss": {
     "source_recipe": "reaction.spell.counterspell",
     "action_feedback": null
+  },
+  "action.environment.heroes_feast.eat": {
+    "source_recipe": "action.environment.heroes_feast.eat",
+    "action_feedback": null,
+    "interaction_target": "source_item"
   }
 }

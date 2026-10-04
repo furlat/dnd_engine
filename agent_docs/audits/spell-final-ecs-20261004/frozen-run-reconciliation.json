@@ -1,0 +1,31 @@
+{
+  "source_sha256": "ba0c772fd08c3c637952124d219651d3ee17c13cc3d88a32c0fb094055974d35",
+  "source_changed_during_run": [],
+  "collected": 3522,
+  "reported": 3522,
+  "passed": 3517,
+  "failed": [
+    [
+      "tests.game.test_spatial_contact_media",
+      "test_grease_entries_splash_with_either_save_outcome_without_pausing_walk[20-True]"
+    ],
+    [
+      "tests.game.test_spatial_contact_media",
+      "test_grease_entries_splash_with_either_save_outcome_without_pausing_walk[1-False]"
+    ],
+    [
+      "tests.game.test_window_presentation",
+      "test_disallowed_window_mask_does_not_select_unmasked_target_behind_it"
+    ],
+    [
+      "tests.game.test_packaged_creature_rigs",
+      "test_fixed_creature_identity_maps_native_attack_and_preserves_all_direction_frames[demonbeast01-content.srd_5_1_cc:creature:creature.dretch@1-smallscale.demonbeast01-Attack6-Attack 1-128]"
+    ],
+    [
+      "tests.game.test_paired_concealment",
+      "test_concealment_matrix_records_real_contact_and_replays_both_views[conceal-true-expiry-expected_contact6-2]"
+    ]
+  ],
+  "missing": [],
+  "duplicates": []
+}

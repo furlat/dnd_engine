@@ -10,7 +10,7 @@ from dnd.actions import Disengage, Move, entity_action_economy_cost_evaluator
 from dnd.core.base_actions import BaseAction, Cost
 from dnd.core.events import EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.gridmap import get_map
-from dnd.core.positioning import PositionCommitError, PositionPublicationError
+from dnd.core.positioning import PositionPublicationError
 from dnd.core.creature_types import DamageType
 from dnd.entity import Entity
 from dnd.conditions import Blinded, Incapacitated, Paralyzed, Stunned, Unconscious
@@ -450,8 +450,8 @@ def test_banishment_effect_failure_releases_denial_and_restores_presence() -> No
     assert target.action_economy.movement_remaining() == 30
 
 
-def test_banishment_restore_precommit_failure_is_retryable() -> None:
-    """Failed return keeps Banishment authoritative until an ordinary retry."""
+def test_banishment_missing_original_tile_returns_to_nearest_valid_support() -> None:
+    """Loss of the original support does not trap an otherwise returnable actor."""
     reset_core_action_state()
     source = strong_entity("Source", (1, 1), "heroes")
     target = strong_entity("Target", (2, 1), "monsters")
@@ -459,19 +459,10 @@ def test_banishment_restore_precommit_failure_is_retryable() -> None:
     position = target.position
     get_map().remove_tile(*position)
 
-    with pytest.raises(PositionCommitError):
-        target.remove_condition_by_uuid(condition.uuid)
-
-    assert condition.applied
-    assert target.is_spatially_suspended
-    assert target.active_conditions_by_uuid[condition.uuid] is condition
-    assert target.action_economy.action_permission.normalized_score == 0
-
-    get_map().set_tile(*position)
     assert target.remove_condition_by_uuid(condition.uuid)
-    assert target.is_deployed
-    assert not target.is_spatially_suspended
-    assert target.uuid in get_map().get_entities_at(position)
+    assert target.is_deployed and not target.is_spatially_suspended
+    assert target.position != position and get_map().get_tile(*target.position) is not None
+    assert target.uuid in get_map().get_entities_at(target.position)
     assert target.action_economy.action_permission.normalized_score == 1
 
 

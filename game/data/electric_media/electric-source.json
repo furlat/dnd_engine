@@ -1,0 +1,45 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/electric-live-study",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/electric-live-20261004",
+  "files": [
+    {
+      "path": "game/assets/electric_media/arc-material.png",
+      "bytes": 286643,
+      "sha256": "b25b09b424b6919fe9c045c692525afecf90e4a2c09c3f834360c067429d1502"
+    },
+    {
+      "path": "game/assets/electric_media/glow.png",
+      "bytes": 7097,
+      "sha256": "33a49af5fbfca3c6ad5086cce8126b14bbd360e42fb8ce0c9552b5a731052f1d"
+    },
+    {
+      "path": "game/assets/electric_media/spark_dot.png",
+      "bytes": 4891,
+      "sha256": "ee2f42f6d681cb4e2be0ee935425800f9effe29a5e9e97fe9395c7bbe80a75bd"
+    },
+    {
+      "path": "game/assets/electric_media/star.png",
+      "bytes": 2748,
+      "sha256": "96d99f9415c2382076658b1fc41bf04d6a234246238dee7b9a25f492cf475f4e"
+    },
+    {
+      "path": "game/assets/electric_media/streak.png",
+      "bytes": 918,
+      "sha256": "7ba83c1f7b0e9719534f6a6f940adc7beec4bcccc0f06724bccb53a50825fa06"
+    },
+    {
+      "path": "game/assets/electric_media/lightning-hands.png",
+      "bytes": 83131,
+      "sha256": "0d6639e471d7506c7bc34a627ecb76c55379ffde9d1f721e5854b17fc6132015"
+    }
+  ],
+  "source_sha256": {
+    "components.json": "847f4e36c8c221c849974702d666425bedd55dd43839d53d0346247d54746a9f",
+    "CAST_HANDOFF.md": "aa14477260eb4c5125d0dc5998cc0bfeda79abdc02841fe3a3a9a021479fd339",
+    "LIGHTNING_BOLT.md": "c6c502232f82bcffa2ce7686fc8343db64fcd9d86ae129fb5943d7042b9d3a4b",
+    "lifecycle.js": "dda3e73a59d043c12be75a40b2a33a5d0384d6a80bd673c7a7b58ced79a4426e",
+    "spell.js": "a2ad78a08eecbdfec55989edd5c6c66b4783a2da648e50d592a5167127c25c70",
+    "bolt.js": "acbfa5cefbfc6b4eabac1bed5776a5bc15348883fe354f65e59b68da6c981167",
+    "cast-assets/hand-sockets.json": "9d024faeaf5c40bd6030ce906f057e5a1258e031b5adffd5f83e2df87503f2f2"
+  }
+}

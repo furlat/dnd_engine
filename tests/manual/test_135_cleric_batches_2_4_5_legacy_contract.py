@@ -551,10 +551,7 @@ def test_heroes_feast_object_and_buff_full_lifecycle() -> None:
 
     actions = feast.get_use_actions(ally.uuid)
     assert len(actions) == 1
-    with patch(
-        "dnd.spells.conjuration.random.randint",
-        side_effect=[4, 6],
-    ):
+    with fixed_dice_faces(4, 6):
         eaten = actions[0].apply()
     assert eaten is not None
     assert not eaten.canceled

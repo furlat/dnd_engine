@@ -1,0 +1,48 @@
+{
+  "authoring_script": ".runtime/class-sockets-20261004/measure.py",
+  "proof": ".runtime/class-sockets-20261004/evidence.json",
+  "records": [
+    {
+      "socket": [
+        "head",
+        "face"
+      ],
+      "clip": "Idle2",
+      "source": "game/assets/class_media/rig/Head10/Idle2.png",
+      "sha256": "9705935b1dc5a6ad58ef9b6450b0bac30ef189585b3ed28fccd6eadf08cfa48d",
+      "method": "Measured isolated original Head10 alpha centroid in each128px source cell",
+      "cells": 120
+    },
+    {
+      "socket": [
+        "head",
+        "face"
+      ],
+      "clip": "Idle4",
+      "source": "game/assets/class_media/rig/Head10/Idle4.png",
+      "sha256": "b9edc835b9a5ccfd374bc68ffb3c284e67f774aecbf31d6aa4250cb7d21f66fe",
+      "method": "Measured isolated original Head10 alpha centroid in each128px source cell",
+      "cells": 120
+    },
+    {
+      "socket": [
+        "other_hand"
+      ],
+      "clip": "Special1",
+      "source": "game/assets/neuroclient/spritesheets/Hands1/Special1.png",
+      "sha256": "37a9fabcc5da1367daba50a02f94a0ad41ed8b54fa90477ad5a7e7f48baa1607",
+      "method": "Alpha-weighted isolated second-palm connected component, excluding previously measured casting palm; ambiguous connected cells remain null",
+      "measured": 118,
+      "missing": [
+        {
+          "facing": "SW",
+          "frame": 1
+        },
+        {
+          "facing": "N",
+          "frame": 0
+        }
+      ]
+    }
+  ]
+}

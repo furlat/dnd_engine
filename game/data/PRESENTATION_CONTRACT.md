@@ -75,10 +75,20 @@ The original reference import/materializer remains an explicit source-conversion
 tool. Ordinary content tuning belongs in selected local records. Re-running
 source conversion is not required for gameplay or for editing local recipes.
 
-Casting layers declare `sourceSheet` plus optional `palette` bake inputs. The
-baker reads the original isolated category/clip sheet and writes the declared
-output PNG. It does not alter flash timing, source selection or recipes. Runtime
-uses the precolored sheet without applying the old hue transform again. Target
+Casting layers default to `colors.source: "auto"`: shared cast resolution takes
+the owning spell's `elementColors` in tertiary/primary/secondary order, then
+replaces isolated hand pixels with that dark/middle/light palette using the
+existing luminance-based palette swap. It never multiplies RGB or rotates hue.
+This also applies to precolored `sourceSheet` inputs; alpha and frame geometry
+remain unchanged. Cache identity includes the source and resolved treatment.
+The same resolution serves ordinary delivery and actor-only casts.
+
+Explicit `colors.source: "override"` preserves authored source colors. Its
+optional `palette` is offline bake metadata: the baker reads the original
+isolated category/clip sheet and writes the declared output PNG. Runtime uses
+that precolored sheet unchanged rather than applying its bake twice. Automatic
+layers instead carry their resolved treatment in `palette` at bind time.
+Neither path alters flash timing, source selection or recipes. Target
 hit-flash palettes are separate: Chill uses a dark/noisy target treatment but a
 full casting ramp. Neither operation changes the actor's equipment identity.
 
@@ -128,11 +138,27 @@ Existing maintained-cloud presentation is unchanged.
 
 ## Additions to the original Studio vocabulary
 
+Directed textured electricity uses an optional `arcs` record on the existing
+spell draft. `mode: applications` consumes recorded `EffectPropagationLink`
+endpoints; `mode: area_line` consumes the received native line geometry and
+admitted cells, including an empty corridor. It does not discover targets.
+`texture`, `glow`, `star`, `streak` and `spark` identify original source textures.
+Widths, core count, travel base/per-cell/cap, branch delay and finite decay
+windows are authored values. Source sockets are required. This delivery and a
+projectile cannot both own the same cast.
+
+The existing application timeline owns arrival, damage, injury and death.
+Branches start from their recorded primary contact; withheld links do not erase
+other disclosed links or renumber native application identities. Arbitrary-time
+sampling uses deterministic source noise, the original material equations and
+the shared XYZ compositor. There is no second simulation clock or spell-name
+dispatch. Resource loading happens with the existing media preload.
+
 | Field | Current consumer and observable meaning |
 | --- | --- |
 | `cast.enabled` | Cast compiler: a child delivery can run without repeating the caster gesture |
 | `cast.holdReleaseForVolley` | Cast sampler: keep the release pose while the volley is released |
-| Actor-layer `sourceSheet` / `palette` | Drawing / offline baker: selected isolated colored sheet and explicit bake treatment |
+| Actor-layer `colors.source` / `sourceSheet` / `palette` | Auto: owning spell palette replaces isolated pixels at media preparation. Override: preserve source pixels; palette remains offline bake metadata. |
 | `projectile.sourceSockets` | Attachment calculation: measured release/preparation coordinates in the actor source cell, overriding legacy source-anchor offsets |
 | Source/target `basis: "rigRoot"` / `"body"` / `"tileCenter"` | Explicit rig root, rig body point or ground support; source sockets override source basis |
 | Target `axisPx` | Zero-default signed reference pixels along the resolved source-to-target chord, independent of facing `forwardPx`; source `axisPx` retains its existing field |
@@ -308,13 +334,18 @@ field changes are children of condition application and
 removal, and their received sensory changes commit at the owning contact.
 
 `StudioSpellDraft.childAttack` explicitly delegates the spell's presentation to
-its real direct child attack. Each pose row matches `rigId`, `weaponCategory`
-and the actual attack `clip`, then supplies ordinary `StudioActorLayer` records.
+its real direct child attack. Each pose row matches `rigId` and the actual attack
+`clip`, optionally restricted by `weaponCategory`. An exact weapon row takes
+precedence over an explicitly authored rig/clip fallback with no weapon category;
+multiple matching rows at the selected specificity are rejected. Rows supply
+ordinary `StudioActorLayer` records.
 It never changes the attack's profile, equipment, clock or outcomes. Literal
 `sourceSheet` layers bypass generated rig-category lookup while keeping normal
 actor slot ordering. True Strike currently has exact shortsword/Melee3/Attack6
-and shortbow/Ranged1/Attack3 overlays; other weapons keep their real attack with
-an explicit missing-media report. Their own fitted artwork remains outstanding.
+and shortbow/Ranged1/Attack3 overlays. Other modular weapon poses use existing
+Magic2 Attack1–6 hand sheets. Automatic layer palettes come from the parent spell's
+`elementColors`, independently of weapon damage; explicit overrides keep their
+authored pixels. Unmatched rigs/clips still report missing media.
 There is no separate cast gesture, accuracy condition or overlay animation
 clock. These passive fields need equivalent execution when adapting NeuroClient.
 

@@ -15,13 +15,14 @@ from pydantic import TypeAdapter
 import pytest
 
 from dnd.core.events import WorldTileState
+from dnd.core.presentation_geometry import LinePresentationGeometry
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.types.materials import TileSurface, Material
 from dnd.types.world import LightLevel, CardinalDirection
 from game.animation_types import PackedSurfaceFrames, PackedSurfaceComponent, ProjectileFrameStorage, ProjectileStorage
 from game.animation_data import load_animation_data
 from game.player_facts import PlayerFact, SpellFact
-from game.projection import Camera
+from game.projection import Camera, rotate_position
 from game.registered_media import registered_media_samples
 from game.volume_media import SurfaceVolume, compose_volume, observed_support_heights
 from tests.game.test_projectile_media import display as display, original_data as original_data, sample_data
@@ -111,6 +112,25 @@ def test_attachment_translation_moves_geometry_with_the_image_without_moving_pro
                            supports=(support((0, 0)),))
     assert compose_volume(image, volume, Camera())[0].get_at((0, 0)).a == 0
     assert compose_volume(image, replace(volume, translation=(0, 2, 0)), Camera())[0].get_at((0, 0)).a == 255
+
+
+@pytest.mark.parametrize('quadrant', range(4))
+def test_line_geometry_clips_translated_surface_to_native_width_and_length(quadrant):
+    camera = Camera(quadrant=quadrant)
+    world = ((-.01, 0), (0, 0), (12, 0), (12.01, 0), (6, .5), (6, .51), (6, -.51))
+    origin = rotate_position((0., 0.), quadrant)
+    local = np.array([[[value-origin[index] for index, value in enumerate(rotate_position(point, quadrant))]]
+                      for point in world])
+    points = np.zeros((len(world), 1, 3))
+    points[:, :, 0], points[:, :, 2] = local[:, :, 0]-.3, local[:, :, 1]+.2
+    points[:, :, 1] = 1
+    image = pygame.Surface((len(world), 1), pygame.SRCALPHA); image.fill('white')
+    line = LinePresentationGeometry(origin=(0, 0), direction=(1., 0.), length_feet=60, width_feet=5)
+    volume = SurfaceVolume((0, 0), 0, 12, points, np.ones((len(world), 1)), 1,
+                           translation=(.3, 0, -.2), line_geometry=line)
+    shown, _ = compose_volume(image, volume, camera)
+    assert [shown.get_at((i, 0)).a for i in range(len(world))] == [0, 255, 255, 0, 255, 0, 0]
+    assert all(image.get_at((i, 0)).a == 255 for i in range(len(world)))
 
 
 @pytest.fixture(scope='module')

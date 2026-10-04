@@ -1,0 +1,16 @@
+invisible passed: absent public choice, stale/direct command rejected before action cost
+non_targetable passed: absent public choice, stale/direct command rejected before action cost
+Traceback (most recent call last):
+  File "/tmp/dnd-force-targetability-probe.py", line 44, in <module>
+    for mode in ('invisible','non_targetable','inactive','out_of_range','sight_lost'):check(mode)
+                                                                                      ~~~~~^^^^^^
+  File "/tmp/dnd-force-targetability-probe.py", line 32, in check
+    elif mode=='inactive':item.is_active=False
+                          ^^^^^^^^^^^^^^
+  File "/home/tommaso/.cache/dnd-engine/venv/lib/python3.13/site-packages/pydantic/main.py", line 1049, in __setattr__
+    setattr_handler(self, name, value)  # call here to not memo on possibly unknown fields
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/tommaso/.cache/dnd-engine/venv/lib/python3.13/site-packages/pydantic/main.py", line 1089, in <lambda>
+    return lambda model, _name, val: attr.__set__(model, val)
+                                     ~~~~~~~~~~~~^^^^^^^^^^^^
+AttributeError: property 'is_active' of 'WallSection' object has no setter

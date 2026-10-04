@@ -351,15 +351,18 @@ class SunlightSensitivityFeature(BaseCondition):
 
 
 def _sunlight_attack_disadvantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID], context: Optional[dict]) -> Optional[AdvantageModifier]:
-    """Return disadvantage when roll context explicitly marks sunlight."""
-    if context and context.get("sunlight") is True:
+    """Use explicit ambient sunlight or a live, occluded sunlight source."""
+    source = Entity.get(source_entity_uuid)
+    if (context and context.get("sunlight") is True) or (source is not None and get_map().is_sunlit(source.position)):
         return AdvantageModifier(name="Sunlight Sensitivity", value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid)
     return None
 
 
 def _sunlight_perception_disadvantage(source_entity_uuid: UUID, target_entity_uuid: Optional[UUID], context: Optional[dict]) -> Optional[AdvantageModifier]:
-    """Return disadvantage for sight Perception in explicit sunlight."""
-    if context and context.get("sunlight") is True and context.get("sense") in {None, "sight"}:
+    """Sunlight affects sight Perception without granting any sight permission."""
+    source = Entity.get(source_entity_uuid)
+    sunlit = bool(context and context.get("sunlight") is True) or (source is not None and get_map().is_sunlit(source.position))
+    if sunlit and (context is None or context.get("sense") in {None, "sight"}):
         return AdvantageModifier(name="Sunlight Sensitivity", value=AdvantageStatus.DISADVANTAGE, source_entity_uuid=source_entity_uuid, target_entity_uuid=target_entity_uuid)
     return None
 

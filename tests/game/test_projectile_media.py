@@ -8,7 +8,7 @@ import pygame
 import pytest
 
 from game.animation import ActorContact, CastApplication, CastInput, ProjectileSample, compile_cast
-from game.animation_data import DATA_ROOT, load_animation_data
+from game.animation_data import load_animation_data
 from game.animation_draw import AnimationMedia, projectile_layer_blits
 from game.animation_types import (
     AuthoredProjectilePhase, AuthoredProjectilePhases, ProjectileFrameLayer,
@@ -32,9 +32,7 @@ def display():
 
 @pytest.fixture(scope="module")
 def original_data():
-    return load_animation_data(authored_bundles=(
-        DATA_ROOT.parent / "wall_media", DATA_ROOT.parent / "surface_contact_media",
-    ))
+    return load_animation_data()
 
 
 def sample_data(original_data, root: Path, *, layered: bool = False):

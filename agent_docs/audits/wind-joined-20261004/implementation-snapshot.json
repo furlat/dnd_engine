@@ -1,0 +1,20 @@
+{
+  "files": {
+    "game/wind_flow_media.py": "9709ec7b33596e0d2b7cf189e07148424c444d25a99b34bb45c3513de03a0d6d",
+    "game/directed_surface.py": "8f432d512f8eee20006a5d761c374d9b5690e007340edf733f7cc65f299dbd23",
+    "game/directed_mesh_media.py": "12684a18a17118ba771a3a1871f99216c770e09de41f7d1eec1c3dcbc546594c",
+    "game/spatial_media_lifetime.py": "c12b3a36437a92c3ed59f4cf562e9787461aa358b3e8d6eefe0ba00505387480",
+    "devtools/export_wind_components.py": "f3d3beeedd057f0bfe2cb8281b85d592ba6da1e6a5ba95e3d710678cf32a6fd0",
+    "devtools/export_thorns_components.py": "2c80aed9f2f11377ec28644b430f4b5153bcfe6abf10ef4bb2293dbd6740bc7d",
+    "game/data/wall_media/wind-flow-source.json": "fa364af76bb9eb85f630bd522ab42e23e641b6839cf77a09bd2549d5eeb92c35",
+    "game/data/wall_media/thorns-flow-source.json": "b7404bfdd1a2ea9b0e43c42c3eef8b2353f2d88cf0b69721c4db9c41fc5c87f5",
+    "tests/game/test_wind_joined_presentation.py": "92b2a9b8e370081db26241d185a9f0a1c98dcac8213557a4f3e4786d468d67db",
+    "tests/game/test_directed_surfaces.py": "c5987ec20056dc61795ddda3069a44f55fe9b6c7d9228c87dcfe2bb4efc4423b",
+    "tests/game/assembly_scenarios.py": "ad2b15124e31bfca677beca64d5bab41afe8a65547ab6d113bcd9b5c5f07dc3d",
+    "game/animation_types.py": "c8f49ed8a15af1c2ba51db96c1f2f4db5aed85facc06b9796aade4d8acb879b7",
+    "game/wall_assembly_media.py": "934f272043ce96cbf98d4dc1d30bb656f98500b11ef184910ce0c494c86360b1",
+    "game/spatial_media_draw.py": "27271c85e3ad0cc7ce0d291ea13c515a84a1414813988e39f657dcfd41e70dcb",
+    "game/data/world_bindings.json": "b05526b8cf1ee5a99f99c69608faefd13942fb10e9498c564055dc667d7c8ad7"
+  },
+  "sha256": "18edb0ca0e91972d3b665218b9a46234e96e587f0c88f10326764ad5e6d0e1c2"
+}

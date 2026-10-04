@@ -198,7 +198,7 @@ def player_position_options(
     actor = _current_player(session, actor_uuid)
     if target not in action.valid_targets:
         raise ValueError("selected target does not belong to the discovered action")
-    if action.position_selection is None or action.position_selection.kind != "path":
+    if action.position_selection is None or action.position_selection.kind not in ("path", "entity_destination"):
         return ()
     return tuple(get_extra_position_options(actor, action, target, list(selected)))
 

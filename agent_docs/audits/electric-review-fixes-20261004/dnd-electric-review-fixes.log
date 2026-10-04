@@ -1,0 +1,1145 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+....EEEEE
+==================================== ERRORS ====================================
+_ ERROR at setup of test_native_discharge_arrives_before_damage_and_seeking_is_deterministic[chain_lightning-False] _
+
+    @pytest.fixture(scope="module")
+    def data():
+        pygame.init()
+        pygame.display.set_mode((1,1))
+>       yield load_animation_data()
+              ^^^^^^^^^^^^^^^^^^^^^
+
+tests/game/test_electric_spell_delivery.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+data_root = PosixPath('/mnt/c/users/tommaso/documents/dev/dnd_engine/game/data/neuroclient')
+
+    def load_animation_data(data_root: Path = DATA_ROOT, *,
+                            rig_files: tuple[Path, ...] = (),
+                            authored_bundles: tuple[Path, ...] | None = None,
+                            world_source: WorldBindingsSource | None = None) -> AnimationData:
+        """Decode shipped typed records; importers own authored source conversion.
+    
+        Unselected media may have metadata without copied sprites. Only explicit
+        local resource bindings select files for the media loader. Archive provenance
+        URLs and paths are never fetched or treated as runtime dependencies. By default the
+        explicit sibling authored bundles are selected when present. An explicit
+        bundle selection must include all media required by the supplied world;
+        () excludes bundles but does not select a historical or empty world.
+        """
+        data_root = data_root.resolve()
+        drafts_file = StudioDraftFile.model_validate_json(
+            _read(data_root / "spell-studio-drafts.materialized.json")
+        )
+        bindings = _Bindings.model_validate_json(_read(data_root / "bindings.json"))
+        rig = RigTables.model_validate_json(_read(data_root / "rig-tables.json"))
+        source_root = data_root / "source"
+        assets = TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
+            _read(source_root / "public/studio/spell-projectile-assets.json")
+        )
+        context_source = _read(source_root / "src/render/data/animation/actionContextPresentation.json")
+        contexts = _ContextFile.model_validate_json(context_source).contexts
+        action_file = _ActionFile.model_validate_json(_read(
+            source_root / "src/render/data/animation/contentActionPresentationRecipes.json"
+        ))
+        attack_recipes: dict[str, AttackRecipe] = {}
+        shove_recipes: dict[str, ShoveRecipe] = {}
+        body_action_recipes: dict[str, BodyActionRecipe] = {}
+        for row in action_file.recipes:
+            kinds = row["compatibleCueKinds"]
+            if isinstance(kinds, list) and "attack" in kinds:
+                recipe = AttackRecipe.model_validate_json(json.dumps(row))
+                identity = recipe.definitionRef.content_id
+                if identity in attack_recipes:
+                    raise ValueError(f"ambiguous authored attack identity: {identity}")
+                attack_recipes[identity] = recipe
+            if isinstance(kinds, list) and "shove" in kinds:
+                shove = ShoveRecipe.model_validate_json(json.dumps(row))
+                identity = shove.definitionRef.content_id
+                if identity in shove_recipes:
+                    raise ValueError(f"ambiguous authored shove identity: {identity}")
+                shove_recipes[identity] = shove
+            if isinstance(kinds, list) and any(kind in kinds for kind in ("action", "item_action", "counterspell")):
+                body_action = BodyActionRecipe.model_validate_json(json.dumps(row))
+                identity = body_action.definitionRef.content_id
+                if identity in body_action_recipes:
+                    raise ValueError(f"ambiguous authored body action identity: {identity}")
+                body_action_recipes[identity] = body_action
+        profiles = AttackProfileFile.model_validate_json(_read(data_root / "attack-profiles.json"))
+        for identity in profiles.behaviors:
+            attack_recipes[identity] = attack_recipes[identity].model_copy(update={"variants": profiles.variants})
+        # The imported environment rows have no actor track. This
+        # local authored revision uses the same Studio action schema and is shared
+        # by the explicit object-action aliases below.
+        for filename in ("object-interaction-recipe.json",):
+            interaction_recipe = BodyActionRecipe.model_validate_json(_read(data_root / filename))
+            body_action_recipes[interaction_recipe.definitionRef.content_id] = interaction_recipe
+        body_action_bindings = TypeAdapter(FrozenMap[BodyActionBinding]).validate_json(
+            _read(data_root / "action-recipe-bindings.json"))
+        for binding in body_action_bindings.values():
+            if binding.source_recipe not in body_action_recipes:
+                raise ValueError(f"unknown source body action recipe: {binding.source_recipe}")
+        generated = _object(json.loads(_read(source_root / "src/render/data/animation/generatedSpellPresentationProfile.json")), "generated profile")
+        projectile_profile = _object(generated["projectile"], "generated projectile")
+        geometry_styles = _object(projectile_profile["geometryStyles"], "geometry styles")
+        dart_style = DartStyle.model_validate_json(json.dumps(geometry_styles["dart"]))
+        bolt_style = BoltStyle.model_validate_json(json.dumps(geometry_styles["bolt"]))
+    
+        drafts_by_ref: dict[ContentRef, StudioSpellDraft] = {}
+        draft_versions: dict[ContentRef, int] = {}
+        identities: set[str] = set()
+        for draft in drafts_file.spells:
+            ref = draft.definitionRef
+            if ref.definition_kind != ContentDefinitionKind.SPELL:
+                raise ValueError(f"spell draft has non-spell definitionRef: {ref.identity_key}")
+            if ref in drafts_by_ref or ref.identity_key in identities:
+                raise ValueError(f"duplicate spell draft definitionRef: {ref.identity_key}")
+            drafts_by_ref[ref] = draft
+            draft_versions[ref] = drafts_file.version
+            identities.add(ref.identity_key)
+        if authored_bundles is None:
+            authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media", "curse_media", "divine_media", "control_media", "fire_media", "lightning_media", "summoning_spells", "summoning_media", "necrotic_media", "utility_media", "weather_solar_media", "holy_media", "electric_media")
+                                     if (data_root.parent / name).is_dir())
+        bundle_resources: dict[str, Path] = {}
+        projectile_storage: dict[str, ProjectileStorage] = {}
+        spell_bindings = dict(bindings.spells)
+        overridden: set[ContentRef] = set()
+        effect_drafts: dict[str, StudioSpellDraft] = {}
+        effect_versions: dict[str, int] = {}
+        action_deliveries: dict[str, str] = {}
+        entity_lifecycle_media: dict[str, EntityLifecyclePhase] = {}
+        for bundle in authored_bundles:
+            lifecycle_path = bundle / "lifecycle.json"
+            if lifecycle_path.exists():
+                phases = TypeAdapter(dict[str, EntityLifecyclePhase]).validate_json(_read(lifecycle_path))
+                if set(phases) - {"arrival", "departure", "bond"} or set(phases) & set(entity_lifecycle_media):
+                    raise ValueError("unknown or duplicate entity lifecycle phase")
+                entity_lifecycle_media.update(phases)
+            resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
+            action_deliveries.update(resource_bindings.actionDeliveries)
+            for identity, ref in resource_bindings.spells.items():
+                if identity in spell_bindings and spell_bindings[identity] != ref:
+                    raise ValueError(f"authored spell binding disagrees with existing definitionRef: {identity}")
+                spell_bindings[identity] = ref
+            draft_paths = (bundle / "spell-studio-drafts.json", *sorted(bundle.glob("*-draft.json")))
+            for draft_path in draft_paths:
+                if not draft_path.exists():
+                    continue  # Media-only bundles have no spell program.
+                overrides = StudioDraftFile.model_validate_json(_read(draft_path))
+                if set(effect_drafts) & set(overrides.effectDrafts):
+                    raise ValueError("duplicate authored child-effect identity")
+                effect_drafts.update(overrides.effectDrafts)
+                effect_versions.update({identity: overrides.version for identity in overrides.effectDrafts})
+                for draft in overrides.spells:
+                    if draft.definitionRef not in spell_bindings.values():
+                        raise ValueError(f"authored bundle has no exact spell binding: {draft.definitionRef.identity_key}")
+                    if draft.definitionRef in overridden:
+                        raise ValueError(f"duplicate authored spell override: {draft.definitionRef.identity_key}")
+                    overridden.add(draft.definitionRef)
+                    drafts_by_ref[draft.definitionRef] = draft
+                    draft_versions[draft.definitionRef] = overrides.version
+            assets += TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
+                _read(bundle / "projectile-assets.json")
+            )
+            local_resources = _local_resources(resource_bindings.resources, data_root)
+            if set(local_resources) & set(bundle_resources):
+                raise ValueError("authored bundle resource identity already bound")
+            bundle_resources.update(local_resources)
+            if set(resource_bindings.projectileStorage) & set(projectile_storage):
+                raise ValueError("authored projectile storage identity already bound")
+            projectile_storage.update(resource_bindings.projectileStorage)
+        drafts: dict[str, StudioSpellDraft] = {}
+        for semantic_id, ref in spell_bindings.items():
+            if semantic_id != ref.content_id or not semantic_id.startswith("spell."):
+                raise ValueError(f"spell binding identity mismatch: {semantic_id}")
+            if ref not in drafts_by_ref:
+                raise ValueError(f"spell binding has no exact authored definitionRef: {semantic_id}")
+            drafts[semantic_id] = drafts_by_ref[ref]
+        if set(spell_bindings.values()) != set(drafts_by_ref):
+            raise ValueError("materialized spell drafts and local bindings differ")
+        for effect_id, draft in effect_drafts.items():
+            if draft.definitionRef not in drafts_by_ref or effect_id in drafts:
+                raise ValueError(f"effect draft must reference its existing owning spell: {effect_id}")
+            drafts[effect_id] = draft
+        for action_id, spell_id in action_deliveries.items():
+            drafts[action_id] = drafts[spell_id]
+    
+        projectile_assets: dict[str, AuthoredProjectileAsset] = {}
+        facing_order = rig.AUTHORED_PROJECTILE_ROW_ORDER
+        if len(facing_order) != 8 or len(set(facing_order)) != 8:
+            raise ValueError("root rig must identify eight unique projectile directions")
+        if set(rig.FACING_ROW) != set(facing_order) or set(rig.FACING_ROW.values()) != set(range(8)):
+            raise ValueError("root rig FACING_ROW must map each direction to a unique sheet row")
+        for asset in assets:
+            if asset.assetId in projectile_assets:
+                raise ValueError(f"duplicate projectile assetId: {asset.assetId}")
+            if len(asset.rowOrder) != 8 or set(asset.rowOrder) != set(facing_order):
+                raise ValueError(f"projectile rowOrder must identify eight unique directions: {asset.assetId}")
+            for phase in (asset.phases.cast, asset.phases.travel, asset.phases.impact):
+                if phase is not None and phase.start + phase.frames > asset.frame.cols:
+                    raise ValueError(f"projectile phase exceeds sheet columns: {asset.assetId}")
+            projectile_assets[asset.assetId] = asset
+    
+        for identity, draft in drafts.items():
+            version = effect_versions.get(identity, draft_versions[draft.definitionRef])
+            if version not in (2, 3):
+                draft = explicit_attachments(draft, projectile_assets)
+            drafts[identity] = explicit_composition(draft, projectile_storage) if version != 3 else draft
+            validate_composition(drafts[identity], projectile_storage)
+    
+        try:
+            vital = _object(contexts["vital_effect"], "vital_effect")
+            feedback = _object(contexts["floating_feedback"], "floating_feedback")
+            lifecycle = _object(contexts["lifecycle"], "lifecycle")
+            damage_context = DamageContext.model_validate_json(json.dumps(vital["damage"]))
+            healing_context = HealingContext.model_validate_json(json.dumps(vital["healing"]))
+            death_save_context = DeathSaveContext.model_validate_json(json.dumps(lifecycle["deathSave"]))
+            life_state_context = LifeStateContext.model_validate_json(json.dumps({
+                **_object(lifecycle["lifeState"], "lifeState"),
+                "bodyPoses": json.loads(_read(DATA_ROOT.parent / "life-state-poses.json")),
+            }))
+            death_context = DeathContext.model_validate_json(json.dumps(vital["death"]))
+            equipment_context = EquipmentTransitionContext.model_validate_json(json.dumps(contexts["equipment_transition"]))
+            movement_context = VoluntaryMovementContext.model_validate_json(json.dumps(contexts["voluntary_movement"]))
+            movement_reaction_context = MovementReactionContext.model_validate_json(json.dumps(contexts["pre_motion_reaction"]))
+            forced_movement_context = ForcedMovementContext.model_validate_json(json.dumps(contexts["forced_movement"]))
+            outcomes = _object(contexts["outcome_feedback"], "outcome_feedback")
+            shove_feedback = TypeAdapter(FrozenMap[LifecycleFeedback]).validate_json(json.dumps(outcomes["shove"]))
+            number_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["number"]))
+            badge_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["badge"]))
+        except KeyError as exc:
+            raise ValueError(f"missing animation context field {exc.args[0]!r}") from exc
+        resources = _local_resources(bindings.resources, data_root)
+        if set(resources) & set(bundle_resources):
+            raise ValueError("authored bundle resource identity already bound")
+        resources.update(bundle_resources)
+        pose_sockets = (TypeAdapter(PoseSockets).validate_json(
+            _read(data_root / bindings.root_pose_sockets_file))
+            if bindings.root_pose_sockets_file is not None else MappingProxyType({}))
+        rigs = {bindings.root_rig: _root_body_rig(rig, resources, bindings.root_body_anchor,
+                                              bindings.root_rest_pose_anchors, pose_sockets)}
+        creature_rigs = {identity: bindings.root_rig for identity in bindings.root_creature_content_refs}
+        _additional_rigs(rig_files, data_root, rigs, resources, creature_rigs)
+>       world = world_source if world_source is not None else WorldBindingsSource.model_validate_json(
+            _read(DATA_ROOT.parent / "world_bindings.json"))
+E       pydantic.errors.PydanticUserError: `WorldBindingsSource` is not fully defined; you should define `DamageType`, then call `WorldBindingsSource.model_rebuild()`.
+E       
+E       For further information visit https://errors.pydantic.dev/2.13/u/class-not-fully-defined
+
+game/animation_data.py:471: PydanticUserError
+_ ERROR at setup of test_native_discharge_arrives_before_damage_and_seeking_is_deterministic[lightning_bolt-False] _
+
+    @pytest.fixture(scope="module")
+    def data():
+        pygame.init()
+        pygame.display.set_mode((1,1))
+>       yield load_animation_data()
+              ^^^^^^^^^^^^^^^^^^^^^
+
+tests/game/test_electric_spell_delivery.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+data_root = PosixPath('/mnt/c/users/tommaso/documents/dev/dnd_engine/game/data/neuroclient')
+
+    def load_animation_data(data_root: Path = DATA_ROOT, *,
+                            rig_files: tuple[Path, ...] = (),
+                            authored_bundles: tuple[Path, ...] | None = None,
+                            world_source: WorldBindingsSource | None = None) -> AnimationData:
+        """Decode shipped typed records; importers own authored source conversion.
+    
+        Unselected media may have metadata without copied sprites. Only explicit
+        local resource bindings select files for the media loader. Archive provenance
+        URLs and paths are never fetched or treated as runtime dependencies. By default the
+        explicit sibling authored bundles are selected when present. An explicit
+        bundle selection must include all media required by the supplied world;
+        () excludes bundles but does not select a historical or empty world.
+        """
+        data_root = data_root.resolve()
+        drafts_file = StudioDraftFile.model_validate_json(
+            _read(data_root / "spell-studio-drafts.materialized.json")
+        )
+        bindings = _Bindings.model_validate_json(_read(data_root / "bindings.json"))
+        rig = RigTables.model_validate_json(_read(data_root / "rig-tables.json"))
+        source_root = data_root / "source"
+        assets = TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
+            _read(source_root / "public/studio/spell-projectile-assets.json")
+        )
+        context_source = _read(source_root / "src/render/data/animation/actionContextPresentation.json")
+        contexts = _ContextFile.model_validate_json(context_source).contexts
+        action_file = _ActionFile.model_validate_json(_read(
+            source_root / "src/render/data/animation/contentActionPresentationRecipes.json"
+        ))
+        attack_recipes: dict[str, AttackRecipe] = {}
+        shove_recipes: dict[str, ShoveRecipe] = {}
+        body_action_recipes: dict[str, BodyActionRecipe] = {}
+        for row in action_file.recipes:
+            kinds = row["compatibleCueKinds"]
+            if isinstance(kinds, list) and "attack" in kinds:
+                recipe = AttackRecipe.model_validate_json(json.dumps(row))
+                identity = recipe.definitionRef.content_id
+                if identity in attack_recipes:
+                    raise ValueError(f"ambiguous authored attack identity: {identity}")
+                attack_recipes[identity] = recipe
+            if isinstance(kinds, list) and "shove" in kinds:
+                shove = ShoveRecipe.model_validate_json(json.dumps(row))
+                identity = shove.definitionRef.content_id
+                if identity in shove_recipes:
+                    raise ValueError(f"ambiguous authored shove identity: {identity}")
+                shove_recipes[identity] = shove
+            if isinstance(kinds, list) and any(kind in kinds for kind in ("action", "item_action", "counterspell")):
+                body_action = BodyActionRecipe.model_validate_json(json.dumps(row))
+                identity = body_action.definitionRef.content_id
+                if identity in body_action_recipes:
+                    raise ValueError(f"ambiguous authored body action identity: {identity}")
+                body_action_recipes[identity] = body_action
+        profiles = AttackProfileFile.model_validate_json(_read(data_root / "attack-profiles.json"))
+        for identity in profiles.behaviors:
+            attack_recipes[identity] = attack_recipes[identity].model_copy(update={"variants": profiles.variants})
+        # The imported environment rows have no actor track. This
+        # local authored revision uses the same Studio action schema and is shared
+        # by the explicit object-action aliases below.
+        for filename in ("object-interaction-recipe.json",):
+            interaction_recipe = BodyActionRecipe.model_validate_json(_read(data_root / filename))
+            body_action_recipes[interaction_recipe.definitionRef.content_id] = interaction_recipe
+        body_action_bindings = TypeAdapter(FrozenMap[BodyActionBinding]).validate_json(
+            _read(data_root / "action-recipe-bindings.json"))
+        for binding in body_action_bindings.values():
+            if binding.source_recipe not in body_action_recipes:
+                raise ValueError(f"unknown source body action recipe: {binding.source_recipe}")
+        generated = _object(json.loads(_read(source_root / "src/render/data/animation/generatedSpellPresentationProfile.json")), "generated profile")
+        projectile_profile = _object(generated["projectile"], "generated projectile")
+        geometry_styles = _object(projectile_profile["geometryStyles"], "geometry styles")
+        dart_style = DartStyle.model_validate_json(json.dumps(geometry_styles["dart"]))
+        bolt_style = BoltStyle.model_validate_json(json.dumps(geometry_styles["bolt"]))
+    
+        drafts_by_ref: dict[ContentRef, StudioSpellDraft] = {}
+        draft_versions: dict[ContentRef, int] = {}
+        identities: set[str] = set()
+        for draft in drafts_file.spells:
+            ref = draft.definitionRef
+            if ref.definition_kind != ContentDefinitionKind.SPELL:
+                raise ValueError(f"spell draft has non-spell definitionRef: {ref.identity_key}")
+            if ref in drafts_by_ref or ref.identity_key in identities:
+                raise ValueError(f"duplicate spell draft definitionRef: {ref.identity_key}")
+            drafts_by_ref[ref] = draft
+            draft_versions[ref] = drafts_file.version
+            identities.add(ref.identity_key)
+        if authored_bundles is None:
+            authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media", "curse_media", "divine_media", "control_media", "fire_media", "lightning_media", "summoning_spells", "summoning_media", "necrotic_media", "utility_media", "weather_solar_media", "holy_media", "electric_media")
+                                     if (data_root.parent / name).is_dir())
+        bundle_resources: dict[str, Path] = {}
+        projectile_storage: dict[str, ProjectileStorage] = {}
+        spell_bindings = dict(bindings.spells)
+        overridden: set[ContentRef] = set()
+        effect_drafts: dict[str, StudioSpellDraft] = {}
+        effect_versions: dict[str, int] = {}
+        action_deliveries: dict[str, str] = {}
+        entity_lifecycle_media: dict[str, EntityLifecyclePhase] = {}
+        for bundle in authored_bundles:
+            lifecycle_path = bundle / "lifecycle.json"
+            if lifecycle_path.exists():
+                phases = TypeAdapter(dict[str, EntityLifecyclePhase]).validate_json(_read(lifecycle_path))
+                if set(phases) - {"arrival", "departure", "bond"} or set(phases) & set(entity_lifecycle_media):
+                    raise ValueError("unknown or duplicate entity lifecycle phase")
+                entity_lifecycle_media.update(phases)
+            resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
+            action_deliveries.update(resource_bindings.actionDeliveries)
+            for identity, ref in resource_bindings.spells.items():
+                if identity in spell_bindings and spell_bindings[identity] != ref:
+                    raise ValueError(f"authored spell binding disagrees with existing definitionRef: {identity}")
+                spell_bindings[identity] = ref
+            draft_paths = (bundle / "spell-studio-drafts.json", *sorted(bundle.glob("*-draft.json")))
+            for draft_path in draft_paths:
+                if not draft_path.exists():
+                    continue  # Media-only bundles have no spell program.
+                overrides = StudioDraftFile.model_validate_json(_read(draft_path))
+                if set(effect_drafts) & set(overrides.effectDrafts):
+                    raise ValueError("duplicate authored child-effect identity")
+                effect_drafts.update(overrides.effectDrafts)
+                effect_versions.update({identity: overrides.version for identity in overrides.effectDrafts})
+                for draft in overrides.spells:
+                    if draft.definitionRef not in spell_bindings.values():
+                        raise ValueError(f"authored bundle has no exact spell binding: {draft.definitionRef.identity_key}")
+                    if draft.definitionRef in overridden:
+                        raise ValueError(f"duplicate authored spell override: {draft.definitionRef.identity_key}")
+                    overridden.add(draft.definitionRef)
+                    drafts_by_ref[draft.definitionRef] = draft
+                    draft_versions[draft.definitionRef] = overrides.version
+            assets += TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
+                _read(bundle / "projectile-assets.json")
+            )
+            local_resources = _local_resources(resource_bindings.resources, data_root)
+            if set(local_resources) & set(bundle_resources):
+                raise ValueError("authored bundle resource identity already bound")
+            bundle_resources.update(local_resources)
+            if set(resource_bindings.projectileStorage) & set(projectile_storage):
+                raise ValueError("authored projectile storage identity already bound")
+            projectile_storage.update(resource_bindings.projectileStorage)
+        drafts: dict[str, StudioSpellDraft] = {}
+        for semantic_id, ref in spell_bindings.items():
+            if semantic_id != ref.content_id or not semantic_id.startswith("spell."):
+                raise ValueError(f"spell binding identity mismatch: {semantic_id}")
+            if ref not in drafts_by_ref:
+                raise ValueError(f"spell binding has no exact authored definitionRef: {semantic_id}")
+            drafts[semantic_id] = drafts_by_ref[ref]
+        if set(spell_bindings.values()) != set(drafts_by_ref):
+            raise ValueError("materialized spell drafts and local bindings differ")
+        for effect_id, draft in effect_drafts.items():
+            if draft.definitionRef not in drafts_by_ref or effect_id in drafts:
+                raise ValueError(f"effect draft must reference its existing owning spell: {effect_id}")
+            drafts[effect_id] = draft
+        for action_id, spell_id in action_deliveries.items():
+            drafts[action_id] = drafts[spell_id]
+    
+        projectile_assets: dict[str, AuthoredProjectileAsset] = {}
+        facing_order = rig.AUTHORED_PROJECTILE_ROW_ORDER
+        if len(facing_order) != 8 or len(set(facing_order)) != 8:
+            raise ValueError("root rig must identify eight unique projectile directions")
+        if set(rig.FACING_ROW) != set(facing_order) or set(rig.FACING_ROW.values()) != set(range(8)):
+            raise ValueError("root rig FACING_ROW must map each direction to a unique sheet row")
+        for asset in assets:
+            if asset.assetId in projectile_assets:
+                raise ValueError(f"duplicate projectile assetId: {asset.assetId}")
+            if len(asset.rowOrder) != 8 or set(asset.rowOrder) != set(facing_order):
+                raise ValueError(f"projectile rowOrder must identify eight unique directions: {asset.assetId}")
+            for phase in (asset.phases.cast, asset.phases.travel, asset.phases.impact):
+                if phase is not None and phase.start + phase.frames > asset.frame.cols:
+                    raise ValueError(f"projectile phase exceeds sheet columns: {asset.assetId}")
+            projectile_assets[asset.assetId] = asset
+    
+        for identity, draft in drafts.items():
+            version = effect_versions.get(identity, draft_versions[draft.definitionRef])
+            if version not in (2, 3):
+                draft = explicit_attachments(draft, projectile_assets)
+            drafts[identity] = explicit_composition(draft, projectile_storage) if version != 3 else draft
+            validate_composition(drafts[identity], projectile_storage)
+    
+        try:
+            vital = _object(contexts["vital_effect"], "vital_effect")
+            feedback = _object(contexts["floating_feedback"], "floating_feedback")
+            lifecycle = _object(contexts["lifecycle"], "lifecycle")
+            damage_context = DamageContext.model_validate_json(json.dumps(vital["damage"]))
+            healing_context = HealingContext.model_validate_json(json.dumps(vital["healing"]))
+            death_save_context = DeathSaveContext.model_validate_json(json.dumps(lifecycle["deathSave"]))
+            life_state_context = LifeStateContext.model_validate_json(json.dumps({
+                **_object(lifecycle["lifeState"], "lifeState"),
+                "bodyPoses": json.loads(_read(DATA_ROOT.parent / "life-state-poses.json")),
+            }))
+            death_context = DeathContext.model_validate_json(json.dumps(vital["death"]))
+            equipment_context = EquipmentTransitionContext.model_validate_json(json.dumps(contexts["equipment_transition"]))
+            movement_context = VoluntaryMovementContext.model_validate_json(json.dumps(contexts["voluntary_movement"]))
+            movement_reaction_context = MovementReactionContext.model_validate_json(json.dumps(contexts["pre_motion_reaction"]))
+            forced_movement_context = ForcedMovementContext.model_validate_json(json.dumps(contexts["forced_movement"]))
+            outcomes = _object(contexts["outcome_feedback"], "outcome_feedback")
+            shove_feedback = TypeAdapter(FrozenMap[LifecycleFeedback]).validate_json(json.dumps(outcomes["shove"]))
+            number_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["number"]))
+            badge_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["badge"]))
+        except KeyError as exc:
+            raise ValueError(f"missing animation context field {exc.args[0]!r}") from exc
+        resources = _local_resources(bindings.resources, data_root)
+        if set(resources) & set(bundle_resources):
+            raise ValueError("authored bundle resource identity already bound")
+        resources.update(bundle_resources)
+        pose_sockets = (TypeAdapter(PoseSockets).validate_json(
+            _read(data_root / bindings.root_pose_sockets_file))
+            if bindings.root_pose_sockets_file is not None else MappingProxyType({}))
+        rigs = {bindings.root_rig: _root_body_rig(rig, resources, bindings.root_body_anchor,
+                                              bindings.root_rest_pose_anchors, pose_sockets)}
+        creature_rigs = {identity: bindings.root_rig for identity in bindings.root_creature_content_refs}
+        _additional_rigs(rig_files, data_root, rigs, resources, creature_rigs)
+>       world = world_source if world_source is not None else WorldBindingsSource.model_validate_json(
+            _read(DATA_ROOT.parent / "world_bindings.json"))
+E       pydantic.errors.PydanticUserError: `WorldBindingsSource` is not fully defined; you should define `DamageType`, then call `WorldBindingsSource.model_rebuild()`.
+E       
+E       For further information visit https://errors.pydantic.dev/2.13/u/class-not-fully-defined
+
+game/animation_data.py:471: PydanticUserError
+_ ERROR at setup of test_native_discharge_arrives_before_damage_and_seeking_is_deterministic[lightning_bolt-True] _
+
+    @pytest.fixture(scope="module")
+    def data():
+        pygame.init()
+        pygame.display.set_mode((1,1))
+>       yield load_animation_data()
+              ^^^^^^^^^^^^^^^^^^^^^
+
+tests/game/test_electric_spell_delivery.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+data_root = PosixPath('/mnt/c/users/tommaso/documents/dev/dnd_engine/game/data/neuroclient')
+
+    def load_animation_data(data_root: Path = DATA_ROOT, *,
+                            rig_files: tuple[Path, ...] = (),
+                            authored_bundles: tuple[Path, ...] | None = None,
+                            world_source: WorldBindingsSource | None = None) -> AnimationData:
+        """Decode shipped typed records; importers own authored source conversion.
+    
+        Unselected media may have metadata without copied sprites. Only explicit
+        local resource bindings select files for the media loader. Archive provenance
+        URLs and paths are never fetched or treated as runtime dependencies. By default the
+        explicit sibling authored bundles are selected when present. An explicit
+        bundle selection must include all media required by the supplied world;
+        () excludes bundles but does not select a historical or empty world.
+        """
+        data_root = data_root.resolve()
+        drafts_file = StudioDraftFile.model_validate_json(
+            _read(data_root / "spell-studio-drafts.materialized.json")
+        )
+        bindings = _Bindings.model_validate_json(_read(data_root / "bindings.json"))
+        rig = RigTables.model_validate_json(_read(data_root / "rig-tables.json"))
+        source_root = data_root / "source"
+        assets = TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
+            _read(source_root / "public/studio/spell-projectile-assets.json")
+        )
+        context_source = _read(source_root / "src/render/data/animation/actionContextPresentation.json")
+        contexts = _ContextFile.model_validate_json(context_source).contexts
+        action_file = _ActionFile.model_validate_json(_read(
+            source_root / "src/render/data/animation/contentActionPresentationRecipes.json"
+        ))
+        attack_recipes: dict[str, AttackRecipe] = {}
+        shove_recipes: dict[str, ShoveRecipe] = {}
+        body_action_recipes: dict[str, BodyActionRecipe] = {}
+        for row in action_file.recipes:
+            kinds = row["compatibleCueKinds"]
+            if isinstance(kinds, list) and "attack" in kinds:
+                recipe = AttackRecipe.model_validate_json(json.dumps(row))
+                identity = recipe.definitionRef.content_id
+                if identity in attack_recipes:
+                    raise ValueError(f"ambiguous authored attack identity: {identity}")
+                attack_recipes[identity] = recipe
+            if isinstance(kinds, list) and "shove" in kinds:
+                shove = ShoveRecipe.model_validate_json(json.dumps(row))
+                identity = shove.definitionRef.content_id
+                if identity in shove_recipes:
+                    raise ValueError(f"ambiguous authored shove identity: {identity}")
+                shove_recipes[identity] = shove
+            if isinstance(kinds, list) and any(kind in kinds for kind in ("action", "item_action", "counterspell")):
+                body_action = BodyActionRecipe.model_validate_json(json.dumps(row))
+                identity = body_action.definitionRef.content_id
+                if identity in body_action_recipes:
+                    raise ValueError(f"ambiguous authored body action identity: {identity}")
+                body_action_recipes[identity] = body_action
+        profiles = AttackProfileFile.model_validate_json(_read(data_root / "attack-profiles.json"))
+        for identity in profiles.behaviors:
+            attack_recipes[identity] = attack_recipes[identity].model_copy(update={"variants": profiles.variants})
+        # The imported environment rows have no actor track. This
+        # local authored revision uses the same Studio action schema and is shared
+        # by the explicit object-action aliases below.
+        for filename in ("object-interaction-recipe.json",):
+            interaction_recipe = BodyActionRecipe.model_validate_json(_read(data_root / filename))
+            body_action_recipes[interaction_recipe.definitionRef.content_id] = interaction_recipe
+        body_action_bindings = TypeAdapter(FrozenMap[BodyActionBinding]).validate_json(
+            _read(data_root / "action-recipe-bindings.json"))
+        for binding in body_action_bindings.values():
+            if binding.source_recipe not in body_action_recipes:
+                raise ValueError(f"unknown source body action recipe: {binding.source_recipe}")
+        generated = _object(json.loads(_read(source_root / "src/render/data/animation/generatedSpellPresentationProfile.json")), "generated profile")
+        projectile_profile = _object(generated["projectile"], "generated projectile")
+        geometry_styles = _object(projectile_profile["geometryStyles"], "geometry styles")
+        dart_style = DartStyle.model_validate_json(json.dumps(geometry_styles["dart"]))
+        bolt_style = BoltStyle.model_validate_json(json.dumps(geometry_styles["bolt"]))
+    
+        drafts_by_ref: dict[ContentRef, StudioSpellDraft] = {}
+        draft_versions: dict[ContentRef, int] = {}
+        identities: set[str] = set()
+        for draft in drafts_file.spells:
+            ref = draft.definitionRef
+            if ref.definition_kind != ContentDefinitionKind.SPELL:
+                raise ValueError(f"spell draft has non-spell definitionRef: {ref.identity_key}")
+            if ref in drafts_by_ref or ref.identity_key in identities:
+                raise ValueError(f"duplicate spell draft definitionRef: {ref.identity_key}")
+            drafts_by_ref[ref] = draft
+            draft_versions[ref] = drafts_file.version
+            identities.add(ref.identity_key)
+        if authored_bundles is None:
+            authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media", "curse_media", "divine_media", "control_media", "fire_media", "lightning_media", "summoning_spells", "summoning_media", "necrotic_media", "utility_media", "weather_solar_media", "holy_media", "electric_media")
+                                     if (data_root.parent / name).is_dir())
+        bundle_resources: dict[str, Path] = {}
+        projectile_storage: dict[str, ProjectileStorage] = {}
+        spell_bindings = dict(bindings.spells)
+        overridden: set[ContentRef] = set()
+        effect_drafts: dict[str, StudioSpellDraft] = {}
+        effect_versions: dict[str, int] = {}
+        action_deliveries: dict[str, str] = {}
+        entity_lifecycle_media: dict[str, EntityLifecyclePhase] = {}
+        for bundle in authored_bundles:
+            lifecycle_path = bundle / "lifecycle.json"
+            if lifecycle_path.exists():
+                phases = TypeAdapter(dict[str, EntityLifecyclePhase]).validate_json(_read(lifecycle_path))
+                if set(phases) - {"arrival", "departure", "bond"} or set(phases) & set(entity_lifecycle_media):
+                    raise ValueError("unknown or duplicate entity lifecycle phase")
+                entity_lifecycle_media.update(phases)
+            resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
+            action_deliveries.update(resource_bindings.actionDeliveries)
+            for identity, ref in resource_bindings.spells.items():
+                if identity in spell_bindings and spell_bindings[identity] != ref:
+                    raise ValueError(f"authored spell binding disagrees with existing definitionRef: {identity}")
+                spell_bindings[identity] = ref
+            draft_paths = (bundle / "spell-studio-drafts.json", *sorted(bundle.glob("*-draft.json")))
+            for draft_path in draft_paths:
+                if not draft_path.exists():
+                    continue  # Media-only bundles have no spell program.
+                overrides = StudioDraftFile.model_validate_json(_read(draft_path))
+                if set(effect_drafts) & set(overrides.effectDrafts):
+                    raise ValueError("duplicate authored child-effect identity")
+                effect_drafts.update(overrides.effectDrafts)
+                effect_versions.update({identity: overrides.version for identity in overrides.effectDrafts})
+                for draft in overrides.spells:
+                    if draft.definitionRef not in spell_bindings.values():
+                        raise ValueError(f"authored bundle has no exact spell binding: {draft.definitionRef.identity_key}")
+                    if draft.definitionRef in overridden:
+                        raise ValueError(f"duplicate authored spell override: {draft.definitionRef.identity_key}")
+                    overridden.add(draft.definitionRef)
+                    drafts_by_ref[draft.definitionRef] = draft
+                    draft_versions[draft.definitionRef] = overrides.version
+            assets += TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
+                _read(bundle / "projectile-assets.json")
+            )
+            local_resources = _local_resources(resource_bindings.resources, data_root)
+            if set(local_resources) & set(bundle_resources):
+                raise ValueError("authored bundle resource identity already bound")
+            bundle_resources.update(local_resources)
+            if set(resource_bindings.projectileStorage) & set(projectile_storage):
+                raise ValueError("authored projectile storage identity already bound")
+            projectile_storage.update(resource_bindings.projectileStorage)
+        drafts: dict[str, StudioSpellDraft] = {}
+        for semantic_id, ref in spell_bindings.items():
+            if semantic_id != ref.content_id or not semantic_id.startswith("spell."):
+                raise ValueError(f"spell binding identity mismatch: {semantic_id}")
+            if ref not in drafts_by_ref:
+                raise ValueError(f"spell binding has no exact authored definitionRef: {semantic_id}")
+            drafts[semantic_id] = drafts_by_ref[ref]
+        if set(spell_bindings.values()) != set(drafts_by_ref):
+            raise ValueError("materialized spell drafts and local bindings differ")
+        for effect_id, draft in effect_drafts.items():
+            if draft.definitionRef not in drafts_by_ref or effect_id in drafts:
+                raise ValueError(f"effect draft must reference its existing owning spell: {effect_id}")
+            drafts[effect_id] = draft
+        for action_id, spell_id in action_deliveries.items():
+            drafts[action_id] = drafts[spell_id]
+    
+        projectile_assets: dict[str, AuthoredProjectileAsset] = {}
+        facing_order = rig.AUTHORED_PROJECTILE_ROW_ORDER
+        if len(facing_order) != 8 or len(set(facing_order)) != 8:
+            raise ValueError("root rig must identify eight unique projectile directions")
+        if set(rig.FACING_ROW) != set(facing_order) or set(rig.FACING_ROW.values()) != set(range(8)):
+            raise ValueError("root rig FACING_ROW must map each direction to a unique sheet row")
+        for asset in assets:
+            if asset.assetId in projectile_assets:
+                raise ValueError(f"duplicate projectile assetId: {asset.assetId}")
+            if len(asset.rowOrder) != 8 or set(asset.rowOrder) != set(facing_order):
+                raise ValueError(f"projectile rowOrder must identify eight unique directions: {asset.assetId}")
+            for phase in (asset.phases.cast, asset.phases.travel, asset.phases.impact):
+                if phase is not None and phase.start + phase.frames > asset.frame.cols:
+                    raise ValueError(f"projectile phase exceeds sheet columns: {asset.assetId}")
+            projectile_assets[asset.assetId] = asset
+    
+        for identity, draft in drafts.items():
+            version = effect_versions.get(identity, draft_versions[draft.definitionRef])
+            if version not in (2, 3):
+                draft = explicit_attachments(draft, projectile_assets)
+            drafts[identity] = explicit_composition(draft, projectile_storage) if version != 3 else draft
+            validate_composition(drafts[identity], projectile_storage)
+    
+        try:
+            vital = _object(contexts["vital_effect"], "vital_effect")
+            feedback = _object(contexts["floating_feedback"], "floating_feedback")
+            lifecycle = _object(contexts["lifecycle"], "lifecycle")
+            damage_context = DamageContext.model_validate_json(json.dumps(vital["damage"]))
+            healing_context = HealingContext.model_validate_json(json.dumps(vital["healing"]))
+            death_save_context = DeathSaveContext.model_validate_json(json.dumps(lifecycle["deathSave"]))
+            life_state_context = LifeStateContext.model_validate_json(json.dumps({
+                **_object(lifecycle["lifeState"], "lifeState"),
+                "bodyPoses": json.loads(_read(DATA_ROOT.parent / "life-state-poses.json")),
+            }))
+            death_context = DeathContext.model_validate_json(json.dumps(vital["death"]))
+            equipment_context = EquipmentTransitionContext.model_validate_json(json.dumps(contexts["equipment_transition"]))
+            movement_context = VoluntaryMovementContext.model_validate_json(json.dumps(contexts["voluntary_movement"]))
+            movement_reaction_context = MovementReactionContext.model_validate_json(json.dumps(contexts["pre_motion_reaction"]))
+            forced_movement_context = ForcedMovementContext.model_validate_json(json.dumps(contexts["forced_movement"]))
+            outcomes = _object(contexts["outcome_feedback"], "outcome_feedback")
+            shove_feedback = TypeAdapter(FrozenMap[LifecycleFeedback]).validate_json(json.dumps(outcomes["shove"]))
+            number_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["number"]))
+            badge_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["badge"]))
+        except KeyError as exc:
+            raise ValueError(f"missing animation context field {exc.args[0]!r}") from exc
+        resources = _local_resources(bindings.resources, data_root)
+        if set(resources) & set(bundle_resources):
+            raise ValueError("authored bundle resource identity already bound")
+        resources.update(bundle_resources)
+        pose_sockets = (TypeAdapter(PoseSockets).validate_json(
+            _read(data_root / bindings.root_pose_sockets_file))
+            if bindings.root_pose_sockets_file is not None else MappingProxyType({}))
+        rigs = {bindings.root_rig: _root_body_rig(rig, resources, bindings.root_body_anchor,
+                                              bindings.root_rest_pose_anchors, pose_sockets)}
+        creature_rigs = {identity: bindings.root_rig for identity in bindings.root_creature_content_refs}
+        _additional_rigs(rig_files, data_root, rigs, resources, creature_rigs)
+>       world = world_source if world_source is not None else WorldBindingsSource.model_validate_json(
+            _read(DATA_ROOT.parent / "world_bindings.json"))
+E       pydantic.errors.PydanticUserError: `WorldBindingsSource` is not fully defined; you should define `DamageType`, then call `WorldBindingsSource.model_rebuild()`.
+E       
+E       For further information visit https://errors.pydantic.dev/2.13/u/class-not-fully-defined
+
+game/animation_data.py:471: PydanticUserError
+_ ERROR at setup of test_invisible_branch_does_not_hide_other_recorded_links_from_an_observer _
+
+    @pytest.fixture(scope="module")
+    def data():
+        pygame.init()
+        pygame.display.set_mode((1,1))
+>       yield load_animation_data()
+              ^^^^^^^^^^^^^^^^^^^^^
+
+tests/game/test_electric_spell_delivery.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+data_root = PosixPath('/mnt/c/users/tommaso/documents/dev/dnd_engine/game/data/neuroclient')
+
+    def load_animation_data(data_root: Path = DATA_ROOT, *,
+                            rig_files: tuple[Path, ...] = (),
+                            authored_bundles: tuple[Path, ...] | None = None,
+                            world_source: WorldBindingsSource | None = None) -> AnimationData:
+        """Decode shipped typed records; importers own authored source conversion.
+    
+        Unselected media may have metadata without copied sprites. Only explicit
+        local resource bindings select files for the media loader. Archive provenance
+        URLs and paths are never fetched or treated as runtime dependencies. By default the
+        explicit sibling authored bundles are selected when present. An explicit
+        bundle selection must include all media required by the supplied world;
+        () excludes bundles but does not select a historical or empty world.
+        """
+        data_root = data_root.resolve()
+        drafts_file = StudioDraftFile.model_validate_json(
+            _read(data_root / "spell-studio-drafts.materialized.json")
+        )
+        bindings = _Bindings.model_validate_json(_read(data_root / "bindings.json"))
+        rig = RigTables.model_validate_json(_read(data_root / "rig-tables.json"))
+        source_root = data_root / "source"
+        assets = TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
+            _read(source_root / "public/studio/spell-projectile-assets.json")
+        )
+        context_source = _read(source_root / "src/render/data/animation/actionContextPresentation.json")
+        contexts = _ContextFile.model_validate_json(context_source).contexts
+        action_file = _ActionFile.model_validate_json(_read(
+            source_root / "src/render/data/animation/contentActionPresentationRecipes.json"
+        ))
+        attack_recipes: dict[str, AttackRecipe] = {}
+        shove_recipes: dict[str, ShoveRecipe] = {}
+        body_action_recipes: dict[str, BodyActionRecipe] = {}
+        for row in action_file.recipes:
+            kinds = row["compatibleCueKinds"]
+            if isinstance(kinds, list) and "attack" in kinds:
+                recipe = AttackRecipe.model_validate_json(json.dumps(row))
+                identity = recipe.definitionRef.content_id
+                if identity in attack_recipes:
+                    raise ValueError(f"ambiguous authored attack identity: {identity}")
+                attack_recipes[identity] = recipe
+            if isinstance(kinds, list) and "shove" in kinds:
+                shove = ShoveRecipe.model_validate_json(json.dumps(row))
+                identity = shove.definitionRef.content_id
+                if identity in shove_recipes:
+                    raise ValueError(f"ambiguous authored shove identity: {identity}")
+                shove_recipes[identity] = shove
+            if isinstance(kinds, list) and any(kind in kinds for kind in ("action", "item_action", "counterspell")):
+                body_action = BodyActionRecipe.model_validate_json(json.dumps(row))
+                identity = body_action.definitionRef.content_id
+                if identity in body_action_recipes:
+                    raise ValueError(f"ambiguous authored body action identity: {identity}")
+                body_action_recipes[identity] = body_action
+        profiles = AttackProfileFile.model_validate_json(_read(data_root / "attack-profiles.json"))
+        for identity in profiles.behaviors:
+            attack_recipes[identity] = attack_recipes[identity].model_copy(update={"variants": profiles.variants})
+        # The imported environment rows have no actor track. This
+        # local authored revision uses the same Studio action schema and is shared
+        # by the explicit object-action aliases below.
+        for filename in ("object-interaction-recipe.json",):
+            interaction_recipe = BodyActionRecipe.model_validate_json(_read(data_root / filename))
+            body_action_recipes[interaction_recipe.definitionRef.content_id] = interaction_recipe
+        body_action_bindings = TypeAdapter(FrozenMap[BodyActionBinding]).validate_json(
+            _read(data_root / "action-recipe-bindings.json"))
+        for binding in body_action_bindings.values():
+            if binding.source_recipe not in body_action_recipes:
+                raise ValueError(f"unknown source body action recipe: {binding.source_recipe}")
+        generated = _object(json.loads(_read(source_root / "src/render/data/animation/generatedSpellPresentationProfile.json")), "generated profile")
+        projectile_profile = _object(generated["projectile"], "generated projectile")
+        geometry_styles = _object(projectile_profile["geometryStyles"], "geometry styles")
+        dart_style = DartStyle.model_validate_json(json.dumps(geometry_styles["dart"]))
+        bolt_style = BoltStyle.model_validate_json(json.dumps(geometry_styles["bolt"]))
+    
+        drafts_by_ref: dict[ContentRef, StudioSpellDraft] = {}
+        draft_versions: dict[ContentRef, int] = {}
+        identities: set[str] = set()
+        for draft in drafts_file.spells:
+            ref = draft.definitionRef
+            if ref.definition_kind != ContentDefinitionKind.SPELL:
+                raise ValueError(f"spell draft has non-spell definitionRef: {ref.identity_key}")
+            if ref in drafts_by_ref or ref.identity_key in identities:
+                raise ValueError(f"duplicate spell draft definitionRef: {ref.identity_key}")
+            drafts_by_ref[ref] = draft
+            draft_versions[ref] = drafts_file.version
+            identities.add(ref.identity_key)
+        if authored_bundles is None:
+            authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media", "curse_media", "divine_media", "control_media", "fire_media", "lightning_media", "summoning_spells", "summoning_media", "necrotic_media", "utility_media", "weather_solar_media", "holy_media", "electric_media")
+                                     if (data_root.parent / name).is_dir())
+        bundle_resources: dict[str, Path] = {}
+        projectile_storage: dict[str, ProjectileStorage] = {}
+        spell_bindings = dict(bindings.spells)
+        overridden: set[ContentRef] = set()
+        effect_drafts: dict[str, StudioSpellDraft] = {}
+        effect_versions: dict[str, int] = {}
+        action_deliveries: dict[str, str] = {}
+        entity_lifecycle_media: dict[str, EntityLifecyclePhase] = {}
+        for bundle in authored_bundles:
+            lifecycle_path = bundle / "lifecycle.json"
+            if lifecycle_path.exists():
+                phases = TypeAdapter(dict[str, EntityLifecyclePhase]).validate_json(_read(lifecycle_path))
+                if set(phases) - {"arrival", "departure", "bond"} or set(phases) & set(entity_lifecycle_media):
+                    raise ValueError("unknown or duplicate entity lifecycle phase")
+                entity_lifecycle_media.update(phases)
+            resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
+            action_deliveries.update(resource_bindings.actionDeliveries)
+            for identity, ref in resource_bindings.spells.items():
+                if identity in spell_bindings and spell_bindings[identity] != ref:
+                    raise ValueError(f"authored spell binding disagrees with existing definitionRef: {identity}")
+                spell_bindings[identity] = ref
+            draft_paths = (bundle / "spell-studio-drafts.json", *sorted(bundle.glob("*-draft.json")))
+            for draft_path in draft_paths:
+                if not draft_path.exists():
+                    continue  # Media-only bundles have no spell program.
+                overrides = StudioDraftFile.model_validate_json(_read(draft_path))
+                if set(effect_drafts) & set(overrides.effectDrafts):
+                    raise ValueError("duplicate authored child-effect identity")
+                effect_drafts.update(overrides.effectDrafts)
+                effect_versions.update({identity: overrides.version for identity in overrides.effectDrafts})
+                for draft in overrides.spells:
+                    if draft.definitionRef not in spell_bindings.values():
+                        raise ValueError(f"authored bundle has no exact spell binding: {draft.definitionRef.identity_key}")
+                    if draft.definitionRef in overridden:
+                        raise ValueError(f"duplicate authored spell override: {draft.definitionRef.identity_key}")
+                    overridden.add(draft.definitionRef)
+                    drafts_by_ref[draft.definitionRef] = draft
+                    draft_versions[draft.definitionRef] = overrides.version
+            assets += TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
+                _read(bundle / "projectile-assets.json")
+            )
+            local_resources = _local_resources(resource_bindings.resources, data_root)
+            if set(local_resources) & set(bundle_resources):
+                raise ValueError("authored bundle resource identity already bound")
+            bundle_resources.update(local_resources)
+            if set(resource_bindings.projectileStorage) & set(projectile_storage):
+                raise ValueError("authored projectile storage identity already bound")
+            projectile_storage.update(resource_bindings.projectileStorage)
+        drafts: dict[str, StudioSpellDraft] = {}
+        for semantic_id, ref in spell_bindings.items():
+            if semantic_id != ref.content_id or not semantic_id.startswith("spell."):
+                raise ValueError(f"spell binding identity mismatch: {semantic_id}")
+            if ref not in drafts_by_ref:
+                raise ValueError(f"spell binding has no exact authored definitionRef: {semantic_id}")
+            drafts[semantic_id] = drafts_by_ref[ref]
+        if set(spell_bindings.values()) != set(drafts_by_ref):
+            raise ValueError("materialized spell drafts and local bindings differ")
+        for effect_id, draft in effect_drafts.items():
+            if draft.definitionRef not in drafts_by_ref or effect_id in drafts:
+                raise ValueError(f"effect draft must reference its existing owning spell: {effect_id}")
+            drafts[effect_id] = draft
+        for action_id, spell_id in action_deliveries.items():
+            drafts[action_id] = drafts[spell_id]
+    
+        projectile_assets: dict[str, AuthoredProjectileAsset] = {}
+        facing_order = rig.AUTHORED_PROJECTILE_ROW_ORDER
+        if len(facing_order) != 8 or len(set(facing_order)) != 8:
+            raise ValueError("root rig must identify eight unique projectile directions")
+        if set(rig.FACING_ROW) != set(facing_order) or set(rig.FACING_ROW.values()) != set(range(8)):
+            raise ValueError("root rig FACING_ROW must map each direction to a unique sheet row")
+        for asset in assets:
+            if asset.assetId in projectile_assets:
+                raise ValueError(f"duplicate projectile assetId: {asset.assetId}")
+            if len(asset.rowOrder) != 8 or set(asset.rowOrder) != set(facing_order):
+                raise ValueError(f"projectile rowOrder must identify eight unique directions: {asset.assetId}")
+            for phase in (asset.phases.cast, asset.phases.travel, asset.phases.impact):
+                if phase is not None and phase.start + phase.frames > asset.frame.cols:
+                    raise ValueError(f"projectile phase exceeds sheet columns: {asset.assetId}")
+            projectile_assets[asset.assetId] = asset
+    
+        for identity, draft in drafts.items():
+            version = effect_versions.get(identity, draft_versions[draft.definitionRef])
+            if version not in (2, 3):
+                draft = explicit_attachments(draft, projectile_assets)
+            drafts[identity] = explicit_composition(draft, projectile_storage) if version != 3 else draft
+            validate_composition(drafts[identity], projectile_storage)
+    
+        try:
+            vital = _object(contexts["vital_effect"], "vital_effect")
+            feedback = _object(contexts["floating_feedback"], "floating_feedback")
+            lifecycle = _object(contexts["lifecycle"], "lifecycle")
+            damage_context = DamageContext.model_validate_json(json.dumps(vital["damage"]))
+            healing_context = HealingContext.model_validate_json(json.dumps(vital["healing"]))
+            death_save_context = DeathSaveContext.model_validate_json(json.dumps(lifecycle["deathSave"]))
+            life_state_context = LifeStateContext.model_validate_json(json.dumps({
+                **_object(lifecycle["lifeState"], "lifeState"),
+                "bodyPoses": json.loads(_read(DATA_ROOT.parent / "life-state-poses.json")),
+            }))
+            death_context = DeathContext.model_validate_json(json.dumps(vital["death"]))
+            equipment_context = EquipmentTransitionContext.model_validate_json(json.dumps(contexts["equipment_transition"]))
+            movement_context = VoluntaryMovementContext.model_validate_json(json.dumps(contexts["voluntary_movement"]))
+            movement_reaction_context = MovementReactionContext.model_validate_json(json.dumps(contexts["pre_motion_reaction"]))
+            forced_movement_context = ForcedMovementContext.model_validate_json(json.dumps(contexts["forced_movement"]))
+            outcomes = _object(contexts["outcome_feedback"], "outcome_feedback")
+            shove_feedback = TypeAdapter(FrozenMap[LifecycleFeedback]).validate_json(json.dumps(outcomes["shove"]))
+            number_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["number"]))
+            badge_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["badge"]))
+        except KeyError as exc:
+            raise ValueError(f"missing animation context field {exc.args[0]!r}") from exc
+        resources = _local_resources(bindings.resources, data_root)
+        if set(resources) & set(bundle_resources):
+            raise ValueError("authored bundle resource identity already bound")
+        resources.update(bundle_resources)
+        pose_sockets = (TypeAdapter(PoseSockets).validate_json(
+            _read(data_root / bindings.root_pose_sockets_file))
+            if bindings.root_pose_sockets_file is not None else MappingProxyType({}))
+        rigs = {bindings.root_rig: _root_body_rig(rig, resources, bindings.root_body_anchor,
+                                              bindings.root_rest_pose_anchors, pose_sockets)}
+        creature_rigs = {identity: bindings.root_rig for identity in bindings.root_creature_content_refs}
+        _additional_rigs(rig_files, data_root, rigs, resources, creature_rigs)
+>       world = world_source if world_source is not None else WorldBindingsSource.model_validate_json(
+            _read(DATA_ROOT.parent / "world_bindings.json"))
+E       pydantic.errors.PydanticUserError: `WorldBindingsSource` is not fully defined; you should define `DamageType`, then call `WorldBindingsSource.model_rebuild()`.
+E       
+E       For further information visit https://errors.pydantic.dev/2.13/u/class-not-fully-defined
+
+game/animation_data.py:471: PydanticUserError
+_ ERROR at setup of test_antimagic_rejected_branch_has_no_recipient_contact_flare _
+
+    @pytest.fixture(scope="module")
+    def data():
+        pygame.init()
+        pygame.display.set_mode((1,1))
+>       yield load_animation_data()
+              ^^^^^^^^^^^^^^^^^^^^^
+
+tests/game/test_electric_spell_delivery.py:21: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+data_root = PosixPath('/mnt/c/users/tommaso/documents/dev/dnd_engine/game/data/neuroclient')
+
+    def load_animation_data(data_root: Path = DATA_ROOT, *,
+                            rig_files: tuple[Path, ...] = (),
+                            authored_bundles: tuple[Path, ...] | None = None,
+                            world_source: WorldBindingsSource | None = None) -> AnimationData:
+        """Decode shipped typed records; importers own authored source conversion.
+    
+        Unselected media may have metadata without copied sprites. Only explicit
+        local resource bindings select files for the media loader. Archive provenance
+        URLs and paths are never fetched or treated as runtime dependencies. By default the
+        explicit sibling authored bundles are selected when present. An explicit
+        bundle selection must include all media required by the supplied world;
+        () excludes bundles but does not select a historical or empty world.
+        """
+        data_root = data_root.resolve()
+        drafts_file = StudioDraftFile.model_validate_json(
+            _read(data_root / "spell-studio-drafts.materialized.json")
+        )
+        bindings = _Bindings.model_validate_json(_read(data_root / "bindings.json"))
+        rig = RigTables.model_validate_json(_read(data_root / "rig-tables.json"))
+        source_root = data_root / "source"
+        assets = TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
+            _read(source_root / "public/studio/spell-projectile-assets.json")
+        )
+        context_source = _read(source_root / "src/render/data/animation/actionContextPresentation.json")
+        contexts = _ContextFile.model_validate_json(context_source).contexts
+        action_file = _ActionFile.model_validate_json(_read(
+            source_root / "src/render/data/animation/contentActionPresentationRecipes.json"
+        ))
+        attack_recipes: dict[str, AttackRecipe] = {}
+        shove_recipes: dict[str, ShoveRecipe] = {}
+        body_action_recipes: dict[str, BodyActionRecipe] = {}
+        for row in action_file.recipes:
+            kinds = row["compatibleCueKinds"]
+            if isinstance(kinds, list) and "attack" in kinds:
+                recipe = AttackRecipe.model_validate_json(json.dumps(row))
+                identity = recipe.definitionRef.content_id
+                if identity in attack_recipes:
+                    raise ValueError(f"ambiguous authored attack identity: {identity}")
+                attack_recipes[identity] = recipe
+            if isinstance(kinds, list) and "shove" in kinds:
+                shove = ShoveRecipe.model_validate_json(json.dumps(row))
+                identity = shove.definitionRef.content_id
+                if identity in shove_recipes:
+                    raise ValueError(f"ambiguous authored shove identity: {identity}")
+                shove_recipes[identity] = shove
+            if isinstance(kinds, list) and any(kind in kinds for kind in ("action", "item_action", "counterspell")):
+                body_action = BodyActionRecipe.model_validate_json(json.dumps(row))
+                identity = body_action.definitionRef.content_id
+                if identity in body_action_recipes:
+                    raise ValueError(f"ambiguous authored body action identity: {identity}")
+                body_action_recipes[identity] = body_action
+        profiles = AttackProfileFile.model_validate_json(_read(data_root / "attack-profiles.json"))
+        for identity in profiles.behaviors:
+            attack_recipes[identity] = attack_recipes[identity].model_copy(update={"variants": profiles.variants})
+        # The imported environment rows have no actor track. This
+        # local authored revision uses the same Studio action schema and is shared
+        # by the explicit object-action aliases below.
+        for filename in ("object-interaction-recipe.json",):
+            interaction_recipe = BodyActionRecipe.model_validate_json(_read(data_root / filename))
+            body_action_recipes[interaction_recipe.definitionRef.content_id] = interaction_recipe
+        body_action_bindings = TypeAdapter(FrozenMap[BodyActionBinding]).validate_json(
+            _read(data_root / "action-recipe-bindings.json"))
+        for binding in body_action_bindings.values():
+            if binding.source_recipe not in body_action_recipes:
+                raise ValueError(f"unknown source body action recipe: {binding.source_recipe}")
+        generated = _object(json.loads(_read(source_root / "src/render/data/animation/generatedSpellPresentationProfile.json")), "generated profile")
+        projectile_profile = _object(generated["projectile"], "generated projectile")
+        geometry_styles = _object(projectile_profile["geometryStyles"], "geometry styles")
+        dart_style = DartStyle.model_validate_json(json.dumps(geometry_styles["dart"]))
+        bolt_style = BoltStyle.model_validate_json(json.dumps(geometry_styles["bolt"]))
+    
+        drafts_by_ref: dict[ContentRef, StudioSpellDraft] = {}
+        draft_versions: dict[ContentRef, int] = {}
+        identities: set[str] = set()
+        for draft in drafts_file.spells:
+            ref = draft.definitionRef
+            if ref.definition_kind != ContentDefinitionKind.SPELL:
+                raise ValueError(f"spell draft has non-spell definitionRef: {ref.identity_key}")
+            if ref in drafts_by_ref or ref.identity_key in identities:
+                raise ValueError(f"duplicate spell draft definitionRef: {ref.identity_key}")
+            drafts_by_ref[ref] = draft
+            draft_versions[ref] = drafts_file.version
+            identities.add(ref.identity_key)
+        if authored_bundles is None:
+            authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media", "curse_media", "divine_media", "control_media", "fire_media", "lightning_media", "summoning_spells", "summoning_media", "necrotic_media", "utility_media", "weather_solar_media", "holy_media", "electric_media")
+                                     if (data_root.parent / name).is_dir())
+        bundle_resources: dict[str, Path] = {}
+        projectile_storage: dict[str, ProjectileStorage] = {}
+        spell_bindings = dict(bindings.spells)
+        overridden: set[ContentRef] = set()
+        effect_drafts: dict[str, StudioSpellDraft] = {}
+        effect_versions: dict[str, int] = {}
+        action_deliveries: dict[str, str] = {}
+        entity_lifecycle_media: dict[str, EntityLifecyclePhase] = {}
+        for bundle in authored_bundles:
+            lifecycle_path = bundle / "lifecycle.json"
+            if lifecycle_path.exists():
+                phases = TypeAdapter(dict[str, EntityLifecyclePhase]).validate_json(_read(lifecycle_path))
+                if set(phases) - {"arrival", "departure", "bond"} or set(phases) & set(entity_lifecycle_media):
+                    raise ValueError("unknown or duplicate entity lifecycle phase")
+                entity_lifecycle_media.update(phases)
+            resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
+            action_deliveries.update(resource_bindings.actionDeliveries)
+            for identity, ref in resource_bindings.spells.items():
+                if identity in spell_bindings and spell_bindings[identity] != ref:
+                    raise ValueError(f"authored spell binding disagrees with existing definitionRef: {identity}")
+                spell_bindings[identity] = ref
+            draft_paths = (bundle / "spell-studio-drafts.json", *sorted(bundle.glob("*-draft.json")))
+            for draft_path in draft_paths:
+                if not draft_path.exists():
+                    continue  # Media-only bundles have no spell program.
+                overrides = StudioDraftFile.model_validate_json(_read(draft_path))
+                if set(effect_drafts) & set(overrides.effectDrafts):
+                    raise ValueError("duplicate authored child-effect identity")
+                effect_drafts.update(overrides.effectDrafts)
+                effect_versions.update({identity: overrides.version for identity in overrides.effectDrafts})
+                for draft in overrides.spells:
+                    if draft.definitionRef not in spell_bindings.values():
+                        raise ValueError(f"authored bundle has no exact spell binding: {draft.definitionRef.identity_key}")
+                    if draft.definitionRef in overridden:
+                        raise ValueError(f"duplicate authored spell override: {draft.definitionRef.identity_key}")
+                    overridden.add(draft.definitionRef)
+                    drafts_by_ref[draft.definitionRef] = draft
+                    draft_versions[draft.definitionRef] = overrides.version
+            assets += TypeAdapter(tuple[AuthoredProjectileAsset, ...]).validate_json(
+                _read(bundle / "projectile-assets.json")
+            )
+            local_resources = _local_resources(resource_bindings.resources, data_root)
+            if set(local_resources) & set(bundle_resources):
+                raise ValueError("authored bundle resource identity already bound")
+            bundle_resources.update(local_resources)
+            if set(resource_bindings.projectileStorage) & set(projectile_storage):
+                raise ValueError("authored projectile storage identity already bound")
+            projectile_storage.update(resource_bindings.projectileStorage)
+        drafts: dict[str, StudioSpellDraft] = {}
+        for semantic_id, ref in spell_bindings.items():
+            if semantic_id != ref.content_id or not semantic_id.startswith("spell."):
+                raise ValueError(f"spell binding identity mismatch: {semantic_id}")
+            if ref not in drafts_by_ref:
+                raise ValueError(f"spell binding has no exact authored definitionRef: {semantic_id}")
+            drafts[semantic_id] = drafts_by_ref[ref]
+        if set(spell_bindings.values()) != set(drafts_by_ref):
+            raise ValueError("materialized spell drafts and local bindings differ")
+        for effect_id, draft in effect_drafts.items():
+            if draft.definitionRef not in drafts_by_ref or effect_id in drafts:
+                raise ValueError(f"effect draft must reference its existing owning spell: {effect_id}")
+            drafts[effect_id] = draft
+        for action_id, spell_id in action_deliveries.items():
+            drafts[action_id] = drafts[spell_id]
+    
+        projectile_assets: dict[str, AuthoredProjectileAsset] = {}
+        facing_order = rig.AUTHORED_PROJECTILE_ROW_ORDER
+        if len(facing_order) != 8 or len(set(facing_order)) != 8:
+            raise ValueError("root rig must identify eight unique projectile directions")
+        if set(rig.FACING_ROW) != set(facing_order) or set(rig.FACING_ROW.values()) != set(range(8)):
+            raise ValueError("root rig FACING_ROW must map each direction to a unique sheet row")
+        for asset in assets:
+            if asset.assetId in projectile_assets:
+                raise ValueError(f"duplicate projectile assetId: {asset.assetId}")
+            if len(asset.rowOrder) != 8 or set(asset.rowOrder) != set(facing_order):
+                raise ValueError(f"projectile rowOrder must identify eight unique directions: {asset.assetId}")
+            for phase in (asset.phases.cast, asset.phases.travel, asset.phases.impact):
+                if phase is not None and phase.start + phase.frames > asset.frame.cols:
+                    raise ValueError(f"projectile phase exceeds sheet columns: {asset.assetId}")
+            projectile_assets[asset.assetId] = asset
+    
+        for identity, draft in drafts.items():
+            version = effect_versions.get(identity, draft_versions[draft.definitionRef])
+            if version not in (2, 3):
+                draft = explicit_attachments(draft, projectile_assets)
+            drafts[identity] = explicit_composition(draft, projectile_storage) if version != 3 else draft
+            validate_composition(drafts[identity], projectile_storage)
+    
+        try:
+            vital = _object(contexts["vital_effect"], "vital_effect")
+            feedback = _object(contexts["floating_feedback"], "floating_feedback")
+            lifecycle = _object(contexts["lifecycle"], "lifecycle")
+            damage_context = DamageContext.model_validate_json(json.dumps(vital["damage"]))
+            healing_context = HealingContext.model_validate_json(json.dumps(vital["healing"]))
+            death_save_context = DeathSaveContext.model_validate_json(json.dumps(lifecycle["deathSave"]))
+            life_state_context = LifeStateContext.model_validate_json(json.dumps({
+                **_object(lifecycle["lifeState"], "lifeState"),
+                "bodyPoses": json.loads(_read(DATA_ROOT.parent / "life-state-poses.json")),
+            }))
+            death_context = DeathContext.model_validate_json(json.dumps(vital["death"]))
+            equipment_context = EquipmentTransitionContext.model_validate_json(json.dumps(contexts["equipment_transition"]))
+            movement_context = VoluntaryMovementContext.model_validate_json(json.dumps(contexts["voluntary_movement"]))
+            movement_reaction_context = MovementReactionContext.model_validate_json(json.dumps(contexts["pre_motion_reaction"]))
+            forced_movement_context = ForcedMovementContext.model_validate_json(json.dumps(contexts["forced_movement"]))
+            outcomes = _object(contexts["outcome_feedback"], "outcome_feedback")
+            shove_feedback = TypeAdapter(FrozenMap[LifecycleFeedback]).validate_json(json.dumps(outcomes["shove"]))
+            number_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["number"]))
+            badge_style = FloatingFeedbackStyle.model_validate_json(json.dumps(feedback["badge"]))
+        except KeyError as exc:
+            raise ValueError(f"missing animation context field {exc.args[0]!r}") from exc
+        resources = _local_resources(bindings.resources, data_root)
+        if set(resources) & set(bundle_resources):
+            raise ValueError("authored bundle resource identity already bound")
+        resources.update(bundle_resources)
+        pose_sockets = (TypeAdapter(PoseSockets).validate_json(
+            _read(data_root / bindings.root_pose_sockets_file))
+            if bindings.root_pose_sockets_file is not None else MappingProxyType({}))
+        rigs = {bindings.root_rig: _root_body_rig(rig, resources, bindings.root_body_anchor,
+                                              bindings.root_rest_pose_anchors, pose_sockets)}
+        creature_rigs = {identity: bindings.root_rig for identity in bindings.root_creature_content_refs}
+        _additional_rigs(rig_files, data_root, rigs, resources, creature_rigs)
+>       world = world_source if world_source is not None else WorldBindingsSource.model_validate_json(
+            _read(DATA_ROOT.parent / "world_bindings.json"))
+E       pydantic.errors.PydanticUserError: `WorldBindingsSource` is not fully defined; you should define `DamageType`, then call `WorldBindingsSource.model_rebuild()`.
+E       
+E       For further information visit https://errors.pydantic.dev/2.13/u/class-not-fully-defined
+
+game/animation_data.py:471: PydanticUserError
+=========================== short test summary info ============================
+ERROR tests/game/test_electric_spell_delivery.py::test_native_discharge_arrives_before_damage_and_seeking_is_deterministic[chain_lightning-False]
+ERROR tests/game/test_electric_spell_delivery.py::test_native_discharge_arrives_before_damage_and_seeking_is_deterministic[lightning_bolt-False]
+ERROR tests/game/test_electric_spell_delivery.py::test_native_discharge_arrives_before_damage_and_seeking_is_deterministic[lightning_bolt-True]
+ERROR tests/game/test_electric_spell_delivery.py::test_invisible_branch_does_not_hide_other_recorded_links_from_an_observer
+ERROR tests/game/test_electric_spell_delivery.py::test_antimagic_rejected_branch_has_no_recipient_contact_flare
+4 passed, 5 errors in 9.10s

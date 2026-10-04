@@ -4,8 +4,8 @@ Contains: CallLightning, PoisonSpray, AcidSplash, Grease, Web, Cloudkill,
           SpiritGuardians, FogCloud, Darkness, Daylight, InsectPlague, IncendiaryCloud
 """
 from dnd.types.physical_access import PhysicalAccess
-from typing import Any, Dict, Optional, List, Set, Tuple, cast as type_cast
-from uuid import UUID
+from typing import Any, Literal, Optional, List, Set, Tuple, cast as type_cast
+from uuid import UUID, uuid4
 
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
@@ -32,7 +32,9 @@ from dnd.core.base_actions import (
     TopologyEffectProfile,
 )
 from dnd.core.aoe import Sphere
-from dnd.core.base_conditions import BaseCondition, Duration
+from dnd.core.action_types import EntityDestinationSelection
+from dnd.core.positioning import PositionPublicationError
+from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent, Duration
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -61,28 +63,30 @@ from dnd.core.condition_types import (
 )
 from dnd.blocks.base_item import BaseItem, UsableItem
 from dnd.types.senses import OpticalObscurement, PerceivedSpatialEffect
-import random
-from dnd.core.dice import AttackOutcome
+from dnd.core.dice import AttackOutcome, Dice, RollType
 from dnd.core.values import ModifiableValue
 from dnd.core.events import EventPhase, RangeType, Range, EventType, EventHandler, Trigger, Damage, Event, EventQueue, ExposedFlameEvent, SpatialChangeEvent, SpatialEffectInteractionEvent
-from dnd.core.creature_types import DamageType
+from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
     ArithmeticFactor,
     NumericalModifier,
     AdvantageModifier,
     AdvantageStatus,
     ResistanceStatus,
+    ResistanceModifier,
 )
-from dnd.core.saving_throw_types import SavingThrowEffectTag
+from dnd.core.saving_throw_types import SavingThrowContext, SavingThrowEffectTag, SavingThrowContext
+from dnd.core.events import SavingThrowEvent
+from dnd.core.aoe import AoEShape, Cylinder
 from dnd.core.base_block import BaseBlock, LightLevel
 from dnd.core.presentation_geometry import CubePresentationGeometry
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.types.world import OccupancyLayer
 from dnd.conditions import Concentrating, ConcentrationActionMarker, Prone
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, resolve_paid_entry_retreats
+from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
 from dnd.spells.content_metadata import srd_action_identity
-from dnd.spatial.area_conditions import AreaCondition
+from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.spatial.environmental_conditions import (
     BURNING_WEB_RECIPE,
     build_environmental_replacement,
@@ -99,6 +103,7 @@ from dnd.spatial.memberships import (
 from dnd.spatial.transitions import bind_spatial_interactions
 from dnd.types.spatial_effects import (
     AreaPropagation,
+    SpatialDamageSource,
     SpatialEffectChangeOperation,
     SpatialEffectAnchorKind,
     SpatialEffectBlockingPolicy,
@@ -109,6 +114,10 @@ from dnd.types.spatial_effects import (
     SpatialEffectTransitionAction,
     SpatialEffectTriggerKind,
 )
+from dnd.core.effect_types import EffectOrigin
+from dnd.core.elevation import support_distance_feet
+from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
+from dnd.core.events import DamageAppliedEvent, SavingThrowEvent, PortalTransferEvent
 from dnd.spells.spell_utils import validate_line_of_sight
 
 
@@ -2125,7 +2134,7 @@ class Cloudkill(SpellAction):
 class SpiritGuardiansSlowed(BaseCondition):
     """Speed halving condition from Spirit Guardians.
 
-    Applied to enemies within the Spirit Guardians zone.
+    Applied to nonexcluded creatures within the Spirit Guardians zone.
     Removed when they leave the zone.
     """
     name: str = Field(default="Spirit Guardians Slowed", description="Display name for the spirit guardians slowed condition.")
@@ -2206,17 +2215,18 @@ class SpiritGuardiansZone(MembershipAreaCondition):
     """Zone control condition for Spirit Guardians spell.
 
     Creates a 15ft radius sphere centered on the caster. The zone follows
-    the caster as they move. Enemies entering or starting turn in the zone
+    the caster as they move. Affected creatures entering or starting turn in the zone
     must make WIS save or take 3d8 radiant damage (half on save).
 
-    Only affects enemies. Allies are unaffected.
+    Explicit cast-time exclusions are unaffected, regardless of faction.
     """
     name: str = Field(default="Spirit Guardians Zone", description="Display name for the spirit guardians zone zone condition.")
-    description: str = Field(default="Spectral warriors damage enemies entering the zone", description="Rules-facing summary for the spirit guardians zone zone condition.")
+    description: str = Field(default="Spectral warriors damage nonexcluded creatures entering the zone", description="Rules-facing summary for the spirit guardians zone zone condition.")
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the spirit guardians zone for cleanup and filtering.")
 
     content_ref: ContentRef = Field(default=SPIRIT_GUARDIANS_ZONE_CONTENT_REF)
     position: Tuple[int, int]
+    has_visible_presence: bool = True
     anchor_kind: SpatialEffectAnchorKind = Field(
         default=SpatialEffectAnchorKind.ENTITY,
     )
@@ -2227,6 +2237,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
     )
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({
+            SpatialEffectTriggerKind.APPEAR,
             SpatialEffectTriggerKind.EFFECT_ENTERS_OCCUPANT,
             SpatialEffectTriggerKind.EFFECT_LEAVES_OCCUPANT,
             SpatialEffectTriggerKind.ENTER,
@@ -2234,23 +2245,27 @@ class SpiritGuardiansZone(MembershipAreaCondition):
             SpatialEffectTriggerKind.TURN_START,
         }),
     )
-    first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
-        default_factory=lambda: frozenset({
-            SpatialEffectTriggerKind.EFFECT_ENTERS_OCCUPANT,
-            SpatialEffectTriggerKind.ENTER,
-            SpatialEffectTriggerKind.TURN_START,
-        }),
-    )
+    first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.ENTER})
+    membership_trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({
+        SpatialEffectTriggerKind.APPEAR, SpatialEffectTriggerKind.EFFECT_ENTERS_OCCUPANT,
+        SpatialEffectTriggerKind.ENTER, SpatialEffectTriggerKind.TURN_START})
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=100))
+    excluded_entity_uuids: frozenset[UUID] = frozenset()
     zone_shape: str = Field(default="sphere", description="Area shape used by spirit guardians zone to compute affected grid positions.")
     zone_radius_feet: int = Field(default=15, description="Zone radius in feet used by spirit guardians zone.")
     adds_difficult_terrain: bool = Field(default=False, description="Whether spirit guardians zone makes affected tiles difficult terrain.")
 
-    hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ENEMIES, description="Creature relationship filter used for spirit guardians zone hazards.")
+    hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for spirit guardians zone hazards.")
 
     spell_dc: int = Field(default=10, description="Spell save DC used by spirit guardians zone saving throws.")
     damage_dice: str = Field(default="3d8", description="Textual damage dice summary for spirit guardians zone.")
     damage_type: DamageType = Field(default=DamageType.RADIANT, description="Damage type dealt by spirit guardians zone.")
     upcast_dice: int = Field(default=0, description="Additional damage dice contributed by upcasting spirit guardians zone.")
+
+    def get_spatial_observation(self, positions: Set[Tuple[int, int]], *, observer_uuid: UUID,
+                                discovered: bool = False) -> PerceivedSpatialEffect | None:
+        observed = super().get_spatial_observation(positions, observer_uuid=observer_uuid, discovered=discovered)
+        return observed.model_copy(update={"energy_type": self.damage_type}) if observed is not None else None
 
     def membership_source_class(
         self,
@@ -2258,10 +2273,12 @@ class SpiritGuardiansZone(MembershipAreaCondition):
         return SpiritGuardiansSlowSource
 
     def membership_applies_to(self, entity: Entity) -> bool:
-        if entity.uuid == self.source_entity_uuid:
-            return False
-        caster = Entity.get(self.source_entity_uuid)
-        return caster is None or not entity.is_ally(caster)
+        return entity.uuid != self.source_entity_uuid and entity.uuid not in self.excluded_entity_uuids
+
+    def is_hazardous_for(self, entity_uuid: UUID | None = None, *,
+                         occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:
+        return (entity_uuid != self.source_entity_uuid and entity_uuid not in self.excluded_entity_uuids
+            and super().is_hazardous_for(entity_uuid, occupancy_layer=occupancy_layer))
 
     def _affect_enemy(
         self,
@@ -2275,12 +2292,10 @@ class SpiritGuardiansZone(MembershipAreaCondition):
         if not entity.ignore_magical_speed_reduction:
             self.apply_membership(entity, parent_event=parent_event)
         caster = Entity.get(self.source_entity_uuid)
-        save_request = entity.create_saving_throw_request(
-            target_entity_uuid=entity.uuid,
-            ability_name="wisdom",
-            dc=self.spell_dc,
+        save_request = SavingThrowEvent(source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=entity.uuid, ability_name="wisdom", dc=self.spell_dc,
             parent_event=parent_event.uuid,
-        )
+            saving_throw_context=self.saving_throw_context(effect_id="spell.spirit_guardians.damage"))
         _, _, success = entity.saving_throw(save_request)
         damage_bonus = (
             caster.get_spell_damage_bonus()
@@ -2299,12 +2314,14 @@ class SpiritGuardiansZone(MembershipAreaCondition):
             damage_bonus=damage_bonus,
             damage_type=self.damage_type,
         )
-        rolled = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll.total
+        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        rolled = roll.total
         entity.receive_damage(
             rolled // 2 if success else rolled,
             self.damage_type,
             self.source_entity_uuid,
             independent_resolution=True, effect_origin=self.effect_origin, parent_event=parent_event.uuid,
+            damages=[damage], damage_rolls=[roll], source_condition_uuid=self.uuid,
         )
         return True
 
@@ -2315,7 +2332,8 @@ class SpiritGuardiansZone(MembershipAreaCondition):
         *,
         parent_event: Event,
     ) -> None:
-        self._affect_enemy(entity, parent_event=parent_event)
+        if self.membership_applies_to(entity):
+            self.apply_membership(entity, parent_event=parent_event)
 
     def _apply_effect_exit_effect(
         self,
@@ -2325,8 +2343,20 @@ class SpiritGuardiansZone(MembershipAreaCondition):
     ) -> None:
         self.remove_membership(entity, parent_event=parent_event)
 
+    def _admit_trigger(self, kind: SpatialEffectTriggerKind, target_entity_uuid: UUID, event: Event) -> bool:
+        if (kind is SpatialEffectTriggerKind.ENTER and isinstance(event, SpatialChangeEvent)
+                and event.old_position in self.affected_positions):
+            return False
+        entity = Entity.get(target_entity_uuid)
+        if entity is None or not self.membership_applies_to(entity):
+            return False
+        if (kind in self.membership_trigger_kinds and not entity.ignore_magical_speed_reduction
+                and self._occupancy_admits_trigger(kind, target_entity_uuid, event)):
+            self.apply_membership(entity, parent_event=event)
+        return AreaCondition._admit_trigger(self, kind, target_entity_uuid, event)
+
     def _create_zone_entry_handler(self) -> EventHandler:
-        """Create handler for entry - WIS save, radiant damage (enemies only)."""
+        """Creature entry damages independently of continuously maintained slow."""
         condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
@@ -2335,7 +2365,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
                 return None
 
             entity = Entity.get(event.entity_uuid)
-            if isinstance(entity, Entity):
+            if isinstance(entity, Entity) and event.old_position not in condition.affected_positions:
                 condition._affect_enemy(entity, parent_event=event)
 
             return None
@@ -2351,7 +2381,7 @@ class SpiritGuardiansZone(MembershipAreaCondition):
         )
 
     def _create_zone_turn_start_handler(self) -> EventHandler:
-        """Create handler for turn start in zone - WIS save, radiant damage (enemies only)."""
+        """Resolve the separate turn-start damage for a nonexcluded recipient."""
         zone_condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
@@ -2430,10 +2460,10 @@ class SpiritGuardians(SpellAction):
 
     Duration: Concentration, up to 10 minutes
 
-    NOTE: This implementation only affects enemies (not neutral creatures).
+    Visible creatures explicitly excluded at cast time remain unaffected.
     """
     name: str = Field(default="Spirit Guardians", description="Display name for the spirit guardians spell.")
-    description: str = Field(default="15ft sphere around caster, enemies take 3d8 radiant (WIS half), speed halved", description="Rules-facing summary for the spirit guardians spell.")
+    description: str = Field(default="15ft sphere around caster, nonexcluded creatures take 3d8 radiant/necrotic (WIS half), speed halved", description="Rules-facing summary for the spirit guardians spell.")
     spell_level: int = Field(default=3, description="Spell slot level required to cast spirit guardians; cantrips use 0.")
     spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify spirit guardians.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
@@ -2448,7 +2478,24 @@ class SpiritGuardians(SpellAction):
         Cost(name="Spirit Guardians Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute spirit guardians.")
 
-    damage_type: DamageType = Field(default=DamageType.RADIANT, description="Damage type dealt by spirit guardians.")
+    damage_type: Literal[DamageType.RADIANT, DamageType.NECROTIC] = DamageType.RADIANT
+    excluded_entity_uuids: frozenset[UUID] = frozenset()
+
+    def model_post_init(self, __context: Any) -> None:
+        self.spell_damage_type = self.damage_type
+        super().model_post_init(__context)
+
+    def get_discovery_variants(self, entity: Any) -> list[BaseAction]:
+        return [variant.model_copy(deep=True, update={"uuid": uuid4(), "damage_type": kind,
+            "spell_damage_type": kind, "registered_template_uuid": self.registered_template_uuid or self.uuid})
+            for variant in super().get_discovery_variants(entity)
+            for kind in (DamageType.RADIANT, DamageType.NECROTIC)]
+
+    def get_discovery_template_name(self) -> str:
+        return f"{super().get_discovery_template_name()}__{self.damage_type.value.lower()}"
+
+    def get_discovery_display_name(self) -> str:
+        return f"{super().get_discovery_display_name()} ({self.damage_type.value.lower()})"
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Spirit Guardians is self-targeted, minimal validation needed."""
@@ -2456,10 +2503,11 @@ class SpiritGuardians(SpellAction):
         if not caster:
             return declaration_event.cancel(status_message="Caster not found")
 
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        for identity in self.excluded_entity_uuids:
+            contact = caster.senses.entities.get(identity)
+            if identity != caster.uuid and (contact is None or not contact.visual):
+                return declaration_event.cancel(status_message="Excluded creatures must be visible when cast")
+        return type_cast(Optional[SpellEvent], super()._validate(declaration_event))
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         """Cast Spirit Guardians - create zone centered on caster."""
@@ -2477,6 +2525,9 @@ class SpiritGuardians(SpellAction):
             status_message=f"{caster.name} casts Spirit Guardians"
         )
 
+        if effect_event.canceled:
+            return effect_event
+
         zone = SpiritGuardiansZone(
             source_entity_uuid=caster.uuid,
             position=caster.position,
@@ -2484,6 +2535,7 @@ class SpiritGuardians(SpellAction):
             faction=caster.faction,
             spell_dc=dc,
             damage_type=self.damage_type,
+            excluded_entity_uuids=self.excluded_entity_uuids,
             upcast_dice=upcast_bonus,
             arbitration_potency=dc,
             effect_origin=execution_event.to_effect_origin(),
@@ -3903,6 +3955,7 @@ class SleetStormZone(AreaCondition):
     tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the sleet storm zone for cleanup and filtering.")
 
     content_ref: ContentRef = Field(default=SLEET_STORM_ZONE_CONTENT_REF)
+    has_visible_presence: bool = True
     position: Tuple[int, int]
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
@@ -3915,10 +3968,7 @@ class SleetStormZone(AreaCondition):
         }),
     )
     first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
-        default_factory=lambda: frozenset({
-            SpatialEffectTriggerKind.ENTER,
-            SpatialEffectTriggerKind.TURN_START,
-        }),
+        default_factory=lambda: frozenset({SpatialEffectTriggerKind.ENTER}),
     )
     zone_shape: str = Field(default="cylinder", description="Area shape used by sleet storm zone to compute affected grid positions.")
     zone_radius_feet: int = Field(default=40, description="Zone radius in feet used by sleet storm zone.")
@@ -3929,9 +3979,23 @@ class SleetStormZone(AreaCondition):
         description="The storm blocks visual routes without changing illumination.",
     )
 
-    hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ENEMIES, description="Creature relationship filter used for sleet storm zone hazards.")
+    hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for sleet storm zone hazards.")
 
     spell_dc: int = Field(default=10, description="Spell save DC used by sleet storm zone saving throws.")
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
+
+    def _area_shape(self, anchor: Tuple[int, int]) -> AoEShape:
+        return Cylinder(source_entity_uuid=self.source_entity_uuid, target=anchor,
+                        radius_feet=40, height_feet=20)
+
+    def _save(self, target: Entity, ability: Literal["dexterity", "constitution"], event: Event) -> bool:
+        request = SavingThrowEvent(source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=target.uuid, target_entity_name=target.name,
+            ability_name=ability, dc=self.spell_dc, parent_event=event.uuid,
+            saving_throw_context=SavingThrowContext(cause_id="spell.sleet_storm",
+                effect_id="spell.sleet_storm.prone" if ability == "dexterity" else "spell.sleet_storm.concentration",
+                is_magical=True))
+        return target.saving_throw(request)[2]
 
     def _douse_item_if_exposed(
         self,
@@ -4057,7 +4121,6 @@ class SleetStormZone(AreaCondition):
     def _create_zone_entry_handler(self) -> EventHandler:
         """DEX save or fall Prone on entry."""
         source_uuid = self.source_entity_uuid
-        dc = self.spell_dc
         zone_condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
@@ -4068,12 +4131,7 @@ class SleetStormZone(AreaCondition):
             if not entity:
                 return None
 
-            save_request = entity.create_saving_throw_request(
-                target_entity_uuid=entity.uuid,
-                ability_name="dexterity", dc=dc,
-                parent_event=event.uuid
-            )
-            _, _, success = entity.saving_throw(save_request)
+            success = zone_condition._save(entity, "dexterity", event)
             if not success:
                 prone = Prone(source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid, tags={ConditionTag.MAGICAL})
                 entity.add_condition(prone, parent_event=event)
@@ -4092,7 +4150,6 @@ class SleetStormZone(AreaCondition):
     def _create_zone_turn_start_handler(self) -> EventHandler:
         """Turn start: DEX save or Prone + concentration disruption."""
         source_uuid = self.source_entity_uuid
-        dc = self.spell_dc
         zone_condition = self
 
         def processor(event: Event, _source_entity_uuid: UUID) -> Optional[Event]:
@@ -4109,25 +4166,12 @@ class SleetStormZone(AreaCondition):
 
             zone_condition._douse_exposed_flames_at(entity.position, event)
 
-            if "Prone" not in entity.active_conditions:
-                save_request = entity.create_saving_throw_request(
-                    target_entity_uuid=entity.uuid,
-                    ability_name="dexterity", dc=dc,
-                    parent_event=event.uuid
-                )
-                _, _, success = entity.saving_throw(save_request)
-                if not success:
-                    prone = Prone(source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid, tags={ConditionTag.MAGICAL})
-                    entity.add_condition(prone, parent_event=event)
+            if not zone_condition._save(entity, "dexterity", event):
+                prone = Prone(source_entity_uuid=source_uuid, target_entity_uuid=entity.uuid, tags={ConditionTag.MAGICAL})
+                entity.add_condition(prone, parent_event=event)
 
             if "Concentrating" in entity.active_conditions:
-                save_request = entity.create_saving_throw_request(
-                    target_entity_uuid=entity.uuid,
-                    ability_name="constitution", dc=dc,
-                    parent_event=event.uuid
-                )
-                _, _, success = entity.saving_throw(save_request)
-                if not success:
+                if not zone_condition._save(entity, "constitution", event):
                     entity.remove_condition("Concentrating", parent_event=event)
 
             return None
@@ -4243,88 +4287,171 @@ class SleetStorm(SpellAction):
 
 
 class DimensionDoor(SpellAction):
-    """Dimension Door - 4th level Conjuration
+    """A paid teleport with an optional nearby willing companion."""
+    name: str = "Dimension Door"
+    description: str = "Teleport alone or with a willing companion within 500ft; blocked arrival deals 4d6 force."
+    spell_level: int = 4
+    spell_school: str = "conjuration"
+    harmful: Optional[bool] = False
+    target_type: TargetType = TargetType.ENTITY
+    position_selection: EntityDestinationSelection = Field(default_factory=EntityDestinationSelection)
+    valid_target_filter: str = "allies"
+    include_self: bool = True
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=500))
 
-    You teleport yourself to any spot you can see within 500 feet.
-    Simplified: direct teleport without portal objects.
+    def get_target_distance(self, position: Tuple[int, int]) -> int:
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            raise ValueError("Caster is unavailable")
+        grid = get_map()
+        return support_distance_feet(caster.position, grid.get_support_elevation_feet(caster.position),
+            position, grid.get_support_elevation_feet(position) if grid.has_tile(*position) else 0)
 
-    Duration: Instantaneous
-    """
-    name: str = Field(default="Dimension Door", description="Display name for the dimension door spell.")
-    description: str = Field(default="Teleport to a visible position within 500ft", description="Rules-facing summary for the dimension door spell.")
-    spell_level: int = Field(default=4, description="Spell slot level required to cast dimension door; cantrips use 0.")
-    spell_school: str = Field(default="conjuration", description="D&D school of magic used to classify dimension door.")
-    target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for dimension door.")
-    position_discovery: Optional[PositionDiscoveryContract] = Field(
-        default_factory=lambda: PositionDiscoveryContract(
-            requires_subjective_walkable=True,
-            requires_subjective_unoccupied=True,
-        ),
-        description="Subjective destination prerequisites for dimension door.",
-    )
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=500),
-        description="Range contract used when validating targets for dimension door.",
-    )
+    def get_valid_positions(self) -> List[Tuple[int, int]]:
+        # Coordinates within the authored map envelope remain selectable even
+        # when unseen or obstructed. Physical admission belongs to paid resolution.
+        x0, y0, x1, y1 = get_map().bounds
+        return [(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)
+                if self.target_position_error((x, y)) is None]
 
-    costs: List[Cost] = Field(default_factory=lambda: [
-        Cost(name="Dimension Door Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ], description="Action economy costs paid to execute dimension door.")
+    def _participants(self) -> tuple[Entity, ...]:
+        caster = Entity.get(self.source_entity_uuid)
+        companion = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or companion is None:
+            return ()
+        return (caster,) if companion is caster else (caster, companion)
+
+    def _selection_error(self) -> str | None:
+        participants = self._participants()
+        if not participants or self.end_position is None or len(self.get_all_targets()) != 1:
+            return "Choose yourself or one companion, then a destination"
+        caster = participants[0]
+        if not caster.is_deployed:
+            return "Caster is not present"
+        if len(participants) == 2:
+            companion = participants[1]
+            if not companion.is_deployed or not caster.is_ally(companion):
+                return "Companion is not a willing ally"
+            if tuple(Size).index(companion.size) > tuple(Size).index(caster.size):
+                return "Companion is larger than the caster"
+            if self.get_target_distance(companion.position) > 5:
+                return "Companion is farther than 5 feet"
+            if companion.uuid not in caster.senses.entities:
+                return "Companion is not perceived"
+        x0, y0, x1, y1 = get_map().bounds
+        x, y = self.end_position
+        if not (x0 <= x <= x1 and y0 <= y <= y1):
+            return "Destination lies outside this map"
+        return self.target_position_error(self.end_position)
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        target_pos = self.end_position
-        if not target_pos:
-            return declaration_event.cancel(status_message="No target position")
+        error = self._selection_error()
+        return declaration_event.cancel(status_message=error) if error else declaration_event.phase_to(EventPhase.EXECUTION)
 
-        if target_pos not in caster.senses.visible or not caster.senses.visible[target_pos]:
-            return declaration_event.cancel(status_message=f"Position {target_pos} not visible")
-
-        distance = self.get_target_distance(target_pos)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Position out of range ({distance}ft)")
-
+    def _destinations(self, participants: tuple[Entity, ...]) -> tuple[Tuple[int, int], ...]:
+        assert self.end_position is not None
         grid = get_map()
-        if not grid.is_walkable(target_pos[0], target_pos[1]):
-            return declaration_event.cancel(status_message=f"Position {target_pos} not walkable")
+        destination = self.end_position
+        caster = participants[0]
+        if (grid.get_entities_at(destination) - {caster.uuid}
+                or not grid.is_walkable_for(*destination, caster.uuid)):
+            return ()
+        if len(participants) == 1:
+            return (destination,)
+        companion = participants[1]
+        # Preserve the chosen pair's relative arrangement when possible, then
+        # select another adjacent supported endpoint; never evict an occupant.
+        preferred = (destination[0] + companion.position[0] - caster.position[0],
+                     destination[1] + companion.position[1] - caster.position[1])
+        candidates = dict.fromkeys((preferred, *((destination[0] + dx, destination[1] + dy)
+            for dx, dy in ((0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)))))
+        other = next((point for point in candidates
+            if point != destination and grid.has_tile(*point)
+            and not (grid.get_entities_at(point) - {companion.uuid})
+            and grid.is_walkable_for(*point, companion.uuid)
+            and support_distance_feet(destination, grid.get_support_elevation_feet(destination),
+                point, grid.get_support_elevation_feet(point)) <= 5), None)
+        return (destination, other) if other is not None else ()
 
-        entities_at = grid.get_entities_at(target_pos)
-        if entities_at and any(e != caster.uuid for e in entities_at):
-            return declaration_event.cancel(status_message=f"Position {target_pos} is occupied")
-
-        return declaration_event.phase_to(new_phase=EventPhase.EXECUTION, status_message=f"Validated {self.name}")
+    def _mishap(self, effect: SpellEvent, participants: tuple[Entity, ...]) -> SpellEvent:
+        caster = participants[0]
+        damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
+            dice_numbers=4, damage_dice=6, damage_type=DamageType.FORCE,
+            damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0))
+        roll = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        for actor in participants:
+            actor.receive_damage(amount=roll.total, damage_type=DamageType.FORCE,
+                source_entity_uuid=caster.uuid, parent_event=effect.uuid,
+                damage_rolls=[roll], damages=[damage.model_copy(update={"target_entity_uuid": actor.uuid})],
+                effect_origin=effect.get_effect_origin())
+        return effect.with_updates(damages=[damage], damage_rolls=[roll], total_damage=roll.total,
+            status_message="Dimension Door arrival was obstructed; neither traveler moved")
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return execution_event.cancel(status_message="Caster not found")
-        target_pos = self.end_position
-        if not target_pos:
-            return execution_event.cancel(status_message="No target position")
+        error = self._selection_error()
+        if error:
+            return execution_event.cancel(status_message=error)
+        participants = self._participants()
+        caster = participants[0]
+        effect = execution_event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:
+            return effect
+        destinations = self._destinations(participants)
+        if not destinations:
+            return self._mishap(effect, participants)
+        transfers: list[PortalTransferEvent] = []
+        for actor, destination in zip(participants, destinations):
+            transfer = EventQueue.publish_declaration(PortalTransferEvent(
+                source_entity_uuid=caster.uuid, source_entity_name=caster.name,
+                target_entity_uuid=actor.uuid, target_entity_name=actor.name,
+                effect_origin=execution_event.get_effect_origin(), start_position=actor.position,
+                end_position=destination, parent_event=effect.uuid, use_register=False))
+            if not transfer.canceled:
+                transfer = transfer.phase_to(EventPhase.EXECUTION)
+            if not transfer.canceled:
+                transfer = transfer.phase_to(EventPhase.EFFECT)
+            transfers.append(transfer)
+            if transfer.canceled:
+                for admitted in transfers:
+                    if not admitted.canceled:
+                        admitted.cancel(status_message="One traveler could not transfer")
+                return effect.with_updates(status_message="Dimension Door transfer prevented")
+        selection_error = self._selection_error()
+        obstructed = self._destinations(participants) != destinations
+        if selection_error or obstructed:
+            for transfer in transfers:
+                transfer.cancel(status_message="Travelers or arrival changed before transfer")
+            return (self._mishap(effect, participants) if obstructed and not selection_error else
+                effect.with_updates(status_message="Dimension Door transfer prevented"))
+        cursor = EventQueue.event_cursor()
+        publication_error: PositionPublicationError | None = None
+        try:
+            Entity.commit_position_transfers(tuple((actor, destination, transfer.uuid)
+                for actor, destination, transfer in zip(participants, destinations, transfers)))
+        except PositionPublicationError as error:
+            publication_error = error
+        for actor, transfer in zip(participants, transfers):
+            resolve_paid_entry_retreats(actor, since_cursor=cursor, parent_event=transfer)
+            transfer.phase_to(EventPhase.COMPLETION, committed=True)
+        if publication_error is not None:
+            raise publication_error
+        return effect.with_updates(status_message="Dimension Door travelers arrived")
 
-        old_pos = caster.senses.position
 
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"{caster.name} teleports from {old_pos} to {target_pos}"
-        )
-
-        Entity.update_entity_position(caster, target_pos)
-        caster.materialize_navigation()
-
-        return effect_event.with_updates(
-            status_message=f"{caster.name} teleports to {target_pos}"
-        )
+GUARDIAN_FOOTPRINT_OFFSETS = ((0, 0), (1, 0), (0, 1), (1, 1))
 
 
 class GuardianOfFaithObject(BaseItem):
+    magically_created: bool = True
     """Spectral world-object anchor for the direct guardian condition."""
     name: str = Field(default="Guardian of Faith", description="Display name for the guardian of faith object item.")
     description: str = Field(default="A large spectral guardian hovers in this space", description="Rules-facing summary for the guardian of faith object item.")
-    blocks_movement: bool = Field(default=False, description="Movement blocking is owned by the anchored spatial condition.")
+    blocks_movement: bool = True
     is_pickable: bool = Field(default=False, description="Whether guardian of faith object can be picked up as an item.")
+
+    def get_world_placement_spec(self) -> WorldPlacementSpec:
+        return WorldPlacementSpec(kind=WorldPlacementKind.CENTER, occupies_bands=True,
+            vertical_extent_steps=2, footprint_offsets=GUARDIAN_FOOTPRINT_OFFSETS)
 
 
 def build_guardian_of_faith_object(
@@ -4352,6 +4479,7 @@ GUARDIAN_OF_FAITH_ZONE_CONTENT_REF = ContentRef(
 class GuardianOfFaithZone(AreaCondition):
     """World-object-anchored guardian aura and damage budget."""
 
+    has_visible_presence: bool = True
     name: str = Field(default="Guardian of Faith Zone")
     description: str = Field(
         default="Blocks its anchor and damages hostile creatures entering nearby.",
@@ -4367,7 +4495,7 @@ class GuardianOfFaithZone(AreaCondition):
         default=SpatialEffectOccupancyPolicy.OVERLAPPING,
     )
     blocking_policy: SpatialEffectBlockingPolicy = Field(
-        default=SpatialEffectBlockingPolicy.ANCHOR,
+        default=SpatialEffectBlockingPolicy.NONE,
     )
     trigger_kinds: frozenset[SpatialEffectTriggerKind] = Field(
         default_factory=lambda: frozenset({SpatialEffectTriggerKind.ENTER}),
@@ -4383,13 +4511,38 @@ class GuardianOfFaithZone(AreaCondition):
     damage_dealt: int = Field(default=0, ge=0)
 
     def _compute_affected_positions(self) -> Set[Tuple[int, int]]:
-        """Preserve the authored two-cell radius around the anchor."""
-        center_x, center_y = self.position
-        return {
-            (center_x + dx, center_y + dy)
-            for dx in range(-2, 3)
-            for dy in range(-2, 3)
-        }
+        grid = get_map()
+        placement = grid.get_object_placement(self.anchor_uuid)
+        occupied = placement.positions if placement is not None else tuple(
+            (self.position[0] + dx, self.position[1] + dy) for dx, dy in GUARDIAN_FOOTPRINT_OFFSETS)
+        candidates = {(x + dx, y + dy) for x, y in occupied
+            for dx in range(-2, 3) for dy in range(-2, 3) if grid.has_tile(x + dx, y + dy)}
+        return {cell for cell in candidates if any(support_distance_feet(origin,
+            grid.get_support_elevation_feet(origin), cell, grid.get_support_elevation_feet(cell)) <= 10
+            for origin in occupied)}
+
+    def is_hazardous_for(self, entity_uuid: UUID | None = None, *,
+                         occupancy_layer: OccupancyLayer = OccupancyLayer.GROUND) -> bool:
+        entity = Entity.get(entity_uuid) if entity_uuid is not None else None
+        return (entity is not None and entity.uuid != self.source_entity_uuid
+            and (self.faction is None or entity.faction is None or entity.faction != self.faction)
+            and self.affects_occupancy_layer(occupancy_layer))
+
+    def progress_spatial_duration(self, *, parent_event: Event | None = None) -> bool:
+        if not self.progress():
+            return False
+        guardian = BaseItem.get(self.anchor_uuid)
+        if isinstance(guardian, GuardianOfFaithObject) and not guardian.retire(parent_event=parent_event):
+            return False
+        return self.deactivate(expire=True, parent_event=parent_event) if self.applied else True
+
+    def _admit_trigger(self, kind: SpatialEffectTriggerKind, target_entity_uuid: UUID, event: Event) -> bool:
+        if (isinstance(event, SpatialChangeEvent)
+                and (event.old_position is None or event.old_position == event.position)):
+            return False
+        if not self.is_hazardous_for(target_entity_uuid):
+            return False
+        return super()._admit_trigger(kind, target_entity_uuid, event)
 
     def _create_zone_entry_handler(self) -> EventHandler:
         zone = self
@@ -4401,29 +4554,28 @@ class GuardianOfFaithZone(AreaCondition):
             if not isinstance(event, SpatialChangeEvent) or event.entity_uuid is None:
                 return None
             entity = Entity.get(event.entity_uuid)
-            caster = Entity.get(zone.source_entity_uuid)
-            if (
-                entity is None
-                or caster is None
-                or entity.uuid == caster.uuid
-                or entity.is_ally(caster)
-            ):
+            if (entity is None or event.old_position is None or event.old_position == event.position
+                    or not zone.is_hazardous_for(entity.uuid, occupancy_layer=entity.get_occupancy_layer())):
                 return None
-            request = caster.create_saving_throw_request(
-                target_entity_uuid=entity.uuid,
-                ability_name="dexterity",
-                dc=zone.spell_dc,
+            request = SavingThrowEvent(source_entity_uuid=zone.source_entity_uuid,
+                target_entity_uuid=entity.uuid, ability_name="dexterity", dc=zone.spell_dc,
                 parent_event=event.uuid,
-            )
+                saving_throw_context=SavingThrowContext(cause_id=zone.content_ref.content_id,
+                    effect_id="spell.guardian_of_faith.damage", is_magical=True))
             _, _, success = entity.saving_throw(request)
-            hp_before = entity.get_hp()
-            entity.receive_damage(
-                amount=10 if success else 20,
-                damage_type=DamageType.RADIANT,
-                source_entity_uuid=caster.uuid,
-                independent_resolution=True, effect_origin=self.effect_origin, parent_event=event.uuid,
-            )
-            zone.damage_dealt += max(0, hp_before - entity.get_hp())
+            cursor = EventQueue.event_cursor()
+            entity.receive_damage(amount=10 if success else 20, damage_type=DamageType.RADIANT,
+                source_entity_uuid=zone.source_entity_uuid, independent_resolution=True,
+                effect_origin=zone.effect_origin, parent_event=event.uuid, source_condition_uuid=zone.uuid,
+                spatial_source=SpatialDamageSource(spatial_effect_uuid=zone.uuid, position=entity.position,
+                    target_position=entity.position, base_height_steps=get_map().get_support_elevation_feet(entity.position) // 5,
+                    exposure="contact"))
+            zone.damage_dealt += sum(result.applied_damage for _, result in EventQueue.iter_events_since(cursor)
+                if isinstance(result, DamageAppliedEvent) and result.phase is EventPhase.COMPLETION
+                and result.source_condition_uuid == zone.uuid and result.target_entity_uuid == entity.uuid
+                and result.parent_event is not None
+                and (incoming := EventQueue.get_event_by_uuid(result.parent_event)) is not None
+                and incoming.parent_event == event.uuid)
             if zone.damage_dealt >= zone.damage_budget:
                 guardian = BaseItem.get(zone.anchor_uuid)
                 if isinstance(guardian, GuardianOfFaithObject):
@@ -4480,8 +4632,15 @@ class GuardianOfFaith(SpellAction):
 
         grid = get_map()
         pos = self.end_position
-        if not grid.is_walkable_for(pos[0], pos[1], caster.uuid):
-            return declaration_event.cancel(status_message="Target position is not unoccupied")
+        if (error := self.target_position_error(pos)) is not None:
+            return declaration_event.cancel(status_message=error)
+        height = grid.get_support_elevation_feet(pos) if grid.has_tile(*pos) else None
+        for dx, dy in GUARDIAN_FOOTPRINT_OFFSETS:
+            cell = (pos[0] + dx, pos[1] + dy)
+            if (not grid.has_tile(*cell) or not caster.senses.visible.get(cell, False)
+                    or not grid.is_walkable_for(*cell) or grid.get_entities_at(cell)
+                    or grid.get_support_elevation_feet(cell) != height):
+                return declaration_event.cancel(status_message="Guardian requires a visible unoccupied Large space")
 
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
@@ -4502,8 +4661,14 @@ class GuardianOfFaith(SpellAction):
             status_message=f"{caster.name} summons a Guardian of Faith"
         )
 
+        if effect_event.canceled:
+            return effect_event
         guardian = build_guardian_of_faith_object(caster.uuid)
-        guardian.place_on_grid(position)
+        try:
+            guardian.place_on_grid(position, parent_event=effect_event.uuid)
+        except ValueError:
+            guardian.retire(parent_event=effect_event)
+            return effect_event.cancel(status_message="Guardian space is no longer available")
         zone = GuardianOfFaithZone(
             source_entity_uuid=caster.uuid,
             position=position,
@@ -4517,6 +4682,7 @@ class GuardianOfFaith(SpellAction):
             ),
             effect_origin=execution_event.get_effect_origin(),
         )
+        guardian.creation_condition_uuid = zone.uuid
         zone_result = zone.activate(parent_event=effect_event)
         if zone_result is None or zone_result.canceled or not zone.applied:
             guardian.retire(parent_event=effect_event)
@@ -4530,81 +4696,143 @@ class GuardianOfFaith(SpellAction):
 
 
 class HeroesFeastBuff(BaseCondition):
-    """Heroes' Feast buff — immunity to poison/frightened, advantage on WIS saves,
-    increased max HP.
-    """
-    name: str = Field(default="Heroes' Feast", description="Display name for the heroes feast buff condition.")
-    description: str = Field(default="Immune to poison/frightened, advantage WIS saves, +max HP", description="Rules-facing summary for the heroes feast buff condition.")
-    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL}, description="Condition tags that classify the heroes feast buff for cleanup and filtering.")
-    hp_bonus: int = Field(default=0, description="Maximum hit point bonus granted by heroes feast buff.")
+    """One public benefit set backed by independent servings' native clocks."""
+    name: str = "Heroes' Feast"
+    description: str = "Poison/fear immunity, Wisdom-save advantage and the strongest retained feast HP bonus."
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    hp_bonus: int = 0
+    modifier_uuid: UUID | None = None
+    winning_source_uuid: UUID | None = None
+    _retiring_sources: tuple[UUID, ...] = PrivateAttr(default=())
 
-    def _apply(self, declaration_event: Event) -> Tuple[
-        List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]
-    ]:
-        assert self.target_entity_uuid is not None
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
-
-        outs: List[Tuple[UUID, UUID]] = []
-
-        if "Poisoned" in target.active_conditions:
-            target.remove_condition("Poisoned", parent_event=declaration_event)
-        if "Frightened" in target.active_conditions:
-            target.remove_condition("Frightened", parent_event=declaration_event)
-
-        target.add_condition_immunity("Poisoned", immunity_name="Heroes' Feast")
-        target.add_condition_immunity("Frightened", immunity_name="Heroes' Feast")
-
-        wis_save = target.saving_throws.get_saving_throw("wisdom")
-        wis_adv_uuid = wis_save.bonus.self_static.add_advantage_modifier(
-            AdvantageModifier(
-                name="Heroes' Feast",
-                value=AdvantageStatus.ADVANTAGE,
-                source_entity_uuid=self.source_entity_uuid,
-                target_entity_uuid=self.target_entity_uuid,
-            )
-        )
-        outs.append((wis_save.bonus.uuid, wis_adv_uuid))
-
-        if self.hp_bonus > 0:
-            hp_mod_uuid = target.health.max_hit_points_bonus.self_static.add_value_modifier(
-                NumericalModifier(
-                    name="Heroes' Feast",
-                    value=self.hp_bonus,
-                    source_entity_uuid=self.source_entity_uuid,
-                    target_entity_uuid=self.target_entity_uuid,
-                )
-            )
-            outs.append((target.health.max_hit_points_bonus.uuid, hp_mod_uuid))
-
-        con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
-        max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            status_message=f"Heroes' Feast buff on {target.name} (+{self.hp_bonus} max HP)",
-            resulting_max_hp=max_hp
-        )
-        return outs, [], [], [], effect_event
-
-    def _post_removal_stats(self) -> Dict[str, Any]:
+    def _apply(self, event: Event):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if target and isinstance(target, Entity):
-            con_mod = target.ability_scores.get_ability("constitution").get_combined_values().normalized_score
-            max_hp = target.health.get_max_hit_dices_points(con_mod) + target.health.max_hit_points_bonus.score
-            return {"resulting_max_hp": max_hp}
-        return {}
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Feast recipient unavailable")
+        target.add_condition_immunity_source("Poisoned", self.uuid)
+        target.add_condition_immunity_source("Frightened", self.uuid)
+        wisdom = target.saving_throws.get_saving_throw("wisdom").bonus
+        advantage = wisdom.self_static.add_advantage_modifier(AdvantageModifier(name=self.name,
+            value=AdvantageStatus.ADVANTAGE, source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid))
+        reduction = target.health.damage_reduction
+        immunity = reduction.self_static.add_resistance_modifier(ResistanceModifier(name=self.name,
+            value=ResistanceStatus.IMMUNITY, damage_type=DamageType.POISON,
+            source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid))
+        maximum = target.health.max_hit_points_bonus
+        self.modifier_uuid = maximum.self_static.add_value_modifier(NumericalModifier(name=self.name,
+            value=0, source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid))
+        return [(wisdom.uuid, advantage), (reduction.uuid, immunity), (maximum.uuid, self.modifier_uuid)], [], [], [], event.phase_to(EventPhase.EFFECT)
 
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Clean up condition immunities."""
-        if not self.target_entity_uuid:
-            return super()._remove(event)
-        target = Entity.get(self.target_entity_uuid)
-        if target:
-            target._remove_static_condition_immunity("Poisoned", "Heroes' Feast")
-            target._remove_static_condition_immunity("Frightened", "Heroes' Feast")
-        return super()._remove(event)
+    def source_uuids(self) -> set[UUID]:
+        return self.additional_parent_conditions | ({self.parent_condition} if self.parent_condition else set())
 
+    def refresh(self, *, committing: "HeroesFeastSource | None" = None, removing: UUID | None = None) -> bool:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        modifier = NumericalModifier.get(self.modifier_uuid) if self.modifier_uuid else None
+        if target is None or modifier is None:
+            return False
+        sources = [source for identity in self.source_uuids()
+            if isinstance(source := BaseCondition.get(identity), HeroesFeastSource)
+            and source.uuid != removing and (source.applied or source is committing) and not source.duration.is_expired and source.contributions_active()]
+        winner = max(sources, key=lambda source: (source.hp_bonus, source.application_order), default=None)
+        before_hp, before_value = target.get_normal_hp(), modifier.value
+        modifier.value = winner.hp_bonus if winner else 0
+        self.hp_bonus = modifier.value
+        self.winning_source_uuid = winner.uuid if winner else None
+        # A new, stronger serving grants the same effective current/max increase.
+        # Expiry or selecting an already-live contribution never heals again.
+        gain = max(0, modifier.value - before_value) if committing is not None else 0
+        target.health.preserve_normal_hit_points(before_hp + gain, maximum_hp=target.get_max_hp())
+        return before_value != modifier.value
+
+    def publish_owner_state(self, parent_event: Event | None) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if self.applied and target is not None:
+            ConditionStateChangedEvent(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid,
+                parent_event=parent_event.uuid if parent_event else None, phase=EventPhase.COMPLETION,
+                condition_state=self.snapshot_state(), resulting_stats=target.snapshot_entity_stats(),
+                behavior_id=self.behavior_binding.behavior_id if self.behavior_binding else None)
+
+    def _remove(self, event: Event | None = None):
+        self._retiring_sources = tuple(self.source_uuids())
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None and self.modifier_uuid is not None:
+            previous = target.get_normal_hp()
+            target.health.max_hit_points_bonus.remove_modifier(self.modifier_uuid)
+            self.modifers_uuids.pop(target.health.max_hit_points_bonus.uuid, None)
+            self.modifier_uuid = None
+            target.health.preserve_normal_hit_points(previous, maximum_hp=target.get_max_hp())
+        return event
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            target.remove_condition_immunity_source("Poisoned", self.uuid)
+            target.remove_condition_immunity_source("Frightened", self.uuid)
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+    def on_membership_changed(self, event: Event) -> None:
+        if self.applied:
+            return
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is not None:
+            for identity in self._retiring_sources:
+                target.remove_condition_by_uuid(identity, parent_event=event)
+        self._retiring_sources = ()
+
+
+class HeroesFeastSource(BaseCondition):
+    """One accepted feast serving, retaining its exact source and ten-turn clock."""
+    name: str = "Heroes' Feast Source"
+    condition_category: ConditionCategory = ConditionCategory.INTERNAL
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
+    feast_uuid: UUID
+    hp_bonus: int = Field(ge=2, le=20)
+    application_order: int = 0
+    _changed_effect: HeroesFeastBuff | None = PrivateAttr(default=None)
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        self.name = f"Heroes' Feast Source {self.uuid}"
+
+    def _apply(self, event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None:
+            return [], [], [], [], event.cancel(status_message="Feast recipient unavailable")
+        effect = target.active_conditions.get("Heroes' Feast")
+        if effect is None:
+            effect = HeroesFeastBuff(source_entity_uuid=self.source_entity_uuid, target_entity_uuid=target.uuid,
+                parent_condition=self.uuid, effect_origin=self.effect_origin)
+            target.add_condition(effect, parent_event=event)
+        if not isinstance(effect, HeroesFeastBuff) or not effect.applied:
+            return [], [], [], [], event.cancel(status_message="Feast benefits were not applied")
+        self.add_shared_subcondition(effect)
+        self.application_order = EventQueue.event_cursor()
+        self._changed_effect = effect
+        return [], [], [effect.uuid], [], event.phase_to(EventPhase.EFFECT)
+
+    def _commit_application(self, event: Event) -> None:
+        if self._changed_effect is not None and not self._changed_effect.refresh(committing=self):
+            self._changed_effect = None
+
+    def on_suppression_changed(self) -> None:
+        for identity in self.sub_conditions:
+            child = BaseCondition.get(identity)
+            if isinstance(child, HeroesFeastBuff) and child.applied:
+                child.refresh()
+
+    def _remove(self, event: Event | None = None):
+        for identity in self.sub_conditions:
+            child = BaseCondition.get(identity)
+            if isinstance(child, HeroesFeastBuff) and child.applied and child.refresh(removing=self.uuid):
+                self._changed_effect = child
+        return event
+
+    def on_membership_changed(self, event: Event) -> None:
+        if self._changed_effect is not None:
+            self._changed_effect.publish_owner_state(event)
+        self._changed_effect = None
 
 @behavior_identity(
     definition_kind=ContentDefinitionKind.ACTION,
@@ -4650,52 +4878,52 @@ class EatFromFeast(BaseAction):
     caster_uuid: UUID = Field(description="UUID of the caster who created the feast")
     is_item_use: bool = Field(default=True, description="Whether eat from feast is routed through item-use execution.")
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
+    costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Eat from Feast", cost_type="actions",
+        cost=1, evaluator=entity_action_economy_cost_evaluator)])
+
+    def _apply_costs(self, event: ActionEvent) -> Optional[ActionEvent]:
+        return type_cast(Optional[ActionEvent], entity_action_economy_cost_applier(event, self.source_entity_uuid))
+
+    def _validate(self, event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
-        if not entity:
-            return declaration_event.cancel(status_message="Entity not found")
-
         feast = BaseItem.get(self.feast_uuid)
-        if not feast or not isinstance(feast, HeroesFeastObject):
-            return declaration_event.cancel(status_message="Feast no longer available")
-
+        if (entity is None or not isinstance(feast, HeroesFeastObject) or not feast.is_active
+                or get_map().get_object_placement(feast.uuid) is None or self.source_item_uuid != feast.uuid
+                or feast.caster_uuid != self.caster_uuid or feast.charges <= 0):
+            return event.cancel(status_message="Feast no longer available")
         if entity.uuid in feast.consumed_by:
-            return declaration_event.cancel(status_message=f"{entity.name} has already eaten from this feast")
+            return event.cancel(status_message="This creature already ate from this feast")
+        if entity.uuid != feast.caster_uuid and len(feast.consumed_by - {feast.caster_uuid}) >= 12:
+            return event.cancel(status_message="All twelve guest servings have been consumed")
+        return type_cast(Optional[ActionEvent], super()._validate(event))
 
-        if "Heroes' Feast" in entity.active_conditions:
-            return declaration_event.cancel(status_message=f"{entity.name} already has Heroes' Feast buff")
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[ActionEvent], parent_result)
-
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+    def _apply(self, event: ActionEvent) -> Optional[ActionEvent]:
         entity = Entity.get(self.source_entity_uuid)
         feast = BaseItem.get(self.feast_uuid)
-        if not entity or not feast or not isinstance(feast, HeroesFeastObject):
-            return execution_event.cancel(status_message="Entity or feast not found")
-
-        hp_bonus = random.randint(1, 10) + random.randint(1, 10)
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"{entity.name} eats from the Heroes' Feast"
-        )
-
-        buff = HeroesFeastBuff(
-            source_entity_uuid=self.caster_uuid,
-            target_entity_uuid=entity.uuid,
-            hp_bonus=hp_bonus,
-        )
-        entity.add_condition(buff, parent_event=effect_event)
-
+        if entity is None or not isinstance(feast, HeroesFeastObject):
+            return event.cancel(status_message="Feast recipient or source unavailable")
+        effect = event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:
+            return effect
+        roll = Dice(count=2, value=10, roll_type=RollType.HEAL,
+            bonus=ModifiableValue.create(source_entity_uuid=entity.uuid, base_value=0, value_name="Feast HP")).roll
+        source = HeroesFeastSource(source_entity_uuid=self.caster_uuid, target_entity_uuid=entity.uuid,
+            feast_uuid=feast.uuid, hp_bonus=roll.total, effect_origin=feast.effect_origin)
+        result = entity.add_condition(source, parent_event=effect)
+        if result is None or result.canceled:
+            return effect.cancel(status_message="Feast benefits were rejected")
+        for condition in tuple(entity.active_conditions.values()):
+            if ({ConditionTag.DISEASE, ConditionTag.POISON} & condition.tags
+                    or condition.name in ("Poisoned", "Frightened")):
+                entity.remove_condition_by_uuid(condition.uuid, parent_event=effect)
         feast.consumed_by.add(entity.uuid)
-
-        return effect_event.with_updates(
-            status_message=f"{entity.name} gains Heroes' Feast buff (+{hp_bonus} max HP)"
-        )
+        if feast.charges == 0:
+            feast.retire(parent_event=effect)
+        return effect.with_updates(status_message=f"{entity.name} eats a feast serving (+{roll.total} HP benefit)")
 
 
 class HeroesFeastObject(UsableItem):
+    magically_created: bool = True
     """A magnificent feast that appears on the ground.
     Creatures can eat from it to gain the Heroes' Feast buff.
     """
@@ -4703,14 +4931,20 @@ class HeroesFeastObject(UsableItem):
     description: str = Field(default="A magnificent feast — eat to gain immunity to poison/frightened and +HP", description="Rules-facing summary for the heroes feast object item.")
     is_pickable: bool = Field(default=False, description="Whether heroes feast object can be picked up as an item.")
     map_char: str = Field(default="F", description="Single-character map glyph used for heroes feast object.")
+    charges: int = 13
+    max_charges: int = 13
+    is_consumable: bool = False
+    effect_origin: EffectOrigin | None = None
     consumed_by: Set[UUID] = Field(default_factory=set, description="Entity UUIDs that have already used heroes feast object.")
     caster_uuid: Optional[UUID] = Field(default=None, description="Caster UUID used for ownership and effect attribution by heroes feast object.")
 
     def get_use_actions(self, user_entity_uuid: UUID) -> List[BaseAction]:
         """Return the EatFromFeast action if the user hasn't eaten yet."""
-        if user_entity_uuid in self.consumed_by:
+        if not self.is_active or self.charges <= 0 or user_entity_uuid in self.consumed_by:
             return []
         if not self.caster_uuid:
+            return []
+        if user_entity_uuid != self.caster_uuid and len(self.consumed_by - {self.caster_uuid}) >= 12:
             return []
         return [
             self.bind_dynamic_use_action(
@@ -4733,6 +4967,28 @@ def build_heroes_feast_object(
         item_id="environment.spell_object.heroes_feast",
         caster_uuid=source_entity_uuid,
     )
+
+
+class HeroesFeastLifetime(SpatialCondition):
+    """Existing world round clock owns this finite prop independently of its caster."""
+    has_visible_presence: bool = True
+    name: str = "Heroes' Feast Lifetime"
+    condition_category: ConditionCategory = ConditionCategory.INTERNAL
+    content_ref: ContentRef = GUARDIAN_OF_FAITH_ZONE_CONTENT_REF.model_copy(
+        update={"content_id": "spatial_effect.spell.heroes_feast"})
+    anchor_kind: SpatialEffectAnchorKind = SpatialEffectAnchorKind.WORLD_OBJECT
+    anchor_uuid: UUID = Field(default=PydanticUndefined, validate_default=True)
+    layer: SpatialEffectLayer = SpatialEffectLayer.FIELD
+    occupancy_policy: SpatialEffectOccupancyPolicy = SpatialEffectOccupancyPolicy.OVERLAPPING
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
+
+    def progress_spatial_duration(self, *, parent_event: Event | None = None) -> bool:
+        if not self.progress():
+            return False
+        feast = BaseItem.get(self.anchor_uuid)
+        if isinstance(feast, HeroesFeastObject) and not feast.retire(parent_event=parent_event):
+            return False
+        return self.deactivate(expire=True, parent_event=parent_event) if self.applied else True
 
 
 class HeroesFeast(SpellAction):
@@ -4775,8 +5031,18 @@ class HeroesFeast(SpellAction):
             status_message=f"{caster.name} conjures a Heroes' Feast"
         )
 
+        if effect_event.canceled:
+            return effect_event
         feast = build_heroes_feast_object(caster.uuid)
-        feast.place_on_grid(position)
+        feast.effect_origin = execution_event.get_effect_origin()
+        feast.place_on_grid(position, parent_event=effect_event.uuid)
+        lifetime = HeroesFeastLifetime(source_entity_uuid=caster.uuid, position=position,
+            anchor_uuid=feast.uuid, effect_origin=feast.effect_origin)
+        feast.creation_condition_uuid = lifetime.uuid
+        admitted = lifetime.activate(parent_event=effect_event)
+        if admitted is None or admitted.canceled or not lifetime.applied:
+            feast.retire(parent_event=effect_event)
+            return effect_event.cancel(status_message="Feast lifetime was not admitted")
 
         return effect_event.with_updates(
             status_message=f"A magnificent feast appears at {position}"
@@ -4800,8 +5066,9 @@ class ProduceFlameEffect(BaseCondition):
         if target is None:
             return [], [], [], [], event.cancel(status_message="Caster missing")
         self.light_source_uuid = get_map().add_light_source(position=target.position,
-            bright_radius_feet=10, dim_radius_feet=10, anchor_uuid=target.uuid, parent_event=event.uuid)
-        actions = [HurlProduceFlame(source_entity_uuid=target.uuid, flame_uuid=self.uuid,
+            bright_radius_feet=10, dim_radius_feet=10, anchor_uuid=target.uuid, parent_event=event.uuid,
+            contribution_owner_uuid=self.uuid)
+        actions = [HurlProduceFlame(source_entity_uuid=target.uuid, flame_uuid=self.uuid, contribution_owner_uuid=self.uuid,
                     caster_level=self.caster_level, spellcasting_source_id=self.spellcasting_source_id, template=True),
                    DismissProduceFlame(source_entity_uuid=target.uuid, effect_uuid=self.uuid, template=True)]
         for action in actions:
@@ -4846,7 +5113,8 @@ def _hurl_flame(spell: SpellAction, event: SpellEvent) -> SpellEvent:
     roll = damage.get_dice(resolution.outcome,
         crit_extra_dice=caster.get_spell_crit_extra_dice() if resolution.outcome == AttackOutcome.CRIT else 0).roll
     target.receive_damage(amount=roll.total, damage_type=DamageType.FIRE, source_entity_uuid=caster.uuid,
-        parent_event=effect.uuid, damages=[damage], damage_rolls=[roll])
+        parent_event=effect.uuid, damages=[damage], damage_rolls=[roll], effect_origin=event.get_effect_origin(),
+        critical_hit=resolution.outcome == AttackOutcome.CRIT)
     return effect.with_updates(damages=[damage], damage_rolls=[roll])
 
 
@@ -4866,6 +5134,13 @@ class ProduceFlame(SpellAction):
     def performs_attack(self) -> bool:
         return self.target_entity_uuid is not None and self.target_entity_uuid != self.source_entity_uuid
 
+    def _validate(self, event: SpellEvent):
+        admitted = super()._validate(event)
+        if admitted is None or admitted.canceled or self.target_entity_uuid == self.source_entity_uuid:
+            return admitted
+        assert isinstance(admitted, SpellEvent)
+        return self.validate_single_recipient(admitted)
+
     def _apply(self, event: SpellEvent):
         caster = Entity.get(self.source_entity_uuid)
         if caster is None:
@@ -4873,7 +5148,7 @@ class ProduceFlame(SpellAction):
         if self.target_entity_uuid is not None and self.target_entity_uuid != caster.uuid:
             old = caster.active_conditions.get("Produce Flame")
             if old is not None:
-                removed = caster.remove_condition_by_uuid(old.uuid, parent_event=event)
+                removed = caster.remove_condition_by_uuid(old.uuid, parent_event=event, consumed=True)
                 if not removed:
                     return event.cancel(status_message="Existing flame could not be released")
             return _hurl_flame(self, event)
@@ -4886,6 +5161,8 @@ class ProduceFlame(SpellAction):
     description="Hurl the retained hand flame.", parent_spell_name="Produce Flame", source_page=171, sort_order=1)
 class HurlProduceFlame(SpellAction):
     name: str = "Hurl Produce Flame"
+    action_category: ActionCategory = ActionCategory.ABILITY
+    verbal: bool = False
     spell_school: str = "conjuration"
     flame_uuid: UUID
     target_type: TargetType = TargetType.ENTITY
@@ -4899,17 +5176,31 @@ class HurlProduceFlame(SpellAction):
     def performs_attack(self) -> bool:
         return True
 
+    def _create_declaration_event(self, parent_event: Event | None = None,
+                                  use_register: bool = True) -> Event | None:
+        event = super()._create_declaration_event(parent_event, use_register)
+        caster = Entity.get(self.source_entity_uuid)
+        flame = next((condition for condition in caster.active_conditions.values()
+            if condition.uuid == self.flame_uuid), None) if caster is not None else None
+        if isinstance(event, SpellEvent) and flame is not None:
+            return event.with_updates(retained_effect_origin=flame.effect_origin)
+        return event
+
     def _validate(self, event: SpellEvent):
         caster = Entity.get(self.source_entity_uuid)
         if caster is None or not any(effect.uuid == self.flame_uuid for effect in caster.active_conditions.values()):
             return event.cancel(status_message="Hand flame is no longer retained")
-        return super()._validate(event)
+        admitted = super()._validate(event)
+        if admitted is None or admitted.canceled:
+            return admitted
+        assert isinstance(admitted, SpellEvent)
+        return self.validate_single_recipient(admitted)
 
     def _apply(self, event: SpellEvent):
         caster = Entity.get(self.source_entity_uuid)
         if caster is None:
             return event.cancel(status_message="Caster missing")
-        removed = caster.remove_condition_by_uuid(self.flame_uuid, parent_event=event)
+        removed = caster.remove_condition_by_uuid(self.flame_uuid, parent_event=event, consumed=True)
         if not removed:
             return event.cancel(status_message="Hand flame could not be released")
         return _hurl_flame(self, event)

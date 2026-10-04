@@ -26,20 +26,24 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.abjuration import DeathWard, FreedomOfMovement, ProtectionFromPoison, RemoveCurse, Stoneskin
 from dnd.spells.necromancy import AbilityCurseEffect
-from dnd.spells.transmutation import EnhanceAbility, Regenerate
+from dnd.spells.transmutation import EnhanceAbility, Regenerate, DarkvisionSpell, Longstrider
+from dnd.spells.divination import SeeInvisibility, TrueSeeing
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
 SupportConditionProgram = Literal["death_ward", "stoneskin", "protection_from_poison",
-    "enhance_ability", "regenerate", "remove_curse", "freedom_of_movement"]
+    "enhance_ability", "regenerate", "remove_curse", "freedom_of_movement",
+    "darkvision", "see_invisibility", "true_seeing", "longstrider"]
 SupportConditionMode = Literal["lifecycle", "lethal", "instant", "clean", "full_hp"]
 SPELLS = {"death_ward": DeathWard, "stoneskin": Stoneskin, "protection_from_poison": ProtectionFromPoison,
     "enhance_ability": EnhanceAbility, "regenerate": Regenerate, "remove_curse": RemoveCurse,
-    "freedom_of_movement": FreedomOfMovement}
+    "freedom_of_movement": FreedomOfMovement, "darkvision": DarkvisionSpell,
+    "see_invisibility": SeeInvisibility, "true_seeing": TrueSeeing, "longstrider": Longstrider}
 CONDITIONS = {"death_ward": "Death Ward", "stoneskin": "Stoneskin",
     "protection_from_poison": "Protection from Poison", "enhance_ability": "Enhance Ability",
-    "regenerate": "Regenerating", "freedom_of_movement": "Freedom of Movement"}
+    "regenerate": "Regenerating", "freedom_of_movement": "Freedom of Movement",
+    "darkvision": "Darkvision", "see_invisibility": "See Invisibility", "true_seeing": "True Seeing", "longstrider": "Longstrider"}
 
 
 def support_condition_history(*, program: SupportConditionProgram, self_target: bool = False,
@@ -56,7 +60,7 @@ def support_condition_history(*, program: SupportConditionProgram, self_target: 
             actor = Entity.create(uuid4(), role.title(), config=EntityConfig(
                 position=position, faction="heroes",
                 ability_scores=AbilityScoresConfig(intelligence=AbilityConfig(ability_score=18)),
-                action_economy=ActionEconomyConfig(spell_slots={2: 3, 3: 3, 4: 3, 7: 3}),
+                action_economy=ActionEconomyConfig(spell_slots={1: 3, 2: 3, 3: 3, 4: 3, 6: 3, 7: 3}),
                 spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
                 health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10, hit_dice_count=12, mode="maximums")]),
                 appearance=AppearanceConfig(body_category="NakedBody", has_beard=False,
@@ -77,7 +81,7 @@ def support_condition_history(*, program: SupportConditionProgram, self_target: 
             game.deploy_entity(actor, position)
             actors[role] = actor
         caster = actors["caster"]
-        recipient = caster if self_target else actors["recipient"]
+        recipient = caster if self_target or program == "see_invisibility" else actors["recipient"]
         encounter = Encounter(name="Support condition lifecycles", source_entity_uuid=caster.uuid)
         for actor in actors.values():
             encounter.add_combatant(actor, HumanController(source_entity_uuid=actor.uuid))
@@ -113,7 +117,7 @@ def support_condition_history(*, program: SupportConditionProgram, self_target: 
         initial = capture_interval(name="Support initialization", start_cursor=0, end_cursor=baseline,
             observer_uuid=caster.uuid, battlefield_id=battlefield)
         before, _ = reduce_interval(None, initial)
-        perform(caster, "spell." + program, target=recipient)
+        perform(caster, "spell." + program, target=None if program == "see_invisibility" else recipient)
 
         if program == "remove_curse":
             assert not any(ConditionTag.CURSE in condition.tags for condition in recipient.active_conditions.values())
@@ -122,7 +126,8 @@ def support_condition_history(*, program: SupportConditionProgram, self_target: 
             # Both camera basis and target attachment must remain correct while
             # the actual buff owner walks, including self-cast variants.
             perform(recipient, "action.move", destination=(recipient.position[0], 8))
-            if program in ("stoneskin", "enhance_ability", "protection_from_poison", "freedom_of_movement"):
+            if program in ("stoneskin", "enhance_ability", "protection_from_poison", "freedom_of_movement",
+                           "darkvision", "see_invisibility", "true_seeing", "longstrider"):
                 # Walk around a corner and return on a fresh turn: the camera
                 # banks remain world-oriented while the wearer changes facing.
                 origin_x = recipient.position[0]

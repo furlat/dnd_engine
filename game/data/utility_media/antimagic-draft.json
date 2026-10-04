@@ -1,0 +1,56 @@
+{
+  "schema": "dnd.spellStudioDrafts",
+  "version": 3,
+  "spells": [
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.antimagic_field",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 10257879,
+        "secondary": 10257879,
+        "tertiary": 10257879
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "original-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "colors": {
+            "source": "override",
+            "primary": 10257879,
+            "mode": "paletteSwap"
+          },
+          "sourceSheet": "/utility/antimagic/Attack5-hands.png",
+          "blendMode": "screen"
+        }
+      },
+      "contact": {
+        "delayMs": 0
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      }
+    }
+  ]
+}

@@ -76,14 +76,21 @@ def assembly_history(*, program: Literal['thorns','wind']='thorns', direction: t
         assert all(actors[r].get_hp()<hp[r] for r in ('recipient','second'))
         assert actors['bystander'].get_hp()==hp['bystander']
         after_cast_hp=actors['recipient'].get_hp()
-        perform('recipient','action.dodge')
+        if program=='wind':
+            # Actual ordinary passage while the field is still present parts
+            # the received visual sheet and must not repeat formation damage.
+            perform('recipient','action.move',(positions['recipient'][0]-dy,positions['recipient'][1]+dx))
+            assert actors['recipient'].get_hp()==after_cast_hp
+        else:
+            perform('recipient','action.dodge')
         perform('second','action.dodge')
         # Next turn actually invokes Thorns end-turn damage; Wind stays harmless.
         perform('caster','action.move',(2,14))
         assert (actors['recipient'].get_hp()<after_cast_hp) is (program=='thorns')
         # Source removal is a native action, not a fixture timestamp.
         perform('caster','action.drop_concentration')
-        perform('recipient','action.move',(positions['recipient'][0]-dy,positions['recipient'][1]+dx))
+        perform('recipient','action.move',(positions['recipient'][0]-dy*(2 if program=='wind' else 1),
+            positions['recipient'][1]+dx*(2 if program=='wind' else 1)))
         captured=capture_history(before,(),observers=tuple(ObserverCapture(role,actors[role].uuid,baseline) for role in ('caster','recipient')))
         primary=captured.views['caster'];return CapturedHistory(primary.initialization,before,primary.lineages,captured.views)
     finally:

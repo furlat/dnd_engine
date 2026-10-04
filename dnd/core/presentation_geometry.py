@@ -8,6 +8,7 @@ consulting a live action, entity, grid, or registry.
 from typing import Annotated, Literal, TypeAlias, Union
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
+from dnd.core.effect_types import ObjectSectionVolume
 
 
 Position: TypeAlias = tuple[int, int]
@@ -130,6 +131,7 @@ class WallAssemblyPresentationGeometry(PresentationGeometryModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
     shape: Literal["wall_assembly"] = "wall_assembly"
+    removed_sections: tuple[ObjectSectionVolume, ...] = ()
     path: Annotated[Union[WallSegment, WallRing, WallPolyline, WallDome], Field(discriminator="form")]
     base_height_steps: StrictInt
     width_feet: float = Field(gt=0)

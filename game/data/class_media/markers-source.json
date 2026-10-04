@@ -1,0 +1,51 @@
+{
+  "source": "preview.js icon()",
+  "geometry": "literal authored paths; stroke1.5 and shadowBlur4; 8x raster coverage",
+  "files": [
+    {
+      "path": "game/assets/class_media/markers/reckless.png",
+      "bytes": 1623,
+      "sha256": "b895df382fcba53b72bd1fa8cf9b1d51422c4fbba970b2fc4631a376dc68dd9d"
+    },
+    {
+      "path": "game/assets/class_media/markers/quickened.png",
+      "bytes": 1495,
+      "sha256": "6808b2cd529a50c5f94f0a89433252d2b3dbcd166505421aad41566b1398b05e"
+    },
+    {
+      "path": "game/assets/class_media/markers/twinned.png",
+      "bytes": 1256,
+      "sha256": "82b16f5058eb947862e5a81088c8099ae40f8d614d1b304cf6559ba29277d6be"
+    },
+    {
+      "path": "game/assets/class_media/markers/distant.png",
+      "bytes": 1013,
+      "sha256": "791f1e8ac72998028cfafccd8785b03ab5cf47f6b540a7feebb22734f11857da"
+    },
+    {
+      "path": "game/assets/class_media/markers/affinity.fire.png",
+      "bytes": 1338,
+      "sha256": "c4baed5044c77e9ebe971aa3aa2f42b6d01c7643d0191f0c2795c6e1915b235e"
+    },
+    {
+      "path": "game/assets/class_media/markers/affinity.cold.png",
+      "bytes": 1366,
+      "sha256": "80e2ee08c72ec9e472507271336f3ef1587489279146984ecbff258c45338d03"
+    },
+    {
+      "path": "game/assets/class_media/markers/affinity.lightning.png",
+      "bytes": 1354,
+      "sha256": "7ffc5fe1a0d1d7a88ce4e63c92c04d946cfe5abeb758249fa40c6db2061a3f8f"
+    },
+    {
+      "path": "game/assets/class_media/markers/affinity.acid.png",
+      "bytes": 1367,
+      "sha256": "cf7c308814991ae2bcacf8950823d67f35b4867b131395bc09222c1460bf3bea"
+    },
+    {
+      "path": "game/assets/class_media/markers/affinity.poison.png",
+      "bytes": 1338,
+      "sha256": "422de639bb8b387da33d0a2ad0acde9f89fbbbd55e4654a8e139ae52007d7d49"
+    }
+  ]
+}

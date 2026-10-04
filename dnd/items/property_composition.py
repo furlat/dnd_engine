@@ -36,6 +36,8 @@ def _unseen_strike(event: Event, source_entity_uuid: UUID, *, item_uuid: UUID,
     attack = EventQueue.get_event_by_uuid(event.parent_event) if event.parent_event else None
     if not isinstance(attack, ActionEvent) or attack.event_type != EventType.ATTACK or attack.source_item_uuid != item_uuid:
         return None
+    if attack.item_magic_suppression_provider_uuids:
+        return None
     target = BaseBlock.get(event.target_entity_uuid) if event.target_entity_uuid else None
     senses = target.get_senses() if target is not None else None
     if senses is None:
@@ -63,7 +65,7 @@ def install_item_properties(item_uuid: UUID, item_id: str, item_name: str,
     for property in properties:
         if isinstance(property, UnseenStrike):
             handler = EventHandler(name=property.name, content_kind=RuntimeBehaviorKind.ITEM,
-                source_entity_uuid=wearer_uuid,
+                source_entity_uuid=wearer_uuid, contribution_owner_uuid=item_uuid,
                 trigger_conditions=[Trigger(event_type=EventType.DAMAGE_ROLL_RESULT,
                     event_phase=EventPhase.EFFECT, event_source_entity_uuid=wearer_uuid)],
                 event_processor=partial(_unseen_strike, item_uuid=item_uuid, property=property))
@@ -76,7 +78,8 @@ def install_item_properties(item_uuid: UUID, item_id: str, item_name: str,
                 continue
             value = values.charisma if property.target is WearerValue.CHARISMA else values.spell_attack
             handle = value.self_static.add_value_modifier(NumericalModifier(name=property.name,
-                value=property.bonus, source_entity_uuid=item_uuid, target_entity_uuid=wearer_uuid))
+                value=property.bonus, source_entity_uuid=item_uuid, target_entity_uuid=wearer_uuid,
+                contribution_owner_uuid=item_uuid))
             contributions.append(ItemPropertyContribution(wearer_uuid, handle, value))
         elif isinstance(property, ArmorPenalties):
             if values is None:

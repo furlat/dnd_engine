@@ -1604,6 +1604,461 @@
       "removal_crossfade_ms": 125,
       "scale": 0.5555555555555556,
       "world_basis": "E"
+    },
+    "sensory.darkvision.back": {
+      "category": "darkvision",
+      "animation": "loop",
+      "asset_id": "sensory.darkvision.sustain.back",
+      "application_asset_id": "sensory.darkvision.application.back",
+      "application_mode": "sequence",
+      "sustain_start_ms": 4000,
+      "removal_fade_ms": 600,
+      "scale": 0.5,
+      "world_basis": "SE"
+    },
+    "sensory.darkvision.front": {
+      "category": "darkvision",
+      "animation": "loop",
+      "asset_id": "sensory.darkvision.sustain.front",
+      "application_asset_id": "sensory.darkvision.application.front",
+      "application_mode": "sequence",
+      "sustain_start_ms": 4000,
+      "removal_fade_ms": 600,
+      "scale": 0.5,
+      "world_basis": "SE"
+    },
+    "sensory.see_invisibility.back": {
+      "category": "see_invisibility",
+      "animation": "loop",
+      "asset_id": "sensory.see_invisibility.sustain.back",
+      "application_asset_id": "sensory.see_invisibility.application.back",
+      "application_mode": "sequence",
+      "sustain_start_ms": 4000,
+      "removal_fade_ms": 600,
+      "scale": 0.5,
+      "world_basis": "SE"
+    },
+    "sensory.see_invisibility.front": {
+      "category": "see_invisibility",
+      "animation": "loop",
+      "asset_id": "sensory.see_invisibility.sustain.front",
+      "application_asset_id": "sensory.see_invisibility.application.front",
+      "application_mode": "sequence",
+      "sustain_start_ms": 4000,
+      "removal_fade_ms": 600,
+      "scale": 0.5,
+      "world_basis": "SE"
+    },
+    "sensory.true_seeing.back": {
+      "category": "true_seeing",
+      "animation": "loop",
+      "asset_id": "sensory.true_seeing.sustain.back",
+      "application_asset_id": "sensory.true_seeing.application.back",
+      "application_mode": "sequence",
+      "sustain_start_ms": 4000,
+      "removal_fade_ms": 600,
+      "scale": 0.5,
+      "world_basis": "SE"
+    },
+    "sensory.true_seeing.front": {
+      "category": "true_seeing",
+      "animation": "loop",
+      "asset_id": "sensory.true_seeing.sustain.front",
+      "application_asset_id": "sensory.true_seeing.application.front",
+      "application_mode": "sequence",
+      "sustain_start_ms": 4000,
+      "removal_fade_ms": 600,
+      "scale": 0.5,
+      "world_basis": "SE"
+    },
+    "control.stunned.back": {
+      "category": "stunned",
+      "animation": "loop",
+      "asset_id": "necrotic.stunned.back",
+      "removal_fade_ms": 200,
+      "scale": 0.5,
+      "actor_top_clearance_px": 8
+    },
+    "control.stunned.front": {
+      "category": "stunned",
+      "animation": "loop",
+      "asset_id": "necrotic.stunned.front",
+      "removal_fade_ms": 200,
+      "scale": 0.5,
+      "actor_top_clearance_px": 8
+    },
+    "control.restrained.mark": {
+      "category": "restrained",
+      "animation": "loop",
+      "asset_id": "control.restrained.mark",
+      "scale": 0.5,
+      "removal_fade_ms": 200,
+      "actor_top_clearance_px": 8
+    },
+    "control.sickened.back": {
+      "category": "Sickened",
+      "animation": "hold",
+      "asset_id": "control.sickened.hold.back",
+      "application_asset_id": "control.sickened.apply.back",
+      "application_fade_ms": [
+        1500,
+        2000
+      ],
+      "sustain_start_ms": 1500,
+      "loop_crossfade_ms": 500,
+      "removal_fade_ms": 450,
+      "world_basis": "E",
+      "scale": 0.5
+    },
+    "control.sickened.front": {
+      "category": "Sickened",
+      "animation": "hold",
+      "asset_id": "control.sickened.hold.front",
+      "application_asset_id": "control.sickened.apply.front",
+      "application_fade_ms": [
+        1500,
+        2000
+      ],
+      "sustain_start_ms": 1500,
+      "loop_crossfade_ms": 500,
+      "removal_fade_ms": 450,
+      "world_basis": "E",
+      "scale": 0.5
+    },
+    "nature.warm.back": {
+      "category": "nature_utility",
+      "animation": "hold",
+      "asset_id": "nature.warm.hold.back",
+      "application_asset_id": "nature.warm.apply.back",
+      "application_mode": "sequence",
+      "sustain_start_ms": 968.75,
+      "application_fade_ms": [
+        968.75,
+        968.75
+      ],
+      "removal_asset_id": "nature.warm.clear.back",
+      "removal_fade_ms": 1031.25,
+      "scale": 0.5111111111111112
+    },
+    "nature.warm.front": {
+      "category": "nature_utility",
+      "animation": "hold",
+      "asset_id": "nature.warm.hold.front",
+      "application_asset_id": "nature.warm.apply.front",
+      "application_mode": "sequence",
+      "sustain_start_ms": 968.75,
+      "application_fade_ms": [
+        968.75,
+        968.75
+      ],
+      "removal_asset_id": "nature.warm.clear.front",
+      "removal_fade_ms": 1031.25,
+      "scale": 0.5111111111111112
+    },
+    "nature.chill.back": {
+      "category": "nature_utility",
+      "animation": "hold",
+      "asset_id": "nature.chill.hold.back",
+      "application_asset_id": "nature.chill.apply.back",
+      "application_mode": "sequence",
+      "sustain_start_ms": 968.75,
+      "application_fade_ms": [
+        968.75,
+        968.75
+      ],
+      "removal_asset_id": "nature.chill.clear.back",
+      "removal_fade_ms": 1031.25,
+      "scale": 0.5111111111111112
+    },
+    "nature.chill.front": {
+      "category": "nature_utility",
+      "animation": "hold",
+      "asset_id": "nature.chill.hold.front",
+      "application_asset_id": "nature.chill.apply.front",
+      "application_mode": "sequence",
+      "sustain_start_ms": 968.75,
+      "application_fade_ms": [
+        968.75,
+        968.75
+      ],
+      "removal_asset_id": "nature.chill.clear.front",
+      "removal_fade_ms": 1031.25,
+      "scale": 0.5111111111111112
+    },
+    "nature.warm-reaction.contact.front": {
+      "category": "nature_utility",
+      "animation": "contact",
+      "asset_id": "nature.warm-reaction.contact.front",
+      "scale": 0.5111111111111112
+    },
+    "nature.chill-reaction.contact.front": {
+      "category": "nature_utility",
+      "animation": "contact",
+      "asset_id": "nature.chill-reaction.contact.front",
+      "scale": 0.5111111111111112
+    },
+    "nature.warm-contact.contact.back": {
+      "category": "nature_utility",
+      "animation": "contact",
+      "asset_id": "nature.warm-contact.contact.back",
+      "scale": 0.5555555555555556
+    },
+    "nature.warm-contact.contact.front": {
+      "category": "nature_utility",
+      "animation": "contact",
+      "asset_id": "nature.warm-contact.contact.front",
+      "scale": 0.5555555555555556
+    },
+    "nature.chill-contact.contact.back": {
+      "category": "nature_utility",
+      "animation": "contact",
+      "asset_id": "nature.chill-contact.contact.back",
+      "scale": 0.5555555555555556
+    },
+    "nature.chill-contact.contact.front": {
+      "category": "nature_utility",
+      "animation": "contact",
+      "asset_id": "nature.chill-contact.contact.front",
+      "scale": 0.5555555555555556
+    },
+    "nature.produce.back": {
+      "category": "nature_utility",
+      "animation": "hold",
+      "asset_id": "nature.produce.hold.back",
+      "application_asset_id": "nature.produce.apply.back",
+      "application_mode": "sequence",
+      "sustain_start_ms": 968.75,
+      "application_fade_ms": [
+        968.75,
+        968.75
+      ],
+      "removal_asset_id": "nature.produce.clear.back",
+      "removal_fade_ms": 1031.25,
+      "scale": 0.5555555555555556
+    },
+    "nature.produce.front": {
+      "category": "nature_utility",
+      "animation": "hold",
+      "asset_id": "nature.produce.hold.front",
+      "application_asset_id": "nature.produce.apply.front",
+      "application_mode": "sequence",
+      "sustain_start_ms": 968.75,
+      "application_fade_ms": [
+        968.75,
+        968.75
+      ],
+      "removal_asset_id": "nature.produce.clear.front",
+      "removal_fade_ms": 1031.25,
+      "scale": 0.5555555555555556
+    },
+    "displacement.telekinesis.back": {
+      "category": "registered-displacement",
+      "animation": "finite",
+      "asset_id": "utility.telekinesis.hold.back",
+      "application_asset_id": "utility.telekinesis.grab.back",
+      "removal_asset_id": "utility.telekinesis.release.back",
+      "application_mode": "sequence",
+      "scale": 0.8380524814062786,
+      "world_basis": "E",
+      "removal_fade_ms": 700
+    },
+    "displacement.telekinesis.front": {
+      "category": "registered-displacement",
+      "animation": "finite",
+      "asset_id": "utility.telekinesis.hold.front",
+      "application_asset_id": "utility.telekinesis.grab.front",
+      "removal_asset_id": "utility.telekinesis.release.front",
+      "application_mode": "sequence",
+      "scale": 0.8380524814062786,
+      "world_basis": "E",
+      "removal_fade_ms": 700
+    },
+    "solar.sunbeam.hand": {
+      "category": "solar",
+      "animation": "hold",
+      "asset_id": "solar.sunbeam.hand",
+      "scale": 1
+    },
+    "control.eyebite_eye.back": {
+      "category": "EyebiteEye",
+      "animation": "hold",
+      "asset_id": "control.eyebite_eye.hold.back",
+      "application_asset_id": "control.eyebite_eye.apply.back",
+      "application_fade_ms": [
+        1000,
+        1500
+      ],
+      "sustain_start_ms": 1000,
+      "loop_crossfade_ms": 500,
+      "removal_fade_ms": 450,
+      "world_basis": "E",
+      "scale": 0.5
+    },
+    "control.eyebite_eye.front": {
+      "category": "EyebiteEye",
+      "animation": "hold",
+      "asset_id": "control.eyebite_eye.hold.front",
+      "application_asset_id": "control.eyebite_eye.apply.front",
+      "application_fade_ms": [
+        1000,
+        1500
+      ],
+      "sustain_start_ms": 1000,
+      "loop_crossfade_ms": 500,
+      "removal_fade_ms": 450,
+      "world_basis": "E",
+      "scale": 0.5
+    },
+    "class.rage.mantle-q0-back": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.rage.mantle-q0-back",
+      "scale": 0.5,
+      "removal_fade_ms": 350
+    },
+    "class.rage.mantle-q0-front": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.rage.mantle-q0-front",
+      "scale": 0.5,
+      "removal_fade_ms": 350
+    },
+    "class.frenzy.mantle-q0-back": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.frenzy.mantle-q0-back",
+      "scale": 0.5,
+      "removal_fade_ms": 350
+    },
+    "class.frenzy.mantle-q0-front": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.frenzy.mantle-q0-front",
+      "scale": 0.5,
+      "removal_fade_ms": 350
+    },
+    "class.marker.reckless": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.marker.reckless",
+      "scale": 0.5,
+      "actor_top_clearance_px": 3
+    },
+    "class.marker.quickened": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.marker.quickened",
+      "scale": 0.5,
+      "actor_top_clearance_px": 3
+    },
+    "class.marker.twinned": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.marker.twinned",
+      "scale": 0.5,
+      "actor_top_clearance_px": 3
+    },
+    "class.marker.distant": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.marker.distant",
+      "scale": 0.5,
+      "actor_top_clearance_px": 3
+    },
+    "class.marker.affinity.fire": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.marker.affinity.fire",
+      "scale": 0.5,
+      "actor_top_clearance_px": 3
+    },
+    "class.marker.affinity.cold": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.marker.affinity.cold",
+      "scale": 0.5,
+      "actor_top_clearance_px": 3
+    },
+    "class.marker.affinity.lightning": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.marker.affinity.lightning",
+      "scale": 0.5,
+      "actor_top_clearance_px": 3
+    },
+    "class.marker.affinity.acid": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.marker.affinity.acid",
+      "scale": 0.5,
+      "actor_top_clearance_px": 3
+    },
+    "class.marker.affinity.poison": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.marker.affinity.poison",
+      "scale": 0.5,
+      "actor_top_clearance_px": 3
+    },
+    "class.affinity.fire.back": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.affinity.fire.back",
+      "scale": 0.5
+    },
+    "class.affinity.fire.front": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.affinity.fire.front",
+      "scale": 0.5
+    },
+    "class.affinity.cold.back": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.affinity.cold.back",
+      "scale": 0.5
+    },
+    "class.affinity.cold.front": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.affinity.cold.front",
+      "scale": 0.5
+    },
+    "class.affinity.lightning.back": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.affinity.lightning.back",
+      "scale": 0.5
+    },
+    "class.affinity.lightning.front": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.affinity.lightning.front",
+      "scale": 0.5
+    },
+    "class.affinity.acid.back": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.affinity.acid.back",
+      "scale": 0.5
+    },
+    "class.affinity.acid.front": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.affinity.acid.front",
+      "scale": 0.5
+    },
+    "class.affinity.poison.back": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.affinity.poison.back",
+      "scale": 0.5
+    },
+    "class.affinity.poison.front": {
+      "category": "ClassOriginal",
+      "animation": "original",
+      "asset_id": "class.affinity.poison.front",
+      "scale": 0.5
     }
   }
 }

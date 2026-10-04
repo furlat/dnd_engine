@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 
 from dnd.conditions import Concentrating, Hidden, Restrained
+from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.base_block import BaseBlock, PreparedConditionApplication
 from dnd.core.base_conditions import ConditionRemovalEvent
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
@@ -114,17 +115,18 @@ def test_light_condition_removal_commits_before_light_observers(kind):
         EventQueue.remove_on_event_callback(observe)
 
 
-def test_continual_flame_independent_owner_retains_light_observation_until_publication():
+def test_continual_flame_item_owner_retains_light_observation_until_publication():
     caster = strong_entity('Caster', (1, 1), 'heroes')
     grid = get_map()
     grid.set_tile_base_light(caster.position, LightLevel.DARKNESS)
     tile = grid.get_tile(*caster.position)
     assert tile is not None
-    flame = ContinualFlameCondition(source_entity_uuid=caster.uuid, anchor_uuid=caster.uuid,
-                                   position=caster.position)
-    flame.activate(parent_event=Event(event_type=EventType.CAST_SPELL, source_entity_uuid=caster.uuid))
+    item = build_authored_item("weapon.club", caster.uuid)
+    item.place_on_grid(caster.position)
+    flame = ContinualFlameCondition(source_entity_uuid=caster.uuid, target_entity_uuid=item.uuid)
+    item.add_condition(flame, parent_event=Event(event_type=EventType.CAST_SPELL, source_entity_uuid=caster.uuid))
     assert tile.resolved_light_level is LightLevel.BRIGHT_LIGHT
-    sustain(caster, flame, flame)
+    sustain(caster, item, flame)
     incoming, prepared = replacement(caster)
     with BaseBlock.condition_removal_scope():
         cursor = EventQueue.event_cursor()
@@ -132,8 +134,7 @@ def test_continual_flame_independent_owner_retains_light_observation_until_publi
         assert EventQueue.event_cursor() == cursor
         assert tile.resolved_light_level is LightLevel.DARKNESS
         caster.publish_condition_application(prepared)
-    # Independent spatial owners publish at the outer graph boundary, before
-    # their removal terminal closes; the entire replacement is committed first.
+    # Item-owned light removal publishes only after the replacement commits.
     lights = [event for _, event in EventQueue.iter_events_since(cursor)
               if event.event_type is EventType.SPATIAL_LIGHT_CHANGED and event.phase is EventPhase.COMPLETION]
     assert len(lights) == 1 and caster.active_conditions['Concentrating'] is incoming

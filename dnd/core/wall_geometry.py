@@ -49,6 +49,11 @@ def wall_shell_cells(geometry: WallPresentationGeometry | WallAssemblyPresentati
                 intersects = nearest <= radius + half_width and farthest >= max(0, radius - half_width)
             if intersects:
                 positions.add((x, y))
+    if isinstance(geometry, WallAssemblyPresentationGeometry):
+        positions = {position for position in positions if not any(
+            volume.contains_band(position, geometry.base_height_steps)
+            and (volume.base_height_steps + 2) * 5 >= geometry.base_height_steps * 5 + geometry.height_feet
+            for volume in geometry.removed_sections)}
     return positions
 
 
@@ -85,6 +90,36 @@ def wall_side_cells(
 
 
 def wall_crosses_path(geometry: WallAssemblyPresentationGeometry,
+                      start: tuple[float, float], end: tuple[float, float]) -> bool:
+    """Clip the existing shell by its retained full-height native apertures."""
+    volumes = tuple(volume for volume in geometry.removed_sections
+        if volume.base_height_steps <= geometry.base_height_steps
+        and (volume.base_height_steps + 2) * 5 >= geometry.base_height_steps * 5 + geometry.height_feet)
+    if not volumes:
+        return _uncut_wall_crosses_path(geometry, start, end)
+    delta = end[0] - start[0], end[1] - start[1]
+    times = {0., 1.}
+    for volume in volumes:
+        for axis in (0, 1):
+            if delta[axis] == 0:
+                continue
+            for boundary in (volume.minimum_position[axis] - .5, volume.minimum_position[axis] + 1.5):
+                t = (boundary - start[axis]) / delta[axis]
+                if 0 < t < 1:
+                    times.add(t)
+    ordered = sorted(times)
+    for low, high in zip(ordered, ordered[1:]):
+        midpoint = (start[0] + delta[0] * (low + high) / 2, start[1] + delta[1] * (low + high) / 2)
+        if any(volume.contains_point(midpoint) for volume in volumes):
+            continue
+        first = start[0] + delta[0] * low, start[1] + delta[1] * low
+        last = start[0] + delta[0] * high, start[1] + delta[1] * high
+        if _uncut_wall_crosses_path(geometry, first, last):
+            return True
+    return False
+
+
+def _uncut_wall_crosses_path(geometry: WallAssemblyPresentationGeometry,
                       start: tuple[float, float], end: tuple[float, float]) -> bool:
     """Actual shell intersection; same-side and hollow-interior legs remain clear."""
     if start == end:

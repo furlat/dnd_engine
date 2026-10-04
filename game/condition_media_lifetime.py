@@ -6,16 +6,22 @@ exactly the same dates. Initial/reacquired unknown effects enter their quiet loo
 
 from dataclasses import dataclass, replace
 from typing import Mapping
+from types import MappingProxyType
 from uuid import UUID
 
-from dnd.core.events import EventType
-from game.animation_types import AnimationData
+from dnd.core.events import EventType, SpatialChangeType
+from dnd.core.creature_types import DamageType
+from dnd.types.actor import SpatialDisposition
+from game.animation_types import AnimationData, Facing8
+from game.animation import BodySample
+from game.body_pose_types import ActorPose
+from game.body_presentation import sample_body_presentation
 from game.choreography import BoundChoreography, MotionTimeline, walk_bound_timelines
 from game.condition_animation import (ConditionAppearance, LiveCopyAppearance,
-    ConditionResponseCue, resolve_condition_appearance)
+    ConditionResponseCue, condition_body_pose, resolve_condition_appearance)
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer, supported_layer
 from game.condition_types import ConditionLayer, ConditionRecipe, ConditionTransitionEffect, ConditionLiveCopies
-from game.player_facts import ConditionChangeFact, PlayerActor, PlayerLineage, PlayerState, TemporaryHitPointsFact
+from game.player_facts import ConditionChangeFact, PlayerActor, PlayerLineage, PlayerState, SpatialFact, TemporaryHitPointsFact
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +38,11 @@ class ConditionMediaLifetime:
     copy_updates: tuple[tuple[float, int], ...] = ()
     responses: tuple[ConditionResponseCue, ...] = ()
     consumed_ms: float | None = None
+    frozen_body: BodySample | None = None
+    absence_pose: ActorPose | None = None
+    returned_ms: float | None = None
+    returned_pose: ActorPose | None = None
+    energy_type: DamageType | None = None
 
 
 def extra_media_members(actor: PlayerActor) -> tuple[tuple[UUID, str], ...]:
@@ -73,7 +84,8 @@ def _members(actor: PlayerActor, data: AnimationData) -> dict[UUID, str]:
             if (recipe := data.condition_recipes.get(identity)) is not None
             and (_media_assets(recipe, data) or recipe.persistent.liveCopies is not None
                  or recipe.persistent.bodyDistortion is not None or recipe.persistent.bodyScale is not None
-                 or recipe.persistent.bodyRamp is not None or recipe.persistent.bodyOutline is not None)}
+                 or recipe.persistent.bodyRamp is not None or recipe.persistent.bodyOutline is not None
+                 or recipe.persistent.frozenPose is not None or recipe.persistent.absenceEcho is not None)}
 
 
 def _effective_assets(recipe: ConditionRecipe, data: AnimationData,
@@ -113,9 +125,16 @@ def register_condition_lifetimes(
     retained: Mapping[UUID, ConditionMediaLifetime], before: PlayerState, data: AnimationData,
     *, absolute_start_ms: float, lineage: PlayerLineage | None = None,
     choreography: BoundChoreography | None = None, motion: MotionTimeline | None = None,
+    facings: Mapping[str, Facing8] = MappingProxyType({}),
 ) -> dict[UUID, ConditionMediaLifetime]:
     current = {owner: (actor.uuid, identity) for actor in before.actors.values()
                for owner, identity in _members(actor, data).items()}
+    energies = {member.condition_uuid: member.state.energy_type for actor in before.actors.values()
+        for member in actor.conditions if member.state is not None}
+    if lineage is not None:
+        energies.update({node.fact.condition.condition_uuid: node.fact.condition.state.energy_type
+            for node in lineage.events if isinstance(node.fact,ConditionChangeFact)
+            and node.fact.condition.state is not None})
     # Retain only live memberships and unfinished tails at head admission.
     # Prior mappings remain untouched, so a retained older head is still seekable.
     result = {}
@@ -131,17 +150,35 @@ def register_condition_lifetimes(
                                for effect in recipe.persistent.liveCopies.removalEffects), default=0.))
                            if recipe.persistent.liveCopies else 0.))
         responses = tuple(cue for cue in lifetime.responses if cue.end_ms > absolute_start_ms)
+        echo = recipe.persistent.absenceEcho
+        if echo is not None:
+            fade_ms = max(fade_ms, echo.returnPortalMs, echo.clearMs)
+        pending_return = (echo is not None and lifetime.returned_ms is None
+            and lifetime.actor_uuid in before.actors
+            and before.actors[lifetime.actor_uuid].spatial_disposition in
+                (SpatialDisposition.ABSENT, SpatialDisposition.RETURN_PENDING))
         if (owner in current or lifetime.removed_ms is None or responses
+                or pending_return or lifetime.returned_ms is not None and echo is not None
+                and absolute_start_ms < lifetime.returned_ms+echo.returnPortalMs
                 or absolute_start_ms < lifetime.removed_ms + fade_ms):
             result[owner] = replace(lifetime, responses=responses)
     for owner, (actor_id, identity) in current.items():
         member = next((row for row in before.actors[actor_id].conditions if row.condition_uuid == owner), None)
         count = member.state.duplicate_count if member is not None and member.state is not None else None
-        result.setdefault(owner, ConditionMediaLifetime(actor_id, owner, identity, initial_copy_count=count or 0))
+        result.setdefault(owner, ConditionMediaLifetime(actor_id, owner, identity, initial_copy_count=count or 0,
+            energy_type=energies.get(owner)))
     applications = set()
+    consumed = set()
+    witnessed_entries = set()
     if lineage is not None:
         for node in lineage.events:
+            if node.canceled:
+                continue
             fact = node.fact
+            if isinstance(fact, SpatialFact) and fact.change_type is SpatialChangeType.ENTITY_ENTERED:
+                witnessed_entries.add(fact.entity_uuid)
+            if isinstance(fact, ConditionChangeFact) and fact.consumed:
+                consumed.add(fact.condition.condition_uuid)
             if isinstance(fact, ConditionChangeFact) and fact.event_type is EventType.CONDITION_APPLICATION:
                 applications.add(fact.condition.condition_uuid)
             elif isinstance(fact, TemporaryHitPointsFact) and fact.grant is not None:
@@ -163,9 +200,11 @@ def register_condition_lifetimes(
                 result[owner] = ConditionMediaLifetime(actor, owner, identity,
                     overlapping.applied_ms if overlapping is not None else
                     absolute if owner in applications else None,
-                    activated_ms=overlapping.activated_ms if overlapping is not None else None)
+                    activated_ms=overlapping.activated_ms if overlapping is not None else None,
+                    energy_type=energies.get(owner))
         elif previous is not None and previous.removed_ms is None:
-            result[owner] = replace(previous, removed_ms=absolute, removed_layers=layers)
+            result[owner] = replace(previous, removed_ms=absolute, removed_layers=layers,
+                consumed_ms=absolute if owner in consumed else previous.consumed_ms)
     turns = ((at + visit.offset_ms, actor) for visit in visits
              if isinstance(visit.timeline, BoundChoreography) for at, actor in visit.timeline.turn_starts)
     for at, actor_id in turns:
@@ -202,6 +241,59 @@ def register_condition_lifetimes(
             continue
         result[cue.owner_uuid] = replace(lifetime, responses=(*lifetime.responses, absolute),
             consumed_ms=absolute.start_ms if cue.trigger == "consumed" else lifetime.consumed_ms)
+    for owner, lifetime in tuple(result.items()):
+        echo = data.condition_recipes[lifetime.behavior_id].persistent.absenceEcho
+        if echo is not None:
+            if lifetime.absence_pose is None and owner not in retained and lifetime.applied_ms is not None:
+                when = lifetime.applied_ms
+                frame = sample_body_presentation(before,None,data,max(0.,when-absolute_start_ms-.001),
+                    max(0.,when-.001),facings,choreography=choreography,motion=motion)
+                pose = next((row for row in frame.poses if row.body.actor_uuid == str(lifetime.actor_uuid)),None)
+                lifetime = replace(lifetime,absence_pose=pose)
+            # Later sight can replace an old absent snapshot with a present one.
+            # Only a received entry admits a return, never that reacquisition.
+            if lifetime.returned_ms is None and lifetime.actor_uuid in witnessed_entries:
+                for visit in visits:
+                    prior = visit.timeline.before
+                    for at,state in visit.timeline.states:
+                        old,new = prior.actors.get(lifetime.actor_uuid),state.actors.get(lifetime.actor_uuid)
+                        if (old is not None and new is not None and old.spatial_disposition in echo.dispositions
+                                and new.spatial_disposition is SpatialDisposition.PRESENT):
+                            when = absolute_start_ms+visit.offset_ms+at
+                            frame = sample_body_presentation(state,None,data,0,when,facings)
+                            pose = next((row for row in frame.poses if row.body.actor_uuid == str(lifetime.actor_uuid)),None)
+                            if pose is not None:
+                                lifetime = replace(lifetime,returned_ms=when,returned_pose=pose)
+                                break
+                        prior=state
+                    if lifetime.returned_ms is not None:
+                        break
+            result[owner]=lifetime
+        freeze = data.condition_recipes[lifetime.behavior_id].persistent.frozenPose
+        if freeze is None or not freeze.captureCurrent or lifetime.frozen_body is not None or owner in retained:
+            continue
+        when = lifetime.applied_ms if lifetime.applied_ms is not None else absolute_start_ms
+        # A hidden onset keeps its authored quiet fallback; unrelated later heads
+        # cannot recapture it as a different pose.
+        overlapping = next((row.frozen_body for row in result.values()
+            if row.actor_uuid == lifetime.actor_uuid and row.frozen_body is not None
+            and (row.applied_ms is None or row.applied_ms <= when)
+            and (row.removed_ms is None or row.removed_ms > when)), None)
+        local = max(0., when - absolute_start_ms - .001)
+        pose = None
+        if overlapping is None:
+            frame = sample_body_presentation(before, None, data, local, max(0., when - .001), facings,
+                choreography=choreography, motion=motion)
+            sampled = next((row for row in frame.poses if row.body.actor_uuid == str(lifetime.actor_uuid)), None)
+            if sampled is not None:
+                actor = frame.displayed.actors.get(lifetime.actor_uuid)
+                prior = (resolve_condition_appearance(tuple(member for member in actor.conditions
+                    if member.condition_uuid != owner), data.condition_recipes, data.condition_media,
+                    extra_members=extra_media_members(actor)) if actor is not None else sampled.actor.condition)
+                prior = sample_condition_lifetimes({str(lifetime.actor_uuid): prior}, result, data,
+                    max(0., when - .001))[str(lifetime.actor_uuid)]
+                pose = condition_body_pose(data, sampled.body, sampled.actor.contact, prior)
+        result[owner] = replace(lifetime, frozen_body=overlapping or pose)
     return result
 
 
@@ -209,6 +301,8 @@ def _transition_layers(effects: tuple[ConditionTransitionEffect, ...], lifetime:
                        age_ms: float, data: AnimationData) -> tuple[ResolvedConditionLayer, ...]:
     result = []
     for effect in effects:
+        if effect.whenEnergyType is not None and effect.whenEnergyType is not lifetime.energy_type:
+            continue
         if not effect.startOffsetMs <= age_ms < effect.startOffsetMs + effect.durationMs:
             continue
         media = data.condition_media.get(effect.assetId)
@@ -249,11 +343,13 @@ def sample_condition_lifetimes(
         displayed_recipes: set[str] = set()
         for lifetime in records.values():
             end = lifetime.removed_ms
-            if str(lifetime.actor_uuid) != actor_id:
-                continue
             for cue in lifetime.responses:
                 if cue.start_ms <= absolute_ms < cue.end_ms:
-                    layers.extend(_transition_layers(cue.effects, lifetime, absolute_ms - cue.start_ms, data))
+                    selected = tuple(effect for effect in cue.effects
+                        if str(cue.recipient_uuid if effect.participant == "recipient" else cue.actor_uuid) == actor_id)
+                    layers.extend(_transition_layers(selected, lifetime, absolute_ms - cue.start_ms, data))
+            if str(lifetime.actor_uuid) != actor_id:
+                continue
             if lifetime.consumed_ms is not None and absolute_ms >= lifetime.consumed_ms:
                 continue
             recipe = data.condition_recipes[lifetime.behavior_id]
@@ -292,20 +388,27 @@ def sample_condition_lifetimes(
         distortion = appearance.distortion
         distortion_strength = 1.
         ramp, ramp_strength = appearance.body_ramp, 1.
+        ramp_age = absolute_ms
+        frozen_lifetime = records.get(appearance.frozen_owner_uuid) if appearance.frozen_owner_uuid else None
+        frozen_body = (frozen_lifetime.frozen_body if frozen_lifetime is not None
+            and (frozen_lifetime.applied_ms is None or frozen_lifetime.applied_ms <= absolute_ms)
+            and (frozen_lifetime.removed_ms is None or absolute_ms < frozen_lifetime.removed_ms) else None)
         for lifetime in records.values():
             authored = data.condition_recipes[lifetime.behavior_id]
             if str(lifetime.actor_uuid) != actor_id:
                 continue
             material = authored.persistent.bodyRamp
             if material is not None:
-                if (ramp == material and lifetime.applied_ms is not None
+                if (ramp == material and lifetime.applied_ms is not None and lifetime.applied_ms <= absolute_ms
                         and (lifetime.removed_ms is None or absolute_ms < lifetime.removed_ms)):
+                    ramp_age = absolute_ms - lifetime.applied_ms
                     ramp_strength = (min(1., max(0., (absolute_ms - lifetime.applied_ms) / material.applicationMs))
                                      if material.applicationMs else 1.)
                 if (ramp is None and lifetime.behavior_id not in appearance.matched_behavior_ids
                         and lifetime.removed_ms is not None
                         and lifetime.removed_ms <= absolute_ms < lifetime.removed_ms + material.removalMs):
                     ramp = material
+                    ramp_age = absolute_ms - lifetime.applied_ms if lifetime.applied_ms is not None else absolute_ms
                     ramp_strength = 1 - (absolute_ms - lifetime.removed_ms) / material.removalMs
             if authored.persistent.bodyDistortion is not None:
                 if (distortion is not None and lifetime.applied_ms is not None
@@ -332,7 +435,8 @@ def sample_condition_lifetimes(
         result[actor_id] = replace(appearance, layers=tuple(layers), live_copies=copies, time_ms=absolute_ms,
                                   outline_age_ms=outline_age,
                                   distortion=distortion, distortion_strength=distortion_strength,
-                                  body_ramp=ramp, ramp_strength=ramp_strength)
+                                  body_ramp=ramp, ramp_strength=ramp_strength, ramp_age_ms=ramp_age,
+                                  frozen_body=frozen_body)
     return result
 
 

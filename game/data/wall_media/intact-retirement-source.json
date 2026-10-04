@@ -1,0 +1,1019 @@
+{
+  "source": "/mnt/c/Users/tommaso/.codex/tmp/wall-retirement-20261004",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/solid-intact-retirement-20261004",
+  "durationMs": 850,
+  "rgba": "Original-operator production recapture; intact first samples byte-identical.",
+  "validation_sha256": "06772c7c01d9b6cad3f5530dea92d30fb78bbbccc0e8f275737d11b47e1c13c4",
+  "identities": [
+    "wall.stone_v0_d0.removal.back",
+    "wall.stone_v0_d0.removal.front",
+    "wall.stone_v0_d1.removal.back",
+    "wall.stone_v0_d1.removal.front",
+    "wall.stone_v0_d2.removal.back",
+    "wall.stone_v0_d2.removal.front",
+    "wall.stone_v0_d3.removal.back",
+    "wall.stone_v0_d3.removal.front",
+    "wall.stone_v1_d0.removal.back",
+    "wall.stone_v1_d0.removal.front",
+    "wall.stone_v1_d1.removal.back",
+    "wall.stone_v1_d1.removal.front",
+    "wall.stone_v1_d2.removal.back",
+    "wall.stone_v1_d2.removal.front",
+    "wall.stone_v1_d3.removal.back",
+    "wall.stone_v1_d3.removal.front",
+    "wall.stone_v2_d0.removal.back",
+    "wall.stone_v2_d0.removal.front",
+    "wall.stone_v2_d1.removal.back",
+    "wall.stone_v2_d1.removal.front",
+    "wall.stone_v2_d2.removal.back",
+    "wall.stone_v2_d2.removal.front",
+    "wall.stone_v2_d3.removal.back",
+    "wall.stone_v2_d3.removal.front",
+    "wall.ice_v0_d0.removal.back",
+    "wall.ice_v0_d0.removal.front",
+    "wall.ice_v0_d1.removal.back",
+    "wall.ice_v0_d1.removal.front",
+    "wall.ice_v0_d2.removal.back",
+    "wall.ice_v0_d2.removal.front",
+    "wall.ice_v0_d3.removal.back",
+    "wall.ice_v0_d3.removal.front",
+    "wall.ice_v1_d0.removal.back",
+    "wall.ice_v1_d0.removal.front",
+    "wall.ice_v1_d1.removal.back",
+    "wall.ice_v1_d1.removal.front",
+    "wall.ice_v1_d2.removal.back",
+    "wall.ice_v1_d2.removal.front",
+    "wall.ice_v1_d3.removal.back",
+    "wall.ice_v1_d3.removal.front",
+    "wall.ice_v2_d0.removal.back",
+    "wall.ice_v2_d0.removal.front",
+    "wall.ice_v2_d1.removal.back",
+    "wall.ice_v2_d1.removal.front",
+    "wall.ice_v2_d2.removal.back",
+    "wall.ice_v2_d2.removal.front",
+    "wall.ice_v2_d3.removal.back",
+    "wall.ice_v2_d3.removal.front"
+  ],
+  "files": [
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d0/q0/back-0.png",
+      "bytes": 201590,
+      "sha256": "ec94e8332ee721d82b654e2bef80f37af7e5c15e2a6db0c15f624f4db5ef4c0d"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d0/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d0/q1/back-0.png",
+      "bytes": 32473,
+      "sha256": "483b909c4f3675c2a2c8b4a82536a875191636b3bc48a00f6fc0c1a7b74dd007"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d0/q1/front-0.png",
+      "bytes": 177972,
+      "sha256": "5e5d66102f91642b9f1f6e7320246fa3ec3e56b80c03c32d7d13c57bebbcfd25"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d0/q2/back-0.png",
+      "bytes": 33882,
+      "sha256": "f2d2e3491c42e783ad3bf677966cf960de720262c0759d935fbfccfa5e1a3c02"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d0/q2/front-0.png",
+      "bytes": 197944,
+      "sha256": "e70bb6637c2ef6e6ab033c33136bfe1714aa110155c01fea49eba0b895ff13f9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d0/q3/back-0.png",
+      "bytes": 183297,
+      "sha256": "ac75d9b2a714de1b6c20dc41f87230b06c15ae2e0bb06ec218a70bc062b24343"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d0/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d1/q0/back-0.png",
+      "bytes": 183309,
+      "sha256": "df78f03724d66b592a767aa78676585fc190c5c82a361bdb68fd7028d25e3ff9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d1/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d1/q1/back-0.png",
+      "bytes": 201590,
+      "sha256": "e2090c892dcf6bb787ffe2cd77bd7d219bf341d77424ccc4806e6d248a398549"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d1/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d1/q2/back-0.png",
+      "bytes": 32473,
+      "sha256": "483b909c4f3675c2a2c8b4a82536a875191636b3bc48a00f6fc0c1a7b74dd007"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d1/q2/front-0.png",
+      "bytes": 177964,
+      "sha256": "ca1ff858244039ef7c09dbb03de7a5bd0789f9616feaa60af0f29cdc1307d835"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d1/q3/back-0.png",
+      "bytes": 33882,
+      "sha256": "f2d2e3491c42e783ad3bf677966cf960de720262c0759d935fbfccfa5e1a3c02"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d1/q3/front-0.png",
+      "bytes": 197942,
+      "sha256": "0657bd6fa7d98d0644923b84cac81257caab05dd14b247625a0b281dbb3ca59b"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d2/q0/back-0.png",
+      "bytes": 33882,
+      "sha256": "f2d2e3491c42e783ad3bf677966cf960de720262c0759d935fbfccfa5e1a3c02"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d2/q0/front-0.png",
+      "bytes": 197942,
+      "sha256": "0657bd6fa7d98d0644923b84cac81257caab05dd14b247625a0b281dbb3ca59b"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d2/q1/back-0.png",
+      "bytes": 183306,
+      "sha256": "f4228af16fd12afca77720ee67afc11be6e131b988abefb69982d8257b4a07f4"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d2/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d2/q2/back-0.png",
+      "bytes": 201592,
+      "sha256": "7bbf435c2d1c60046a8efc3114b13446e6f0115472f28d7c470d4286826ef4c9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d2/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d2/q3/back-0.png",
+      "bytes": 32473,
+      "sha256": "483b909c4f3675c2a2c8b4a82536a875191636b3bc48a00f6fc0c1a7b74dd007"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d2/q3/front-0.png",
+      "bytes": 177970,
+      "sha256": "d006015541b579e7b512b9db63fad9bd610bf770fc31a5c1c291533fcba8f6e9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d3/q0/back-0.png",
+      "bytes": 32473,
+      "sha256": "483b909c4f3675c2a2c8b4a82536a875191636b3bc48a00f6fc0c1a7b74dd007"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d3/q0/front-0.png",
+      "bytes": 177972,
+      "sha256": "5e5d66102f91642b9f1f6e7320246fa3ec3e56b80c03c32d7d13c57bebbcfd25"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d3/q1/back-0.png",
+      "bytes": 33882,
+      "sha256": "f2d2e3491c42e783ad3bf677966cf960de720262c0759d935fbfccfa5e1a3c02"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d3/q1/front-0.png",
+      "bytes": 197944,
+      "sha256": "e70bb6637c2ef6e6ab033c33136bfe1714aa110155c01fea49eba0b895ff13f9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d3/q2/back-0.png",
+      "bytes": 183309,
+      "sha256": "df78f03724d66b592a767aa78676585fc190c5c82a361bdb68fd7028d25e3ff9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d3/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d3/q3/back-0.png",
+      "bytes": 201592,
+      "sha256": "2bfb714bb6398d23faf47be1203b46fa6fe2d4a58bf4d9e68eb2ce06a7b77375"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v0_d3/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d0/q0/back-0.png",
+      "bytes": 202148,
+      "sha256": "5581f4b4434adfe1167e49460eff7a4e2c8f8d915f7afeba07c21c41c7714447"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d0/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d0/q1/back-0.png",
+      "bytes": 32439,
+      "sha256": "c123271dedc57a0fe444a48dd02bf12ab1ccd2461c523dc70e54e2e3512fe011"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d0/q1/front-0.png",
+      "bytes": 177831,
+      "sha256": "f9c12ce112b1160f73769457d13156cf1bcfc2bc1dba2bb07ea14dc047d5723d"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d0/q2/back-0.png",
+      "bytes": 33805,
+      "sha256": "5286629326369dcd815167dbdf0ed191346136aac01b87e032b123554c727aa9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d0/q2/front-0.png",
+      "bytes": 198813,
+      "sha256": "bcaae1a4519cc6fe1f0769866f6e9f366d0de1a68872aadb6ff374df64ec680d"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d0/q3/back-0.png",
+      "bytes": 183586,
+      "sha256": "5bf90ec6cedef598c251dcfbf2e596387c139dd820388e4d149224d773daca17"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d0/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d1/q0/back-0.png",
+      "bytes": 183603,
+      "sha256": "b627f76d7face25e435879da13cd55d5baecd17f8bb3e2e59cccaa4ffe929afe"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d1/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d1/q1/back-0.png",
+      "bytes": 202150,
+      "sha256": "3e98806231021d89222cddbee600e34d0d8d58344ccaf15446ce1b4486ee5e5d"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d1/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d1/q2/back-0.png",
+      "bytes": 32439,
+      "sha256": "c123271dedc57a0fe444a48dd02bf12ab1ccd2461c523dc70e54e2e3512fe011"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d1/q2/front-0.png",
+      "bytes": 177825,
+      "sha256": "e25074df0781c09f20e6939e153b42f27a0ad32ade533d1b981d13f27ca6b33b"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d1/q3/back-0.png",
+      "bytes": 33805,
+      "sha256": "5286629326369dcd815167dbdf0ed191346136aac01b87e032b123554c727aa9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d1/q3/front-0.png",
+      "bytes": 198811,
+      "sha256": "23f26c708c00866c466d40bf4a18b184636d81d36a48f189ad7cf800c6e396f2"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d2/q0/back-0.png",
+      "bytes": 33805,
+      "sha256": "5286629326369dcd815167dbdf0ed191346136aac01b87e032b123554c727aa9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d2/q0/front-0.png",
+      "bytes": 198811,
+      "sha256": "23f26c708c00866c466d40bf4a18b184636d81d36a48f189ad7cf800c6e396f2"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d2/q1/back-0.png",
+      "bytes": 183601,
+      "sha256": "dae6c14ddc0953faff57f69ddbd9fcece0e61a68e4b356f7ad85cf7232737ec8"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d2/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d2/q2/back-0.png",
+      "bytes": 202150,
+      "sha256": "b91bc2ec0f308d70a57bab88dbef84699c51d837edbe730f21746a1706a1817b"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d2/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d2/q3/back-0.png",
+      "bytes": 32439,
+      "sha256": "c123271dedc57a0fe444a48dd02bf12ab1ccd2461c523dc70e54e2e3512fe011"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d2/q3/front-0.png",
+      "bytes": 177831,
+      "sha256": "fac44e51d1bc2381d9591548d22f3365ef4b3ca1709496e721a91498eb2bc6ae"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d3/q0/back-0.png",
+      "bytes": 32439,
+      "sha256": "c123271dedc57a0fe444a48dd02bf12ab1ccd2461c523dc70e54e2e3512fe011"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d3/q0/front-0.png",
+      "bytes": 177831,
+      "sha256": "f9c12ce112b1160f73769457d13156cf1bcfc2bc1dba2bb07ea14dc047d5723d"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d3/q1/back-0.png",
+      "bytes": 33805,
+      "sha256": "5286629326369dcd815167dbdf0ed191346136aac01b87e032b123554c727aa9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d3/q1/front-0.png",
+      "bytes": 198813,
+      "sha256": "bcaae1a4519cc6fe1f0769866f6e9f366d0de1a68872aadb6ff374df64ec680d"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d3/q2/back-0.png",
+      "bytes": 183603,
+      "sha256": "b627f76d7face25e435879da13cd55d5baecd17f8bb3e2e59cccaa4ffe929afe"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d3/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d3/q3/back-0.png",
+      "bytes": 202150,
+      "sha256": "f834265b470c4f46e2f12d05b4111f7e40ca582873618dfba105976d14c7c7ed"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v1_d3/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d0/q0/back-0.png",
+      "bytes": 201641,
+      "sha256": "712eac4b3a590f3ca8c8261009b3340ea456b7df54fc322fb4e67109696b5211"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d0/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d0/q1/back-0.png",
+      "bytes": 32451,
+      "sha256": "d789610b2e4cb8759821449b6cdb1129d718c6367ef3c6fdd0ea6102ec909a04"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d0/q1/front-0.png",
+      "bytes": 177445,
+      "sha256": "1d20bb1b52d83199bb587fda37369e7c9ffb0a5522d04713135a1fb816bc5dda"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d0/q2/back-0.png",
+      "bytes": 33731,
+      "sha256": "fda1b20809e8cd97f8c48942c2ed3b9f4999c1b701963ff98c70bdd7cfd98be2"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d0/q2/front-0.png",
+      "bytes": 196745,
+      "sha256": "908bb2843e536a85430885231e89644768a8d06f25d18f226d4fae9561d1d425"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d0/q3/back-0.png",
+      "bytes": 183762,
+      "sha256": "244be289ffa6500fdd6433a3cc9bafe72c8473af8926fe01409ad4a28e0f71b7"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d0/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d1/q0/back-0.png",
+      "bytes": 183787,
+      "sha256": "cbea9a099e6a6239cbe2eb4142c03e556d9db742e4070e65d3e93440d86bfa6a"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d1/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d1/q1/back-0.png",
+      "bytes": 201643,
+      "sha256": "242948d11f5b7931467e81d26d58c67d04bac36f852c841e54804ea6952e54aa"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d1/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d1/q2/back-0.png",
+      "bytes": 32451,
+      "sha256": "d789610b2e4cb8759821449b6cdb1129d718c6367ef3c6fdd0ea6102ec909a04"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d1/q2/front-0.png",
+      "bytes": 177435,
+      "sha256": "0608d3263667ed1e096b4129730f3b0e391668009d3a0d62031be4bfb971aa24"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d1/q3/back-0.png",
+      "bytes": 33731,
+      "sha256": "fda1b20809e8cd97f8c48942c2ed3b9f4999c1b701963ff98c70bdd7cfd98be2"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d1/q3/front-0.png",
+      "bytes": 196743,
+      "sha256": "177a3d76c6b6b25b75454971ac125699d8052866e1f8d4457d43fa67d0b4049e"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d2/q0/back-0.png",
+      "bytes": 33731,
+      "sha256": "fda1b20809e8cd97f8c48942c2ed3b9f4999c1b701963ff98c70bdd7cfd98be2"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d2/q0/front-0.png",
+      "bytes": 196743,
+      "sha256": "177a3d76c6b6b25b75454971ac125699d8052866e1f8d4457d43fa67d0b4049e"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d2/q1/back-0.png",
+      "bytes": 183784,
+      "sha256": "e9d125a56bb2d445b5f5759ef8497db3ceaa9bd3e83d2e2de0e07adf3844d3f6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d2/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d2/q2/back-0.png",
+      "bytes": 201643,
+      "sha256": "baa5f3eec61e42b1bd1007da5fa6cacc075324c7c3db72001dbcb7d1be3d5a1c"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d2/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d2/q3/back-0.png",
+      "bytes": 32451,
+      "sha256": "d789610b2e4cb8759821449b6cdb1129d718c6367ef3c6fdd0ea6102ec909a04"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d2/q3/front-0.png",
+      "bytes": 177446,
+      "sha256": "6b2c7592f98c1fada8cdf354c59e91f34b83636bbd6bd62f60edee35c02e2f59"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d3/q0/back-0.png",
+      "bytes": 32451,
+      "sha256": "d789610b2e4cb8759821449b6cdb1129d718c6367ef3c6fdd0ea6102ec909a04"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d3/q0/front-0.png",
+      "bytes": 177445,
+      "sha256": "1d20bb1b52d83199bb587fda37369e7c9ffb0a5522d04713135a1fb816bc5dda"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d3/q1/back-0.png",
+      "bytes": 33731,
+      "sha256": "fda1b20809e8cd97f8c48942c2ed3b9f4999c1b701963ff98c70bdd7cfd98be2"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d3/q1/front-0.png",
+      "bytes": 196745,
+      "sha256": "908bb2843e536a85430885231e89644768a8d06f25d18f226d4fae9561d1d425"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d3/q2/back-0.png",
+      "bytes": 183787,
+      "sha256": "cbea9a099e6a6239cbe2eb4142c03e556d9db742e4070e65d3e93440d86bfa6a"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d3/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d3/q3/back-0.png",
+      "bytes": 201643,
+      "sha256": "7289f1e63c3d8021056a1f015b544e5d7743f266fe773e6cf16dd36b44d8246d"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/ice_v2_d3/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d0/q0/back-0.png",
+      "bytes": 118505,
+      "sha256": "88874010ab6d87c15a47e5d394d5182148c7b38c64b3888bab149f2b4e4a5d3c"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d0/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d0/q1/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d0/q1/front-0.png",
+      "bytes": 102104,
+      "sha256": "f654d8055bed9d5ee1c44498b586b2cec30de34d849374b90767c8b258d477c0"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d0/q2/back-0.png",
+      "bytes": 16371,
+      "sha256": "c39335258a51b1e69f7373bcc98436feee57e6c8106c6d3b91783ada2ba72d11"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d0/q2/front-0.png",
+      "bytes": 111285,
+      "sha256": "0678213ff1c2ccea11d90b2c2dbef5867bbb661341da6f7e272b51691567a542"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d0/q3/back-0.png",
+      "bytes": 125392,
+      "sha256": "1c4ef19187219ad86f3db5378bc48f1861206278df6b90fce00d4ce05760251f"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d0/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d1/q0/back-0.png",
+      "bytes": 120969,
+      "sha256": "c3bbbc858a0aef6d9cbb2564e341d90dd4ca875b1c04dfec9450fbf595ebc0ad"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d1/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d1/q1/back-0.png",
+      "bytes": 112618,
+      "sha256": "9254e2a21a100208f09fdb2f23fdc122df0356b5140cf7fe0b71fd73bc2db742"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d1/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d1/q2/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d1/q2/front-0.png",
+      "bytes": 107470,
+      "sha256": "e11e6a4302e3c8a01004aa8b775eac4bf367bfda62417aa2e332ac8b611c9bf7"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d1/q3/back-0.png",
+      "bytes": 16371,
+      "sha256": "c39335258a51b1e69f7373bcc98436feee57e6c8106c6d3b91783ada2ba72d11"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d1/q3/front-0.png",
+      "bytes": 117500,
+      "sha256": "f7ad37dcf27d15685c3a8afdd6ef891dd3d9eaf03e2fa3fdbef6201e23a351c0"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d2/q0/back-0.png",
+      "bytes": 16371,
+      "sha256": "c39335258a51b1e69f7373bcc98436feee57e6c8106c6d3b91783ada2ba72d11"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d2/q0/front-0.png",
+      "bytes": 114869,
+      "sha256": "82c7443f1c4356d3805dba505cd61ccb9d9196b6e808b791ea993ca7a2e66c40"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d2/q1/back-0.png",
+      "bytes": 114643,
+      "sha256": "7fa67161bf2256f81d5bd343b2ff85c1ebd48e7e01e0b73d8ddefade30cf54fe"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d2/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d2/q2/back-0.png",
+      "bytes": 116570,
+      "sha256": "4630d2dae688eff1da2445e6d90e4baaa4c04ace1700beb575808f4975ac44df"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d2/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d2/q3/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d2/q3/front-0.png",
+      "bytes": 114828,
+      "sha256": "1531c741ee3b36dd3de40307e995e89c1634645c2b7c7381e60a96edce9e9ec3"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d3/q0/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d3/q0/front-0.png",
+      "bytes": 110050,
+      "sha256": "9a613a3fd00986071e1ed0f1624419355d1c2ccf1252ef1fbdf1df94c689a2c6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d3/q1/back-0.png",
+      "bytes": 16371,
+      "sha256": "c39335258a51b1e69f7373bcc98436feee57e6c8106c6d3b91783ada2ba72d11"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d3/q1/front-0.png",
+      "bytes": 107315,
+      "sha256": "62eb08d01fdf846e53e0db34014be3aa8cf37eb49e41d67a7980467d9b01b325"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d3/q2/back-0.png",
+      "bytes": 118429,
+      "sha256": "5ef3e1ea49bd756498860308d4fb06469fe878e048e68ab012a1df2ded36ff0a"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d3/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d3/q3/back-0.png",
+      "bytes": 122396,
+      "sha256": "023bdad7a780d1b852feb3d1505cd33e24f4f6124ed402a5500e0ec9beae48be"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v0_d3/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d0/q0/back-0.png",
+      "bytes": 118753,
+      "sha256": "d48aad7bb02413e28a2f7dbc18da3ad0c6bc452f9e9388b1fc280ec30f878547"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d0/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d0/q1/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d0/q1/front-0.png",
+      "bytes": 106727,
+      "sha256": "2de5174b9334905e5659777ecc1aa03d326d75baf8eaa1d52ad584f95862cd79"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d0/q2/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d0/q2/front-0.png",
+      "bytes": 112787,
+      "sha256": "eb3a3f5526f5d4a82d36e07cf7d2248194ed674fc1616c216ab2b6f12360e9f3"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d0/q3/back-0.png",
+      "bytes": 122141,
+      "sha256": "4533625b2ed55e03e6dde020a45137d22d045656727ed6d2a91bf007f2ccb807"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d0/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d1/q0/back-0.png",
+      "bytes": 118427,
+      "sha256": "1515082fd80f9b2948557d186500c41636bebdc448de40046a23f9d702f51acc"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d1/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d1/q1/back-0.png",
+      "bytes": 113867,
+      "sha256": "4f260a0e8d068ff960b94b5a07bb7e7ae4a5b144f3b5d7386a3397e4a460a2c4"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d1/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d1/q2/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d1/q2/front-0.png",
+      "bytes": 111354,
+      "sha256": "80f578b8e4d4937871de4913c7188a812346a3a051ba769da3be0dce40d74262"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d1/q3/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d1/q3/front-0.png",
+      "bytes": 118336,
+      "sha256": "2d047aa60d75b85587e9aee36a973120bbefc3e2d7c605fb33be61fa293080d4"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d2/q0/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d2/q0/front-0.png",
+      "bytes": 115961,
+      "sha256": "1fcaba99d3531adce18088faecbc6da1b2e1ccb27e0897219722c270f0300de8"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d2/q1/back-0.png",
+      "bytes": 111493,
+      "sha256": "27040922475a698627cc1548426b0c654f320e8064dd43c4a79e3dc5a9c7ae97"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d2/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d2/q2/back-0.png",
+      "bytes": 117553,
+      "sha256": "d44c7ac5838c6faa71634d96cfc90842faca59f6288b3985693072bce6a9bc0a"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d2/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d2/q3/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d2/q3/front-0.png",
+      "bytes": 118776,
+      "sha256": "36ef34085172db7e4aa5814297ce069789adabc9080499f7bd4392ddb45ddb9b"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d3/q0/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d3/q0/front-0.png",
+      "bytes": 112392,
+      "sha256": "f1f948e156c1b3eb7c955348189e72f9e015ceaa469635ebdfd3e33f9db8c9c6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d3/q1/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d3/q1/front-0.png",
+      "bytes": 108571,
+      "sha256": "b0dc736751d5664942d75c2967e2cdc79b2773ba8c5fee94d76aceac6dc43ead"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d3/q2/back-0.png",
+      "bytes": 115602,
+      "sha256": "0f4dfabfb8dea3d2e6a025cfcbbd87cd50de3891ac7f95f30ffe09fb4278c452"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d3/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d3/q3/back-0.png",
+      "bytes": 123543,
+      "sha256": "de18a3d6d65ac648dc09992a914fdea3f4cf07cf5479e8f2f434351b55bfbfd9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v1_d3/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d0/q0/back-0.png",
+      "bytes": 115102,
+      "sha256": "6919cb1c0d04f05c227e22b5a364228b772aab5bc658f1778f982b760559a785"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d0/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d0/q1/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d0/q1/front-0.png",
+      "bytes": 95429,
+      "sha256": "89792de61085beaffc7db79a25fea85024731e334bef2cc783e95b5b030db515"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d0/q2/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d0/q2/front-0.png",
+      "bytes": 111280,
+      "sha256": "464c9f02559af0d8d6bc1a8086e7d9ba17a7fa4fdb7f333b2723cf5f6ed3065a"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d0/q3/back-0.png",
+      "bytes": 115919,
+      "sha256": "da71bb1be2ff600f757a9c2d79aaeee3ae7d37e26fd53ef17dac1ee8b8fd5a84"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d0/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d1/q0/back-0.png",
+      "bytes": 111975,
+      "sha256": "8e951e0885f8bbbc9b25a94111c85a03e7171e7737c89da6a503507ad290e840"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d1/q0/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d1/q1/back-0.png",
+      "bytes": 109129,
+      "sha256": "015095ea84a86f8ac1068ad7eddc7fe2ea5271afb351934b73eca56050c17c1e"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d1/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d1/q2/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d1/q2/front-0.png",
+      "bytes": 101329,
+      "sha256": "1b5e29f5d2b9490fb4fd579a783e5c7d4bf75f797fe85cdad90379fdf9db65a8"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d1/q3/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d1/q3/front-0.png",
+      "bytes": 117737,
+      "sha256": "c343f8c90bda5aa9d6e7fe0a9345ebf66c192a28a81f18ae5dba65db39d8b526"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d2/q0/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d2/q0/front-0.png",
+      "bytes": 115274,
+      "sha256": "d8e6f07544b621b03d1234fe494af8522ba54c6fbfdc5b431334c2404435d58e"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d2/q1/back-0.png",
+      "bytes": 106413,
+      "sha256": "5d839b8523f668b1465631c439b4c424988f7841833306eb0ce03f50f885e4c2"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d2/q1/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d2/q2/back-0.png",
+      "bytes": 113092,
+      "sha256": "aec46a2731b3e4dc62225ea930924cf5900fb28a5224eff364584fecca711727"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d2/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d2/q3/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d2/q3/front-0.png",
+      "bytes": 108480,
+      "sha256": "7ecc5f555b126f50733bf2a380cdd5bf9ffe43479d23b957eb43e70fceef67b1"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d3/q0/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d3/q0/front-0.png",
+      "bytes": 102296,
+      "sha256": "ff3bb7abe47cff1eacd332b67c8e12088dd61a252d9dff828e9ded78f5a58708"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d3/q1/back-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d3/q1/front-0.png",
+      "bytes": 107868,
+      "sha256": "8ce892c6a37a12bb3114889de7b2655f39dfb0d2edf005da062d577f27b2d0b9"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d3/q2/back-0.png",
+      "bytes": 109831,
+      "sha256": "dce4b01927ddf0631e19472646af43e0568ffbe54416f1c50922f69e264ac263"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d3/q2/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d3/q3/back-0.png",
+      "bytes": 118825,
+      "sha256": "4670e384463317fe2824a3b2cffec04d326c1fc1056a1496010f5410e94ad2b3"
+    },
+    {
+      "path": "game/assets/wall_media/retirement/packed/stone_v2_d3/q3/front-0.png",
+      "bytes": 16350,
+      "sha256": "8fc8af1ab29c4ccc3d3447fbb86c5c18cd5da3c39f4ebe5124d95fe31235f4d6"
+    }
+  ]
+}

@@ -114,6 +114,8 @@ def validate_wall_modules(binding: SpatialMediaBinding,
             banks = (*assembly.modules, *((assembly.ring,) if assembly.ring is not None else ()))
             for bank in banks:
                 for identity in (bank.assetId, bank.applicationAssetId, bank.removalAssetId):
+                    if identity is None:
+                        continue
                     asset, source = assets.get(identity), storage.get(identity)
                     if asset is None or source is None or binding.assetPhase not in source.phases:
                         raise ValueError(f"Assembly phase lacks registered media: {identity}")
@@ -187,7 +189,8 @@ def validate_composition(draft: StudioSpellDraft, storage: Mapping[str, Projecti
     """Check the selected in-memory contract; never inspect or validate media files."""
     if draft.area is not None and draft.area.sprite is not None:
         raise ValueError(f"Selected recipe {draft.definitionRef} requires unsupported area.sprite")
-    uses = [(track.assetId, track.assetPhase, track.composition) for track in draft.media]
+    uses = [(identity, track.assetPhase, track.composition) for track in draft.media
+            for identity in (track.assetIdsByCamera or (track.assetId,))]
     projectile = draft.projectile
     if projectile is not None and projectile.sprite is not None:
         uses.extend((phase.assetId or projectile.sprite.assetId, phase.assetPhase, phase.composition)
@@ -202,3 +205,36 @@ def validate_composition(draft: StudioSpellDraft, storage: Mapping[str, Projecti
     for track in draft.media:
         if track.composition == "xyz_volume" and (track.orientation != "authored" or track.scaleWithActor):
             raise ValueError(f"XYZ cast media requires authored world orientation and scale: {track.id}")
+
+
+def validate_cell_modules(binding: SpatialMediaBinding,
+                          assets: Mapping[str, AuthoredProjectileAsset],
+                          storage: Mapping[str, ProjectileStorage]) -> None:
+    """Admit explicit per-cell paired banks and finite native quench contacts."""
+    layers = tuple(layer for layer in binding.layers if layer.cellVariants)
+    if not layers:
+        if binding.loopCrossfadeMs or binding.quenchVariants:
+            raise ValueError('Overlap/quench registration requires cell modules')
+        return
+    if len(layers)!=2 or {layer.side for layer in layers}!={'rear','front'} or len({len(layer.cellVariants) for layer in layers})!=1:
+        raise ValueError('Cell modules require complete paired variants')
+    selected = [(row.assetId,True,True) for layer in layers for row in layer.cellVariants]
+    selected += [(row.applicationAssetId,False,True) for layer in layers for row in layer.cellVariants]
+    selected += [(identity,False,False) for row in binding.quenchVariants for identity in (row.rearAssetId,row.frontAssetId)]
+    for identity,hold,spatial in selected:
+        asset,source=assets.get(identity),storage.get(identity)
+        if asset is None or source is None or binding.assetPhase not in source.phases:
+            raise ValueError(f'Cell phase lacks registered media: {identity}')
+        phase={'cast':asset.phases.cast,'travel':asset.phases.travel,'impact':asset.phases.impact}[binding.assetPhase]
+        if phase is None or (phase.fps or asset.fps)!=binding.fps or phase.loop!=hold:
+            raise ValueError(f'Cell phase has an inconsistent native clock: {identity}')
+        if hold and binding.holdStartFrame+binding.holdFrames>phase.frames:
+            raise ValueError(f'Cell hold exceeds its delivered frames: {identity}')
+        media=source.phases[binding.assetPhase]
+        if spatial:
+            if media.surfaceFrames is None or media.surfaceFrames.componentsByFacing is None or any(
+                    facing not in media.surfaceFrames.componentsByFacing for facing in ('E','S','W','N')):
+                raise ValueError(f'Cell source requires four closest-surface cameras: {identity}')
+        elif any(layer.partsByFacing is None or any(facing not in layer.partsByFacing
+                or len(layer.partsByFacing[facing])!=phase.frames for facing in ('E','S','W','N')) for layer in media.layers):
+            raise ValueError(f'Cell contact requires four native cameras: {identity}')

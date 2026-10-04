@@ -1,0 +1,228 @@
+{
+  "schema": "dnd.spellStudioDrafts",
+  "version": 3,
+  "spells": [
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "spell",
+        "content_id": "spell.telekinesis",
+        "content_version": 1,
+        "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+      },
+      "elementColors": {
+        "primary": 13756903,
+        "secondary": 7982570,
+        "tertiary": 3703458
+      },
+      "cast": {
+        "actionClip": "Attack5",
+        "bodyPlaybackSpeed": 1,
+        "releaseFrame": 7,
+        "equipment": {
+          "kind": "hidden"
+        },
+        "effects": [],
+        "recovery": {
+          "enabled": false,
+          "bodyClip": "Taunt",
+          "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "original-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "colors": {
+            "source": "override",
+            "primary": 7982570,
+            "mode": "paletteSwap"
+          },
+          "sourceSheet": "/utility/telekinesis/Attack5-hands.png",
+          "blendMode": "screen"
+        }
+      },
+      "media": [
+        {
+          "id": "resisted-hand-back",
+          "assetId": "utility.telekinesis.grab.back",
+          "attachment": "target_ground",
+          "requiredSaveSuccess": true,
+          "durationMs": 1750,
+          "fadeInMs": 600,
+          "fadeOutMs": 700,
+          "startOffsetMs": 200,
+          "scale": 0.8380524814062786,
+          "viewFacing": "E",
+          "depth": "behind_body",
+          "timeMap": [
+            {
+              "elapsedMs": 0,
+              "sourceFrame": 0
+            },
+            {
+              "elapsedMs": 1750,
+              "sourceFrame": 0
+            }
+          ],
+          "emissionPointByFacing": {
+            "E": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "SE": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "S": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "SW": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "W": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "NW": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "N": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "NE": {
+              "x": 0,
+              "y": 23.33452377915607
+            }
+          }
+        },
+        {
+          "id": "resisted-hand-front",
+          "assetId": "utility.telekinesis.grab.front",
+          "attachment": "target_ground",
+          "requiredSaveSuccess": true,
+          "durationMs": 1750,
+          "fadeInMs": 600,
+          "fadeOutMs": 700,
+          "startOffsetMs": 200,
+          "scale": 0.8380524814062786,
+          "viewFacing": "E",
+          "depth": "front_body",
+          "timeMap": [
+            {
+              "elapsedMs": 0,
+              "sourceFrame": 0
+            },
+            {
+              "elapsedMs": 1750,
+              "sourceFrame": 0
+            }
+          ],
+          "emissionPointByFacing": {
+            "E": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "SE": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "S": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "SW": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "W": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "NW": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "N": {
+              "x": 0,
+              "y": 23.33452377915607
+            },
+            "NE": {
+              "x": 0,
+              "y": 23.33452377915607
+            }
+          }
+        }
+      ],
+      "contact": {
+        "delayMs": 0
+      },
+      "condition": {
+        "anchor": "effect",
+        "delayMs": 0,
+        "feedbackEnabled": false
+      },
+      "displacementLayers": [
+        {
+          "id": "displacement.telekinesis.back",
+          "assetId": "displacement.telekinesis.back",
+          "category": "registered-displacement",
+          "animation": "finite",
+          "fps": 32,
+          "attachment": "body",
+          "offsetY": 12.444444444444443,
+          "activeDuring": [
+            "idle",
+            "move",
+            "jump",
+            "forced_move",
+            "attack",
+            "cast",
+            "act",
+            "hit"
+          ],
+          "priority": 30,
+          "colors": {
+            "primary": 13756903,
+            "secondary": 7982570,
+            "tertiary": 3703458
+          },
+          "drawOrder": "behind_body",
+          "fadeInMs": 300
+        },
+        {
+          "id": "displacement.telekinesis.front",
+          "assetId": "displacement.telekinesis.front",
+          "category": "registered-displacement",
+          "animation": "finite",
+          "fps": 32,
+          "attachment": "body",
+          "offsetY": 12.444444444444443,
+          "activeDuring": [
+            "idle",
+            "move",
+            "jump",
+            "forced_move",
+            "attack",
+            "cast",
+            "act",
+            "hit"
+          ],
+          "priority": 30,
+          "colors": {
+            "primary": 13756903,
+            "secondary": 7982570,
+            "tertiary": 3703458
+          },
+          "drawOrder": "in_front_of_body",
+          "fadeInMs": 300
+        }
+      ]
+    }
+  ]
+}

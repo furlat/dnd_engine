@@ -1,0 +1,9 @@
+# Independent root review: item attachments and destination selection
+
+Bounded approval after reading the actual native selection, ordinary player/AI command route, retained item lifetime and map drawing changes. This is not whole-plan completion or gallery acceptance.
+
+Continual Flame environment/device/static attachments use the real object's currently rendered alpha and item UUID. They bracket the existing physical draw command rather than extending its obstruction silhouette. Fixture-depth indices point to the original body after inserting rear layers; the nonempty equal-owner exclusion preserves ordering within that composite while leaving other bodies in the ordinary depth calculation. Exact effect membership and provider tokens gate attachments, and the existing witnessed application clock survives transfers. No live registry reads, second clock or spell-specific app dispatcher were added. Legacy merged primitive walls remain an explicit registration gap; this approval concerns the current environment/device/static and equipment routes.
+
+Creature-plus-destination selection is a passive capability used by native discovery, human controls and AI validation. Discovery has no event side effects. Submission requires one destination, and the selected action validates current creature/support state before expenditure. Existing position options, map picking, keyboard confirmation and undo are reused. Telekinesis first cast and retained repeat use the same command path; no spell name is tested by controls.
+
+Independent root run: 31 passed, `/tmp/dnd-cf-tk-independent-final.log`, covering actual saved Continual object histories in four cameras, native selection, human/UI/session/item-use routing and dependency boundaries. The implementer's separate receipts retain the larger bounded runs. No new assets or external chat messages occurred in this review.

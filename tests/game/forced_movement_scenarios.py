@@ -18,6 +18,7 @@ from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.materialization import CreatureDeploymentRole, CreaturePossessionMode
 from dnd.core.content.recipes import ContentRecipe
 from dnd.core.equipment_types import BodyPart
+from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import Event, EventPhase, EventQueue, ForcedMovementEvent, StepMovementEvent
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
@@ -61,11 +62,13 @@ def forced_movement_history(
     blocker_position: tuple[int, int] | None = None, watcher_position: tuple[int, int] | None = None,
     target_identity: str | None = None, target_hp: Literal[4, 40] = 40,
     mechanism: Literal["shove", "telekinesis"] = "shove", destination: tuple[int, int] | None = None,
+    initial_cast: bool = False, resisted: bool = False, allied: bool = False,
 ) -> CapturedHistory:
     """Execute a Shove or an earned Telekinesis Move through action discovery.
 
-    For Telekinesis, the actual cast/grab establishes the returned baseline;
-    the complete granted Move lineage is the reviewed forced-movement action.
+    For Telekinesis, a paid cast resisted by the recipient establishes the
+    retained repeat permission. The next paid repeat selects this same creature
+    and an explicit landing through ordinary discovery and command submission.
     Map content owns hazards, support transitions and blocking objects. An
     optional native creature carries an opportunity handler beside the route.
     """
@@ -87,6 +90,8 @@ def forced_movement_history(
                 possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
             )
         actors = [source, target]
+        if allied:
+            target.faction = source.faction
         if blocker_position is not None:
             actors.append(_modular_actor("Blocking creature", blocker_position))
         watcher = None
@@ -151,27 +156,46 @@ def forced_movement_history(
         def execute(behavior: str, *, position: tuple[int, int] | None = None) -> Event:
             available = get_available_actions(source)
             action = next(row for row in available.all_actions if row.behavior_id == behavior and row.valid_targets)
-            option = next(row for row in action.valid_targets if row.position == position) if position is not None else next(
-                row for row in action.valid_targets if row.target_uuid == target.uuid)
+            entity_destination = (action.position_selection is not None
+                                  and action.position_selection.kind == "entity_destination")
+            option = (next(row for row in action.valid_targets if row.target_uuid == target.uuid)
+                      if entity_destination or position is None else
+                      next(row for row in action.valid_targets if row.position == position))
             start = EventQueue.event_cursor()
-            result = execute_by_index(source, action.template_name, option.index, available=available)
+            result = execute_by_index(source, action.template_name, option.index, available=available,
+                extra_target_positions=[position] if entity_destination and position is not None else None)
             assert result is not None and result.phase is EventPhase.COMPLETION
             retain(start)
             return result
 
         random.seed(seed)
-        if mechanism == "telekinesis":
-            execute("spell.telekinesis")
+        if mechanism == "telekinesis" and not initial_cast:
+            with fixed_dice_faces(*([20] * 16)):
+                execute("spell.telekinesis", position=destination)
             assert source.action_economy.spell_slot_5.normalized_score == 0
+            assert source.action_economy.actions.normalized_score == 0
+            assert target.position == target_position
             assert "Concentrating" in source.active_conditions
+            start = EventQueue.event_cursor()
+            encounter.next_turn()
+            while encounter.get_current_entity() is not source:
+                encounter.next_turn()
+            retain(start)
+            random.seed(seed)
         before = latest
         history.clear()
         movement_before = target.action_economy.movement_remaining()
         actions_before = source.action_economy.actions.normalized_score
         bonus_before = source.action_economy.bonus_actions.normalized_score
         watcher_reactions = watcher.action_economy.reactions.normalized_score if watcher is not None else None
-        result = execute("action.shove" if mechanism == "shove" else "action.spell.telekinesis.move", position=destination)
-        assert source.action_economy.actions.normalized_score == actions_before
+        behavior = ("action.shove" if mechanism == "shove" else
+                    "spell.telekinesis" if initial_cast else "action.spell.telekinesis.move")
+        if resisted:
+            with fixed_dice_faces(*([20] * 16)):
+                result = execute(behavior, position=destination)
+        else:
+            result = execute(behavior, position=destination)
+        assert source.action_economy.actions.normalized_score == actions_before - (mechanism == "telekinesis")
         assert source.action_economy.bonus_actions.normalized_score == bonus_before - (mechanism == "shove")
         if target.can_take_actions():
             assert target.action_economy.movement_remaining() == movement_before

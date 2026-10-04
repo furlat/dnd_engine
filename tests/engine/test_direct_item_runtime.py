@@ -252,14 +252,14 @@ def test_guardian_spell_constructs_private_direct_object_and_preserves_zone_life
 
     result = GuardianOfFaith(
         source_entity_uuid=caster.uuid,
-        end_position=(10, 7),
+        end_position=(8, 7),
         cast_at_level=4,
     ).apply()
 
     assert isinstance(result, SpellEvent) and not result.canceled
     guardian = next(
         block
-        for object_uuid in get_map().get_objects_at((10, 7))
+        for object_uuid in get_map().get_objects_at((8, 7))
         if isinstance((block := BaseBlock.get(object_uuid)), GuardianOfFaithObject)
     )
     zone = next(

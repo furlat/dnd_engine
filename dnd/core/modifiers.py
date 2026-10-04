@@ -356,6 +356,8 @@ class ContextualModifier(BaseObject):
             contextual evaluator fails. Failures are logged; strict callers
             use :meth:`execute_callable`.
         """
+        if not self.contributions_active():
+            return None
         try:
             result = self.callable(
                 source_entity_uuid,

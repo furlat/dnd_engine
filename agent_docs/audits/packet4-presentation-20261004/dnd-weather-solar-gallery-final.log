@@ -1,0 +1,15 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+Capture once: sleet-storm-lifecycle
+Capture once: sunbeam-lifecycle
+Capture once: sunburst-area
+[1/9] sleet-storm-lifecycle
+[2/9] sleet-storm-lifecycle--recipient
+[3/9] sleet-storm-lifecycle--second
+[4/9] sunbeam-lifecycle
+[5/9] sunbeam-lifecycle--recipient
+[6/9] sunbeam-lifecycle--second
+[7/9] sunburst-area
+[8/9] sunburst-area--recipient
+[9/9] sunburst-area--second
+9/9 cases passed; gallery: /mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/spell-packet4-review/runs/20261004T062819Z-2faa58/index.html
+Serve: /home/tommaso/.cache/dnd-engine/venv/bin/python3 -m devtools.animation_review.serve --directory /mnt/c/users/tommaso/documents/dev/dnd_engine/.runtime/spell-packet4-review

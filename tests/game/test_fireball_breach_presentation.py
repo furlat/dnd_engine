@@ -138,12 +138,16 @@ def test_slow_serial_breaches_keep_one_continuous_explosion_until_last_reach():
     assert len(cast.area_reach) == 4
     assert cast.timeline.ground_delivery is not None
     impact, = [row for row in cast.timeline.ground_delivery.projectile_intervals if row.name == 'impact']
+    assert cast.area_reach[0][0] == cast.timeline.release_ms < impact.start_ms
+    assert all(at >= impact.start_ms for at, _ in cast.area_reach[1:])
     last_reach = cast.area_reach[-1][0]
     assert last_reach - impact.start_ms > 2000
     assert impact.end_ms > last_reach
     columns = []
     for at, _ in cast.area_reach:
-        frame = sample_choreography(bound, at + 1).clips[0].sample
+        # Initial geometry is available for formation at release; explosion
+        # samples still start at contact. Later reaches wait for real breaches.
+        frame = sample_choreography(bound, max(at, impact.start_ms) + 1).clips[0].sample
         projectile, = [p for p in frame.projectiles if p.phase == 'impact']
         columns.append(projectile.column)
     assert columns == sorted(set(columns))

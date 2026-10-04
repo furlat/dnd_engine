@@ -31,6 +31,7 @@ _SPELL_CATALOG_METADATA_ATTRIBUTE = "__dnd_spell_catalog_metadata__"
 SpellCatalogTargetType = Literal[
     "self",
     "entity",
+    "object",
     "multi_entity",
     "position",
     "position_aoe",

@@ -11,11 +11,15 @@ from uuid import UUID, uuid4
 from pydantic import Field, PrivateAttr, model_validator
 
 from dnd.core.base_block import BaseBlock, MovementMode, PreparedConditionRemovals
+from dnd.core.base_object import BaseObject
+from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
+from dnd.core.effect_types import AntimagicException, ObjectSectionVolume
+from dnd.core.life_types import RemainsDisposition
 from dnd.core.item_properties import ItemProperty
 from dnd.items.property_composition import ItemPropertyContribution, install_item_properties, release_item_properties
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import DiceRoll
-from dnd.core.gridmap import CommittedObjectRemovals, get_map
+from dnd.core.gridmap import CommittedObjectRemovals, PreparedObjectPlacement, get_map
 from dnd.core.events import (
     Damage,
     Event,
@@ -28,7 +32,7 @@ from dnd.core.events import (
 )
 from dnd.core.equipment_types import EquipmentSlot
 from dnd.types.world import CardinalDirection
-from dnd.types.physical_access import ContactPassage
+from dnd.types.physical_access import ContactPassage, PhysicalAccess
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement, WorldPlacementSpec
 from dnd.core.item_types import (
     EquippedVisualPolicy,
@@ -189,6 +193,21 @@ class BaseItem(BaseBlock):
 
 
 
+    def refresh_antimagic_contributions(self) -> None:
+        position = (self.antimagic_suspended_placement.position
+            if self.antimagic_suspended_placement is not None else self.get_position())
+        providers = ({row.provider_uuid for row in SpellProtectionRegistry.get_antimagic_suppressions({position})}
+            if position is not None else set())
+        self.suppression_provider_uuids = set() if self.antimagic_exempt() else providers
+        for condition in self.active_conditions_by_uuid.values():
+            if condition.magical_origin and not condition.antimagic_exempt():
+                for identity in providers | condition.suppression_provider_uuids:
+                    condition.set_suppression(identity, identity in providers)
+
+    def on_world_placement_committed(self, event: Event) -> None:
+        self.refresh_antimagic_contributions()
+        super().on_world_placement_committed(event)
+
     def on_long_rest(self, actor_uuid: UUID) -> None:
         """Default possessions have no item-owned rest resource."""
         return None
@@ -196,6 +215,28 @@ class BaseItem(BaseBlock):
     is_usable: bool = Field(default=False, description="Can be used (activate effect)")
     is_consumable: bool = Field(default=False, description="Destroyed on use")
     is_magical: bool = Field(default=False, description="Rules-facing magic-item protection, independent of artwork.")
+    removed_local_bands: tuple[tuple[int, int, int], ...] = ()
+    magically_created: bool = False
+    creation_condition_uuid: UUID | None = Field(default=None, exclude=True)
+    antimagic_suspended_placement: WorldObjectPlacement | None = Field(default=None, exclude=True)
+    antimagic_exception: AntimagicException | None = None
+    suppression_provider_uuids: set[UUID] = Field(default_factory=set, exclude=True)
+
+    @classmethod
+    def get_all_items(cls) -> tuple['BaseItem', ...]:
+        """Read existing live block identities, including temporarily absent creations."""
+        return tuple(block for block in BaseBlock._registry.values() if isinstance(block, BaseItem))
+
+    def antimagic_exempt(self) -> bool:
+        owner = BaseCondition.get(self.creation_condition_uuid) if self.creation_condition_uuid else None
+        return self.antimagic_exception is not None or (isinstance(owner, BaseCondition) and owner.antimagic_exempt())
+
+    def contributions_active(self) -> bool:
+        return BaseBlock.get(self.uuid) is self and not self.suppression_provider_uuids
+
+    def allows_contribution_at(self, position: tuple[int, int] | None) -> bool:
+        return self.contributions_active()
+
     known_to_creator: bool = Field(default=False, description="Creator retains knowledge of this authored construction.")
     stack_count: int = Field(
         default=1,
@@ -261,6 +302,7 @@ class BaseItem(BaseBlock):
     @model_validator(mode="after")
     def validate_item_id(self) -> "BaseItem":
         validate_namespaced_id(self.item_id, "item_id")
+        BaseObject.register(self)
         seen = {self.uuid}
         parent_uuid = self.supported_by_uuid
         while parent_uuid is not None:
@@ -312,6 +354,7 @@ class BaseItem(BaseBlock):
         """
         return ItemPresentationState(
             item_uuid=self.uuid,
+            suppression_provider_uuids=tuple(sorted(self.suppression_provider_uuids, key=str)),
             item_id=self.item_id,
             name=self.name,
             description=self.description,
@@ -327,7 +370,9 @@ class BaseItem(BaseBlock):
             stack_id=self.stack_id,
             visual_item_name=self.visual_item_name or self.name,
             visual_variant_id=self.visual_variant_id,
-            item_effects=tuple(effect for condition in self.active_conditions_by_uuid.values()
+            item_effects=tuple(effect.model_copy(update={
+                "suppression_provider_uuids": tuple(sorted(condition.suppression_providers(), key=str)),
+            }) for condition in self.active_conditions_by_uuid.values()
                 if (effect := condition.snapshot_item_effect()) is not None),
             equipped_visual_policy=self.equipped_visual_policy,
             stack_count=self.stack_count if stack_count is None else stack_count,
@@ -407,6 +452,7 @@ class BaseItem(BaseBlock):
         parent_event: Optional[Event] = None,
     ) -> ItemLocationStateEvent:
         """Publish one non-vetoable completion fact after location has committed."""
+        self.refresh_antimagic_contributions()
         source_uuid = source_entity_uuid or owner_uuid or self.source_entity_uuid
         if location is ItemLocation.FLOOR and world_placement is None:
             world_placement = get_map().get_object_placement(self.uuid)
@@ -432,6 +478,7 @@ class BaseItem(BaseBlock):
         )
         execution = declaration.phase_to(EventPhase.EXECUTION)
         effect = execution.phase_to(EventPhase.EFFECT)
+        self.on_world_placement_committed(effect)
         return effect.phase_to(EventPhase.COMPLETION, use_register=True)
 
     def blocks_walking(self, requesting_entity_uuid: Optional[UUID] = None,
@@ -456,7 +503,7 @@ class BaseItem(BaseBlock):
     def get_world_placement_spec(self) -> WorldPlacementSpec:
         if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
             return self.destruction_profile.placement_spec or super().get_world_placement_spec()
-        return super().get_world_placement_spec()
+        return super().get_world_placement_spec().model_copy(update={"removed_local_bands": self.removed_local_bands})
 
     def get_contact_passage(self) -> ContactPassage:
         structure = self.get_boundary_structure()
@@ -620,6 +667,17 @@ class BaseItem(BaseBlock):
             return
         self.position = placement.position
         self.tile_uuid = placement.tile_uuid
+        local = []
+        for x, y, height in placement.removed_bands:
+            dx, dy = x - placement.position[0], y - placement.position[1]
+            if placement.orientation is CardinalDirection.SOUTH:
+                dx, dy = -dy, dx
+            elif placement.orientation is CardinalDirection.WEST:
+                dx, dy = -dx, -dy
+            elif placement.orientation is CardinalDirection.NORTH:
+                dx, dy = dy, -dx
+            local.append((dx, dy, height - placement.base_height_steps))
+        self.removed_local_bands = tuple(local)
 
     def on_grid_object_placed(self, placement: WorldObjectPlacement) -> None:
         """Make location snapshots agree with the committed spatial indexes."""
@@ -942,23 +1000,115 @@ class BaseItem(BaseBlock):
     def is_object_known_to(self, observer_uuid: UUID) -> bool:
         return self.known_to_creator and self.source_entity_uuid == observer_uuid
 
+    def commit_disintegration(self, prepared: PreparedItemRetirement, *,
+            preserved_contents: tuple[tuple["BaseItem", PreparedObjectPlacement], ...] = ()) -> ItemDestructionEvent:
+        """Publish dust from an already admitted ordinary item retirement."""
+        parent = prepared.parent_event
+        event = EventQueue.publish_preflighted(ItemDestructionEvent(
+            source_entity_uuid=parent.source_entity_uuid if parent is not None else self.source_entity_uuid,
+            target_entity_uuid=self.uuid, item_uuid=self.uuid,
+            previous_state=self.to_item_presentation_state(),
+            previous_placement=get_map().get_object_placement(self.uuid),
+            parent_event=parent.uuid if parent is not None else None,
+            remains_disposition=RemainsDisposition.DISINTEGRATED,
+            destroyed_item_uuids=(self.uuid,),
+            preserved_item_uuids=tuple(item.uuid for item, _ in preserved_contents),
+            use_register=False,
+        ))
+        for phase in (EventPhase.EXECUTION, EventPhase.EFFECT):
+            event = EventQueue.publish_committed_phase(
+                event.model_copy(update={"use_register": False}).phase_to(phase))
+        for item, drop in preserved_contents:
+            container = BaseBlock.get(item.stored_in_uuid) if item.stored_in_uuid is not None else None
+            if container is not None:
+                container.remove_contained_item(item.uuid, parent_event=event, reason=ItemReleaseReason.OWNER_DEPARTED)
+            item.owner_uuid = None
+            item.stored_in_uuid = None
+            get_map().commit_object_placement(drop)
+            item.publish_location_state(ItemLocation.FLOOR, parent_event=event)
+        prepared.parent_event = event
+        # Dust has no authored broken furniture remnant or repairable body.
+        self.integrity = ItemIntegrity.DESTROYED
+        self.commit_retirement(prepared)
+        return event.phase_to(EventPhase.COMPLETION, resulting_state=None)
+
+    def disintegrate_section(self, volume: ObjectSectionVolume, parent_event: Event) -> bool:
+        event = ItemDestructionEvent(source_entity_uuid=parent_event.source_entity_uuid,
+            target_entity_uuid=self.uuid, item_uuid=self.uuid,
+            previous_state=self.to_item_presentation_state(),
+            previous_placement=get_map().get_object_placement(self.uuid), affected_volume=volume,
+            remains_disposition=RemainsDisposition.DISINTEGRATED, parent_event=parent_event.uuid)
+        event = event.phase_to(EventPhase.EXECUTION)
+        if not event.canceled:
+            event = event.phase_to(EventPhase.EFFECT)
+        if event.canceled:
+            return False
+        if not get_map().remove_object_section(self.uuid, volume, event):
+            event.cancel(status_message="Object section removal was refused")
+            return False
+        event.phase_to(EventPhase.COMPLETION, resulting_state=self.to_item_presentation_state(),
+            resulting_placement=get_map().get_object_placement(self.uuid))
+        return True
+
     def disintegration_error(self) -> str | None:
         if self.is_magical:
             return "Magic items are unaffected by Disintegrate"
+        if get_map().get_object_placement(self.uuid) is None:
+            return "Disintegrate requires a placed object"
+        return None
+
+    def disintegration_volume(self, parent_event: Event) -> ObjectSectionVolume | None:
         placement = get_map().get_object_placement(self.uuid)
         if placement is None:
-            return "Disintegrate requires a placed object"
-        xs = [p[0] for p in placement.positions]
-        ys = [p[1] for p in placement.positions]
-        if (max(xs) - min(xs) > 1 or max(ys) - min(ys) > 1
-                or placement.top_height_steps - placement.base_height_steps > 2):
-            return "Partial disintegration of larger objects is not yet supported"
-        return None
+            return None
+        xs, ys = zip(*placement.positions)
+        heights = tuple(height for position in placement.positions for height in placement.band_heights(position))
+        if (max(xs) - min(xs) <= 1 and max(ys) - min(ys) <= 1
+                and max(heights) - min(heights) <= 1):
+            return None
+        contact = get_map().attack_object_contact(parent_event.source_entity_uuid, self.uuid,
+            range_feet=60, access=PhysicalAccess.PROJECTILE)
+        if contact is None:
+            return None
+        minimum = (min(contact[0], max(xs) - 1) if max(xs) > min(xs) else contact[0],
+                   min(contact[1], max(ys) - 1) if max(ys) > min(ys) else contact[1])
+        height = min(placement.band_heights(contact), default=placement.base_height_steps)
+        return ObjectSectionVolume(minimum_position=minimum, base_height_steps=height)
 
     def disintegrate(self, parent_event: Event) -> bool:
         if self.disintegration_error() is not None:
             return False
-        self.retire(parent_event)
+        if get_map().attack_object_contact(parent_event.source_entity_uuid, self.uuid,
+                range_feet=60, access=PhysicalAccess.PROJECTILE) is None:
+            return False
+        volume = self.disintegration_volume(parent_event)
+        if volume is not None:
+            return self.disintegrate_section(volume, parent_event)
+        # A targeted container is the object hit, not every object stored inside it.
+        # Admit its ordinary contents spill before retiring its storage block.
+        contents: list[tuple[BaseItem, PreparedObjectPlacement]] = []
+        storage = self.get_storage_block()
+        prepared = None
+        accepted = False
+        try:
+            for item in self.get_all_items() if storage is not None else ():
+                if storage is None or item.stored_in_uuid != storage.uuid:
+                    continue
+                drop = get_map().prepare_object_placement(item.uuid, self.position, parent_event.uuid)
+                if drop is None:
+                    return False
+                contents.append((item, drop))
+            prepared = self.prepare_retirement(parent_event)
+            if prepared is None or not all(get_map().validate_prepared_object_placement(drop) for _, drop in contents):
+                return False
+            accepted = True
+            self.commit_disintegration(prepared, preserved_contents=tuple(contents))
+        finally:
+            if not accepted:
+                if prepared is not None:
+                    self.cancel_retirement(prepared)
+                for _, drop in contents:
+                    get_map().cancel_object_placement(drop, "Disintegration container removal was refused")
         return BaseBlock.get(self.uuid) is None
 
     @property
@@ -1094,7 +1244,7 @@ class WorldItem(BaseItem):
     def get_world_placement_spec(self) -> WorldPlacementSpec:
         if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
             return super().get_world_placement_spec()
-        return self.world_placement_spec
+        return self.world_placement_spec.model_copy(update={"removed_local_bands": self.removed_local_bands})
 
     def get_boundary_structure(self) -> BoundaryStructure | None:
         if self.integrity is ItemIntegrity.DESTROYED and self.destruction_profile is not None:
@@ -1217,6 +1367,8 @@ class UsableItem(BaseItem):
     use_requirement: EquippedSourceRequirement | None = None
 
     def use_admission_error(self, actor_uuid: UUID) -> Optional[str]:
+        if self.is_magical and not self.contributions_active():
+            return "The item's magical properties are suppressed"
         requirement = self.use_requirement
         if requirement is not None and (not self.is_equipped or self.owner_uuid != actor_uuid
                 or self.equipped_slot != requirement.slot.value):

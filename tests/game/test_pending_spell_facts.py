@@ -271,10 +271,12 @@ def test_committed_speed_is_sampled_before_arrival_suppresses_haste(arena):
     cast(anchor, "spell.haste", target_entity=caster)
     next_turn(turns, caster)
     assert caster.action_economy.current_speed() == 60
+    haste = caster.active_conditions["Haste"]
     cursor = EventQueue.event_cursor()
     cast(caster, "action.move", position=(3, 3))
-    assert caster.position == (3, 3) and "Haste" not in caster.active_conditions
+    assert caster.position == (3, 3) and caster.active_conditions["Haste"] is haste
+    assert haste.suppression_provider_uuids == {field.uuid}
     steps = [event for _, event in EventQueue.iter_events_since(cursor)
              if isinstance(event, StepMovementEvent) and event.phase is EventPhase.COMPLETION]
     assert len(steps) == 1 and steps[0].committed and steps[0].resolved_speed_feet == 60
-    assert caster.action_economy.current_speed() != 60
+    assert caster.action_economy.current_speed() == 30

@@ -9,8 +9,10 @@ import pygame
 from game.animation_types import AnimationData
 from game.draw_commands import DrawCommand
 from game.player_facts import PlayerState
-from game.portal_animation import PortalTransferCue
-from game.portal_art import PortalBank, PortalHatch, portal_frame
+from game.portal_animation import PortalTransferCue, portal_departure_contact, portal_arrival_contact
+from game.portal_art import PortalBank, PortalHatch, PortalArt, DoorwayArt, portal_frame
+from game.animation import view_facing
+from game.registered_media import registered_media_blits
 from game.projection import Camera, painter_key, project_screen
 from game.world_animation import WorldTransitionSample
 
@@ -64,7 +66,7 @@ def portal_draw_commands(state: PlayerState, data: AnimationData, presentation_m
     if state.senses is not None:
         for identity, effect in state.senses.spatial_effects.items():
             art = data.portals.get(effect.content_ref.content_id)
-            if art is None or effect.trap_state is None:
+            if not isinstance(art, PortalArt) or effect.trap_state is None:
                 continue
             active = effect.trap_state.value == "activated"
             change = changes.get(identity)
@@ -88,6 +90,9 @@ def portal_draw_commands(state: PlayerState, data: AnimationData, presentation_m
                         _hatch_image(art.hatch, frame, camera, scale), art.hatch.pivot,
                         scale, camera, "portal_hatch", frame))
     for cue, elapsed in transfers:
+        if isinstance(cue.art, DoorwayArt):
+            commands.extend(_doorway_commands(cue,elapsed,camera))
+            continue
         if cue.arrival is None or not cue.exit_open_ms <= elapsed < cue.complete_ms:
             continue
         # Endpoint permission does not turn the entrance view into a remote
@@ -101,6 +106,37 @@ def portal_draw_commands(state: PlayerState, data: AnimationData, presentation_m
         contact = cue.arrival
         commands.append(_command(str(cue.event_uuid), contact.grid, contact.elevation_steps,
             _bank_image(bank, frame, camera, scale), bank.pivot, scale, camera, "portal_exit", frame))
+    return tuple(commands)
+
+
+def _doorway_commands(cue: PortalTransferCue, elapsed: float, camera: Camera) -> tuple[DrawCommand, ...]:
+    art = cue.art
+    assert isinstance(art,DoorwayArt)
+    if not cue.start_ms <= elapsed < cue.complete_ms:
+        return ()
+    age = elapsed-cue.start_ms
+    if elapsed >= cue.exit_close_ms:
+        frame = art.holdEndFrame + int((elapsed-cue.exit_close_ms)*art.fps/1000)
+    elif age < art.openingMs:
+        frame = int(age*art.fps/1000)
+    else:
+        # Shared opening and quiet native held samples for both admitted endpoints.
+        frame = art.holdFirstFrame + int((age-art.openingMs)*art.fps/1000) % (art.holdEndFrame-art.holdFirstFrame)
+    commands = []
+    for endpoint, contact in (('entrance',cue.departure),('exit',cue.arrival)):
+        if contact is None:
+            continue
+        position = (contact.grid[0],contact.grid[1]-art.thresholdCells)
+        anchor = project_screen(position,camera,elevation_steps=contact.elevation_steps)
+        for side, identity in (('back',art.back),('front',art.front)):
+            key = painter_key(position,elevation_steps=contact.elevation_steps,quadrant=camera.quadrant,
+                role='actor',identity=(str(cue.event_uuid),endpoint,side))
+            key = (*key[:3], key[3]+(-1 if side=='back' else 1),key[4])
+            for image,destination,blend in registered_media_blits(cue.data,identity,'impact',frame,
+                    view_facing('E',camera.quadrant,cue.data),scale=art.scale*camera.zoom,
+                    anchor=anchor,rows={}):
+                commands.append(DrawCommand(key,image,destination,blend,
+                    (str(cue.event_uuid),endpoint,identity,'doorway',frame)))
     return tuple(commands)
 
 
@@ -127,6 +163,18 @@ def clip_portal_bodies(commands: tuple[DrawCommand, ...], camera: Camera,
         cue, elapsed = falling_sample
         contact = cue.departure if identity in falling else cue.arrival
         assert contact is not None
+        if isinstance(cue.art,DoorwayArt):
+            sampled = portal_departure_contact(cue,elapsed) or portal_arrival_contact(cue,elapsed)
+            assert sampled is not None
+            ground = project_screen(sampled.grid,camera,elevation_steps=sampled.elevation_steps)
+            dx = (np.arange(command.surface.width)[:,None]+command.destination[0]+.5-ground[0])/(128*camera.zoom)
+            world_y = sampled.grid[1] + dx * (-1 if camera.quadrant in (0,3) else 1)
+            image = command.surface.copy()
+            alpha = pygame.surfarray.pixels_alpha(image)
+            alpha[:] = np.where(world_y >= contact.grid[1]-cue.art.thresholdCells,alpha,0)
+            del alpha
+            result.append(command._replace(surface=image))
+            continue
         art, hatch = cue.art, cue.art.hatch if identity in falling else None
         scale = art.scale * camera.zoom
         ground = project_screen(contact.grid, camera, elevation_steps=contact.elevation_steps)

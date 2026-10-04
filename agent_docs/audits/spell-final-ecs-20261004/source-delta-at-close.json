@@ -1,0 +1,77 @@
+[
+  {
+    "file": "devtools/author_class_presentation.py",
+    "before": "183dad0c500eb66783b9fcac8df434a8174cd6df919e36570fb416c1c3d829c1",
+    "after": "95c034ed80521300e954ed9678fbf151a7111634614908ef0d125c0be23723b1"
+  },
+  {
+    "file": "game/animation_types.py",
+    "before": "344e1434fa2962fb77b132060311d341e29eb270d508ea41206289eac7559b40",
+    "after": "9e5d19df391284f82bc321df820f94b71e2a3574df67dc1defdae5f5c5a60bef"
+  },
+  {
+    "file": "game/body_action.py",
+    "before": "529b39b1541c2ae1342b8284cea8e7e6842214859504a956571c6581d0e343aa",
+    "after": "7a1abb342b5f338ff2a29ca77673ec69e4e7e6bd86b5c9588336e1bc44183d9e"
+  },
+  {
+    "file": "game/data/class_media/action-recipes.json",
+    "before": "2d97524c0ec43b44fe449374c8f10108b44181ba54af2ba424bface5d3eb4ef7",
+    "after": "b9f99e552ffaf55d0e724d49b68a3229b419dd90694c1efeda5c17a7f8146944"
+  },
+  {
+    "file": "game/data/condition-recipes.json",
+    "before": "52ca0746789a9c6256bb80a41279a733ec88c0de74da6632707468a7033a9514",
+    "after": "b529499b0e50d92e72031be8d79070a0d07ac1d669a6a94e487f095364dcb269"
+  },
+  {
+    "file": "game/directed_contacts.py",
+    "before": "580d29ca4d3ef8e4e4d64de31d0e34db7d5242f336e482829588c0d31310cb59",
+    "after": "3f0295176776aeb53542e1717b722c88b5aea68a2b7be50f0c9025ff6f9d016f"
+  },
+  {
+    "file": "tests/game/movement_scenarios.py",
+    "before": "25c9278a6b852084fd47956cd5d704bf530776166ff4496cae28e5c65a73c390",
+    "after": "db2a9ad4ff6efef854c9ce7a2d61587d4125509cff855f4ca7d9ac642f699bb6"
+  },
+  {
+    "file": "tests/game/test_attachment_authoring.py",
+    "before": "56c07301e3156e70269f897b3410a10462ab925c7b87b414f679e6b15dd16280",
+    "after": "ab87980112bf332380aa86c73625f1c541d695690e47558120b9a72a5fce69fa"
+  },
+  {
+    "file": "tests/game/test_class_feature_presentation.py",
+    "before": "de96ac52913b368498a23a802206e48043cf6dca6a4a979b9b34db302c2314a3",
+    "after": "c017c227268d5987fe0f5dba125198bf7d9c7037c646260916c62f9b26cdeb08"
+  },
+  {
+    "file": "tests/game/test_equipment_animation.py",
+    "before": "8f0e671d8cbd73b433af02f5957b9a83a0554cea7be8c8bbf900994e50df5865",
+    "after": "48168f36ee74298b4de5de0d3ae52f492154da812cd75c13114ea11724e1ca6e"
+  },
+  {
+    "file": "tests/game/test_force_construction_presentation.py",
+    "before": "bf19040de13fb2957d31f781fcc48dbc2352be0ee106e876cbe83d877791d704",
+    "after": "79a12b5eb820bf3104f766d8767976c8ca763c7dfeb7a9493961c54f3cca49af"
+  },
+  {
+    "file": "tests/game/test_movement_routes.py",
+    "before": "404deee398a9f6b754331921eb908bf0bf5e4d902ef1d2a716a9032328bed19c",
+    "after": "12fc9ff2e101b371a471069d4255b7b3242200f13d1052a80002d89617d9ee47"
+  },
+  {
+    "file": "tests/game/test_pending_spell_facts.py",
+    "before": "2cdfe35164772b9f2eb5cb3c1e46eeb7301449cf07f8ed7944d6f236842fc9a6",
+    "after": "5a76916cbc7a4ddc0d7833ef2badf704dc26a6e7ebf0e53fbaba4f0fa0aef59b"
+  },
+  {
+    "file": "tests/game/test_sleep_area_projection.py",
+    "before": "1738b25a30bb68f3852479f06456eac55e1b7d8670057e3e2235ee4dda49a247",
+    "after": "33da083eee2d8408fe4d6daa69c845b6508d116d620ac1e562e0b2c82a1d6af1"
+  },
+  {
+    "file": "tests/game/test_web_condition_layers.py",
+    "before": "0f790a61ec52d9d1cdf73fa701bcd32393d85247c9d5b0f3fdcb87b6f7110501",
+    "after": "32ae7de5aaf5a72f3791fab511495949bf0c89b1d84372a7a284a8e2f5ede138"
+  }
+]

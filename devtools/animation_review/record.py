@@ -11,7 +11,7 @@ from uuid import UUID
 import pygame
 
 from dnd.core.events import EventPhase
-from dnd.core.presentation_geometry import SpherePresentationGeometry
+from dnd.core.presentation_geometry import CylinderPresentationGeometry, SpherePresentationGeometry
 from game.animation import facing_for_delta
 from game.animation_data import load_animation_data
 from game.animation_draw import LoadedBodyRows, actor_screen_bounds
@@ -25,13 +25,14 @@ from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
 from game.condition_media_lifetime import register_condition_lifetimes
 from game.construction_media_lifetime import register_construction_lifetimes
 from game.spatial_media_lifetime import register_spatial_lifetimes
+from game.item_attachment_lifetime import register_item_attachment_starts
 from game.concentration_media import register_concentration_lifetimes
 from game.deposit_media import register_deposit_starts
 from game.motion_media import MotionMediaCue, bind_motion_media, choreography_motion_media
 from game.motion import MotionTimeline, bind_motion
 from game.playback_frame import PlaybackFrame, sample_playback_frame
 from game.body_history import retain_body_head
-from game.player_facts import AttackFact, ForcedMovementFact, MovementFact, PlayerState, PortalTransferFact, SpellFact, StepFact
+from game.player_facts import ActionFact, AttackFact, ForcedMovementFact, MovementFact, PlayerState, PortalTransferFact, SpellFact, StepFact
 from game.player_reduction import reduce_lineage, stage_lineage
 from game.presentation_group import presentation_groups, reduce_presentation_group, stage_presentation_group
 from game.presentation_coverage import lineage_coverage, missing_observed_bindings, presentation_inventory
@@ -39,7 +40,7 @@ from game.projection import Camera, TILE_WIDTH, ZOOM_LEVELS, project_screen
 from game.scene import draw_actor_labels, load_scene_media, scene_actors
 from game.visual_position import VisualPosition
 from devtools.animation_review.cases import ReviewCase, ReviewSequence
-from devtools.animation_review.framing import cast_media_bounds, projected_bounds
+from devtools.animation_review.framing import cast_media_bounds, displacement_media_bounds, projected_bounds
 from devtools.animation_review.trace import LINEAGE, STATE, draw_trace, frame_trace, group_trace, motion_trace, state_summary
 
 
@@ -140,25 +141,36 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 body_lift_px=leg.arc_height_px + leg.initial_lift_px)
                 for leg in flight.legs for grid, elevation in (
                     (leg.start, leg.start_height), (leg.end, leg.end_height)))
-        if case.framing == "scene" and any(
-                isinstance(event.fact, SpellFact)
-                and (recipe := data.drafts.get(event.fact.effect_id or event.fact.behavior_id or "")) is not None
-                and recipe.media for event in root.events):
+        has_anchored_media = case.framing == "scene" and any(
+                isinstance(event.fact, (SpellFact, ActionFact))
+                and (recipe := data.drafts.get((event.fact.effect_id or event.fact.behavior_id or "")
+                    if isinstance(event.fact, SpellFact) else event.fact.behavior_id or "")) is not None
+                and (recipe.media or recipe.displacementLayers) for event in root.events)
+        if has_anchored_media or any(isinstance(event.fact, ForcedMovementFact) for event in root.events):
             groups = (tuple(reaction.choreography for reaction in flight.reactions) if flight is not None
                       else (bind_choreography(before, root, data, facings=facings),))
-            anchored_frames.extend(bounds for group in groups for node in group.nodes
-                                   if isinstance(node.bound, BoundCast)
-                                   if (bounds := cast_media_bounds(node.bound.timeline)))
+            framing_contacts.extend(replace(cue.actor, grid=point.grid,
+                elevation_steps=point.elevation_steps, body_lift_px=lift)
+                for group in groups for cue in group.forced_movement for point in cue.points
+                for lift in (0., cue.actor.body_lift_px + (cue.flight.clearancePx if cue.flight else 0.)))
+            # These layers join the sampled actor surface, so actor framing
+            # includes them even when standalone scene effects are excluded.
+            anchored_frames.extend(bounds for group in groups for cue in group.forced_movement
+                                   if (bounds := displacement_media_bounds(cue)))
+            if has_anchored_media:
+                anchored_frames.extend(bounds for group in groups for node in group.nodes
+                                       if isinstance(node.bound, BoundCast)
+                                       if (bounds := cast_media_bounds(node.bound.timeline)))
         before = reduce_lineage(before, root)
         if case.framing == "scene" and before.senses is not None:
             for effect in before.senses.spatial_effects.values():
                 binding = data.spatial_media.get(effect.content_ref.content_id)
                 geometry = effect.area_geometry
-                if binding is None or not isinstance(geometry, SpherePresentationGeometry):
+                if binding is None or not isinstance(geometry, (SpherePresentationGeometry, CylinderPresentationGeometry)):
                     continue
                 support = before.tiles.get(geometry.center)
                 for layer in binding.layers:
-                    volume = layer.composition == "volume"
+                    volume = layer.composition in ("xy_volume", "xyz_volume")
                     if not volume and geometry.center not in before.senses.visible:
                         continue
                     elevation = support.elevation_steps if support is not None else effect.anchor_elevation_steps
@@ -242,8 +254,9 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     feedback: list[FeedbackTrack] = []
     motion_media: list[MotionMediaCue] = []
     presentation_ms = 0.0
-    condition_lifetimes = register_condition_lifetimes({}, before, data, absolute_start_ms=0)
+    condition_lifetimes = register_condition_lifetimes({}, before, data, absolute_start_ms=0, facings=facings)
     spatial_lifetimes = register_spatial_lifetimes({}, before, data, absolute_start_ms=0)
+    item_starts = register_item_attachment_starts({}, before, data, absolute_start_ms=0)
     construction_lifetimes = register_construction_lifetimes({}, before, data, absolute_start_ms=0)
     concentration_lifetimes = register_concentration_lifetimes({}, before, data, absolute_start_ms=0)
     deposit_starts = register_deposit_starts({}, before, data, absolute_start_ms=0)
@@ -280,7 +293,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     body_media, number_font, badge_font, choreography=choreography,
                     choreography_media=choreography_media, motion=motion, reaction_media=reaction_media,
                     feedback=feedback, condition_lifetimes=condition_lifetimes,
-                    spatial_lifetimes=spatial_lifetimes, construction_lifetimes=construction_lifetimes, concentration_lifetimes=concentration_lifetimes, deposit_starts=deposit_starts,
+                    spatial_lifetimes=spatial_lifetimes, item_starts=item_starts, construction_lifetimes=construction_lifetimes, concentration_lifetimes=concentration_lifetimes, deposit_starts=deposit_starts,
                     positions=positions, feedback_viewport=feedback_viewport, motion_media=motion_media, body_history=body_history,
                 )
                 samples.append(sample)
@@ -288,6 +301,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                                       for bounds in actor_screen_bounds(sample.commands).values())
                 draw_frame(view, sample.displayed, catalog, cache, camera, presentation_ms / 1000,
                            show_grid=False, show_debug=False, mouse_position=None, extra_commands=sample.commands,
+                           animation_data=data, item_starts=item_starts,
                            world_transitions=sample.world_transitions, residue_reveals=sample.residue_reveals, deposited_materials=sample.deposited_materials)
                 draw_actor_labels(view, cache.debug_font, sample.actors, sample.displayed, camera,
                                   shown_hp=sample.shown_hp, active_uuid=None,
@@ -375,8 +389,10 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                 group_media = load_choreography_media(group, body_rows=body_rows) if group is not None else None
                 reaction_media = load_motion_media(motion, data, body_rows=body_rows) if motion is not None else {}
                 condition_lifetimes = register_condition_lifetimes(condition_lifetimes, before, data,
-                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
+                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion, facings=facings)
                 spatial_lifetimes = register_spatial_lifetimes(spatial_lifetimes, before, data,
+                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
+                item_starts = register_item_attachment_starts(item_starts, before, data,
                     absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
                 construction_lifetimes = register_construction_lifetimes(construction_lifetimes, before, data,
                     absolute_start_ms=presentation_ms, choreography=group, motion=motion)

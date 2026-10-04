@@ -13,6 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_valid
 from dnd.core.content.identities import ContentRef
 from dnd.core.creature_types import DamageType
 from dnd.types.abilities import AbilityName
+from dnd.types.actor import SpatialDisposition
+from dnd.types.class_features import MetamagicMode
 
 
 Color = Annotated[int, Field(ge=0, le=0xFFFFFF)]
@@ -85,12 +87,13 @@ class ConditionLayer(_Record):
     category: Name
     animation: Name
     fps: Annotated[float, Field(gt=0)]
-    attachment: Literal["body", "ground", "head", "face"]
+    attachment: Literal["body", "ground", "head", "face", "hand"]
     offsetX: float = 0
     offsetY: float = 0
     opacity: Alpha = 1.
     activeDuring: tuple[Activity, ...]
     startOffsetMs: Duration = 0
+    phaseOffsetMs: Duration = 0
     fadeInMs: Duration = 0
     priority: Priority
     colors: ConditionColors
@@ -98,6 +101,7 @@ class ConditionLayer(_Record):
     lifeStates: tuple[LifeStage, ...] = ("alive", "dying", "stable", "dead")
     whenEnergyType: DamageType | None = None
     whenAbility: AbilityName | None = None
+    whenMetamagicMode: MetamagicMode | None = None
 
 
 class ConditionTransitionEffect(_Record):
@@ -105,7 +109,7 @@ class ConditionTransitionEffect(_Record):
     assetId: Name
     category: Name
     animation: Name
-    attachment: Literal["body", "ground", "head", "face"]
+    attachment: Literal["body", "ground", "head", "face", "hand"]
     offsetX: float = 0
     offsetY: float = 0
     opacity: Alpha = 1.
@@ -115,6 +119,8 @@ class ConditionTransitionEffect(_Record):
     startOffsetMs: Duration = 0
     drawOrder: Literal["behind_body", "in_front_of_body"] = "in_front_of_body"
     lifeStates: tuple[LifeStage, ...] = ("alive", "dying", "stable", "dead")
+    participant: Literal["owner", "recipient"] = "owner"
+    whenEnergyType: DamageType | None = None
 
 
 class ConditionActivation(_Record):
@@ -128,6 +134,15 @@ class ConditionBodyColor(_Record):
     brightness: Annotated[float, Field(ge=0.25, le=2)]
 
 
+class EquipmentGlint(_Record):
+    periodMs: Annotated[float, Field(gt=0)]
+    startY: float
+    endY: float
+    width: Annotated[float, Field(gt=0)]
+    color: Color
+    strength: Alpha
+
+
 class ConditionEquipmentModifier(_Record):
     id: Name
     slots: tuple[StudioEquipmentSlot, ...]
@@ -136,6 +151,8 @@ class ConditionEquipmentModifier(_Record):
     saturation: Annotated[float, Field(ge=0, le=2)]
     brightness: Annotated[float, Field(ge=0.25, le=2)]
     priority: Priority
+    affectedItemOnly: bool = False
+    glint: EquipmentGlint | None = None
 
 
 class ConditionAppearanceLayer(_Record):
@@ -210,18 +227,45 @@ class ConditionBodyRamp(_Record):
     """Palette-only material over the current body and equipment pixels."""
 
     colors: Annotated[tuple[Color, ...], Field(min_length=1)]
-    mapping: Literal["maximum_rgb"] = "maximum_rgb"
+    mapping: Literal["maximum_rgb", "luminance_texture", "bark_texture", "wither_texture", "fracture_wave", "energy_burn", "rising_bands", "etched_burn", "flowing_film", "frost_texture"] = "maximum_rgb"
+    texture: Name | None = None
+    normalTexture: Name | None = None
+    textureRepeats: Annotated[float, Field(gt=0)] = 6.
+    textureWeight: Alpha = .35
+    textureFrames: Annotated[int, Field(ge=1)] = 1
+    textureFps: Annotated[float, Field(gt=0)] = 32.
     gain: Annotated[float, Field(gt=0)] = 1.
     applicationMs: Duration = 0.
     removalMs: Duration = 0.
 
+    @model_validator(mode="after")
+    def texture_contract(self) -> "ConditionBodyRamp":
+        if (self.mapping in {"luminance_texture", "bark_texture", "wither_texture", "flowing_film", "frost_texture"}) != (self.texture is not None):
+            raise ValueError("textured palette mapping requires exactly one texture")
+        if (self.mapping == "frost_texture") != (self.normalTexture is not None):
+            raise ValueError("frost material requires its original normal texture")
+        if self.mapping in {"energy_burn", "rising_bands"} and len(self.colors) != 2:
+            raise ValueError("Energy material requires its source middle/bright colors")
+        if self.mapping == "etched_burn" and len(self.colors) != 3:
+            raise ValueError("Etched burn requires its original base and two line colors")
+        if self.mapping == "bark_texture" and len(self.colors) != 2:
+            raise ValueError("bark texture mapping requires its dark and light wood colors")
+        if self.mapping == "fracture_wave" and len(self.colors) != 2:
+            raise ValueError("fracture mapping requires its base and crack colors")
+        if self.mapping == "wither_texture" and len(self.colors) != 4:
+            raise ValueError("wither mapping requires dark, light, scar and pulse colors")
+        if self.mapping == "flowing_film" and len(self.colors) != 4:
+            raise ValueError("flowing film requires its three palette endpoints and body tint")
+        return self
+
 
 class ConditionResponse(_Record):
-    trigger: Literal["consumed", "healed"]
+    trigger: Literal["consumed", "healed", "damage_requested", "damage_applied", "damage_received"]
     effects: tuple[ConditionTransitionEffect, ...]
 
 
 class ConditionFrozenPose(_Record):
+    captureCurrent: bool = False
     clip: Name
     frame: Annotated[int, Field(ge=0)]
     framesByRig: Mapping[str, Annotated[int, Field(ge=0)]] = Field(default_factory=dict)
@@ -246,12 +290,35 @@ class ConditionBodyOutline(_Record):
     onsetMs: Annotated[float, Field(gt=0)] = 300
 
 
+class ConditionAbsenceEcho(_Record):
+    """Original silhouette treatment and media for a witnessed physical absence."""
+    dispositions: tuple[SpatialDisposition, ...]
+    back: Name
+    front: Name
+    scale: Annotated[float, Field(gt=0)]
+    departureMs: tuple[Duration, Duration] = (120., 920.)
+    returnMs: tuple[Duration, Duration] = (320., 1320.)
+    clearMs: Annotated[float, Field(gt=0)] = 650.
+    portalDurationMs: Annotated[float, Field(gt=0)] = 2000.
+    returnPortalMs: Annotated[float, Field(gt=0)] = 2420.
+    ghostBase: tuple[float,float,float] = (98.,130.,148.)
+    ghostLight: tuple[float,float,float] = (95.,90.,88.)
+    rimColor: tuple[float,float,float] = (27.,24.,18.)
+
+    @model_validator(mode='after')
+    def ordered_intervals(self) -> 'ConditionAbsenceEcho':
+        if any(end <= start for start,end in (self.departureMs,self.returnMs)):
+            raise ValueError('Absence transition end must follow its start')
+        return self
+
+
 class ConditionPersistent(_Record):
     alphaMultiplier: Alpha
     bodyColor: ConditionBodyColor | None
     # Hold the final frame of a mapped rig clip when no action owns the body.
     bodyPose: Name | None = None
     frozenPose: ConditionFrozenPose | None = None
+    absenceEcho: ConditionAbsenceEcho | None = None
     bodyOutline: ConditionBodyOutline | None = None
     label: ConditionLabel | None = None
     bodyScale: ConditionBodyScale | None = None
@@ -307,7 +374,7 @@ class ConditionRecipe(_Record):
             if (self.classification.visualIntensity not in ("state_only", "icon_only")
                     or any(domain not in ("none", "hud_only") for domain in self.classification.presentationDomains)
                     or persistent.alphaMultiplier != 1 or persistent.bodyColor is not None
-                    or persistent.bodyPose is not None or persistent.frozenPose is not None
+                    or persistent.bodyPose is not None or persistent.frozenPose is not None or persistent.absenceEcho is not None
                     or persistent.bodyOutline is not None or persistent.label is not None
                     or persistent.bodyScale is not None or persistent.liveCopies is not None
                     or persistent.bodyDistortion is not None or persistent.bodyRamp is not None

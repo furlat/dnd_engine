@@ -1,0 +1,27 @@
+[
+  {
+    "file": "game/data/condition-recipes.json",
+    "before": "52ca0746789a9c6256bb80a41279a733ec88c0de74da6632707468a7033a9514",
+    "after": "d8ede6e04ff96a6b33256d2b4b2ad5d994469a963a8019716224b0b303ff337a"
+  },
+  {
+    "file": "game/directed_contacts.py",
+    "before": "580d29ca4d3ef8e4e4d64de31d0e34db7d5242f336e482829588c0d31310cb59",
+    "after": "3f0295176776aeb53542e1717b722c88b5aea68a2b7be50f0c9025ff6f9d016f"
+  },
+  {
+    "file": "tests/game/movement_scenarios.py",
+    "before": "25c9278a6b852084fd47956cd5d704bf530776166ff4496cae28e5c65a73c390",
+    "after": "db2a9ad4ff6efef854c9ce7a2d61587d4125509cff855f4ca7d9ac642f699bb6"
+  },
+  {
+    "file": "tests/game/test_force_construction_presentation.py",
+    "before": "bf19040de13fb2957d31f781fcc48dbc2352be0ee106e876cbe83d877791d704",
+    "after": "79a12b5eb820bf3104f766d8767976c8ca763c7dfeb7a9493961c54f3cca49af"
+  },
+  {
+    "file": "tests/game/test_movement_routes.py",
+    "before": "404deee398a9f6b754331921eb908bf0bf5e4d902ef1d2a716a9032328bed19c",
+    "after": "12fc9ff2e101b371a471069d4255b7b3242200f13d1052a80002d89617d9ee47"
+  }
+]

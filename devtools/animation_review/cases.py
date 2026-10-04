@@ -16,6 +16,9 @@ from devtools.animation_review.hypnotic_cases import HypnoticCase
 from devtools.animation_review.assembly_cases import AssemblyCase
 from devtools.animation_review.scorching_cases import ScorchingCase
 from devtools.animation_review.continual_flame_cases import ContinualFlameCase
+from devtools.animation_review.weather_solar_cases import WeatherSolarCase
+from devtools.animation_review.holy_cases import HolyCase
+from devtools.animation_review.class_cases import ClassFeatureCase
 from dnd.core.equipment_types import WeaponSlot
 from game.player_facts import PlayerLineage, PlayerState
 
@@ -45,7 +48,16 @@ class DamageResolutionCase(BaseModel):
 class ConstructionCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["construction"]
-    material: Literal["ice", "stone"]
+    material: Literal["ice", "stone", "force"]
+    break_section: bool = True
+    disintegrate: bool = False
+    fracture_after_cut: bool = False
+    dome_radius: Literal[5, 10] | None = None
+
+
+class SurfaceIgnitionCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["surface-ignition"]
 
 
 class FlightCase(BaseModel):
@@ -196,6 +208,9 @@ class ForcedMovementCase(BaseModel):
     target_hp: Literal[4, 40] = 40
     mechanism: Literal["shove", "telekinesis"] = "shove"
     destination: tuple[int, int] | None = None
+    initial_cast: bool = False
+    resisted: bool = False
+    allied: bool = False
 
 
 class TeleportCase(BaseModel):
@@ -243,7 +258,8 @@ class SupportConditionCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["support-condition"]
     program: Literal["death_ward", "stoneskin", "protection_from_poison", "enhance_ability",
-                     "regenerate", "remove_curse", "freedom_of_movement"]
+                     "regenerate", "remove_curse", "freedom_of_movement",
+                     "darkvision", "see_invisibility", "true_seeing", "longstrider"]
     self_target: bool = False
     ability: Literal["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"] = "strength"
     mode: Literal["lifecycle", "lethal", "instant", "clean", "full_hp"] = "lifecycle"
@@ -260,7 +276,7 @@ class InterruptionCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["interruption"]
     blocker: Literal["sanctuary", "counterspell"]
-    spell: Literal["fire_bolt", "magic_missile", "sacred_flame", "fireball"] = "fire_bolt"
+    spell: Literal["fire_bolt", "magic_missile", "sacred_flame", "fireball", "finger_of_death"] = "fire_bolt"
     blocked: bool = True
 
 
@@ -349,6 +365,22 @@ class AreaSpellCase(BaseModel):
 class CallLightningCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["call-lightning"]
+    repeat_position: tuple[int, int] | None = None
+    move_before_repeat: bool = False
+
+
+class ConeOfColdCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["cone-of-cold"]
+    heading: int = Field(default=0, ge=0, le=7)
+    oblique: bool = False
+
+
+class WindInterceptionCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["wind-interception"]
+    direction: tuple[int, int] = (0, 1)
+    blocked: bool = True
 
 
 class WebCase(BaseModel):
@@ -462,6 +494,67 @@ class DreadResidueCase(BaseModel):
     entry: Literal["walk", "jump", "misty-step"] = "walk"
 
 
+class SharedConditionCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["shared-condition"]
+    program: Literal["petrified", "restrained", "incapacitated", "stunned", "sickened"]
+
+
+class DirectedSpellCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["directed-spell"]
+    program: Literal["Eyebite", "Disintegrate", "Finger of Death"]
+    mode: Literal["asleep", "panicked", "sickened"] = "sickened"
+    repeat: bool = False
+    saved: bool = False
+    cleanup: bool = False
+    lethal: bool = False
+    prone: bool = False
+    magical_weapon: bool = False
+    target_item_id: str | None = None
+
+
+class ElectricSpellCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["electric-spell"]
+    program: Literal["lightning_bolt", "chain_lightning"]
+    empty: bool = False
+
+
+class AntimagicCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["antimagic"]
+
+
+class TransportSpellCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal['transport-spell']
+    program: Literal['door', 'door_passenger', 'door_mishap', 'banish_return', 'banish_saved',
+                     'banish_foreign_return', 'banish_permanent', 'banish_pending']
+
+
+class NecroticSpellCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["necrotic-spell"]
+    program: Literal["blight", "harm", "circle_of_death"]
+    saved: bool = False
+    immune: bool = False
+
+
+class NatureSpellCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["nature-spell"]
+    program: Literal["shillelagh", "barkskin", "warm", "chill", "produce_hit", "produce_miss", "produce_initial"]
+    immune: bool = False
+
+
+class PowerWordCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["power-word"]
+    program: Literal["kill", "stun"]
+    outcome: Literal["applied", "threshold", "ward", "prone", "immune"] = "applied"
+
+
 class SpellHandoffCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["spell-handoff"]
@@ -501,8 +594,8 @@ class ReviewCase(BaseModel):
     description: str
     framing: Literal["scene", "actors"] = "scene"
     initial_facings: tuple[ReviewFacing, ...] = ()
-    scenario: Annotated[AttackCase | DamageResolutionCase | ConstructionCase | FlightCase | ItemPowerCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
-                        | SummoningCase | AssemblyCase | HypnoticCase | CurseCase | DivineCase | SlowCase | HoldCase | ScorchingCase | FearCase | ContinualFlameCase | CreatureCase | EquipmentCase | ItemTransferCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | CallLightningCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase,
+    scenario: Annotated[ConeOfColdCase | WindInterceptionCase | ClassFeatureCase | TransportSpellCase | HolyCase | AntimagicCase | WeatherSolarCase | AttackCase | DamageResolutionCase | ConstructionCase | SurfaceIgnitionCase | FlightCase | ItemPowerCase | ParalysisCase | CastCase | ProjectileLifeCase | ParalysisLifecycleCase | DodgeExpiryCase | HealingCase | LifecycleCase
+                        | SummoningCase | AssemblyCase | HypnoticCase | CurseCase | DivineCase | SlowCase | HoldCase | ScorchingCase | FearCase | ContinualFlameCase | CreatureCase | EquipmentCase | ItemTransferCase | ObjectAttackCase | DiscoveryCase | VisibilityCase | MovementCase | ForcedMovementCase | TeleportCase | ConcealmentCase | EnvironmentCase | EnvironmentControlCase | DeviceCase | WebCase | CantripCase | AreaSpellCase | CallLightningCase | SupportCase | HealingBatchCase | SupportConditionCase | TrueStrikeCase | PendingSpellCase | PersistentSpellCase | WallSpellCase | GlobeCase | InterruptionCase | ControlSpellCase | TrapCase | MechanismCase | PortalCase | WindowCase | DoorCase | TrapHardwareCase | PropDestructionCase | LiquidBarrelCase | GroundContactCase | BodyResidueCase | DreadResidueCase | SpellHandoffCase | PowerWordCase | SharedConditionCase | NatureSpellCase | NecroticSpellCase | ElectricSpellCase | DirectedSpellCase,
                         Field(discriminator="kind")]
     pause_at_ms: float | None = Field(default=None, ge=0)
     pause_duration_ms: float = Field(default=750, gt=0)

@@ -4,21 +4,23 @@ Contains: SpikeGrowth, Slow, Haste, Darkvision, JumpSpell, ExpeditiousRetreat, D
           EnhanceAbility, EnlargeReduce, Regenerate
 """
 from typing import cast
-from dnd.blocks.equipment import Weapon, WeaponUnequipEvent
+from dnd.blocks.equipment import EquipmentEvent, Weapon, WeaponUnequipEvent
 from dnd.core.attack_types import WeaponAttackOverride
 from dnd.types.materials import Material
-from dnd.core.equipment_types import WeaponKind, WeaponSlot
+from dnd.core.equipment_types import WeaponKind, WeaponSet, WeaponSlot
 from dnd.types.world import MovementMode
 from dnd.core.base_conditions import Duration
 from typing import Any, Dict, Literal, Optional, List, Set, Tuple, cast as type_cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import Field, PrivateAttr
 from dnd.blocks.base_item import BaseItem
+from dnd.core.life_types import RemainsDisposition
 from dnd.core.base_block import BaseBlock
 from dnd.types.physical_access import PhysicalAccess
 
 from dnd.core.action_types import EntityTargetPerception
+from dnd.core.action_types import EntityDestinationSelection
 from dnd.core.base_actions import (
     ActionCategory,
     ActionEvent,
@@ -46,12 +48,6 @@ from dnd.core.condition_types import (
     DurationType,
     HazardFilter,
 )
-from dnd.core.content.dependencies import (
-    ContentDependency,
-    ContentDependencyPhase,
-    ContentDependencyRelation,
-)
-from dnd.core.content.registration import get_content_declaration
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.types.world import OccupancyLayer
 from dnd.core.action_types import (
@@ -62,11 +58,16 @@ from dnd.core.action_types import (
 )
 from dnd.core.base_block import SensesType, SenseMode
 from dnd.core.events import (
-    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, ForcedMovementEvent, EventQueue
+    Event, EventPhase, EventType, EventHandler, Trigger, Range, RangeType, SpatialChangeEvent, Damage, Healing, ForcedMovementEvent
 )
 from dnd.types.abilities import AbilityName
 from dnd.types.actor import ConditionState
 from dnd.core.dice import AttackOutcome
+from dnd.core.effect_types import EffectOrigin
+from dnd.core.elevation import support_distance_feet
+from dnd.core.life_types import LifeState
+from dnd.core.saving_throw_types import SavingThrowContext
+from dnd.types.event_facts import LandingKind
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.modifiers import (
     ArithmeticFactor,
@@ -78,9 +79,9 @@ from dnd.core.values import ModifiableValue
 from dnd.core.aoe import AoEShape, Cube
 from dnd.core.gridmap import get_map
 from dnd.entity import Entity
-from dnd.conditions import Dashing, Restrained, Concentrating, ConcentrationActionMarker
+from dnd.conditions import Dashing, ConcentrationActionMarker, Prone
 from dnd.creature_transforms import apply_incapacitated_transform, remove_modifier_ownership
-from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, resolve_paid_entry_retreats
+from dnd.actions import AttackEvent, SpellAction, SpellEvent, entity_action_economy_cost_evaluator, entity_action_economy_cost_applier, commit_forced_movement, resolve_fall_damage
 from dnd.spatial.area_conditions import AreaCondition
 from dnd.types.spatial_effects import (
     SpatialEffectLayer,
@@ -89,7 +90,6 @@ from dnd.types.spatial_effects import (
 )
 from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity
 from dnd.spells.spell_utils import fire_heal_roll_result
-from dnd.spells.spell_utils import validate_line_of_sight
 
 
 SPIKE_GROWTH_ZONE_CONTENT_REF = ContentRef(
@@ -829,6 +829,7 @@ class DarkvisionEffect(BaseCondition):
 
     name: str = Field(default="Darkvision", description="Condition name.")
     description: str = Field(default="You can see in darkness within 60 feet", description="Condition description.")
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=4800))
     _granted_sense_mode: SenseMode | None = PrivateAttr(default=None)
     _sense_changed: bool = PrivateAttr(default=False)
 
@@ -842,14 +843,14 @@ class DarkvisionEffect(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
             raise RuntimeError("Admitted sense recipient disappeared")
-        self._granted_sense_mode = SenseMode(sense_type=SensesType.DARKVISION, range_feet=60)
-        target.senses.sense_modes.append(self._granted_sense_mode)
+        self._granted_sense_mode = SenseMode(sense_type=SensesType.DARKVISION, range_feet=60, contribution_owner_uuid=self.uuid)
+        target.senses.add_sense_mode_source(self.uuid, self._granted_sense_mode)
         self._sense_changed = True
 
     def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is not None and self._granted_sense_mode is not None:
-            target.senses.sense_modes = [mode for mode in target.senses.sense_modes if mode is not self._granted_sense_mode]
+            target.senses.remove_sense_mode_source(self.uuid)
             self._granted_sense_mode = None
             self._sense_changed = True
 
@@ -867,7 +868,7 @@ class DarkvisionSpell(SpellAction):
     description: str = Field(default="Grant 60ft darkvision to a willing creature", description="Spell description.")
     spell_level: int = Field(default=2, description="Spell slot level.")
     spell_school: str = Field(default="transmutation", description="Spell school.")
-    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
+    concentration: bool = Field(default=False, description="Whether the spell requires concentration.")
     target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Spell range.")
     valid_target_filter: str = Field(default="self_or_allies", description="Valid target filter key.")
@@ -926,10 +927,6 @@ class DarkvisionSpell(SpellAction):
             tags={ConditionTag.MAGICAL}
         )
         target.add_condition(darkvision_effect, parent_event=effect_event)
-
-        concentration = self.ensure_concentration(effect_event)
-        if darkvision_effect.applied:
-            concentration.add_linked_condition(target.uuid, darkvision_effect.uuid)
 
         return effect_event.with_updates(
             status_message=f"{target.name} gains darkvision (60ft)"
@@ -1036,12 +1033,17 @@ class Disintegrate(SpellAction):
             status_message=f"DEX save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
 
+        if effect_event.canceled:
+            return effect_event
         if success:
             return effect_event.with_updates(
                 status_message=f"{target.name} dodges the ray"
             )
 
         damage_bonus = caster.get_spell_damage_bonus()
+        damage_bonus.self_static.add_value_modifier(NumericalModifier(
+            source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+            name="Disintegrate flat damage", value=self.base_damage_bonus))
         force_damage = Damage(
             source_entity_uuid=caster.uuid,
             target_entity_uuid=target.uuid,
@@ -1052,13 +1054,16 @@ class Disintegrate(SpellAction):
         )
         damage_dice = force_damage.get_dice(attack_outcome=AttackOutcome.HIT)
         damage_roll = damage_dice.roll
-        final_damage = damage_roll.total + self.base_damage_bonus
+        final_damage = damage_roll.total
 
         target.receive_damage(
             amount=final_damage,
             damage_type=DamageType.FORCE,
             source_entity_uuid=caster.uuid,
-            parent_event=effect_event.uuid
+            parent_event=effect_event.uuid,
+            damage_rolls=[damage_roll], damages=[force_damage],
+            effect_origin=effect_event.to_effect_origin(),
+            zero_hp_disposition=RemainsDisposition.DISINTEGRATED,
         )
 
         return effect_event.with_updates(
@@ -1578,374 +1583,227 @@ class EnlargeReduce(SpellAction):
         )
 
 
-@srd_action_identity(
-    content_id="action.spell.telekinesis.restrain",
-    display_name="Telekinesis: Restrain",
-    description="Restrain the creature currently held by Telekinesis.",
-    parent_spell_name="Telekinesis",
-    source_page=185,
-    sort_order=862,
-)
-class TelekinesisRestrain(BaseAction):
-    """Restrain the creature currently grabbed by Telekinesis.
+def _telekinesis_selection_error(caster: Entity, target: Entity | None,
+                                 destination: Tuple[int, int] | None) -> str | None:
+    if target is None or destination is None:
+        return "Choose a creature and a destination"
+    if target.size is Size.GARGANTUAN:
+        return "Telekinesis affects Huge or smaller creatures"
+    if target.occupancy_layer is not OccupancyLayer.GROUND:
+        return "Telekinesis requires a supported creature"
+    contact = caster.senses.entities.get(target.uuid)
+    if target.uuid != caster.uuid and (contact is None or not contact.visual):
+        return "Target is not visible"
+    if not caster.senses.visible.get(destination, False):
+        return "Destination is not visible"
+    grid = get_map()
+    if grid.get_tile(*destination) is None:
+        return "Destination has no support"
+    source_height = grid.get_support_elevation_feet(caster.position)
+    target_height = grid.get_support_elevation_feet(target.position)
+    end_height = grid.get_support_elevation_feet(destination)
+    if (support_distance_feet(caster.position, source_height, target.position, target_height) > 60
+            or support_distance_feet(caster.position, source_height, destination, end_height) > 60):
+        return "Target and destination must be within 60ft"
+    if support_distance_feet(target.position, target_height, destination, end_height) > 30:
+        return "Telekinesis displacement exceeds 30ft"
+    if grid.admit_airborne_transfer(target.position, destination, target.uuid) is None:
+        return "Transfer path or landing is blocked"
+    return None
 
-    This zero-cost granted action is registered after a failed Strength save,
-    applies Restrained, links it to the caster's concentration, and then removes
-    both temporary Telekinesis follow-up actions.
-    """
-    name: str = Field(default="Telekinesis: Restrain", description="Action name.")
-    description: str = Field(default="Restrain the telekinetically grabbed creature", description="Action summary.")
-    target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode.")
-    action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Action category.")
-    costs: List[Cost] = Field(default_factory=list, description="Action-economy costs paid by the follow-up action.")
 
-    grabbed_entity_uuid: UUID = Field(description="UUID of the grabbed entity")
+def _resolve_telekinetic_transfer(caster: Entity, target: Entity,
+                                  destination: Tuple[int, int], parent: Event,
+                                  spell_dc: int, origin: EffectOrigin | None) -> None:
+    allied = caster.is_ally(target)
+    if not allied:
+        request = caster.create_saving_throw_request(target.uuid, "strength", spell_dc,
+            parent_event=parent.uuid, saving_throw_context=SavingThrowContext(
+                cause_id="spell.telekinesis", effect_id="spell.telekinesis.move", is_magical=True))
+        if target.saving_throw(request)[2]:
+            return
+    if _telekinesis_selection_error(caster, target, destination) is not None:
+        return
+    grid = get_map()
+    start = target.position
+    path = grid.admit_airborne_transfer(start, destination, target.uuid)
+    if path is None or start == destination:
+        return
+    delta = (destination[0] - start[0], destination[1] - start[1])
+    distance = support_distance_feet(start, grid.get_support_elevation_feet(start),
+        destination, grid.get_support_elevation_feet(destination))
+    event = ForcedMovementEvent(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+        source_entity_name=caster.name, target_entity_name=target.name,
+        start_position=start, end_position=destination,
+        direction=(0 if not delta[0] else (1 if delta[0] > 0 else -1),
+                   0 if not delta[1] else (1 if delta[1] > 0 else -1)),
+        intended_distance=distance, actual_distance=distance, disclosed_path=path,
+        start_elevation_feet=grid.get_support_elevation_feet(start),
+        end_elevation_feet=grid.get_support_elevation_feet(destination),
+        landing_kind=LandingKind.CONTROLLED if allied else LandingKind.IMPACT,
+        effect_origin=origin, cause="telekinesis", parent_event=parent.uuid,
+        phase=EventPhase.DECLARATION)
+    event = event.phase_to(EventPhase.EXECUTION)
+    if event.canceled:
+        return
+    event = event.phase_to(EventPhase.EFFECT)
 
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        grabbed = Entity.get(self.grabbed_entity_uuid)
-        if not grabbed:
-            return declaration_event.cancel(status_message="Grabbed entity not found")
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message="Validated Telekinesis: Restrain"
-        )
+    def impact(landing: ForcedMovementEvent) -> None:
+        packets: tuple[tuple[Literal[6, 8], int, DamageType], ...] = (
+            (8, 4, DamageType.FORCE), (6, 2, DamageType.BLUDGEONING))
+        for sides, count, damage_type in packets:
+            damage = Damage(name="Telekinesis impact", source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid, damage_dice=sides, dice_numbers=count,
+                damage_bonus=ModifiableValue.create(source_entity_uuid=caster.uuid, base_value=0), damage_type=damage_type)
+            roll = damage.get_dice(AttackOutcome.HIT).roll
+            target.receive_damage(roll.total, damage_type, source_entity_uuid=caster.uuid,
+                damage_rolls=[roll], damages=[damage], parent_event=landing.uuid,
+                effect_origin=origin, independent_resolution=True)
+        resolve_fall_damage(target, drop_feet=landing.drop_feet,
+            source_entity_uuid=caster.uuid, parent_event=landing, knock_prone=False)
+        if target.health.life_state is not LifeState.DEAD:
+            request = caster.create_saving_throw_request(target.uuid, "dexterity", spell_dc,
+                parent_event=landing.uuid, condition_context="Prone",
+                saving_throw_context=SavingThrowContext(cause_id="spell.telekinesis",
+                    effect_id="spell.telekinesis.landing", condition_id="condition.prone", is_magical=True))
+            if not target.saving_throw(request)[2]:
+                target.add_condition(Prone(source_entity_uuid=caster.uuid,
+                    target_entity_uuid=target.uuid, effect_origin=origin), parent_event=landing)
 
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-
-        caster = Entity.get(self.source_entity_uuid)
-        grabbed = Entity.get(self.grabbed_entity_uuid)
-        if not caster or not grabbed:
-            return execution_event.cancel(status_message="Entity not found")
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"Restraining {grabbed.name} with Telekinesis"
-        )
-
-        restrained = Restrained(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=grabbed.uuid,
-            tags={ConditionTag.MAGICAL}
-        )
-        grabbed.add_condition(restrained, parent_event=effect_event)
-
-        conc = caster.active_conditions.get("Concentrating")
-        if isinstance(conc, Concentrating):
-            conc.add_linked_condition(grabbed.uuid, restrained.uuid)
-
-        caster.unregister_action("Telekinesis: Restrain")
-        caster.unregister_action("Telekinesis: Move")
-
-        return effect_event.with_updates(
-            status_message=f"{grabbed.name} restrained by Telekinesis"
-        )
+    commit_forced_movement(target, event, parent_event=parent,
+        on_landing=None if allied else impact)
 
 
 @srd_action_identity(
     content_id="action.spell.telekinesis.move",
     display_name="Telekinesis: Move",
-    description="Move the creature currently held by Telekinesis.",
+    description="Spend an action to move one creature to a supported destination.",
     parent_spell_name="Telekinesis",
     source_page=185,
     sort_order=861,
 )
 class TelekinesisMove(BaseAction):
-    """Move the creature currently grabbed by Telekinesis up to thirty feet.
+    """One paid repeat, authorized by the exact active concentration marker."""
+    name: str = "Telekinesis: Move"
+    description: str = "Move a creature up to 30ft; STR negates hostile movement"
+    target_type: TargetType = TargetType.ENTITY
+    position_selection: EntityDestinationSelection = Field(default_factory=EntityDestinationSelection)
+    action_category: ActionCategory = ActionCategory.ABILITY
+    valid_target_filter: str = "all"
+    include_self: bool = True
+    costs: List[Cost] = Field(default_factory=lambda: [Cost(name="Telekinesis move", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)])
+    marker_uuid: UUID
+    spell_dc: int
+    effect_origin: EffectOrigin | None = None
 
-    This zero-cost granted action validates a nearby destination, emits a forced
-    movement event, updates the entity's grid position, and removes both
-    temporary Telekinesis follow-up actions.
-    """
-    name: str = Field(default="Telekinesis: Move", description="Action name.")
-    description: str = Field(default="Move the telekinetically grabbed creature up to 30ft", description="Action summary.")
-    target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode.")
-    action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Action category.")
-    costs: List[Cost] = Field(default_factory=list, description="Action-economy costs paid by the follow-up action.")
-
-    grabbed_entity_uuid: UUID = Field(description="UUID of the grabbed entity")
-
-    def get_valid_targets(self) -> List[Tuple[int, int]]:
-        """Return walkable, unoccupied positions within 30ft of the grabbed entity."""
-        grabbed = Entity.get(self.grabbed_entity_uuid)
-        if not grabbed:
-            return []
-        grid = get_map()
-        gx, gy = grabbed.senses.position
-        valid = []
-        for dx in range(-6, 7):
-            for dy in range(-6, 7):
-                x, y = gx + dx, gy + dy
-                if abs(dx) + abs(dy) > 6:
-                    continue
-                if not grid.is_walkable(x, y):
-                    continue
-                entities_at = grid.get_entities_at((x, y))
-                if entities_at and entities_at != {grabbed.uuid}:
-                    continue
-                valid.append((x, y))
-        return valid
-
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        grabbed = Entity.get(self.grabbed_entity_uuid)
-        if not grabbed:
-            return declaration_event.cancel(status_message="Grabbed entity not found")
-
-        target_pos = self.end_position
-        if target_pos is None:
-            return declaration_event.cancel(status_message="No target position")
-
-        valid = self.get_valid_targets()
-        if target_pos not in valid:
-            return declaration_event.cancel(status_message="Invalid target position")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message="Validated Telekinesis: Move"
-        )
-
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        grabbed = Entity.get(self.grabbed_entity_uuid)
-        if not caster or not grabbed:
-            return execution_event.cancel(status_message="Entity not found")
-
-        target_pos = self.end_position
-        if target_pos is None:
-            return execution_event.cancel(status_message="No target position")
-
-        start_pos = grabbed.senses.position
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"Moving {grabbed.name} to {target_pos}"
-        )
-
-        forced_event = ForcedMovementEvent(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=grabbed.uuid,
-            source_entity_name=caster.name,
-            target_entity_name=grabbed.name,
-            start_position=start_pos,
-            end_position=target_pos,
-            direction=(0, 0),
-            intended_distance=abs(target_pos[0] - start_pos[0]) * 5 + abs(target_pos[1] - start_pos[1]) * 5,
-            actual_distance=abs(target_pos[0] - start_pos[0]) * 5 + abs(target_pos[1] - start_pos[1]) * 5,
-            cause="telekinesis",
-            phase=EventPhase.DECLARATION,
-            parent_event=effect_event.uuid
-        )
-        forced_event = forced_event.phase_to(EventPhase.EXECUTION)
-        forced_event = forced_event.phase_to(EventPhase.EFFECT)
-        entry_cursor = EventQueue.event_cursor()
-        if not forced_event.canceled:
-            Entity.update_entity_position(
-                grabbed,
-                target_pos,
-                parent_event=forced_event.uuid,
-            )
-        forced_event.phase_to(
-            EventPhase.COMPLETION,
-            end_position=grabbed.position,
-            actual_distance=(
-                abs(grabbed.position[0] - start_pos[0])
-                + abs(grabbed.position[1] - start_pos[1])
-            )
-            * 5,
-        )
-
-        resolve_paid_entry_retreats(grabbed, since_cursor=entry_cursor, parent_event=effect_event)
-        caster.unregister_action("Telekinesis: Restrain")
-        caster.unregister_action("Telekinesis: Move")
-
-        return effect_event.with_updates(
-            status_message=f"{grabbed.name} moved to {target_pos} by Telekinesis"
-        )
-
-
-@srd_action_identity(
-    content_id="action.spell.telekinesis.grab",
-    display_name="Telekinesis",
-    description="Maintain a telekinetic grab and expose its follow-up choices.",
-    parent_spell_name="Telekinesis",
-    source_page=185,
-    sort_order=860,
-    dependencies=(
-        ContentDependency(
-            relation=ContentDependencyRelation.GRANTS_ACTION,
-            target_ref=get_content_declaration(TelekinesisMove).ref,
-            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-        ),
-        ContentDependency(
-            relation=ContentDependencyRelation.GRANTS_ACTION,
-            target_ref=get_content_declaration(TelekinesisRestrain).ref,
-            phase=ContentDependencyPhase.RUNTIME_REFERENCE,
-        ),
-    ),
-)
-class TelekinesisGrab(BaseAction):
-    """Contest one creature with Telekinesis and expose follow-up actions.
-
-    The caster receives this action template while concentrating on Telekinesis.
-    Each use costs one action. A failed Strength save registers zero-cost
-    restrain and move follow-up actions against the grabbed creature.
-    """
-    name: str = Field(default="Telekinesis", description="Action name.")
-    description: str = Field(default="Telekinetically grab a creature (STR save)", description="Action summary.")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
-    action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Action category.")
-    costs: List[Cost] = Field(default_factory=lambda: [
-        Cost(name="Telekinesis Cost", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ], description="Action-economy costs paid to use the maintained Telekinesis action.")
-
-    spell_dc: int = Field(default=10, description="Strength save DC for the grab attempt.")
-    valid_target_filter: str = Field(default="enemies", description="Target filter key for available action discovery.")
-
-    def _validate(self, declaration_event: ActionEvent) -> Optional[ActionEvent]:
-        source = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not source or not target:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        distance = source.senses.get_feet_distance(target.position)
-        if distance > 60:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft > 60ft)")
-
-        contact = source.senses.entities.get(target.uuid)
-        if contact is None or not contact.visual:
-            return declaration_event.cancel(status_message="Target not in line of sight")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message="Validated Telekinesis grab"
-        )
-
-    def _apply(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
+    def _create_declaration_event(self, parent_event: Optional[Event] = None,
+                                  use_register: bool = True) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not caster or not target:
-            return execution_event.cancel(status_message="Entity not found")
+        if caster is None:
+            return None
+        harmful = target is not None and not caster.is_ally(target)
+        return SpellEvent(name=self.name, description=self.description,
+            event_type=EventType.BASE_ACTION, phase=EventPhase.DECLARATION,
+            source_entity_uuid=caster.uuid, source_entity_name=caster.name,
+            target_entity_uuid=self.target_entity_uuid, target_entity_name=target.name if target else None,
+            target_position=target.position if target else None,
+            declared_target_entity_uuids=[target.uuid] if target else [],
+            parent_event=parent_event.uuid if parent_event else None, use_register=use_register,
+            costs=[BaseCost.model_validate(cost) for cost in self.effective_costs],
+            spell_id="telekinesis", spell_level=5,
+            cast_at_level=(self.effect_origin.effective_spell_level or 5) if self.effect_origin else 5,
+            spell_school="transmutation", target_type=TargetType.ENTITY, verbal=False,
+            source_position=caster.position, effect_source_position=caster.position,
+            retained_effect_origin=self.effect_origin, harmful=harmful,
+            harmful_target_entity_uuids=[target.uuid] if harmful and target else [],
+            save_ability="strength", save_dc=self.spell_dc, range_type="ranged", range_ft=60,
+            projectile_type="ray", damage_types=[DamageType.FORCE, DamageType.BLUDGEONING])
 
-        save_request = caster.create_saving_throw_request(
-            target_entity_uuid=target.uuid,
-            ability_name="strength",
-            dc=self.spell_dc,
-            parent_event=execution_event.uuid
-        )
-        _, _, success = target.saving_throw(save_request)
+    def validate_source_requirements_for_discovery(self) -> bool:
+        caster = Entity.get(self.source_entity_uuid)
+        marker = caster.active_conditions_by_uuid.get(self.marker_uuid) if caster else None
+        return marker is not None and marker.applied and marker.contributions_active()
 
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"STR save: {'Success' if success else 'Failure'}"
-        )
+    def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
+        if len(self.get_all_targets()) != 1:
+            return declaration_event.cancel(status_message="Choose exactly one creature")
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None or not self.validate_source_requirements_for_discovery():
+            return declaration_event.cancel(status_message="Telekinesis concentration has ended")
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        error = _telekinesis_selection_error(caster, target, self.end_position)
+        if error:
+            return declaration_event.cancel(status_message=error)
+        return declaration_event.phase_to(EventPhase.EXECUTION)
 
-        if success:
-            return effect_event.with_updates(
-                status_message=f"{target.name} resists Telekinesis (STR save)"
-            )
-
-        restrain = TelekinesisRestrain(
-            source_entity_uuid=caster.uuid,
-            grabbed_entity_uuid=target.uuid,
-            template=True
-        )
-        move = TelekinesisMove(
-            source_entity_uuid=caster.uuid,
-            grabbed_entity_uuid=target.uuid,
-            template=True
-        )
-        caster.register_action(restrain)
-        caster.register_action(move)
-
-        return effect_event.with_updates(
-            status_message=f"{target.name} grabbed by Telekinesis — choose Restrain or Move"
-        )
+    def _apply(self, execution_event: ActionEvent) -> ActionEvent:
+        caster = Entity.get(self.source_entity_uuid)
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None or self.end_position is None:
+            return execution_event.cancel(status_message="Creature or destination no longer available")
+        effect = execution_event.phase_to(EventPhase.EFFECT)
+        if not effect.canceled and self.validate_source_requirements_for_discovery():
+            _resolve_telekinetic_transfer(caster, target, self.end_position, effect,
+                self.spell_dc, self.effect_origin)
+        return effect
 
     def _apply_costs(self, execution_event: ActionEvent) -> Optional[ActionEvent]:
         return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
 
 
 class Telekinesis(SpellAction):
-    """Begin maintaining Telekinesis and optionally grab an initial target.
+    """Cast and move once; concentration grants paid, finite repeats for ten minutes."""
+    harmful: Optional[bool] = True
+    name: str = "Telekinesis"
+    description: str = "Move a creature up to 30ft; hostile landing deals 4d8 force + 2d6 bludgeoning"
+    spell_level: int = 5
+    spell_school: str = "transmutation"
+    concentration: bool = True
+    target_type: TargetType = TargetType.ENTITY
+    position_selection: EntityDestinationSelection = Field(default_factory=EntityDestinationSelection)
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60))
+    valid_target_filter: str = "all"
+    include_self: bool = True
+    projectile_type: Optional[str] = "ray"
 
-    Casting registers a maintained `TelekinesisGrab` action on the caster and
-    links that action marker to concentration cleanup. If the initial target is
-    not the caster, the first grab resolves immediately without an extra action
-    cost.
-    """
-    harmful: Optional[bool] = Field(default=True, description="This spell imposes a harmful effect on its recipients.")
-    name: str = Field(default="Telekinesis", description="Spell name.")
-    description: str = Field(default="Telekinetically grab, move, or restrain a creature (STR save)", description="Rules-facing spell summary.")
-    spell_level: int = Field(default=5, description="Base spell level.")
-    spell_school: str = Field(default="transmutation", description="Spell school.")
-    concentration: bool = Field(default=True, description="Whether the spell requires concentration.")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode.")
-    spell_range: Range = Field(
-        default_factory=lambda: Range(type=RangeType.RANGE, normal=60),
-        description="Maximum range for the grab target.",
-    )
-    valid_target_filter: str = Field(default="enemies", description="Target filter key for available action discovery.")
-    projectile_type: Optional[str] = Field(default="ray", description="Client-facing projectile visual key.")
+    def get_harmful_intent(self, caster: Entity, targets: List[UUID]) -> Tuple[bool, List[UUID]]:
+        recipients = [target_uuid for target_uuid in targets
+            if (target := Entity.get(target_uuid)) is not None and not caster.is_ally(target)]
+        return bool(recipients), recipients
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        los_event = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        if los_event is None or los_event.canceled:
-            return los_event
-
-        source = Entity.get(self.source_entity_uuid)
+        if len(self.get_all_targets()) != 1:
+            return declaration_event.cancel(status_message="Choose exactly one creature")
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return declaration_event.cancel(status_message="Caster not found")
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not source or not target:
-            return declaration_event.cancel(status_message="Entity not found")
-
-        distance = self.get_target_distance(target.position)
-        if distance > self.effective_range:
-            return declaration_event.cancel(status_message=f"Target out of range ({distance}ft)")
-
-        return los_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
+        error = _telekinesis_selection_error(caster, target, self.end_position)
+        if error:
+            return declaration_event.cancel(status_message=error)
+        return declaration_event.phase_to(EventPhase.EXECUTION)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return execution_event.cancel(status_message="Caster not found")
-
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None or target is None or self.end_position is None:
+            return execution_event.cancel(status_message="Creature or destination no longer available")
+        effect = execution_event.phase_to(EventPhase.EFFECT)
+        if effect.canceled:
+            return effect
+        repeat_uuid = uuid4()
+        marker = ConcentrationActionMarker(name="Telekinesis", source_entity_uuid=caster.uuid,
+            target_entity_uuid=caster.uuid, action_uuid=repeat_uuid, action_name="Telekinesis: Move",
+            duration=Duration(duration_type=DurationType.ROUNDS, duration=100), tags={ConditionTag.MAGICAL})
+        effect = self.apply_owned_condition(effect, marker)
+        if effect.canceled or not marker.applied:
+            return effect
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"{caster.name} casts Telekinesis"
-        )
-
-        grab = TelekinesisGrab(
-            source_entity_uuid=caster.uuid,
-            spell_dc=dc,
-            template=True
-        )
-        caster.register_action(grab)
-
-        concentration = self.ensure_concentration(effect_event)
-        marker = ConcentrationActionMarker(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            action_name=grab.name
-        )
-        caster.add_condition(marker, parent_event=effect_event)
-        concentration.add_linked_condition(caster.uuid, marker.uuid)
-
-        if self.target_entity_uuid and self.target_entity_uuid != caster.uuid:
-            first_grab = TelekinesisGrab(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=self.target_entity_uuid,
-                spell_dc=dc,
-                template=False,
-                costs=[],
-            )
-            first_grab.apply()
-
-        return effect_event.with_updates(
-            status_message=f"{caster.name} channels Telekinesis"
-        )
+        repeat = TelekinesisMove(uuid=repeat_uuid, source_entity_uuid=caster.uuid,
+            marker_uuid=marker.uuid, contribution_owner_uuid=marker.uuid, spell_dc=dc, effect_origin=marker.effect_origin, template=True)
+        caster.register_action(repeat)
+        _resolve_telekinetic_transfer(caster, target, self.end_position, effect, dc, marker.effect_origin)
+        return effect
 
 
 class RegeneratingEffect(BaseCondition):
@@ -2117,12 +1975,18 @@ class Longstrider(SpellAction):
     spell_level: int = 1
     spell_school: str = "transmutation"
     target_type: TargetType = TargetType.MULTI_ENTITY
+    entity_target_perception: EntityTargetPerception = EntityTargetPerception.TOUCH_CONTACT
     include_self: bool = True
     valid_target_filter: str = "self_or_allies"
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
 
     def get_multi_target_count(self) -> int:
         return self.alt_target_count or max(1, self.cast_at_level)
+
+    def _validate(self, event):
+        if len(self.get_all_targets()) > self.get_multi_target_count():
+            return event.cancel(status_message="Too many recipients for this Longstrider slot")
+        return super()._validate(event)
 
     def _apply(self, event: SpellEvent):
         effect_event = event.phase_to(EventPhase.EFFECT)
@@ -2155,6 +2019,7 @@ class Barkskin(SpellAction):
     concentration: bool = True
     target_type: TargetType = TargetType.ENTITY
     include_self: bool = True
+    entity_target_perception: EntityTargetPerception = EntityTargetPerception.TOUCH_CONTACT
     valid_target_filter: str = "self_or_allies"
     spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
 
@@ -2216,6 +2081,9 @@ class ShillelaghEffect(BaseCondition):
     weapon_uuid: UUID
     casting_ability: AbilityName
 
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={"affected_item_uuid": self.weapon_uuid})
+
     def _apply(self, event: Event):
         caster = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         weapon = cast(Weapon | None, Weapon.get(self.weapon_uuid))
@@ -2225,14 +2093,22 @@ class ShillelaghEffect(BaseCondition):
             damage_die=8, optional_ability=self.casting_ability)
 
         def released(transition: Event, actor_uuid: UUID):
-            if isinstance(transition, WeaponUnequipEvent) and transition.item_uuid == self.weapon_uuid:
-                actor = Entity.get(actor_uuid)
-                if actor is not None:
-                    actor.remove_condition_by_uuid(self.uuid, parent_event=transition)
+            if transition.canceled:
+                return None
+            actor = Entity.get(actor_uuid)
+            exact_release = isinstance(transition, WeaponUnequipEvent) and transition.item_uuid == self.weapon_uuid
+            changed_set = (isinstance(transition, (AttackEvent, EquipmentEvent))
+                and transition.phase is EventPhase.COMPLETION and actor is not None
+                and actor.equipment.active_weapon_set is not WeaponSet.MELEE)
+            if actor is not None and (exact_release or changed_set):
+                actor.remove_condition_by_uuid(self.uuid, parent_event=transition)
             return None
 
-        handler = EventHandler(name="Shillelagh release", source_entity_uuid=caster.uuid,
-            trigger_conditions=[Trigger(event_type=EventType.WEAPON_UNEQUIP, event_phase=EventPhase.EFFECT)],
+        handler = EventHandler(name="Shillelagh release", source_entity_uuid=caster.uuid, runs_while_suppressed=True,
+            trigger_conditions=[Trigger(event_type=EventType.WEAPON_UNEQUIP, event_phase=EventPhase.EFFECT),
+                Trigger(event_type=EventType.WEAPON_EQUIP, event_phase=EventPhase.COMPLETION),
+                Trigger(event_type=EventType.ATTACK, event_phase=EventPhase.COMPLETION,
+                    event_source_entity_uuid=caster.uuid)],
             event_processor=released)
         caster.add_event_handler(handler)
         return [], [handler.uuid], [], [], event.phase_to(EventPhase.EFFECT)
@@ -2253,9 +2129,29 @@ class Shillelagh(SpellAction):
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
     selected_weapon_uuid: UUID | None = None
 
-    def _create_declaration_event(self, parent_event: Event | None = None, use_register: bool = True):
+    def _held_weapon(self, slot: WeaponSlot | None = None) -> Weapon | None:
+        slot = self.weapon_slot if slot is None else slot
         caster = Entity.get(self.source_entity_uuid)
-        weapon = caster.equipment.get_weapon(self.weapon_slot) if caster else None
+        if (caster is None or caster.equipment.active_weapon_set is not WeaponSet.MELEE
+                or slot not in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF)):
+            return None
+        weapon = caster.equipment.get_weapon(slot)
+        return weapon if weapon is not None and weapon.weapon_kind in (WeaponKind.CLUB, WeaponKind.QUARTERSTAFF) and weapon.material is Material.WOOD else None
+
+    def get_discovery_variants(self, entity: Any) -> list[BaseAction]:
+        return [variant.model_copy(deep=True, update={"uuid": uuid4(), "weapon_slot": slot,
+                "registered_template_uuid": self.registered_template_uuid or self.uuid})
+            for variant in super().get_discovery_variants(entity)
+            for slot in (WeaponSlot.MELEE_MAIN, WeaponSlot.MELEE_OFF) if self._held_weapon(slot) is not None]
+
+    def get_discovery_template_name(self) -> str:
+        return f"{super().get_discovery_template_name()}__{self.weapon_slot.value}"
+
+    def get_discovery_display_name(self) -> str:
+        return f"{super().get_discovery_display_name()} ({'main hand' if self.weapon_slot is WeaponSlot.MELEE_MAIN else 'off hand'})"
+
+    def _create_declaration_event(self, parent_event: Event | None = None, use_register: bool = True):
+        weapon = self._held_weapon()
         self.selected_weapon_uuid = weapon.uuid if weapon else None
         declaration = super()._create_declaration_event(parent_event, use_register=use_register)
         return declaration.model_copy(update={"source_item_uuid":self.selected_weapon_uuid}) if declaration else None
@@ -2264,15 +2160,14 @@ class Shillelagh(SpellAction):
         cost=1, evaluator=entity_action_economy_cost_evaluator)])
 
     def _validate(self, event: SpellEvent):
-        caster = Entity.get(self.source_entity_uuid)
-        weapon = caster.equipment.get_weapon(self.weapon_slot) if caster else None
+        weapon = self._held_weapon()
         if weapon is None or (weapon.weapon_kind not in (WeaponKind.CLUB, WeaponKind.QUARTERSTAFF) or weapon.material != Material.WOOD):
             return event.cancel(status_message="Shillelagh requires a held wooden club or quarterstaff")
         return super()._validate(event)
 
     def _apply(self, event: SpellEvent):
         caster = Entity.get(self.source_entity_uuid)
-        weapon = caster.equipment.get_weapon(self.weapon_slot) if caster else None
+        weapon = self._held_weapon()
         if (caster is None or weapon is None or weapon.uuid != self.selected_weapon_uuid
                 or (weapon.weapon_kind not in (WeaponKind.CLUB, WeaponKind.QUARTERSTAFF) or weapon.material != Material.WOOD)):
             return event.cancel(status_message="Exact eligible held weapon was lost")

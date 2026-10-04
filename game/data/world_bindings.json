@@ -4213,29 +4213,6 @@
       "removalFadeMs": 600,
       "removalEasing": "smoothstep"
     },
-    "spatial_effect.spell.continual_flame": {
-      "layers": [
-        {
-          "assetId": "fire.continual_flame.hold.back",
-          "applicationAssetId": "fire.continual_flame.apply.back",
-          "side": "rear",
-          "composition": "clump"
-        },
-        {
-          "assetId": "fire.continual_flame.hold.front",
-          "applicationAssetId": "fire.continual_flame.apply.front",
-          "side": "front",
-          "composition": "clump"
-        }
-      ],
-      "assetPhase": "impact",
-      "holdStartFrame": 0,
-      "holdFrames": 64,
-      "fps": 32,
-      "scale": 0.5,
-      "removalFadeMs": 400,
-      "removalEasing": "smoothstep"
-    },
     "spatial_effect.spell.wall_of_thorns": {
       "layers": [
         {
@@ -4331,7 +4308,22 @@
               "pixelScale": 1.3333333333333333,
               "heightFeet": 10
             },
-            "heightFeet": 10
+            "heightFeet": 10,
+            "thorns": {
+              "components": "/thorns/components.json",
+              "nativeUnitsPerCell": 2.121320344,
+              "verticalScale": 1.224744871391589,
+              "palette": [
+                2238236,
+                4667427,
+                7430212,
+                10586977,
+                4476971,
+                6910269,
+                10197340,
+                13680790
+              ]
+            }
           }
         }
       ],
@@ -4427,7 +4419,20 @@
             "moduleLengthCells": 1,
             "widthFeet": 1,
             "pixelScale": 1,
-            "heightFeet": 15
+            "heightFeet": 15,
+            "flow": {
+              "material": "wind_streaks",
+              "components": "/wind/flow-components.json",
+              "nativeUnitsPerCell": 2.121320344,
+              "verticalScale": 1.224744871391589,
+              "palette": [
+                4478821,
+                7441564,
+                10862797,
+                14082789,
+                15855578
+              ]
+            }
           }
         }
       ],
@@ -4435,7 +4440,3435 @@
       "holdStartFrame": 0,
       "holdFrames": 64,
       "fps": 32,
-      "scale": 1
+      "scale": 1,
+      "interceptionComponents": "/wind/block-components.json"
+    },
+    "spatial_effect.spell.ice_storm": {
+      "layers": [
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -3.328145117436725,
+            -0.503617294702417
+          ],
+          "delayMs": 2592.709088772605
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -3.328145117436725,
+            -0.503617294702417
+          ],
+          "delayMs": 2592.709088772605
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -3.6609963773218626,
+            0.530610968693145
+          ],
+          "delayMs": 2133.0689260103068
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -3.6609963773218626,
+            0.530610968693145
+          ],
+          "delayMs": 2133.0689260103068
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.back",
+          "applicationAssetId": "weather.ice.ground2.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -2.387497077676426,
+            -2.5199179242582432
+          ],
+          "delayMs": 2394.796646330857
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.front",
+          "applicationAssetId": "weather.ice.ground2.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -2.387497077676426,
+            -2.5199179242582432
+          ],
+          "delayMs": 2394.796646330857
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.back",
+          "applicationAssetId": "weather.ice.ground0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -2.439646481948148,
+            -1.4347664726712537
+          ],
+          "delayMs": 2832.6524065741946
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.front",
+          "applicationAssetId": "weather.ice.ground0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -2.439646481948148,
+            -1.4347664726712537
+          ],
+          "delayMs": 2832.6524065741946
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -2.4549561947669645,
+            -0.5002248236465675
+          ],
+          "delayMs": 2111.406215213716
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -2.4549561947669645,
+            -0.5002248236465675
+          ],
+          "delayMs": 2111.406215213716
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -2.5904433138224703,
+            0.4775254274023609
+          ],
+          "delayMs": 3084.666546397781
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -2.5904433138224703,
+            0.4775254274023609
+          ],
+          "delayMs": 3084.666546397781
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.back",
+          "applicationAssetId": "weather.ice.ground2.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -2.5594152801468226,
+            1.5692591407911096
+          ],
+          "delayMs": 3221.5493374187613
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.front",
+          "applicationAssetId": "weather.ice.ground2.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -2.5594152801468226,
+            1.5692591407911096
+          ],
+          "delayMs": 3221.5493374187613
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -2.3559171875578615,
+            2.556938520894255
+          ],
+          "delayMs": 2174.1858481536806
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -2.3559171875578615,
+            2.556938520894255
+          ],
+          "delayMs": 2174.1858481536806
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.back",
+          "applicationAssetId": "weather.ice.ground0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -1.5009329924247141,
+            -2.3682667288097945
+          ],
+          "delayMs": 2129.454769534274
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.front",
+          "applicationAssetId": "weather.ice.ground0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -1.5009329924247141,
+            -2.3682667288097945
+          ],
+          "delayMs": 2129.454769534274
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -1.492014562787699,
+            -1.4151008692999312
+          ],
+          "delayMs": 2993.8089208881106
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -1.492014562787699,
+            -1.4151008692999312
+          ],
+          "delayMs": 2993.8089208881106
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -1.5805603487802729,
+            -0.5775064263001696
+          ],
+          "delayMs": 2581.598454968113
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -1.5805603487802729,
+            -0.5775064263001696
+          ],
+          "delayMs": 2581.598454968113
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -1.326740731982221,
+            0.38180693397225696
+          ],
+          "delayMs": 3210.823734869788
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -1.326740731982221,
+            0.38180693397225696
+          ],
+          "delayMs": 3210.823734869788
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.back",
+          "applicationAssetId": "weather.ice.ground2.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -1.382056061201365,
+            1.3922943068795575
+          ],
+          "delayMs": 2939.445937723573
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.front",
+          "applicationAssetId": "weather.ice.ground2.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -1.382056061201365,
+            1.3922943068795575
+          ],
+          "delayMs": 2939.445937723573
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.back",
+          "applicationAssetId": "weather.ice.ground0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -1.5430303762571385,
+            2.6446856476002267
+          ],
+          "delayMs": 2961.533001222048
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.front",
+          "applicationAssetId": "weather.ice.ground0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -1.5430303762571385,
+            2.6446856476002267
+          ],
+          "delayMs": 2961.533001222048
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.back",
+          "applicationAssetId": "weather.ice.ground0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -0.46938903130685505,
+            -3.3778787016483873
+          ],
+          "delayMs": 2848.317153658169
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.front",
+          "applicationAssetId": "weather.ice.ground0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -0.46938903130685505,
+            -3.3778787016483873
+          ],
+          "delayMs": 2848.317153658169
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -0.4786229406247003,
+            -2.602387734009244
+          ],
+          "delayMs": 2700.4840693380143
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -0.4786229406247003,
+            -2.602387734009244
+          ],
+          "delayMs": 2700.4840693380143
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.back",
+          "applicationAssetId": "weather.ice.ground0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -0.4859069514232033,
+            -1.364815685790927
+          ],
+          "delayMs": 2888.9198498527517
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.front",
+          "applicationAssetId": "weather.ice.ground0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -0.4859069514232033,
+            -1.364815685790927
+          ],
+          "delayMs": 2888.9198498527517
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -0.6424549053950613,
+            -0.6016752705756516
+          ],
+          "delayMs": 2150.8167333431597
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -0.6424549053950613,
+            -0.6016752705756516
+          ],
+          "delayMs": 2150.8167333431597
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.back",
+          "applicationAssetId": "weather.ice.ground0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -0.4498896259090543,
+            0.5728852411788466
+          ],
+          "delayMs": 2912.4183581243383
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.front",
+          "applicationAssetId": "weather.ice.ground0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -0.4498896259090543,
+            0.5728852411788466
+          ],
+          "delayMs": 2912.4183581243383
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -0.5199179242582431,
+            1.360638548843235
+          ],
+          "delayMs": 2963.7947366140875
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -0.5199179242582431,
+            1.360638548843235
+          ],
+          "delayMs": 2963.7947366140875
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.back",
+          "applicationAssetId": "weather.ice.ground2.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -0.43476647267125373,
+            2.471541207363771
+          ],
+          "delayMs": 3217.8287500355477
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.front",
+          "applicationAssetId": "weather.ice.ground2.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -0.43476647267125373,
+            2.471541207363771
+          ],
+          "delayMs": 3217.8287500355477
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.back",
+          "applicationAssetId": "weather.ice.ground0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            -0.5002248236465675,
+            3.4589155123678212
+          ],
+          "delayMs": 2881.1034313726764
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.front",
+          "applicationAssetId": "weather.ice.ground0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            -0.5002248236465675,
+            3.4589155123678212
+          ],
+          "delayMs": 2881.1034313726764
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            0.4775254274023609,
+            -3.446662039980583
+          ],
+          "delayMs": 2495.5887149790183
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            0.4775254274023609,
+            -3.446662039980583
+          ],
+          "delayMs": 2495.5887149790183
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            0.5692591407911095,
+            -2.4016315970574396
+          ],
+          "delayMs": 2551.0570411720405
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            0.5692591407911095,
+            -2.4016315970574396
+          ],
+          "delayMs": 2551.0570411720405
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.back",
+          "applicationAssetId": "weather.ice.ground0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            0.5569385208942549,
+            -1.4553659378358135
+          ],
+          "delayMs": 2351.699824999738
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.front",
+          "applicationAssetId": "weather.ice.ground0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            0.5569385208942549,
+            -1.4553659378358135
+          ],
+          "delayMs": 2351.699824999738
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            0.5671054072236075,
+            -0.37411794262699516
+          ],
+          "delayMs": 2970.1903878831185
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            0.5671054072236075,
+            -0.37411794262699516
+          ],
+          "delayMs": 2970.1903878831185
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            0.4511921853660169,
+            0.367741346006369
+          ],
+          "delayMs": 2651.9960960795256
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            0.4511921853660169,
+            0.367741346006369
+          ],
+          "delayMs": 2651.9960960795256
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.back",
+          "applicationAssetId": "weather.ice.ground0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            0.6317332711902054,
+            1.421200732287525
+          ],
+          "delayMs": 2316.105143232559
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.front",
+          "applicationAssetId": "weather.ice.ground0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            0.6317332711902054,
+            1.421200732287525
+          ],
+          "delayMs": 2316.105143232559
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            0.5848991307000688,
+            2.4483493040952453
+          ],
+          "delayMs": 2348.619770683396
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            0.5848991307000688,
+            2.4483493040952453
+          ],
+          "delayMs": 2348.619770683396
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            0.4224935736998304,
+            3.482286414507871
+          ],
+          "delayMs": 2858.0316965198986
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            0.4224935736998304,
+            3.482286414507871
+          ],
+          "delayMs": 2858.0316965198986
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            1.381806933972257,
+            -3.445940565159981
+          ],
+          "delayMs": 2857.634177283668
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            1.381806933972257,
+            -3.445940565159981
+          ],
+          "delayMs": 2857.634177283668
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            1.3922943068795575,
+            -2.6632750125389064
+          ],
+          "delayMs": 2943.634268891398
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            1.3922943068795575,
+            -2.6632750125389064
+          ],
+          "delayMs": 2943.634268891398
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            1.6446856476002267,
+            -1.505699442081459
+          ],
+          "delayMs": 2494.620486964774
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            1.6446856476002267,
+            -1.505699442081459
+          ],
+          "delayMs": 2494.620486964774
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.back",
+          "applicationAssetId": "weather.ice.ground0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            1.6543942538894043,
+            -0.6343986876549025
+          ],
+          "delayMs": 2870.56706196017
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.front",
+          "applicationAssetId": "weather.ice.ground0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            1.6543942538894043,
+            -0.6343986876549025
+          ],
+          "delayMs": 2870.56706196017
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.back",
+          "applicationAssetId": "weather.ice.ground2.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            1.6221212983516125,
+            0.6386361793776814
+          ],
+          "delayMs": 2943.9980262052327
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.front",
+          "applicationAssetId": "weather.ice.ground2.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            1.6221212983516125,
+            0.6386361793776814
+          ],
+          "delayMs": 2943.9980262052327
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.back",
+          "applicationAssetId": "weather.ice.ground2.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            1.397612265990756,
+            1.406381319992215
+          ],
+          "delayMs": 2795.608957290821
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.front",
+          "applicationAssetId": "weather.ice.ground2.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            1.397612265990756,
+            1.406381319992215
+          ],
+          "delayMs": 2795.608957290821
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.back",
+          "applicationAssetId": "weather.ice.ground2.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            1.635184314209073,
+            2.672682457722317
+          ],
+          "delayMs": 3176.2168628538316
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.front",
+          "applicationAssetId": "weather.ice.ground2.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            1.635184314209073,
+            2.672682457722317
+          ],
+          "delayMs": 3176.2168628538316
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.back",
+          "applicationAssetId": "weather.ice.ground0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            1.3983247294243484,
+            3.351184188893967
+          ],
+          "delayMs": 2683.013512792965
+        },
+        {
+          "assetId": "weather.ice.ground0.settled.front",
+          "applicationAssetId": "weather.ice.ground0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            1.3983247294243484,
+            3.351184188893967
+          ],
+          "delayMs": 2683.013512792965
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            2.360638548843235,
+            -2.438515313097014
+          ],
+          "delayMs": 2255.1640710989855
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            2.360638548843235,
+            -2.438515313097014
+          ],
+          "delayMs": 2255.1640710989855
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            2.471541207363771,
+            -1.6404642466779478
+          ],
+          "delayMs": 2362.6671421843607
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            2.471541207363771,
+            -1.6404642466779478
+          ],
+          "delayMs": 2362.6671421843607
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.back",
+          "applicationAssetId": "weather.ice.ground2.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            2.4589155123678212,
+            -0.36795135394640965
+          ],
+          "delayMs": 2129.840396692995
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.front",
+          "applicationAssetId": "weather.ice.ground2.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            2.4589155123678212,
+            -0.36795135394640965
+          ],
+          "delayMs": 2129.840396692995
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            2.553337960019417,
+            0.6703758275394648
+          ],
+          "delayMs": 2078.028304646065
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            2.553337960019417,
+            0.6703758275394648
+          ],
+          "delayMs": 2078.028304646065
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            2.5983684029425604,
+            1.3771140505452422
+          ],
+          "delayMs": 3074.6852044817356
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            2.5983684029425604,
+            1.3771140505452422
+          ],
+          "delayMs": 3074.6852044817356
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            2.5446340621641865,
+            2.453095625214337
+          ],
+          "delayMs": 2009.3671082267942
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            2.5446340621641865,
+            2.453095625214337
+          ],
+          "delayMs": 2009.3671082267942
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.back",
+          "applicationAssetId": "weather.ice.ground1.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            3.4483493040952453,
+            -1.5088104195467167
+          ],
+          "delayMs": 2985.7117427000017
+        },
+        {
+          "assetId": "weather.ice.ground1.settled.front",
+          "applicationAssetId": "weather.ice.ground1.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            3.4483493040952453,
+            -1.5088104195467167
+          ],
+          "delayMs": 2985.7117427000017
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.back",
+          "applicationAssetId": "weather.ice.ground2.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            3.482286414507871,
+            -0.33262734117424775
+          ],
+          "delayMs": 2320.8405370323785
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.front",
+          "applicationAssetId": "weather.ice.ground2.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            3.482286414507871,
+            -0.33262734117424775
+          ],
+          "delayMs": 2320.8405370323785
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.back",
+          "applicationAssetId": "weather.ice.ground2.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            3.554059434840019,
+            0.5913868756248121
+          ],
+          "delayMs": 2378.8409098287925
+        },
+        {
+          "assetId": "weather.ice.ground2.settled.front",
+          "applicationAssetId": "weather.ice.ground2.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            3.554059434840019,
+            0.5913868756248121
+          ],
+          "delayMs": 2378.8409098287925
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.back",
+          "applicationAssetId": "weather.ice.ground3.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "offsetCells": [
+            3.3367249874610936,
+            1.597571253404385
+          ],
+          "delayMs": 2275.6449607059008
+        },
+        {
+          "assetId": "weather.ice.ground3.settled.front",
+          "applicationAssetId": "weather.ice.ground3.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "offsetCells": [
+            3.3367249874610936,
+            1.597571253404385
+          ],
+          "delayMs": 2275.6449607059008
+        },
+        {
+          "assetId": "weather.ice.contact0.settled.back",
+          "composition": "clump",
+          "side": "rear",
+          "recipientTrackId": "recipient-back"
+        },
+        {
+          "assetId": "weather.ice.contact0.settled.front",
+          "composition": "clump",
+          "side": "front",
+          "recipientTrackId": "recipient-front"
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 1,
+      "fps": 32,
+      "scale": 0.7692307692307692
+    },
+    "spatial_effect.spell.sleet_storm": {
+      "layers": [
+        {
+          "assetId": "weather.sleet.storm.hold.ground.surface",
+          "applicationAssetId": "weather.sleet.storm.apply.ground.surface",
+          "removalAssetId": "weather.sleet.storm.remove.ground.surface",
+          "composition": "xyz_volume"
+        },
+        {
+          "assetId": "weather.sleet.storm.hold.back.surface",
+          "applicationAssetId": "weather.sleet.storm.apply.back.surface",
+          "removalAssetId": "weather.sleet.storm.remove.back.surface",
+          "composition": "xyz_volume"
+        },
+        {
+          "assetId": "weather.sleet.storm.hold.front.surface",
+          "applicationAssetId": "weather.sleet.storm.apply.front.surface",
+          "removalAssetId": "weather.sleet.storm.remove.front.surface",
+          "composition": "xyz_volume"
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 1.4285714285714286
+    },
+    "spatial_effect.spell.antimagic_field": {
+      "layers": [
+        {
+          "assetId": "utility.antimagic.hold.back",
+          "side": "rear",
+          "composition": "billboard"
+        },
+        {
+          "assetId": "utility.antimagic.hold.front",
+          "side": "front",
+          "composition": "billboard"
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 0.7071067811865476,
+      "formationFadeMs": 900,
+      "removalFadeMs": 700,
+      "removalEasing": "smoothstep"
+    },
+    "spatial_effect.spell.spirit_guardians": {
+      "layers": [
+        {
+          "assetId": "holy.spirit.radiant",
+          "composition": "orbit",
+          "whenEnergyType": "Radiant",
+          "orbit": {
+            "count": 7,
+            "radiusCells": 2.65,
+            "heightCells": 0.64,
+            "periodMs": 2000,
+            "slotsPerCycle": 3,
+            "sizePixels": 68,
+            "formationMs": 1000,
+            "trailMs": 400,
+            "trailSamples": 24,
+            "bright": 16773072,
+            "middle": 15054940,
+            "mistLow": [
+              203,
+              169,
+              98
+            ],
+            "mistRange": [
+              37,
+              45,
+              49
+            ],
+            "mistRadiusCells": 3,
+            "blendMode": "screen"
+          }
+        },
+        {
+          "assetId": "holy.spirit.necrotic",
+          "composition": "orbit",
+          "whenEnergyType": "Necrotic",
+          "orbit": {
+            "count": 7,
+            "radiusCells": 2.65,
+            "heightCells": 0.64,
+            "periodMs": 2000,
+            "slotsPerCycle": 3,
+            "sizePixels": 68,
+            "formationMs": 1000,
+            "trailMs": 400,
+            "trailSamples": 24,
+            "bright": 11927523,
+            "middle": 5163430,
+            "mistLow": [
+              52,
+              143,
+              122
+            ],
+            "mistRange": [
+              50,
+              65,
+              62
+            ],
+            "mistRadiusCells": 3,
+            "blendMode": "screen"
+          }
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 16,
+      "fps": 32,
+      "scale": 1,
+      "removalFadeMs": 1000,
+      "removalEasing": "smoothstep",
+      "contactMediaByEnergy": {
+        "Radiant": [
+          {
+            "id": "holy.contact.radiant.behind",
+            "assetId": "holy.contact.radiant",
+            "attachment": "target_ground",
+            "scale": 0.575,
+            "alpha": 0.6,
+            "blendMode": "normal",
+            "depth": "behind_body",
+            "emissionPointByFacing": {
+              "E": {
+                "x": 0,
+                "y": 6
+              },
+              "SE": {
+                "x": 0,
+                "y": 6
+              },
+              "S": {
+                "x": 0,
+                "y": 6
+              },
+              "SW": {
+                "x": 0,
+                "y": 6
+              },
+              "W": {
+                "x": 0,
+                "y": 6
+              },
+              "NW": {
+                "x": 0,
+                "y": 6
+              },
+              "N": {
+                "x": 0,
+                "y": 6
+              },
+              "NE": {
+                "x": 0,
+                "y": 6
+              }
+            }
+          },
+          {
+            "id": "holy.contact.radiant.front",
+            "assetId": "holy.contact.radiant",
+            "attachment": "target_ground",
+            "scale": 0.575,
+            "alpha": 0.38,
+            "blendMode": "normal",
+            "depth": "front_body",
+            "emissionPointByFacing": {
+              "E": {
+                "x": 0,
+                "y": 6
+              },
+              "SE": {
+                "x": 0,
+                "y": 6
+              },
+              "S": {
+                "x": 0,
+                "y": 6
+              },
+              "SW": {
+                "x": 0,
+                "y": 6
+              },
+              "W": {
+                "x": 0,
+                "y": 6
+              },
+              "NW": {
+                "x": 0,
+                "y": 6
+              },
+              "N": {
+                "x": 0,
+                "y": 6
+              },
+              "NE": {
+                "x": 0,
+                "y": 6
+              }
+            }
+          }
+        ],
+        "Necrotic": [
+          {
+            "id": "holy.contact.necrotic.behind",
+            "assetId": "holy.contact.necrotic",
+            "attachment": "target_ground",
+            "scale": 0.575,
+            "alpha": 0.6,
+            "blendMode": "normal",
+            "depth": "behind_body",
+            "emissionPointByFacing": {
+              "E": {
+                "x": 0,
+                "y": 6
+              },
+              "SE": {
+                "x": 0,
+                "y": 6
+              },
+              "S": {
+                "x": 0,
+                "y": 6
+              },
+              "SW": {
+                "x": 0,
+                "y": 6
+              },
+              "W": {
+                "x": 0,
+                "y": 6
+              },
+              "NW": {
+                "x": 0,
+                "y": 6
+              },
+              "N": {
+                "x": 0,
+                "y": 6
+              },
+              "NE": {
+                "x": 0,
+                "y": 6
+              }
+            }
+          },
+          {
+            "id": "holy.contact.necrotic.front",
+            "assetId": "holy.contact.necrotic",
+            "attachment": "target_ground",
+            "scale": 0.575,
+            "alpha": 0.38,
+            "blendMode": "normal",
+            "depth": "front_body",
+            "emissionPointByFacing": {
+              "E": {
+                "x": 0,
+                "y": 6
+              },
+              "SE": {
+                "x": 0,
+                "y": 6
+              },
+              "S": {
+                "x": 0,
+                "y": 6
+              },
+              "SW": {
+                "x": 0,
+                "y": 6
+              },
+              "W": {
+                "x": 0,
+                "y": 6
+              },
+              "NW": {
+                "x": 0,
+                "y": 6
+              },
+              "N": {
+                "x": 0,
+                "y": 6
+              },
+              "NE": {
+                "x": 0,
+                "y": 6
+              }
+            }
+          }
+        ]
+      },
+      "damageMaterials": {
+        "Radiant": {
+          "id": "radiant-body-contact",
+          "material": {
+            "mapping": "energy_burn",
+            "colors": [
+              15181114,
+              16772273
+            ]
+          },
+          "points": [
+            {
+              "elapsedMs": 0,
+              "strength": 0
+            },
+            {
+              "elapsedMs": 80,
+              "strength": 0.9
+            },
+            {
+              "elapsedMs": 483.0,
+              "strength": 0.9
+            },
+            {
+              "elapsedMs": 1150,
+              "strength": 0
+            }
+          ]
+        },
+        "Necrotic": {
+          "id": "necrotic-body-contact",
+          "material": {
+            "mapping": "energy_burn",
+            "colors": [
+              2995855,
+              9566929
+            ]
+          },
+          "points": [
+            {
+              "elapsedMs": 0,
+              "strength": 0
+            },
+            {
+              "elapsedMs": 80,
+              "strength": 0.9
+            },
+            {
+              "elapsedMs": 483.0,
+              "strength": 0.9
+            },
+            {
+              "elapsedMs": 1150,
+              "strength": 0
+            }
+          ]
+        }
+      }
+    },
+    "spatial_effect.spell.guardian_of_faith": {
+      "layers": [
+        {
+          "assetId": "holy.guardian",
+          "composition": "clump",
+          "worldFacing": "S",
+          "motes": {
+            "count": 24,
+            "radiusCells": 0.25,
+            "radialGrowthCells": 0.2,
+            "heightCells": 2.65,
+            "palette": [
+              14267508,
+              16770474
+            ],
+            "brightEvery": 3,
+            "alpha": 0.5,
+            "sizePixels": [
+              1.5,
+              2.8
+            ],
+            "blendMode": "screen"
+          }
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 0.775,
+      "formationFadeMs": 1000,
+      "removalFadeMs": 1150,
+      "removalEasing": "smoothstep",
+      "directedResponse": {
+        "assetId": "holy.guardian",
+        "firstFrame": 64,
+        "frames": 32,
+        "fps": 32,
+        "contactFrame": 13,
+        "scale": 0.775,
+        "bladeMotion": [
+          [
+            [
+              0.555580079555511,
+              1.84795364688453,
+              -0.156271606683731
+            ],
+            [
+              0.792208552360535,
+              1.84795598289999,
+              -1.71707093715668
+            ]
+          ],
+          [
+            [
+              0.513216435909271,
+              1.877199684421,
+              -0.211062997579575
+            ],
+            [
+              0.51095849275589,
+              2.26500803475352,
+              -1.76326894760132
+            ]
+          ],
+          [
+            [
+              0.439004093408585,
+              1.9386019967525,
+              -0.298960089683533
+            ],
+            [
+              -0.0438602566719055,
+              2.91786551705602,
+              -1.61477077007294
+            ]
+          ],
+          [
+            [
+              0.348746120929718,
+              2.02385736293225,
+              -0.379400312900543
+            ],
+            [
+              -0.59418660402298,
+              3.3860897395428,
+              -1.14233064651489
+            ]
+          ],
+          [
+            [
+              0.26356703042984,
+              2.10256735979784,
+              -0.431616693735123
+            ],
+            [
+              -0.939282596111298,
+              3.4660778288662,
+              -0.581350147724152
+            ]
+          ],
+          [
+            [
+              0.205152302980423,
+              2.1524769140757,
+              -0.458455741405487
+            ],
+            [
+              -1.07772529125214,
+              3.34800538751855,
+              -0.213532119989395
+            ]
+          ],
+          [
+            [
+              0.173893108963966,
+              2.17612250055103,
+              -0.472367167472839
+            ],
+            [
+              -1.12430262565613,
+              3.23206485227884,
+              -0.032653421163559
+            ]
+          ],
+          [
+            [
+              0.156402632594109,
+              2.18808129368867,
+              -0.480721235275269
+            ],
+            [
+              -1.1419278383255,
+              3.15201456654385,
+              0.0626400113105774
+            ]
+          ],
+          [
+            [
+              0.145260587334633,
+              2.19554836710224,
+              -0.485888481140137
+            ],
+            [
+              -1.1493546962738,
+              3.09956488745665,
+              0.11946302652359
+            ]
+          ],
+          [
+            [
+              0.139141246676445,
+              2.19971027064375,
+              -0.488746702671051
+            ],
+            [
+              -1.15213048458099,
+              3.07058311166894,
+              0.149578452110291
+            ]
+          ],
+          [
+            [
+              0.136660292744637,
+              2.20140709387253,
+              -0.489976555109024
+            ],
+            [
+              -1.15287411212921,
+              3.0584089671062,
+              0.162042230367661
+            ]
+          ],
+          [
+            [
+              0.188719928264618,
+              2.18217175858216,
+              -0.49675390124321
+            ],
+            [
+              -1.18870306015015,
+              3.08434224272037,
+              -0.113322824239731
+            ]
+          ],
+          [
+            [
+              0.37482225894928,
+              2.11181214097544,
+              -0.492967158555985
+            ],
+            [
+              -0.923909187316895,
+              2.94646856633749,
+              -1.14267587661743
+            ]
+          ],
+          [
+            [
+              0.6303870677948,
+              2.0115331293763,
+              -0.391785353422165
+            ],
+            [
+              0.411153495311737,
+              2.18122771633493,
+              -1.9500480890274
+            ]
+          ],
+          [
+            [
+              0.787121772766113,
+              1.95856660686886,
+              -0.201015710830688
+            ],
+            [
+              1.74770617485046,
+              1.45817180149236,
+              -1.39751505851746
+            ]
+          ],
+          [
+            [
+              0.832836627960205,
+              1.95730311450767,
+              -0.0656057968735695
+            ],
+            [
+              2.20512008666992,
+              1.21800612518933,
+              -0.620796263217926
+            ]
+          ],
+          [
+            [
+              0.828806579113007,
+              1.93959129929924,
+              -0.0373592004179955
+            ],
+            [
+              2.20075440406799,
+              1.08733898349589,
+              -0.495893716812134
+            ]
+          ],
+          [
+            [
+              0.815200388431549,
+              1.91615843623162,
+              -0.0340928956866264
+            ],
+            [
+              2.12915754318237,
+              0.962126656899848,
+              -0.548747360706329
+            ]
+          ],
+          [
+            [
+              0.799720764160156,
+              1.8947049082623,
+              -0.0350407510995865
+            ],
+            [
+              2.04471826553345,
+              0.857896567154337,
+              -0.627216577529907
+            ]
+          ],
+          [
+            [
+              0.78249979019165,
+              1.87536576628499,
+              -0.0395827293395996
+            ],
+            [
+              1.94794929027557,
+              0.779218617500822,
+              -0.72717821598053
+            ]
+          ],
+          [
+            [
+              0.763423264026642,
+              1.8585953653064,
+              -0.0470958389341831
+            ],
+            [
+              1.83954453468323,
+              0.730979387276377,
+              -0.843665659427643
+            ]
+          ],
+          [
+            [
+              0.742511391639709,
+              1.84487069048298,
+              -0.0568783804774284
+            ],
+            [
+              1.72105026245117,
+              0.717675341236484,
+              -0.970959722995758
+            ]
+          ],
+          [
+            [
+              0.720566093921661,
+              1.83460974258088,
+              -0.0688643977046013
+            ],
+            [
+              1.59641695022583,
+              0.747537356849201,
+              -1.10561156272888
+            ]
+          ],
+          [
+            [
+              0.697942018508911,
+              1.82779777550249,
+              -0.0818439945578575
+            ],
+            [
+              1.46974062919617,
+              0.817141565456982,
+              -1.23703920841217
+            ]
+          ],
+          [
+            [
+              0.674985289573669,
+              1.82423359991646,
+              -0.0948213338851929
+            ],
+            [
+              1.34501469135284,
+              0.919765279572258,
+              -1.35699832439423
+            ]
+          ],
+          [
+            [
+              0.652187466621399,
+              1.82363484995422,
+              -0.107337661087513
+            ],
+            [
+              1.22596836090088,
+              1.04941464853055,
+              -1.46125531196594
+            ]
+          ],
+          [
+            [
+              0.630086362361908,
+              1.82555666067186,
+              -0.119032397866249
+            ],
+            [
+              1.11597728729248,
+              1.19835826416906,
+              -1.54717135429382
+            ]
+          ],
+          [
+            [
+              0.609836041927338,
+              1.82929822743178,
+              -0.129522100090981
+            ],
+            [
+              1.02021622657776,
+              1.35436117252264,
+              -1.61262047290802
+            ]
+          ],
+          [
+            [
+              0.592717409133911,
+              1.83387229170077,
+              -0.138454630970955
+            ],
+            [
+              0.943068504333496,
+              1.50170432557004,
+              -1.65787601470947
+            ]
+          ],
+          [
+            [
+              0.578265011310577,
+              1.83868112552337,
+              -0.145601466298103
+            ],
+            [
+              0.881626725196838,
+              1.63222261927847,
+              -1.68722724914551
+            ]
+          ],
+          [
+            [
+              0.566962718963623,
+              1.8430302023035,
+              -0.150963991880417
+            ],
+            [
+              0.836027503013611,
+              1.73787855445955,
+              -1.70454370975494
+            ]
+          ],
+          [
+            [
+              0.55926501750946,
+              1.84629215588957,
+              -0.154543220996857
+            ],
+            [
+              0.80618816614151,
+              1.81177592147743,
+              -1.71353697776794
+            ]
+          ]
+        ],
+        "bladeWorldScale": 0.7521675074386314,
+        "palette": [
+          14069079,
+          16773307,
+          16770721
+        ],
+        "blendMode": "screen"
+      },
+      "contactMediaByEnergy": {
+        "Radiant": [
+          {
+            "id": "holy.contact.radiant",
+            "assetId": "holy.contact.radiant",
+            "attachment": "target_ground",
+            "scale": 0.6,
+            "alpha": 1,
+            "blendMode": "screen",
+            "durationMs": 1150,
+            "fadeOutMs": 750,
+            "depth": "front_body",
+            "emissionPointByFacing": {
+              "E": {
+                "x": 0,
+                "y": -5.833333333333333
+              },
+              "SE": {
+                "x": 0,
+                "y": -5.833333333333333
+              },
+              "S": {
+                "x": 0,
+                "y": -5.833333333333333
+              },
+              "SW": {
+                "x": 0,
+                "y": -5.833333333333333
+              },
+              "W": {
+                "x": 0,
+                "y": -5.833333333333333
+              },
+              "NW": {
+                "x": 0,
+                "y": -5.833333333333333
+              },
+              "N": {
+                "x": 0,
+                "y": -5.833333333333333
+              },
+              "NE": {
+                "x": 0,
+                "y": -5.833333333333333
+              }
+            }
+          }
+        ]
+      },
+      "damageMaterials": {
+        "Radiant": {
+          "id": "guardian-etched-contact",
+          "material": {
+            "mapping": "etched_burn",
+            "colors": [
+              11958817,
+              16768904,
+              16773318
+            ]
+          },
+          "points": [
+            {
+              "elapsedMs": 0,
+              "strength": 0
+            },
+            {
+              "elapsedMs": 1,
+              "strength": 0.78
+            },
+            {
+              "elapsedMs": 200,
+              "strength": 0.78
+            },
+            {
+              "elapsedMs": 850,
+              "strength": 0
+            }
+          ]
+        }
+      }
+    },
+    "spatial_effect.spell.heroes_feast": {
+      "layers": [
+        {
+          "assetId": "holy.feast",
+          "composition": "clump",
+          "groundShadow": {
+            "radiiCells": [
+              0.462,
+              0.395
+            ],
+            "color": 338207,
+            "alpha": 0.16
+          },
+          "motes": {
+            "count": 32,
+            "radiusCells": 1.2,
+            "heightCells": 1.4,
+            "depthRatio": 0.5,
+            "palette": [
+              9359544,
+              15595721
+            ],
+            "brightEvery": 4,
+            "alpha": 0.7,
+            "sizePixels": [
+              2,
+              3
+            ],
+            "formationOnlyMs": 2000,
+            "blendMode": "screen"
+          }
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 0.636395,
+      "formationFadeMs": 1350,
+      "removalFadeMs": 450,
+      "removalEasing": "smoothstep"
+    },
+    "spatial_effect.material.fire": {
+      "layers": [
+        {
+          "assetId": "surface.ignition.growth_v36_d0_v0.hold.back",
+          "applicationAssetId": "surface.ignition.growth_v36_d0_v0.application.back",
+          "composition": "cell_modules",
+          "side": "rear",
+          "cellVariants": [
+            {
+              "assetId": "surface.ignition.growth_v36_d0_v0.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v36_d0_v0.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v36_d0_v1.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v36_d0_v1.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v36_d1_v0.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v36_d1_v0.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d1_v1.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v35_d1_v1.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d2_v0.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v35_d2_v0.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d2_v1.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v35_d2_v1.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d3_v0.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v35_d3_v0.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d3_v1.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v35_d3_v1.application.back"
+            }
+          ]
+        },
+        {
+          "assetId": "surface.ignition.growth_v36_d0_v0.hold.front",
+          "applicationAssetId": "surface.ignition.growth_v36_d0_v0.application.front",
+          "composition": "cell_modules",
+          "side": "front",
+          "cellVariants": [
+            {
+              "assetId": "surface.ignition.growth_v36_d0_v0.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v36_d0_v0.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v36_d0_v1.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v36_d0_v1.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v36_d1_v0.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v36_d1_v0.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d1_v1.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v35_d1_v1.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d2_v0.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v35_d2_v0.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d2_v1.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v35_d2_v1.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d3_v0.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v35_d3_v0.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d3_v1.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v35_d3_v1.application.front"
+            }
+          ]
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 1,
+      "loopCrossfadeMs": 500,
+      "removalFadeMs": 650,
+      "quenchVariants": [
+        {
+          "rearAssetId": "surface.ignition.quench_wisp_0.quench.back",
+          "frontAssetId": "surface.ignition.quench_wisp_0.quench.front"
+        },
+        {
+          "rearAssetId": "surface.ignition.quench_wisp_1.quench.back",
+          "frontAssetId": "surface.ignition.quench_wisp_1.quench.front"
+        },
+        {
+          "rearAssetId": "surface.ignition.quench_wisp_2.quench.back",
+          "frontAssetId": "surface.ignition.quench_wisp_2.quench.front"
+        }
+      ]
+    },
+    "spatial_effect.spell.web.burning": {
+      "layers": [
+        {
+          "assetId": "surface.ignition.growth_v36_d0_v0.hold.back",
+          "applicationAssetId": "surface.ignition.growth_v36_d0_v0.application.back",
+          "composition": "cell_modules",
+          "side": "rear",
+          "cellVariants": [
+            {
+              "assetId": "surface.ignition.growth_v36_d0_v0.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v36_d0_v0.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v36_d0_v1.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v36_d0_v1.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v36_d1_v0.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v36_d1_v0.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d1_v1.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v35_d1_v1.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d2_v0.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v35_d2_v0.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d2_v1.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v35_d2_v1.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d3_v0.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v35_d3_v0.application.back"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d3_v1.hold.back",
+              "applicationAssetId": "surface.ignition.growth_v35_d3_v1.application.back"
+            }
+          ]
+        },
+        {
+          "assetId": "surface.ignition.growth_v36_d0_v0.hold.front",
+          "applicationAssetId": "surface.ignition.growth_v36_d0_v0.application.front",
+          "composition": "cell_modules",
+          "side": "front",
+          "cellVariants": [
+            {
+              "assetId": "surface.ignition.growth_v36_d0_v0.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v36_d0_v0.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v36_d0_v1.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v36_d0_v1.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v36_d1_v0.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v36_d1_v0.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d1_v1.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v35_d1_v1.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d2_v0.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v35_d2_v0.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d2_v1.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v35_d2_v1.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d3_v0.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v35_d3_v0.application.front"
+            },
+            {
+              "assetId": "surface.ignition.growth_v35_d3_v1.hold.front",
+              "applicationAssetId": "surface.ignition.growth_v35_d3_v1.application.front"
+            }
+          ]
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 1,
+      "loopCrossfadeMs": 500,
+      "removalFadeMs": 650,
+      "quenchVariants": [
+        {
+          "rearAssetId": "surface.ignition.quench_wisp_0.quench.back",
+          "frontAssetId": "surface.ignition.quench_wisp_0.quench.front"
+        },
+        {
+          "rearAssetId": "surface.ignition.quench_wisp_1.quench.back",
+          "frontAssetId": "surface.ignition.quench_wisp_1.quench.front"
+        },
+        {
+          "rearAssetId": "surface.ignition.quench_wisp_2.quench.back",
+          "frontAssetId": "surface.ignition.quench_wisp_2.quench.front"
+        }
+      ]
+    },
+    "spatial_effect.spell.frigid_air": {
+      "layers": [
+        {
+          "assetId": "wall.frigid_air_d0.hold.back",
+          "composition": "wall_assembly",
+          "wallAssembly": {
+            "modules": [
+              {
+                "tangent": [
+                  1,
+                  0
+                ],
+                "assetId": "wall.frigid_air_d0.hold.back"
+              }
+            ],
+            "moduleLengthCells": 2,
+            "heightFeet": 10,
+            "widthFeet": 1,
+            "pixelScale": 1,
+            "air": {
+              "mesh": "/construction/air-sphere.json",
+              "sourceRadiusFeet": 10,
+              "nativeUnitsPerCell": 2.121320344,
+              "verticalScale": 1.224744871391589,
+              "palette": [
+                1587797,
+                3302789,
+                6331836,
+                10933732,
+                14872813,
+                6445127,
+                10128754
+              ]
+            }
+          }
+        }
+      ],
+      "assetPhase": "impact",
+      "holdStartFrame": 0,
+      "holdFrames": 256,
+      "fps": 32,
+      "scale": 1,
+      "removalFadeMs": 850,
+      "removalEasing": "smoothstep"
+    },
+    "spatial_effect.class_feature.draconic_presence": {
+      "layers": [
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            0.939441866433556,
+            0.0
+          ],
+          "phaseOffsetMs": 0,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -1.199817660537512,
+            1.0991317676633596
+          ],
+          "phaseOffsetMs": 137,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            0.1836504007215134,
+            -2.0926126331348676
+          ],
+          "phaseOffsetMs": 274,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            1.5122941276322532,
+            1.9725170758161121
+          ],
+          "phaseOffsetMs": 411,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -2.775243674736399,
+            -0.49089889947837556
+          ],
+          "phaseOffsetMs": 548,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            2.628950731213263,
+            -1.6723275030157956
+          ],
+          "phaseOffsetMs": 685,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -0.879328703633117,
+            3.27107693218503
+          ],
+          "phaseOffsetMs": 822,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -1.6769889934691193,
+            -3.22892756529252
+          ],
+          "phaseOffsetMs": 959,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            3.638386500678386,
+            1.328725336034526
+          ],
+          "phaseOffsetMs": 1096,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -3.785129113504887,
+            1.5624554335573262
+          ],
+          "phaseOffsetMs": 1233,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            1.8246749499346084,
+            -3.8992477166310633
+          ],
+          "phaseOffsetMs": 1370,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            1.3484058579274203,
+            4.298892312177031
+          ],
+          "phaseOffsetMs": 1507,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -4.064084661461805,
+            -2.355205166153253
+          ],
+          "phaseOffsetMs": 1644,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            4.7676231824101,
+            -1.0481635089842645
+          ],
+          "phaseOffsetMs": 1781,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -2.909594812295792,
+            4.138627504390573
+          ],
+          "phaseOffsetMs": 1918,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -0.6722047251731357,
+            -5.187217215435265
+          ],
+          "phaseOffsetMs": 2055,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            4.126580754020616,
+            3.4778606864013453
+          ],
+          "phaseOffsetMs": 2192,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -5.55306606437402,
+            0.22965843982607628
+          ],
+          "phaseOffsetMs": 2329,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            4.050519402066581,
+            -4.030841144052222
+          ],
+          "phaseOffsetMs": 2466,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -0.270970975529855,
+            5.860551554788915
+          ],
+          "phaseOffsetMs": 2603,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -3.8541192945059155,
+            -4.61847986901014
+          ],
+          "phaseOffsetMs": 2740,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            6.1053208641264085,
+            0.821432300079443
+          ],
+          "phaseOffsetMs": 2877,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -5.1730044716277614,
+            3.599280574626899
+          ],
+          "phaseOffsetMs": 3014,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            1.4135341338662517,
+            -6.283455992650754
+          ],
+          "phaseOffsetMs": 3151,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            3.269539162332405,
+            5.705708866212396
+          ],
+          "phaseOffsetMs": 3288,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -6.391586446151189,
+            -2.0390499606907015
+          ],
+          "phaseOffsetMs": 3425,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            6.208584318942624,
+            -2.868568429759417
+          ],
+          "phaseOffsetMs": 3562,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -2.68968141726325,
+            6.426968180727032
+          ],
+          "phaseOffsetMs": 3699,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -2.400559908297777,
+            -6.674033285048755
+          ],
+          "phaseOffsetMs": 3836,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            6.387540403176332,
+            3.35705790862648
+          ],
+          "phaseOffsetMs": 3973,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -7.094912470936931,
+            1.870248452650495
+          ],
+          "phaseOffsetMs": 4110,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            4.0327598747243005,
+            -6.271966364588377
+          ],
+          "phaseOffsetMs": 4247,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            1.2829138103977957,
+            7.464579591753391
+          ],
+          "phaseOffsetMs": 4384,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -6.079661537289055,
+            -4.70835788352532
+          ],
+          "phaseOffsetMs": 4521,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            7.776941195509358,
+            -0.6443648421141206
+          ],
+          "phaseOffsetMs": 4658,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -5.375462448728019,
+            5.810811123354
+          ],
+          "phaseOffsetMs": 4795,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            0.039089573227702415,
+            -8.026499641503811
+          ],
+          "phaseOffsetMs": 4932,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            5.466378065537917,
+            6.025781059349749
+          ],
+          "phaseOffsetMs": 5069,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -8.208397786440836,
+            -0.7606801896866792
+          ],
+          "phaseOffsetMs": 5206,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            6.651179872594648,
+            -5.048102308257701
+          ],
+          "phaseOffsetMs": 5343,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -1.5132256030002702,
+            8.318460249798981
+          ],
+          "phaseOffsetMs": 5480,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -4.558491829190001,
+            -7.243748127667441
+          ],
+          "phaseOffsetMs": 5617,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            8.353230358979042,
+            2.2891874769281726
+          ],
+          "phaseOffsetMs": 5754,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -7.795863733384865,
+            4.000805847076912
+          ],
+          "phaseOffsetMs": 5891,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            3.080731531632812,
+            -8.310002048515384
+          ],
+          "phaseOffsetMs": 6028,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            3.379030562029767,
+            8.300258750063861
+          ],
+          "phaseOffsetMs": 6165,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -8.186846126543891,
+            -3.8797932159140247
+          ],
+          "phaseOffsetMs": 6302,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            8.750083675317818,
+            -2.6978477743772276
+          ],
+          "phaseOffsetMs": 6439,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.awe.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "awe",
+          "offsetCells": [
+            -4.678147097515982,
+            7.982630438244943
+          ],
+          "phaseOffsetMs": 6576,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            0.939441866433556,
+            0.0
+          ],
+          "phaseOffsetMs": 0,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -1.199817660537512,
+            1.0991317676633596
+          ],
+          "phaseOffsetMs": 137,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            0.1836504007215134,
+            -2.0926126331348676
+          ],
+          "phaseOffsetMs": 274,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            1.5122941276322532,
+            1.9725170758161121
+          ],
+          "phaseOffsetMs": 411,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -2.775243674736399,
+            -0.49089889947837556
+          ],
+          "phaseOffsetMs": 548,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            2.628950731213263,
+            -1.6723275030157956
+          ],
+          "phaseOffsetMs": 685,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -0.879328703633117,
+            3.27107693218503
+          ],
+          "phaseOffsetMs": 822,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -1.6769889934691193,
+            -3.22892756529252
+          ],
+          "phaseOffsetMs": 959,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            3.638386500678386,
+            1.328725336034526
+          ],
+          "phaseOffsetMs": 1096,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -3.785129113504887,
+            1.5624554335573262
+          ],
+          "phaseOffsetMs": 1233,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            1.8246749499346084,
+            -3.8992477166310633
+          ],
+          "phaseOffsetMs": 1370,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            1.3484058579274203,
+            4.298892312177031
+          ],
+          "phaseOffsetMs": 1507,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -4.064084661461805,
+            -2.355205166153253
+          ],
+          "phaseOffsetMs": 1644,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            4.7676231824101,
+            -1.0481635089842645
+          ],
+          "phaseOffsetMs": 1781,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -2.909594812295792,
+            4.138627504390573
+          ],
+          "phaseOffsetMs": 1918,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -0.6722047251731357,
+            -5.187217215435265
+          ],
+          "phaseOffsetMs": 2055,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            4.126580754020616,
+            3.4778606864013453
+          ],
+          "phaseOffsetMs": 2192,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -5.55306606437402,
+            0.22965843982607628
+          ],
+          "phaseOffsetMs": 2329,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            4.050519402066581,
+            -4.030841144052222
+          ],
+          "phaseOffsetMs": 2466,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -0.270970975529855,
+            5.860551554788915
+          ],
+          "phaseOffsetMs": 2603,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -3.8541192945059155,
+            -4.61847986901014
+          ],
+          "phaseOffsetMs": 2740,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            6.1053208641264085,
+            0.821432300079443
+          ],
+          "phaseOffsetMs": 2877,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -5.1730044716277614,
+            3.599280574626899
+          ],
+          "phaseOffsetMs": 3014,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            1.4135341338662517,
+            -6.283455992650754
+          ],
+          "phaseOffsetMs": 3151,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            3.269539162332405,
+            5.705708866212396
+          ],
+          "phaseOffsetMs": 3288,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -6.391586446151189,
+            -2.0390499606907015
+          ],
+          "phaseOffsetMs": 3425,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            6.208584318942624,
+            -2.868568429759417
+          ],
+          "phaseOffsetMs": 3562,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -2.68968141726325,
+            6.426968180727032
+          ],
+          "phaseOffsetMs": 3699,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -2.400559908297777,
+            -6.674033285048755
+          ],
+          "phaseOffsetMs": 3836,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            6.387540403176332,
+            3.35705790862648
+          ],
+          "phaseOffsetMs": 3973,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -7.094912470936931,
+            1.870248452650495
+          ],
+          "phaseOffsetMs": 4110,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            4.0327598747243005,
+            -6.271966364588377
+          ],
+          "phaseOffsetMs": 4247,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            1.2829138103977957,
+            7.464579591753391
+          ],
+          "phaseOffsetMs": 4384,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -6.079661537289055,
+            -4.70835788352532
+          ],
+          "phaseOffsetMs": 4521,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            7.776941195509358,
+            -0.6443648421141206
+          ],
+          "phaseOffsetMs": 4658,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -5.375462448728019,
+            5.810811123354
+          ],
+          "phaseOffsetMs": 4795,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            0.039089573227702415,
+            -8.026499641503811
+          ],
+          "phaseOffsetMs": 4932,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            5.466378065537917,
+            6.025781059349749
+          ],
+          "phaseOffsetMs": 5069,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -8.208397786440836,
+            -0.7606801896866792
+          ],
+          "phaseOffsetMs": 5206,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            6.651179872594648,
+            -5.048102308257701
+          ],
+          "phaseOffsetMs": 5343,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -1.5132256030002702,
+            8.318460249798981
+          ],
+          "phaseOffsetMs": 5480,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -4.558491829190001,
+            -7.243748127667441
+          ],
+          "phaseOffsetMs": 5617,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            8.353230358979042,
+            2.2891874769281726
+          ],
+          "phaseOffsetMs": 5754,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -7.795863733384865,
+            4.000805847076912
+          ],
+          "phaseOffsetMs": 5891,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            3.080731531632812,
+            -8.310002048515384
+          ],
+          "phaseOffsetMs": 6028,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            3.379030562029767,
+            8.300258750063861
+          ],
+          "phaseOffsetMs": 6165,
+          "scale": 1.85,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -8.186846126543891,
+            -3.8797932159140247
+          ],
+          "phaseOffsetMs": 6302,
+          "scale": 1.9500000000000002,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            8.750083675317818,
+            -2.6978477743772276
+          ],
+          "phaseOffsetMs": 6439,
+          "scale": 2.0500000000000003,
+          "alpha": 0.6
+        },
+        {
+          "assetId": "class.draconic_fear.presence-q0-ground",
+          "composition": "clump",
+          "whenPresenceMode": "fear",
+          "offsetCells": [
+            -4.678147097515982,
+            7.982630438244943
+          ],
+          "phaseOffsetMs": 6576,
+          "scale": 1.85,
+          "alpha": 0.6
+        }
+      ],
+      "holdStartFrame": 0,
+      "holdFrames": 64,
+      "fps": 32,
+      "scale": 0.5,
+      "formationFadeMs": 180,
+      "removalFadeMs": 350
     }
   },
   "liquid_surfaces": {
@@ -4884,6 +8317,10 @@
               "destruction": [
                 "wall.stone_v0_d0.destruction.back",
                 "wall.stone_v0_d0.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v0_d0.removal.back",
+                "wall.stone_v0_d0.removal.front"
               ]
             },
             {
@@ -4898,6 +8335,10 @@
               "destruction": [
                 "wall.stone_v1_d0.destruction.back",
                 "wall.stone_v1_d0.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v1_d0.removal.back",
+                "wall.stone_v1_d0.removal.front"
               ]
             },
             {
@@ -4912,6 +8353,10 @@
               "destruction": [
                 "wall.stone_v2_d0.destruction.back",
                 "wall.stone_v2_d0.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v2_d0.removal.back",
+                "wall.stone_v2_d0.removal.front"
               ]
             }
           ]
@@ -4938,6 +8383,10 @@
               "destruction": [
                 "wall.stone_v0_d1.destruction.back",
                 "wall.stone_v0_d1.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v0_d1.removal.back",
+                "wall.stone_v0_d1.removal.front"
               ]
             },
             {
@@ -4952,6 +8401,10 @@
               "destruction": [
                 "wall.stone_v1_d1.destruction.back",
                 "wall.stone_v1_d1.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v1_d1.removal.back",
+                "wall.stone_v1_d1.removal.front"
               ]
             },
             {
@@ -4966,6 +8419,10 @@
               "destruction": [
                 "wall.stone_v2_d1.destruction.back",
                 "wall.stone_v2_d1.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v2_d1.removal.back",
+                "wall.stone_v2_d1.removal.front"
               ]
             }
           ]
@@ -4992,6 +8449,10 @@
               "destruction": [
                 "wall.stone_v0_d2.destruction.back",
                 "wall.stone_v0_d2.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v0_d2.removal.back",
+                "wall.stone_v0_d2.removal.front"
               ]
             },
             {
@@ -5006,6 +8467,10 @@
               "destruction": [
                 "wall.stone_v1_d2.destruction.back",
                 "wall.stone_v1_d2.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v1_d2.removal.back",
+                "wall.stone_v1_d2.removal.front"
               ]
             },
             {
@@ -5020,6 +8485,10 @@
               "destruction": [
                 "wall.stone_v2_d2.destruction.back",
                 "wall.stone_v2_d2.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v2_d2.removal.back",
+                "wall.stone_v2_d2.removal.front"
               ]
             }
           ]
@@ -5046,6 +8515,10 @@
               "destruction": [
                 "wall.stone_v0_d3.destruction.back",
                 "wall.stone_v0_d3.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v0_d3.removal.back",
+                "wall.stone_v0_d3.removal.front"
               ]
             },
             {
@@ -5060,6 +8533,10 @@
               "destruction": [
                 "wall.stone_v1_d3.destruction.back",
                 "wall.stone_v1_d3.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v1_d3.removal.back",
+                "wall.stone_v1_d3.removal.front"
               ]
             },
             {
@@ -5074,6 +8551,10 @@
               "destruction": [
                 "wall.stone_v2_d3.destruction.back",
                 "wall.stone_v2_d3.destruction.front"
+              ],
+              "removal": [
+                "wall.stone_v2_d3.removal.back",
+                "wall.stone_v2_d3.removal.front"
               ]
             }
           ]
@@ -5081,7 +8562,8 @@
       ],
       "lengthFeet": 10,
       "heightFeet": 10,
-      "pixelScale": 1
+      "pixelScale": 1,
+      "removalDurationMs": 850
     },
     "spell_construction.ice.section": {
       "directions": [
@@ -5107,6 +8589,10 @@
               "destruction": [
                 "wall.ice_v0_d0.destruction.back",
                 "wall.ice_v0_d0.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v0_d0.removal.back",
+                "wall.ice_v0_d0.removal.front"
               ]
             },
             {
@@ -5121,6 +8607,10 @@
               "destruction": [
                 "wall.ice_v1_d0.destruction.back",
                 "wall.ice_v1_d0.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v1_d0.removal.back",
+                "wall.ice_v1_d0.removal.front"
               ]
             },
             {
@@ -5135,6 +8625,10 @@
               "destruction": [
                 "wall.ice_v2_d0.destruction.back",
                 "wall.ice_v2_d0.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v2_d0.removal.back",
+                "wall.ice_v2_d0.removal.front"
               ]
             }
           ]
@@ -5161,6 +8655,10 @@
               "destruction": [
                 "wall.ice_v0_d1.destruction.back",
                 "wall.ice_v0_d1.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v0_d1.removal.back",
+                "wall.ice_v0_d1.removal.front"
               ]
             },
             {
@@ -5175,6 +8673,10 @@
               "destruction": [
                 "wall.ice_v1_d1.destruction.back",
                 "wall.ice_v1_d1.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v1_d1.removal.back",
+                "wall.ice_v1_d1.removal.front"
               ]
             },
             {
@@ -5189,6 +8691,10 @@
               "destruction": [
                 "wall.ice_v2_d1.destruction.back",
                 "wall.ice_v2_d1.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v2_d1.removal.back",
+                "wall.ice_v2_d1.removal.front"
               ]
             }
           ]
@@ -5215,6 +8721,10 @@
               "destruction": [
                 "wall.ice_v0_d2.destruction.back",
                 "wall.ice_v0_d2.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v0_d2.removal.back",
+                "wall.ice_v0_d2.removal.front"
               ]
             },
             {
@@ -5229,6 +8739,10 @@
               "destruction": [
                 "wall.ice_v1_d2.destruction.back",
                 "wall.ice_v1_d2.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v1_d2.removal.back",
+                "wall.ice_v1_d2.removal.front"
               ]
             },
             {
@@ -5243,6 +8757,10 @@
               "destruction": [
                 "wall.ice_v2_d2.destruction.back",
                 "wall.ice_v2_d2.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v2_d2.removal.back",
+                "wall.ice_v2_d2.removal.front"
               ]
             }
           ]
@@ -5269,6 +8787,10 @@
               "destruction": [
                 "wall.ice_v0_d3.destruction.back",
                 "wall.ice_v0_d3.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v0_d3.removal.back",
+                "wall.ice_v0_d3.removal.front"
               ]
             },
             {
@@ -5283,6 +8805,10 @@
               "destruction": [
                 "wall.ice_v1_d3.destruction.back",
                 "wall.ice_v1_d3.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v1_d3.removal.back",
+                "wall.ice_v1_d3.removal.front"
               ]
             },
             {
@@ -5297,6 +8823,10 @@
               "destruction": [
                 "wall.ice_v2_d3.destruction.back",
                 "wall.ice_v2_d3.destruction.front"
+              ],
+              "removal": [
+                "wall.ice_v2_d3.removal.back",
+                "wall.ice_v2_d3.removal.front"
               ]
             }
           ]
@@ -5304,7 +8834,56 @@
       ],
       "lengthFeet": 10,
       "heightFeet": 10,
-      "pixelScale": 1
+      "pixelScale": 1,
+      "removalDurationMs": 850,
+      "surface": {
+        "material": "ice_shell",
+        "components": "/construction/operators.json",
+        "nativeUnitsPerCell": 2.121320344,
+        "verticalScale": 1.224744871391589,
+        "palette": [
+          1587797,
+          3302789,
+          6331836,
+          10933732,
+          14872813,
+          6445127,
+          10128754
+        ],
+        "domeOnly": true,
+        "applicationMs": 850,
+        "destructionMs": 2300,
+        "removalMs": 750
+      }
+    },
+    "spell_construction.force.section": {
+      "lengthFeet": 10,
+      "heightFeet": 10,
+      "pixelScale": 1,
+      "surface": {
+        "material": "force_membrane",
+        "components": "/construction/operators.json",
+        "nativeUnitsPerCell": 2.121320344,
+        "verticalScale": 1.224744871391589,
+        "palette": [
+          1456469,
+          3170957,
+          6331856,
+          10933748,
+          14872831,
+          2115627,
+          4229708,
+          6797430,
+          7593616,
+          13564882,
+          6445127,
+          10128754
+        ],
+        "applicationMs": 850,
+        "destructionMs": 2500,
+        "removalMs": 850,
+        "motes": "/construction/force-motes.json"
+      }
     }
   }
 }

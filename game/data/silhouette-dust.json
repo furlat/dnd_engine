@@ -1,0 +1,14 @@
+{
+  "erosionMs": 1150,
+  "particleLifetimeMs": 1350,
+  "particleFadeInMs": 80,
+  "alphaThreshold": 24,
+  "horizontalRankWeight": 0.32,
+  "velocityX": 18,
+  "velocityY": [-10, -12],
+  "gravity": 15,
+  "color": 7514249,
+  "minimumLuminance": 0.6,
+  "particleEvery": 3,
+  "particleSize": 0.55
+}

@@ -13,7 +13,7 @@ import numpy as np
 import pygame
 
 from dnd.core.item_types import ItemEffectPresentationState
-from game.condition_types import ConditionRecipe, load_condition_recipes
+from game.condition_types import ConditionEquipmentModifier, ConditionRecipe, load_condition_recipes
 from game.item_appearance import item_source_palettes
 
 
@@ -46,7 +46,7 @@ def item_material_recipes() -> tuple[ItemMaterialRecipe, ...]:
 
 
 def _material_recipe(effects: tuple[ItemEffectPresentationState, ...]) -> ItemMaterialRecipe | None:
-    keys = {(effect.behavior_id, effect.damage_type) for effect in effects}
+    keys = {(effect.behavior_id, effect.damage_type) for effect in effects if not effect.suppression_provider_uuids}
     # Coatings supersede intrinsic color; ties use authored semantic keys, never
     # UUID/order, so identical items look the same across independent lineages.
     return max((row for row in item_material_recipes() if (row.behavior_id, row.damage_type) in keys),
@@ -80,11 +80,14 @@ def item_condition_recipes() -> Mapping[str, ConditionRecipe]:
 
 def item_material(surface: pygame.Surface, effects: tuple[ItemEffectPresentationState, ...],
                   slot: str, recipes: Mapping[str, ConditionRecipe], *,
-                  category: str, base_tint: int = 0xFFFFFF) -> pygame.Surface:
+                  category: str, base_tint: int = 0xFFFFFF,
+                  owned_modifiers: tuple[ConditionEquipmentModifier, ...] = (),
+                  time_ms: float = 0.) -> pygame.Surface:
     """Swap authored palette zones; preserve other colors and original alpha."""
     modifiers = [modifier for effect in effects
-                 if (recipe := recipes.get(effect.behavior_id)) is not None
+                 if not effect.suppression_provider_uuids and (recipe := recipes.get(effect.behavior_id)) is not None
                  for modifier in recipe.persistent.equipmentModifiers if slot in modifier.slots]
+    modifiers.extend(modifier for modifier in owned_modifiers if slot in modifier.slots)
     material = _material_recipe(effects) if slot in ("weapon", "offhand") else None
     if not modifiers and material is None and base_tint == 0xFFFFFF:
         return surface
@@ -119,6 +122,17 @@ def item_material(surface: pygame.Surface, effects: tuple[ItemEffectPresentation
         pixels = pygame.surfarray.pixels3d(result)
         pixels[matched] = targets[zone[matched]]
         del pixels
+        for modifier in modifiers:
+            glint = modifier.glint
+            if glint is None:
+                continue
+            center = glint.startY + (glint.endY - glint.startY) * (time_ms % glint.periodMs) / glint.periodMs
+            glow = np.exp(-((np.arange(surface.height) - center) / glint.width) ** 2) * glint.strength
+            color = np.array([glint.color >> 16 & 255, glint.color >> 8 & 255, glint.color & 255])
+            pixels = pygame.surfarray.pixels3d(result)
+            emitted = pixels.astype(float) + glow[None, :, None] * color
+            pixels[matched] = np.clip(np.rint(emitted[matched]), 0, 255).astype(np.uint8)
+            del pixels
         if material is not None and material.bloom_strength:
             _bounded_bloom(result, matched, material)
     for modifier in sorted(modifiers, key=lambda row: row.priority):

@@ -1,0 +1,47 @@
+[
+  {
+    "path": "tests/game/fixtures/legacy-device-destruction.json.gz",
+    "before": "ed74d62476692a020544a5cd0cf005533598d543e7945609b24f0cf33ca4fa76",
+    "after": "b1e53001d90dc8b4d9067faae58367ec448c6b4a2d5e594f2188f04eb153e54c",
+    "added": {
+      "dnd.actions.SpellEvent.font_conversion": 6,
+      "dnd.core.events.TakeDamageEvent.relentless_rage": 3,
+      "dnd.core.base_actions.ActionEvent.font_conversion": 4
+    },
+    "previous_values_lists_ids_receipt_omissions_unchanged": true
+  },
+  {
+    "path": "tests/game/fixtures/legacy-door-destruction.json.gz",
+    "before": "485c20dc7204713cbaf3484fa1f92dfb9704eaf3031bac7717afb686388d61f2",
+    "after": "3a35c15b339e40fe8997022cc2ad77ee20ff54111c96f557015c3209500df1e7",
+    "added": {
+      "dnd.core.base_actions.ActionEvent.font_conversion": 4,
+      "dnd.core.events.TakeDamageEvent.relentless_rage": 2,
+      "dnd.actions.MovementEvent.font_conversion": 6
+    },
+    "previous_values_lists_ids_receipt_omissions_unchanged": true
+  },
+  {
+    "path": "tests/game/fixtures/legacy-web-destruction.json.gz",
+    "before": "3227ddb143bc698f288a684eb0bd21549858f0d4888a452c6eff5c15da777c83",
+    "after": "4cec2d38ee974594909d0d8493956380d173e54d5432754f7a8d794f3dd69c08",
+    "added": {
+      "dnd.actions.SpellEvent.font_conversion": 4,
+      "dnd.core.events.SavingThrowEvent.indomitable_reroll": 5,
+      "dnd.core.base_actions.ActionEvent.font_conversion": 4,
+      "dnd.actions.MovementEvent.font_conversion": 4,
+      "dnd.core.events.TakeDamageEvent.relentless_rage": 1
+    },
+    "previous_values_lists_ids_receipt_omissions_unchanged": true
+  },
+  {
+    "path": "tests/game/fixtures/legacy-completed-actions.json",
+    "before": "be1592a04e23bf1090e209fa73f2b980877efe128c3a925571430127f473d89e",
+    "after": "c3ec7a51166819055cdf28236e8d98b516a4c6a10e523b18c2cf0f0f924cc6c7",
+    "added": {
+      "dnd.actions.AttackEvent.font_conversion": 3,
+      "dnd.actions.JumpEvent.font_conversion": 1
+    },
+    "previous_values_lists_ids_receipt_omissions_unchanged": true
+  }
+]

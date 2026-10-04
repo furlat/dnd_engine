@@ -1,0 +1,22 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/final-utility-batch",
+  "hand_source": "/home/tommaso/Dev/neurodragon_art/sources/solar-contact-originals-20261004/cantrips-review/actors/sacred_flame/hand-glow.png",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/utility-cast-originals-20261004",
+  "originals": {
+    "hand-glow.png": "45033ef97b73439d94a49840f6a6722c85ba3604d2c41fd9af16c35c6676ff5c",
+    "review.js": "6c8136e1397ebfc169dd2de681ad90a34f06bdc15ef3a2872bc9b7022e8101bb"
+  },
+  "files": [
+    {
+      "path": "game/assets/utility_media/antimagic-Attack5-hands.png",
+      "bytes": 62430,
+      "sha256": "f17e974ae7fbbeb9bd7fc9d05825301af9449c0ea17a079c50ad2ab433212ed0"
+    },
+    {
+      "path": "game/assets/utility_media/telekinesis-Attack5-hands.png",
+      "bytes": 62175,
+      "sha256": "a178915c5c03ba11f7e0c3ea45bbe463774e96791aae4aa3e083c55a3216a0db"
+    }
+  ],
+  "adaptation": "Original source-atop colors and .65*(1-smooth(.75,1.25,t)) opacity sampled at fifteen original 12fps Attack5 frames; runtime screen blend."
+}

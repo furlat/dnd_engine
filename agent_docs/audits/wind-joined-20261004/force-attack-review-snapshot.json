@@ -1,0 +1,9 @@
+{
+  "files": {
+    "dnd/actions.py": "8badef01ada00bfafd1cb0f462d362e0ee51f1b43b609dee2f63d700e75846e9",
+    "dnd/entity.py": "4186122bea0ce5590b59f69a761f7aa5c3637f17e5f0bc3122634d47c3dcb988",
+    "dnd/core/gridmap.py": "4b44955725053d097c3eba768db88008071da7a42354e209f52268ffbd003d90",
+    "tests/engine/test_remaining_walls.py": "ec381c1077221c4d3e2fa77e96190455e6f9d71f4baf4fd953322cb4e99a0798"
+  },
+  "sha256": "0f3140f0220c36ab5fc5474227a87f2988f123bc45c62c5d454312fdab1fd838"
+}

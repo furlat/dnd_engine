@@ -1,0 +1,383 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+.....FF..EFFFEF..FFFFFFF
+==================================== ERRORS ====================================
+_ ERROR at setup of test_unknown_replacement_is_redacted_and_legacy_destruction_never_invents_one _
+tests/game/test_device_destruction.py:51: in legacy_recorded
+    native = RecordedSequence.model_validate_json(gzip.decompress(path.read_bytes()), context=PASSIVE_EVENT_REPLAY)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   pydantic_core._pydantic_core.ValidationError: 13 validation errors for RecordedSequence
+E   lineages.0.root
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.3
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.6
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.7
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.root
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.events.5
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.events.6
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.19.root
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.19.events.1
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.19.events.2
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.28.root
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.28.events.7
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.28.events.8
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+_ ERROR at setup of test_unseen_old_device_does_not_gain_a_break_animation_from_late_wreck_sight _
+tests/game/test_device_destruction.py:51: in legacy_recorded
+    native = RecordedSequence.model_validate_json(gzip.decompress(path.read_bytes()), context=PASSIVE_EVENT_REPLAY)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   pydantic_core._pydantic_core.ValidationError: 13 validation errors for RecordedSequence
+E   lineages.0.root
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.3
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.6
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.7
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.root
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.events.5
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.events.6
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.19.root
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.19.events.1
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.19.events.2
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.28.root
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.28.events.7
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.28.events.8
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+=================================== FAILURES ===================================
+_ test_native_destruction_settles_same_device_body_after_contact_without_retaining_links[caster] _
+tests/game/test_device_destruction.py:116: in test_native_destruction_settles_same_device_body_after_contact_without_retaining_links
+    group = bind_choreography(before, lineage, data, facings={str(fact.object_uuid): facing})
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1425: in bind_choreography
+    complete = visit(lineage.root, 0)
+               ^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1126: in visit
+    bound = (bind_attack(prior, branch, data, facings=facings, contacts=placed_contacts,
+game/attack.py:355: in bind_attack
+    contact_end = (contact + data.projectile_assets[weapon_trail.impactAssetId].phases['impact'].frames
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'AuthoredProjectilePhases' object is not subscriptable
+_ test_native_destruction_settles_same_device_body_after_contact_without_retaining_links[target] _
+tests/game/test_device_destruction.py:116: in test_native_destruction_settles_same_device_body_after_contact_without_retaining_links
+    group = bind_choreography(before, lineage, data, facings={str(fact.object_uuid): facing})
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1425: in bind_choreography
+    complete = visit(lineage.root, 0)
+               ^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1126: in visit
+    bound = (bind_attack(prior, branch, data, facings=facings, contacts=placed_contacts,
+game/attack.py:355: in bind_attack
+    contact_end = (contact + data.projectile_assets[weapon_trail.impactAssetId].phases['impact'].frames
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'AuthoredProjectilePhases' object is not subscriptable
+_ test_archived_replacement_and_same_identity_settled_bodies_have_identical_pixels[device-None] _
+tests/game/test_device_destruction.py:215: in test_archived_replacement_and_same_identity_settled_bodies_have_identical_pixels
+    archived = RecordedSequence.model_validate_json(gzip.decompress(path.read_bytes()), context=PASSIVE_EVENT_REPLAY)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   pydantic_core._pydantic_core.ValidationError: 13 validation errors for RecordedSequence
+E   lineages.0.root
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.3
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.6
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.7
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.root
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.events.5
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.events.6
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.19.root
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.19.events.1
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.19.events.2
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.28.root
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.28.events.7
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.28.events.8
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+_ test_archived_replacement_and_same_identity_settled_bodies_have_identical_pixels[door-clear] _
+tests/game/test_device_destruction.py:215: in test_archived_replacement_and_same_identity_settled_bodies_have_identical_pixels
+    archived = RecordedSequence.model_validate_json(gzip.decompress(path.read_bytes()), context=PASSIVE_EVENT_REPLAY)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   pydantic_core._pydantic_core.ValidationError: 12 validation errors for RecordedSequence
+E   lineages.0.root
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.1
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.2
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.7.root
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.7.events.7
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.7.events.8
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.10.root
+E     Value error, incomplete recorded dnd.actions.MovementEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.10.events.5
+E     Value error, incomplete recorded dnd.actions.MovementEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.15.root
+E     Value error, incomplete recorded dnd.actions.MovementEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.15.events.5
+E     Value error, incomplete recorded dnd.actions.MovementEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.16.root
+E     Value error, incomplete recorded dnd.actions.MovementEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.16.events.5
+E     Value error, incomplete recorded dnd.actions.MovementEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+_ test_removal_and_new_object_without_disclosed_destruction_have_no_break_transition _
+tests/game/test_device_destruction.py:256: in test_removal_and_new_object_without_disclosed_destruction_have_no_break_transition
+    group = bind_choreography(before, hidden, data)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1425: in bind_choreography
+    complete = visit(lineage.root, 0)
+               ^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1126: in visit
+    bound = (bind_attack(prior, branch, data, facings=facings, contacts=placed_contacts,
+game/attack.py:355: in bind_attack
+    contact_end = (contact + data.projectile_assets[weapon_trail.impactAssetId].phases['impact'].frames
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'AuthoredProjectilePhases' object is not subscriptable
+_ test_legacy_remembered_device_hidden_before_removal_does_not_borrow_lineage_entry_sight _
+tests/game/test_device_destruction.py:295: in test_legacy_remembered_device_hidden_before_removal_does_not_borrow_lineage_entry_sight
+    native = RecordedSequence.model_validate_json(gzip.decompress(path.read_bytes()), context=PASSIVE_EVENT_REPLAY)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   pydantic_core._pydantic_core.ValidationError: 18 validation errors for RecordedSequence
+E   lineages.0.root
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.66
+E     Value error, incomplete recorded dnd.core.events.SavingThrowEvent: missing ['indomitable_reroll'] [type=value_error, input_value={'wire_type': 'dnd.core.e...dler_presentations': []}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.68
+E     Value error, incomplete recorded dnd.core.events.SavingThrowEvent: missing ['indomitable_reroll'] [type=value_error, input_value={'wire_type': 'dnd.core.e...dler_presentations': []}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.0.events.79
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.3.root
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.3.events.4
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.4.root
+E     Value error, incomplete recorded dnd.actions.MovementEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.4.events.6
+E     Value error, incomplete recorded dnd.actions.MovementEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.8.events.1
+E     Value error, incomplete recorded dnd.core.events.SavingThrowEvent: missing ['indomitable_reroll'] [type=value_error, input_value={'wire_type': 'dnd.core.e...dler_presentations': []}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.root
+E     Value error, incomplete recorded dnd.actions.MovementEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.events.2
+E     Value error, incomplete recorded dnd.core.events.SavingThrowEvent: missing ['indomitable_reroll'] [type=value_error, input_value={'wire_type': 'dnd.core.e...dler_presentations': []}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.9.events.14
+E     Value error, incomplete recorded dnd.actions.MovementEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.12.root
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.12.events.66
+E     Value error, incomplete recorded dnd.core.events.SavingThrowEvent: missing ['indomitable_reroll'] [type=value_error, input_value={'wire_type': 'dnd.core.e...dler_presentations': []}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.12.events.78
+E     Value error, incomplete recorded dnd.actions.SpellEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.action...ed_effect_origin': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.21.root
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.21.events.59
+E     Value error, incomplete recorded dnd.core.events.TakeDamageEvent: missing ['relentless_rage'] [type=value_error, input_value={'wire_type': 'dnd.core.e..._disposition': 'intact'}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+E   lineages.21.events.60
+E     Value error, incomplete recorded dnd.core.base_actions.ActionEvent: missing ['font_conversion'] [type=value_error, input_value={'wire_type': 'dnd.core.b...[], 'propagation': None}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.13/v/value_error
+_ test_real_sleep_then_nonlethal_and_lethal_attacks_bind_only_the_actual_break[break-cannon] _
+tests/game/test_device_destruction.py:383: in test_real_sleep_then_nonlethal_and_lethal_attacks_bind_only_the_actual_break
+    group = bind_choreography(state, root, data)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1425: in bind_choreography
+    complete = visit(lineage.root, 0)
+               ^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1126: in visit
+    bound = (bind_attack(prior, branch, data, facings=facings, contacts=placed_contacts,
+game/attack.py:355: in bind_attack
+    contact_end = (contact + data.projectile_assets[weapon_trail.impactAssetId].phases['impact'].frames
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'AuthoredProjectilePhases' object is not subscriptable
+_ test_real_sleep_then_nonlethal_and_lethal_attacks_bind_only_the_actual_break[break-projector] _
+tests/game/test_device_destruction.py:383: in test_real_sleep_then_nonlethal_and_lethal_attacks_bind_only_the_actual_break
+    group = bind_choreography(state, root, data)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1425: in bind_choreography
+    complete = visit(lineage.root, 0)
+               ^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1126: in visit
+    bound = (bind_attack(prior, branch, data, facings=facings, contacts=placed_contacts,
+game/attack.py:355: in bind_attack
+    contact_end = (contact + data.projectile_assets[weapon_trail.impactAssetId].phases['impact'].frames
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'AuthoredProjectilePhases' object is not subscriptable
+_ test_real_item_hits_flash_at_contact_then_restore_approved_body_pixels[break-cannon] _
+tests/game/test_device_destruction.py:417: in test_real_item_hits_flash_at_contact_then_restore_approved_body_pixels
+    group = bind_choreography(state, root, data)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1425: in bind_choreography
+    complete = visit(lineage.root, 0)
+               ^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1126: in visit
+    bound = (bind_attack(prior, branch, data, facings=facings, contacts=placed_contacts,
+game/attack.py:355: in bind_attack
+    contact_end = (contact + data.projectile_assets[weapon_trail.impactAssetId].phases['impact'].frames
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'AuthoredProjectilePhases' object is not subscriptable
+_ test_real_item_hits_flash_at_contact_then_restore_approved_body_pixels[break-projector] _
+tests/game/test_device_destruction.py:417: in test_real_item_hits_flash_at_contact_then_restore_approved_body_pixels
+    group = bind_choreography(state, root, data)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1425: in bind_choreography
+    complete = visit(lineage.root, 0)
+               ^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1126: in visit
+    bound = (bind_attack(prior, branch, data, facings=facings, contacts=placed_contacts,
+game/attack.py:355: in bind_attack
+    contact_end = (contact + data.projectile_assets[weapon_trail.impactAssetId].phases['impact'].frames
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'AuthoredProjectilePhases' object is not subscriptable
+_ test_real_item_hits_flash_at_contact_then_restore_approved_body_pixels[break-fireball] _
+tests/game/test_device_destruction.py:417: in test_real_item_hits_flash_at_contact_then_restore_approved_body_pixels
+    group = bind_choreography(state, root, data)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1425: in bind_choreography
+    complete = visit(lineage.root, 0)
+               ^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1126: in visit
+    bound = (bind_attack(prior, branch, data, facings=facings, contacts=placed_contacts,
+game/attack.py:355: in bind_attack
+    contact_end = (contact + data.projectile_assets[weapon_trail.impactAssetId].phases['impact'].frames
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'AuthoredProjectilePhases' object is not subscriptable
+____________ test_zero_or_canceled_item_damage_has_no_flash[False] _____________
+tests/game/test_device_destruction.py:461: in test_zero_or_canceled_item_damage_has_no_flash
+    group = bind_choreography(state, root, raster[3])
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1425: in bind_choreography
+    complete = visit(lineage.root, 0)
+               ^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1126: in visit
+    bound = (bind_attack(prior, branch, data, facings=facings, contacts=placed_contacts,
+game/attack.py:355: in bind_attack
+    contact_end = (contact + data.projectile_assets[weapon_trail.impactAssetId].phases['impact'].frames
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'AuthoredProjectilePhases' object is not subscriptable
+_____________ test_zero_or_canceled_item_damage_has_no_flash[True] _____________
+tests/game/test_device_destruction.py:461: in test_zero_or_canceled_item_damage_has_no_flash
+    group = bind_choreography(state, root, raster[3])
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1425: in bind_choreography
+    complete = visit(lineage.root, 0)
+               ^^^^^^^^^^^^^^^^^^^^^^
+game/choreography.py:1126: in visit
+    bound = (bind_attack(prior, branch, data, facings=facings, contacts=placed_contacts,
+game/attack.py:355: in bind_attack
+    contact_end = (contact + data.projectile_assets[weapon_trail.impactAssetId].phases['impact'].frames
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'AuthoredProjectilePhases' object is not subscriptable
+=========================== short test summary info ============================
+FAILED tests/game/test_device_destruction.py::test_native_destruction_settles_same_device_body_after_contact_without_retaining_links[caster]
+FAILED tests/game/test_device_destruction.py::test_native_destruction_settles_same_device_body_after_contact_without_retaining_links[target]
+FAILED tests/game/test_device_destruction.py::test_archived_replacement_and_same_identity_settled_bodies_have_identical_pixels[device-None]
+FAILED tests/game/test_device_destruction.py::test_archived_replacement_and_same_identity_settled_bodies_have_identical_pixels[door-clear]
+FAILED tests/game/test_device_destruction.py::test_removal_and_new_object_without_disclosed_destruction_have_no_break_transition
+FAILED tests/game/test_device_destruction.py::test_legacy_remembered_device_hidden_before_removal_does_not_borrow_lineage_entry_sight
+FAILED tests/game/test_device_destruction.py::test_real_sleep_then_nonlethal_and_lethal_attacks_bind_only_the_actual_break[break-cannon]
+FAILED tests/game/test_device_destruction.py::test_real_sleep_then_nonlethal_and_lethal_attacks_bind_only_the_actual_break[break-projector]
+FAILED tests/game/test_device_destruction.py::test_real_item_hits_flash_at_contact_then_restore_approved_body_pixels[break-cannon]
+FAILED tests/game/test_device_destruction.py::test_real_item_hits_flash_at_contact_then_restore_approved_body_pixels[break-projector]
+FAILED tests/game/test_device_destruction.py::test_real_item_hits_flash_at_contact_then_restore_approved_body_pixels[break-fireball]
+FAILED tests/game/test_device_destruction.py::test_zero_or_canceled_item_damage_has_no_flash[False]
+FAILED tests/game/test_device_destruction.py::test_zero_or_canceled_item_damage_has_no_flash[True]
+ERROR tests/game/test_device_destruction.py::test_unknown_replacement_is_redacted_and_legacy_destruction_never_invents_one
+ERROR tests/game/test_device_destruction.py::test_unseen_old_device_does_not_gain_a_break_animation_from_late_wreck_sight
+13 failed, 9 passed, 2 errors in 29.56s

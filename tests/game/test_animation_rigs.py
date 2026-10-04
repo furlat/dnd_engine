@@ -78,12 +78,14 @@ def test_selected_fixed_target_preserves_shared_cast_and_feedback(data: Animatio
         assert sample_cast(timeline, hit.hp_ms).vitals[0].hp == (0 if lethal else 13)
         final = sample_cast(timeline, timeline.complete_ms)
         assert final.complete
-        assert final.bodies[1].clip == ("Die" if lethal else "Idle")
+        assert final.bodies[1].clip == (("Death" if timeline.source.applications[0].target.rig_id == GOBLIN else "Die") if lethal else "Idle")
         assert final.vitals[0].life_state == (LifeState.DEAD if lethal else LifeState.ALIVE)
     for offset in (0, 250, 7000 / 12, 1500):
         fixed = sample_cast(goblin, goblin_hit.travel_end_ms + offset)
         modular = sample_cast(root, root_hit.travel_end_ms + offset)
-        assert fixed.bodies[1] == modular.bodies[1]
+        # Accepted Goblin terminal art uses Death; modular keeps Die.
+        # Shared reaction timing/facing and feedback still agree.
+        assert replace(fixed.bodies[1],clip=modular.bodies[1].clip) == modular.bodies[1]
         assert fixed.vitals == modular.vitals
         assert fixed.numbers == modular.numbers
 
@@ -145,7 +147,7 @@ def test_caster_clip_metadata_controls_release_prepare_and_recovery(data: Animat
 
 @pytest.mark.parametrize("already_dead", [False, True])
 def test_target_death_uses_its_own_duration_and_terminal_frame(data: AnimationData, already_dead: bool) -> None:
-    selected = with_clip(data, GOBLIN, "Die", fps=4.0, frames=9)
+    selected = with_clip(data, GOBLIN, "Death", fps=4.0, frames=9)
     source = cast_input(lethal=True)
     if already_dead:
         source = replace(
@@ -170,7 +172,7 @@ def test_target_death_uses_its_own_duration_and_terminal_frame(data: AnimationDa
     for elapsed in (timeline.complete_ms, timeline.complete_ms + 10000):
         final = sample_cast(timeline, elapsed)
         assert final.complete and final.vitals[0].life_state == LifeState.DEAD
-        assert final.bodies[1].clip == "Die" and final.bodies[1].frame == 8
+        assert final.bodies[1].clip == "Death" and final.bodies[1].frame == 8
 
 
 @pytest.mark.parametrize("clip,lethal", [("Idle", False), ("TakeDamage", False), ("Die", True)])

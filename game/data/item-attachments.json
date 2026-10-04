@@ -1,0 +1,23 @@
+{
+  "condition.spell.continual_flame": {
+    "layers": [
+      {
+        "assetId": "fire.continual_flame.hold.back",
+        "applicationAssetId": "fire.continual_flame.apply.back",
+        "side": "rear",
+        "composition": "clump"
+      },
+      {
+        "assetId": "fire.continual_flame.hold.front",
+        "applicationAssetId": "fire.continual_flame.apply.front",
+        "side": "front",
+        "composition": "clump"
+      }
+    ],
+    "assetPhase": "impact",
+    "holdStartFrame": 0,
+    "holdFrames": 64,
+    "fps": 32,
+    "scale": 0.5
+  }
+}

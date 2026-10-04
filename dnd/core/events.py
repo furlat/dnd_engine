@@ -34,7 +34,7 @@ __all__ = [
     "DeathSaveEvent", "InstantDeathEvent", "DeathEvent",
 ]
 
-from dnd.types.event_facts import (EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
+from dnd.types.event_facts import (LandingKind, EventType as EventType, EventPhase as EventPhase, MovementTrajectory as MovementTrajectory, SpatialChangeType as SpatialChangeType, WorldTileState as WorldTileState, WorldConnectorState as WorldConnectorState)
 
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -43,6 +43,7 @@ from pydantic import BaseModel, Field, ConfigDict, PrivateAttr, StrictInt, field
 from typing import Union, List, Optional, Dict, Self, Literal, TypeVar, Protocol, runtime_checkable, Tuple, Any, Set, Iterator, Sequence, cast
 from dnd.core.values import ModifiableValue
 from dnd.types.actor import TemporaryHitPointsGrant, ConditionState
+from dnd.types.class_features import IndomitableReroll, RelentlessRageIntervention
 from dnd.types.summoning import SummonOrigin, SummonSelection, TerminalOwnerRelease
 
 from dnd.core.combat_log import (
@@ -64,7 +65,8 @@ from dnd.core.content.runtime import (
 from dnd.core.content.identities import ContentRef
 from dnd.core.damage import DamageResolution
 from dnd.core.effect_types import ObservedChangeRef, EffectOrigin, EventResolutionRef, ResolutionRef
-from dnd.core.life_types import LifeState, LifeStateChangeReason
+from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
+from dnd.core.effect_types import ObjectSectionVolume
 from dnd.core.creature_types import DamageType
 from dnd.core.saving_throw_types import SavingThrowContext
 from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SenseMode
@@ -842,6 +844,7 @@ class EntityCreatedEvent(Event):
     initiative: StrictInt = 0
     armor_class: StrictInt = Field(default=10, ge=0)
     life_state: str
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
     current_hit_points: StrictInt = 0
     maximum_hit_points: StrictInt = 0
     temporary_hit_points: StrictInt = 0
@@ -1150,6 +1153,8 @@ class BaseHandler(BaseObject):
         default=True,
         description="Whether queue dispatch should invoke this handler.",
     )
+    runs_while_suppressed: bool = Field(default=False,
+        description="Native duration/final cleanup reaction, independent of effect contribution.")
     player_toggleable: bool = Field(
         default=False,
         description="Whether player-facing controls may enable or disable this handler.",
@@ -1187,7 +1192,7 @@ class BaseHandler(BaseObject):
         Returns:
             A modified/canceled event, the same event, or None for no change.
         """
-        if not self.enabled:
+        if not self.enabled or (not self.runs_while_suppressed and not self.contributions_active()):
             return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
@@ -1217,7 +1222,7 @@ class EventHandler(BaseHandler):
         Returns:
             A modified/canceled event, the same event, or None for no change.
         """
-        if not self.enabled:
+        if not self.enabled or (not self.runs_while_suppressed and not self.contributions_active()):
             return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
@@ -1240,7 +1245,7 @@ class EventHandler(BaseHandler):
                 owner.remove_event_handler_from_dicts(self)
             return True
 
-        entity = BaseObject.get(self.source_entity_uuid)
+        entity = BaseObject.get_contribution_owner(self.source_entity_uuid)
 
         if entity is not None and isinstance(entity, EntityWithEventHandlers):
             if self.uuid in entity.event_handlers:
@@ -1282,7 +1287,7 @@ class SpatialHandler(BaseHandler):
         Returns:
             A modified/canceled event, the same event, or None for no change.
         """
-        if not self.enabled:
+        if not self.enabled or (not self.runs_while_suppressed and not self.contributions_active()):
             return None
         if source_entity_uuid is None:
             source_entity_uuid = self.source_entity_uuid
@@ -1555,7 +1560,7 @@ class EventQueue:
         if (
             result is not None
             and evidence.effected
-            and handler.content_kind is RuntimeBehaviorKind.REACTION
+            and handler.content_kind in (RuntimeBehaviorKind.REACTION, RuntimeBehaviorKind.CLASS_FEATURE)
             and isinstance(binding, BehaviorBinding)
         ):
             emitted_lineages = tuple(dict.fromkeys(
@@ -2837,6 +2842,7 @@ class SavingThrowEvent(D20Event):
     """Legacy event payload for a resolved saving throw."""
 
     name: str = Field(default="Saving Throw", description="Human-readable saving throw label.")
+    indomitable_reroll: IndomitableReroll | None = None
     ability_name: AbilityName = Field(description="Ability used for the saving throw.")
     saving_throw_context: Optional[SavingThrowContext] = Field(
         default=None,
@@ -3595,6 +3601,7 @@ class SpatialChangeEvent(Event):
     tile_present: Optional[bool] = Field(
         default=None, description="Whether the addressed Tile exists after this commit.",
     )
+    removed_object_volume: ObjectSectionVolume | None = None
     object_state: Optional[ItemPresentationState] = Field(
         default=None, description="Complete item after-value at an actual world commit.",
     )
@@ -4299,11 +4306,15 @@ class PortalTransferEvent(Event):
 
     name: str = "Portal Transfer"
     event_type: EventType = EventType.PORTAL_TRANSFER
-    portal_uuid: UUID
+    portal_uuid: UUID | None = None
     portal_content_ref: ContentRef | None = None
     start_position: Tuple[int, int]
     end_position: Tuple[int, int]
     committed: bool = False
+    effect_origin: EffectOrigin | None = None
+
+    def get_effect_origin(self) -> EffectOrigin | None:
+        return self.effect_origin
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
         return {self.start_position, self.end_position}
@@ -4347,6 +4358,16 @@ class ForcedMovementEvent(Event):
     blocked_by_obstacle: bool = Field(default=False, description="Whether an obstacle stopped movement early.")
     blocked_by: Optional[str] = Field(default=None, description="Obstacle or entity that blocked movement.")
     cause: str = Field(default="shove", description="Mechanic that caused the displacement.")
+    disclosed_path: Tuple[Tuple[int, int], ...] = ()
+    start_elevation_feet: int = 0
+    end_elevation_feet: int = 0
+    drop_feet: int = 0
+    landing_kind: LandingKind = LandingKind.GROUND
+    effect_origin: EffectOrigin | None = None
+
+    def get_effect_origin(self) -> EffectOrigin | None:
+        return self.effect_origin
+
 
     def generate_combat_log(self) -> CombatLogEntry:
         """Generate combat log for forced movement."""
@@ -4406,7 +4427,7 @@ class ForcedMovementEvent(Event):
         )
 
     def get_affected_positions(self) -> Set[Tuple[int, int]]:
-        return {self.start_position, self.end_position}
+        return {self.start_position, self.end_position, *self.disclosed_path}
 
     def completion_position_observer_evidence(
         self,
@@ -5108,7 +5129,12 @@ class ItemDestructionEvent(Event):
     event_type: EventType = EventType.ITEM_DESTRUCTION
     item_uuid: UUID
     previous_state: ItemPresentationState
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
     previous_placement: WorldObjectPlacement | None = None
+    destroyed_item_uuids: tuple[UUID, ...] = ()
+    preserved_item_uuids: tuple[UUID, ...] = ()
+    affected_volume: ObjectSectionVolume | None = None
+    resulting_placement: WorldObjectPlacement | None = None
     damage_types: tuple[DamageType, ...] = ()
     resulting_state: ItemPresentationState | None = None
 
@@ -5129,8 +5155,11 @@ class TakeDamageEvent(Event):
         description="Event category for damage application.",
     )
     total_damage: int = Field(description="Total damage before any modifications")
+    relentless_rage: RelentlessRageIntervention | None = None
     intercepted_by_condition_uuid: UUID | None = None
     spatial_source: SpatialDamageSource | None = None
+    source_condition_uuid: UUID | None = None
+    zero_hp_disposition: RemainsDisposition = RemainsDisposition.INTACT
     damage_rolls: List[DiceRoll] = Field(default_factory=list, description="Individual damage rolls")
     damages: List['Damage'] = Field(default_factory=list, description="Damage specifications (types)")
     effect_id: Optional[str] = Field(
@@ -5295,6 +5324,7 @@ class DamageAppliedEvent(Event):
         description="Stable identity of the effect that caused the applied damage.",
     )
     spatial_source: SpatialDamageSource | None = None
+    source_condition_uuid: UUID | None = None
     resolution: Optional[DamageResolution] = Field(
         default=None,
         description="Complete resolution of the parent incoming damage packet.",
@@ -5519,6 +5549,7 @@ class LifeStateChangeEvent(Event):
     entity_name: str = Field(default="", description="Display name of the affected entity.")
     previous_state: LifeState = Field(description="Authoritative state before execution.")
     new_state: LifeState = Field(description="Authoritative state after the transition.")
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
     reason: LifeStateChangeReason = Field(description="Rules-facing cause of the transition.")
     normal_hit_points: int = Field(
         default=0,
@@ -5603,6 +5634,9 @@ class DeathSaveEvent(Event):
 class DeathEvent(Event):
     """Fired when an accepted rule transitions an entity to dead."""
 
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
+    destroyed_item_uuids: tuple[UUID, ...] = ()
+    preserved_item_uuids: tuple[UUID, ...] = ()
     name: str = Field(default="Death", description="Human-readable death event label.")
     event_type: EventType = Field(default=EventType.DEATH, description="Event category for entity death.")
     entity_uuid: UUID = Field(description="Entity that died.")

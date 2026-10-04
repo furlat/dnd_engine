@@ -3,9 +3,10 @@ from typing import AbstractSet, Dict, Optional, Any, List, Self, Set, ClassVar, 
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, PrivateAttr, model_validator, computed_field, ConfigDict
 from dnd.core.values import ModifiableValue
-from dnd.core.base_conditions import BaseCondition
+from dnd.core.base_object import BaseObject
+from dnd.core.base_conditions import BaseCondition, SpellProtectionRegistry
 from dnd.core.condition_types import (
-    HazardFilter, InvoluntarySustainLoss, SustainLossPolicy,
+    HazardFilter, InvoluntarySustainLoss, SustainLossPolicy, ConditionTag,
 )
 from dnd.core.item_types import ItemPresentationState, ItemReleaseReason
 from dnd.core.content.runtime import (
@@ -32,6 +33,7 @@ from dnd.types.world import LightLevel as LightLevel, MovementMode, OccupancyLay
 from dnd.types.actor import EntityStatsState
 from dnd.types.physical_access import ContactPassage, PhysicalAccess
 from dnd.types.controls import ControlLink
+from dnd.core.effect_types import ObjectSectionVolume
 from dnd.types.world_placement import (
     BoundaryStructure,
     WorldPlacementKind,
@@ -192,8 +194,18 @@ class BaseBlock(BaseModel):
     faction: Optional[str] = Field(default=None, description="Faction for ally/enemy detection. None = no faction.")
     stealth_dc: Optional[int] = Field(default=None, exclude=True,
         description="Stealth DC required to perceive. Set by Hidden condition.")
-    is_invisible: bool = Field(default=False, exclude=True,
-        description="Whether invisible. Set by Invisible condition.")
+    intrinsic_invisibility: bool = Field(default=False, alias="is_invisible", exclude=True,
+        description="Authored/manual invisibility independent of condition-owned contributions.")
+
+    @property
+    def is_invisible(self) -> bool:
+        return self.intrinsic_invisibility or any(condition.grants_invisibility
+            and condition.contributions_active() for condition in self.active_conditions_by_uuid.values())
+
+    @is_invisible.setter
+    def is_invisible(self, value: bool) -> None:
+        self.intrinsic_invisibility = value
+
     _attached_light_sources: Set[UUID] = PrivateAttr(default_factory=set)
 
     active_conditions: Dict[str, BaseCondition] = Field(
@@ -470,6 +482,7 @@ class BaseBlock(BaseModel):
             uuid: UUID of the block to unregister.
         """
         cls._registry.pop(uuid, None)
+        BaseObject.unregister(uuid)
 
     def get_blocks(self) -> List['BaseBlock']:
         """Return direct child blocks discovered on this block.
@@ -860,6 +873,9 @@ class BaseBlock(BaseModel):
         """Only an item publishes an item after-value for condition changes."""
         return None
 
+    def on_object_section_removed(self, volume: ObjectSectionVolume, parent_event: Event) -> None:
+        """An existing geometry owner may publish its now-cut physical shell."""
+
     def get_world_placement_spec(self) -> WorldPlacementSpec:
         """Return the neutral one-band center placement capability."""
         return WorldPlacementSpec(
@@ -1189,7 +1205,7 @@ class BaseBlock(BaseModel):
         )
 
     def remove_condition_by_uuid(self, condition_uuid: UUID,
-                                 parent_event: Optional[Event] = None, *,
+                                 parent_event: Optional[Event] = None, *, consumed: bool = False,
                                  terminal_release: TerminalOwnerRelease | None = None) -> bool:
         """Remove a condition by UUID.
 
@@ -1206,6 +1222,7 @@ class BaseBlock(BaseModel):
             return self.remove_condition(
                 condition.name,
                 parent_event=parent_event,
+                consumed=consumed,
                 terminal_release=terminal_release,
             )
         return False
@@ -1412,6 +1429,13 @@ class BaseBlock(BaseModel):
         if publish:
             cls._publish_committed_condition_removals(result)
         return result
+
+    @classmethod
+    def prepared_return_reservations(cls) -> frozenset[tuple[int, int]]:
+        """Destinations already admitted in the current condition-removal graph."""
+        accepted = cls._accepted_condition_removals.get()
+        return frozenset(position for _, condition, _, _ in (accepted or {}).values()
+                         for position in condition.prepared_removal_occupancies())
 
     @classmethod
     def validate_prepared_condition_removals(
@@ -1754,6 +1778,13 @@ class BaseBlock(BaseModel):
             if declaration_event.canceled:
                 self._discard_uncommitted_condition_tree(condition)
                 return declaration_event
+            position = self.get_position()
+            if (position is not None and condition.magical_origin and not condition.antimagic_exempt()
+                    and ConditionTag.CONCENTRATION not in condition.tags):
+                parent = BaseCondition.get(condition.parent_condition) if condition.parent_condition else None
+                if not isinstance(parent, BaseCondition) or not parent.magical_origin:
+                    condition.suppression_provider_uuids.update(row.provider_uuid for row in
+                        SpellProtectionRegistry.get_antimagic_suppressions({position}))
             effect = condition.prepare_application(declaration_event=declaration_event)
             if effect is None or effect.canceled:
                 self._discard_uncommitted_condition_tree(condition)
@@ -1993,7 +2024,16 @@ class BaseBlock(BaseModel):
     @staticmethod
     def _condition_immunity_source_name(source_id: UUID) -> str:
         """Encode one exact structural source without display-name identity."""
-        return f"structural-source:{source_id}"
+        source = BaseObject.get_contribution_owner(source_id)
+        prefix = "condition-source" if isinstance(source, BaseCondition) else "structural-source"
+        return f"{prefix}:{source_id}"
+
+    @staticmethod
+    def condition_immunity_contributes(source_name: str | None) -> bool:
+        if source_name is None or not source_name.startswith("condition-source:"):
+            return True
+        source = BaseObject.get_contribution_owner(UUID(source_name.partition(":")[2]))
+        return source is not None and source.contributions_active()
 
     def add_condition_immunity_source(
         self,

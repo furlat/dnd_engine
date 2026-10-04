@@ -8,9 +8,9 @@ from dnd.core.condition_types import ConditionCategory
 from dnd.core.creature_types import Size
 from dnd.core.equipment_types import WeaponSet
 from dnd.core.item_types import ItemPresentationState
-from dnd.core.life_types import LifeState
+from dnd.core.life_types import LifeState, RemainsDisposition
 from dnd.types.event_facts import WorldTileState
-from dnd.types.actor import ConditionState, EntityStatsState, TemporaryHitPointsGrant
+from dnd.types.actor import ConditionState, EntityStatsState, TemporaryHitPointsGrant, SpatialDisposition
 from dnd.types.world import OccupancyLayer
 from dnd.types.summoning import SummonOrigin
 
@@ -49,6 +49,7 @@ class ActorState:
     maximum_hp: int
     temporary_hp: int
     life_state: LifeState
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
     armor_class: int = 10
     conditions: tuple[ConditionFact, ...] = ()
     last_visual_position: tuple[int, int] | None = None
@@ -61,3 +62,4 @@ class ActorState:
     resolved_size: Size | None = None
     structural_base_size: Size | None = None
     summon_origin: SummonOrigin | None = None
+    spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT

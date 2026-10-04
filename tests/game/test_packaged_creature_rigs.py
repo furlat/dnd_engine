@@ -30,7 +30,12 @@ def test_fixed_creature_identity_maps_native_attack_and_preserves_all_direction_
     assert {"Idle", "Run", "TakeDamage", "Die", attack} <= rig.clips.keys()
     # Baked bodies have no independent gear. Wolf shadows recover the exact
     # visible pixels from the original body/composite pair, including alpha.
-    assert rig.slot_order == (("body",) if filename == "skeletonarcher05" else ("shadow", "body"))
+    expected_slots = {
+        "demonbeast01": ("shadow", "body", "effect"),
+        "skeletonarcher05": ("body",),
+        "greywolf": ("shadow", "body"),
+    }
+    assert rig.slot_order == expected_slots[filename]
     if "shadow" in rig.slot_order:
         assert rig.shadow_alpha == (1 if filename == "greywolf" else 0.5)
     for url, record in document["provenance"]["files"].items():

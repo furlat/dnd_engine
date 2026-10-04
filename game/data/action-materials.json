@@ -1,0 +1,48 @@
+{
+  "action.environment.heroes_feast.eat": {
+    "id": "feast-blessing",
+    "material": {
+      "mapping": "rising_bands",
+      "colors": [
+        4036734,
+        10739640
+      ]
+    },
+    "points": [
+      {
+        "elapsedMs": 0,
+        "strength": 0
+      },
+      {
+        "elapsedMs": 80,
+        "strength": 0.38
+      },
+      {
+        "elapsedMs": 672.0,
+        "strength": 0.38
+      },
+      {
+        "elapsedMs": 1600,
+        "strength": 0
+      }
+    ],
+    "motes": {
+      "count": 21,
+      "radiusCells": 0.18,
+      "radialGrowthCells": 0.3,
+      "heightCells": 1.9,
+      "depthRatio": 0.5,
+      "palette": [
+        9359544,
+        15595721
+      ],
+      "brightEvery": 4,
+      "alpha": 0.7,
+      "sizePixels": [
+        2,
+        3
+      ],
+      "blendMode": "screen"
+    }
+  }
+}

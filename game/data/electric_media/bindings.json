@@ -1,0 +1,26 @@
+{
+  "spells": {
+    "spell.lightning_bolt": {
+      "content_id": "spell.lightning_bolt",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+      "definition_kind": "spell",
+      "pack_id": "content.srd_5_1_cc"
+    },
+    "spell.chain_lightning": {
+      "content_id": "spell.chain_lightning",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00",
+      "definition_kind": "spell",
+      "pack_id": "content.srd_5_1_cc"
+    }
+  },
+  "resources": {
+    "/electric/arc-material.png": "game/assets/electric_media/arc-material.png",
+    "/electric/glow.png": "game/assets/electric_media/glow.png",
+    "/electric/spark_dot.png": "game/assets/electric_media/spark_dot.png",
+    "/electric/star.png": "game/assets/electric_media/star.png",
+    "/electric/streak.png": "game/assets/electric_media/streak.png",
+    "/electric/lightning-hands.png": "game/assets/electric_media/lightning-hands.png"
+  }
+}

@@ -69,16 +69,19 @@ SAFE_LEAF_MODULES = frozenset({
     "dnd.types.traps",
     "dnd.types.world",
     "dnd.types.abilities",
+    "dnd.types.class_features",
     "dnd.core.content.identities",
 })
 
 # Shared observations compose passive identities and state values. These exact
 # edges do not permit a leaf to import registries, entities or gameplay owners.
 NEUTRAL_VALUE_DEPENDENCIES = {
+    "dnd.core.presentation_geometry": frozenset({"dnd.core.effect_types"}),
     "dnd.types.senses": frozenset({
         "dnd.types.world", "dnd.core.content.identities", "dnd.types.traps",
         "dnd.core.presentation_geometry", "dnd.types.material_deposits",
-        "dnd.types.spell_suppression", "dnd.types.spatial_effects",
+        "dnd.types.spell_suppression", "dnd.types.spatial_effects", "dnd.core.creature_types",
+        "dnd.types.class_features",
     }),
     "dnd.types.traps": frozenset({"dnd.core.creature_types", "dnd.types.abilities"}),
 }
@@ -1417,11 +1420,6 @@ def test_floor_items_use_the_canonical_placement_boundary() -> None:
             "BaseItem",
             "place_on_grid",
         ),
-        (
-            "dnd.spells.evocation",
-            "ContinualFlameObject",
-            "place_flame",
-        ),
     }
     found: set[tuple[str, str | None, str | None]] = set()
     details: list[str] = []
@@ -1436,8 +1434,7 @@ def test_floor_items_use_the_canonical_placement_boundary() -> None:
             )
 
     assert found == allowed, (
-        "Only BaseItem.place_on_grid and the deliberate non-item "
-        "ContinualFlameObject may call GridMap.place_object directly.\n"
+        "Only BaseItem.place_on_grid may call GridMap.place_object directly.\n"
         + "\n".join(details)
     )
 

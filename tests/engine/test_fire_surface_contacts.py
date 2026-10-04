@@ -14,7 +14,7 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.spells.abjuration import GlobeOfInvulnerability
 from dnd.spells.conjuration import WebZone
-from dnd.spells.evocation import BurningHands, Fireball, FireBolt
+from dnd.spells.evocation import BurningHands, Fireball, FireBolt, LightningBolt
 from dnd.spells.walls import WallOfFire
 from dnd.spatial.environmental_conditions import BurningWeb, FireSurface, OilSurface, WetSurface
 from dnd.types.world import CardinalDirection, OccupancyLayer
@@ -175,3 +175,18 @@ def test_fire_bolt_object_contact_ignites_existing_oil_before_destruction(caster
     assert cast is not None and not cast.canceled
     assert not target.is_breakable() and burning_cells() == {(4, 1)}
     assert oil.affected_positions == {(5, 1)}
+
+
+def test_lightning_bolt_ignites_only_its_admitted_empty_line(caster):
+    material = surface(caster, {(3, 1), (3, 2)})
+    register_spell(caster, LightningBolt)
+    caster.update_entity_senses()
+    options = [(action, target) for action in get_available_actions(caster).all_actions
+               if action.behavior_id == 'spell.lightning_bolt' for target in action.valid_targets
+               if target.position == (2, 1)]
+    assert options
+    result = execute_available_action(caster, *options[0])
+    assert isinstance(result, SpellEvent) and not result.canceled
+    assert (3, 1) in (result.resolved_area_positions or ())
+    assert (3, 2) not in (result.resolved_area_positions or ())
+    assert burning_cells() == {(3, 1)} and material.affected_positions == {(3, 2)}

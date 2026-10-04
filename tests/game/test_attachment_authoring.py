@@ -24,7 +24,12 @@ def test_supported_v1_and_v6_decode_to_the_same_explicit_v2_recipe(data, tmp_pat
     (tmp_path / "projectile-assets.json").write_text("[]")
     recipe_path = tmp_path / "spell-studio-drafts.json"
     recipe_path.write_text(json.dumps({"schema": "dnd.spellStudioDrafts", "version": 1, "spells": [fire_bolt]}))
-    converted = load_animation_data(authored_bundles=(tmp_path,), world_source=recipe_only_world())
+    # The empty world isolates scene geometry, not the admitted item/condition
+    # materials or measured Idle2/Idle4 pose sockets. Retain their source bundles
+    # while varying only this recipe's file version.
+    bundles = (*(DATA_ROOT.parent / name for name in
+        ("fire_media", "necrotic_media", "support_conditions", "class_media")), tmp_path)
+    converted = load_animation_data(authored_bundles=bundles, world_source=recipe_only_world())
     assert converted.drafts["spell.fire_bolt"] == data.drafts["spell.fire_bolt"]
     explicit = converted.drafts["spell.fire_bolt"]
     assert explicit.projectile is not None
@@ -34,7 +39,7 @@ def test_supported_v1_and_v6_decode_to_the_same_explicit_v2_recipe(data, tmp_pat
     assert explicit.projectile.targetAnchor.forwardPx == 0
     recipe_path.write_text(json.dumps({"schema": "dnd.spellStudioDrafts", "version": 2,
         "spells": [explicit.model_dump(mode="json")]}))
-    assert load_animation_data(authored_bundles=(tmp_path,), world_source=recipe_only_world()).drafts == converted.drafts
+    assert load_animation_data(authored_bundles=bundles, world_source=recipe_only_world()).drafts == converted.drafts
     # Conversion leaves the retained historical source untouched.
     assert fire_bolt["projectile"]["sourceAnchor"]["basis"] == "tileCenter"
     assert fire_bolt["projectile"]["targetAnchor"]["forwardPx"] == -16

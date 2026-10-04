@@ -1,0 +1,22 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/solar-contact-originals-20261004",
+  "files": [
+    {
+      "path": "game/assets/weather_solar_media/contacts/contact-radiant.png",
+      "bytes": 191316,
+      "sha256": "eb99bbf86c78fb197241fb9de3b65245f9b041ef5cd1b616359cdc27688c3461"
+    },
+    {
+      "path": "game/assets/weather_solar_media/contacts/hand-glow.png",
+      "bytes": 98478,
+      "sha256": "45033ef97b73439d94a49840f6a6722c85ba3604d2c41fd9af16c35c6676ff5c"
+    }
+  ],
+  "identities": [
+    "holy.contact.radiant",
+    "solar.sunbeam.hand"
+  ],
+  "hand_adaptation": "Unchanged 23x23 forward cluster from original Attack5 frame 7, anchored by delivered hand sockets to the current actor hand; other-hand cluster omitted.",
+  "contact_adaptation": "Unchanged holy contact, 48 frames at 32 FPS, pivot (80,150), source worldPixels=160/3.1."
+}

@@ -1,0 +1,2244 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/class-action-vfx-proposals/live",
+  "rig_source": "/home/tommaso/Dev/NeuroClient/app/public/spritesheets",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/class-actions-roar-cast-v5-20261004",
+  "revision": "roar-cast-v5",
+  "manifest_sha256": "d046dd3171ae1d85fe213490995ddaf140f9e1ce90be3d90db55ed159a96e2de",
+  "files": [
+    {
+      "path": "game/assets/class_media/rig/NakedBody/Idle2.png",
+      "bytes": 133201,
+      "sha256": "3064ee6b192c72c6ad5f1a36d98a7c298b125f0473d9e0b9bab2f3027703ce7a"
+    },
+    {
+      "path": "game/assets/class_media/rig/NakedBody/Idle4.png",
+      "bytes": 124549,
+      "sha256": "4492b38cfd23057b8222788b41c4a606f88c3c2a8e5389a0c20ad392590b1318"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head22/Idle2.png",
+      "bytes": 129828,
+      "sha256": "b8bddac5c434615afe4a3512970794ebbe1690609cc1fe85723d7cf51bdc58c8"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head22/Idle4.png",
+      "bytes": 128788,
+      "sha256": "6177e2963f18e6eff63e4cb98b8a49510adc9bf0e5d93c3e96afa77b024fb492"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head15/Idle2.png",
+      "bytes": 121187,
+      "sha256": "2537b0cf3d50a62bda45bb383c415b287fdcbc03791126bcf751512158c7c6ae"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head15/Idle4.png",
+      "bytes": 119521,
+      "sha256": "dc25caa0b336e0873c28bff9fdecbb7adc4471786e97cf32680b90bc8de0544b"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest14/Idle2.png",
+      "bytes": 128258,
+      "sha256": "41bb43b2188e1457fc69e7de34c085786aac2339c15aca5b871c76fce4b8fe24"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest14/Idle4.png",
+      "bytes": 122844,
+      "sha256": "75d8b8f7095718914f8a2d7729e590a79f34da3503957598bdb3ece585f11c2e"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs1/Idle2.png",
+      "bytes": 123065,
+      "sha256": "aa536f741122501bde686de1e66683ace15356c868d2b6dc2c5907988998d9a2"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs1/Idle4.png",
+      "bytes": 120069,
+      "sha256": "d09b8848637eb16f633f9e88613541b01404bf3411358dab42e37425d70111e9"
+    },
+    {
+      "path": "game/assets/class_media/rig/Belt2/Idle2.png",
+      "bytes": 121046,
+      "sha256": "9d186e1c4d04a7347d04228ef3eecac18ef5871bcec166006b451eda6b900f5c"
+    },
+    {
+      "path": "game/assets/class_media/rig/Belt2/Idle4.png",
+      "bytes": 117607,
+      "sha256": "37e9c5cd344cafe20f53916c6ac38358e0fba6ffe98c5b2b082fa99f6b68eaa5"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shoes1/Idle2.png",
+      "bytes": 115568,
+      "sha256": "9d7834a70062ceed76a5c7c177a3eae10782e1ff697c356604f31991e13e3570"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shoes1/Idle4.png",
+      "bytes": 115468,
+      "sha256": "43662f3004f24d47446108bd853a20643ef72fae6f9e4e6fdacdc963f7453634"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shadow/Idle2.png",
+      "bytes": 119945,
+      "sha256": "32d80695485e562278609fa125193070ee9b527000a0dd22b51417bf05b4fefa"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shadow/Idle4.png",
+      "bytes": 118523,
+      "sha256": "a458bc08ccbb62639e7aeff035ac7a762a365e0fce9c06967b9244466c9cbbac"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee1/Idle2.png",
+      "bytes": 117494,
+      "sha256": "f2121b2b982084e56e1b0f5bc185de6a1052d2d199521725876e5bb7b7ff39ea"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee1/Idle4.png",
+      "bytes": 115889,
+      "sha256": "8171f4c679c05becbb6c71afa96a437a69bd343f102e8e220fc1feacbc6b00ab"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee3/Idle2.png",
+      "bytes": 122065,
+      "sha256": "34af80fd95ccc094d9ddd500e04e87a7baff04d64d16c048da85bc5ba566c3e7"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee3/Idle4.png",
+      "bytes": 118329,
+      "sha256": "5a7029be8f9a341e0dab352f971d6d609ecbf435cec113615568c95e6a0d75b6"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs7/Idle2.png",
+      "bytes": 128942,
+      "sha256": "0e89745afea01a8d0002664d9c054966482d2db845797437d277c430e44728a5"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs7/Idle4.png",
+      "bytes": 124067,
+      "sha256": "1259e095b11a3051f4b3c5dd1443076c62f43bce862d48d4b2c3b70cae7dd89d"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shoes2/Idle2.png",
+      "bytes": 118116,
+      "sha256": "ad1de6a79dc8a5ed79598f2ebf94d90fdc058388b2a16c896fd25b541168b138"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shoes2/Idle4.png",
+      "bytes": 116877,
+      "sha256": "83ecc6830868aa0be48129e5df6d426d5e7e2db2b28d0f9bfab1a6992d7af726"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest7/Idle2.png",
+      "bytes": 123665,
+      "sha256": "b2c85806e03226cdc757d246ecfc8c578641f20dab309721f4c5764b5b0ec5d0"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest7/Idle4.png",
+      "bytes": 121641,
+      "sha256": "9b339ffa2390afb72d2c014dd00dc3e113e11c7a2285479bf8238575daa0dd23"
+    },
+    {
+      "path": "game/assets/class_media/rig/Belt1/Idle2.png",
+      "bytes": 116036,
+      "sha256": "7636443846beb9624f43b6d4a77edd67fdedff4a102c3d5a6975c2e61f065f0a"
+    },
+    {
+      "path": "game/assets/class_media/rig/Belt1/Idle4.png",
+      "bytes": 115536,
+      "sha256": "3d0afe76753de39a6d5783beb4fe21943883b2a3daa4d56be43c689e76984adf"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield5/Idle2.png",
+      "bytes": 125551,
+      "sha256": "b6297314467750be41e22a65a59a3983eea9e0fab84ba756f8fe30811f08f659"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield5/Idle4.png",
+      "bytes": 120364,
+      "sha256": "da1043ad956283be94511e5a219a928ef450dd734080bec1f8773c5bd68aab08"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee2/Idle2.png",
+      "bytes": 124199,
+      "sha256": "eed015df63289e7c61fbd25b135aafb7bfb7a22af168da22477a057a21d74ce6"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee2/Idle4.png",
+      "bytes": 119370,
+      "sha256": "b760a585374d446a0cd20d5e24cb0047e5d65bc8247d674fef6e7091313ccc37"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head2/Idle2.png",
+      "bytes": 115262,
+      "sha256": "261e17d208320d5a47e58ce7d2d39d07a06ea9f62d90f421a8fdd9e838355ab7"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head2/Idle4.png",
+      "bytes": 115389,
+      "sha256": "23431596f2e2266da90632cd26c0d600091ea782950596838854d82ba492670b"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head10/Idle2.png",
+      "bytes": 117013,
+      "sha256": "9705935b1dc5a6ad58ef9b6450b0bac30ef189585b3ed28fccd6eadf08cfa48d"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head10/Idle4.png",
+      "bytes": 116775,
+      "sha256": "b9edc835b9a5ccfd374bc68ffb3c284e67f774aecbf31d6aa4250cb7d21f66fe"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head13/Idle2.png",
+      "bytes": 119984,
+      "sha256": "d430a4647d40b9b7ae3e2635238ea5ae181b39b075c87a61634c3135161721e7"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head13/Idle4.png",
+      "bytes": 119900,
+      "sha256": "07965fc0df4e0701fc045226147b842517b423e787c43c02e3c1513c0c81e160"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged1/Idle2.png",
+      "bytes": 119216,
+      "sha256": "b4713c9e8860e1079eea36fed6280235bdf85681cedfd58b535c228f81aa1590"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged1/Idle4.png",
+      "bytes": 116789,
+      "sha256": "a04e3fe75152bbd2a15f6e68ad19de8b546db422d520c392c73fc34bf6a13a40"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged4/Idle2.png",
+      "bytes": 148119,
+      "sha256": "c64c5799773d7997049e6014d74e7243330f16609c4a65da8bbd73120a530366"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged4/Idle4.png",
+      "bytes": 138190,
+      "sha256": "bd6a28ca141490a60befc859c2e6d0683f5d9208cf9e72024f62b761c34cc3a8"
+    },
+    {
+      "path": "game/assets/class_media/rig/NakedBody2/Idle2.png",
+      "bytes": 135784,
+      "sha256": "5d92a3041c70ded656c3a4a5a94dd59f9c5464a9b0c957fc52f3fc820e9dd3a2"
+    },
+    {
+      "path": "game/assets/class_media/rig/NakedBody2/Idle4.png",
+      "bytes": 129840,
+      "sha256": "f9e58e94e29433ccb75242764312f743e4932efa8a90dfd018f763896112f986"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs9/Idle2.png",
+      "bytes": 152876,
+      "sha256": "6737a4a725e4059b3b1ec9084ef0d8dfeaa526233d29ee935db8498eadec7cc5"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs9/Idle4.png",
+      "bytes": 144916,
+      "sha256": "35920f432f7893a7890f684084f5ad94d376cc06b94b401ed541c21a25dc4095"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest15/Idle2.png",
+      "bytes": 127615,
+      "sha256": "2d5f6b8c6af4bc6e05b345b6696307de7db050fa76de65f187c146b9266e6eec"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest15/Idle4.png",
+      "bytes": 122740,
+      "sha256": "4592caf16bff3a0230c90aec094acbe34d364ce596882e8baa99c3bd8d7f3e3f"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield7/Idle2.png",
+      "bytes": 162468,
+      "sha256": "73d856bdedd53422bf8d97cec0fda62d5249704a430f45068d79d57bc7d7b768"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield7/Idle4.png",
+      "bytes": 151995,
+      "sha256": "e147fe35b0643493c042a301d4600656d03a0a8626898f60ed3a268379b80743"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee9/Idle2.png",
+      "bytes": 120726,
+      "sha256": "758ff0db09594cd3f5d910329678c48868106e8d25622387d2a87ee1e7026ec6"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee9/Idle4.png",
+      "bytes": 117696,
+      "sha256": "e4ada7bc0392f5eb2a4d5d76d4afc1210822dceeee20c3765613415bf2343f29"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head5/Idle2.png",
+      "bytes": 117137,
+      "sha256": "faa848d0f35813a52c7b3b305fcc35807cd21af8d0795f750fe9911ca5be4d04"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head5/Idle4.png",
+      "bytes": 117207,
+      "sha256": "1fffbb11f97cd39d18fee6d6dab291299c08dd8517082656d3e8b91b733553d0"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee10/Idle2.png",
+      "bytes": 126098,
+      "sha256": "d54e04f195c102548d76d14f14f93130090cce018c699f56968efc6c6fbf69dc"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee10/Idle4.png",
+      "bytes": 120716,
+      "sha256": "9dd378b14ac50298e3ab8164851839f10095282f6b508fb8b11604526f1b65fe"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee11/Idle2.png",
+      "bytes": 128982,
+      "sha256": "d9e360258cd28fac3206867103e9baa11dfdd9effa69078f5013ca6d62619436"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee11/Idle4.png",
+      "bytes": 123458,
+      "sha256": "f06bcd48945748afc9aaa9d41d8a37973ba1bb8069e5869b76adcc58d80e99c5"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee12/Idle2.png",
+      "bytes": 124038,
+      "sha256": "4b6135277bfdb21d8abb3db73a3efa8c958de76710c523052a075a6835bcd2c1"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee12/Idle4.png",
+      "bytes": 120408,
+      "sha256": "d6e8c40820751657590475a83a6f39619a13565b2f337bd6acbfada868d63663"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee13/Idle2.png",
+      "bytes": 125965,
+      "sha256": "0add9ecb1c75cccffde2ea1055ec8fc94e06cf2f26b8c1c3d06419336c15195f"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee13/Idle4.png",
+      "bytes": 121189,
+      "sha256": "f3c507ada1229b99dd0d59f06f52b89f78424683f6ad3d23e68f188f1fc5146d"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee14/Idle2.png",
+      "bytes": 129798,
+      "sha256": "510d0aa4d7c94956f5c119cd0e801efe28d83cd053d230720170660b71f937f3"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee14/Idle4.png",
+      "bytes": 124361,
+      "sha256": "fe15a25965cfb98cdf45643e85e9f94de1ff6e285d9bba343cf8b7dd7e07c920"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee15/Idle2.png",
+      "bytes": 123908,
+      "sha256": "d76c080581e3ec3b4236578bcc1d5c81e2d4f0e84c89d32ed53196ad50ac4754"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee15/Idle4.png",
+      "bytes": 119984,
+      "sha256": "d5dee79854d5c6cf06893d39977e9983f5979eb8d7239240a21f10cf43251994"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee16/Idle2.png",
+      "bytes": 131260,
+      "sha256": "e2776bb6c1410a26b37c94ed54ec8a11ac0c9cc71e0351314abc611381b9cfd3"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee16/Idle4.png",
+      "bytes": 125726,
+      "sha256": "33ba752a9a6072620216f89d8ac452472badb128cc93a4a56f20ab8101edc71f"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee17/Idle2.png",
+      "bytes": 121471,
+      "sha256": "a07c5a9f1eb90f7a9efb6ff0d7196d82dae10895448422cdf17a7d37aaec3f68"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee17/Idle4.png",
+      "bytes": 118027,
+      "sha256": "3d9c771799edcb17ddd3de3758bf834f778cc47d4656c230b25ceb517e7b44ea"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee18/Idle2.png",
+      "bytes": 118623,
+      "sha256": "fdfea06bd5322d21c014f06da79da2488571cf4476bdd256b06bb29c356aa2ed"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee18/Idle4.png",
+      "bytes": 116704,
+      "sha256": "3f89e981a8073760727faed5da41e79ef984779f05e957439d8427006c20d1d9"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee19/Idle2.png",
+      "bytes": 126779,
+      "sha256": "7622a1e0cbfb226caaacda00b9f827ec8f1d083388b77ef5f8b76fc16288f545"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee19/Idle4.png",
+      "bytes": 122753,
+      "sha256": "7cabc5eda86fcaf38896f23c4c0793ab2f407c9e4aa30f461422211adb78cedc"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee20/Idle2.png",
+      "bytes": 130491,
+      "sha256": "8244a705d84fe0c3f31e3c3b7dc61c80211553de90307d078e24e0fe7fd3ef4b"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee20/Idle4.png",
+      "bytes": 127697,
+      "sha256": "f126df90bc14d5933622f8b9a7fb9531761c05f5b6fc5cd4b527e9efdab416f2"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee21/Idle2.png",
+      "bytes": 139012,
+      "sha256": "206f5383fa0e2c254c50d81c0f50ec28c147b1e2dd0d9a306ea86756a83f78c3"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee21/Idle4.png",
+      "bytes": 130894,
+      "sha256": "bc6c39a3a6a03c6c21fc5a8a41e424eff7449499549980a784166faaf0fd7846"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee22/Idle2.png",
+      "bytes": 123665,
+      "sha256": "34f780f3d3b804f5ed0b3099c9fea0ad33c880d93975230e3ccba7eff3cf4e9f"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee22/Idle4.png",
+      "bytes": 120283,
+      "sha256": "7490f05122e008d221d16cf9c9284e360fe1a298b929c3981ac8d3ce58ab26ba"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee23/Idle2.png",
+      "bytes": 131408,
+      "sha256": "fb4a290a389fe3da74eb1e3a3aef6626057cd3ee6c23e3046d8ec9dfc01278c1"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee23/Idle4.png",
+      "bytes": 127001,
+      "sha256": "7fd5f8fcbb3c8e17682e07613a204a4ead0a1c2209e4dcdcc4ae4769f2252f83"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee24/Idle2.png",
+      "bytes": 128277,
+      "sha256": "ab4d0b35ca8b8c54a4355095b8f5515a49175c77b61e3cedb399a6b68b21a699"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee24/Idle4.png",
+      "bytes": 123590,
+      "sha256": "5c3369a785a9cdfbcfc47d08c68bc450cce83b7541a027eb8cd4abe7b4929783"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee25/Idle2.png",
+      "bytes": 128432,
+      "sha256": "c799d98346db4495211b042f1b7c27499ea289ca6602b8fa6610c89c8fed6fb9"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee25/Idle4.png",
+      "bytes": 123810,
+      "sha256": "3050b0b6cd16c345a3c8cb3cb31a2f5e8f599eba5c7978fb24485a99eb5cb74a"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee4/Idle2.png",
+      "bytes": 121159,
+      "sha256": "642c6a893d7562ef79750b1441bdb5cfbf7caa594d68f0ebb7589b59ec7e25d5"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee4/Idle4.png",
+      "bytes": 118397,
+      "sha256": "81a590d1e3496ce9b7ba409fbc5a905a9cdc007dfd34db873b6fc682cd4ab546"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee5/Idle2.png",
+      "bytes": 121970,
+      "sha256": "4c1fd98b86519af1ee27134d7813908399c001ea2a4e08fe1e8511a8226ace5a"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee5/Idle4.png",
+      "bytes": 118614,
+      "sha256": "59609acfc2bf5b27abe904f4aac8b65176380ce087cc4f80ddca5bc640c746ad"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee6/Idle2.png",
+      "bytes": 128030,
+      "sha256": "ce0025da7f66e1402907843cb88e01303dbdff8fe057638d89db7ef59ef0a9ad"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee6/Idle4.png",
+      "bytes": 121961,
+      "sha256": "fc49ea4b25ab2a9380eca290ad1f6870e60366d23d0a86a7f1e5736003cb4b40"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee7/Idle2.png",
+      "bytes": 127296,
+      "sha256": "dafdbd0c30adfb75074620a4bc98e24ab3eebd86a620163b896943eabce6d49b"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee7/Idle4.png",
+      "bytes": 122995,
+      "sha256": "c1dc4e686067fa0b1479fb859bbec374e499aa93bb51e8f2a5a5057d0ede3f00"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee8/Idle2.png",
+      "bytes": 127873,
+      "sha256": "cb6cf97e4b2da81de249d8caa612cb9b4e67913a35ddac157aa41d6e38647100"
+    },
+    {
+      "path": "game/assets/class_media/rig/Melee8/Idle4.png",
+      "bytes": 122060,
+      "sha256": "f6f9b68a140254b53046a85e9b2639f7ab95ceeea80839a0f0a2d43d2533153e"
+    },
+    {
+      "path": "game/assets/class_media/rig/Offhand1/Idle2.png",
+      "bytes": 123717,
+      "sha256": "430b5522a26978315d00bc7dcfffb4b4315421cd0ad9b500a1363d14955d7e57"
+    },
+    {
+      "path": "game/assets/class_media/rig/Offhand1/Idle4.png",
+      "bytes": 118330,
+      "sha256": "8bfd2ea190e38d4fb53fa9c95e2460a2431875235c015868718aceb04760acc8"
+    },
+    {
+      "path": "game/assets/class_media/rig/Offhand2/Idle2.png",
+      "bytes": 117719,
+      "sha256": "2dfb5c3f461f83c5c969e05c59786bd18a9b5b0acf3d33e3a61b1349dfdb8482"
+    },
+    {
+      "path": "game/assets/class_media/rig/Offhand2/Idle4.png",
+      "bytes": 116080,
+      "sha256": "eb68b023abef78aa571270a3cdc4df829bcb9150455d7fa44739a35542d7ceb7"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged2/Idle2.png",
+      "bytes": 127240,
+      "sha256": "2e00bde9a164dd54415bf0ea93b0635eeea5a76edbf5acc620efb521660350e2"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged2/Idle4.png",
+      "bytes": 120745,
+      "sha256": "78c1e9d9385d5e99900da4af122672f5940d98426ffefe1c0b85e5b9dc62e504"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged3/Idle2.png",
+      "bytes": 121901,
+      "sha256": "8c99bdbdc4ecff75e59ca6b4e7d1b2190411f23bb0c3b2324feb207fb7f3c19d"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged3/Idle4.png",
+      "bytes": 117859,
+      "sha256": "6b04c1cb0ef3608ccbc5511fe55ddb9385f26df066dab4719bdad2ed4a93859a"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged5/Idle2.png",
+      "bytes": 117264,
+      "sha256": "e7cc5d088ef21f561c5cd789d2e970e2e8e8699208624173e2a3b84b2d3ab36c"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged5/Idle4.png",
+      "bytes": 117117,
+      "sha256": "5cd5f8277fac25f7d7e401ff0629e2a2bfd839aa546ffad77f8271f42139b0fd"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged6/Idle2.png",
+      "bytes": 142566,
+      "sha256": "6a9e8e76751bfc6d3b4ae77a8d2fee6605ab9faf21d57e2fadbbb96910dd234a"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged6/Idle4.png",
+      "bytes": 130563,
+      "sha256": "d3c4e91b8e0395f22f8a5fe743df520d0439a1a5a42836454421ce91e0ee6160"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged7/Idle2.png",
+      "bytes": 128602,
+      "sha256": "fa50483ec9741c5fa4339a36e5b33f8bb655adbb5e8ade4fd170acd58b91654a"
+    },
+    {
+      "path": "game/assets/class_media/rig/Ranged7/Idle4.png",
+      "bytes": 124361,
+      "sha256": "a4a6e33565c67d35a4f031a96a74398dc99ca2b921288029f30a8c168f3669a8"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield1/Idle2.png",
+      "bytes": 128999,
+      "sha256": "8b2bf522bca44aa13f7b7b787d332fd7167a5eb42d63960bbda4e3d45a33fc4d"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield1/Idle4.png",
+      "bytes": 121939,
+      "sha256": "d5f8ee61dd6110e0e17e18fc834d8302d574d85a7c28ee7e71088c216e5dd9bc"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield2/Idle2.png",
+      "bytes": 133193,
+      "sha256": "0bbf871cb7e435061cbb3ffff183e6a20bfca8da9b4abe59cfe339b2fb9fb1f7"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield2/Idle4.png",
+      "bytes": 123114,
+      "sha256": "e2f88146c394ab7ac76686714a255cf9a875e7ef39b57e3d60d6f668f7502ac0"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield3/Idle2.png",
+      "bytes": 126113,
+      "sha256": "8c4c9d09dce121e16fc50d8a7059a23628b41bf617dd0c7ba5cffb0633358609"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield3/Idle4.png",
+      "bytes": 120803,
+      "sha256": "8fb32ea3b6ca158c516d8a0a793eebabe123c4a68211fe59e18aba8bdfeff806"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield4/Idle2.png",
+      "bytes": 144922,
+      "sha256": "bf70296bb89f0efcddd2664ec293d2f9fe2e76d109e13b41fda825ca8633e156"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield4/Idle4.png",
+      "bytes": 136296,
+      "sha256": "62e814a5f12294e52ef69952dc34f4a4d55f67bf03767c9cfdede865b380a268"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield6/Idle2.png",
+      "bytes": 133381,
+      "sha256": "4c42bb280b48592c785b72559145d866b8db4898917d3d6c32b41b97920509b0"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shield6/Idle4.png",
+      "bytes": 124255,
+      "sha256": "0cfd7a6f0655ebead931d2f1fa67714731b43c9542a1ffa7f62af4a5209f80ac"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest1/Idle2.png",
+      "bytes": 117939,
+      "sha256": "468d1a6de7c0d9dadc2c732d11c501f36eec8502650dab53008de35308024955"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest1/Idle4.png",
+      "bytes": 117247,
+      "sha256": "85fe42186b3a09138cb7066d869b62b3d90d1c75b4013cba1ff2f55e23a209e6"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest10/Idle2.png",
+      "bytes": 118941,
+      "sha256": "3e3697ca915bb7d5186ec10a271591c1391f23d2bb81297646d55568078cae28"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest10/Idle4.png",
+      "bytes": 117810,
+      "sha256": "a65bd5f06ea88958b38c82bd7dcab917fcdeb6dd31b717b07df467070981b36e"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest11/Idle2.png",
+      "bytes": 124877,
+      "sha256": "9c5fcd7a54ce6e2bad6ac471cede336a3341724c4f13a6228d83db0e91cad084"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest11/Idle4.png",
+      "bytes": 120187,
+      "sha256": "5f7ece9b3fe689b2816d9a2f9ad466504541f082ed60182c12a1e799db665c10"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest12/Idle2.png",
+      "bytes": 119293,
+      "sha256": "446b2022b02dcf60261ae0b251e3d74a5b014046e0a1a786246c7433f22e1f53"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest12/Idle4.png",
+      "bytes": 118086,
+      "sha256": "56afcc798e35536ba446e02e4486f22aa0d4e46d8bd048b1ca0f004668e78313"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest13/Idle2.png",
+      "bytes": 126218,
+      "sha256": "a80461947691ae6242b5c9e8bd7a165f9d59097f08c9cb04abb29fae6df42810"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest13/Idle4.png",
+      "bytes": 122016,
+      "sha256": "017a5570f42ab1697973b7e6f94639a25c1320aa84b327c04e3287a17020605b"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest16/Idle2.png",
+      "bytes": 130026,
+      "sha256": "2a50144f3ee92211a12640ff30aa735358576420ec4d8f6a75e2d15ef00f14f8"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest16/Idle4.png",
+      "bytes": 125292,
+      "sha256": "474c41df1b2959b3f1c733638ae2f3d68d09d0e1ba4c2ec73319d997389efb88"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest17/Idle2.png",
+      "bytes": 167271,
+      "sha256": "83584ebdc02be5230107fb09c7b5b3717bd2cfc25fc2d6e3b053132c16f6fb3e"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest17/Idle4.png",
+      "bytes": 161168,
+      "sha256": "2862fb9fceedefafb9cdd504b37d50b6cacab2b34835f54810814b4bbd74ecf2"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest18/Idle2.png",
+      "bytes": 122332,
+      "sha256": "3ebd517c8b3c728859cb83699c1f6ecbcebe3b25838090aaae7b84a21995eb25"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest18/Idle4.png",
+      "bytes": 123007,
+      "sha256": "6b96d3d601cef248ce4a64f267a11dcb319023caacd3a0e565b72c2ef8250689"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest19/Idle2.png",
+      "bytes": 158818,
+      "sha256": "a8c3f7261530fb68ab115205a136bb2a02b23a15696c2f21c71aad774331ace0"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest19/Idle4.png",
+      "bytes": 156798,
+      "sha256": "213f0062f2b5a7acce54828af07afbadf03ee2d65fb6978291152a7f9720d41e"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest2/Idle2.png",
+      "bytes": 116646,
+      "sha256": "cee00d8f30519ebfe7619dcd6b4ac483342b7f4ad6fb4cdb31ebfd633378fb4f"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest2/Idle4.png",
+      "bytes": 116715,
+      "sha256": "f1a64baf24ab2cd59fa6e774df19b81860f3a838a952a9a8ed31602a92a44c73"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest3/Idle2.png",
+      "bytes": 117752,
+      "sha256": "bb1b19160728a7551848e4c74d30bc504b3a43417811bf92ff5f6db91c87ed30"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest3/Idle4.png",
+      "bytes": 116865,
+      "sha256": "7d960cfa09949dd784f221e317d81208a9d2f22da1235f1eae6b241725cde6de"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest4/Idle2.png",
+      "bytes": 120552,
+      "sha256": "d61f9c7d032c8a89b23745184087d4cc16fda6a5d26f47c20f2626099a8757cf"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest4/Idle4.png",
+      "bytes": 120214,
+      "sha256": "e902cf48fd3f6a1c553dcad75f890e7f2516edc3c708952b3ca78ec457bc9156"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest5/Idle2.png",
+      "bytes": 126348,
+      "sha256": "a7a26b7762a7bf0b4163df51db76f817cb2d4dc8acb1cf8d4530bdf21453e1a1"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest5/Idle4.png",
+      "bytes": 124279,
+      "sha256": "a693f0475e686b1f9266d8cb39eb2eed4ac1ad526af470154eb113170e3c464a"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest6/Idle2.png",
+      "bytes": 119154,
+      "sha256": "f07bd46be879b0d91643a2d3d784fe62851af80ac361fbc27ae6c63a3def8a45"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest6/Idle4.png",
+      "bytes": 119194,
+      "sha256": "777a1216e4dcb7be8e8e9b103bba0c7c6343100b5b99e0b47c3874e860d868f8"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest8/Idle2.png",
+      "bytes": 134171,
+      "sha256": "88bad33203d4bc712c2bc6972c70e7c722e1d5020f1a6f5c7764c6c86fe1ebd2"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest8/Idle4.png",
+      "bytes": 126532,
+      "sha256": "4b6363eb0a5076acb588fcfdb907d2095d3c05c1048f786d5cbd049f9cc5e515"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest9/Idle2.png",
+      "bytes": 124183,
+      "sha256": "483986d3e0acd3196aa8551912e6c3a558e391c6e3ae102eab0f72bd9b5978e4"
+    },
+    {
+      "path": "game/assets/class_media/rig/Chest9/Idle4.png",
+      "bytes": 119461,
+      "sha256": "1e2192c55ba5ae326e94f5e975d302c573a43f9e40cb7956325daa3f0255cce6"
+    },
+    {
+      "path": "game/assets/class_media/rig/Hands1/Idle2.png",
+      "bytes": 118947,
+      "sha256": "c76ec00b5129884231216e8b0a8a16176cfc8129f01c9510c7a0d0000a56651a"
+    },
+    {
+      "path": "game/assets/class_media/rig/Hands1/Idle4.png",
+      "bytes": 116332,
+      "sha256": "609027f64f561fb53caaa40ad309c827bdb0cb1cdec9d1b2bd6e60a0fe339663"
+    },
+    {
+      "path": "game/assets/class_media/rig/Hands2/Idle2.png",
+      "bytes": 151949,
+      "sha256": "2167f5ff545d0aeada65f707ec425608b45d74d182d05337797aa04fcdfe038b"
+    },
+    {
+      "path": "game/assets/class_media/rig/Hands2/Idle4.png",
+      "bytes": 144614,
+      "sha256": "9b91cf15763a0762938ca67bcf68e4c72547dc79cdab50977b62c2135ab24e67"
+    },
+    {
+      "path": "game/assets/class_media/rig/Hands3/Idle2.png",
+      "bytes": 100721,
+      "sha256": "d2304fadf536d88377277e985e0cf772b4239ce14e592f8fdb0f3c6c6f176414"
+    },
+    {
+      "path": "game/assets/class_media/rig/Hands3/Idle4.png",
+      "bytes": 100225,
+      "sha256": "14393bd1b47273ec1d5ea39800d229ae9afdcf1a60c7c80b1ae463d76548d9e1"
+    },
+    {
+      "path": "game/assets/class_media/rig/Hands4/Idle2.png",
+      "bytes": 103097,
+      "sha256": "bdd4d067c6e17a01477550b188c7b56e4e3985643e03f24974c4e8dce520b763"
+    },
+    {
+      "path": "game/assets/class_media/rig/Hands4/Idle4.png",
+      "bytes": 100918,
+      "sha256": "9afb6164518a99b89a9b14cf753ee0b7df878125327816621c57e0dd352aadef"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head12/Idle2.png",
+      "bytes": 119844,
+      "sha256": "464d73ce59afa3f3ed93d33c8dcbb1395f9b3e29920722856b5ae00949ef1db0"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head12/Idle4.png",
+      "bytes": 119673,
+      "sha256": "eecd29df1b5c60e2ba877184e2237d701ebd49dbc68b764b239b021f78bd65b5"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head14/Idle2.png",
+      "bytes": 122296,
+      "sha256": "09b44f1c537bc3e7fe11c2d743de3e5255bab66e7a5108b5e27f4551406e8f86"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head14/Idle4.png",
+      "bytes": 120741,
+      "sha256": "718b2429a0a4208b6d17d5fc8b8f8b12a79bacbe287560aa908586c7d039bb0e"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head18/Idle2.png",
+      "bytes": 119769,
+      "sha256": "ac5ab8bbee7a940dcfc948dd5e42a2147ba8dd6e057b7f8b92b8906e7bf99277"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head18/Idle4.png",
+      "bytes": 119012,
+      "sha256": "e9c1242893b3f2eb8c1778eb56c6aa4077698e9daa61fea3b359418f396ca9f9"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head19/Idle2.png",
+      "bytes": 121696,
+      "sha256": "c226c1c3212d255596c21ed32b07f52fec9caad164979f7a1d5f7d89d554a02c"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head19/Idle4.png",
+      "bytes": 120870,
+      "sha256": "37b90e99dd4eeb99d37fc784074e5a3ea93206ff5c75dd68b8bbeb82d3322a30"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head20/Idle2.png",
+      "bytes": 122302,
+      "sha256": "dfccd38034c3ad76b16044e8185789d5dcfb0431947ad7838514230faf160cf7"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head20/Idle4.png",
+      "bytes": 121210,
+      "sha256": "d00d3e519c75c85966f8185fcee9200f460b1fd35698af339272b6e91428ccea"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head21/Idle2.png",
+      "bytes": 121261,
+      "sha256": "026df88d13ab2f24d085a07cbf1ab8162a9a72c99ee7d2d077911e4d6d7fba5b"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head21/Idle4.png",
+      "bytes": 120838,
+      "sha256": "e6ce382a41fe1cfa4fc297eb214fac368dda9f7c69c8b3535354203f898c910d"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head23/Idle2.png",
+      "bytes": 118049,
+      "sha256": "23ffa027e0ba62d024e3e7dbbca808b14e57d47172a95bfd509506b0e254c020"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head23/Idle4.png",
+      "bytes": 118195,
+      "sha256": "bf7248e90359308b285465f4ae30b85fdcf9453aa576f5dd7a5f91942ddc9448"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head24/Idle2.png",
+      "bytes": 136702,
+      "sha256": "80adf3da321c2cb1e03318e39ae7f948dbf534903b8dca68d0008b3797034ddd"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head24/Idle4.png",
+      "bytes": 136584,
+      "sha256": "c8dd3f213d66cffba92a94e2eb450acf6e294fa7c0a92da4e971a2ca05fa3e53"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head3/Idle2.png",
+      "bytes": 117241,
+      "sha256": "71afdf4fd668b3732ce452d8104dd8fabe17c1978091daa69788eb6a53d8090d"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head3/Idle4.png",
+      "bytes": 117253,
+      "sha256": "a79d86c81414d7ace4594fb7d4bf109a7faf4cac769ee8ee4a20c5d7140761c2"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head4/Idle2.png",
+      "bytes": 116392,
+      "sha256": "b961d92817dc09dbf8315a978a397ef2aa5dba715300e46c31a03dc0831b622b"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head4/Idle4.png",
+      "bytes": 116341,
+      "sha256": "e9f48875b7814a9af664523d5fd56a8c5e5ef633854bf940cfb36856a77886b9"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head6/Idle2.png",
+      "bytes": 118038,
+      "sha256": "1732a18235eb36e0b1e4fc48b70d14594aa0969abbda9be62c18b6596cbb6a56"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head6/Idle4.png",
+      "bytes": 117723,
+      "sha256": "f8d7a424ff23a42de8b50e4fa0a888d7eb795f51ed0710b13e709ae3cbb41266"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head7/Idle2.png",
+      "bytes": 117463,
+      "sha256": "f6752036bc46bb371f914fa0773c6864b2c66dc17689de35fba5588af72a6d0c"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head7/Idle4.png",
+      "bytes": 117123,
+      "sha256": "b82e5ac52ef865185137749c52aa168c8e4496347581340be156c20f6278aa79"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head8/Idle2.png",
+      "bytes": 118338,
+      "sha256": "82b0ad3fff010d5c03c74491ab43d8b9491758ee9b3aaad274647bddb9c1acd3"
+    },
+    {
+      "path": "game/assets/class_media/rig/Head8/Idle4.png",
+      "bytes": 117582,
+      "sha256": "e7cd130da301a4e6f758710b19545ecb28db7ee353b4720a5a2ebe05d227b87d"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs2/Idle2.png",
+      "bytes": 124793,
+      "sha256": "1a3a23d3d10a65d4fc58f8fe536b47f566b2aedfb31abecd8638056904cd71f5"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs2/Idle4.png",
+      "bytes": 121565,
+      "sha256": "42ff5072dd8642cb14d2435404a143ff1de3e7f6a553466863b63f260dcab00e"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs3/Idle2.png",
+      "bytes": 124909,
+      "sha256": "174d960b42ef6181f431b96c8657c8b8db1d2fe1153ab833b798e953086fb749"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs3/Idle4.png",
+      "bytes": 122119,
+      "sha256": "8701f1e09de7b614c33a72a865938ae83a975b24faaa66a87100a982f215da7e"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs4/Idle2.png",
+      "bytes": 125091,
+      "sha256": "4a8a9fcf7669343c80890e57aff876c1c83f96d7490da267b13dc40073dc31ce"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs4/Idle4.png",
+      "bytes": 120584,
+      "sha256": "13bc5dd8b8e75094645cbe22befcf73e1ca16d386bf28918ad3007c076dd2e73"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs5/Idle2.png",
+      "bytes": 127176,
+      "sha256": "073a890ce4a1d4352a3ca9cd6bcef85b9244dbeb042fd294ed9fa98bed09e94c"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs5/Idle4.png",
+      "bytes": 122870,
+      "sha256": "8e54fd290235905e8e5543adf7e1b27ccc1fa9f8d6c84651eb0dec58547ba166"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs6/Idle2.png",
+      "bytes": 120646,
+      "sha256": "6b4e659f660bbbcf6d81d1d1cfd003d8971a7b0eea6eda74c687ffb6baa73bad"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs6/Idle4.png",
+      "bytes": 118147,
+      "sha256": "d851070e43c7d73c7fa2362bc3bab5aae8ade8c0873aa339dca8d25f85daf396"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs8/Idle2.png",
+      "bytes": 125176,
+      "sha256": "61da3c7ff6f24426355b4211d6c2e3d49e8c4e59a441216bf410b370aa4300c1"
+    },
+    {
+      "path": "game/assets/class_media/rig/Legs8/Idle4.png",
+      "bytes": 122528,
+      "sha256": "cac16d6f97a9ce168d389da7fc77282b4735571de5930615a6664b36d2a6d3eb"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shoes3/Idle2.png",
+      "bytes": 115830,
+      "sha256": "81c32003006e8812febb3029735159117aa8c45f73d90704045c4da9006a7c58"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shoes3/Idle4.png",
+      "bytes": 115667,
+      "sha256": "054f2db21eded1481152d21754109f84bb3c8e81fa4d279be4ab6b083ee3e3fb"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shoes4/Idle2.png",
+      "bytes": 115925,
+      "sha256": "d425b662844cb6dd66099a2506e4cc5afb086726f492120b9020b034c0367b2a"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shoes4/Idle4.png",
+      "bytes": 116046,
+      "sha256": "c821a4f218f79e1f2b5775f228f07f57a969a0a2d756a4325160a4882d4a9cac"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shoes5/Idle2.png",
+      "bytes": 142803,
+      "sha256": "858d72982434b1624dae7ae4d5505564c716779ef86464a6c1f4e298ea745091"
+    },
+    {
+      "path": "game/assets/class_media/rig/Shoes5/Idle4.png",
+      "bytes": 135930,
+      "sha256": "3509023882e2d56fa43c2138736415d3d79270b1a60c7c772ff9c0549a4efa3e"
+    },
+    {
+      "path": "game/assets/class_media/rig/Bag1/Idle2.png",
+      "bytes": 117172,
+      "sha256": "053d2e3a6535d605f68892d7663dd72ed8cd77137e9da3560f27bf7296dcd4eb"
+    },
+    {
+      "path": "game/assets/class_media/rig/Bag1/Idle4.png",
+      "bytes": 117301,
+      "sha256": "08e60d40de37282d2b04e0346f7a3c99540ba7e38a32232285f0a2b771225f82"
+    },
+    {
+      "path": "game/assets/class_media/rig/Bag2/Idle2.png",
+      "bytes": 140181,
+      "sha256": "062ccc2b3ef03a306b810099caa054cd435e18328f9f0a948707984cc6bbebd4"
+    },
+    {
+      "path": "game/assets/class_media/rig/Bag2/Idle4.png",
+      "bytes": 140595,
+      "sha256": "adffd95b17bd68222114302ffe8e10918608eb40a985976e4a472d50dd695f8b"
+    },
+    {
+      "path": "game/assets/class_media/rig/Bag8/Idle2.png",
+      "bytes": 154870,
+      "sha256": "d6d59526f1192cd765a145aff2bd3ab3452d0affcde2654b2128656c15be80bf"
+    },
+    {
+      "path": "game/assets/class_media/rig/Bag8/Idle4.png",
+      "bytes": 153703,
+      "sha256": "dfd9a11cfd4e846d7bd032c39763a9f7e46ba12c8e28cab2bfc1e31f3b5e0c67"
+    },
+    {
+      "path": "game/assets/class_media/rage/mantle-q0-back.png",
+      "bytes": 136252,
+      "sha256": "1074d4a6ec4f0238c8e124458bbc2d2480e88f82339995a10560514dfcfd10e4"
+    },
+    {
+      "path": "game/assets/class_media/rage/mantle-q0-front.png",
+      "bytes": 156496,
+      "sha256": "9554f6b40ed8c7b8a66bcdc6d848b60080223f5242287fd5e5ae489ed6e0c62e"
+    },
+    {
+      "path": "game/assets/class_media/rage/ground-q0-ground.png",
+      "bytes": 333320,
+      "sha256": "0ee6766e9aa388604acf2fc65d74c0e446cdac09bca5a4f512a9049a69ac8235"
+    },
+    {
+      "path": "game/assets/class_media/frenzy/mantle-q0-back.png",
+      "bytes": 136234,
+      "sha256": "d4558d1b679a996649ffbd24148052ff75c511280178376c74a9d8bf13dbb48e"
+    },
+    {
+      "path": "game/assets/class_media/frenzy/mantle-q0-front.png",
+      "bytes": 156619,
+      "sha256": "4a95b0d67e63165f0b5ad8fb7fb1af9002b1c1e01214d2b322f10cb7c9c1d4bd"
+    },
+    {
+      "path": "game/assets/class_media/frenzy/ground-q0-ground.png",
+      "bytes": 333154,
+      "sha256": "69b47f5f3faab4bfaf8e6231884d24e0d0225d9f440c4dff00f48bfcdf31609d"
+    },
+    {
+      "path": "game/assets/class_media/relentless/burst-q0-back.png",
+      "bytes": 37173,
+      "sha256": "20bf30d6d99e0a2f4437d658ca52af400bb3686db74213a8d0786a5dee71502b"
+    },
+    {
+      "path": "game/assets/class_media/relentless/burst-q0-front.png",
+      "bytes": 38865,
+      "sha256": "baa2a96547e3e434694860fb344a166fd9febd6464b6d9a07303f971d64e4ab6"
+    },
+    {
+      "path": "game/assets/class_media/action_surge/burst-q0-back.png",
+      "bytes": 37194,
+      "sha256": "c8fa53212a86430310067aec7578a810148dbeee8f63e159be7a33b02a1f719e"
+    },
+    {
+      "path": "game/assets/class_media/action_surge/burst-q0-front.png",
+      "bytes": 38841,
+      "sha256": "7bda7e503c362d0224aa9d639ab190ebe19796c90489e40cd907b2eee2a7cb31"
+    },
+    {
+      "path": "game/assets/class_media/indomitable/burst-q0-back.png",
+      "bytes": 37314,
+      "sha256": "4847f42c28e2092e0abf8ce97df145e58451b464a4525b9ad07fb403855cefdd"
+    },
+    {
+      "path": "game/assets/class_media/indomitable/burst-q0-front.png",
+      "bytes": 38931,
+      "sha256": "9542807d8d5008b4c4d385d6b312721ec18eb29a526b422726f172633de8b34b"
+    },
+    {
+      "path": "game/assets/class_media/second_wind/heal-q0-back.png",
+      "bytes": 105881,
+      "sha256": "d737aabb1679dc2fcd9a1f5bc7b2f569718220f2bf19ddafb706d5dac7b1f17b"
+    },
+    {
+      "path": "game/assets/class_media/second_wind/heal-q0-front.png",
+      "bytes": 104830,
+      "sha256": "e3c0d1ee2fa045526ab0f2101eb86cc4406972316dd3eae7e1634bc2c274bc43"
+    },
+    {
+      "path": "game/assets/class_media/wings/mantle-q0-back.png",
+      "bytes": 136872,
+      "sha256": "1b300be1d08862eaa6e8f5cc4795d1daf8d24d0edbfcf06d33fc2902b274ceae"
+    },
+    {
+      "path": "game/assets/class_media/wings/mantle-q0-front.png",
+      "bytes": 157125,
+      "sha256": "fa9b809b1b2500c157b34b33d3c1e8789282be0529fe4ab051a5b81bda78076a"
+    },
+    {
+      "path": "game/assets/class_media/awe/presence-q0-ground.png",
+      "bytes": 1133403,
+      "sha256": "6fcc11a85ebb7aedfe51b52ca8cc2c56062e0eadd81881a9289a5405bc38dede"
+    },
+    {
+      "path": "game/assets/class_media/awe/charge-q0-all.png",
+      "bytes": 121992,
+      "sha256": "54634f47a34b5e05f64a674c18acd766b1008cfeeef21c9d143830575784e46f"
+    },
+    {
+      "path": "game/assets/class_media/awe/charge-q1-all.png",
+      "bytes": 121712,
+      "sha256": "3240b8e05e9749f152d4d2ce717a49d826dae85d7b245ee060ffbfffe621ef87"
+    },
+    {
+      "path": "game/assets/class_media/awe/charge-q2-all.png",
+      "bytes": 124779,
+      "sha256": "1023eed53b3dce50cef783372288b59c907fab77834ba70a9e815fa81f3b6068"
+    },
+    {
+      "path": "game/assets/class_media/awe/charge-q3-all.png",
+      "bytes": 126741,
+      "sha256": "0567be2307c9b11362f81380493ef79047bd0ee0f02436071d7b226dbcbbb64b"
+    },
+    {
+      "path": "game/assets/class_media/draconic_fear/presence-q0-ground.png",
+      "bytes": 1132820,
+      "sha256": "83e0fa9c4bedab516f3919c94b6cac8447f95729ff62a328f7f7b7bf21e428ad"
+    },
+    {
+      "path": "game/assets/class_media/draconic_fear/charge-q0-all.png",
+      "bytes": 122144,
+      "sha256": "9a9424332bdabd57a75c8082e957f3ef95549ac44cd93546a324f54284ff53b2"
+    },
+    {
+      "path": "game/assets/class_media/draconic_fear/charge-q1-all.png",
+      "bytes": 121753,
+      "sha256": "234a43012b7e25dd4651840c07e4622c69ec9ed4f884b2d06b85527d96c8dfe5"
+    },
+    {
+      "path": "game/assets/class_media/draconic_fear/charge-q2-all.png",
+      "bytes": 124995,
+      "sha256": "64f752d5662249de1b739992166393df56665348a762c86c45a91cd71c632807"
+    },
+    {
+      "path": "game/assets/class_media/draconic_fear/charge-q3-all.png",
+      "bytes": 127190,
+      "sha256": "d40cc29bbf3e663e14db667deb66a276d6a16e49b0e818498dae4de0fc95554d"
+    },
+    {
+      "path": "game/assets/class_media/font_gather/charge-q0-all.png",
+      "bytes": 122023,
+      "sha256": "862f798d8148af7d2a0303011857649d497be34d438c58903eef9edfb1370693"
+    },
+    {
+      "path": "game/assets/class_media/font_gather/charge-q1-all.png",
+      "bytes": 121851,
+      "sha256": "d0556e6b83aa72e3b345b90273b6f9f5b731aed98f82d6f8564aca41415a5190"
+    },
+    {
+      "path": "game/assets/class_media/font_gather/charge-q2-all.png",
+      "bytes": 124979,
+      "sha256": "0f72bdf31c97ad34d59af09a393c67f0b173e3344e4600f26945f2498d55d95b"
+    },
+    {
+      "path": "game/assets/class_media/font_gather/charge-q3-all.png",
+      "bytes": 126898,
+      "sha256": "1f6b8504946d82a049b9428c38bc0b0b152d316703f794d6a8b8269c9e2c8866"
+    },
+    {
+      "path": "game/assets/class_media/quickened/quickened-q0-all.png",
+      "bytes": 92872,
+      "sha256": "7f04d348aa038a13f6edf0132695ce372ec377308a817e0a6789fd0c6619779a"
+    },
+    {
+      "path": "game/assets/class_media/twinned/twinned-q0-all.png",
+      "bytes": 94137,
+      "sha256": "7cf1f4744aa203803667f0661d438e51e8da8aeb35aaaf8be577d3a8cc065a20"
+    },
+    {
+      "path": "game/assets/class_media/distant/distant-q0-all.png",
+      "bytes": 186051,
+      "sha256": "dd94206fab3a64a6c0bfb2c814bbdd1cfc33cf7811a71575701c77f5b968b74f"
+    },
+    {
+      "path": "game/assets/class_media/affinity-fire/affinity-q0-back.png",
+      "bytes": 173086,
+      "sha256": "7d3d254bc127f36056513e33572d64661116154810d8a381fd577ea296b4f044"
+    },
+    {
+      "path": "game/assets/class_media/affinity-fire/affinity-q0-front.png",
+      "bytes": 193804,
+      "sha256": "149e8f12954b0739f779b65f28d08e2a719ed5d350522151f08c135d19d5bd15"
+    },
+    {
+      "path": "game/assets/class_media/affinity-cold/affinity-q0-back.png",
+      "bytes": 174173,
+      "sha256": "a82c63419a818b757c7212b44ff1d2fe28228d81891ae17aab9aa373f72381d4"
+    },
+    {
+      "path": "game/assets/class_media/affinity-cold/affinity-q0-front.png",
+      "bytes": 194975,
+      "sha256": "e56062f3a99bc3797c5bf662e071b2077eb53a023fd6a95fdd8d6cd624e133bd"
+    },
+    {
+      "path": "game/assets/class_media/affinity-lightning/affinity-q0-back.png",
+      "bytes": 174397,
+      "sha256": "b30674aeb7004ccd4bfeaea961b729f3e2b828f692baad6b80c68f5b222fc3cc"
+    },
+    {
+      "path": "game/assets/class_media/affinity-lightning/affinity-q0-front.png",
+      "bytes": 192616,
+      "sha256": "913fe502e8ba180bac831120cdf5d9671783d6d977e6a670f9fbc9ca0721c961"
+    },
+    {
+      "path": "game/assets/class_media/affinity-acid/affinity-q0-back.png",
+      "bytes": 173790,
+      "sha256": "39b7fe8923ee597e6972e6eea848dc5bd52af4174d6ae4a415e097cc33c87b00"
+    },
+    {
+      "path": "game/assets/class_media/affinity-acid/affinity-q0-front.png",
+      "bytes": 203354,
+      "sha256": "8104b6e778a384a15a67f2f8800b2d4a3975ef8de1955044c14c6302a5209910"
+    },
+    {
+      "path": "game/assets/class_media/affinity-poison/affinity-q0-back.png",
+      "bytes": 173297,
+      "sha256": "a44cd178245346760e4f7245b7f1d055d884ef14cda045d06f9a0cc87f6d46c7"
+    },
+    {
+      "path": "game/assets/class_media/affinity-poison/affinity-q0-front.png",
+      "bytes": 206744,
+      "sha256": "b2b0c3479004caa873226273ae4fcc73b084ff5efea81222442dfaf18fdbccad"
+    },
+    {
+      "path": "game/assets/class_media/intimidate/threat-h0-all.png",
+      "bytes": 169376,
+      "sha256": "6f71cbe36c1f40abec86ebef42b2dd0554fb86549e6d9d72f7b12483b07ada4b"
+    },
+    {
+      "path": "game/assets/class_media/intimidate/threat-h1-all.png",
+      "bytes": 162505,
+      "sha256": "24cca9275f3e5f791576768b1b838360d70b5cbd7fc2e893c15eb850a6f38efd"
+    },
+    {
+      "path": "game/assets/class_media/intimidate/threat-h2-all.png",
+      "bytes": 190013,
+      "sha256": "a06447d1261c9450ac5b1783c0bb577a5c5668b1eaef7a68ece14f689ce1bdd2"
+    },
+    {
+      "path": "game/assets/class_media/intimidate/threat-h3-all.png",
+      "bytes": 118588,
+      "sha256": "4cba128b504465b476707b86aa1fcf3985d2a881e21dab7571e4a3673802ec94"
+    },
+    {
+      "path": "game/assets/class_media/intimidate/threat-h4-all.png",
+      "bytes": 170906,
+      "sha256": "2ee3ec4e9217298460b25e83311ae2a25f6ec33bbfb1eb653bdad29a7fc2f2fa"
+    },
+    {
+      "path": "game/assets/class_media/intimidate/threat-h5-all.png",
+      "bytes": 166299,
+      "sha256": "1932b9f99c4689ebebddfe2e9ea1db45f3ea9572a8666f13e827ae6b79fdaa1f"
+    },
+    {
+      "path": "game/assets/class_media/intimidate/threat-h6-all.png",
+      "bytes": 189762,
+      "sha256": "b29d85b5fd37f2b9d1856f759120c61b8463367f91f1c17e00c6831f2d2c7dc7"
+    },
+    {
+      "path": "game/assets/class_media/intimidate/threat-h7-all.png",
+      "bytes": 118112,
+      "sha256": "1872cd3c3a2e85779707f19469f45e0abd49ef385eb00655f47a53216a876f02"
+    },
+    {
+      "path": "game/assets/class_media/martial/slash-h0-all.png",
+      "bytes": 19959,
+      "sha256": "8ba0c758e97d750ea936976b0743d297c9814c757a0505ad649c61171ca6f73a"
+    },
+    {
+      "path": "game/assets/class_media/martial/slash-h1-all.png",
+      "bytes": 31166,
+      "sha256": "03f9300d885a897b1d0484a54a0f5373a78aca136a3d3a490c9eba1bd89aa9ae"
+    },
+    {
+      "path": "game/assets/class_media/martial/slash-h2-all.png",
+      "bytes": 35739,
+      "sha256": "85d0ac5bb59cd213cdf95ea028cb79021310d354859e4e53ca71fd24a8df1fec"
+    },
+    {
+      "path": "game/assets/class_media/martial/slash-h3-all.png",
+      "bytes": 31289,
+      "sha256": "db8c2702809f1228d8f0c1c3f2b553687419537140b1fbb655a216f0e80f1d9f"
+    },
+    {
+      "path": "game/assets/class_media/martial/slash-h4-all.png",
+      "bytes": 39807,
+      "sha256": "c59aa10dfc855b72dda70de28cd98aea5e1758e9a0c1d278ad891ae382317582"
+    },
+    {
+      "path": "game/assets/class_media/martial/slash-h5-all.png",
+      "bytes": 31792,
+      "sha256": "a6df13072ae61ceb56537070f1e5b64870f8ba50e5584637d174f60712ba46d9"
+    },
+    {
+      "path": "game/assets/class_media/martial/slash-h6-all.png",
+      "bytes": 29361,
+      "sha256": "decf01e8c0fd486153325611ec2cdac34e189e83f11f9ab729d6f4fb4ece30f3"
+    },
+    {
+      "path": "game/assets/class_media/martial/slash-h7-all.png",
+      "bytes": 25426,
+      "sha256": "e369b2d2a5cecc492c86d60baedcd055e75130fcd5a6be850f50f2886a22a625"
+    },
+    {
+      "path": "game/assets/class_media/martial/impact-q0-all.png",
+      "bytes": 22294,
+      "sha256": "4185e76efc968dfd91ff6be27192e5f8fc9e099ff1b50e1bf05c32a1cbf82c1e"
+    },
+    {
+      "path": "game/assets/class_media/film-field.png",
+      "bytes": 120669,
+      "sha256": "a8a131f2617bf29202e3ad8ca8bb4a620570deaefb72409fae0f573a80c03bd7"
+    }
+  ],
+  "conversions": [
+    {
+      "source": "assets/native/mantle-q0-back.png",
+      "source_sha256": "3f6e7da82e7d95d3179f39e5d531bd9d2e794c227153ee183c95425a013ab6a0",
+      "selected": "rage/mantle-q0-back.png",
+      "palette": [
+        "#7b2629",
+        "#c74439",
+        "#ec8763"
+      ],
+      "sha256": "1074d4a6ec4f0238c8e124458bbc2d2480e88f82339995a10560514dfcfd10e4",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/mantle-q0-front.png",
+      "source_sha256": "08d3abf41f48aa1703696d83f0f8b3fe325e82179ba9482a27defa39ae33ac73",
+      "selected": "rage/mantle-q0-front.png",
+      "palette": [
+        "#7b2629",
+        "#c74439",
+        "#ec8763"
+      ],
+      "sha256": "9554f6b40ed8c7b8a66bcdc6d848b60080223f5242287fd5e5ae489ed6e0c62e",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/ground-q0-ground.png",
+      "source_sha256": "1613d7b6873e0a91c94c0c32c0c535e3b6a53e54babc170030f26ad96fb1bb7c",
+      "selected": "rage/ground-q0-ground.png",
+      "palette": [
+        "#7b2629",
+        "#c74439",
+        "#ec8763"
+      ],
+      "sha256": "0ee6766e9aa388604acf2fc65d74c0e446cdac09bca5a4f512a9049a69ac8235",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/mantle-q0-back.png",
+      "source_sha256": "3f6e7da82e7d95d3179f39e5d531bd9d2e794c227153ee183c95425a013ab6a0",
+      "selected": "frenzy/mantle-q0-back.png",
+      "palette": [
+        "#78262b",
+        "#da393f",
+        "#f07b68"
+      ],
+      "sha256": "d4558d1b679a996649ffbd24148052ff75c511280178376c74a9d8bf13dbb48e",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/mantle-q0-front.png",
+      "source_sha256": "08d3abf41f48aa1703696d83f0f8b3fe325e82179ba9482a27defa39ae33ac73",
+      "selected": "frenzy/mantle-q0-front.png",
+      "palette": [
+        "#78262b",
+        "#da393f",
+        "#f07b68"
+      ],
+      "sha256": "4a95b0d67e63165f0b5ad8fb7fb1af9002b1c1e01214d2b322f10cb7c9c1d4bd",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/ground-q0-ground.png",
+      "source_sha256": "1613d7b6873e0a91c94c0c32c0c535e3b6a53e54babc170030f26ad96fb1bb7c",
+      "selected": "frenzy/ground-q0-ground.png",
+      "palette": [
+        "#78262b",
+        "#da393f",
+        "#f07b68"
+      ],
+      "sha256": "69b47f5f3faab4bfaf8e6231884d24e0d0225d9f440c4dff00f48bfcdf31609d",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/burst-q0-back.png",
+      "source_sha256": "7d13969bd5ca92ea28a6aa41c3697bd76c111977c3baeed9b6f1951563714a55",
+      "selected": "relentless/burst-q0-back.png",
+      "palette": [
+        "#792e2b",
+        "#db5d4c",
+        "#e5d3b2"
+      ],
+      "sha256": "20bf30d6d99e0a2f4437d658ca52af400bb3686db74213a8d0786a5dee71502b",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/burst-q0-front.png",
+      "source_sha256": "877b922ca6cd5c062ffd368613c76ff720d5af90e717f35cb84b67b49e9e9cd3",
+      "selected": "relentless/burst-q0-front.png",
+      "palette": [
+        "#792e2b",
+        "#db5d4c",
+        "#e5d3b2"
+      ],
+      "sha256": "baa2a96547e3e434694860fb344a166fd9febd6464b6d9a07303f971d64e4ab6",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/burst-q0-back.png",
+      "source_sha256": "7d13969bd5ca92ea28a6aa41c3697bd76c111977c3baeed9b6f1951563714a55",
+      "selected": "action_surge/burst-q0-back.png",
+      "palette": [
+        "#496c84",
+        "#92b9cb",
+        "#ddbc89"
+      ],
+      "sha256": "c8fa53212a86430310067aec7578a810148dbeee8f63e159be7a33b02a1f719e",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/burst-q0-front.png",
+      "source_sha256": "877b922ca6cd5c062ffd368613c76ff720d5af90e717f35cb84b67b49e9e9cd3",
+      "selected": "action_surge/burst-q0-front.png",
+      "palette": [
+        "#496c84",
+        "#92b9cb",
+        "#ddbc89"
+      ],
+      "sha256": "7bda7e503c362d0224aa9d639ab190ebe19796c90489e40cd907b2eee2a7cb31",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/burst-q0-back.png",
+      "source_sha256": "7d13969bd5ca92ea28a6aa41c3697bd76c111977c3baeed9b6f1951563714a55",
+      "selected": "indomitable/burst-q0-back.png",
+      "palette": [
+        "#af8360",
+        "#e1ccb0",
+        "#708699"
+      ],
+      "sha256": "4847f42c28e2092e0abf8ce97df145e58451b464a4525b9ad07fb403855cefdd",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/burst-q0-front.png",
+      "source_sha256": "877b922ca6cd5c062ffd368613c76ff720d5af90e717f35cb84b67b49e9e9cd3",
+      "selected": "indomitable/burst-q0-front.png",
+      "palette": [
+        "#af8360",
+        "#e1ccb0",
+        "#708699"
+      ],
+      "sha256": "9542807d8d5008b4c4d385d6b312721ec18eb29a526b422726f172633de8b34b",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/heal-q0-back.png",
+      "source_sha256": "a052091f081574f67428d4aa07d806daf09bdc64661c949a5b528d999e3ff10f",
+      "selected": "second_wind/heal-q0-back.png",
+      "palette": [
+        "#458b83",
+        "#75bfa3",
+        "#c3dace"
+      ],
+      "sha256": "d737aabb1679dc2fcd9a1f5bc7b2f569718220f2bf19ddafb706d5dac7b1f17b",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/heal-q0-front.png",
+      "source_sha256": "a33b4c8cf5367d948e42637908e5a68f53acb8d7ab4a9cc9d377fdadec3adc02",
+      "selected": "second_wind/heal-q0-front.png",
+      "palette": [
+        "#458b83",
+        "#75bfa3",
+        "#c3dace"
+      ],
+      "sha256": "e3c0d1ee2fa045526ab0f2101eb86cc4406972316dd3eae7e1634bc2c274bc43",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/mantle-q0-back.png",
+      "source_sha256": "3f6e7da82e7d95d3179f39e5d531bd9d2e794c227153ee183c95425a013ab6a0",
+      "selected": "wings/mantle-q0-back.png",
+      "palette": [
+        "#254e69",
+        "#64aec7",
+        "#c5d8d8"
+      ],
+      "sha256": "1b300be1d08862eaa6e8f5cc4795d1daf8d24d0edbfcf06d33fc2902b274ceae",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/mantle-q0-front.png",
+      "source_sha256": "08d3abf41f48aa1703696d83f0f8b3fe325e82179ba9482a27defa39ae33ac73",
+      "selected": "wings/mantle-q0-front.png",
+      "palette": [
+        "#254e69",
+        "#64aec7",
+        "#c5d8d8"
+      ],
+      "sha256": "fa9b809b1b2500c157b34b33d3c1e8789282be0529fe4ab051a5b81bda78076a",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/presence-q0-ground.png",
+      "source_sha256": "c0475a93d09d189bdfa519c783f87fcaf5717774e092d61e31b21aefb7c9e596",
+      "selected": "awe/presence-q0-ground.png",
+      "palette": [
+        "#77573c",
+        "#d5ad60",
+        "#efdba9"
+      ],
+      "sha256": "6fcc11a85ebb7aedfe51b52ca8cc2c56062e0eadd81881a9289a5405bc38dede",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q0-all.png",
+      "source_sha256": "153d5173639ac8efab38ff480c0547aca0d7fd3c0a328f96c79da570f9f58b5e",
+      "selected": "awe/charge-q0-all.png",
+      "palette": [
+        "#77573c",
+        "#d5ad60",
+        "#efdba9"
+      ],
+      "sha256": "54634f47a34b5e05f64a674c18acd766b1008cfeeef21c9d143830575784e46f",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q1-all.png",
+      "source_sha256": "35bd8cb32cb5befe807ad540905d0bbf34eb5d344024d50af6816fcb2c5d2bd1",
+      "selected": "awe/charge-q1-all.png",
+      "palette": [
+        "#77573c",
+        "#d5ad60",
+        "#efdba9"
+      ],
+      "sha256": "3240b8e05e9749f152d4d2ce717a49d826dae85d7b245ee060ffbfffe621ef87",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q2-all.png",
+      "source_sha256": "0be01a7b22a0787a8a67e8afbf43a3d3e9fc850192acd85c4da443d7569b5a8f",
+      "selected": "awe/charge-q2-all.png",
+      "palette": [
+        "#77573c",
+        "#d5ad60",
+        "#efdba9"
+      ],
+      "sha256": "1023eed53b3dce50cef783372288b59c907fab77834ba70a9e815fa81f3b6068",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q3-all.png",
+      "source_sha256": "b1d23535cb9e91c6a6dd94e53a6c3e5ed9a2ef71499b4cc03904c995bf9d4d22",
+      "selected": "awe/charge-q3-all.png",
+      "palette": [
+        "#77573c",
+        "#d5ad60",
+        "#efdba9"
+      ],
+      "sha256": "0567be2307c9b11362f81380493ef79047bd0ee0f02436071d7b226dbcbbb64b",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/presence-q0-ground.png",
+      "source_sha256": "c0475a93d09d189bdfa519c783f87fcaf5717774e092d61e31b21aefb7c9e596",
+      "selected": "draconic_fear/presence-q0-ground.png",
+      "palette": [
+        "#3d3b41",
+        "#8a353b",
+        "#c06155"
+      ],
+      "sha256": "83e0fa9c4bedab516f3919c94b6cac8447f95729ff62a328f7f7b7bf21e428ad",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q0-all.png",
+      "source_sha256": "153d5173639ac8efab38ff480c0547aca0d7fd3c0a328f96c79da570f9f58b5e",
+      "selected": "draconic_fear/charge-q0-all.png",
+      "palette": [
+        "#3d3b41",
+        "#8a353b",
+        "#c06155"
+      ],
+      "sha256": "9a9424332bdabd57a75c8082e957f3ef95549ac44cd93546a324f54284ff53b2",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q1-all.png",
+      "source_sha256": "35bd8cb32cb5befe807ad540905d0bbf34eb5d344024d50af6816fcb2c5d2bd1",
+      "selected": "draconic_fear/charge-q1-all.png",
+      "palette": [
+        "#3d3b41",
+        "#8a353b",
+        "#c06155"
+      ],
+      "sha256": "234a43012b7e25dd4651840c07e4622c69ec9ed4f884b2d06b85527d96c8dfe5",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q2-all.png",
+      "source_sha256": "0be01a7b22a0787a8a67e8afbf43a3d3e9fc850192acd85c4da443d7569b5a8f",
+      "selected": "draconic_fear/charge-q2-all.png",
+      "palette": [
+        "#3d3b41",
+        "#8a353b",
+        "#c06155"
+      ],
+      "sha256": "64f752d5662249de1b739992166393df56665348a762c86c45a91cd71c632807",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q3-all.png",
+      "source_sha256": "b1d23535cb9e91c6a6dd94e53a6c3e5ed9a2ef71499b4cc03904c995bf9d4d22",
+      "selected": "draconic_fear/charge-q3-all.png",
+      "palette": [
+        "#3d3b41",
+        "#8a353b",
+        "#c06155"
+      ],
+      "sha256": "d40cc29bbf3e663e14db667deb66a276d6a16e49b0e818498dae4de0fc95554d",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q0-all.png",
+      "source_sha256": "153d5173639ac8efab38ff480c0547aca0d7fd3c0a328f96c79da570f9f58b5e",
+      "selected": "font_gather/charge-q0-all.png",
+      "palette": [
+        "#277fa4",
+        "#77cce6",
+        "#d9bb73"
+      ],
+      "sha256": "862f798d8148af7d2a0303011857649d497be34d438c58903eef9edfb1370693",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q1-all.png",
+      "source_sha256": "35bd8cb32cb5befe807ad540905d0bbf34eb5d344024d50af6816fcb2c5d2bd1",
+      "selected": "font_gather/charge-q1-all.png",
+      "palette": [
+        "#277fa4",
+        "#77cce6",
+        "#d9bb73"
+      ],
+      "sha256": "d0556e6b83aa72e3b345b90273b6f9f5b731aed98f82d6f8564aca41415a5190",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q2-all.png",
+      "source_sha256": "0be01a7b22a0787a8a67e8afbf43a3d3e9fc850192acd85c4da443d7569b5a8f",
+      "selected": "font_gather/charge-q2-all.png",
+      "palette": [
+        "#277fa4",
+        "#77cce6",
+        "#d9bb73"
+      ],
+      "sha256": "0f72bdf31c97ad34d59af09a393c67f0b173e3344e4600f26945f2498d55d95b",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/charge-q3-all.png",
+      "source_sha256": "b1d23535cb9e91c6a6dd94e53a6c3e5ed9a2ef71499b4cc03904c995bf9d4d22",
+      "selected": "font_gather/charge-q3-all.png",
+      "palette": [
+        "#277fa4",
+        "#77cce6",
+        "#d9bb73"
+      ],
+      "sha256": "1f6b8504946d82a049b9428c38bc0b0b152d316703f794d6a8b8269c9e2c8866",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/quickened-q0-all.png",
+      "source_sha256": "d80031e2ff8f24de62aaac3c3c3b5db5cc06f110f3600fbf8d887b15e5a7d09c",
+      "selected": "quickened/quickened-q0-all.png",
+      "palette": [
+        "#398fb5",
+        "#80c9e2",
+        "#d7bd83"
+      ],
+      "sha256": "7f04d348aa038a13f6edf0132695ce372ec377308a817e0a6789fd0c6619779a",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/twinned-q0-all.png",
+      "source_sha256": "105d38f55fa10f3864bc120a5d3909af8030a030235e9e321ba0b7a7b284e07e",
+      "selected": "twinned/twinned-q0-all.png",
+      "palette": [
+        "#398fb5",
+        "#80c9e2",
+        "#d7bd83"
+      ],
+      "sha256": "7cf1f4744aa203803667f0661d438e51e8da8aeb35aaaf8be577d3a8cc065a20",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/distant-q0-all.png",
+      "source_sha256": "5ec78840992e2fabeb25cbb2cd6241342dcfd6dc9ecd02a3c9645b569e98c5b9",
+      "selected": "distant/distant-q0-all.png",
+      "palette": [
+        "#398fb5",
+        "#80c9e2",
+        "#d7bd83"
+      ],
+      "sha256": "dd94206fab3a64a6c0bfb2c814bbdd1cfc33cf7811a71575701c77f5b968b74f",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/affinity-q0-back.png",
+      "source_sha256": "610eebb5f7e88aa3ac0aa7a606009526b5d6e0a34d7a935be76c873d1bad175e",
+      "selected": "affinity-fire/affinity-q0-back.png",
+      "palette": [
+        "#572932",
+        "#c8513c",
+        "#ed9973"
+      ],
+      "sha256": "7d3d254bc127f36056513e33572d64661116154810d8a381fd577ea296b4f044",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/affinity-q0-front.png",
+      "source_sha256": "219eb57c2de3265d158803c44d622e80f525eccfb2518884b1fc8e967b20218e",
+      "selected": "affinity-fire/affinity-q0-front.png",
+      "palette": [
+        "#572932",
+        "#c8513c",
+        "#ed9973"
+      ],
+      "sha256": "149e8f12954b0739f779b65f28d08e2a719ed5d350522151f08c135d19d5bd15",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/affinity-q0-back.png",
+      "source_sha256": "610eebb5f7e88aa3ac0aa7a606009526b5d6e0a34d7a935be76c873d1bad175e",
+      "selected": "affinity-cold/affinity-q0-back.png",
+      "palette": [
+        "#1d4661",
+        "#559ac5",
+        "#b9dce6"
+      ],
+      "sha256": "a82c63419a818b757c7212b44ff1d2fe28228d81891ae17aab9aa373f72381d4",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/affinity-q0-front.png",
+      "source_sha256": "219eb57c2de3265d158803c44d622e80f525eccfb2518884b1fc8e967b20218e",
+      "selected": "affinity-cold/affinity-q0-front.png",
+      "palette": [
+        "#1d4661",
+        "#559ac5",
+        "#b9dce6"
+      ],
+      "sha256": "e56062f3a99bc3797c5bf662e071b2077eb53a023fd6a95fdd8d6cd624e133bd",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/affinity-q0-back.png",
+      "source_sha256": "610eebb5f7e88aa3ac0aa7a606009526b5d6e0a34d7a935be76c873d1bad175e",
+      "selected": "affinity-lightning/affinity-q0-back.png",
+      "palette": [
+        "#17486c",
+        "#51aabd",
+        "#e8c275"
+      ],
+      "sha256": "b30674aeb7004ccd4bfeaea961b729f3e2b828f692baad6b80c68f5b222fc3cc",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/affinity-q0-front.png",
+      "source_sha256": "219eb57c2de3265d158803c44d622e80f525eccfb2518884b1fc8e967b20218e",
+      "selected": "affinity-lightning/affinity-q0-front.png",
+      "palette": [
+        "#17486c",
+        "#51aabd",
+        "#e8c275"
+      ],
+      "sha256": "913fe502e8ba180bac831120cdf5d9671783d6d977e6a670f9fbc9ca0721c961",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/affinity-q0-back.png",
+      "source_sha256": "610eebb5f7e88aa3ac0aa7a606009526b5d6e0a34d7a935be76c873d1bad175e",
+      "selected": "affinity-acid/affinity-q0-back.png",
+      "palette": [
+        "#55552a",
+        "#9caa48",
+        "#c8ce83"
+      ],
+      "sha256": "39b7fe8923ee597e6972e6eea848dc5bd52af4174d6ae4a415e097cc33c87b00",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/affinity-q0-front.png",
+      "source_sha256": "219eb57c2de3265d158803c44d622e80f525eccfb2518884b1fc8e967b20218e",
+      "selected": "affinity-acid/affinity-q0-front.png",
+      "palette": [
+        "#55552a",
+        "#9caa48",
+        "#c8ce83"
+      ],
+      "sha256": "8104b6e778a384a15a67f2f8800b2d4a3975ef8de1955044c14c6302a5209910",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/affinity-q0-back.png",
+      "source_sha256": "610eebb5f7e88aa3ac0aa7a606009526b5d6e0a34d7a935be76c873d1bad175e",
+      "selected": "affinity-poison/affinity-q0-back.png",
+      "palette": [
+        "#304e38",
+        "#6f9756",
+        "#b3c589"
+      ],
+      "sha256": "a44cd178245346760e4f7245b7f1d055d884ef14cda045d06f9a0cc87f6d46c7",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/affinity-q0-front.png",
+      "source_sha256": "219eb57c2de3265d158803c44d622e80f525eccfb2518884b1fc8e967b20218e",
+      "selected": "affinity-poison/affinity-q0-front.png",
+      "palette": [
+        "#304e38",
+        "#6f9756",
+        "#b3c589"
+      ],
+      "sha256": "b2b0c3479004caa873226273ae4fcc73b084ff5efea81222442dfaf18fdbccad",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/threat-h0-all.png",
+      "source_sha256": "6585b96c96486bcd00da6546d74f5a998d29dd0d543048d468717d7307db8628",
+      "selected": "intimidate/threat-h0-all.png",
+      "palette": [
+        "#5a3132",
+        "#bc5147",
+        "#c1b4a2"
+      ],
+      "sha256": "6f71cbe36c1f40abec86ebef42b2dd0554fb86549e6d9d72f7b12483b07ada4b",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/threat-h1-all.png",
+      "source_sha256": "aa6e20c31bf1283a224ffa044df47151e5fc71c884e495193918cbae33d9e71f",
+      "selected": "intimidate/threat-h1-all.png",
+      "palette": [
+        "#5a3132",
+        "#bc5147",
+        "#c1b4a2"
+      ],
+      "sha256": "24cca9275f3e5f791576768b1b838360d70b5cbd7fc2e893c15eb850a6f38efd",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/threat-h2-all.png",
+      "source_sha256": "ff691e2f9a9ffb60cd52ba199b726aaf7de3b9771b50da4a182d07f68001a4d9",
+      "selected": "intimidate/threat-h2-all.png",
+      "palette": [
+        "#5a3132",
+        "#bc5147",
+        "#c1b4a2"
+      ],
+      "sha256": "a06447d1261c9450ac5b1783c0bb577a5c5668b1eaef7a68ece14f689ce1bdd2",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/threat-h3-all.png",
+      "source_sha256": "0d2dd05e9e5f4361ecaae8a84e59b7d67b5a052b0c18c56293e3c5a180dc47e8",
+      "selected": "intimidate/threat-h3-all.png",
+      "palette": [
+        "#5a3132",
+        "#bc5147",
+        "#c1b4a2"
+      ],
+      "sha256": "4cba128b504465b476707b86aa1fcf3985d2a881e21dab7571e4a3673802ec94",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/threat-h4-all.png",
+      "source_sha256": "1d69f63c2df0ac6a4c43e7a03e5afdf8c2fe91c7cde350fcdb45e5e179cb02f4",
+      "selected": "intimidate/threat-h4-all.png",
+      "palette": [
+        "#5a3132",
+        "#bc5147",
+        "#c1b4a2"
+      ],
+      "sha256": "2ee3ec4e9217298460b25e83311ae2a25f6ec33bbfb1eb653bdad29a7fc2f2fa",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/threat-h5-all.png",
+      "source_sha256": "76862d42a7a9b69b908d92f9880994a41cebdc0847a15151f78d2d016e6dfee0",
+      "selected": "intimidate/threat-h5-all.png",
+      "palette": [
+        "#5a3132",
+        "#bc5147",
+        "#c1b4a2"
+      ],
+      "sha256": "1932b9f99c4689ebebddfe2e9ea1db45f3ea9572a8666f13e827ae6b79fdaa1f",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/threat-h6-all.png",
+      "source_sha256": "57dc7d0b3f72b2e560e60d9942b3256406507080c475b12460ce6b98cd0fcfe8",
+      "selected": "intimidate/threat-h6-all.png",
+      "palette": [
+        "#5a3132",
+        "#bc5147",
+        "#c1b4a2"
+      ],
+      "sha256": "b29d85b5fd37f2b9d1856f759120c61b8463367f91f1c17e00c6831f2d2c7dc7",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/threat-h7-all.png",
+      "source_sha256": "cbeb9a6af5c61aa7e5526e2a53944f5188a2aaba2e877a85e4ea8f42f35edb02",
+      "selected": "intimidate/threat-h7-all.png",
+      "palette": [
+        "#5a3132",
+        "#bc5147",
+        "#c1b4a2"
+      ],
+      "sha256": "1872cd3c3a2e85779707f19469f45e0abd49ef385eb00655f47a53216a876f02",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/slash-h0-all.png",
+      "source_sha256": "e4da5f08ac8911fd96e556a134784744db084b1020f083bb600bc17878be281a",
+      "selected": "martial/slash-h0-all.png",
+      "palette": [
+        "#642b2b",
+        "#bf5745",
+        "#e4ccb1"
+      ],
+      "sha256": "8ba0c758e97d750ea936976b0743d297c9814c757a0505ad649c61171ca6f73a",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/slash-h1-all.png",
+      "source_sha256": "bd3eb97bf8f5926bd460512a357bf8f90fdaaaeb8a04cf4c94fef33c939696fc",
+      "selected": "martial/slash-h1-all.png",
+      "palette": [
+        "#642b2b",
+        "#bf5745",
+        "#e4ccb1"
+      ],
+      "sha256": "03f9300d885a897b1d0484a54a0f5373a78aca136a3d3a490c9eba1bd89aa9ae",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/slash-h2-all.png",
+      "source_sha256": "f68c5d392cf47f278466971db8de1f8efc99061f07189c1ee771af86dac68d32",
+      "selected": "martial/slash-h2-all.png",
+      "palette": [
+        "#642b2b",
+        "#bf5745",
+        "#e4ccb1"
+      ],
+      "sha256": "85d0ac5bb59cd213cdf95ea028cb79021310d354859e4e53ca71fd24a8df1fec",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/slash-h3-all.png",
+      "source_sha256": "189099dc21f2a00a82be4d7e1f14f4691f78c3ae64a89455a2125e473a66bee1",
+      "selected": "martial/slash-h3-all.png",
+      "palette": [
+        "#642b2b",
+        "#bf5745",
+        "#e4ccb1"
+      ],
+      "sha256": "db8c2702809f1228d8f0c1c3f2b553687419537140b1fbb655a216f0e80f1d9f",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/slash-h4-all.png",
+      "source_sha256": "4c2f59d2155ef6c626ff69dc210805e33bbdd17828902f5677c98416020d3051",
+      "selected": "martial/slash-h4-all.png",
+      "palette": [
+        "#642b2b",
+        "#bf5745",
+        "#e4ccb1"
+      ],
+      "sha256": "c59aa10dfc855b72dda70de28cd98aea5e1758e9a0c1d278ad891ae382317582",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/slash-h5-all.png",
+      "source_sha256": "9f06d9a876880fb4c956d89396674d26094c762fd265c53e5bcd57c649762da7",
+      "selected": "martial/slash-h5-all.png",
+      "palette": [
+        "#642b2b",
+        "#bf5745",
+        "#e4ccb1"
+      ],
+      "sha256": "a6df13072ae61ceb56537070f1e5b64870f8ba50e5584637d174f60712ba46d9",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/slash-h6-all.png",
+      "source_sha256": "2b41dfe403467116715f6de11c4eac5d753198b7544161d790d31d8c57c6d147",
+      "selected": "martial/slash-h6-all.png",
+      "palette": [
+        "#642b2b",
+        "#bf5745",
+        "#e4ccb1"
+      ],
+      "sha256": "decf01e8c0fd486153325611ec2cdac34e189e83f11f9ab729d6f4fb4ece30f3",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/slash-h7-all.png",
+      "source_sha256": "1daa09563d3009405209cbc0f2c3d32a6f53d3236231907719cbafacccc2cedd",
+      "selected": "martial/slash-h7-all.png",
+      "palette": [
+        "#642b2b",
+        "#bf5745",
+        "#e4ccb1"
+      ],
+      "sha256": "e369b2d2a5cecc492c86d60baedcd055e75130fcd5a6be850f50f2886a22a625",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    },
+    {
+      "source": "assets/native/impact-q0-all.png",
+      "source_sha256": "9078801326318d74283647bae83dad418d5f9df61f396177af8daed8d19cd621",
+      "selected": "martial/impact-q0-all.png",
+      "palette": [
+        "#642b2b",
+        "#bf5745",
+        "#e4ccb1"
+      ],
+      "sha256": "4185e76efc968dfd91ff6be27192e5f8fc9e099ff1b50e1bf05c32a1cbf82c1e",
+      "operator": "preview.js colorAt; original alpha and crop registration"
+    }
+  ],
+  "identities": [
+    "class.rage.mantle-q0-back",
+    "class.rage.mantle-q0-front",
+    "class.rage.ground-q0-ground",
+    "class.frenzy.mantle-q0-back",
+    "class.frenzy.mantle-q0-front",
+    "class.frenzy.ground-q0-ground",
+    "class.relentless.burst-q0-back",
+    "class.relentless.burst-q0-front",
+    "class.action_surge.burst-q0-back",
+    "class.action_surge.burst-q0-front",
+    "class.indomitable.burst-q0-back",
+    "class.indomitable.burst-q0-front",
+    "class.second_wind.heal-q0-back",
+    "class.second_wind.heal-q0-front",
+    "class.wings.mantle-q0-back",
+    "class.wings.mantle-q0-front",
+    "class.awe.presence-q0-ground",
+    "class.awe.charge-q0-all",
+    "class.awe.charge-q1-all",
+    "class.awe.charge-q2-all",
+    "class.awe.charge-q3-all",
+    "class.draconic_fear.presence-q0-ground",
+    "class.draconic_fear.charge-q0-all",
+    "class.draconic_fear.charge-q1-all",
+    "class.draconic_fear.charge-q2-all",
+    "class.draconic_fear.charge-q3-all",
+    "class.font_gather.charge-q0-all",
+    "class.font_gather.charge-q1-all",
+    "class.font_gather.charge-q2-all",
+    "class.font_gather.charge-q3-all",
+    "class.quickened.quickened-q0-all",
+    "class.twinned.twinned-q0-all",
+    "class.distant.distant-q0-all",
+    "class.affinity.fire.back",
+    "class.affinity.fire.front",
+    "class.affinity.cold.back",
+    "class.affinity.cold.front",
+    "class.affinity.lightning.back",
+    "class.affinity.lightning.front",
+    "class.affinity.acid.back",
+    "class.affinity.acid.front",
+    "class.affinity.poison.back",
+    "class.affinity.poison.front",
+    "class.intimidate.threat",
+    "class.martial.melee1.attack1",
+    "class.martial.impact"
+  ],
+  "original_archive": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+  "original_archive_sha256": "931b0bc3fbd0b426df5315e01e544383bcb65cdf5fc38211249372de6836751d",
+  "pose_sources": {
+    "NakedBody": "/home/tommaso/Dev/NeuroClient/app/public/spritesheets",
+    "Head22": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head15": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest14": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Legs1": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Belt2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shoes1": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shadow": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee1": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee3": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Legs7": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shoes2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest7": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Belt1": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shield5": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head10": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head13": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Ranged1": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Ranged4": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "NakedBody2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Legs9": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest15": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shield7": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee9": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head5": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee10": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee11": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee12": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee13": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee14": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee15": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee16": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee17": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee18": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee19": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee20": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee21": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee22": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee23": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee24": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee25": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee4": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee5": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee6": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee7": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Melee8": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Offhand1": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Offhand2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Ranged2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Ranged3": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Ranged5": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Ranged6": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Ranged7": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shield1": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shield2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shield3": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shield4": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shield6": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest1": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest10": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest11": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest12": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest13": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest16": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest17": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest18": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest19": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest3": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest4": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest5": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest6": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest8": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Chest9": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Hands1": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Hands2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Hands3": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Hands4": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head12": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head14": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head18": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head19": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head20": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head21": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head23": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head24": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head3": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head4": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head6": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head7": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Head8": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Legs2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Legs3": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Legs4": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Legs5": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Legs6": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Legs8": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shoes3": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shoes4": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Shoes5": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Bag1": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Bag2": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip",
+    "Bag8": "/home/tommaso/Dev/neurodragon_art/sources/item-equipment-20261002/Stand-alone Character creator - 2D Fantasy V1.3.zip"
+  },
+  "film_source_sha256": "67025ac04d8085628e420eddb53bf9db799c64c7991777a5c9b3d6f2c9633c4c"
+}

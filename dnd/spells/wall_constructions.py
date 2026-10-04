@@ -15,9 +15,11 @@ from dnd.core.base_conditions import BaseCondition, Duration
 from dnd.core.condition_types import ConditionTag, DurationType
 from dnd.core.content.identities import ContentRef
 from dnd.core.creature_types import DamageType
-from dnd.core.events import Event, EventPhase, EventQueue, ForcedMovementEvent, Range, RangeType, SpatialChangeEvent
+from dnd.core.effect_types import ObjectSectionVolume
+from dnd.core.events import Event, EventPhase, EventQueue, ForcedMovementEvent, ItemDestructionEvent, Range, RangeType, SpatialChangeEvent
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import ItemPresentationState
+from dnd.core.item_types import ItemLocation, ItemPresentationState
+from dnd.core.life_types import RemainsDisposition
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
 from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, WallDome, WallPolyline, WallRing, WallSegment
 from dnd.core.wall_geometry import wall_crosses_path, wall_path_contact, wall_shell_cells
@@ -34,6 +36,7 @@ from dnd.types.world_placement import WorldPlacementKind, WorldPlacementSpec
 
 
 class FrigidAirZone(WallFieldZone):
+    section_positions: frozenset[tuple[int, int]] | None = None
     name: str = "Frigid Air"
     description: str = "Passing through the former ice sheet causes cold damage once per turn."
     content_ref: ContentRef = wall_condition_ref("spatial_effect.spell.frigid_air")
@@ -41,10 +44,15 @@ class FrigidAirZone(WallFieldZone):
     first_per_turn_trigger_kinds: frozenset[SpatialEffectTriggerKind] = frozenset({SpatialEffectTriggerKind.ENTER})
     duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.PERMANENT))
 
+    def resolve_condition_footprint(self) -> set[tuple[int, int]]:
+        footprint = super().resolve_condition_footprint()
+        return footprint & self.section_positions if self.section_positions is not None else footprint
+
     def admits_occupancy_transition(self, event: SpatialChangeEvent) -> bool:
         return (SpatialCondition.admits_occupancy_transition(self, event)
             and event.old_position is not None
-            and wall_path_contact(self.geometry, event.old_position, event.position, self.affected_positions) is not None)
+            and wall_path_contact(self.geometry, event.old_position, event.position,
+                {cell for cell in self.affected_positions if self.allows_contribution_at(cell)}) is not None)
 
     def _occupancy_admits_trigger(self, kind, target_entity_uuid, event) -> bool:
         if isinstance(event, SpatialChangeEvent) and kind is SpatialEffectTriggerKind.ENTER:
@@ -58,7 +66,8 @@ class FrigidAirZone(WallFieldZone):
                  for dx in (-1, 0, 1) for dy in (-1, 0, 1) }
 
     def damage_contact_position(self, event: SpatialChangeEvent, entity: Entity) -> tuple[int, int]:
-        contact = (wall_path_contact(self.geometry, event.old_position, event.position, self.affected_positions)
+        contact = (wall_path_contact(self.geometry, event.old_position, event.position,
+                {cell for cell in self.affected_positions if self.allows_contribution_at(cell)})
                    if event.old_position is not None else None)
         return (min(self.affected_positions, key=lambda p: hypot(p[0] - contact[0], p[1] - contact[1]))
                 if contact is not None else entity.position)
@@ -80,8 +89,11 @@ class WallSection(WorldItem):
     _break_event: Event | None = PrivateAttr(default=None)
 
     def to_item_presentation_state(self, *, stack_count: int | None = None) -> ItemPresentationState:
+        owner = BaseCondition.get(self.wall_owner_uuid)
         return super().to_item_presentation_state(stack_count=stack_count).model_copy(
-            update={"construction_owner_uuid": self.wall_owner_uuid, "construction_geometry": self.geometry, "known_to_creator": self.known_to_creator})
+            update={"construction_owner_uuid": self.wall_owner_uuid, "construction_geometry": self.geometry,
+                "construction_suppressions": owner.spatial_suppressions if isinstance(owner, BaseCondition) else (),
+                "known_to_creator": self.known_to_creator})
 
     def _on_destroy(self, parent_event: Event | None) -> None:
         self._break_event = parent_event
@@ -108,20 +120,64 @@ class WallSection(WorldItem):
         return accepted
 
     def disintegrate(self, parent_event: Event) -> bool:
+        owner = BaseCondition.get(self.wall_owner_uuid)
         if self.magical_force:
-            owner = BaseCondition.get(self.wall_owner_uuid)
-            return owner.deactivate(parent_event=parent_event) if isinstance(owner, SolidWallZone) else False
-        self.destroy(parent_event)
+            if not isinstance(owner, SolidWallZone):
+                return False
+            event = ItemDestructionEvent(source_entity_uuid=parent_event.source_entity_uuid,
+                target_entity_uuid=self.uuid, item_uuid=self.uuid,
+                previous_state=self.to_item_presentation_state(),
+                previous_placement=get_map().get_object_placement(self.uuid),
+                remains_disposition=RemainsDisposition.DISINTEGRATED,
+                destroyed_item_uuids=tuple(owner.sections), parent_event=parent_event.uuid)
+            event = event.phase_to(EventPhase.EXECUTION)
+            if not event.canceled:
+                event = event.phase_to(EventPhase.EFFECT)
+            if event.canceled:
+                return False
+            if not owner.deactivate(parent_event=event):
+                event.cancel(status_message="Force creation removal was refused")
+                return False
+            event.phase_to(EventPhase.COMPLETION)
+            return True
+        volume = self.disintegration_volume(parent_event)
+        if volume is not None:
+            return self.disintegrate_section(volume, parent_event)
+        prepared = self.prepare_retirement(parent_event)
+        if prepared is None:
+            return False
+        event = self.commit_disintegration(prepared)
+        if isinstance(owner, SolidWallZone) and owner.applied:
+            owner.on_section_destroyed(self.uuid, event)
         return BaseBlock.get(self.uuid) is None
 
-    def disintegration_error(self) -> str | None:
-        if self.magical_force:
-            return None
+    def disintegration_volume(self, parent_event: Event) -> ObjectSectionVolume | None:
         path = self.geometry.path
-        if isinstance(path, WallDome) or (isinstance(path, WallSegment)
-                and hypot(path.end[0] - path.start[0], path.end[1] - path.start[1]) > 2):
-            return "Partial disintegration of larger objects is not yet supported"
-        return None
+        if (not self.geometry.removed_sections and isinstance(path, WallSegment)
+                and hypot(path.end[0] - path.start[0], path.end[1] - path.start[1]) <= 2
+                and self.geometry.height_feet <= 10):
+            return None
+        return super().disintegration_volume(parent_event)
+
+    def on_object_section_removed(self, volume: ObjectSectionVolume, parent_event: Event) -> None:
+        previous = self.geometry
+        self.geometry = self.geometry.model_copy(update={
+            "removed_sections": (*self.geometry.removed_sections, volume)})
+        owner = BaseCondition.get(self.wall_owner_uuid)
+        if isinstance(owner, SolidWallZone) and owner.applied:
+            owner.sections[self.uuid] = self.geometry
+            change = owner._open_change(SpatialEffectChangeOperation.STATE_CHANGED,
+                previous_positions=set(owner.affected_positions), affected_positions=set(owner.affected_positions),
+                parent_event=parent_event)
+            if owner.material == "ice":
+                positions = {position for position in wall_shell_cells(previous)
+                    if volume.contains_band(position, previous.base_height_steps)} & owner.affected_positions
+                owner.leave_frigid_air(previous, positions, change)
+            get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
+            owner._complete_change(change)
+
+    def disintegration_error(self) -> str | None:
+        return None if get_map().get_object_placement(self.uuid) is not None else "Wall section is absent"
 
 
 class SolidWallZone(AreaCondition):
@@ -163,6 +219,21 @@ class SolidWallZone(AreaCondition):
     def resolve_condition_footprint(self) -> set[tuple[int, int]]:
         return self._apply_spell_protection({p for p in wall_shell_cells(self.geometry) if get_map().has_tile(*p)})
 
+    def antimagic_exempt(self) -> bool:
+        return self.material == "stone" or super().antimagic_exempt()
+
+    def allows_contribution_at(self, position: tuple[int, int] | None) -> bool:
+        return self.material == "stone" or super().allows_contribution_at(position)
+
+    def refresh_antimagic_suppression(self, *, parent_event: Event) -> None:
+        previous = self.spatial_suppressions
+        super().refresh_antimagic_suppression(parent_event=parent_event)
+        if previous != self.spatial_suppressions:
+            for identity in self.sections:
+                item = BaseBlock.get(identity)
+                if isinstance(item, BaseItem):
+                    item.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
+
     def blocks_crossing_between(self, start, end, channel, requester_uuid, mode,
                                 terminal_provider_uuid=None) -> bool:
         if channel == "optical" and self.material != "stone":
@@ -170,11 +241,11 @@ class SolidWallZone(AreaCondition):
         if channel == "movement" and mode is MovementMode.BURROWING and self.material != "force":
             return False
         return any(identity != terminal_provider_uuid and wall_path_contact(geometry, start, end,
-                   self.affected_positions) is not None
+                   {p for p in self.affected_positions if self.allows_contribution_at(p)}) is not None
                    for identity, geometry in self.sections.items())
 
     def blocks_physical_optics_at(self, position: tuple[int, int]) -> bool:
-        return self.material == "stone" and any(position in wall_shell_cells(g) for g in self.sections.values())
+        return self.material == "stone" and self.allows_contribution_at(position) and any(position in wall_shell_cells(g) for g in self.sections.values())
 
     def get_spatial_observation(self, positions: set[tuple[int, int]], *, observer_uuid,
                                 discovered=False) -> PerceivedSpatialEffect | None:
@@ -198,16 +269,23 @@ class SolidWallZone(AreaCondition):
                 get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
                 self._complete_change(change)
                 return
-            air = FrigidAirZone(source_entity_uuid=self.source_entity_uuid, position=min(positions),
-                geometry=geometry, affected_positions=positions, spell_dc=self.spell_dc,
-                contact_damage=WallDamageSpec(dice_count=self.residual_dice_count, die=6,
-                    damage_type=DamageType.COLD, save_ability="constitution", effect_id="wall_of_ice.frigid_air"),
-                effect_origin=self.effect_origin)
-            result = air.activate(parent_event=change)
-            if result is not None and not result.canceled and air.applied:
-                self.add_linked_condition(air.uuid, air.uuid)
+            self.leave_frigid_air(geometry, positions, change)
         get_map().invalidate_spatial_caches({"movement", "optical", "propagation"})
         self._complete_change(change)
+
+    def leave_frigid_air(self, geometry: WallAssemblyPresentationGeometry,
+                         positions: set[tuple[int, int]], parent_event: Event) -> None:
+        """The existing cold remnant owns only the section actually destroyed."""
+        if not positions:
+            return
+        air = FrigidAirZone(source_entity_uuid=self.source_entity_uuid, position=min(positions),
+            geometry=geometry, affected_positions=positions, section_positions=frozenset(positions), spell_dc=self.spell_dc,
+            contact_damage=WallDamageSpec(dice_count=self.residual_dice_count, die=6,
+                damage_type=DamageType.COLD, save_ability="constitution", effect_id="wall_of_ice.frigid_air"),
+            effect_origin=self.effect_origin)
+        result = air.activate(parent_event=parent_event)
+        if result is not None and not result.canceled and air.applied:
+            self.add_linked_condition(air.uuid, air.uuid)
 
     def publish_removal_effect(self, declaration_event: Event) -> Event:
         effect = super().publish_removal_effect(declaration_event)
@@ -596,6 +674,7 @@ class ConstructWall(SpellAction):
                 item = WallSection(source_entity_uuid=caster.uuid, wall_owner_uuid=zone.uuid,
                     item_id=f"spell_construction.{self.construction_material}.section", name=f"{self.name} section",
                     geometry=section, magical_force=self.construction_material == "force",
+                    creation_condition_uuid=zone.uuid,
                     armor_class=12 if self.construction_material == "ice" else 15,
                     health=None if self.construction_material == "force" else BaseItem.create_item_health(caster.uuid, hp),
                     is_invisible=self.construction_material == "force",

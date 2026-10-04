@@ -1,0 +1,21 @@
+{
+  "source": "/home/tommaso/Dev/neurodragon_art/sources/fear-eyebite-deb28a4f625f",
+  "manifest": "production-handoff/fear-eyebite-approved-media.json",
+  "manifest_sha256": "deb28a4f625fdf9535994b2c4a40efe2e4797311c3d7b480fe9888d2be5b7f81",
+  "identities": [
+    "control.sickened.apply.back",
+    "control.sickened.apply.front",
+    "control.sickened.hold.back",
+    "control.sickened.hold.front"
+  ],
+  "selected_windows": {
+    "apply": [
+      0,
+      48
+    ],
+    "hold": [
+      32,
+      64
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/death-curse-review/blight-lifecycle-v1",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/blight-lifecycle-20261004",
+  "files": [
+    {
+      "path": "game/assets/necrotic_media/blight/media/back-0.png",
+      "bytes": 95909,
+      "sha256": "c10fa826c561a4121dd999508725b899bab6216b5c2ad91a0fdad2db5a60ead4"
+    },
+    {
+      "path": "game/assets/necrotic_media/blight/media/front-0.png",
+      "bytes": 119198,
+      "sha256": "47f6c97e1f7a802ea8658bc61e9536369ec244724544f1883f0188d5dbf8fc17"
+    },
+    {
+      "path": "game/assets/necrotic_media/blight/assets/donor-noise.png",
+      "bytes": 7651,
+      "sha256": "4a4af55a4b5bb4f59b0e15f9dabee3015807045f329b66ec3bd73d152f05c356"
+    }
+  ],
+  "identities": [
+    "necrotic.blight.back",
+    "necrotic.blight.front"
+  ],
+  "operator_source_sha256": "500447b40dbbc97e3c852d90af3f56866703a876481bdffda2bc962767e8e4c0"
+}

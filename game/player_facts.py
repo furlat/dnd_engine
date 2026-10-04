@@ -17,23 +17,24 @@ from dnd.core.combat_log import CombatLogEntry
 from dnd.core.content.identities import HandlerDispatchOutcome
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.creature_types import AttackOutcome
-from dnd.core.effect_types import ObservedChangeRef, ApplicationMembership, ResolutionRef
+from dnd.core.effect_types import ObjectSectionVolume, ObservedChangeRef, ApplicationMembership, ResolutionRef, EffectPropagationLink
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
-from dnd.types.event_facts import EventPhase, EventType, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState
+from dnd.types.event_facts import EventPhase, EventType, LandingKind, MovementTrajectory, SpatialChangeType, WorldConnectorState, WorldTileState
 from dnd.core.item_types import (DoorMechanism, DoorSwing, EquippedVisualPolicy, ItemConcentrationSlot, ItemResourceChange, ItemEffectPresentationState,
     ItemIntegrity, ItemPresentationKind, ItemPresentationState, ItemRemnantState)
-from dnd.core.life_types import LifeState, LifeStateChangeReason
+from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.types.residues import BodyReleaseResult, ObjectResidueState
 from dnd.types.senses import PerceivedContact, PerceivedSpatialEffect, SenseMode, SensesSnapshot
-from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectChangeOperation
+from dnd.types.spatial_effects import SpatialDamageSource, SpatialEffectChangeOperation, SpatialEffectInteractionOperation
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.traps import TrapState
 from dnd.types.physical_access import ContactPassage
 from dnd.types.world import MovementMode, OccupancyLayer
 from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 from dnd.types.abilities import AbilityName
-from dnd.types.actor import TemporaryHitPointsGrant
+from dnd.types.actor import TemporaryHitPointsGrant, SpatialDisposition
+from dnd.types.class_features import FontConversion, IndomitableReroll, RelentlessRageIntervention
 from dnd.types.actor_facts import ConditionFact
 from dnd.types.summoning import SummonManifestation, SummonDepartureCause
 
@@ -48,6 +49,7 @@ class VisualItem:
     visual_variant_id: str | None
     equipped_visual_policy: EquippedVisualPolicy
     item_effects: tuple[ItemEffectPresentationState, ...] = ()
+    suppression_provider_uuids: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -79,6 +81,8 @@ class PlayerActor:
     manifestation: SummonManifestation | None = None
     faction: str | None = None
     present: bool = True
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
+    spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -126,6 +130,7 @@ class SpellFact:
     source_position: tuple[int, int] | None
     declared_target_entity_uuids: tuple[UUID, ...]
     application: ApplicationMembership | None
+    propagation: EffectPropagationLink | None = None
     attack_outcome: AttackOutcome | None = None
     cast_origin: Literal["actor", "source_item"] = "actor"
     source_item_uuid: UUID | None = None
@@ -210,6 +215,11 @@ class ForcedMovementFact:
     start_position: tuple[int, int]
     end_position: tuple[int, int]
     actual_distance: int
+    disclosed_path: tuple[tuple[int, int], ...] = ()
+    start_elevation_feet: int | None = None
+    end_elevation_feet: int | None = None
+    drop_feet: int = 0
+    landing_kind: LandingKind = LandingKind.GROUND
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -241,6 +251,8 @@ class DamageRequestFact:
     source_entity_uuid: UUID | None
     target_entity_uuid: UUID
     intercepted_by_condition_uuid: UUID | None = None
+    source_condition_uuid: UUID | None = None
+    relentless_rage: RelentlessRageIntervention | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -256,6 +268,7 @@ class DamageResultFact:
     body_release: BodyReleaseResult | None = None
     effect_id: str | None = None
     spatial_source: SpatialDamageSource | None = None
+    source_condition_uuid: UUID | None = None
 
 
 DamageFact = DamageRequestFact | DamageResultFact
@@ -270,6 +283,7 @@ class SavingThrowFact:
     ability_name: AbilityName
     succeeded: bool
     effect_id: str | None
+    indomitable_reroll: IndomitableReroll | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -300,6 +314,8 @@ class LifeFact:
     new_state: LifeState
     reason: LifeStateChangeReason
     normal_hit_points: int
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
+    preserved_equipped_item_uuids: tuple[UUID, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -329,6 +345,16 @@ class ConditionChangeFact:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class ItemEffectChangeFact:
+    """Witnessed native item membership edge, without a creature condition."""
+
+    kind: Literal["item_effect"] = "item_effect"
+    item_uuid: UUID
+    effect_uuid: UUID
+    event_type: EventType
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CreationWitness:
     """Observed first placement tied to its exact recorded native birth."""
     birth_event_uuid: UUID
@@ -341,6 +367,7 @@ class SpatialFact:
     change_type: SpatialChangeType
     entity_uuid: UUID | None
     position: tuple[int, int]
+    object_uuid: UUID | None = None
     commit_event_uuid: UUID | None = None
     previous_occupancy_layer: OccupancyLayer | None = None
     occupancy_layer: OccupancyLayer | None = None
@@ -395,6 +422,7 @@ class ActionFact:
     name: str | None
     source_item_uuid: UUID | None = None
     reaction: ActionReaction | None = None
+    font_conversion: FontConversion | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -438,6 +466,8 @@ class SpatialEffectStateFact:
     previous_pressed: bool | None = None
     pressed: bool | None = None
     operation: SpatialEffectChangeOperation = SpatialEffectChangeOperation.STATE_CHANGED
+    interaction_operation: SpatialEffectInteractionOperation | None = None
+    removed_positions: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -477,12 +507,16 @@ class ObjectDestroyedFact:
     item_id: str
     remnant_state: ItemRemnantState | None = None
     destruction_outcome: str | None = None
+    remains_disposition: RemainsDisposition = RemainsDisposition.INTACT
+    previous_item: "FloorItem | None" = None
+    affected_volume: ObjectSectionVolume | None = None
+    resulting_placement: WorldObjectPlacement | None = None
 
 
 PlayerFact = Annotated[
     AttackFact | SpellFact | AreaReachFact | MovementFact | StepFact | ForcedMovementFact | PortalTransferFact | ShoveFact
     | Annotated[DamageFact, Field(discriminator="stage")] | HealFact | TemporaryHitPointsFact | LifeFact | DeathSaveFact | EquipmentFact
-    | ConditionChangeFact | SpatialFact | FactionFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
+    | ConditionChangeFact | ItemEffectChangeFact | SpatialFact | FactionFact | TurnFact | ActionFact | SensoryFact | ItemChargeFact | SpatialEffectStateFact
     | ObjectDamageFact | ObjectDestroyedFact | MechanismActivationFact | SavingThrowFact,
     Field(discriminator="kind"),
 ]
@@ -547,6 +581,7 @@ class FloorItem:
     stack_count: int = 1
     is_pickable: bool = True
     item_effects: tuple[ItemEffectPresentationState, ...] = ()
+    suppression_provider_uuids: tuple[UUID, ...] = ()
     blocks_propagation: bool = False
     contact_passage: ContactPassage = ContactPassage.STRUCTURAL
     supported_by_uuid: UUID | None = None
@@ -563,6 +598,7 @@ class FloorItem:
     destruction_outcome: str | None = None
     construction_owner_uuid: UUID | None = None
     construction_geometry: AoEPresentationGeometry | None = None
+    construction_suppressions: tuple[SpellSuppression, ...] = ()
     known_to_creator: bool = False
 
 

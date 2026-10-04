@@ -1,0 +1,8 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+Capture once: telekinesis-ledge-enemy
+[1/2] telekinesis-ledge-enemy
+[2/2] telekinesis-ledge-enemy--participant-2
+2/2 cases passed; gallery: /tmp/pytest-of-tommaso/pytest-139/test_four_camera_framing_keeps0/runs/20261004T091112Z-cf2f12/index.html
+Serve: /home/tommaso/.cache/dnd-engine/venv/bin/python3 -m devtools.animation_review.serve --directory /tmp/pytest-of-tommaso/pytest-139/test_four_camera_framing_keeps0
+.
+1 passed, 8 deselected in 28.14s

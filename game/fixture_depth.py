@@ -175,6 +175,7 @@ their ordering too. This is local image composition, not a new depth buffer.
         bounds = command.surface.get_rect(topleft=command.destination)
         peers = [peer for index, peer in enumerate(commands)
                  if index != fixture.command_index and peer.key[0] == command.key[0]
+                 and not (command.owner and peer.owner == command.owner)
                  and bounds.colliderect(peer.surface.get_rect(topleft=peer.destination))]
         if not peers:
             continue

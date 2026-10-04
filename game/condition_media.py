@@ -107,7 +107,7 @@ def load_condition_media(path: Path, resources_path: Path, root: Path) -> Mappin
 def supported_layer(layer: ConditionLayer, media: Mapping[str, ConditionLayerMedia]) -> bool:
     """Static images and paged neutral-color media share the authored selectors."""
     asset = media.get(layer.assetId)
-    return (asset is not None and layer.attachment in ("body", "ground", "head", "face")
+    return (asset is not None and layer.attachment in ("body", "ground", "head", "face", "hand")
         and frozenset(layer.activeDuring) <= ACTIVITIES
         and (asset.category, asset.animation) == (layer.category, layer.animation)
         and layer.colors.primary == layer.colors.secondary == layer.colors.tertiary == 0xFFFFFF)

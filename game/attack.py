@@ -13,6 +13,7 @@ from uuid import UUID
 from dnd.core.dice import AttackOutcome
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.life_types import LifeState
+from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, WallPolyline, WallSegment
 from game.animation import (
     ActorContact, ObjectContact, BodySample, DamageTiming, GeometryProjectileSample, NumberSample, VitalsSample,
     feedback_identity,
@@ -25,7 +26,7 @@ from game.animation_data import resolve_player_layers
 from game.animation_rates import action_playback_rate
 from game.animation_types import (
     ActionFeedback, ActionProjectile, AnimationData, AttackRecipe, AttackVariant, ChildAttackPresentation, ElementColors, Facing8,
-    LayerColors, RigLayer, StudioActorLayer, StudioDamage,
+    LayerColors, RigLayer, StudioActorLayer, StudioDamage, WeaponTrailPose, WeaponTrailPresentation,
 )
 from game.combat import actor_contact, object_contact
 from game.player_facts import AttackFact, DamageResultFact, ObjectDamageFact, LifeFact, PlayerLineage, PlayerNode, PlayerState
@@ -41,6 +42,43 @@ _PHYSICAL_DAMAGE = frozenset(("Bludgeoning", "Piercing", "Slashing"))
 
 
 @dataclass(frozen=True, slots=True)
+class ProjectileInterception:
+    position: tuple[float, float]
+    fraction: float
+    tangent: tuple[float, float]
+    components: str
+
+
+def _received_interception(fact: AttackFact, before: PlayerState, data: AnimationData,
+        start: tuple[float, float], end: tuple[float, float]) -> ProjectileInterception | None:
+    point = fact.projectile_deflection_position
+    if point is None or before.senses is None or fact.intercepted_by_condition_uuid is None:
+        return None
+    owner = before.senses.spatial_effects.get(fact.intercepted_by_condition_uuid)
+    if owner is None or not isinstance(owner.area_geometry, WallAssemblyPresentationGeometry):
+        return None
+    binding = data.spatial_media.get(owner.content_ref.content_id)
+    if binding is None or binding.interceptionComponents is None:
+        return None
+    path = owner.area_geometry.path
+    points = (path.start,path.end) if isinstance(path,WallSegment) else path.points if isinstance(path,WallPolyline) else ()
+    candidates = []
+    for a,b in zip(points,points[1:]):
+        dx,dy = b[0]-a[0],b[1]-a[1]
+        length2 = dx*dx+dy*dy
+        t = min(1.,max(0.,((point[0]-a[0])*dx+(point[1]-a[1])*dy)/length2))
+        candidates.append((hypot(point[0]-a[0]-t*dx,point[1]-a[1]-t*dy),(dx,dy)))
+    if not candidates:
+        return None
+    dx,dy = end[0]-start[0],end[1]-start[1]
+    length2 = dx*dx+dy*dy
+    if not length2:
+        return None
+    fraction = min(1.,max(0.,((point[0]-start[0])*dx+(point[1]-start[1])*dy)/length2))
+    return ProjectileInterception(point,fraction,min(candidates)[1],binding.interceptionComponents)
+
+
+@dataclass(frozen=True, slots=True)
 class AttackProjectileTimeline:
     recipe: ActionProjectile
     start_ms: float
@@ -48,6 +86,7 @@ class AttackProjectileTimeline:
     from_point: tuple[float, float]
     to_point: tuple[float, float]
     element_colors: ElementColors
+    interception: ProjectileInterception | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +114,10 @@ class AttackTimeline:
     authored_clip: str | None = None
     release_ms: float | None = None
     results: tuple[PlayerNode, ...] = ()
+    weapon_trail: WeaponTrailPresentation | None = None
+    weapon_pose: WeaponTrailPose | None = None
+    contact_scale: float = 1
+    show_contact: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +127,7 @@ class AttackSample:
     vitals: tuple[VitalsSample, ...]
     complete: bool
     projectiles: tuple[GeometryProjectileSample, ...] = ()
+    elapsed_ms: float = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,15 +262,33 @@ def project_attack_projectile(timeline: AttackTimeline, effect: GeometryProjecti
     assert projectile is not None
     first, last = _semantic_projectile_endpoints(timeline.data, timeline.source, timeline.target,
                                                 projectile.recipe, quadrant, include_height=True)
+    if projectile.interception is not None:
+        fraction = projectile.interception.fraction
+        sampled = _bolt_sample(timeline.data,first,last,effect.progress*fraction,projectile.recipe)
+        height = attack_projectile_height(timeline, 1., quadrant)
+        end = project_world(projectile.interception.position, quadrant=quadrant, elevation_steps=height)
+        factor = timeline.data.rig.TILE_W / TILE_WIDTH
+        curvature = projectile.recipe.trajectory.curvature if projectile.recipe.trajectory.type == 'bezier' else 0
+        original_end = projectile_curve_point(first,last,fraction,curvature)
+        correction = end[0]*factor-original_end[0],end[1]*factor-original_end[1]
+        # Preserve the original curve's elapsed parameter and bolt length.
+        # Only the socket inset is blended out at the native wall contact.
+        point = sampled.point[0]+effect.progress*correction[0],sampled.point[1]+effect.progress*correction[1]
+        dx,dy = projectile_curve_tangent(first,last,effect.progress*fraction,curvature)
+        dx,dy = dx*fraction+correction[0],dy*fraction+correction[1]
+        length = hypot(sampled.point[0]-sampled.trail[0][0],sampled.point[1]-sampled.trail[0][1])
+        norm = max(hypot(dx,dy),1e-9)
+        return replace(sampled,point=point,trail=((point[0]-dx*length/norm,point[1]-dy*length/norm),point),progress=effect.progress)
     return _bolt_sample(timeline.data, first, last, effect.progress, projectile.recipe)
 
 
-def attack_projectile_contact(timeline: AttackTimeline, effect: GeometryProjectileSample,
-                              quadrant: int) -> tuple[tuple[float, float], float]:
-    """The rendered point's body lift remains height rather than ground drift."""
+def attack_projectile_height(timeline: AttackTimeline, progress: float, quadrant: int) -> float:
+    """Interception cuts the existing source-to-target height interpolation."""
     projectile = timeline.projectile
     assert projectile is not None
-    source, target, progress = timeline.source, timeline.target, effect.progress
+    source, target = timeline.source, timeline.target
+    if projectile.interception is not None:
+        progress *= projectile.interception.fraction
     target_lift = (projectile.recipe.targetY * target.visual_scale
                    + rest_pose_offset(timeline.data, target, quadrant)[1]) if isinstance(target, ActorContact) else 0
     target_height = body_elevation_steps(target, timeline.data) if isinstance(target, ActorContact) else target.elevation_steps
@@ -235,6 +297,13 @@ def attack_projectile_contact(timeline: AttackTimeline, effect: GeometryProjecti
     height = (body_elevation_steps(source, timeline.data) * (1 - progress)
               + target_height * progress
               - lift * TILE_WIDTH / timeline.data.rig.TILE_W / HEIGHT_STEP_PIXELS)
+    return height
+
+
+def attack_projectile_contact(timeline: AttackTimeline, effect: GeometryProjectileSample,
+                              quadrant: int) -> tuple[tuple[float, float], float]:
+    """The rendered point's body lift remains height rather than ground drift."""
+    height = attack_projectile_height(timeline, effect.progress, quadrant)
     return reference_point_contact(timeline.data, effect.point, height, quadrant), height
 
 
@@ -242,7 +311,8 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
                 *, facings: Mapping[str, Facing8] | None = None,
                 contacts: Mapping[str, ActorContact] | None = None,
                 child_presentation: ChildAttackPresentation | None = None,
-                causal_index: PlayerCausalIndex | None = None) -> BoundAttack | None:
+                causal_index: PlayerCausalIndex | None = None,
+                emitting_handlers: tuple[str, ...] = ()) -> BoundAttack | None:
     """Bind one retained attack root; geometry remains authored profile data."""
     root_node = lineage.root
     root = root_node.fact
@@ -310,8 +380,9 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
         duration = (max(profile.projectile.minimumTravelDurationMs,
                         hypot(planar, height) * 1000 / profile.projectile.speedPxPerSecond)
                     if hypot(planar, height) >= 1 else 0)
-        contact += duration
-        projectile = AttackProjectileTimeline(profile.projectile, release, contact, first, last, _attack_colors(data, root))
+        interception = _received_interception(root, before, data, source.grid, target.grid)
+        contact += duration * (interception.fraction if interception is not None else 1)
+        projectile = AttackProjectileTimeline(profile.projectile, release, contact, first, last, _attack_colors(data, root), interception)
     index = causal_index if causal_index is not None else index_player_lineage(lineage)
     reference = root_node.resolution_ref
     owned = index.owned.get(reference, ()) if reference is not None else ()
@@ -336,10 +407,34 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
                                                             active_weapon_set=root.weapon_set)}
     if target_actor is not None and isinstance(target, ActorContact):
         appearances[target.actor_uuid] = resolve_player_layers(data, target_actor, rig_id=target.rig_id)
+    weapon_trail = (recipe.weaponTrail if projectile is None
+        and root.attack_source_kind == 'equipped' and not root_node.canceled else None)
+    if weapon_trail is not None and not (root.behavior_id in weapon_trail.behaviorIds
+            or any(identity in weapon_trail.handlerIds for identity in emitting_handlers)
+            or root.attack_outcome is not None and _OUTCOMES[root.attack_outcome] in weapon_trail.outcomes):
+        weapon_trail=None
+    weapon_pose = None
+    if weapon_trail is not None:
+        slot = 'offhand' if root.weapon_slot == WeaponSlot.MELEE_OFF else 'weapon'
+        category = next((layer.category for layer in appearances[source.actor_uuid] if layer.slot == slot), None)
+        weapon_pose = next((pose for pose in weapon_trail.poses
+            if (pose.rigId, pose.category, pose.clip) == (source.rig_id, category, display_clip)), None)
+        if weapon_pose is not None and all(row.value in _PHYSICAL_DAMAGE for row in root.damage_types):
+            layers = tuple(layer for layer in layers if layer.slot != 'slash')
+    show_contact = weapon_trail is not None and root.attack_outcome in (AttackOutcome.HIT, AttackOutcome.CRIT)
+    contact_end = contact
+    if show_contact and weapon_trail is not None:
+        impact = data.projectile_assets[weapon_trail.impactAssetId].phases.impact
+        if impact is None:
+            raise ValueError('Weapon contact media requires an impact phase')
+        contact_end += impact.frames * 1000 / (impact.fps or data.projectile_assets[weapon_trail.impactAssetId].fps)
     if child_presentation is not None:
         weapon = next((layer.category for layer in appearances[source.actor_uuid] if layer.slot == "weapon"), None)
         poses = [pose for pose in child_presentation.poses
                  if (pose.rigId, pose.weaponCategory, pose.clip) == (source.rig_id, weapon, display_clip)]
+        if not poses:
+            poses = [pose for pose in child_presentation.poses if pose.weaponCategory is None
+                     and (pose.rigId, pose.clip) == (source.rig_id, display_clip)]
         if len(poses) > 1:
             raise ValueError("child attack has ambiguous authored weapon-pose layers")
         if poses:
@@ -349,13 +444,15 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
                 raise ValueError("child attack layers must have distinct destination slots")
         else:
             missing = (*missing, f"child_attack/{source.rig_id}/{weapon}/{display_clip}")
+    if projectile is not None and projectile.interception is not None:
+        contact_end = max(contact_end, contact + 1000)
     timeline = AttackTimeline(
         root_event_uuid=str(root_node.uuid), source=source, target=target, data=data,
         profile_id=profile.id, clip=display_clip, playback_speed=profile.actor.playbackSpeed,
         facing=facing, contact_ms=contact, body_end_ms=body_end,
         # FloatingText.run returns immediately: a badge fade does not hold the
         # causal join. The enclosing historical head owns overlay retirement.
-        complete_ms=max(body_end, timing.end_ms if timing is not None else contact), layers=layers,
+        complete_ms=max(body_end, timing.end_ms if timing is not None else contact, contact_end), layers=layers,
         damage=damage, damage_timing=timing, results=results,
         damage_total=(sum(row.applied_damage for row in applied) if applied
             else sum(row.applied_damage for row in object_packets) if object_packets else None),
@@ -367,6 +464,8 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
                   if root.attack_outcome is not None else None), missing_media=(*body_missing, *missing),
         projectile=projectile, authored_clip=profile.actor.clip,
         release_ms=release if projectile is not None else None,
+        weapon_trail=weapon_trail, weapon_pose=weapon_pose, show_contact=show_contact,
+        contact_scale=1.2 if root.attack_outcome is AttackOutcome.CRIT else 1,
     )
     return BoundAttack(timeline, reduce_lineage(before, lineage), MappingProxyType(appearances),
                        frozenset(identity for identity, _ in changes) if timing is not None else frozenset())
@@ -420,8 +519,9 @@ def sample_attack(timeline: AttackTimeline, elapsed_ms: float) -> AttackSample:
     projectile = timeline.projectile
     if projectile is not None and projectile.start_ms <= t < projectile.end_ms:
         progress = (t - projectile.start_ms) / (projectile.end_ms - projectile.start_ms)
-        projectiles = (_bolt_sample(data, projectile.from_point, projectile.to_point, progress, projectile.recipe),)
+        effect = _bolt_sample(data, projectile.from_point, projectile.to_point, progress, projectile.recipe)
+        projectiles = (project_attack_projectile(timeline,effect,0) if projectile.interception is not None else effect,)
     vitals = ((VitalsSample(target.actor_uuid, hp, life, flash),)
               if isinstance(target, ActorContact) and life is not None else ())
     return AttackSample((body, recipient) if recipient is not None else (body,), tuple(numbers),
-                        vitals, t >= timeline.complete_ms, projectiles)
+                        vitals, t >= timeline.complete_ms, projectiles, t)

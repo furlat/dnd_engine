@@ -1,0 +1,9 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+hidden at native return None
+SpellFact 0 [('d7d6a97d-7d03-4d5e-8915-6441d1a5c9f6', None)]
+ConditionChangeFact 0 [('d7d6a97d-7d03-4d5e-8915-6441d1a5c9f6', None)]
+ConditionChangeFact 0 [('d7d6a97d-7d03-4d5e-8915-6441d1a5c9f6', None)]
+ConditionChangeFact 0 [('d7d6a97d-7d03-4d5e-8915-6441d1a5c9f6', None)]
+RETURN CUE on ConditionChangeFact ConditionChangeFact(kind='condition', target_entity_uuid=UUID('35eb4062-4f50-4f80-bd79-5d6996a836d4'), event_type=<EventType.CONDITION_REMOVAL: 'condition_removal'>, condition=ConditionFact(event_uuid=UUID('2d6f024c-dd0a-486e-8ffc-2f5678521ad9'), condition_uuid=UUID('649d40ff-eded-423c-baa1-64fd8d347f86'), name='Blinded', category=<ConditionCategor
+ConditionChangeFact 0 [('d7d6a97d-7d03-4d5e-8915-6441d1a5c9f6', 8003.333333333334)]
+ConditionChangeFact 0 [('d7d6a97d-7d03-4d5e-8915-6441d1a5c9f6', 8003.333333333334)]

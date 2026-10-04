@@ -10,11 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.types.world import LightLevel
 from dnd.core.content.identities import ContentRef
+from dnd.core.creature_types import DamageType
 from dnd.core.presentation_geometry import AoEPresentationGeometry, WallAssemblyPresentationGeometry
 from dnd.types.traps import TrapState
 from dnd.types.material_deposits import MaterialDepositSource
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.types.spatial_effects import AreaPropagation
+from dnd.types.class_features import DraconicPresenceMode
 
 
 class SensesType(str, Enum):
@@ -33,6 +35,7 @@ class SenseMode(BaseModel):
 
     sense_type: SensesType = Field(description="Special sense category.")
     range_feet: int = Field(default=0, description="Range in feet; zero means unlimited.")
+    contribution_owner_uuid: UUID | None = Field(default=None, exclude=True)
 
 
 class OpticalObscurement(str, Enum):
@@ -80,6 +83,9 @@ class PerceivedSpatialEffect(BaseModel):
     pressed: bool | None = None
     direction: tuple[int, int] | None = None
     anchor_item_uuid: UUID | None = None
+    anchor_entity_uuid: UUID | None = None
+    energy_type: DamageType | None = None
+    presence_mode: DraconicPresenceMode | None = None
     sustainer_item_uuid: UUID | None = None
     concentration_slot_uuid: UUID | None = None
     anchor_position: tuple[int, int] | None = None

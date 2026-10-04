@@ -12,7 +12,7 @@ from game.volume_media import SurfaceVolume
 
 DrawRole = Literal["other", "actor", "actor_shadow", "body_copy", "body_contour",
                    "body_trail", "floating_number", "device", "device_wreck",
-                   "deposit_floor", "deposit_air", "environment_floor", "terrain_floor"]
+                   "deposit_floor", "deposit_air", "environment_floor", "terrain_floor", "item"]
 
 
 class DevicePose(NamedTuple):
@@ -33,6 +33,8 @@ class DrawCommand(NamedTuple):
     volume: SurfaceVolume | None = None
     # Components of one authored composite share world cuts and retain layer order.
     world_depth_group: tuple[str, ...] | None = None
+    # Complementary original-frame samples mix once after their independent depth cuts.
+    media_mix_group: tuple[str, ...] | None = None
     # Rendering inputs are independent of optional diagnostic evidence above.
     role: DrawRole = "other"
     owner: str = ""

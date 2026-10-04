@@ -1,0 +1,1469 @@
+{
+  "baseline": "95a47cd5ca508838bce8a2e67d6fe1fc591ce4e6",
+  "scope": "Every changed game/ and devtools/ file; native/AI coverage is in the native feature trace",
+  "files": [
+    {
+      "path": "devtools/animation_review/cases.py",
+      "change": "modified",
+      "responsibility": "Native capture/gallery coverage, framing and existing production sampler plumbing",
+      "trace": "SPELL_VFX_VISUAL_COVERAGE_2026-10-04.md",
+      "sha256": "0bdd9ddf868063971bdc6c4951b23735825b8a67258c41a4567416e3cb1ef3c8"
+    },
+    {
+      "path": "devtools/animation_review/catalog.json",
+      "change": "modified",
+      "responsibility": "Native capture/gallery coverage, framing and existing production sampler plumbing",
+      "trace": "SPELL_VFX_VISUAL_COVERAGE_2026-10-04.md",
+      "sha256": "71b8cecc2dbf45ba91247b30d07eaea65ed292d2a8a73988bf8511c4d3684dbc"
+    },
+    {
+      "path": "devtools/animation_review/class_cases.py",
+      "change": "added",
+      "responsibility": "Native capture/gallery coverage, framing and existing production sampler plumbing",
+      "trace": "SPELL_VFX_VISUAL_COVERAGE_2026-10-04.md",
+      "sha256": "f43c1c019f9338be661c446873743c2ec2ee3598d2148b3340fd536d1c2b2a4b"
+    },
+    {
+      "path": "devtools/animation_review/framing.py",
+      "change": "modified",
+      "responsibility": "Native capture/gallery coverage, framing and existing production sampler plumbing",
+      "trace": "SPELL_VFX_VISUAL_COVERAGE_2026-10-04.md",
+      "sha256": "8ab79fea8339761ceb0a6ff1b41920ba4f61f9a5db4925aa550c0c02ada58866"
+    },
+    {
+      "path": "devtools/animation_review/holy_cases.py",
+      "change": "added",
+      "responsibility": "Native capture/gallery coverage, framing and existing production sampler plumbing",
+      "trace": "SPELL_VFX_VISUAL_COVERAGE_2026-10-04.md",
+      "sha256": "566a68fe2a8bfb7304ba113bcf2633e9eb5d4bd41370849e4007c6f6e7fa8fef"
+    },
+    {
+      "path": "devtools/animation_review/produce.py",
+      "change": "modified",
+      "responsibility": "Native capture/gallery coverage, framing and existing production sampler plumbing",
+      "trace": "SPELL_VFX_VISUAL_COVERAGE_2026-10-04.md",
+      "sha256": "f1998012766cc37bc0c075da87e9233222df62307ecca8388e18258c58cffa6e"
+    },
+    {
+      "path": "devtools/animation_review/record.py",
+      "change": "modified",
+      "responsibility": "Native capture/gallery coverage, framing and existing production sampler plumbing",
+      "trace": "SPELL_VFX_VISUAL_COVERAGE_2026-10-04.md",
+      "sha256": "7887d8935d8af41549af1b584c29ccc464d242f46644e9da86b4d54d86d55241"
+    },
+    {
+      "path": "devtools/animation_review/weather_solar_cases.py",
+      "change": "added",
+      "responsibility": "Native capture/gallery coverage, framing and existing production sampler plumbing",
+      "trace": "SPELL_VFX_VISUAL_COVERAGE_2026-10-04.md",
+      "sha256": "907ba3a70a9529c2949374cd29d3a0532136b2b0f5ebab9017f1461cb5abcbc3"
+    },
+    {
+      "path": "devtools/author_class_presentation.py",
+      "change": "added",
+      "responsibility": "Original class recipe authoring",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "95c034ed80521300e954ed9678fbf151a7111634614908ef0d125c0be23723b1"
+    },
+    {
+      "path": "devtools/export_construction_operators.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "8198cc86303fb43a777dfa1ca0782be1a0abe912d8ffb19c47ff947011246446"
+    },
+    {
+      "path": "devtools/export_directed_components.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "656989b7e6f03a7f956fba24c44527a863fc9530a3e3f7b0cc0114d596ef111a"
+    },
+    {
+      "path": "devtools/export_finger_components.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "97e861c4c6a8d40eb119739515c789812cf25ddc91beb9eea07714d441ee6a81"
+    },
+    {
+      "path": "devtools/export_finger_media.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "e1ac5e33ad7db8275f5f8883b9191af46aabe8c7c5aa88c05c026ce45ff6fa98"
+    },
+    {
+      "path": "devtools/export_force_motes.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d8cb57696f47e45e54da2811b713ef073f6f54eff62df8c590e591c5d1d4f31f"
+    },
+    {
+      "path": "devtools/export_produce_travel.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "aa698fa798ad9cf1164103f4b9600c152a4fa04ec3d2d3ecafc93219c3f11895"
+    },
+    {
+      "path": "devtools/export_sleet_ownership.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d7584a2842f54a614c3cb19e95ff6b721f3458c82830a26db09dc114f2e80a5b"
+    },
+    {
+      "path": "devtools/export_solar_ownership.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "1c9fa9d915f823110b9a93263eb2dad091a7184b0cc1e4f2588529f85671abf3"
+    },
+    {
+      "path": "devtools/export_solid_fracture_rest.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "3b804ef787b808932adc734ca4c530a7255f2eaea042853281cddff8036f78c2"
+    },
+    {
+      "path": "devtools/export_thorns_components.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "2c80aed9f2f11377ec28644b430f4b5153bcfe6abf10ef4bb2293dbd6740bc7d"
+    },
+    {
+      "path": "devtools/export_wall_retirement.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d9d489d1f8d46e4de55662573c5c6ae7307c86a7805bb84a784b73e507bdae52"
+    },
+    {
+      "path": "devtools/export_wind_components.py",
+      "change": "added",
+      "responsibility": "Accepted source geometry/particle/phase export",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "f3d3beeedd057f0bfe2cb8281b85d592ba6da1e6a5ba95e3d710678cf32a6fd0"
+    },
+    {
+      "path": "devtools/import_class_media.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "812993850ee76ce45779b1a0c241d8e909d77a6c144c1fb3d421675d4232d788"
+    },
+    {
+      "path": "devtools/import_condition_materials.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "17886f7c43ac98832fd8c920257b8b84eb36e6f3acae76664ab99f07f114c57d"
+    },
+    {
+      "path": "devtools/import_construction_operators.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "5d3ea3aec637348376a4f431ca3db525749a065423776b314a7f42ed3d5aae9e"
+    },
+    {
+      "path": "devtools/import_electric_media.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "463c0c4322533c1c962b8c9a81dc44adda4b8b8c7ee422952c2e2ca50aac72df"
+    },
+    {
+      "path": "devtools/import_fear_media.py",
+      "change": "modified",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "c147b7e3f042a0ab2664a976e78ee0897c38ebaef38192a9495784068f27e0ab"
+    },
+    {
+      "path": "devtools/import_finger_media.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "459f0a60e2d99976cee42410e0daf2a4aedff5a8c836f03b4f98e895d0f02b82"
+    },
+    {
+      "path": "devtools/import_frigid_air.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "3ae311344f8b92a33bb6b2ae59a6aeefd2ffcc30429109f840c21764233481fe"
+    },
+    {
+      "path": "devtools/import_holy_media.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b72e1f373fedadd28de7a8ee5b8eea2b2e2375cf6fbcf4c1c1c4bf2d2ce6a785"
+    },
+    {
+      "path": "devtools/import_nature_utility.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d3646e462f5f15eaeaca15d940f5c3495ee4b8941604643edc0e187c82feb8e4"
+    },
+    {
+      "path": "devtools/import_necrotic_media.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "178f905a189df374bf278adf55881f73015f35076be8efe697ad32b2a4e6f0bb"
+    },
+    {
+      "path": "devtools/import_registered_media.py",
+      "change": "modified",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "f544ace31855152e625ec740176cc64ba02c0417ec19301ff1e9e01e35a14706"
+    },
+    {
+      "path": "devtools/import_sensory_media.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "34cd45eb90401c54440d5ace9738bc1cc5b6fc951f38cd2f49a91cb621dc2f23"
+    },
+    {
+      "path": "devtools/import_solar_contacts.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "15f60abd839371fda05a60832606fffc8a686c1ff1fc8f962c312a2b0d94b4b7"
+    },
+    {
+      "path": "devtools/import_solid_wall_media.py",
+      "change": "modified",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "ddb6cdef515e8fea03be9c05528c0facb6fed3dcf8e5f782156f991c43c00abc"
+    },
+    {
+      "path": "devtools/import_solid_wall_surfaces.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "1bcedd56040018f9037b9eeaf00679d5f0140405c7f46212e44d4e8aca7c90e1"
+    },
+    {
+      "path": "devtools/import_surface_ignition_media.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "1d7195cc8f4eaaf71cdac92bd0ba2c830cedd603c534a29baf8db04169db0e4f"
+    },
+    {
+      "path": "devtools/import_transport_media.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b21c18c2e2375895c8c2d32c57e073b15a0efed82f6db153bc36dcc8f0d5b8fb"
+    },
+    {
+      "path": "devtools/import_utility_media.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "6e34d982655fa9e2d72eeeeada8b3f1f727081af2b5715409d11b8aa9fdd18b9"
+    },
+    {
+      "path": "devtools/import_weather_solar_media.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "db54d4faa56f550fd01fab34119a97f56c720e12d1c6bb9efb3fd8735266a804"
+    },
+    {
+      "path": "devtools/import_weather_solar_surfaces.py",
+      "change": "added",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "6e5dc3efc668abd2fb01a0aeb4ba7f201eda890d52618d32dc6bda77e733dacd"
+    },
+    {
+      "path": "devtools/measure_weapon_trails.py",
+      "change": "added",
+      "responsibility": "Original equipped-sheet measurement",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "e3cf2fd5fdfa014a0e224a6e8be1623c1836af49a8c9652648179111b5e2c431"
+    },
+    {
+      "path": "devtools/media_delivery.py",
+      "change": "modified",
+      "responsibility": "Accepted source import/validation/registration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "2e83db8e861f41a39d2119cd2bc34a7e073e82478b9eb8b5966120b3061c60f7"
+    },
+    {
+      "path": "game/absence_media.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "43b2c11c458a3e53b156b69acea3b74d0f7f1536466249a52d866363158c9890"
+    },
+    {
+      "path": "game/animation.py",
+      "change": "modified",
+      "responsibility": "Existing cast sampling, source registration and interruptions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "ba3cedccaff260c8e4c0bfc7571bec42b28f36099d7f184a58f1e3b755c5ff28"
+    },
+    {
+      "path": "game/animation_data.py",
+      "change": "modified",
+      "responsibility": "Selected data admission and validation",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "9aae301ca3d9612248b648f11fafd865a2bdf2b4c5dfa42d009b1eadccc1c7ce"
+    },
+    {
+      "path": "game/animation_draw.py",
+      "change": "modified",
+      "responsibility": "Current body, materials and condition lifetimes",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "46c1ca2d54439aa8b70bac992481cfc2f5dbfafa8a573e04c3dd1e9d5ff15cb5"
+    },
+    {
+      "path": "game/animation_types.py",
+      "change": "modified",
+      "responsibility": "Passive contracts and authored records",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "9e5d19df391284f82bc321df820f94b71e2a3574df67dc1defdae5f5c5a60bef"
+    },
+    {
+      "path": "game/app.py",
+      "change": "modified",
+      "responsibility": "Existing app and dependent target selection",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "2a3070097e8538d6d56977655947f4815bd8a0c5d224b95a559787bba792e49b"
+    },
+    {
+      "path": "game/attack.py",
+      "change": "modified",
+      "responsibility": "Existing class action and attack binding",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "32734485822d8a6abf7609d4c845acd5fcbfa77e69bbf1e2f11258033598d3cb"
+    },
+    {
+      "path": "game/authoring_conversion.py",
+      "change": "modified",
+      "responsibility": "Selected data admission and validation",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "3916f28943666f33439263c6c83b4c0397513b7ffca8497810fdd2f903d51504"
+    },
+    {
+      "path": "game/body_action.py",
+      "change": "modified",
+      "responsibility": "Existing class action and attack binding",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "7a1abb342b5f338ff2a29ca77673ec69e4e7e6bd86b5c9588336e1bc44183d9e"
+    },
+    {
+      "path": "game/body_effects.py",
+      "change": "modified",
+      "responsibility": "Current body, materials and condition lifetimes",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "59120d2bc014cefa1d90d1498276b6635d9df1d12405e945d2bbd32179512edb"
+    },
+    {
+      "path": "game/body_pose_types.py",
+      "change": "modified",
+      "responsibility": "Passive contracts and authored records",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "3624d47b9b236426e38abf758a368070bcda66fad6da4940a9a95c967e163b35"
+    },
+    {
+      "path": "game/body_presentation.py",
+      "change": "modified",
+      "responsibility": "Current body, materials and condition lifetimes",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b59a66d1b70cfe72cc9d38163af2cd6bea4e401396b9a3fd141dd69753e5e1d7"
+    },
+    {
+      "path": "game/cast_media.py",
+      "change": "modified",
+      "responsibility": "Existing cast sampling, source registration and interruptions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "38649bf4a1682a0f131d2543deb9b4d2609139540c41f77a3866b673167157bf"
+    },
+    {
+      "path": "game/cell_media.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "b9d58724d86ecf0ccfe685015c76ffab61f44df2ae3527734693b1cd3bb2c5ab"
+    },
+    {
+      "path": "game/choreography.py",
+      "change": "modified",
+      "responsibility": "Existing causal choreography and sampled frame",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "c85f1b8178a1ce2593129992673a41088bed36b2b69bb1b9eafbde4d5b7772d2"
+    },
+    {
+      "path": "game/choreography_draw.py",
+      "change": "modified",
+      "responsibility": "Existing causal choreography and sampled frame",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "009820daca3b1dd9aae8b3641f2d778ac87c7db01d78f33248fa6c90f7281296"
+    },
+    {
+      "path": "game/combat.py",
+      "change": "modified",
+      "responsibility": "Existing cast sampling, source registration and interruptions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "cc63bb58f3b7967d23173bdea7e6bb29981dae75164873a9420dc70ea47afa8b"
+    },
+    {
+      "path": "game/component_particles.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "9925a87a822902680b0083fdee95e24ca3a1ce5a459709500c34c4136ec02928"
+    },
+    {
+      "path": "game/condition_animation.py",
+      "change": "modified",
+      "responsibility": "Current body, materials and condition lifetimes",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "ee178854731101b23c71addd398204ec041b5b0a3a9376f2a3b5639ae3ac0208"
+    },
+    {
+      "path": "game/condition_draw.py",
+      "change": "modified",
+      "responsibility": "Current body, materials and condition lifetimes",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "35a14474bc8c1320c728a978e44fee3ccdea461827c7a31424aecb48a609cd7c"
+    },
+    {
+      "path": "game/condition_media.py",
+      "change": "modified",
+      "responsibility": "Current body, materials and condition lifetimes",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "77fec946b8ac07564fe955ec4a39cb7d5e7045ed974d81a5a532e90d0806d7d1"
+    },
+    {
+      "path": "game/condition_media_lifetime.py",
+      "change": "modified",
+      "responsibility": "Current body, materials and condition lifetimes",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "0a6d373dedc80db69d3c652e858ab394b20cd3cb5305d972683d4e86d219a853"
+    },
+    {
+      "path": "game/condition_sampling.py",
+      "change": "modified",
+      "responsibility": "Current body, materials and condition lifetimes",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d6620f20eb315b90683281f773afe6d6948631f33dad78c818e4170fe95e43d5"
+    },
+    {
+      "path": "game/condition_types.py",
+      "change": "modified",
+      "responsibility": "Passive contracts and authored records",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "f42baab3c2094c1072cf9710950974411f684ae96055929b8a327a322c0cf76a"
+    },
+    {
+      "path": "game/construction_media.py",
+      "change": "modified",
+      "responsibility": "Existing construction media and section lifecycle",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "9fcca24fe8d4f9d074e70625c9f57598482e72bf3d6058e5dda66c151d1c68be"
+    },
+    {
+      "path": "game/construction_media_lifetime.py",
+      "change": "modified",
+      "responsibility": "Existing construction media and section lifecycle",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "cb9557a578850b12d944eea5c5fd7c2b2ee18c88927036289abba01da91fc5b5"
+    },
+    {
+      "path": "game/construction_surface.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "16dc7c3337a0baba70acbc3653b546355dca4dd7ba93c2332058d638745a21bc"
+    },
+    {
+      "path": "game/construction_transitions.py",
+      "change": "modified",
+      "responsibility": "Existing construction media and section lifecycle",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b5efc9a18df57664bcb8b9393be288057013d2285d2963bb501826a02cf8b8ef"
+    },
+    {
+      "path": "game/controls.py",
+      "change": "modified",
+      "responsibility": "Existing app and dependent target selection",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "826669d4a99653dce5a5e38f7a7237c4f678027fd356bb521566fe43ca6d75e3"
+    },
+    {
+      "path": "game/data/PRESENTATION_CONTRACT.md",
+      "change": "modified",
+      "responsibility": "Shared authored presentation records: PRESENTATION_CONTRACT",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "f0f634a7f83e094f69b9126423e9f28b2b7f8bdacf6c14052e5e41e96622cf41"
+    },
+    {
+      "path": "game/data/action-intakes.json",
+      "change": "added",
+      "responsibility": "Shared authored presentation records: action-intakes",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d9e3bd157a45f674357b0a565ce066970ddf79ef149a0513a6c778be5953d300"
+    },
+    {
+      "path": "game/data/action-materials.json",
+      "change": "added",
+      "responsibility": "Shared authored presentation records: action-materials",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "308326b56e3c1b70163e4a251492003d90d996712213df3ca0f33b4db02b65d8"
+    },
+    {
+      "path": "game/data/class_media/action-recipes.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: class_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b9f99e552ffaf55d0e724d49b68a3229b419dd90694c1efeda5c17a7f8146944"
+    },
+    {
+      "path": "game/data/class_media/bindings.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: class_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "e7b7c4144581df0356be275ff421e3fa4ed41fcaf7bc1766e325153dba19c805"
+    },
+    {
+      "path": "game/data/class_media/markers-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: class_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "98386c5cc9334998b1a139c626f79cd43c6facc93ed4dbe514034e8515db3c3f"
+    },
+    {
+      "path": "game/data/class_media/projectile-assets.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: class_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b470a7c3ea60b1ab23df088f53c0ba7eb16661f9a912896b868736baf917fb3a"
+    },
+    {
+      "path": "game/data/class_media/sockets-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: class_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "67d638c6900e10ff301f2d3c33a0133e1985e01a1f44a1a77b6a1960bb6553bb"
+    },
+    {
+      "path": "game/data/class_media/source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: class_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "a0ef452bc6ce89d3ba3cb199edb6559246aaf4c5c6044fb4d08d2f3a25d8c472"
+    },
+    {
+      "path": "game/data/class_media/weapon-trails-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: class_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "122fd707f2bc43a799874a039b8f07a7375206bc5fd75e900282a5f767435c81"
+    },
+    {
+      "path": "game/data/class_media/weapon-trails.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: class_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "58fe0c4d07fba8d783727f885f856225068637f4e6f459560d89e93cba8ce8ee"
+    },
+    {
+      "path": "game/data/condition-media.json",
+      "change": "modified",
+      "responsibility": "Shared authored presentation records: condition-media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "8101c07902eeb70128b7ca75af673811c035590f4ade021fff70b1eb0151e69f"
+    },
+    {
+      "path": "game/data/condition-recipes.json",
+      "change": "modified",
+      "responsibility": "Shared authored presentation records: condition-recipes",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b529499b0e50d92e72031be8d79070a0d07ac1d669a6a94e487f095364dcb269"
+    },
+    {
+      "path": "game/data/control_media/bindings.json",
+      "change": "modified",
+      "responsibility": "Selected accepted source bundle: control_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "83e7cdb8615497d7b4c7e3bb130ce510006fb98174addb7c39317adec9cde622"
+    },
+    {
+      "path": "game/data/control_media/directed-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: control_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "4301ada4f5109faeed79ba6ca43523920ddddfcd051c0072587a6b0064c5f9a3"
+    },
+    {
+      "path": "game/data/control_media/eyebite-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: control_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "1d1c7f9b7757ceb4f5563a80558efe5f2283b511e7eb7b064b001cfa577c00e2"
+    },
+    {
+      "path": "game/data/control_media/eyebite-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: control_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "955f5fdf1d8e4cec75fd69ba5473852b1c1193d2143a14b3a640b590136ea830"
+    },
+    {
+      "path": "game/data/control_media/projectile-assets.json",
+      "change": "modified",
+      "responsibility": "Selected accepted source bundle: control_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "dd0f82bd2c2a4f7da2b3332676a2b4dc09713aab3b5aadb84cfadad394cd7b99"
+    },
+    {
+      "path": "game/data/control_media/sickened-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: control_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "034f5d18f2cb21f321083c017e29ebbd438a192bb68343e2b37f4842a0b1adfc"
+    },
+    {
+      "path": "game/data/electric_media/bindings.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: electric_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "5acef4d53b9a5c563c1711e04effb0b92c95f5314e55e7b49a157b6b557e8584"
+    },
+    {
+      "path": "game/data/electric_media/electric-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: electric_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d32962e7c5f6f005b1a83b57e4a571a27ea0f1a53c48c44c3e2bfd1de528e62e"
+    },
+    {
+      "path": "game/data/electric_media/electric-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: electric_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "de4503a7019e8d3a4d87668a34df845945f6a859ccaac8b86ed36f38b7409eee"
+    },
+    {
+      "path": "game/data/electric_media/projectile-assets.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: electric_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "game/data/finger_media/bindings.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: finger_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "44692c5b453dbb9357271e3a3951fa1624ccd898f292a5c498c29a262bba1847"
+    },
+    {
+      "path": "game/data/finger_media/finger-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: finger_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "8077af2b2f11bd547f01c92e099ab1704c40268f0b5240f0f4b6199ab4374fa5"
+    },
+    {
+      "path": "game/data/finger_media/projectile-assets.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: finger_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "15dd186ef96176e758420f59c06c65e44f67dd28c904574a96e24422f775861f"
+    },
+    {
+      "path": "game/data/finger_media/source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: finger_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "62e955c300042e54fcb0fd3cca8350419640e9c0521d2d3eeff59f425d667c24"
+    },
+    {
+      "path": "game/data/holy_media/bindings.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: holy_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "f7b9c69f5b4d64b559519b624fef4a53fb00cc4179c537dde97c48d9f038512c"
+    },
+    {
+      "path": "game/data/holy_media/blade-motion.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: holy_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "750cde162e56e1b79210abfd5ba012e3dc938bd1bdb9e075739c7d1e8126d2a2"
+    },
+    {
+      "path": "game/data/holy_media/holy-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: holy_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "cf4c2cfb23fd91e0d0ac45ac898bb0bfc98945c731499df1029088c978d26e26"
+    },
+    {
+      "path": "game/data/holy_media/projectile-assets.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: holy_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "50af88c87acb8fb32210f776d6afd9d387615c5788cbc9f3559e2af673c997a2"
+    },
+    {
+      "path": "game/data/holy_media/source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: holy_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "a36e8ebb7e141eaff2c955fe3664652b3279c141d43b822459d1d542c7952146"
+    },
+    {
+      "path": "game/data/item-attachments.json",
+      "change": "added",
+      "responsibility": "Shared authored presentation records: item-attachments",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "0a028bc7affb126f7f426cca6ced43b812cb92ab6c48b59480a0234d3cb7a15b"
+    },
+    {
+      "path": "game/data/necrotic_media/bindings.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: necrotic_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "8de1beb77c5ccc951c556599a3e891d467fe884e7a2666cceb2ad62ef0d44291"
+    },
+    {
+      "path": "game/data/necrotic_media/blight-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: necrotic_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "1b0a9a34a7a698d9668b8df94fc55daa5bb98a33d5593f2882866526d67b81ac"
+    },
+    {
+      "path": "game/data/necrotic_media/damage-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: necrotic_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "52dc275313a5f597828a0150dd84621f7815f71a559c5a5f6b34571a2c6dfdb0"
+    },
+    {
+      "path": "game/data/necrotic_media/disintegrate-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: necrotic_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "776b23dfe3038877d398d7cd535d810f60e36206f0ae2af269dc2a17616487b2"
+    },
+    {
+      "path": "game/data/necrotic_media/dust-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: necrotic_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "3750ce9dfa6c90f70479b5fc6d6bd4647e527e4237b5a3ef4a04f1b42028a85e"
+    },
+    {
+      "path": "game/data/necrotic_media/plasma-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: necrotic_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d47ba98d24999a0b783ad33ea197926026e0778f308e82213509320b38e2b07a"
+    },
+    {
+      "path": "game/data/necrotic_media/power-word-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: necrotic_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b2155cd0ee00874530268763b49140cf934ecb2be5b29349ce75232289645b5b"
+    },
+    {
+      "path": "game/data/necrotic_media/power-words-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: necrotic_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "c94b8fdace4128a8b30a79bb7a6dda04afbcb1a0ce216e2a1187daaab4b811dc"
+    },
+    {
+      "path": "game/data/necrotic_media/projectile-assets.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: necrotic_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d71fefb119d35910273c0e62636214f7bb0cb4ed37ce9e7d30ab09062df2133b"
+    },
+    {
+      "path": "game/data/neuroclient/action-recipe-bindings.json",
+      "change": "modified",
+      "responsibility": "Original modular recipe/socket additions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "617cbf9c86e8a2ee54e61e77f90270397da71411571649b58296a393b680a8a1"
+    },
+    {
+      "path": "game/data/neuroclient/feast-interaction-recipe.json",
+      "change": "added",
+      "responsibility": "Original modular recipe/socket additions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "ba3d13a84b675c4a4b7f30b89dbedc3e29b1d851e8682b4dd6cae912da3cb29a"
+    },
+    {
+      "path": "game/data/neuroclient/pose-sockets.json",
+      "change": "modified",
+      "responsibility": "Original modular recipe/socket additions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "02a829192d4840310b1a997d565abc8d0f7fb9426ee41d2cc4470cceba825f1f"
+    },
+    {
+      "path": "game/data/portals.json",
+      "change": "modified",
+      "responsibility": "Shared authored presentation records: portals",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "7662cc89075a417da309ccafd1958a857575b720d0041202bb1544c58f1fd973"
+    },
+    {
+      "path": "game/data/silhouette-dust.json",
+      "change": "added",
+      "responsibility": "Shared authored presentation records: silhouette-dust",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d1959858187c80a7a3782c0b397e0976e918445346006ad4827a0d1fb0a1adbc"
+    },
+    {
+      "path": "game/data/support_conditions/bindings.json",
+      "change": "modified",
+      "responsibility": "Selected accepted source bundle: support_conditions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "0028a6b2f63c9c66abdf9112a03969fd528d283b679bffacafcd652aad34eed3"
+    },
+    {
+      "path": "game/data/support_conditions/longstrider-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: support_conditions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "18cd346e5805c459816245434721f1c12e8736b44790166cbb9b94e3b7da2bfb"
+    },
+    {
+      "path": "game/data/support_conditions/nature-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: support_conditions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "e3c109b515d67a540f8ab91f58f9112aefb291cfb8878557a9272aa27c3a40b5"
+    },
+    {
+      "path": "game/data/support_conditions/nature-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: support_conditions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "480ba7eb4598e2bd85aadc730581d71271535df265cdfb9de79ef9c9f2fd2711"
+    },
+    {
+      "path": "game/data/support_conditions/produce-travel-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: support_conditions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "f0fe6ba4917c4a216335fa08e4cf7784dafe1f703963a531adb544d2cad345aa"
+    },
+    {
+      "path": "game/data/support_conditions/projectile-assets.json",
+      "change": "modified",
+      "responsibility": "Selected accepted source bundle: support_conditions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "3b45c187ce2ec3eb6584c58b87980141d3a186fd804f51c7ddf40b2dbfa21cff"
+    },
+    {
+      "path": "game/data/support_conditions/sensory-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: support_conditions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "ebcb98ca39855547f3d41f8929e76f0abdffa74a53e9950932cea68fd7200ff0"
+    },
+    {
+      "path": "game/data/support_conditions/sensory-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: support_conditions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "1a8dadc761b4262260cc8508029eeb40f2c5eb5b0c09c7805d00fded1717ea96"
+    },
+    {
+      "path": "game/data/surface_ignition_media/bindings.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: surface_ignition_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "14499ea18f6a40b47fdf38bd7444949d7dfedceb9d7eefd15bbf1b8e683835ef"
+    },
+    {
+      "path": "game/data/surface_ignition_media/projectile-assets.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: surface_ignition_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "6dc62d6aa97e4df8508f9f9c07756626c9ef29f26aa075ce791b3529bcf3c3c3"
+    },
+    {
+      "path": "game/data/surface_ignition_media/source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: surface_ignition_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "21566d89fd4aa1a4db520dce1953ce6928645c6cfbc95bb1006277eaef581df0"
+    },
+    {
+      "path": "game/data/transport_media/banishment-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: transport_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "92ea535717936073e843ff1896053eca60d5bcf470545d37af5752a0ac2a2203"
+    },
+    {
+      "path": "game/data/transport_media/bindings.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: transport_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "432940f48df0a2c55a966bb5df8f79345b31998640ec98404e4ce5aec42e4b94"
+    },
+    {
+      "path": "game/data/transport_media/dimension_door-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: transport_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "62adb64a860f367a45df84e6fa47ff25698c29b5189816042f419454da176051"
+    },
+    {
+      "path": "game/data/transport_media/projectile-assets.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: transport_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "2f34f5491b30c9c653a28e7fa2e7f9c32719088a1ffacc1cc611bf59d462ed56"
+    },
+    {
+      "path": "game/data/transport_media/transport-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: transport_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "f5bf27c72210b9cf038c9681d71764a89fab4b89b1b0ec404cc83a1570978532"
+    },
+    {
+      "path": "game/data/utility_media/antimagic-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: utility_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "22149784615d622015a4475d90d527c99fb48c7dc26b97bade186a33a51e8e22"
+    },
+    {
+      "path": "game/data/utility_media/antimagic-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: utility_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "faa98d7016815ba9f8ca8dc51fad6b6891011caba26c41ad42d6c315a0f1c3dd"
+    },
+    {
+      "path": "game/data/utility_media/bindings.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: utility_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "911c44b05e4bc21b92d21f7ed34457c5cfbc6a42c67ebac39096391847dfcfec"
+    },
+    {
+      "path": "game/data/utility_media/cast-hands-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: utility_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "3ae4ef4131727bb00d521189583479e6e868c2383ba5c5e3c34acb15f420de83"
+    },
+    {
+      "path": "game/data/utility_media/projectile-assets.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: utility_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "07a92748f29cdaa7139873c163df0d28adc86b4fc3fe7bd08dbf117fffbfb1a4"
+    },
+    {
+      "path": "game/data/utility_media/telekinesis-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: utility_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "f74453ab4d5adb85987f1f37696bd2d4e9a61abaa35ed1bff826a89660ad45de"
+    },
+    {
+      "path": "game/data/utility_media/telekinesis-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: utility_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "95cbc6a44e9618a41a4deffd13273291160a5c570ea997d37933de52005afaec"
+    },
+    {
+      "path": "game/data/wall_media/bindings.json",
+      "change": "modified",
+      "responsibility": "Selected accepted source bundle: wall_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "caf169366ad982f5f38e10c3b88e80957227ba25371e47070ae5b27118aa342c"
+    },
+    {
+      "path": "game/data/wall_media/construction-operator-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: wall_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "82e043ea718281d5fbcab760e42293f273b8ce8257d0d8a4ae5ec5867490c610"
+    },
+    {
+      "path": "game/data/wall_media/force-motes-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: wall_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "4ffb7867a2d8abcaab18b35ff76a401c43b5945632793283c38820ea8754fe47"
+    },
+    {
+      "path": "game/data/wall_media/fracture-material-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: wall_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "6d9fbe3ff4b05dca5fb486da8ae45ff6bab2b565af4aa2432bcbaf516d850eb6"
+    },
+    {
+      "path": "game/data/wall_media/frigid-air-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: wall_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "76708a5a8437c8515577cd277a203c522d89bf2739baacebbae41686255b1e53"
+    },
+    {
+      "path": "game/data/wall_media/intact-retirement-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: wall_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b379f2c2648428cb0963c46b9cd5595f8eb46538228daac43a48202dc6208261"
+    },
+    {
+      "path": "game/data/wall_media/projectile-assets.json",
+      "change": "modified",
+      "responsibility": "Selected accepted source bundle: wall_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "1382b50e6c3ef230f3df4b21c8db3c3197e3e46ebc67c26e3a4dd2d9fa3e10b0"
+    },
+    {
+      "path": "game/data/wall_media/solid-surfaces-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: wall_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "90ca8b129cb189235ac3d304a1c8a42ea0ef33f2fd7284ba02a5d563a1f192ce"
+    },
+    {
+      "path": "game/data/wall_media/spell-studio-drafts.json",
+      "change": "modified",
+      "responsibility": "Selected accepted source bundle: wall_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "313dd36a8c819a9b8b7011e521ebac4c526a09945b31584158923136a63f55c9"
+    },
+    {
+      "path": "game/data/wall_media/thorns-flow-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: wall_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b7404bfdd1a2ea9b0e43c42c3eef8b2353f2d88cf0b69721c4db9c41fc5c87f5"
+    },
+    {
+      "path": "game/data/wall_media/wind-flow-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: wall_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "fa364af76bb9eb85f630bd522ab42e23e641b6839cf77a09bd2549d5eeb92c35"
+    },
+    {
+      "path": "game/data/weather_solar_media/beam-surfaces-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: weather_solar_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "e3013c8bc97713fe668d42e9b0a1b91c7766a4316ce698a4b6d71b1a9a5fd69a"
+    },
+    {
+      "path": "game/data/weather_solar_media/bindings.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: weather_solar_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "e1a03fe42bdae95982c5c206cb1287b975f78a9fd0acaae96c5e98f9000e4f7b"
+    },
+    {
+      "path": "game/data/weather_solar_media/burst-surfaces-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: weather_solar_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "e64616252cb2da9e660c6ea82056a24f3d4f12ad3a2b60d063078d316d1d71c8"
+    },
+    {
+      "path": "game/data/weather_solar_media/contacts-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: weather_solar_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "07f72e9ff74809a586b304e691538b3851c6822a2cefe53b382121263cf4264c"
+    },
+    {
+      "path": "game/data/weather_solar_media/ice-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: weather_solar_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "a05b0162c638ecf3f89619562c17c7c4a845d617bfd3c6dc29b1d37f88aab767"
+    },
+    {
+      "path": "game/data/weather_solar_media/projectile-assets.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: weather_solar_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b45fa2a1feee6988848a0c854c312f1c18162e8d0cfa8dafcd2fad941f53f8e3"
+    },
+    {
+      "path": "game/data/weather_solar_media/sleet-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: weather_solar_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "20e305a293bcc2d397fed50ea90372a229fda7dfdde842fa260bc20a839fb927"
+    },
+    {
+      "path": "game/data/weather_solar_media/sleet-surfaces-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: weather_solar_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "4a76cba476e217563a0f5fc360dd8ca96fd9823134613a2d2524b36c715370d1"
+    },
+    {
+      "path": "game/data/weather_solar_media/solar-source.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: weather_solar_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "79e57a17ebba2edfb19dbefe6e094709ffd42a23d10097a03660e3ca51165111"
+    },
+    {
+      "path": "game/data/weather_solar_media/weather-draft.json",
+      "change": "added",
+      "responsibility": "Selected accepted source bundle: weather_solar_media",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d28efa78290255c9028a3e6bb98f701da74dcb6c106ce255dab04184702928df"
+    },
+    {
+      "path": "game/data/world_bindings.json",
+      "change": "modified",
+      "responsibility": "Shared authored presentation records: world_bindings",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b05526b8cf1ee5a99f99c69608faefd13942fb10e9498c564055dc667d7c8ad7"
+    },
+    {
+      "path": "game/directed_contacts.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "cfbef5634ea912dcbc9676217d6379a0b742914283e41de0144e9589442081a3"
+    },
+    {
+      "path": "game/directed_media.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "1227f65441d3ff7c574eb8ec08baec04f41f06c30670fa615c5ae36d86784507"
+    },
+    {
+      "path": "game/directed_mesh_media.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "12684a18a17118ba771a3a1871f99216c770e09de41f7d1eec1c3dcbc546594c"
+    },
+    {
+      "path": "game/directed_plasma_media.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "31c2aeb650d6a8c86b4de1125d04a272ea7978247f89b6a7d19ec5a8f91135ca"
+    },
+    {
+      "path": "game/directed_surface.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "8f432d512f8eee20006a5d761c374d9b5690e007340edf733f7cc65f299dbd23"
+    },
+    {
+      "path": "game/draw_commands.py",
+      "change": "modified",
+      "responsibility": "Existing painter depth and volume integration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d569f557c09e9c4776cf11ab4de1df84ed92831340a1da050ce6868f467e7f37"
+    },
+    {
+      "path": "game/encounter_play.py",
+      "change": "modified",
+      "responsibility": "Existing app and dependent target selection",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d2b17e9768f9a37cda3488f2a475b09d78ade43f11a751807684c8fe6d7ff222"
+    },
+    {
+      "path": "game/event_record.py",
+      "change": "modified",
+      "responsibility": "Subjective projection, reduction and historical record",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "462203081a21dfe3529132e3614eb129bc02ccef0496af8a06c029f08aa254f2"
+    },
+    {
+      "path": "game/finite_material.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "2b8d80c5bc9094ff3b4b65ddbb58572a00920a5842003dfbe19af7fc9f5de762"
+    },
+    {
+      "path": "game/fixture_depth.py",
+      "change": "modified",
+      "responsibility": "Existing painter depth and volume integration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "83205df7849bc9c0947385f0f3caaed640f971e5b8d623c9ad8db1ae575a9468"
+    },
+    {
+      "path": "game/forced_movement.py",
+      "change": "modified",
+      "responsibility": "Existing displacement and portal transfer",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "7f020ea460da0930967fce7fb1278ead554bee4c5f99aa15957522979b9e9853"
+    },
+    {
+      "path": "game/interruption.py",
+      "change": "modified",
+      "responsibility": "Existing cast sampling, source registration and interruptions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "c79043ac64d5ac56ddcfaeda052c969000fcf10896de4239c368192e57fa1d00"
+    },
+    {
+      "path": "game/interruption_draw.py",
+      "change": "modified",
+      "responsibility": "Existing cast sampling, source registration and interruptions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "f8d4f8bd6a8ab27f4698d693b358854a734397dd36f2321df809f77773fd0f8e"
+    },
+    {
+      "path": "game/item_attachment_lifetime.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "378aa2c9ea04785625db40545d7704bbbe6acda11c352d82fd0f90155697a3c4"
+    },
+    {
+      "path": "game/item_draw.py",
+      "change": "modified",
+      "responsibility": "Existing item surfaces and effect material",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "df0afb5598165b4de6b7e27b709c565e4f9211ace96cc5cf2389a5fc0b7124b3"
+    },
+    {
+      "path": "game/item_effects.py",
+      "change": "modified",
+      "responsibility": "Existing item surfaces and effect material",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "37a507272fd5dec2acbb440a5d40aa7d5a85c130334ff09476364f336339a4e5"
+    },
+    {
+      "path": "game/maintained_media.py",
+      "change": "modified",
+      "responsibility": "Existing spatial field, contacts, sources and lifetime",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "ebe63dcbb56686ee9b17e703c19e787681f1a71c3dc41d8f83d3925f4105fa51"
+    },
+    {
+      "path": "game/media_blend.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "90dd4ef6c224fc965a6f41e10aaa13c53179f0486c584a7c9ceb6ff2793ce32b"
+    },
+    {
+      "path": "game/object_dust.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "20f0c2d5870fcb3de96cda5712f6deea94f65210a168533f6972abf73e4aac3a"
+    },
+    {
+      "path": "game/orbit_media.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "b7e6c1745632b1900df710f4b9019cb8ae6f7019a235fa0c9785c65e3f442429"
+    },
+    {
+      "path": "game/playback_frame.py",
+      "change": "modified",
+      "responsibility": "Existing causal choreography and sampled frame",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "7c71c8672d05ebe697285a0855045d2dd1423921d5260393e6c544bc651c01d6"
+    },
+    {
+      "path": "game/player_facts.py",
+      "change": "modified",
+      "responsibility": "Passive contracts and authored records",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "1c90d8ae96ff8e9c09256dda8f41cf6c891fb7220b451a3de30ef422810f940a"
+    },
+    {
+      "path": "game/player_projection.py",
+      "change": "modified",
+      "responsibility": "Subjective projection, reduction and historical record",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "44bcd95ac9321e9f0eebf2699bedd43a10f7a81884f24f3417396c41acf92bc8"
+    },
+    {
+      "path": "game/player_reduction.py",
+      "change": "modified",
+      "responsibility": "Subjective projection, reduction and historical record",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "2d19c978d9b25c96f31f52422c6aca9bf5aa9c6ea0baeb5a9733cbf25eec1979"
+    },
+    {
+      "path": "game/portal_animation.py",
+      "change": "modified",
+      "responsibility": "Existing displacement and portal transfer",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "f924f450e46459f6acb36c8a4c6f353c1204deddf72980ebe32ab9784c11f781"
+    },
+    {
+      "path": "game/portal_art.py",
+      "change": "modified",
+      "responsibility": "Existing displacement and portal transfer",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "e4e2a510495536c0763c426b422e8a401e4e4fffa22d7d4c28abaf32e283dbe0"
+    },
+    {
+      "path": "game/portal_draw.py",
+      "change": "modified",
+      "responsibility": "Existing displacement and portal transfer",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "e74c9524257ab4abf10ae676ace75e616c1b601490920989cb443b563e316bda"
+    },
+    {
+      "path": "game/presentation.py",
+      "change": "modified",
+      "responsibility": "Subjective projection, reduction and historical record",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "c445f1a7095760f40ad1fa3fd75f56ec99af1434c0fba16f14e4256e432f689b"
+    },
+    {
+      "path": "game/presentation_coverage.py",
+      "change": "modified",
+      "responsibility": "Existing app and dependent target selection",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "4294ba5cc657ace2c49728c01abda9c3041a3108b880ec5f3beade8fddaf2022"
+    },
+    {
+      "path": "game/projectile_media.py",
+      "change": "modified",
+      "responsibility": "Existing cast sampling, source registration and interruptions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "d9335e01553d7f997d1f2de72042613b08bc1ad5d793a51c75f6ccd245606b79"
+    },
+    {
+      "path": "game/registered_media.py",
+      "change": "modified",
+      "responsibility": "Existing cast sampling, source registration and interruptions",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "3ad75edcd7e7cd0a3eef2fc2bba42902cfba5924b8f28b5a76f739d9fbb01ce0"
+    },
+    {
+      "path": "game/scene.py",
+      "change": "modified",
+      "responsibility": "Subjective projection, reduction and historical record",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "b35d57d57a12a4d4e893596a77ca1be18bdb1e71e28cf327e13a425c9c204001"
+    },
+    {
+      "path": "game/session.py",
+      "change": "modified",
+      "responsibility": "Existing app and dependent target selection",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "36e18f7fdf1f32ac46bb725246d85fbfef8dfab446a87a105b35db5617cdde4c"
+    },
+    {
+      "path": "game/spatial_contact_media.py",
+      "change": "modified",
+      "responsibility": "Existing spatial field, contacts, sources and lifetime",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "46bfa3b0334c10a8986f33ac6a50b0e76598c0130400f7eb9bf2e923414e84c3"
+    },
+    {
+      "path": "game/spatial_field_media.py",
+      "change": "modified",
+      "responsibility": "Existing spatial field, contacts, sources and lifetime",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "757945d636c7ca664e9582bce1d37e44198499aaaedbf77e3570ec74570ea8f7"
+    },
+    {
+      "path": "game/spatial_media_draw.py",
+      "change": "modified",
+      "responsibility": "Existing spatial field, contacts, sources and lifetime",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "27271c85e3ad0cc7ce0d291ea13c515a84a1414813988e39f657dcfd41e70dcb"
+    },
+    {
+      "path": "game/spatial_media_lifetime.py",
+      "change": "modified",
+      "responsibility": "Existing spatial field, contacts, sources and lifetime",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "c12b3a36437a92c3ed59f4cf562e9787461aa358b3e8d6eefe0ba00505387480"
+    },
+    {
+      "path": "game/spatial_response.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "8ebd3dfc8317669f3c11a3860ade3ad72e06417fa92bb5500b5f9386204ce6fe"
+    },
+    {
+      "path": "game/stationary_media.py",
+      "change": "modified",
+      "responsibility": "Existing spatial field, contacts, sources and lifetime",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "7c057af701e90132c2059a6626f307ccb07a037f6287898bbace323c32ff9ef4"
+    },
+    {
+      "path": "game/thorns_surface.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "d7a91f3770f6cf3d2eedc394f7e05fe8d57945500e26ea1d2fd39b4b7a665ede"
+    },
+    {
+      "path": "game/volume_media.py",
+      "change": "modified",
+      "responsibility": "Existing painter depth and volume integration",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "f757edf79bb867c9979a492138da9bce65d7bd5b30eb50e4ed752781ef53b40a"
+    },
+    {
+      "path": "game/wall_assembly_media.py",
+      "change": "modified",
+      "responsibility": "Existing spatial field, contacts, sources and lifetime",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "934f272043ce96cbf98d4dc1d30bb656f98500b11ef184910ce0c494c86360b1"
+    },
+    {
+      "path": "game/weapon_trail_media.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "ef90f45bdbff3749a0e5b7b8826d062d2dd1b204445e3a496b3132eef802131d"
+    },
+    {
+      "path": "game/wind_flow_media.py",
+      "change": "added",
+      "responsibility": "New closed material/sampling module; individually reviewed",
+      "trace": "SPELL_NEW_GAME_MODULE_TRACE_2026-10-04.md",
+      "sha256": "9709ec7b33596e0d2b7cf189e07148424c444d25a99b34bb45c3513de03a0d6d"
+    },
+    {
+      "path": "game/world_animation.py",
+      "change": "modified",
+      "responsibility": "Passive contracts and authored records",
+      "trace": "SPELL_PRESENTATION_FEATURE_TRACE_2026-10-04.md",
+      "sha256": "257ba8ded8683ebd8b1b3fed082102c1d623f90e4adb1b6d7ea292067550306b"
+    }
+  ]
+}

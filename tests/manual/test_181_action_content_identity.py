@@ -56,9 +56,7 @@ from dnd.spells.evocation import Sunbeam, SunbeamStrike
 from dnd.spells.necromancy import Eyebite, EyebiteStrike
 from dnd.spells.transmutation import (
     Telekinesis,
-    TelekinesisGrab,
     TelekinesisMove,
-    TelekinesisRestrain,
 )
 from server.content_catalog import build_public_content_catalog
 
@@ -459,7 +457,7 @@ def test_maintained_spell_action_closure_and_cross_owner_binding_are_exact() -> 
         CallLightning: CallLightningStrike,
         Sunbeam: SunbeamStrike,
         Eyebite: EyebiteStrike,
-        Telekinesis: TelekinesisGrab,
+        Telekinesis: TelekinesisMove,
     }
     for spell_type, action_type in direct_grants.items():
         spell_declaration = SPELL_CONTENT_DECLARATIONS_BY_CLASS[spell_type]
@@ -470,16 +468,9 @@ def test_maintained_spell_action_closure_and_cross_owner_binding_are_exact() -> 
             for dependency in spell_declaration.dependencies
         )
 
-    grab_declaration = get_content_declaration(TelekinesisGrab)
-    follow_up_identity_keys = {
-        get_content_declaration(TelekinesisMove).ref.identity_key,
-        get_content_declaration(TelekinesisRestrain).ref.identity_key,
-    }
-    assert {
-        dependency.target_ref.identity_key
-        for dependency in grab_declaration.dependencies
-        if dependency.relation is ContentDependencyRelation.GRANTS_ACTION
-    } == follow_up_identity_keys
+    move_declaration = get_content_declaration(TelekinesisMove)
+    assert not any(dependency.relation is ContentDependencyRelation.GRANTS_ACTION
+                   for dependency in move_declaration.dependencies)
 
     reset_engine_runtime(grid_size=(4, 4))
     caster = Entity.create(

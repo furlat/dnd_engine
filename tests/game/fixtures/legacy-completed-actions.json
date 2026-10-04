@@ -123,7 +123,7 @@
         "stack_count": 1,
         "max_stack": 1,
         "is_consumable": false,
-        "map_char": "\u2020",
+        "map_char": "†",
         "include_in_senses_objects": true,
         "include_in_adjacent_senses_objects": false,
         "include_in_available_object_actions": true,
@@ -214,8 +214,8 @@
         "target_name": "Near target",
         "target_uuid": "c9ec67be-e912-4029-a86f-5472c0fbbc36",
         "compact": "{cyan:Shield Fighter} {green:hits} {yellow:Near target} for {red:13} damage",
-        "verbose": "{cyan:Shield Fighter} \u2192 {yellow:Near target} (Longsword)\n  Attack: d20({cyan:13}) +7 = 20 vs AC 10 \u2192 {green:HIT}\n  Damage: 1d8({red:7}) +6 = {bold red:13} Slashing",
-        "detailed": "{cyan:Shield Fighter} \u2192 {yellow:Near target} (Longsword)\n  Attack: d20({cyan:13}) +7 [Prof +2, Character Total-Level Proficiency +1, Strength Ability +4] = 20 vs AC 10 [Unarmored Armor Class +10] \u2192 {green:HIT}\n  Damage: 1d8({red:7}) +6 [Strength Ability +4] = {bold red:13} Slashing",
+        "verbose": "{cyan:Shield Fighter} → {yellow:Near target} (Longsword)\n  Attack: d20({cyan:13}) +7 = 20 vs AC 10 → {green:HIT}\n  Damage: 1d8({red:7}) +6 = {bold red:13} Slashing",
+        "detailed": "{cyan:Shield Fighter} → {yellow:Near target} (Longsword)\n  Attack: d20({cyan:13}) +7 [Prof +2, Character Total-Level Proficiency +1, Strength Ability +4] = 20 vs AC 10 [Unarmored Armor Class +10] → {green:HIT}\n  Damage: 1d8({red:7}) +6 [Strength Ability +4] = {bold red:13} Slashing",
         "data": {
           "attacker_name": "Shield Fighter",
           "attacker_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
@@ -340,7 +340,10 @@
         ]
       },
       "located_position_observer_uuids": {},
-      "effective_handler_presentations": []
+      "effective_handler_presentations": [],
+      "item_magic_suppression_provider_uuids": [],
+      "propagation": null,
+      "font_conversion": null
     }
   },
   {
@@ -452,7 +455,7 @@
         "stack_count": 1,
         "max_stack": 1,
         "is_consumable": false,
-        "map_char": "\u2020",
+        "map_char": "†",
         "include_in_senses_objects": true,
         "include_in_adjacent_senses_objects": false,
         "include_in_available_object_actions": true,
@@ -544,8 +547,8 @@
         "target_name": "Far target",
         "target_uuid": "4099c36c-3a5f-4d44-bf3c-d31e1278cedb",
         "compact": "{cyan:Shield Fighter} {green:hits} {yellow:Far target} for {red:3} damage",
-        "verbose": "{cyan:Shield Fighter} \u2192 {yellow:Far target} (Longbow) {red:DIS}\n  Attack: DIS d20(13,14\u2192{red:13}) +5 = 18 vs AC 10 \u2192 {green:HIT}\n  Damage: 1d8({red:1}) +2 = {bold red:3} Piercing",
-        "detailed": "{cyan:Shield Fighter} \u2192 {yellow:Far target} (Longbow) {red:DIS}\n  Attack: DIS d20(13,14\u2192{red:13}) +5 [Prof +2, Character Total-Level Proficiency +1, Dexterity Ability +2] = 18 vs AC 10 [Unarmored Armor Class +10] \u2192 {green:HIT}\n  Damage: 1d8({red:1}) +2 [Dexterity Ability +2] = {bold red:3} Piercing",
+        "verbose": "{cyan:Shield Fighter} → {yellow:Far target} (Longbow) {red:DIS}\n  Attack: DIS d20(13,14→{red:13}) +5 = 18 vs AC 10 → {green:HIT}\n  Damage: 1d8({red:1}) +2 = {bold red:3} Piercing",
+        "detailed": "{cyan:Shield Fighter} → {yellow:Far target} (Longbow) {red:DIS}\n  Attack: DIS d20(13,14→{red:13}) +5 [Prof +2, Character Total-Level Proficiency +1, Dexterity Ability +2] = 18 vs AC 10 [Unarmored Armor Class +10] → {green:HIT}\n  Damage: 1d8({red:1}) +2 [Dexterity Ability +2] = {bold red:3} Piercing",
         "data": {
           "attacker_name": "Shield Fighter",
           "attacker_uuid": "3722ce13-28d3-4d1f-aa26-28a9c551e56d",
@@ -678,7 +681,10 @@
         ]
       },
       "located_position_observer_uuids": {},
-      "effective_handler_presentations": []
+      "effective_handler_presentations": [],
+      "item_magic_suppression_provider_uuids": [],
+      "propagation": null,
+      "font_conversion": null
     }
   },
   {
@@ -805,7 +811,7 @@
         "stack_count": 1,
         "max_stack": 1,
         "is_consumable": false,
-        "map_char": "\u2020",
+        "map_char": "†",
         "include_in_senses_objects": true,
         "include_in_adjacent_senses_objects": false,
         "include_in_available_object_actions": true,
@@ -897,8 +903,8 @@
         "target_name": "Mover",
         "target_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
         "compact": "{cyan:Sword wielder} {bold yellow:CRITS} {yellow:Mover} for {bold red:11} damage!",
-        "verbose": "{cyan:Sword wielder} \u2192 {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 \u2192 {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
-        "detailed": "{cyan:Sword wielder} \u2192 {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 [Unarmored Armor Class +10] \u2192 {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
+        "verbose": "{cyan:Sword wielder} → {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 → {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
+        "detailed": "{cyan:Sword wielder} → {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 [Unarmored Armor Class +10] → {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
         "data": {
           "attacker_name": "Sword wielder",
           "attacker_uuid": "5148a323-3a79-4588-8b0c-a45708b04744",
@@ -976,9 +982,9 @@
                 "source_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
                 "target_name": null,
                 "target_uuid": null,
-                "compact": "\u2620 {bold red:Mover} has been defeated!",
-                "verbose": "\u2620 {bold red:Mover} has been defeated!",
-                "detailed": "\u2620 {bold red:Mover} has been defeated!\n  Dropped to -7 HP\n  Killed by: {cyan:Sword wielder}",
+                "compact": "☠ {bold red:Mover} has been defeated!",
+                "verbose": "☠ {bold red:Mover} has been defeated!",
+                "detailed": "☠ {bold red:Mover} has been defeated!\n  Dropped to -7 HP\n  Killed by: {cyan:Sword wielder}",
                 "data": {
                   "entity_name": "Mover",
                   "final_hp": -7
@@ -999,8 +1005,8 @@
             "target_name": "Mover",
             "target_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
             "compact": "{cyan:Mover} {green:succeeds} {yellow:CON} save (DC 10)",
-            "verbose": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 \u2192 {green:succeeds}",
-            "detailed": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 \u2192 {green:succeeds}",
+            "verbose": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 → {green:succeeds}",
+            "detailed": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 → {green:succeeds}",
             "data": {
               "entity_name": "Mover",
               "entity_uuid": "6694daa9-892c-4c36-9930-0ea65c56b1f1",
@@ -1052,7 +1058,10 @@
         ]
       },
       "located_position_observer_uuids": {},
-      "effective_handler_presentations": []
+      "effective_handler_presentations": [],
+      "item_magic_suppression_provider_uuids": [],
+      "propagation": null,
+      "font_conversion": null
     }
   },
   {
@@ -1179,8 +1188,8 @@
             "target_name": "Mover",
             "target_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
             "compact": "{cyan:Sword wielder} {bold yellow:CRITS} {yellow:Mover} for {bold red:11} damage!",
-            "verbose": "{cyan:Sword wielder} \u2192 {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 \u2192 {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
-            "detailed": "{cyan:Sword wielder} \u2192 {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 [Unarmored Armor Class +10] \u2192 {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
+            "verbose": "{cyan:Sword wielder} → {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 → {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
+            "detailed": "{cyan:Sword wielder} → {yellow:Mover} (Longsword)\n  Attack (OA): d20({cyan:20}) +0 = 20 vs AC 10 [Unarmored Armor Class +10] → {bold yellow:CRIT!}\n  Damage: 2d8({red:5,6}) = {bold red:11} Slashing",
             "data": {
               "attacker_name": "Sword wielder",
               "attacker_uuid": "fe456f5d-f628-4389-bd7e-f7c1953a1f95",
@@ -1258,9 +1267,9 @@
                     "source_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
                     "target_name": null,
                     "target_uuid": null,
-                    "compact": "\u2620 {bold red:Mover} has been defeated!",
-                    "verbose": "\u2620 {bold red:Mover} has been defeated!",
-                    "detailed": "\u2620 {bold red:Mover} has been defeated!\n  Dropped to -7 HP\n  Killed by: {cyan:Sword wielder}",
+                    "compact": "☠ {bold red:Mover} has been defeated!",
+                    "verbose": "☠ {bold red:Mover} has been defeated!",
+                    "detailed": "☠ {bold red:Mover} has been defeated!\n  Dropped to -7 HP\n  Killed by: {cyan:Sword wielder}",
                     "data": {
                       "entity_name": "Mover",
                       "final_hp": -7
@@ -1281,8 +1290,8 @@
                 "target_name": "Mover",
                 "target_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
                 "compact": "{cyan:Mover} {green:succeeds} {yellow:CON} save (DC 10)",
-                "verbose": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 \u2192 {green:succeeds}",
-                "detailed": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 \u2192 {green:succeeds}",
+                "verbose": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 → {green:succeeds}",
+                "detailed": "{cyan:Mover} {yellow:CON} save vs DC 10\n  Save: d20({cyan:17}) +0 = 17 → {green:succeeds}",
                 "data": {
                   "entity_name": "Mover",
                   "entity_uuid": "f358de18-b855-4631-b96c-4ffb4b109ef1",
@@ -1331,7 +1340,10 @@
         ]
       },
       "located_position_observer_uuids": {},
-      "effective_handler_presentations": []
+      "effective_handler_presentations": [],
+      "item_magic_suppression_provider_uuids": [],
+      "propagation": null,
+      "font_conversion": null
     }
   }
 ]

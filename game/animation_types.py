@@ -24,10 +24,13 @@ from dnd.types.world import MovementMode
 from dnd.types.summoning import SummonManifestation
 from dnd.core.condition_types import ConditionTag
 from dnd.core.item_types import ItemEffectPresentationState
-from game.condition_types import ConditionBodyAnimation, ConditionRecipe, ConditionBodyRamp
+from dnd.core.life_types import LifeState
+from dnd.core.creature_types import DamageType
+from dnd.types.class_features import DraconicPresenceMode
+from game.condition_types import ConditionBodyAnimation, ConditionRecipe, ConditionBodyRamp, ConditionLayer
 from game.condition_media import ConditionLayerMedia
 from game.device_art import DeviceArt
-from game.portal_art import PortalArt
+from game.portal_art import PortalArt, DoorwayArt
 
 T = TypeVar("T")
 FrozenMap = Annotated[
@@ -59,6 +62,16 @@ class RigLayer:
     alpha: float = 1.0
     item_effects: tuple[ItemEffectPresentationState, ...] = ()
     item_uuid: UUID | None = None
+    suppression_provider_uuids: tuple[UUID, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ItemAttachmentStart:
+    """Witnessed application time retained independently of item exposure."""
+
+    item_uuid: UUID
+    applied_ms: float | None = None
+    source_cursor: int | None = None
 
 
 class AuthoredRecord(BaseModel):
@@ -72,7 +85,7 @@ class ElementColors(AuthoredRecord):
 
 
 class LayerColors(AuthoredRecord):
-    source: Literal["auto", "override"]
+    source: Literal["auto", "override"] = "auto"
     primary: Color
     secondary: Color | None = None
     tertiary: Color | None = None
@@ -102,10 +115,11 @@ class StudioActorLayer(AuthoredRecord):
     hidden: bool
     category: Identifier
     colors: LayerColors
-    # Optional isolated, already-colored export; never recolor the actor body.
+    # Optional isolated export; automatic palettes replace only its effect pixels.
     sourceSheet: Identifier | None = None
-    # Offline bake input for sourceSheet; runtime uses the already-colored sheet.
+    # Override: offline bake metadata. Auto: resolved from the owning spell at bind time.
     palette: PaletteTreatment | None = None
+    blendMode: BlendMode = "normal"
 
 
 class StudioEquipment(AuthoredRecord):
@@ -113,10 +127,10 @@ class StudioEquipment(AuthoredRecord):
 
 
 class ChildAttackPose(AuthoredRecord):
-    """Literal actor layers fitted to one existing rig/weapon/attack pose."""
+    """Layers fitted to a rig/clip, optionally restricted to one weapon category."""
 
     rigId: Identifier
-    weaponCategory: Identifier
+    weaponCategory: Identifier | None = None
     clip: Identifier
     layers: Annotated[tuple[StudioActorLayer, ...], Field(min_length=1)]
 
@@ -145,6 +159,7 @@ class StudioCast(AuthoredRecord):
     slash: StudioActorLayer | None = None
     recovery: StudioRecovery
     holdReleaseForVolley: bool = False
+    holdUntilContact: bool = False
     sourceSockets: SourceSockets | None = None
 
     @model_validator(mode="after")
@@ -272,6 +287,7 @@ class SourceAnchor(AuthoredRecord):
 
 
 class StudioProjectile(AuthoredRecord):
+    requireAttackOutcome: bool = False
     targetLocal: TargetLocalDelivery | None = None
     geometry: ProjectileGeometry
     sprite: ProjectileSprite | None
@@ -378,7 +394,7 @@ class HitFlash(AuthoredRecord):
     enabled: bool
     frame: BodyFrame
     durationMs: Positive
-    color: Color
+    color: Annotated[int, Field(ge=0, le=0xFFFFFF)]
     palette: PaletteTreatment | None = None
 
 
@@ -387,7 +403,7 @@ class FloatingNumber(AuthoredRecord):
     frame: BodyFrame
     durationMs: Positive
     label: str
-    color: Color
+    color: Annotated[int, Field(ge=0, le=0xFFFFFF)]
 
 
 class DamageDeath(AuthoredRecord):
@@ -402,13 +418,92 @@ class StudioDamage(AuthoredRecord):
     death: DamageDeath | None = None
 
 
-class StudioMediaTrack(AuthoredRecord):
+class ApplicationOutcome(AuthoredRecord):
+    """Authored selectors over one committed application, never inferred mechanics."""
+
+    requireRemovedConditionTag: ConditionTag | None = None
+    requiredSaveSuccess: bool | None = None
+    requireAppliedConditionId: Identifier | None = None
+    requiredLifeState: LifeState | None = None
+    requireDamageApplied: bool = False
+    rigIds: tuple[Identifier, ...] = ()
+
+
+class BodyMaterialPoint(AuthoredRecord):
+    elapsedMs: NonNegative
+    strength: Annotated[float, Field(ge=0, le=1)]
+    pulse: Annotated[float, Field(ge=0, le=1)] = 0
+
+
+class RisingMotes(AuthoredRecord):
+    """Original deterministic world particles around an observed owner."""
+    blendMode: Literal["normal", "screen"] = "normal"
+    count: Annotated[int, Field(ge=1)]
+    radiusCells: NonNegative
+    radialGrowthCells: NonNegative = 0
+    heightCells: Positive
+    depthRatio: Positive = 1
+    periodMs: Positive = 2000
+    palette: tuple[int, int]
+    brightEvery: Annotated[int, Field(ge=1)]
+    alpha: Annotated[float, Field(ge=0, le=1)]
+    sizePixels: tuple[Positive, Positive]
+    formationOnlyMs: Positive | None = None
+
+
+class ObjectIntake(AuthoredRecord):
+    """Finite serving particles from the selected object to the current pose socket."""
+    blendMode: Literal["normal", "screen"] = "normal"
+    socket: Identifier
+    sourceOffsetCells: tuple[float, float, float]
+    count: Annotated[int, Field(ge=1)]
+    delayPerParticle: NonNegative
+    arcHeightCells: NonNegative
+    palette: tuple[int, int]
+    brightEvery: Annotated[int, Field(ge=1)]
+    radiusPixels: tuple[Positive, Positive]
+    alpha: Annotated[float, Field(ge=0, le=1)]
+
+
+class StudioBodyMaterialTrack(ApplicationOutcome):
+    """Finite current-silhouette material on a cast release or recipient contact."""
+
+    id: Identifier
+    material: ConditionBodyRamp
+    clock: Literal["release", "contact"] = "release"
+    motes: RisingMotes | None = None
+    startOffsetMs: float = 0
+    points: Annotated[tuple[BodyMaterialPoint, ...], Field(min_length=2)]
+
+    @model_validator(mode="after")
+    def finite_envelope(self) -> StudioBodyMaterialTrack:
+        if self.points[0].elapsedMs != 0 or any(a.elapsedMs >= b.elapsedMs for a, b in zip(self.points, self.points[1:])):
+            raise ValueError("material points must start at zero and increase strictly")
+        if any(point.strength or point.pulse for point in (self.points[0], self.points[-1])):
+            raise ValueError("finite body material must start and end clear")
+        return self
+
+
+@dataclass(frozen=True, slots=True)
+class BodyMaterialSample:
+    material: ConditionBodyRamp
+    strength: float
+    pulse: float = 0
+    age_ms: float = 0
+
+
+class StudioMediaTrack(ApplicationOutcome):
     """Finite authored media on the cast clock, independent of travel geometry."""
 
     id: Identifier
     assetId: Identifier
-    composition: Literal["billboard", "xyz_volume"] = "billboard"
+    assetIdsByCamera: tuple[Identifier, Identifier, Identifier, Identifier] | None = None
+    poseSocket: Identifier | None = None
+    whenPresenceMode: DraconicPresenceMode | None = None
+    composition: Literal["billboard", "xyz_volume", "clump"] = "billboard"
+    blendMode: Literal["normal", "screen"] = "normal"
     assetPhase: Literal["cast", "travel", "impact"] = "impact"
+    clock: Literal["release", "contact"] = "release"
     attachment: Literal["source_hand", "source_ground", "target_body", "target_ground", "area_ground",
                         "departure_ground", "arrival_ground"]
     startOffsetMs: float = 0
@@ -418,16 +513,21 @@ class StudioMediaTrack(AuthoredRecord):
     scale: Positive = 1
     scaleWithActor: bool = False
     alpha: Annotated[float, Field(ge=0, le=1)] = 1
+    fadeInMs: NonNegative = 0
+    fadeOutMs: NonNegative = 0
+    fadeCurve: Literal["linear", "smoothstep"] = "linear"
+    bodyOffsetsClip: str | None = None
     depth: Literal["world", "ground", "behind_body", "front_body"] = "world"
     orientation: Literal["authored", "target_vector"] = "authored"
     # Fixed-world orbit banks use an authored camera basis. Omission retains
     # facing-driven media such as directed projectiles and sprays.
     viewFacing: Facing8 | None = None
     onMiss: Literal["play", "omit"] = "play"
-    requireRemovedConditionTag: ConditionTag | None = None
-    requiredSaveSuccess: bool | None = None
     actorTopClearancePx: NonNegative | None = None
     worldOffsetsByFacing: FacingMap[Point] | None = None
+    # Camera-ground X+Z of a pre-rendered depth band, relative to its owner.
+    # Changes painter order only; registration and gameplay extent stay fixed.
+    sortDepthByFacing: FacingMap[float] | None = None
     timeMap: tuple[MediaTimePoint, ...] = ()
     timeMapsByFacing: FacingMap[tuple[MediaTimePoint, ...]] | None = None
     bodyOffsetsByFacing: FacingMap[tuple[Point, ...]] | None = None
@@ -436,12 +536,31 @@ class StudioMediaTrack(AuthoredRecord):
 
     @model_validator(mode="after")
     def removal_gate_target(self) -> StudioMediaTrack:
+        if self.clock == "contact" and not self.attachment.startswith("target_"):
+            raise ValueError("contact media requires a recorded recipient attachment")
         if self.requireRemovedConditionTag is not None and not self.attachment.startswith("target_"):
             raise ValueError("condition-removal media requires a target attachment")
         if self.requiredSaveSuccess is not None and not self.attachment.startswith("target_"):
             raise ValueError("save-outcome media requires a target attachment")
+        if (self.requireAppliedConditionId is not None or self.requiredLifeState is not None or self.requireDamageApplied) and not self.attachment.startswith("target_"):
+            raise ValueError("application-outcome media requires a target attachment")
         if self.actorTopClearancePx is not None and not self.attachment.startswith("target_"):
             raise ValueError("actor clearance requires a target attachment")
+        return self
+
+
+class BodyActionMediaTrack(StudioMediaTrack):
+    """The same finite source sampler, selected by an actor action's own outcome."""
+
+    requireHealingApplied: bool = False
+
+    @model_validator(mode="after")
+    def removal_gate_target(self) -> BodyActionMediaTrack:
+        if self.clock != 'release' or self.attachment not in ('source_ground','source_hand'):
+            raise ValueError('Body action media requires its actor release attachment')
+        if (self.requireRemovedConditionTag is not None or self.requiredLifeState is not None
+                or self.requireDamageApplied or self.actorTopClearancePx is not None):
+            raise ValueError('Body action media cannot select a spell recipient outcome')
         return self
 
 
@@ -449,6 +568,7 @@ class StudioContact(AuthoredRecord):
     """Presentation arrival; outcomes still come solely from native events."""
 
     delayMs: NonNegative = 0
+    launchDelayMs: NonNegative = 0
     speedTilesPerSecond: Positive | None = None
     cellsByFacing: FacingMap[FrozenMap[NonNegative]] | None = None
 
@@ -456,6 +576,108 @@ class StudioContact(AuthoredRecord):
     def serialize_cell_contacts(self, value: Mapping[Facing8, Mapping[str, float]] | None
                                 ) -> dict[Facing8, dict[str, float]] | None:
         return None if value is None else {facing: dict(cells) for facing, cells in value.items()}
+
+
+class StudioArcDelivery(AuthoredRecord):
+    """Accepted textured ribbons on resolved edges or the native line corridor."""
+    texture: str
+    glow: str
+    star: str
+    streak: str
+    spark: str
+    mode: Literal["applications", "area_line", "ground_strike"]
+    coreCount: Annotated[int, Field(ge=1, le=8)] = 1
+    widthCells: Positive
+    secondaryWidthCells: Positive
+    travelBaseMs: NonNegative
+    travelPerCellMs: NonNegative
+    maximumTravelMs: Positive
+    branchDelayMs: NonNegative = 0
+    chargeStartMs: NonNegative = 180
+    decayStartMs: NonNegative = 240
+    decayEndMs: Positive = 760
+    contactDecayStartMs: NonNegative = 320
+    contactDecayEndMs: Positive = 1120
+
+    @model_validator(mode="after")
+    def finite_decay(self) -> StudioArcDelivery:
+        if self.decayEndMs <= self.decayStartMs or self.contactDecayEndMs <= self.contactDecayStartMs:
+            raise ValueError("arc decay ends must follow their starts")
+        return self
+
+
+class StudioDirectedEye(AuthoredRecord):
+    sizeCells: tuple[Positive, Positive]
+    replaceLayerIds: tuple[str, ...]
+
+
+class StudioNoiseRibbonDelivery(AuthoredRecord):
+    """Original procedural material over actual source/recipient geometry."""
+    material: Literal["noise_ribbon"]
+    verticalScale: Positive
+    sourceEye: StudioDirectedEye | None = None
+    texture: str
+    palette: Annotated[tuple[Color, ...], Field(min_length=2)]
+    sourceSocket: Literal["owner", "face", "hand"]
+    sourcePlaneHeightCells: Positive
+    targetPlaneHeightCells: Positive
+    widthCells: Positive
+    arcHeightCells: NonNegative
+    contactFadeMs: NonNegative
+
+
+class StudioDarknessMeshDelivery(AuthoredRecord):
+    """Original donor mesh resources and evaluated owner-local launch socket."""
+    material: Literal["darkness_mesh"]
+    geometry: str
+    palette: Annotated[tuple[Color, ...], Field(min_length=2)]
+    nativeUnitsPerCell: Positive
+    verticalScale: Positive
+    sourceOffsetNativeXYZ: tuple[float, float, float]
+    targetPlaneHeightCells: Positive
+    contactFadeMs: NonNegative
+
+
+class StudioPlasmaTrailDelivery(AuthoredRecord):
+    """Original plasma material inputs, on the measured actor hand plane."""
+    material: Literal["plasma_trail"]
+    particles: str
+    sphere: str
+    trailTexture: str
+    noiseTexture: str
+    palette: Annotated[tuple[Color, ...], Field(min_length=2)]
+    nativeUnitsPerCell: Positive
+    verticalScale: Positive
+    sourceSocket: Literal["hand"]
+    sourcePlaneHeightCells: Positive
+    targetPlaneHeightCells: Positive
+    contactFadeMs: NonNegative
+
+
+StudioDirectedDelivery = Annotated[
+    StudioNoiseRibbonDelivery | StudioDarknessMeshDelivery | StudioPlasmaTrailDelivery,
+    Field(discriminator="material"),
+]
+
+
+class StudioCancellationMedia(AuthoredRecord):
+    """Finite source cleanup for one received interruption outcome."""
+    outcomeCode: Identifier
+    reactionId: Identifier
+    cutoffOffsetMs: float
+    media: tuple[StudioMediaTrack, ...]
+    reactionOffsetsByFacing: FacingMap[tuple[float, float, float]]
+    successByCamera: tuple[Identifier, Identifier, Identifier, Identifier]
+    reactionScale: Positive
+
+    @model_validator(mode="after")
+    def source_cleanup_only(self) -> StudioCancellationMedia:
+        if any(track.attachment != "source_ground" or track.clock != "release"
+               or track.composition != "billboard" for track in self.media):
+            raise ValueError("cancellation cleanup requires finite source-ground billboard media")
+        if any(track.loop for track in self.media):
+            raise ValueError("cancellation cleanup must end")
+        return self
 
 
 class StudioSpellDraft(AuthoredRecord):
@@ -467,8 +689,26 @@ class StudioSpellDraft(AuthoredRecord):
     damage: StudioDamage | None = None
     condition: StudioCondition | None = None
     media: tuple[StudioMediaTrack, ...] = ()
+    bodyMaterials: tuple[StudioBodyMaterialTrack, ...] = ()
+    arcs: StudioArcDelivery | None = None
+    directed: StudioDirectedDelivery | None = None
+    cancellationMedia: StudioCancellationMedia | None = None
+    displacementLayers: tuple[ConditionLayer, ...] = ()
     contact: StudioContact | None = None
     childAttack: ChildAttackPresentation | None = None
+
+    @model_validator(mode="after")
+    def arc_source_contract(self) -> StudioSpellDraft:
+        if sum(value is not None for value in (self.arcs, self.directed, self.projectile)) > 1:
+            raise ValueError("one authored delivery owns a cast trajectory")
+        if self.directed is not None and (self.contact is None or self.contact.speedTilesPerSecond is None):
+            raise ValueError("directed material requires its authored contact speed")
+        if self.arcs is not None:
+            if self.cast.sourceSockets is None:
+                raise ValueError("directed arc delivery requires authored cast sourceSockets")
+            if self.projectile is not None:
+                raise ValueError("directed arcs and projectile delivery cannot own the same cast")
+        return self
 
 
 class StudioDraftFile(AuthoredRecord):
@@ -599,7 +839,7 @@ class PackedFootpoint(AuthoredRecord):
 
 
 class RGBMediaTint(AuthoredRecord):
-    color: Color
+    color: Annotated[int, Field(ge=0, le=0xFFFFFF)]
     strength: Annotated[float, Field(ge=0, le=1)]
 
 
@@ -649,7 +889,7 @@ class PackedSurfaceFrames(AuthoredRecord):
     componentsByFacing: FacingMap[tuple[PackedSurfaceComponent, ...]] | None = None
     positionScale: Positive = 1
     referencePixelScale: Positive = 1
-    coordinateBasis: Literal["camera_local_xyz"] = "camera_local_xyz"
+    coordinateBasis: Literal["camera_local_xyz", "material_rest_xyz"] = "camera_local_xyz"
 
     @model_validator(mode="after")
     def packet_source(self) -> PackedSurfaceFrames:
@@ -936,7 +1176,28 @@ class DamageContext(AuthoredRecord):
     deathFrame: NonNegative
 
 
+class SilhouetteDust(AuthoredRecord):
+    """Accepted outline erosion and finite particles, shared by bodies and objects."""
+    erosionMs: Positive
+    particleLifetimeMs: Positive
+    particleFadeInMs: Positive
+    alphaThreshold: Annotated[int, Field(ge=1, le=255)]
+    horizontalRankWeight: Annotated[float, Field(ge=0, le=1)]
+    velocityX: NonNegative
+    velocityY: tuple[float, float]
+    gravity: NonNegative
+    color: Color
+    minimumLuminance: Annotated[float, Field(ge=0, le=1)]
+    particleEvery: Annotated[int, Field(ge=1)]
+    particleSize: Positive
+
+    @property
+    def duration_ms(self) -> float:
+        return self.erosionMs + self.particleLifetimeMs
+
+
 class DeathContext(AuthoredRecord):
+    silhouetteDust: SilhouetteDust | None = None
     bodyClip: Identifier
     bodyPlaybackSpeed: Positive
     equipmentHideFrame: NonNegative
@@ -1045,7 +1306,7 @@ class ReleaseFamily(AuthoredRecord):
 
 
 class BloodVapor(AuthoredRecord):
-    color: Color
+    color: Annotated[int, Field(ge=0, le=0xFFFFFF)]
     every: Annotated[int, Field(ge=1)] = 7
     count: Annotated[int, Field(ge=1)] = 4
     life: Positive
@@ -1127,7 +1388,7 @@ class HealingContext(AuthoredRecord):
 class LifecycleFeedback(AuthoredRecord):
     enabled: bool
     text: Identifier
-    color: Color
+    color: Annotated[int, Field(ge=0, le=0xFFFFFF)]
 
 
 class DeathSaveContext(AuthoredRecord):
@@ -1350,6 +1611,34 @@ class AttackVariant(AuthoredRecord):
     projectile: ActionProjectile | None
 
 
+class WeaponTrailPose(AuthoredRecord):
+    rigId: Identifier
+    category: Identifier
+    clip: Identifier
+    pointsByFacing: FacingMap[tuple[Point | None, ...]]
+
+    @model_validator(mode='after')
+    def complete_facings(self) -> WeaponTrailPose:
+        if set(self.pointsByFacing) != {'E','SE','S','SW','W','NW','N','NE'}:
+            raise ValueError('Weapon paths require all eight measured facings')
+        return self
+
+
+class WeaponTrailPresentation(AuthoredRecord):
+    """Measured equipped-weapon paths and the accepted finite contact bank."""
+    poses: tuple[WeaponTrailPose, ...]
+    impactAssetId: Identifier
+    palette: tuple[int, int, int]
+    behaviorIds: tuple[Identifier, ...] = ()
+    handlerIds: tuple[Identifier, ...] = ()
+    outcomes: tuple[Literal['hit','miss','critical','critical_miss'], ...] = ()
+
+
+class WeaponTrailBinding(AuthoredRecord):
+    behaviors: tuple[Identifier, ...]
+    presentation: WeaponTrailPresentation
+
+
 class AttackProfileFile(AuthoredRecord):
     """Local shared profiles in the original NeuroStudio variant vocabulary."""
 
@@ -1359,7 +1648,7 @@ class AttackProfileFile(AuthoredRecord):
 
 class ActionFeedback(AuthoredRecord):
     text: Identifier
-    color: Color
+    color: Annotated[int, Field(ge=0, le=0xFFFFFF)]
 
 
 class CounterspellFeedback(AuthoredRecord):
@@ -1383,6 +1672,7 @@ class AttackRecipe(AuthoredRecord):
     variants: tuple[AttackVariant, ...]
     projectile: JsonValue
     actionFeedback: JsonValue
+    weaponTrail: WeaponTrailPresentation | None = None
 
 
 class InterruptionRule(AuthoredRecord):
@@ -1423,6 +1713,8 @@ class ContentActionRecipe(AuthoredRecord):
     variants: tuple[JsonValue, ...]
     projectile: JsonValue
     actionFeedback: ActionFeedback | None
+    media: tuple[BodyActionMediaTrack, ...] = ()
+    handlerResponse: bool = False
 
 
 ShoveRecipe = ContentActionRecipe
@@ -1536,8 +1828,8 @@ class AssemblyModuleMedia(AuthoredRecord):
 
     tangent: tuple[float, float]
     assetId: Identifier
-    applicationAssetId: Identifier
-    removalAssetId: Identifier
+    applicationAssetId: Identifier | None = None
+    removalAssetId: Identifier | None = None
 
 
 class AssemblyRingMedia(AuthoredRecord):
@@ -1550,6 +1842,32 @@ class AssemblyRingMedia(AuthoredRecord):
     pixelScale: Positive
 
 
+class WindFlowMaterial(AuthoredRecord):
+    """Original joined sheets evaluated on the received wall path and body contacts."""
+    material: Literal["wind_streaks"]
+    components: Identifier
+    nativeUnitsPerCell: Positive
+    verticalScale: Positive
+    palette: Annotated[tuple[int, ...], Field(min_length=2)]
+
+
+class ConstructionAirMedia(AuthoredRecord):
+    """Original quiet air geometry and flake law, owned by an actual breach."""
+    mesh: Identifier
+    sourceRadiusFeet: Positive
+    nativeUnitsPerCell: Positive
+    verticalScale: Positive
+    palette: Annotated[tuple[int, ...], Field(min_length=2)]
+
+
+class ThornsMaterial(AuthoredRecord):
+    """Original living vine mesh responding to admitted body/damage contacts."""
+    components: Identifier
+    nativeUnitsPerCell: Positive
+    verticalScale: Positive
+    palette: Annotated[tuple[int, ...], Field(min_length=2)]
+
+
 class WallAssemblyMedia(AuthoredRecord):
     """Registered passive construction data, separate from Fire's paired banks."""
 
@@ -1559,6 +1877,9 @@ class WallAssemblyMedia(AuthoredRecord):
     widthFeet: Positive
     pixelScale: Positive
     ring: AssemblyRingMedia | None = None
+    flow: WindFlowMaterial | None = None
+    air: ConstructionAirMedia | None = None
+    thorns: ThornsMaterial | None = None
 
     @model_validator(mode="after")
     def distinct_directions(self) -> "WallAssemblyMedia":
@@ -1568,6 +1889,57 @@ class WallAssemblyMedia(AuthoredRecord):
         return self
 
 
+class OrbitMedia(AuthoredRecord):
+    """Original component motion in the current owner's local space."""
+    blendMode: Literal["normal", "screen"] = "normal"
+    count: Annotated[int, Field(ge=1)]
+    radiusCells: Positive
+    heightCells: float
+    periodMs: Positive
+    slotsPerCycle: Annotated[int, Field(ge=1)]
+    sizePixels: Positive
+    formationMs: Positive
+    trailMs: Positive
+    trailSamples: Annotated[int, Field(ge=2)]
+    bright: Annotated[int, Field(ge=0, le=0xFFFFFF)]
+    middle: Annotated[int, Field(ge=0, le=0xFFFFFF)]
+    mistLow: tuple[int, int, int]
+    mistRange: tuple[int, int, int]
+    mistRadiusCells: Positive
+
+
+class GroundEllipse(AuthoredRecord):
+    radiiCells: tuple[Positive, Positive]
+    color: Annotated[int, Field(ge=0, le=0xFFFFFF)]
+    alpha: Annotated[float, Field(ge=0, le=1)]
+
+
+class DirectedSpatialResponse(AuthoredRecord):
+    """A finite admitted object gesture, never a hit-test shape."""
+    blendMode: Literal["normal", "screen"] = "normal"
+    assetId: Identifier
+    firstFrame: Annotated[int, Field(ge=0)]
+    frames: Annotated[int, Field(ge=1)]
+    fps: Positive
+    contactFrame: Annotated[int, Field(ge=0)]
+    scale: Positive
+    bladeMotion: tuple[tuple[tuple[float, float, float], tuple[float, float, float]], ...] = ()
+    bladeWorldScale: Positive = 1
+    palette: tuple[int, int, int]
+
+    @model_validator(mode="after")
+    def phase_bounds(self) -> DirectedSpatialResponse:
+        if self.contactFrame >= self.frames or self.bladeMotion and len(self.bladeMotion) != self.frames:
+            raise ValueError("Directed response contact/blade samples must fit the finite phase")
+        return self
+
+
+class CellMediaVariant(AuthoredRecord):
+    """One accepted formation and sustained source pair for a native cell."""
+    assetId: Identifier
+    applicationAssetId: Identifier
+
+
 class SpatialMediaLayer(AuthoredRecord):
     """One registered layer around the received area's occupants."""
     assetId: Identifier
@@ -1575,13 +1947,33 @@ class SpatialMediaLayer(AuthoredRecord):
     side: Literal["center", "rear", "front"] = "center"
     removalAssetId: Identifier | None = None
     suppressionAssetId: Identifier | None = None
-    composition: Literal["billboard", "line_floor", "floor", "xy_volume", "xyz_volume", "clump", "wall_modules", "wall_assembly", "legacy", "volume"] = "legacy"
+    recipientTrackId: Identifier | None = None
+    whenEnergyType: DamageType | None = None
+    whenPresenceMode: DraconicPresenceMode | None = None
+    alpha: Annotated[float, Field(ge=0, le=1)] = 1
+    scale: Positive = 1
+    phaseOffsetMs: NonNegative = 0
+    worldFacing: Facing8 = "E"
+    orbit: OrbitMedia | None = None
+    groundShadow: GroundEllipse | None = None
+    motes: RisingMotes | None = None
+    composition: Literal["billboard", "line_floor", "floor", "xy_volume", "xyz_volume", "clump", "wall_modules", "wall_assembly", "cell_modules", "orbit", "legacy", "volume"] = "legacy"
+    cellVariants: tuple[CellMediaVariant, ...] = ()
     wallAxes: tuple[WallAxisMedia, ...] = ()
     wallRing: WallRingMedia | None = None
     wallAssembly: WallAssemblyMedia | None = None
 
     @model_validator(mode="after")
     def wall_banks(self) -> "SpatialMediaLayer":
+        if bool(self.cellVariants) != (self.composition == "cell_modules"):
+            raise ValueError("Cell modules require explicit source variants")
+        if self.cellVariants and not any(row.assetId == self.assetId and row.applicationAssetId == self.applicationAssetId
+                                       for row in self.cellVariants):
+            raise ValueError("Cell lifecycle reference must identify a declared variant")
+        if (self.orbit is not None) != (self.composition == "orbit"):
+            raise ValueError("Orbit composition requires its authored component motion")
+        if self.recipientTrackId is not None and self.composition != "clump":
+            raise ValueError("recipient endpoints require clump composition")
         if (self.wallAssembly is not None) != (self.composition == "wall_assembly"):
             raise ValueError("wall_assembly composition requires its explicit registration")
         if self.composition == "wall_modules":
@@ -1653,11 +2045,17 @@ class SpatialMediaBinding(AuthoredRecord):
     holdFrames: Annotated[int, Field(ge=1)]
     fps: Positive
     scale: Positive
+    loopCrossfadeMs: NonNegative = 0
+    quenchVariants: tuple[ContactSweepVariant, ...] = ()
     formationFadeMs: NonNegative = 0
     removalFadeMs: NonNegative = 0
     removalEasing: Literal["linear", "smoothstep"] = "linear"
     referenceRadiusFeet: Positive | None = None
     surfaceHeightScale: Positive = 1
+    directedResponse: DirectedSpatialResponse | None = None
+    interceptionComponents: str | None = None
+    damageMaterials: FrozenMap[StudioBodyMaterialTrack] = Field(default_factory=lambda: MappingProxyType({}))
+    contactMediaByEnergy: FrozenMap[tuple[StudioMediaTrack, ...]] = Field(default_factory=lambda: MappingProxyType({}))
     suppressionDirection: Point | None = None
     movementSpeedCellsPerSecond: Positive | None = None
     safeSideTint: RGBMediaTint | None = None
@@ -1669,6 +2067,13 @@ class SpatialMediaBinding(AuthoredRecord):
         Mapping[Literal["contact", "radiated_heat"], ContactSweep],
         AfterValidator(MappingProxyType), PlainSerializer(dict, return_type=dict),
     ] = Field(default_factory=lambda: MappingProxyType({}))
+
+
+    @model_validator(mode="after")
+    def loop_window(self) -> SpatialMediaBinding:
+        if self.loopCrossfadeMs >= self.holdFrames*1000/self.fps/2:
+            raise ValueError("Loop crossfade must leave a nonoverlapping hold window")
+        return self
 
 
 class DepositMediaBinding(AuthoredRecord):
@@ -1684,6 +2089,7 @@ class ConstructionPhaseMedia(AuthoredRecord):
     application: tuple[Identifier, Identifier]
     intact: tuple[Identifier, Identifier]
     destruction: tuple[Identifier, Identifier]
+    removal: tuple[Identifier, Identifier] | None = None
 
 
 class ConstructionDirectionMedia(AuthoredRecord):
@@ -1692,19 +2098,40 @@ class ConstructionDirectionMedia(AuthoredRecord):
     variants: Annotated[tuple[ConstructionPhaseMedia, ...], Field(min_length=1)]
 
 
+class ConstructionSurfaceMedia(AuthoredRecord):
+    """Original physical mesh/material sampled on admitted construction geometry."""
+    material: Literal["force_membrane", "ice_shell"]
+    components: Identifier
+    motes: Identifier | None = None
+    nativeUnitsPerCell: Positive
+    verticalScale: Positive
+    palette: Annotated[tuple[int, ...], Field(min_length=2)]
+    domeOnly: bool = False
+    applicationMs: Positive
+    destructionMs: Positive
+    removalMs: Positive
+
+
 class ConstructionMediaBinding(AuthoredRecord):
     """Artwork for an admitted physical object, independently of its spell zone."""
 
-    directions: Annotated[tuple[ConstructionDirectionMedia, ...], Field(min_length=1)]
+    directions: tuple[ConstructionDirectionMedia, ...] = ()
+    surface: ConstructionSurfaceMedia | None = None
     lengthFeet: Positive
     heightFeet: Positive
     pixelScale: Positive = 1
+    removalDurationMs: Positive | None = None
 
     @model_validator(mode="after")
     def unique_headings(self) -> "ConstructionMediaBinding":
+        if not self.directions and (self.surface is None or self.surface.domeOnly):
+            raise ValueError('Construction requires native panel media')
         tangents = [row.tangent for row in self.directions]
         if len(set(tangents)) != len(tangents) or any(x*x+y*y <= 0 for x, y in tangents):
             raise ValueError('Construction banks require distinct nonzero tangents')
+        has_removal = [v.removal is not None for d in self.directions for v in d.variants]
+        if has_removal and (any(has_removal) != all(has_removal) or all(has_removal) != (self.removalDurationMs is not None)):
+            raise ValueError('Construction retirement requires all banks and its source duration')
         return self
 
 
@@ -1771,7 +2198,7 @@ class AnimationData:
     action_media_assets: Mapping[str, ActionMediaAsset | ParticleMediaAsset]
     body_release_media: Mapping[str, tuple[MovementMediaTrack, ...]]
     relocation_actions: frozenset[str] = frozenset()
-    portals: Mapping[str, PortalArt] = field(default_factory=dict)
+    portals: Mapping[str, PortalArt | DoorwayArt] = field(default_factory=dict)
     blood_responses: Mapping[str, BloodResponse | None] = field(default_factory=dict)
     action_playback_rates: Mapping[str, float] = field(default_factory=dict)
     action_deliveries: Mapping[str, str] = field(default_factory=dict)
@@ -1781,3 +2208,6 @@ class AnimationData:
     construction_media: Mapping[str, ConstructionMediaBinding] = field(default_factory=dict)
     body_materials: Mapping[SummonManifestation, BodyMaterial] = field(default_factory=dict)
     entity_lifecycle_media: Mapping[str, EntityLifecyclePhase] = field(default_factory=dict)
+    item_attachments: Mapping[str, SpatialMediaBinding] = field(default_factory=dict)
+    action_materials: Mapping[str, StudioBodyMaterialTrack] = field(default_factory=dict)
+    action_intakes: Mapping[str, ObjectIntake] = field(default_factory=dict)

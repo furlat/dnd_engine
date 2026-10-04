@@ -133,7 +133,7 @@ def test_preloaded_media_draws_every_phase_after_source_links_are_removed(
     # available from the presentation session without reopening their files.
     load_actor_media(data, (
         (replace(source.caster, facing=candidate.facing), APPEARANCE, ("Idle", candidate.recipe.cast.actionClip)),
-        (source.applications[0].target, appearance, ("Idle", data.death_context.bodyClip)),
+        (source.applications[0].target, appearance, ("Idle", sample_cast(lethal,lethal.complete_ms).bodies[1].clip)),
     ), body_rows=rows)
     for elapsed in (0, 100, 900, 1900, 2800, 4000):
         assert any(render_pixels(screen, candidate, loaded, elapsed)), elapsed

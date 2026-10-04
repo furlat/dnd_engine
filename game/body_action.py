@@ -17,7 +17,8 @@ from game.animation_types import (ActionFeedback, AnimationData, BodyActionRecip
                                   StudioActorLayer, StudioCondition, StudioRecovery, StudioSpellDraft)
 from game.animation_types import BodyContext, ContentBodyQualifier, ActionFrameAnchor
 from game.combat import actor_contact, actor_is_visible
-from game.player_facts import ActionFact, ConditionChangeFact, PlayerNode, PlayerState, SpellFact
+from game.player_facts import (ActionFact, AttackFact, ConditionChangeFact, DamageRequestFact,
+    SavingThrowFact, PlayerNode, PlayerState, SpellFact)
 from game.animation_rates import action_playback_rate
 
 
@@ -55,6 +56,32 @@ class BodyActionCue:
     cast_layers: tuple[StudioActorLayer, ...] = ()
     body_context: BodyContext | None = None
     recovery_body: BodyContext | None = None
+    save_success: bool | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BodyActionSubject:
+    """An already disclosed intervention can select the same authored actor track."""
+
+    behavior_id: str
+    source_uuid: UUID
+    target_uuid: UUID | None = None
+    save_success: bool | None = None
+
+
+def intervention_subjects(event: PlayerNode, data: AnimationData) -> tuple[BodyActionSubject, ...]:
+    """Actual disclosed handler evidence selects existing content action data."""
+    fact = event.fact
+    success = (fact.indomitable_reroll.succeeded if isinstance(fact,SavingThrowFact)
+        and fact.indomitable_reroll is not None else
+        fact.relentless_rage.succeeded if isinstance(fact,DamageRequestFact)
+        and fact.relentless_rage is not None else None)
+    target = (fact.target_entity_uuid if isinstance(fact,(AttackFact,SavingThrowFact,DamageRequestFact)) else None)
+    return tuple(BodyActionSubject(row.behavior_id,row.source_entity_uuid,target,success)
+        for row in event.content_attributions if row.role == 'effective_handler'
+        and row.source_entity_uuid is not None
+        and (recipe := data.body_action_recipes.get(row.behavior_id)) is not None
+        and recipe.handlerResponse)
 
 
 def body_cast_limitations(draft: StudioSpellDraft) -> tuple[str, ...]:
@@ -68,9 +95,12 @@ def body_action_limitations(action: BodyActionRecipe) -> tuple[str, ...]:
 def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData,
                      *, start_ms: float, facings: Mapping[str, Facing8],
                      contacts: Mapping[str, ActorContact],
-                     reaction_source_uuid: UUID | None = None) -> BodyActionCue | None:
+                     reaction_source_uuid: UUID | None = None,
+                     subject: BodyActionSubject | None = None) -> BodyActionCue | None:
     fact = event.fact
-    if isinstance(fact, ConditionChangeFact):
+    if subject is not None:
+        behavior_id, source_uuid, target_uuid = subject.behavior_id, subject.source_uuid, subject.target_uuid
+    elif isinstance(fact, ConditionChangeFact):
         recipe = data.condition_recipes.get(fact.condition.behavior_id or "")
         if (fact.event_type is not EventType.CONDITION_APPLICATION or recipe is None
                 or recipe.reactionCastBinding is None or reaction_source_uuid is None):
@@ -85,7 +115,7 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
     draft = data.drafts.get(behavior_id)
     binding = data.body_action_bindings.get(behavior_id)
     recipe_id = binding.source_recipe if binding is not None else behavior_id
-    action = data.body_action_recipes.get(recipe_id) if isinstance(fact, ActionFact) else None
+    action = data.body_action_recipes.get(recipe_id) if isinstance(fact, ActionFact) or subject is not None else None
     if draft is None and action is None:
         return None
     if draft is not None and (draft.projectile is not None or draft.area is not None):
@@ -96,6 +126,14 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
     contact = contacts.get(str(actor.uuid))
     if contact is None:
         contact = actor_contact(before, actor, data, facings.get(str(actor.uuid), "S"))
+    if target_uuid is not None and target_uuid != actor.uuid:
+        target = contacts.get(str(target_uuid))
+        other = before.actors.get(target_uuid)
+        if target is None and other is not None and actor_is_visible(before, other):
+            target = actor_contact(before, other, data)
+        if target is not None and target.grid != contact.grid:
+            contact = replace(contact, facing=facing_for_delta(
+                (target.grid[0] - contact.grid[0], target.grid[1] - contact.grid[1]), data))
     interaction_object_uuid = None
     if isinstance(fact, ActionFact) and binding is not None and binding.interaction_target is not None:
         interaction_object_uuid = (fact.source_item_uuid if binding.interaction_target == "source_item"
@@ -116,7 +154,8 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
     if draft is not None:
         cast_body = resolve_body_context(data, contact, "cast", ContentBodyQualifier(contentRef=draft.definitionRef))
         draft = resolve_cast_recipe(data, contact, draft)
-        if draft.media and behavior_id not in data.relocation_actions:
+        if ((draft.media and behavior_id not in data.relocation_actions)
+                or draft.bodyMaterials or draft.displacementLayers or draft.arcs is not None or draft.directed is not None):
             return None
         cast = draft.cast
         if cast.bodyPlaybackSpeed is None or cast.equipment is None:
@@ -187,7 +226,8 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
     cue = BodyActionCue(event.uuid, contact, data, recipe_id, clip, speed, start_ms, effect_ms,
         body_end, body_end, body_end, enabled, hidden_slots, hide_weapon,
         recovery, condition, feedback, tuple(gaps), interaction_object_uuid,
-        behavior_id in data.relocation_actions, cast_layers, selected, recovery_body)
+        behavior_id in data.relocation_actions, cast_layers, selected, recovery_body,
+        subject.save_success if subject is not None else None)
     return join_body_action(cue, data, body_end)
 
 

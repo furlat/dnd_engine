@@ -1,0 +1,8 @@
+{
+  "file": "tests/game/test_sleep_area_projection.py",
+  "sha256": "33da083eee2d8408fe4d6daa69c845b6508d116d620ac1e562e0b2c82a1d6af1",
+  "production_changes": false,
+  "native_footprint_cells": 49,
+  "independent_rerun_passed": 52,
+  "root_review": "pending"
+}

@@ -1,0 +1,125 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/nature-utility-batch",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/nature-utility-compact-palm-v7",
+  "revision": "compact-palm-v7",
+  "files": [
+    {
+      "path": "game/assets/nature_utility/media/produce-back/0.png",
+      "bytes": 54476,
+      "sha256": "cc8fc4cbd7014d7cb60ffb9bbff00a6c956a94c255ae70eae5880dd59d2fc934"
+    },
+    {
+      "path": "game/assets/nature_utility/media/produce-front/0.png",
+      "bytes": 2660,
+      "sha256": "65f4b278efd2d3869410969540a47156c7a26265bf60efc69df4c0b9260a1e51"
+    },
+    {
+      "path": "game/assets/nature_utility/media/produce-hit-front/0.png",
+      "bytes": 1004,
+      "sha256": "c65264c2b2f9bd81c2cd726c8628382b97445677de7a6caa838b00ea867b290f"
+    },
+    {
+      "path": "game/assets/nature_utility/media/warm-back/0.png",
+      "bytes": 881532,
+      "sha256": "32246a225ea1c94e91965961f8634e5f9138d1441c19aeac89f13e5b6a3073ca"
+    },
+    {
+      "path": "game/assets/nature_utility/media/warm-back/1.png",
+      "bytes": 300598,
+      "sha256": "7b8ff6f8fed4f908471598e9a395761731458b8e75bfc14fa71c6bebb32f2ca5"
+    },
+    {
+      "path": "game/assets/nature_utility/media/warm-front/0.png",
+      "bytes": 826047,
+      "sha256": "f35e83a18171f19d2bd9d86079efcd0a37e17b8afa14304ba40c76544e61841f"
+    },
+    {
+      "path": "game/assets/nature_utility/media/warm-front/1.png",
+      "bytes": 248788,
+      "sha256": "16ac2d03f435d5600934ddf9de6516700f6c1a4f67e38a8dfe586500496df1bb"
+    },
+    {
+      "path": "game/assets/nature_utility/media/chill-back/0.png",
+      "bytes": 840895,
+      "sha256": "243e3156e46e34d061d86d7c2271722452c9f8a0c0fbbfa2c12587e19a52bc39"
+    },
+    {
+      "path": "game/assets/nature_utility/media/chill-back/1.png",
+      "bytes": 286467,
+      "sha256": "36ba50452f0560ddf2fea5d63e60a4804b85191eb3e45c75daad881abf6d2957"
+    },
+    {
+      "path": "game/assets/nature_utility/media/chill-front/0.png",
+      "bytes": 790918,
+      "sha256": "178d08ea7d22063222f02575bd5c1bbd536360eaae3223d87ac66095f7bd7c3a"
+    },
+    {
+      "path": "game/assets/nature_utility/media/chill-front/1.png",
+      "bytes": 239736,
+      "sha256": "526c4a5b27f5abbea7d436c388f322c21ade6754a29e2945e76588cc581b36eb"
+    },
+    {
+      "path": "game/assets/nature_utility/media/warm-contact-back/0.png",
+      "bytes": 8007,
+      "sha256": "467d30357bc2b6fa8547b8267c0ef5ebef0e93fbc86570461e22eaf14c582334"
+    },
+    {
+      "path": "game/assets/nature_utility/media/warm-contact-front/0.png",
+      "bytes": 37657,
+      "sha256": "22b205151d169db1a0c48dd98cd7ce1f6b3a8c0611b298fdea36fcead1fa60fb"
+    },
+    {
+      "path": "game/assets/nature_utility/media/chill-contact-back/0.png",
+      "bytes": 7943,
+      "sha256": "03bdbced87dc9fe3f024840fb3b15c6645f72c8a3c939862dcf074bf6b76a0ec"
+    },
+    {
+      "path": "game/assets/nature_utility/media/chill-contact-front/0.png",
+      "bytes": 36695,
+      "sha256": "7837d2ff3f1ef9feff6b1959c4692a386587fff0228527bae98cf01a70ef9378"
+    },
+    {
+      "path": "game/assets/nature_utility/media/warm-reaction-front/0.png",
+      "bytes": 12066,
+      "sha256": "e2b078c4204dc97b02b2e6d1e190d12cbf7c3fa9c6c8a9a16cec1e3fcdc8d433"
+    },
+    {
+      "path": "game/assets/nature_utility/media/chill-reaction-front/0.png",
+      "bytes": 11606,
+      "sha256": "7ba026529d2fd7c24a02469d986b7b4f21e939c075b14bbe30f2be167b34f84d"
+    },
+    {
+      "path": "game/assets/nature_utility/bark.png",
+      "bytes": 151627,
+      "sha256": "686089843688a3eb36d7692e35a2d16e1747ed091ba75c1eb4477b839ca7ea09"
+    }
+  ],
+  "identities": [
+    "nature.produce.apply.back",
+    "nature.produce.apply.front",
+    "nature.produce.hold.back",
+    "nature.produce.hold.front",
+    "nature.produce.clear.back",
+    "nature.produce.clear.front",
+    "nature.produce-hit.contact.front",
+    "nature.warm.apply.back",
+    "nature.warm.apply.front",
+    "nature.warm.hold.back",
+    "nature.warm.hold.front",
+    "nature.warm.clear.back",
+    "nature.warm.clear.front",
+    "nature.chill.apply.back",
+    "nature.chill.apply.front",
+    "nature.chill.hold.back",
+    "nature.chill.hold.front",
+    "nature.chill.clear.back",
+    "nature.chill.clear.front",
+    "nature.warm-contact.contact.back",
+    "nature.warm-contact.contact.front",
+    "nature.chill-contact.contact.back",
+    "nature.chill-contact.contact.front",
+    "nature.warm-reaction.contact.front",
+    "nature.chill-reaction.contact.front"
+  ],
+  "manifest_sha256": "6297dbe680ecdf322f4ae86a630a2c292710e7af761169ba6318d298250c51d7"
+}

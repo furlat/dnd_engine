@@ -15,11 +15,16 @@ from dnd.spells.abjuration import AntimagicField, AntimagicFieldZone
 from dnd.spells.enchantment import BlessEffect
 from dnd.spells.evocation import FireBolt
 from dnd.spells.transmutation import Haste
-from tests.engine.support import has_condition
 from tests.manual.spell_regression_support import (
     create_spell_regression_actor,
     reset_spell_regression_arena,
 )
+
+
+def has_condition(entity: Entity, name: str) -> bool:
+    """Whether the retained condition currently contributes its rules."""
+    condition = entity.active_conditions.get(name)
+    return condition is not None and condition.contributions_active()
 
 
 def _amf_caster(
@@ -128,7 +133,7 @@ def test_spell_blocked_from_inside_zone() -> None:
 
 
 def test_suppress_existing_conditions_on_cast() -> None:
-    """Archived group 4: existing magical conditions become markers on cast."""
+    """Archived group 4: existing magical conditions retain identity while suppressed."""
     reset_spell_regression_arena(16, 9)
     caster = _amf_caster()
     target = create_spell_regression_actor("Inside Target", (6, 4), "monsters")
@@ -138,7 +143,8 @@ def test_suppress_existing_conditions_on_cast() -> None:
     _cast_antimagic_field(caster)
 
     assert not has_condition(target, "Blinded")
-    assert has_condition(target, "Antimagic Suppression: Blinded")
+    assert target.active_conditions["Blinded"].applied
+    assert target.active_conditions["Blinded"].suppression_provider_uuids
 
 
 def test_restore_conditions_on_amf_end() -> None:
@@ -197,7 +203,8 @@ def test_caster_magical_conditions_suppressed() -> None:
     _cast_antimagic_field(caster)
 
     assert not has_condition(caster, "Bless")
-    assert has_condition(caster, "Antimagic Suppression: Bless")
+    assert caster.active_conditions["Bless"].applied
+    assert caster.active_conditions["Bless"].suppression_provider_uuids
 
 
 def test_zone_follows_caster() -> None:

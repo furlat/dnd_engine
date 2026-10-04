@@ -36,6 +36,7 @@ class PacketKey:
     vertical_scale: float
     position_scale: float
     reference_pixel_scale: float
+    coordinate_basis: Literal["camera_local_xyz", "material_rest_xyz"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +64,7 @@ class SurfacePositions:
     vertical_scale: float
     position_scale: float = 1
     reference_pixel_scale: float = 1
+    coordinate_basis: Literal["camera_local_xyz", "material_rest_xyz"] = "camera_local_xyz"
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,9 +185,10 @@ def _raw_part(cache: ProjectileFrameCache, path: Path,
 
 def _surface_packet(cache: ProjectileFrameCache, path: Path, blends: tuple[Literal["normal", "add"], ...],
                     visual: ProjectileSprite, bounds: tuple[float, float], vertical_scale: float,
-                    position_scale: float, member: str | None = None, reference_pixel_scale: float = 1) -> tuple[CachedSource, ...]:
+                    position_scale: float, member: str | None = None, reference_pixel_scale: float = 1,
+                    coordinate_basis: Literal["camera_local_xyz", "material_rest_xyz"] = "camera_local_xyz") -> tuple[CachedSource, ...]:
     keys: tuple[FrameKey, ...] = tuple(PacketKey(path, member, index, visual.tint, visual.alpha, blend,
-        bounds, vertical_scale, position_scale, reference_pixel_scale) for index, blend in enumerate(blends))
+        bounds, vertical_scale, position_scale, reference_pixel_scale, coordinate_basis) for index, blend in enumerate(blends))
     if all(key in cache.frames for key in keys):
         for key in keys:
             cache.frames.move_to_end(key)
@@ -216,7 +219,7 @@ def _surface_packet(cache: ProjectileFrameCache, path: Path, blends: tuple[Liter
         xyz.setflags(write=False)
         owners.setflags(write=False)
         source = CachedSource(_prepare(image, visual.tint, visual.alpha, blend),
-            SurfacePositions(xyz, owners, bounds, vertical_scale, position_scale, reference_pixel_scale), (ox, oy))
+            SurfacePositions(xyz, owners, bounds, vertical_scale, position_scale, reference_pixel_scale, coordinate_basis), (ox, oy))
         prior = cache.frames.pop(key, None)
         if prior is not None:
             cache.decoded_bytes -= prior.nbytes
@@ -264,7 +267,7 @@ def _projectile_frame_layers(
                     assert pattern is not None
                     path = data.media_root / pattern.format(direction=direction, frame=packet.frameIndices[frame])
                 sources = _surface_packet(cache, path, blends, visual, packet.bounds,
-                                          packet.verticalScale, packet.positionScale, member, packet.referencePixelScale)
+                                          packet.verticalScale, packet.positionScale, member, packet.referencePixelScale, packet.coordinateBasis)
                 for source, blend in zip(sources, blends):
                     offset = tuple(source.offset[i] + round(source_pivot[i]) - source_pivot[i]
                                    + asset_pivot[i] for i in range(2))

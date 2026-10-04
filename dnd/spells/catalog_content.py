@@ -528,8 +528,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
         saves=_saving_throws('charisma'), concentration=True, multi_target=_multi_target(1, 4, False), tags=('concentration',),
     )),
     (transmutation.DarkvisionSpell, _catalog(
-        'darkvision', 'Grant 60ft darkvision to a willing creature', 'entity', 'touch', 5, 'touch',
-        concentration=True, tags=('concentration',),
+        'darkvision', 'Grant 60ft darkvision to a willing creature for 8 hours', 'entity', 'touch', 5, 'touch',
     )),
     (divination.SeeInvisibility, _catalog(
         'see_invisibility', 'See invisible creatures and objects', 'self', 'self', 0, 'self',
@@ -551,7 +550,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
         area=_area('sphere', radius_ft=20), concentration=True, tags=('sphere', 'concentration'),
     )),
     (evocation.ContinualFlame, _catalog(
-        'continual_flame', 'Touch: permanent 20ft bright + 20ft dim light on object', 'position', 'touch', 5, 'touch',
+        'continual_flame', 'Touch: permanent 20ft bright + 20ft dim light on object', 'object', 'touch', 5, 'touch',
     )),
     (evocation.PrayerOfHealing, _catalog(
         'prayer_of_healing', 'Heal up to 6 allies for 2d8 + modifier HP', 'multi_entity', 'ranged', 30, 'none',
@@ -643,7 +642,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
         concentration=True, tags=('concentration',),
     )),
     (evocation.IceStorm, _catalog(
-        'ice_storm', '20ft cylinder: 2d8 bludg + 4d6 cold (DEX half), difficult terrain 1 round', 'position_aoe', 'ranged', 60, 'aoe_projectile',
+        'ice_storm', '20ft cylinder: 2d8 bludg + 4d6 cold (DEX half), terrain until end of next caster turn', 'position_aoe', 'ranged', 300, 'aoe_projectile',
         projectile='rain', area=_area('cylinder', radius_ft=20, height_ft=40), damage=(DamageType.BLUDGEONING, DamageType.COLD), saves=_saving_throws('dexterity'), tags=('ice', 'hail', 'storm'),
     )),
     (wall_fields.WindWall, _catalog(
@@ -682,11 +681,12 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
         classes=('druid', 'sorcerer', 'wizard'), tags=('fire', 'wall', 'concentration'),
     )),
     (conjuration.DimensionDoor, _catalog(
-        'dimension_door', 'Teleport to a visible position within 500ft', 'position', 'ranged', 500, 'none',
+        'dimension_door', 'Teleport alone or with a nearby willing companion; blocked arrival deals 4d6 force', 'entity', 'ranged', 500, 'none',
     )),
     (abjuration.Banishment, _catalog(
-        'banishment', 'CHA save or banished (removed from play), concentration', 'entity', 'ranged', 60, 'none',
+        'banishment', 'CHA save; temporary demiplane or home-plane departure, one additional creature per higher slot', 'multi_entity', 'ranged', 60, 'none',
         saves=_saving_throws('charisma'), concentration=True, tags=('concentration',),
+        multi_target=_multi_target(1, 1, False),
     )),
     (conjuration.GuardianOfFaith, _catalog(
         'guardian_of_faith', 'Summon spectral guardian: 20 radiant (DEX half), 60 damage budget', 'position', 'ranged', 30, 'aoe',
@@ -715,8 +715,8 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
         projectile='orb', area=_area('sphere', radius_ft=20), damage=(DamageType.PIERCING,), saves=_saving_throws('constitution'), concentration=True, tags=('piercing', 'orb', 'sphere', 'concentration'),
     )),
     (transmutation.Telekinesis, _catalog(
-        'telekinesis', 'Telekinetically grab, move, or restrain a creature (STR save)', 'entity', 'ranged', 60, 'ray',
-        projectile='ray', saves=_saving_throws('strength'), concentration=True, tags=('ray', 'concentration'),
+        'telekinesis', 'Move a creature up to 30ft; STR negates, hostile landing 4d8 force + 2d6 bludgeoning, DEX avoids Prone', 'entity', 'ranged', 60, 'ray',
+        projectile='ray', damage=(DamageType.FORCE, DamageType.BLUDGEONING), saves=_saving_throws('strength', 'dexterity'), concentration=True, tags=('ray', 'concentration'),
     )),
     (evocation.FlameStrike, _catalog(
         'flame_strike', '10ft cylinder: 4d6 fire + 4d6 radiant (DEX half)', 'position_aoe', 'ranged', 60, 'aoe_projectile',
@@ -741,7 +741,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
         'true_seeing', 'Grant truesight 120ft', 'entity', 'touch', 5, 'touch',
     )),
     (evocation.Sunbeam, _catalog(
-        'sunbeam', '60ft line beam, 6d8 radiant + Blinded (CON half), repeatable', 'self', 'self', 0, 'beam',
+        'sunbeam', '60ft line beam, 6d8 radiant + Blinded (CON half), repeatable', 'position_aoe', 'self', 0, 'beam',
         projectile='beam', area=_area('line', length_ft=60, width_ft=5), damage=(DamageType.RADIANT,), saves=_saving_throws('constitution'), concentration=True, tags=('radiant', 'beam', 'line', 'concentration'),
     )),
     (evocation.ChainLightning, _catalog(
@@ -876,7 +876,7 @@ _SPELL_GRANTED_ACTION_TYPES_BY_CLASS: Mapping[
         necromancy.EyebiteStrike,
     ),
     transmutation.Telekinesis: (
-        transmutation.TelekinesisGrab,
+        transmutation.TelekinesisMove,
     ),
 })
 

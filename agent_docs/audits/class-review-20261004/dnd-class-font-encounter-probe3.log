@@ -1,0 +1,5 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+slot_to_points owner [('Slot→SP L2', {'direction': 'slot_to_points', 'slot_level': 2, 'sorcery_points_delta': 2, 'spell_slots_delta': -1})]
+slot_to_points observer [('Slot→SP L2', {'direction': 'slot_to_points', 'slot_level': None, 'sorcery_points_delta': None, 'spell_slots_delta': None})]
+points_to_slot owner [('3SP→Slot L2', {'direction': 'points_to_slot', 'slot_level': 2, 'sorcery_points_delta': -3, 'spell_slots_delta': 1})]
+points_to_slot observer [('3SP→Slot L2', {'direction': 'points_to_slot', 'slot_level': None, 'sorcery_points_delta': None, 'spell_slots_delta': None})]

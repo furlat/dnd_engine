@@ -1,0 +1,135 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/final-utility-batch",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/final-utility-grounded-layering-v2",
+  "files": [
+    {
+      "path": "game/assets/utility_media/assets/hand-grab-0-back.png",
+      "bytes": 527127,
+      "sha256": "cee98ae6340d144d2198541e79c37c3a87f6d62a15225be3fd46a5d033018c3f"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-grab-0-front.png",
+      "bytes": 137946,
+      "sha256": "9613b2435d9008072ce3d421b7cc66af9e0ded2ef300e5af90f841f4d54ba6cd"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-grab-1-back.png",
+      "bytes": 180485,
+      "sha256": "8940fa6642f08066b78e53e933fc2c273eaabbda340e4aadc7bcdfa636dd4450"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-grab-1-front.png",
+      "bytes": 433547,
+      "sha256": "ebc9c146e97cd6fe18812acae0332375546b94a4b232a899b48175aa57550993"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-grab-2-back.png",
+      "bytes": 69494,
+      "sha256": "ac444c89c87ed0d974bc229bb1c59ebf92bf143fcc178aafbfbda6e1dc797190"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-grab-2-front.png",
+      "bytes": 418884,
+      "sha256": "c9b6ae07c176083e8cd76402332816234a4e459f7db3f46fe3650733d86d4f27"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-grab-3-back.png",
+      "bytes": 361811,
+      "sha256": "e36ace2ac882150de5371a189bd0e84c7ab7a8f637c6b3f503ec6be1ee3a45a9"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-grab-3-front.png",
+      "bytes": 275268,
+      "sha256": "b992fd8239bce62fbbadbfa83d816292bdf43cb04504415a3c9ec6102cb78900"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-hold-0-back.png",
+      "bytes": 813805,
+      "sha256": "3292bb177ee523ed934aac5d25009419098f4180dc012cb829cf012c6fd6ae44"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-hold-0-front.png",
+      "bytes": 218053,
+      "sha256": "721bd6a42323f783403f8f2a5c04d3d9e1d87a9f08f3e9091ec4d3fd876059d1"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-hold-1-back.png",
+      "bytes": 278210,
+      "sha256": "db1fe72f4f6c76744bf68c45f4ccc5a902dceb249b8c81508d00c59f82fe7256"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-hold-1-front.png",
+      "bytes": 648240,
+      "sha256": "229cc8ee9d770c91c8ffb4b64a6e176dca8ee6690cc2bdfe7d18b361d69b5e71"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-hold-2-back.png",
+      "bytes": 90035,
+      "sha256": "12b62740205cb46dde38b82f22e7663ccd8b96dbb997453b42282620244b7649"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-hold-2-front.png",
+      "bytes": 689490,
+      "sha256": "ddeea7964536305531706c66f46a31440fca0aa57642457e2709e0abe13a913f"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-hold-3-back.png",
+      "bytes": 652060,
+      "sha256": "b9d6e086297c50a37e9d838adc9e9ae486ab1c384ab3f28e053c272210c5b097"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-hold-3-front.png",
+      "bytes": 378102,
+      "sha256": "31731dfb67ea72fca2ce33e2d1797136c1fddc160a1df7b2b7207b8c6311daf9"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-release-0-back.png",
+      "bytes": 541989,
+      "sha256": "b8e39b11d989853a1fc47284107950eb91b1f9ddfe056816f8a08a6e48d5a038"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-release-0-front.png",
+      "bytes": 149104,
+      "sha256": "20f673728aa398c912c14024d315dcc79e8b51098da7fac67806de3cfa0bcdc9"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-release-1-back.png",
+      "bytes": 191059,
+      "sha256": "aaff1d6a1d8ef12dbc5ed3535c5dda37cc60b74061a277c60dc3d31111fd2a93"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-release-1-front.png",
+      "bytes": 438561,
+      "sha256": "a1391772d029ce20a9706b212e1b5261d2addd791ac008164eefa3642b857f87"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-release-2-back.png",
+      "bytes": 73736,
+      "sha256": "845f16580edd416f8a9b44d681c4da3d8a20135145b1c7c526c958a364aef134"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-release-2-front.png",
+      "bytes": 423825,
+      "sha256": "b5e214dc3b0ce25dfdd8d261705c27bc6249dce4478be776023b18e2343cf3a1"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-release-3-back.png",
+      "bytes": 370617,
+      "sha256": "4eb928a01c6c4aee075f0e1c53ee6c22c535e4ea69bcea665a30b947306643a8"
+    },
+    {
+      "path": "game/assets/utility_media/assets/hand-release-3-front.png",
+      "bytes": 281686,
+      "sha256": "d67a2ff481be73d91d91a4d43128a7d23a0a29ac33cdcb29151996750fba396f"
+    }
+  ],
+  "identities": [
+    "utility.telekinesis.grab.back",
+    "utility.telekinesis.grab.front",
+    "utility.telekinesis.hold.back",
+    "utility.telekinesis.hold.front",
+    "utility.telekinesis.release.back",
+    "utility.telekinesis.release.front"
+  ],
+  "manifest_sha256": "eb2535824c2f92e2fdd013283e178ada4003fb80434c2f1b7c6e5343c95ee990"
+}

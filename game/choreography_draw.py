@@ -17,16 +17,18 @@ from game.animation_draw import (
     attack_draw_commands, load_actor_media, load_animation_media, load_attack_media,
     action_media_draw_commands, load_action_strip_media, load_cast_rows,
 )
-from game.attack import AttackSample, BoundAttack, attack_actor_contacts
+from game.attack import AttackSample, BoundAttack, attack_actor_contacts, attack_projectile_height
 from game.choreography import BoundChoreography, ChoreographySample
 from game.combat import BoundCast
 from game.condition_animation import ConditionAppearance, condition_body_pose
 from game.condition_draw import load_condition_layers
 from game.motion import MotionTimeline
 from game.projection import Camera
+from game.portal_animation import portal_body
 from game.scene import SceneActor, available_clips, load_scene_media, scene_actors
 from game.stationary_media import stationary_media_draw_commands
 from game.interruption_draw import reaction_media_draw_commands
+from game.wind_flow_media import wind_interception_commands
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,8 +116,16 @@ def load_choreography_media(bound: BoundChoreography, *,
         load(hop.contact, (hop.body_clip, "Idle"), hop.data)
     for forced in bound.forced_movement:
         recovery = forced.recovery_body
-        clips = (forced.clip, "Idle", *((recovery.actor.clip,) if recovery and recovery.actor.enabled else ()))
+        clips = (forced.clip, "Idle", *((recovery.actor.clip,) if recovery and recovery.actor.enabled else ()),
+                 *((forced.flight_body.actor.clip,) if forced.flight_body is not None else ()))
         load(forced.actor, clips, forced.data)
+    for portal in bound.portals:
+        contact = portal.departure or portal.arrival
+        if contact is not None:
+            body = portal_body(portal, portal.fall_start_ms + 1)
+            if body is None:
+                body = portal_body(portal, portal.arrival_ms + 1)
+            load(contact, ('Idle', body.clip) if body is not None else ('Idle',), portal.data)
     for healing in bound.healing:
         if healing.contact is not None and healing.body_context is not None and healing.body_context.actor.enabled and healing.data is not None:
             load(healing.contact, (healing.body_context.actor.clip, "Idle"), healing.data)
@@ -179,6 +189,8 @@ def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySam
                                condition_appearances: Mapping[str, ConditionAppearance] | None = None,
                                include_bodies: bool = True,
                                actor_bounds: Mapping[str, pygame.Rect] | None = None,
+                               body_samples: Mapping[str, BodySample] | None = None,
+                               actor_contacts: Mapping[str, ActorContact] | None = None,
                                ) -> tuple[AnimationDrawCommand, ...]:
     commands: list[tuple[int, AnimationDrawCommand]] = []
     # There is one displayed body per actor. A child's active gesture replaces
@@ -190,6 +202,14 @@ def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySam
             drawn = attack_draw_commands(node.bound.timeline, current, node.bound.appearances,
                 media.attacks[node.event_uuid], font, badge_font, camera,
                 condition_appearances=condition_appearances, include_bodies=include_bodies)
+            timeline = node.bound.timeline
+            projectile = timeline.projectile
+            if projectile is not None and projectile.interception is not None:
+                contact = projectile.interception
+                drawn = (*drawn,*wind_interception_commands(timeline.data,contact.components,
+                    contact.position,attack_projectile_height(timeline,1.,camera.quadrant),contact.tangent,
+                    (timeline.target.grid[0]-timeline.source.grid[0],timeline.target.grid[1]-timeline.source.grid[1]),
+                    current.elapsed_ms-projectile.end_ms,camera,timeline.root_event_uuid))
         elif isinstance(node.bound, BoundCast) and isinstance(current, CastSample):
             cast_media = media.casts[node.event_uuid]
             if node.bound.staged_area:
@@ -213,7 +233,8 @@ def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySam
                 cast_media = replace(cast_media, area=area)
             drawn = animation_draw_commands(node.bound.timeline, current, cast_media, camera,
                                              condition_appearances=condition_appearances, include_bodies=include_bodies,
-                                             actor_bounds=actor_bounds)
+                                             actor_bounds=actor_bounds, body_samples=body_samples,
+                                             actor_contacts=actor_contacts)
         else:
             raise ValueError("choreography sample does not match its bound primitive")
         for body in current.bodies:
@@ -227,7 +248,8 @@ def choreography_draw_commands(bound: BoundChoreography, sample: ChoreographySam
     # The shared frame draws condition feedback from retained FloatingText
     # tracks, whose launch contact survives the actor leaving sight.
     return (*result, *(command for cue, elapsed in sample.stationary_media
-                      for command in stationary_media_draw_commands((cue,), elapsed, camera)),
+                      for command in stationary_media_draw_commands((cue,), elapsed, camera,
+                          actor_contacts=actor_contacts, body_samples=body_samples)),
             *(command for cue, elapsed in sample.reaction_media
                       for command in reaction_media_draw_commands(cue, elapsed, media.casts.get(cue.incoming_event_uuid), camera)),
             *(command for strip in sample.strips

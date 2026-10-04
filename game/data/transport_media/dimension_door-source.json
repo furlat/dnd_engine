@@ -1,0 +1,71 @@
+{
+  "source": "/home/tommaso/Dev/neurodragon_art/sources/dimension-door-simultaneous-v2/registered",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/dimension-door-simultaneous-v2/installed-registration",
+  "files": [
+    {
+      "path": "game/assets/transport_media/dimension_door/q0/back-0.png",
+      "bytes": 199614,
+      "sha256": "e6e2e89d8168c7f3a9f3203cbae8255d6f429d23ec5da02a84839357000ca23c"
+    },
+    {
+      "path": "game/assets/transport_media/dimension_door/q0/back-1.png",
+      "bytes": 75652,
+      "sha256": "36fe51bd4d6bdd4766ef63691dc99920ef589db3a9d1f413755e8199995a9156"
+    },
+    {
+      "path": "game/assets/transport_media/dimension_door/q0/front-0.png",
+      "bytes": 234186,
+      "sha256": "7e168cc42bfc7afc2f74e6fde5f870a88f8dfedc7dbbe012e57bf4fa0419b5a6"
+    },
+    {
+      "path": "game/assets/transport_media/dimension_door/q1/back-0.png",
+      "bytes": 199649,
+      "sha256": "93ccd68059267fa466bfba721eb7df3d076fe9c6ddf083a782c78c21be50a378"
+    },
+    {
+      "path": "game/assets/transport_media/dimension_door/q1/back-1.png",
+      "bytes": 74703,
+      "sha256": "9e6a82ca4608f9a5594513c994755b09ee764f6fe514eec9ea5322b54138824d"
+    },
+    {
+      "path": "game/assets/transport_media/dimension_door/q1/front-0.png",
+      "bytes": 215457,
+      "sha256": "deaaf1d665e9f42746c0b266ccee6707e7165a2ccd6923fad1e55cad2cddfd10"
+    },
+    {
+      "path": "game/assets/transport_media/dimension_door/q2/back-0.png",
+      "bytes": 213880,
+      "sha256": "3db2badebaac3c1979979c91c8c8c284bcee5ed313af312b7f66a5a7d00cce8c"
+    },
+    {
+      "path": "game/assets/transport_media/dimension_door/q2/back-1.png",
+      "bytes": 50313,
+      "sha256": "26f5cdeb4fe03b77d649c67c20882c72cd8ea031109819ddd76e275e353ae652"
+    },
+    {
+      "path": "game/assets/transport_media/dimension_door/q2/front-0.png",
+      "bytes": 231157,
+      "sha256": "d705d5dcc5d33775451ee1cbab721b2897d58ef214524fa3285b695f09983303"
+    },
+    {
+      "path": "game/assets/transport_media/dimension_door/q3/back-0.png",
+      "bytes": 213379,
+      "sha256": "6161664629589d4d55f9025a25bd450e31a90136f13ba1c9026d07540d245973"
+    },
+    {
+      "path": "game/assets/transport_media/dimension_door/q3/back-1.png",
+      "bytes": 42097,
+      "sha256": "08594b4cb43c2939d80614eecfdced5d4f1a6d1bdd577a6140650c5e502da9d7"
+    },
+    {
+      "path": "game/assets/transport_media/dimension_door/q3/front-0.png",
+      "bytes": 217461,
+      "sha256": "bfec4cd96b1dd02eb3569f007b92d4880cb0cb32b71349dbd4ac3dafcc4cf84d"
+    }
+  ],
+  "identities": [
+    "transport.dimension_door.finite.back",
+    "transport.dimension_door.finite.front"
+  ],
+  "manifest_sha256": "14974bff6432de1b01bfb4ca9daf2a2f609cfbe9446a0846da3365492e26fb8d"
+}

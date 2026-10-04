@@ -1,0 +1,32 @@
+# Transport and utility presentation independent ECS review — 2026-10-04
+
+Initial verdict: one bounded Banishment replay blocker; the reviewed Dimension Door, utility cast-glow and Continual Flame object-boundary integration has no additional identified blocker. This is not whole-plan approval. Production files were read only during this review.
+
+## Open finding
+
+P2 — `game/condition_media_lifetime.py` admits the Banishment return portal from any received actor-state change from absent/pending to present. A later ordinary observation can make that change after the actual return occurred unseen. A real native Encounter reproduction casts Banishment, blinds and deafens its caster, ends concentration while the recipient returns unseen, then restores sight. The old absence owner acquires `returned_ms=8003.333333333334` on the caster's unrelated Blinded-removal lineage. This invents a witnessed return at reacquisition. Admission must be tied to the received, committed arrival event and its existing causal presentation date; an observation replacement alone must enter the present state quietly. Reproduction and output are preserved beside this receipt in `transport-utility-review-20261004/`.
+
+## Reviewed behavior
+
+- Dimension Door retains disclosed endpoints independently: departure-only witnesses receive no arrival endpoint and arrival-only witnesses receive no departure endpoint. The shared doorway cue uses the original four camera banks, one existing choreography clock, real participant identities and admitted endpoint headings. Failed native mishaps do not create transfer cues. No gameplay inference, spell-name dispatch or extra event executor is introduced.
+- Banishment's source-observer condition-removal fallback discloses only the already-known exact membership owner when the target is absent. It deliberately omits hidden HP, armor, item, tile and return-policy after-values. Pending absence lifetimes retain their original owner and pose. The return-admission exception above remains the blocker.
+- Utility source hands use the original sheet, source-atop colors and source opacity law, sampled at the existing fifteen 12 FPS pose frames. The existing actor-layer contract adds a closed blend mode and uses the shared media blitter. It adds no private timeline or condition state. Continuous source opacity is explicitly sampled at those authored frames rather than claimed as continuous source rendering.
+- Continual Flame draws attachments from the disclosed actual item and exact effect owner. Merged corner sprites retain their existing appearance; each disclosed original item independently supplies its effect attachment and source alpha registration. No merged pseudo-item becomes an effect owner. The existing suppression tuple, condition lifetime and world placement remain authoritative.
+
+## Independent evidence and limits
+
+Ran `test_transport_spell_delivery.py`, `test_dimension_door_selection_replay.py`, `test_utility_cast_glows.py`, `test_continual_flame_objects.py`, `test_media_screen_blend.py` and `tests/architecture/test_dependency_boundaries.py`: **48 passed in 71.79 seconds**. The real hidden-return probe demonstrates the additional case absent from that passing matrix. Source and installed/private utility payload SHA checks are recorded in the evidence directory.
+
+Existing independent native/Telekinesis receipts were read for context. This review does not approve the reviewer's earlier native implementations, redo their independent review, or claim all galleries/every frame were visually inspected. It excludes concurrent directed/dust, Finger, Wind and Force/Ice/Thorns changes.
+
+## Correction and final bounded approval
+
+The root corrected the finding by requiring a witnessed, noncanceled `SpatialFact` `ENTITY_ENTERED` for the returning actor before admitting the existing state edge. No new event schema or clock was introduced. Independently reran the exact original native probe: every sight-reacquisition head leaves `returned_ms=None`; the old owner then retires quietly. Independently reran both complete transport/Dimension Door files plus the Finger delivery file after a behavior-preserving shared donor-value extraction: **18 passed in 36.94 seconds**. The corrected source hash and new logs are preserved beside the initial evidence. **Final verdict: approved within this bounded transport/utility review.** The original failed probe remains preserved; this approval does not extend to the whole spell plan or concurrent Wind implementation.
+
+## Follow-up Produce Flame source and recorder framing review
+
+Approved the bounded final Produce Flame travel selection. The source adapter preserves the accepted small head, 0.035-second trail, nine 0.1-second sparks, source speed and donor material/palette. It removes the demonstration endpoint cutoff and follows the moving emitter with the orthographic camera. Native yaw maps to the eight existing facing rows; the shared target-vector/tangent and camera-quarter consumer owns runtime direction. No screen rotation or stored demonstration trajectory is introduced. The retained source flame is consumed on the existing source-release milestone; original hit media remains the explicit impact override and is omitted on misses.
+
+Independently verified all **1,088** preserved original hashes and all **16** selected local/private payload hashes. Reconstructed all **1,024** original 192×192 RGBA cells from the runtime atlas rectangles/offsets using the declared heading mapping: every byte matches. Independently ran the complete nature delivery file: **14 passed in 9.74 seconds**. Inspected the root's selected four-camera travel frame; the accepted small flame stays small. This is a source/registration review, not a claim that every new video frame was manually inspected.
+
+Approved the final recorder-only forced-movement framing correction. The preflight consumes existing compiled points/support heights, maximum body lift and displacement-media bounds for every forced movement, including actor-framed cases. Other cast-media bounds keep their existing scene-framing condition. The recorder does not mutate the native action, trajectory, current camera rules or runtime pose. Independently reran the native Telekinesis ledge framing regression: **1 passed in 28.14 seconds**, including two saved participant views and all four cameras; both recordings pass. The root's earlier failing framing recordings remain separate evidence.

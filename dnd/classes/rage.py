@@ -638,7 +638,7 @@ class Rage(BaseAction):
         template.active_raging_condition_uuid = raging.uuid
         purge_succeeded = (
             not raging.mindless_rage
-            or _purge_mindless_rage_conditions(entity, applied)
+            or _purge_mindless_rage_conditions(entity, execution_event)
         )
 
         return execution_event.phase_to(
@@ -1113,7 +1113,7 @@ class Frenzy(BaseAction):
         template.active_raging_condition_uuid = raging.uuid
         purge_succeeded = (
             not raging.mindless_rage
-            or _purge_mindless_rage_conditions(entity, raging_applied)
+            or _purge_mindless_rage_conditions(entity, execution_event)
         )
 
         return execution_event.phase_to(

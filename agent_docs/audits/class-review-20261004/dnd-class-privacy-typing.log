@@ -1,0 +1,7 @@
+/mnt/c/users/tommaso/documents/dev/dnd_engine/tests/game/test_class_feature_privacy.py
+  /mnt/c/users/tommaso/documents/dev/dnd_engine/tests/game/test_class_feature_privacy.py:27:20 - error: Operator "in" not supported for types "Literal['L2']" and "str | None"
+    Operator "in" not supported for types "Literal['L2']" and "None" (reportOperatorIssue)
+1 error, 0 warnings, 0 informations
+WARNING: there is a new pyright version available (v1.1.409 -> v1.1.414).
+Please install the new version or set PYRIGHT_PYTHON_FORCE_VERSION to `latest`
+

@@ -7,13 +7,14 @@ from typing import Literal, Mapping, Sequence
 
 from uuid import UUID
 
+from dnd.core.effect_types import ObjectSectionVolume
 from dnd.types.world import CardinalDirection
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.core.presentation_geometry import (
     CylinderPresentationGeometry, SpherePresentationGeometry,
     ConePresentationGeometry, LinePresentationGeometry,
 )
-from game.player_facts import PlayerState, WorldUpdate
+from game.player_facts import PlayerObject, PlayerState, WorldUpdate
 from game.animation_types import HitFlash, MechanismProjectileArt, PropAnimation, PropDepth, SaveHop, SurfaceReveal
 from game.device_art import DeviceFacing
 from game.mechanism_projectile import MechanismProjectileCue
@@ -111,6 +112,22 @@ def bind_spatial_media_motion(before: PerceivedSpatialEffect, after: PerceivedSp
 
 
 @dataclass(frozen=True, slots=True)
+class ObjectDustContact:
+    """Witnessed pre-removal image owner and its native cut volume."""
+    object: PlayerObject
+    affected_volume: ObjectSectionVolume | None
+    partial: bool
+    seed: int
+
+
+@dataclass(frozen=True, slots=True)
+class ConstructionCollapse:
+    """Witnessed Force owner and original per-view geometric impact points."""
+    object: PlayerObject
+    contacts: tuple[tuple[float, float, float], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class WorldTransition:
     identity: UUID
     field: Literal["is_open", "is_engaged", "trap_state", "pressed", "activation", "creation", "removal", "destruction", "hit_flash", "spatial_motion"]
@@ -122,6 +139,9 @@ class WorldTransition:
     duration_ms: float | None = None
     projectile: MechanismProjectileCue | None = None
     spatial_motion: SpatialMediaMotion | None = None
+    object_dust: ObjectDustContact | None = None
+    construction_collapse: ConstructionCollapse | None = None
+    membrane_contact: tuple[float, float, float] | None = None
 
 
 @dataclass(frozen=True, slots=True)

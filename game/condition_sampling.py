@@ -57,6 +57,7 @@ def sample_condition_media(data: AnimationData, resolved: ResolvedConditionLayer
                 *((ConditionMediaSample(media.removal_asset_id,
                     floor(release_age * (phase.fps or release.fps) / 1000), resolved.alpha * blend),)
                     if blend else ()))
+    age += layer.phaseOffsetMs if resolved.application else 0
     opacity = resolved.alpha
     if resolved.application and layer.fadeInMs:
         fade_age = age if resolved.fade_in_age_ms is None else min(age, resolved.fade_in_age_ms)

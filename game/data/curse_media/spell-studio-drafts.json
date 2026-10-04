@@ -27,6 +27,19 @@
           "enabled": false,
           "bodyClip": "Taunt",
           "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/spell-palettes/ray_of_frost-weaponGlow.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
         }
       },
       "condition": {
@@ -85,6 +98,19 @@
           "enabled": false,
           "bodyClip": "Taunt",
           "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/spell-palettes/ray_of_frost-weaponGlow.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
         }
       },
       "condition": {
@@ -165,6 +191,19 @@
           "enabled": false,
           "bodyClip": "Taunt",
           "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/spell-palettes/ray_of_frost-weaponGlow.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
         }
       },
       "condition": {
@@ -245,6 +284,19 @@
           "enabled": false,
           "bodyClip": "Taunt",
           "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/spell-palettes/ray_of_frost-weaponGlow.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
         }
       },
       "condition": {
@@ -325,6 +377,19 @@
           "enabled": false,
           "bodyClip": "Taunt",
           "bodyPlaybackSpeed": 1
+        },
+        "weaponGlow": {
+          "id": "cast-hands",
+          "slot": "weaponGlow",
+          "enabled": true,
+          "hidden": false,
+          "category": "Magic2",
+          "sourceSheet": "/spell-palettes/ray_of_frost-weaponGlow.png",
+          "colors": {
+            "source": "auto",
+            "mode": "paletteSwap",
+            "primary": 16777215
+          }
         }
       },
       "condition": {

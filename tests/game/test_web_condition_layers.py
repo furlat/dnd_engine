@@ -157,7 +157,7 @@ def test_source_membership_deduplicates_wraps_and_other_restraints_do_not_select
 
     assert len(appearance((generic, web, second_source)).layers) == 2
     assert len(appearance((generic, second_source)).layers) == 2
-    assert not appearance((generic,)).layers
+    assert [layer.layer.assetId for layer in appearance((generic,)).layers] == ["control.restrained.mark"]
     assert web.behavior_id is not None
     recipe = data.condition_recipes[web.behavior_id]
     limited = recipe.model_copy(update={"persistent": recipe.persistent.model_copy(update={

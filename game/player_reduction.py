@@ -5,6 +5,7 @@ import json
 from game.recording_compat import upgrade_player_sequence
 from types import MappingProxyType
 from typing import Mapping
+from dnd.types.actor import SpatialDisposition
 from dnd.core.effect_types import ResolutionRef
 from uuid import UUID
 
@@ -132,7 +133,8 @@ def stage_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
     return result
 
 
-def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
+def apply_player_fact(target: PlayerState, fact: PlayerFact) -> None:
+    """Fold an already-disclosed committed fact into player memory."""
     match fact:
         case FactionFact():
             actor = target.actors.get(fact.entity_uuid)
@@ -146,6 +148,9 @@ def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
                     target.senses.entities.pop(actor.uuid, None)
                 return
             actor = target.actors.get(fact.entity_uuid) if fact.entity_uuid is not None else None
+            if actor is not None and fact.change_type is SpatialChangeType.ENTITY_ENTERED:
+                actor = replace(actor, spatial_disposition=SpatialDisposition.PRESENT)
+                target.actors[actor.uuid] = actor
             if actor is not None and fact.occupancy_layer is not None:
                 target.actors[actor.uuid] = replace(actor, occupancy_layer=fact.occupancy_layer)
             if (fact.entity_uuid == target.observer_uuid
@@ -197,7 +202,8 @@ def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
             target.actors[actor.uuid] = replace(actor, temporary_hp=fact.resulting_temporary_hp, temporary_hp_grant=fact.grant)
         case LifeFact():
             actor = target.actors[fact.entity_uuid]
-            target.actors[actor.uuid] = replace(actor, life_state=fact.new_state, normal_hp=fact.normal_hit_points)
+            target.actors[actor.uuid] = replace(actor, life_state=fact.new_state, normal_hp=fact.normal_hit_points,
+                remains_disposition=fact.remains_disposition)
         case EquipmentFact():
             actor = target.actors.get(fact.source_entity_uuid)
             if actor is not None:
@@ -212,6 +218,8 @@ def _apply_fact(target: PlayerState, fact: PlayerFact) -> None:
             elif condition.category is not ConditionCategory.INTERNAL:
                 members[condition.condition_uuid] = condition
             target.actors[actor.uuid] = replace(actor, conditions=tuple(members.values()),
+                spatial_disposition=(condition.resulting_stats.spatial_disposition
+                    if condition.resulting_stats is not None else actor.spatial_disposition),
                 normal_hp=(condition.resulting_stats.normal_hp
                     if condition.resulting_stats is not None else actor.normal_hp),
                 maximum_hp=(condition.resulting_stats.maximum_hp if condition.resulting_stats is not None else
@@ -256,7 +264,7 @@ def reduce_nodes(target: PlayerState, nodes: tuple[PlayerNode, ...], versions: t
                 if committed_at < result.spatial_commit_cursors.get(node.fact.entity_uuid, -1) < indexes[node.uuid]:
                     continue
                 result.spatial_commit_cursors[node.fact.entity_uuid] = committed_at
-            _apply_fact(result, node.fact)
+            apply_player_fact(result, node.fact)
     if observation is not None:
         _observe(result, observation)
     for remaining in pending:

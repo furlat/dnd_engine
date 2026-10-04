@@ -1,12 +1,14 @@
 """Register accepted native eight-heading Fear and source-owned Frightened banks."""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
 
 from devtools.import_registered_media import DIRECTIONS, import_registered_bank
+from devtools.media_delivery import install_verified_payloads
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -73,3 +75,67 @@ if __name__ == '__main__':
     parser.add_argument('--repo', type=Path, default=ROOT)
     args = parser.parse_args()
     print(f'Registered {len(import_fear(args.source, repo=args.repo))} Fear / Frightened layers')
+
+
+def import_sickened(source: Path, *, production: Path, repo: Path = ROOT) -> tuple[str, ...]:
+    """Reuse the archived Eyebite handoff's common condition; no spell binding."""
+    row = json.loads((source / 'production-handoff/fear-eyebite-approved-media.json').read_text())['sickened_v5']
+    row = {**row, 'fps': 32}  # Explicit export clock in FEAR_EYEBITE.md.
+    with TemporaryDirectory(prefix='sickened-registration-') as temporary:
+        staging = Path(temporary)
+        identities = import_registered_bank(source, row, 'sickened',
+            (('apply', 0, 48), ('hold', 32, 64)), staging, bundle='control_media', default_scale=.5)
+        payloads = tuple((str(path.relative_to(source)),
+            'game/assets/control_media/' + str(path.relative_to(source)),
+            hashlib.sha256(path.read_bytes()).hexdigest())
+            for path in dict.fromkeys(source / page for camera in row['cameras'].values()
+                for layer in camera['layers'].values() for page in layer['pages']))
+        install_verified_payloads(source, payloads, preserved=source, production=production, repo=repo)
+        folder = repo / 'game/data/control_media'
+        bindings = json.loads((folder / 'bindings.json').read_text())
+        staged = staging / 'game/data/control_media'
+        bindings['projectileStorage'].update(json.loads((staged / 'bindings.json').read_text())['projectileStorage'])
+        assets = {r['assetId']: r for r in json.loads((folder / 'projectile-assets.json').read_text())}
+        assets.update({r['assetId']: r for r in json.loads((staged / 'projectile-assets.json').read_text())})
+        (folder / 'bindings.json').write_text(json.dumps(bindings, indent=2)+'\n')
+        (folder / 'projectile-assets.json').write_text(json.dumps(list(assets.values()), indent=2)+'\n')
+        (folder / 'sickened-source.json').write_text(json.dumps({'source': str(source),
+            'manifest': 'production-handoff/fear-eyebite-approved-media.json',
+            'manifest_sha256': hashlib.sha256((source / 'production-handoff/fear-eyebite-approved-media.json').read_bytes()).hexdigest(),
+            'identities': identities, 'selected_windows': {'apply': [0, 48], 'hold': [32, 64]}}, indent=2)+'\n')
+    return identities
+
+
+def import_eyebite(source: Path, *, production: Path, repo: Path = ROOT) -> tuple[str, ...]:
+    """Register accepted eye/contact windows; recipes remain independently authored."""
+    manifest_path = source/'production-handoff/fear-eyebite-approved-media.json'
+    rows = json.loads(manifest_path.read_text())
+    selections = (('eyebite_eye_v1','eyebite_eye',(('apply',0,48),('hold',32,80))),
+                  ('eyebite_hit_v2','eyebite_hit',(('finite',0,48),)))
+    result = []
+    payloads = {}
+    with TemporaryDirectory(prefix='eyebite-registration-') as temporary:
+        staging = Path(temporary)
+        for identity,program,windows in selections:
+            row = {**rows[identity],'fps':32}
+            result.extend(import_registered_bank(source,row,program,windows,staging,
+                bundle='control_media',default_scale=.5))
+            for camera in row['cameras'].values():
+                for layer in camera['layers'].values():
+                    for relative in layer['pages']:
+                        path=source/relative
+                        payloads[relative]=(relative,'game/assets/control_media/'+relative,
+                            hashlib.sha256(path.read_bytes()).hexdigest())
+        install_verified_payloads(source,tuple(payloads.values()),preserved=source,production=production,repo=repo)
+        folder=repo/'game/data/control_media'
+        bindings=json.loads((folder/'bindings.json').read_text())
+        staged=staging/'game/data/control_media'
+        bindings['projectileStorage'].update(json.loads((staged/'bindings.json').read_text())['projectileStorage'])
+        assets={row['assetId']:row for row in json.loads((folder/'projectile-assets.json').read_text())}
+        assets.update({row['assetId']:row for row in json.loads((staged/'projectile-assets.json').read_text())})
+        (folder/'bindings.json').write_text(json.dumps(bindings,indent=2)+'\n')
+        (folder/'projectile-assets.json').write_text(json.dumps(list(assets.values()),indent=2)+'\n')
+        (folder/'eyebite-source.json').write_text(json.dumps({'source':str(source),
+            'manifest_sha256':hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+            'identities':result,'selected_windows':selections},indent=2)+'\n')
+    return tuple(result)

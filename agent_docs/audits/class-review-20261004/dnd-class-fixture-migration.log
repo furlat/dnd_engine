@@ -1,0 +1,4 @@
+legacy-device-destruction.json.gz 13 neutral fields; strict passive decode and previous JSON values unchanged
+legacy-door-destruction.json.gz 12 neutral fields; strict passive decode and previous JSON values unchanged
+legacy-web-destruction.json.gz 18 neutral fields; strict passive decode and previous JSON values unchanged
+legacy-completed-actions.json 4 neutral fields; strict passive decode and previous JSON values unchanged

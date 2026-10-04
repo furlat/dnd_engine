@@ -31,11 +31,11 @@
           "category": "Magic3",
           "sourceSheet": "/healing-spells/aid/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 14003810,
             "secondary": 16049592,
             "tertiary": 4534354,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -83,11 +83,11 @@
           "category": "Magic3",
           "sourceSheet": "/healing-spells/aid/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 14992773,
             "secondary": 16313285,
             "tertiary": 5719121,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -135,11 +135,11 @@
           "category": "Magic3",
           "sourceSheet": "/healing-spells/aid/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 7388105,
             "secondary": 12119014,
             "tertiary": 3160405,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {
@@ -206,11 +206,11 @@
           "category": "Magic3",
           "sourceSheet": "/healing-spells/aid/cast.png",
           "colors": {
-            "source": "override",
+            "source": "auto",
             "primary": 14858086,
             "secondary": 16312503,
             "tertiary": 5059639,
-            "mode": "multiTint"
+            "mode": "paletteSwap"
           }
         },
         "recovery": {

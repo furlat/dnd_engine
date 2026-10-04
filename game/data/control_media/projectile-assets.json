@@ -916,5 +916,465 @@
         15053908
       ]
     }
+  },
+  {
+    "assetId": "control.sickened.apply.back",
+    "displayName": "control.sickened.apply.back",
+    "kind": "projectile",
+    "sheet": "/control_media/sickened/apply/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.629903810567
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2698530,
+        5068336,
+        7962695,
+        10527068,
+        13091974,
+        15130546
+      ]
+    }
+  },
+  {
+    "assetId": "control.sickened.apply.front",
+    "displayName": "control.sickened.apply.front",
+    "kind": "projectile",
+    "sheet": "/control_media/sickened/apply/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.629903810567
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2698530,
+        5068336,
+        7962695,
+        10527068,
+        13091974,
+        15130546
+      ]
+    }
+  },
+  {
+    "assetId": "control.sickened.hold.back",
+    "displayName": "control.sickened.hold.back",
+    "kind": "projectile",
+    "sheet": "/control_media/sickened/hold/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.629903810567
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2698530,
+        5068336,
+        7962695,
+        10527068,
+        13091974,
+        15130546
+      ]
+    }
+  },
+  {
+    "assetId": "control.sickened.hold.front",
+    "displayName": "control.sickened.hold.front",
+    "kind": "projectile",
+    "sheet": "/control_media/sickened/hold/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 64
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 64,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.629903810567
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2698530,
+        5068336,
+        7962695,
+        10527068,
+        13091974,
+        15130546
+      ]
+    }
+  },
+  {
+    "assetId": "control.eyebite_eye.apply.back",
+    "displayName": "control.eyebite_eye.apply.back",
+    "kind": "projectile",
+    "sheet": "/control_media/eyebite_eye/apply/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.629903810567
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2366493,
+        5255221,
+        8733511,
+        11627362,
+        14133130,
+        15783599
+      ]
+    }
+  },
+  {
+    "assetId": "control.eyebite_eye.apply.front",
+    "displayName": "control.eyebite_eye.apply.front",
+    "kind": "projectile",
+    "sheet": "/control_media/eyebite_eye/apply/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.629903810567
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2366493,
+        5255221,
+        8733511,
+        11627362,
+        14133130,
+        15783599
+      ]
+    }
+  },
+  {
+    "assetId": "control.eyebite_eye.hold.back",
+    "displayName": "control.eyebite_eye.hold.back",
+    "kind": "projectile",
+    "sheet": "/control_media/eyebite_eye/hold/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 80
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 80,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.629903810567
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2366493,
+        5255221,
+        8733511,
+        11627362,
+        14133130,
+        15783599
+      ]
+    }
+  },
+  {
+    "assetId": "control.eyebite_eye.hold.front",
+    "displayName": "control.eyebite_eye.hold.front",
+    "kind": "projectile",
+    "sheet": "/control_media/eyebite_eye/hold/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 80
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 80,
+        "fps": 32,
+        "loop": true
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.629903810567
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2366493,
+        5255221,
+        8733511,
+        11627362,
+        14133130,
+        15783599
+      ]
+    }
+  },
+  {
+    "assetId": "control.eyebite_hit.finite.back",
+    "displayName": "control.eyebite_hit.finite.back",
+    "kind": "projectile",
+    "sheet": "/control_media/eyebite_hit/finite/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.629903810567
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2366493,
+        5255221,
+        8733511,
+        11627362,
+        14133130,
+        15783599
+      ]
+    }
+  },
+  {
+    "assetId": "control.eyebite_hit.finite.front",
+    "displayName": "control.eyebite_hit.finite.front",
+    "kind": "projectile",
+    "sheet": "/control_media/eyebite_hit/finite/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.629903810567
+    },
+    "defaultScale": 0.5,
+    "palettePreview": {
+      "colors": [
+        2366493,
+        5255221,
+        8733511,
+        11627362,
+        14133130,
+        15783599
+      ]
+    }
   }
 ]

@@ -20,6 +20,8 @@ class ActorPose:
     body: BodySample
     coverage: float = 1.
     appearance_override: ConditionAppearance | None = None
+    dust_elapsed_ms: float | None = None
+    dust_seed: int = 1
 
 
 @dataclass(frozen=True, slots=True)

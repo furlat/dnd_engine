@@ -401,11 +401,11 @@ class StaticValue(BaseValue):
 
     def arithmetic_factor(self, excluded: frozenset[UUID] = frozenset()) -> Fraction:
         return prod((Fraction(f.numerator, f.denominator)
-            for key, f in self.factor_modifiers.items() if key not in excluded), start=Fraction(1))
+            for key, f in self.factor_modifiers.items() if key not in excluded and f.contributions_active()), start=Fraction(1))
 
     def additive_score(self, normalized: bool = False, excluded: frozenset[UUID] = frozenset()) -> int:
         return sum((modifier.normalized_value if normalized else modifier.value)
-            for key, modifier in self.value_modifiers.items() if key not in excluded)
+            for key, modifier in self.value_modifiers.items() if key not in excluded and modifier.contributions_active())
 
     def remove_modifier(self, uuid: UUID) -> None:
         """Remove a modifier UUID from every static modifier bucket.
@@ -434,7 +434,7 @@ class StaticValue(BaseValue):
         """
         if not self.min_constraints:
             return None
-        return min(constraint.value for constraint in self.min_constraints.values())
+        return min((constraint.value for constraint in self.min_constraints.values() if constraint.contributions_active()), default=None)
 
     @computed_field
     @property
@@ -446,7 +446,7 @@ class StaticValue(BaseValue):
         """
         if not self.max_constraints:
             return None
-        return max(constraint.value for constraint in self.max_constraints.values())
+        return max((constraint.value for constraint in self.max_constraints.values() if constraint.contributions_active()), default=None)
 
     def _score(self, normalized: bool = False) -> int:
         """Calculate the channel score after numerical modifiers and constraints.
@@ -488,8 +488,8 @@ class StaticValue(BaseValue):
         return self._score(normalized=True)
 
     def score_bounds(self, excluded: frozenset[UUID] = frozenset()) -> tuple[int | None, int | None]:
-        minima = [value.value for key, value in self.min_constraints.items() if key not in excluded]
-        maxima = [value.value for key, value in self.max_constraints.items() if key not in excluded]
+        minima = [value.value for key, value in self.min_constraints.items() if key not in excluded and value.contributions_active()]
+        maxima = [value.value for key, value in self.max_constraints.items() if key not in excluded and value.contributions_active()]
         return (min(minima) if minima else None, max(maxima) if maxima else None)
 
     def normalized_score_excluding(self, modifier_uuids: set[UUID]) -> int:
@@ -511,7 +511,7 @@ class StaticValue(BaseValue):
         Returns:
             Positive values mean advantage, negative values mean disadvantage.
         """
-        return sum(modifier.numerical_value for modifier in self.advantage_modifiers.values())
+        return sum(modifier.numerical_value for modifier in self.advantage_modifiers.values() if modifier.contributions_active())
 
     @computed_field
     @property
@@ -536,9 +536,9 @@ class StaticValue(BaseValue):
         Returns:
             `NOCRIT`, `AUTOCRIT`, or `NONE`, with `NOCRIT` taking precedence.
         """
-        if CriticalStatus.NOCRIT in (mod.value for mod in self.critical_modifiers.values()):
+        if CriticalStatus.NOCRIT in (mod.value for mod in self.critical_modifiers.values() if mod.contributions_active()):
             return CriticalStatus.NOCRIT
-        elif CriticalStatus.AUTOCRIT in (mod.value for mod in self.critical_modifiers.values()):
+        elif CriticalStatus.AUTOCRIT in (mod.value for mod in self.critical_modifiers.values() if mod.contributions_active()):
             return CriticalStatus.AUTOCRIT
         else:
             return CriticalStatus.NONE
@@ -551,9 +551,9 @@ class StaticValue(BaseValue):
         Returns:
             `AUTOMISS`, `AUTOHIT`, or `NONE`, with `AUTOMISS` taking precedence.
         """
-        if AutoHitStatus.AUTOMISS in (mod.value for mod in self.auto_hit_modifiers.values()):
+        if AutoHitStatus.AUTOMISS in (mod.value for mod in self.auto_hit_modifiers.values() if mod.contributions_active()):
             return AutoHitStatus.AUTOMISS
-        elif AutoHitStatus.AUTOHIT in (mod.value for mod in self.auto_hit_modifiers.values()):
+        elif AutoHitStatus.AUTOHIT in (mod.value for mod in self.auto_hit_modifiers.values() if mod.contributions_active()):
             return AutoHitStatus.AUTOHIT
         else:
             return AutoHitStatus.NONE
@@ -569,7 +569,9 @@ class StaticValue(BaseValue):
         if not self.size_modifiers:
             return Size.MEDIUM
 
-        sizes = [modifier.value for modifier in self.size_modifiers.values()]
+        sizes = [modifier.value for modifier in self.size_modifiers.values() if modifier.contributions_active()]
+        if not sizes:
+            return Size.MEDIUM
         if self.largest_size_priority:
             return max(sizes, key=lambda s: list(Size).index(s))
         else:
@@ -588,8 +590,12 @@ class StaticValue(BaseValue):
 
         type_counts = {}
         for modifier in self.damage_type_modifiers.values():
+            if not modifier.contributions_active():
+                continue
             type_counts[modifier.value] = type_counts.get(modifier.value, 0) + 1
 
+        if not type_counts:
+            return []
         max_count = max(type_counts.values())
         if max_count == 0:
             return []
@@ -620,6 +626,8 @@ class StaticValue(BaseValue):
         """
         resistance_sum = {damage_type: 0 for damage_type in DamageType}
         for modifier in self.resistance_modifiers.values():
+            if not modifier.contributions_active():
+                continue
             resistance_sum[modifier.damage_type] += modifier.numerical_value
         return resistance_sum
 

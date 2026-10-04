@@ -6,6 +6,7 @@ from uuid import UUID
 import pygame
 
 from dnd.core.condition_types import ConditionCategory
+from dnd.core.life_types import RemainsDisposition
 from game.animation import sample_idle_body
 from game.animation_data import resolve_player_layers
 from game.animation_draw import (
@@ -32,7 +33,7 @@ def scene_actors(target: PlayerState, data: AnimationData,
         return ()
     result = []
     for actor in target.actors.values():
-        if not actor_is_visible(target, actor):
+        if not actor_is_visible(target, actor) or actor.remains_disposition is RemainsDisposition.DISINTEGRATED:
             continue
         contact = actor_contact(target, actor, data, facings.get(str(actor.uuid), "S"))
         position = positions.get(contact.actor_uuid) if positions else None

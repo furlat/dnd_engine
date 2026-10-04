@@ -12,6 +12,7 @@ from dnd.action_timing import action_timing_enabled, record_action_elapsed, reco
 from dnd.core.values import BaseValue, ModifiableValue, AdvantageStatus
 from dnd.core.base_object import BaseObject
 from dnd.core.creature_types import CreatureType, DamageType, Size
+from dnd.core.elevation import support_distance_feet
 from dnd.core.modifiers import NumericalModifier, ResistanceStatus
 from dnd.core.values import CriticalStatus, AutoHitStatus
 from dnd.core.base_conditions import BaseCondition
@@ -22,7 +23,7 @@ from dnd.core.content.runtime import (
     bind_runtime_action_before_admission,
     bind_runtime_root_owned_behavior,
 )
-from dnd.core.life_types import LifeState, LifeStateChangeReason
+from dnd.core.life_types import LifeState, LifeStateChangeReason, RemainsDisposition
 from dnd.core.saving_throw_types import (
     SAVING_THROW_CONTEXT_KEY,
     SavingThrowContext,
@@ -35,6 +36,7 @@ from dnd.core.events import (
     D20RollResultEvent, AttackD20RollResultEvent, SavingThrowD20RollResultEvent, SkillCheckD20RollResultEvent,
     TakeDamageEvent, DamageAppliedEvent, DeathSaveEvent, InstantDeathEvent, DeathEvent, HealEvent,
     LifeStateChangeEvent, ReviveEvent, EntityCreatedEvent, EntityFactionChangedEvent,
+    EventHandler, EventType, Trigger,
 )
 from dnd.core.equipment_types import (
     ArmorType,
@@ -48,7 +50,7 @@ from dnd.core.base_block import BaseBlock, MovementMode, PreparedConditionApplic
 from dnd.types.world import OccupancyLayer
 from dnd.types.physical_access import PhysicalAccess
 from dnd.core.events import RangeType
-from dnd.types.actor import EntityStatsState
+from dnd.types.actor import EntityStatsState, PendingSpatialReturn, SpatialDisposition
 from dnd.types.summoning import SummonOrigin, TerminalOwnerRelease
 from dnd.types.spatial_effects import SpatialDamageSource
 from dnd.blocks.abilities import AbilityScoresConfig, AbilityScores
@@ -134,11 +136,11 @@ class PreparedBirth:
 
 @dataclass(slots=True)
 class PreparedSpatialReturn:
-    """One native return and its admitted adjacent occupant displacements."""
+    """One native return to an admitted free supported position."""
 
     entity: 'Entity'
     position: tuple[int, int]
-    displaced: tuple[tuple['Entity', tuple[int, int], tuple[int, int]], ...]
+    origin: tuple[int, int]
     parent_event: UUID | None
     committed: bool = False
     published: bool = False
@@ -300,6 +302,8 @@ class EntityConfig(BaseModel):
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
     size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
     gaseous_body: bool = Field(default=False, description="Native body form affected by physical gas barriers.")
+    native_plane_id: str = "material"
+    current_plane_id: str = "material"
     has_ordinary_sight: bool = Field(
         default=True,
         description="Whether the entity can see visual phenomena without special senses."
@@ -444,6 +448,8 @@ class Entity(BaseBlock):
     creature_type: CreatureType = Field(default=CreatureType.HUMANOID, description="Creature type (default humanoid)")
     size: Size = Field(default=Size.MEDIUM, description="Creature size (Tiny through Gargantuan)")
     gaseous_body: bool = Field(default=False, description="Native body form affected by physical gas barriers.")
+    native_plane_id: str = "material"
+    current_plane_id: str = "material"
     is_deployed: bool = Field(
         default=False,
         description="Whether this Entity currently occupies a world Tile.",
@@ -452,6 +458,11 @@ class Entity(BaseBlock):
         default=False,
         description="Whether the finished aggregate's birth has committed, before fact publication.",
     )
+    suspended_support_elevation_feet: int | None = None
+    spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT
+    pending_spatial_return: PendingSpatialReturn | None = None
+    pending_spatial_return_handler_uuid: UUID | None = Field(default=None, exclude=True)
+    antimagic_presence_owner_uuid: UUID | None = Field(default=None, exclude=True)
     is_spatially_suspended: bool = Field(
         default=False,
         description="Whether a retained Entity is temporarily absent from the world.",
@@ -511,15 +522,38 @@ class Entity(BaseBlock):
     )
     is_my_turn: bool = Field(default=False, description="True when it's this entity's turn")
     non_blocking: bool = Field(default=False, description="When True, entity does not block movement through its cell")
-    ignore_difficult_terrain: bool = Field(default=False, description="When True, ignores difficult terrain movement costs")
-    ignore_magical_speed_reduction: bool = Field(
-        default=False,
-        description="When True, magical effects cannot reduce this entity's movement speed."
-    )
-    ignore_underwater_penalties: bool = Field(
-        default=False,
-        description="When True, underwater movement and attack penalties are ignored."
-    )
+    intrinsic_ignore_difficult_terrain: bool = Field(default=False, alias="ignore_difficult_terrain")
+
+    @property
+    def ignore_difficult_terrain(self) -> bool:
+        return self.intrinsic_ignore_difficult_terrain or any(condition.ignores_difficult_terrain
+            and condition.contributions_active() for condition in self.active_conditions_by_uuid.values())
+
+    @ignore_difficult_terrain.setter
+    def ignore_difficult_terrain(self, value: bool) -> None:
+        self.intrinsic_ignore_difficult_terrain = value
+
+    intrinsic_ignore_magical_speed_reduction: bool = Field(default=False, alias="ignore_magical_speed_reduction")
+
+    @property
+    def ignore_magical_speed_reduction(self) -> bool:
+        return self.intrinsic_ignore_magical_speed_reduction or any(condition.ignores_magical_speed_reduction
+            and condition.contributions_active() for condition in self.active_conditions_by_uuid.values())
+
+    @ignore_magical_speed_reduction.setter
+    def ignore_magical_speed_reduction(self, value: bool) -> None:
+        self.intrinsic_ignore_magical_speed_reduction = value
+
+    intrinsic_ignore_underwater_penalties: bool = Field(default=False, alias="ignore_underwater_penalties")
+
+    @property
+    def ignore_underwater_penalties(self) -> bool:
+        return self.intrinsic_ignore_underwater_penalties or any(condition.ignores_underwater_penalties
+            and condition.contributions_active() for condition in self.active_conditions_by_uuid.values())
+
+    @ignore_underwater_penalties.setter
+    def ignore_underwater_penalties(self, value: bool) -> None:
+        self.intrinsic_ignore_underwater_penalties = value
     max_concentration_slots: ModifiableValue = Field(
         default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(), value_name="max_concentration_slots", base_value=1),
         description="Maximum simultaneous concentration slots available to this entity."
@@ -786,9 +820,12 @@ class Entity(BaseBlock):
             raise PositionCommitError(
                 ValueError("Entity membership does not match its objective position")
             )
+        elevation = grid.get_support_elevation_feet(self.position)
         grid._commit_entity_membership(self.uuid, self.position, None)
+        self.suspended_support_elevation_feet = elevation
         self.is_deployed = False
         self.is_spatially_suspended = True
+        self.spatial_disposition = SpatialDisposition.ABSENT
         spatial_senses_system.unregister_observer(self.uuid)
         try:
             grid._publish_entity_membership(
@@ -814,11 +851,13 @@ class Entity(BaseBlock):
             raise RuntimeError("only a suspended Entity can be restored")
         grid = get_map()
         old_position = self.position
+        old_disposition = self.spatial_disposition
         self._set_position(position)
         try:
             grid._commit_entity_membership(self.uuid, None, position)
             self.is_deployed = True
             self.is_spatially_suspended = False
+            self.spatial_disposition = SpatialDisposition.PRESENT
             self._register_spatial_observer()
         except BaseException as exc:
             spatial_senses_system.unregister_observer(self.uuid)
@@ -827,6 +866,7 @@ class Entity(BaseBlock):
             self._set_position(old_position)
             self.is_deployed = False
             self.is_spatially_suspended = True
+            self.spatial_disposition = old_disposition
             if isinstance(exc, PositionCommitError):
                 raise
             raise PositionCommitError(exc) from exc
@@ -901,54 +941,66 @@ class Entity(BaseBlock):
         except BaseException as exc:
             raise PositionPublicationError(exc) from exc
 
-    def prepare_spatial_return(self, *, parent_event: UUID | None = None) -> PreparedSpatialReturn:
-        """Admit the existing return-to-origin rule without moving any actor."""
+    @classmethod
+    def commit_position_transfers(
+        cls, transfers: Sequence[tuple['Entity', tuple[int, int], UUID]],
+    ) -> None:
+        """Commit all admitted endpoints before publishing any arrival reaction."""
+        if len({actor.uuid for actor, _, _ in transfers}) != len(transfers):
+            raise ValueError("A transfer may include each actor only once")
+        if len({position for _, position, _ in transfers}) != len(transfers):
+            raise ValueError("Transfer endpoints must be distinct")
+        originals = [(actor, actor.position, actor.occupancy_layer) for actor, _, _ in transfers]
+        committed: list[tuple[Entity, tuple[int, int], OccupancyLayer]] = []
+        try:
+            for (actor, position, _), (_, source, layer) in zip(transfers, originals):
+                cls.update_entity_position(actor, position, occupancy_layer=OccupancyLayer.GROUND, publish=False)
+                committed.append((actor, source, layer))
+        except BaseException:
+            for actor, source, layer in reversed(committed):
+                cls.update_entity_position(actor, source, occupancy_layer=layer, publish=False)
+            raise
+        errors: list[BaseException] = []
+        for (actor, position, parent), (_, source, layer) in zip(transfers, originals):
+            if source == position and layer is OccupancyLayer.GROUND:
+                continue
+            try:
+                get_map()._publish_entity_membership(actor.uuid, source, position,
+                    parent_event=parent, previous_occupancy_layer=layer,
+                    occupancy_layer=OccupancyLayer.GROUND)
+            except BaseException as error:
+                errors.append(error)
+        if errors:
+            raise PositionPublicationError(BaseExceptionGroup("Committed transfer publication failed", errors))
+
+    def prepare_spatial_return(self, *, parent_event: UUID | None = None,
+                               reserved: AbstractSet[tuple[int, int]] = frozenset()) -> PreparedSpatialReturn | None:
+        """Reserve original or nearest free support without displacing occupants."""
         if not self.is_spatially_suspended or self.is_deployed:
             raise PositionCommitError(ValueError("only a suspended Entity can return"))
         grid = get_map()
-        if grid.get_tile(*self.position) is None:
-            raise PositionCommitError(ValueError("return Tile no longer exists"))
-        displaced: list[tuple[Entity, tuple[int, int], tuple[int, int]]] = []
-        reserved = {self.position}
-        for occupant_uuid in sorted(grid.get_entities_at(self.position) - {self.uuid}, key=str):
-            occupant = Entity.get(occupant_uuid)
-            if occupant is None or not occupant.is_deployed:
-                raise PositionCommitError(ValueError("return occupant identity is stale"))
-            destination = next((
-                (self.position[0] + dx, self.position[1] + dy)
-                for dx, dy in ((0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1))
-                if (self.position[0] + dx, self.position[1] + dy) not in reserved
-                and grid.is_walkable_for(self.position[0] + dx, self.position[1] + dy, occupant.uuid)
-            ), None)
-            if destination is None:
-                raise PositionCommitError(ValueError("return occupant has no supported adjacent destination"))
-            reserved.add(destination)
-            displaced.append((occupant, occupant.position, destination))
-        return PreparedSpatialReturn(self, self.position, tuple(displaced), parent_event)
+        origin = self.position
+        elevation = self.suspended_support_elevation_feet or 0
+        candidates = sorted(grid.get_all_tiles(), key=lambda point: (
+            support_distance_feet(origin, elevation, point, grid.get_support_elevation_feet(point)),
+            abs(point[0] - origin[0]) + abs(point[1] - origin[1]), point))
+        destination = next((point for point in candidates if point not in reserved
+            and not grid.get_entities_at(point) and grid.is_walkable_for(*point, self.uuid)), None)
+        return PreparedSpatialReturn(self, destination, origin, parent_event) if destination is not None else None
 
     def validate_spatial_return(self, prepared: PreparedSpatialReturn) -> bool:
-        if prepared.entity is not self or prepared.committed:
-            return False
         grid = get_map()
-        if (Entity.get(self.uuid) is not self or not self.is_spatially_suspended
-                or self.is_deployed or self.position != prepared.position
-                or grid.get_entity_position(self.uuid) is not None
-                or grid.get_tile(*prepared.position) is None):
-            return False
-        if grid.get_entities_at(prepared.position) != {actor.uuid for actor, _, _ in prepared.displaced}:
-            return False
-        return all(Entity.get(actor.uuid) is actor and actor.is_deployed
-            and actor.position == source and grid.get_entity_position(actor.uuid) == source
-            and grid.is_walkable_for(destination[0], destination[1], actor.uuid)
-            for actor, source, destination in prepared.displaced)
+        return (prepared.entity is self and not prepared.committed
+            and Entity.get(self.uuid) is self and self.is_spatially_suspended and not self.is_deployed
+            and self.position == prepared.origin and grid.get_entity_position(self.uuid) is None
+            and not grid.get_entities_at(prepared.position)
+            and grid.is_walkable_for(*prepared.position, self.uuid))
 
     def commit_spatial_return(self, prepared: PreparedSpatialReturn) -> None:
         if prepared.committed:
             return
         if not self.validate_spatial_return(prepared):
             raise PositionCommitError(ValueError("prepared return no longer matches objective occupancy"))
-        for actor, _source, destination in prepared.displaced:
-            Entity.update_entity_position(actor, destination, publish=False)
         self.restore_spatial_presence(prepared.position, publish=False)
         prepared.committed = True
 
@@ -958,25 +1010,41 @@ class Entity(BaseBlock):
         if prepared.published:
             return
         prepared.published = True
-        grid = get_map()
-        errors: list[BaseException] = []
-        for actor, source, destination in prepared.displaced:
-            try:
-                grid._publish_entity_membership(actor.uuid, source, destination,
-                    parent_event=prepared.parent_event,
-                    previous_occupancy_layer=actor.occupancy_layer,
-                    occupancy_layer=actor.occupancy_layer)
-            except BaseException as error:
-                errors.append(error)
         try:
-            grid._publish_entity_membership(self.uuid, None, prepared.position,
-                                           parent_event=prepared.parent_event)
+            get_map()._publish_entity_membership(self.uuid, None, prepared.position,
+                                                parent_event=prepared.parent_event)
         except BaseException as error:
-            errors.append(error)
-        if errors:
-            raise PositionPublicationError(
-                BaseExceptionGroup("Committed native return publication failed", errors),
-            )
+            raise PositionPublicationError(error) from error
+
+    def retain_pending_spatial_return(self, pending: PendingSpatialReturn) -> None:
+        """Own one unresolved return until a spatial change makes support available."""
+        self.pending_spatial_return = pending
+        self.spatial_disposition = SpatialDisposition.RETURN_PENDING
+        if self.pending_spatial_return_handler_uuid is not None:
+            return
+        handler = EventHandler(name="Pending spatial return", source_entity_uuid=self.uuid,
+            runs_while_suppressed=True, event_processor=self._retry_spatial_return,
+            trigger_conditions=[Trigger(event_type=kind, event_phase=EventPhase.EFFECT)
+                for kind in (EventType.SPATIAL_ENTITY_LEFT, EventType.SPATIAL_TILE_CHANGED,
+                             EventType.SPATIAL_OBJECT_REMOVED, EventType.SPATIAL_OBJECT_CHANGED)])
+        self.add_event_handler(handler)
+        self.pending_spatial_return_handler_uuid = handler.uuid
+
+    def _retry_spatial_return(self, event: Event, _source_uuid: UUID) -> Event | None:
+        pending = self.pending_spatial_return
+        if pending is None or not self.is_spatially_suspended:
+            return None
+        prepared = self.prepare_spatial_return(parent_event=event.uuid)
+        if prepared is None:
+            return None
+        self.commit_spatial_return(prepared)
+        self.current_plane_id = pending.plane_id
+        self.pending_spatial_return = None
+        handler_uuid, self.pending_spatial_return_handler_uuid = self.pending_spatial_return_handler_uuid, None
+        if handler_uuid is not None and (handler := self.event_handlers.get(handler_uuid)) is not None:
+            self.remove_event_handler(handler)
+        self.publish_spatial_return(prepared)
+        return None
 
     @classmethod
     def register_entity(cls, entity: 'Entity') -> None:
@@ -1133,6 +1201,7 @@ class Entity(BaseBlock):
             initiative=self.initiative.normalized_score,
             armor_class=self.ac_bonus().normalized_score,
             life_state=self.health.life_state.value,
+            remains_disposition=self.health.remains_disposition,
             current_hit_points=max(0, self.get_hp()),
             maximum_hit_points=max(0, self.get_max_hp()),
             temporary_hit_points=max(
@@ -1209,7 +1278,8 @@ class Entity(BaseBlock):
             )),
             condition_immunities=tuple(sorted({
                 condition_name
-                for condition_name, _source_name in self.condition_immunities
+                for condition_name, source_name in self.condition_immunities
+                if self.condition_immunity_contributes(source_name)
             })),
             attacks_per_action=(
                 self.action_economy.resolve_attacks_per_attack_action()
@@ -1336,7 +1406,7 @@ class Entity(BaseBlock):
             grid._commit_entity_membership(self.uuid, self.position, None)
         self.__class__._entity_registry.pop(self.uuid, None)
         for obj in tuple(BaseObject._registry.values()):
-            if obj.source_entity_uuid in owned_source_uuids:
+            if isinstance(obj, BaseObject) and obj.source_entity_uuid in owned_source_uuids:
                 obj.remove_from_register()
         for value in tuple(BaseValue._registry.values()):
             if value.source_entity_uuid in owned_source_uuids:
@@ -1784,6 +1854,7 @@ class Entity(BaseBlock):
             creature_type=config.creature_type,
             size=config.size,
             gaseous_body=config.gaseous_body,
+            native_plane_id=config.native_plane_id, current_plane_id=config.current_plane_id,
             structural_base_size=config.size,
             has_ordinary_sight=config.has_ordinary_sight,
             requires_breathing=config.requires_breathing,
@@ -2020,15 +2091,15 @@ class Entity(BaseBlock):
             True when the entity is immune in its current target/context state.
         """
         for static_immunity in self.condition_immunities:
-            if static_immunity[0] == condition_name:
+            if static_immunity[0] == condition_name and self.condition_immunity_contributes(static_immunity[1]):
                 return True
         condition_contextual_immunities = self.contextual_condition_immunities.get(condition_name, [])
         immunity_context = dict(self.context or {})
         if condition is not None:
             immunity_context.setdefault("condition", condition)
             immunity_context.setdefault("condition_tags", condition.tags)
-        for _, immunity_check in condition_contextual_immunities:
-            if immunity_check(self, self.get_target_entity(), immunity_context):
+        for source_name, immunity_check in condition_contextual_immunities:
+            if self.condition_immunity_contributes(source_name) and immunity_check(self, self.get_target_entity(), immunity_context):
                 return True
         return False
 
@@ -2333,6 +2404,8 @@ class Entity(BaseBlock):
             temporary_hp_grant=self.health.temporary_hit_points_grant,
             armor_class=self.ac_bonus().normalized_score,
             resolved_size=self.size,
+            native_plane_id=self.native_plane_id, current_plane_id=self.current_plane_id,
+            spatial_disposition=self.spatial_disposition,
             healing_blocked=self.health.is_healing_blocked(),
             damage_affinities=tuple(
                 (damage_type.value, status.value) for damage_type in DamageType
@@ -2452,6 +2525,7 @@ class Entity(BaseBlock):
             entity_name=self.name,
             previous_state=previous_state,
             new_state=requested_state,
+            remains_disposition=self.health.remains_disposition,
             reason=reason,
             normal_hit_points=self.get_normal_hp(),
             parent_event=parent_event.uuid if parent_event is not None else None,
@@ -2517,14 +2591,85 @@ class Entity(BaseBlock):
             parent_event,
         )
 
+    def _possessions_for_remains(self) -> tuple[BaseItem, ...]:
+        """Current container membership, including nested contents, deepest first."""
+        roots = dict(self.inventory.items)
+        for slot in _CONCRETE_EQUIPMENT_SLOTS:
+            item = self.equipment.get_item_by_slot(slot)
+            if item is not None:
+                roots[item.uuid] = item
+        items: dict[UUID, BaseItem] = {}
+        pending = list(roots.values())
+        while pending:
+            item = pending.pop()
+            if item.uuid in items:
+                continue
+            items[item.uuid] = item
+            storage = item.get_storage_block()
+            if isinstance(storage, Inventory):
+                pending.extend(storage.items.values())
+        return tuple(reversed(tuple(items.values())))
+
+    def _prepare_disintegrated_possessions(self, parent_event: DeathEvent
+            ) -> tuple[tuple[PreparedItemRetirement, ...], tuple[tuple[BaseItem, PreparedObjectPlacement], ...]] | None:
+        """Admit the existing retirement/drop operations before committing dust."""
+        retirements: list[PreparedItemRetirement] = []
+        drops: list[tuple[BaseItem, PreparedObjectPlacement]] = []
+        accepted = False
+        try:
+            for item in self._possessions_for_remains():
+                if item.is_magical:
+                    drop = get_map().prepare_object_placement(item.uuid, self.position, parent_event.uuid)
+                    if drop is None:
+                        return None
+                    drops.append((item, drop))
+                else:
+                    retirement = item.prepare_retirement(parent_event)
+                    if retirement is None:
+                        return None
+                    retirements.append(retirement)
+            if (not all(get_map().validate_prepared_object_placement(drop) for _, drop in drops)
+                    or not all(BaseBlock.validate_prepared_condition_removals(retirement.conditions.entries)
+                               for retirement in retirements)):
+                return None
+            accepted = True
+            return tuple(retirements), tuple(drops)
+        finally:
+            if not accepted:
+                for retirement in retirements:
+                    retirement.item.cancel_retirement(retirement)
+                for _, drop in drops:
+                    get_map().cancel_object_placement(drop, "Disintegration death was not admitted")
+
+    def _commit_disintegrated_possessions(self, parent_event: DeathEvent,
+            retirements: tuple[PreparedItemRetirement, ...],
+            drops: tuple[tuple[BaseItem, PreparedObjectPlacement], ...]) -> None:
+        # Extract survivors before retiring any surrounding nonmagical container.
+        for item, drop in drops:
+            owner_uuid, container_uuid = item.owner_uuid, item.stored_in_uuid
+            container = BaseBlock.get(container_uuid) if container_uuid is not None else None
+            if container is not None:
+                container.remove_contained_item(item.uuid, parent_event=parent_event,
+                    reason=ItemReleaseReason.OWNER_DEPARTED)
+            item.owner_uuid = None
+            item.stored_in_uuid = None
+            get_map().commit_object_placement(drop)
+            item.drop(entity_uuid=self.uuid, position=drop.placement.position)
+            if owner_uuid is not None and container_uuid is not None:
+                item.publish_holdings_release(owner_uuid, container_uuid, parent_event=parent_event.uuid)
+            item.publish_location_state(ItemLocation.FLOOR, parent_event=parent_event)
+        for retirement in retirements:
+            retirement.item.commit_disintegration(retirement)
+
     def _fire_death_event(
         self,
         source_entity_uuid: UUID,
         parent_event: Optional[UUID] = None,
         encounter_uuid: Optional[UUID] = None,
         reason: LifeStateChangeReason = LifeStateChangeReason.DAMAGE,
+        remains_disposition: RemainsDisposition = RemainsDisposition.INTACT,
     ) -> DeathEvent:
-        """Fire the standard death event through completion."""
+        """Admit death through execution; publish committed aftermath afterward."""
         killer = Entity.get(source_entity_uuid)
         killer_name = killer.name if killer and isinstance(killer, Entity) else ""
         death_event = DeathEvent(
@@ -2540,6 +2685,11 @@ class Entity(BaseBlock):
             parent_event=parent_event
         )
         death_event = death_event.phase_to(EventPhase.EXECUTION)
+        possessions = None
+        if not death_event.canceled and remains_disposition is RemainsDisposition.DISINTEGRATED:
+            possessions = self._prepare_disintegrated_possessions(death_event)
+            if possessions is None:
+                death_event = death_event.cancel(status_message="Disintegration possessions could not be released")
         if death_event.canceled:
             if self.get_normal_hp() <= 0:
                 self._set_normal_hp(1)
@@ -2551,6 +2701,12 @@ class Entity(BaseBlock):
                     death_event,
                 )
             return death_event
+        if possessions is not None:
+            retirements, drops = possessions
+            self.health.remains_disposition = remains_disposition
+            death_event = death_event.with_updates(remains_disposition=remains_disposition,
+                destroyed_item_uuids=tuple(retirement.item.uuid for retirement in retirements),
+                preserved_item_uuids=tuple(item.uuid for item, _ in drops))
         if self.uses_death_saves:
             self.death_save_successes = 0
             self.death_save_failures = 3
@@ -2559,7 +2715,10 @@ class Entity(BaseBlock):
             reason,
             death_event,
         )
-        death_event = death_event.phase_to(EventPhase.EFFECT)
+        if possessions is not None:
+            self._commit_disintegrated_possessions(death_event, *possessions)
+        death_event = EventQueue.publish_committed_phase(
+            death_event.model_copy(update={"use_register": False}).phase_to(EventPhase.EFFECT))
         return death_event.phase_to(EventPhase.COMPLETION)
 
     def add_death_save_failure(
@@ -2707,7 +2866,8 @@ class Entity(BaseBlock):
         """
         if hit_points < 1:
             raise ValueError("hit_points must be at least 1")
-        if self.health.life_state is not LifeState.DEAD:
+        if (self.health.life_state is not LifeState.DEAD
+                or self.health.remains_disposition is RemainsDisposition.DISINTEGRATED):
             return False
         revive_event = ReviveEvent(
             source_entity_uuid=self.uuid,
@@ -2894,8 +3054,8 @@ class Entity(BaseBlock):
     def _get_bonuses_for_ability_check(
         self,
         ability_name: AbilityName,
-    ) -> Tuple[ModifiableValue, ModifiableValue]:
-        """Return proficiency and ability modifier for a raw ability check."""
+    ) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
+        """Return proficiency, ability modifier and check-only contributions."""
         ability = self.ability_scores.get_ability(ability_name)
         normalized_proficiency_bonus = self.proficiency_bonus.model_copy(
             deep=True,
@@ -2903,7 +3063,7 @@ class Entity(BaseBlock):
         normalized_proficiency_bonus.update_normalizers(
             ability.check_proficiency_sources.converter(),
         )
-        return normalized_proficiency_bonus, ability.get_combined_values()
+        return normalized_proficiency_bonus, ability.get_combined_values(), ability.check_bonus
 
     def _get_bonuses_for_saving_throw(self, ability_name: AbilityName) -> Tuple[ModifiableValue, ModifiableValue, ModifiableValue]:
         """Return component values that make up an entity saving throw bonus.
@@ -2972,14 +3132,13 @@ class Entity(BaseBlock):
         Returns:
             Combined saving throw bonus.
         """
-        if (target_entity_uuid is None or target_entity_uuid == self.uuid
+        target_entity = Entity.get(target_entity_uuid) if target_entity_uuid is not None else None
+        # A retained effect can outlive its source. Its recorded DC still applies;
+        # only a currently present opponent can contribute outgoing modifiers.
+        if (target_entity_uuid is None or target_entity is None or target_entity_uuid == self.uuid
                 or get_map().get_tile_by_uuid(target_entity_uuid) is not None):
             bonuses = self._get_bonuses_for_saving_throw(ability_name)
             return bonuses[0].combine_values(list(bonuses)[1:]).model_copy(deep=True)
-
-        target_entity = Entity.get(target_entity_uuid)
-        if not isinstance(target_entity, Entity):
-            raise ValueError(f"Target entity {target_entity_uuid} not found")
 
         with self._temporary_target(target_entity_uuid), target_entity._temporary_target(self.uuid):
             source_bonuses = self._get_bonuses_for_saving_throw(ability_name)
@@ -3000,7 +3159,7 @@ class Entity(BaseBlock):
         """Build the complete bonus for a raw ability check."""
         if target_entity_uuid is None or target_entity_uuid == self.uuid:
             bonuses = self._get_bonuses_for_ability_check(ability_name)
-            return bonuses[0].combine_values([bonuses[1]]).model_copy(
+            return bonuses[0].combine_values(list(bonuses)[1:]).model_copy(
                 deep=True,
             )
 
@@ -3023,7 +3182,7 @@ class Entity(BaseBlock):
                 source_bonus.set_from_target(target_bonus)
             try:
                 return source_bonuses[0].combine_values(
-                    [source_bonuses[1]],
+                    list(source_bonuses)[1:],
                 ).model_copy(deep=True)
             finally:
                 for source_bonus in source_bonuses:
@@ -3437,6 +3596,7 @@ class Entity(BaseBlock):
             effect_id=effect_id,
             resolution=resolution,
             spatial_source=parent_event.spatial_source,
+            source_condition_uuid=parent_event.source_condition_uuid,
             critical_hit=critical_hit,
             impact_direction=impact_direction,
             parent_event=parent_event.uuid,
@@ -3476,6 +3636,9 @@ class Entity(BaseBlock):
         spatial_source: SpatialDamageSource | None = None,
         effect_origin: EffectOrigin | None = None,
         independent_resolution: bool = False,
+        source_condition_uuid: UUID | None = None,
+        normal_hit_point_damage_cap: int | None = None,
+        zero_hp_disposition: RemainsDisposition = RemainsDisposition.INTACT,
     ) -> int:
         """Apply damage through the engine event lifecycle.
 
@@ -3519,11 +3682,14 @@ class Entity(BaseBlock):
             target_entity_uuid=self.uuid,
             target_entity_name=self.name,
             total_damage=amount,
+            normal_hit_point_damage_cap=normal_hit_point_damage_cap,
+            zero_hp_disposition=zero_hp_disposition,
             damage_rolls=damage_rolls or [],
             damages=event_damages,
             effect_id=effect_id,
             parent_event=parent_event,
             spatial_source=spatial_source,
+            source_condition_uuid=source_condition_uuid,
             effect_origin=effect_origin,
             phase=EventPhase.DECLARATION
         )
@@ -3571,7 +3737,11 @@ class Entity(BaseBlock):
             and self.health.life_state is not LifeState.DEAD
         ):
             normal_hp_after = self.get_normal_hp()
-            if normal_hp_before <= 0 and self.uses_death_saves:
+            if (normal_hp_after <= 0
+                    and take_damage_event.zero_hp_disposition is RemainsDisposition.DISINTEGRATED):
+                self._fire_death_event(source_entity_uuid, parent_event=take_damage_event.uuid,
+                    remains_disposition=take_damage_event.zero_hp_disposition)
+            elif normal_hp_before <= 0 and self.uses_death_saves:
                 self._set_normal_hp(0)
                 if self.health.life_state is LifeState.STABLE:
                     self._transition_life_state(
@@ -3771,7 +3941,7 @@ class Entity(BaseBlock):
                 and self.action_economy.action_permission.normalized_score > 0)
 
     def has_runtime_agency(self) -> bool:
-        return not self._runtime_agency_revoked and Entity.get(self.uuid) is self
+        return not self._runtime_agency_revoked and not self.is_spatially_suspended and Entity.get(self.uuid) is self
 
     def revoke_runtime_agency(self) -> None:
         """End action/reaction authority immediately while terminal cleanup unwinds."""
@@ -5316,6 +5486,12 @@ class Entity(BaseBlock):
             item_charge_cost=item_charge_cost,
             fixed_healing=template.get_fixed_healing(self),
         )
+        for target in valid_targets:
+            if target.target_uuid is not None:
+                secondary = template.get_secondary_target_options(target.target_uuid)
+                target.secondary_targets = None if secondary is None else [
+                    option.model_copy(update={"index": len(valid_targets) + index})
+                    for index, option in enumerate(secondary)]
         action_info.set_execution_template(template)
         return action_info
 
@@ -5496,7 +5672,8 @@ class Entity(BaseBlock):
         self, template: BaseAction, pool: Dict[UUID, Tuple[int, int]],
     ) -> Dict[UUID, Tuple[int, int]]:
         """Merge perceived attackable items without changing cached creature pools."""
-        if template.effective_target_type is not TargetType.CREATURE_OR_OBJECT:
+        if (template.effective_target_type is not TargetType.CREATURE_OR_OBJECT
+                and not (template.effective_target_type is TargetType.MULTI_ENTITY and template.multi_target_objects)):
             return pool
         result = dict(pool)
         result.update({identity: contact.position
@@ -5938,7 +6115,7 @@ class Entity(BaseBlock):
 
                 started = time.perf_counter() if timing else 0.0
                 source_requirements_met = (
-                    can_afford
+                    can_afford and template.contributions_active()
                     and template.validate_source_requirements_for_discovery()
                 )
                 if legal_only and not source_requirements_met:
@@ -7018,8 +7195,11 @@ class Entity(BaseBlock):
             if not can_afford:
                 continue
 
-            for obj_uuid, contact in self.senses.objects.items():
-                obj_pos = contact.position
+            candidates = {identity: contact.position for identity, contact in self.senses.objects.items()}
+            if template.include_owned_item_targets:
+                for item in (*self.inventory.items.values(), *self.equipment.get_all_equipped_items()):
+                    candidates[item.uuid] = self.position
+            for obj_uuid, obj_pos in candidates.items():
                 obj_block = BaseBlock.get(obj_uuid)
                 if obj_block is not None and not obj_block.should_include_in_available_object_actions():
                     continue

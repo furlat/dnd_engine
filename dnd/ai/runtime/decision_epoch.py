@@ -1091,6 +1091,8 @@ def _action_target_from_available_target(
         index=target.index,
         target_uuid=str(target.target_uuid) if target.target_uuid else None,
         target_kind=target.target_kind,
+        secondary_targets=(None if target.secondary_targets is None else tuple(
+            _action_target_from_available_target(option, target_values) for option in target.secondary_targets)),
         target_name=target.target_name,
         position=target.position,
         distance=target.distance,

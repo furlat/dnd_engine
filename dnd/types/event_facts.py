@@ -99,6 +99,15 @@ class EventType(str, Enum):
 
 
 
+class LandingKind(str, Enum):
+    """Actual support contact for one forced movement leg."""
+
+    GROUND = "ground"
+    FALL = "fall"
+    CONTROLLED = "controlled"
+    IMPACT = "impact"
+
+
 class MovementTrajectory(str, Enum):
     """Geometry used to present an ordered voluntary movement transition."""
 

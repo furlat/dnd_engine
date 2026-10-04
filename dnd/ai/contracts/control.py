@@ -206,6 +206,7 @@ class ActionTarget(ControlModel):
     index: int = Field(description="Engine target index for execution.")
     target_uuid: Optional[str] = Field(default=None, description="Target entity or object UUID.")
     target_kind: Literal["creature", "object"] = Field(default="creature", description="Native recipient kind; independent of faction.")
+    secondary_targets: Optional[Sequence["ActionTarget"]] = None
     target_name: Optional[str] = Field(default=None, description="Known target display name.")
     position: Optional[Tuple[int, int]] = Field(default=None, description="Target grid position.")
     distance: Optional[int] = Field(default=None, description="Distance in feet when supplied by the engine.")
@@ -234,6 +235,8 @@ class ActionTarget(ControlModel):
     def _freeze_collections(self) -> None:
         """Freeze paths and affected-set collections."""
         object.__setattr__(self, "path", tuple(self.path))
+        if self.secondary_targets is not None:
+            object.__setattr__(self, "secondary_targets", tuple(self.secondary_targets))
         object.__setattr__(self, "safe_path", tuple(self.safe_path))
         object.__setattr__(self, "opportunity_attack_exposures", tuple(self.opportunity_attack_exposures))
         object.__setattr__(
@@ -579,7 +582,9 @@ class ActionAffordance(ControlModel):
             raise ValueError("Additional targets exceed the affordance allocation count")
         legal_target_uuids = {
             target.target_uuid
-            for target in (*self.targets, *self.target_options)
+            for target in (self.targets[0].secondary_targets
+                if self.targets and self.targets[0].secondary_targets is not None
+                else (*self.targets, *self.target_options))
             if target.target_uuid is not None
         }
         if any(target_uuid not in legal_target_uuids for target_uuid in selected):

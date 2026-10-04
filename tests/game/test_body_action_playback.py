@@ -72,11 +72,12 @@ def frame(before, root, data, elapsed, quadrant, font):
         feedback=choreography_feedback(group, data, 0))
 
 
-def test_original_four_utility_drafts_have_body_and_effect_without_projectile(data):
+def test_utility_drafts_keep_their_selected_source_release_without_projectile(data):
     for identity in ("spell.invisibility", "spell.greater_invisibility", "spell.see_invisibility", "spell.true_seeing"):
         draft = data.drafts[identity]
         assert draft.projectile is None and draft.area is None
-        assert (draft.cast.actionClip, draft.cast.bodyPlaybackSpeed, draft.cast.releaseFrame) == ("Special1", 1, 8)
+        release_frame = 7 if identity in ("spell.see_invisibility", "spell.true_seeing") else 8
+        assert (draft.cast.actionClip, draft.cast.bodyPlaybackSpeed, draft.cast.releaseFrame) == ("Special1", 1, release_frame)
         assert draft.cast.effects == () and not draft.cast.recovery.enabled
 
 

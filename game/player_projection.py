@@ -6,6 +6,7 @@ it never asks the live engine what an observer can see.
 """
 
 from dataclasses import dataclass, field, replace
+from math import floor
 from uuid import UUID
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent, ShoveEvent, SpellEvent, TraverseConnectorEvent
@@ -16,24 +17,28 @@ from dnd.types.senses import SensesSnapshot, reduce_senses_snapshot
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.types.spell_suppression import SpellSuppression
 from dnd.core.base_actions import ActionEvent
+from dnd.core.combat_log import CombatLogEntry
+from dnd.core.presentation_geometry import ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.runtime import HandlerDispatchOutcome
 from dnd.core.events import (
     AreaReachEvent,
     DamageAppliedEvent, DeathEvent, DeathSaveEvent, EncounterEvent, EntityCreatedEvent, EntityFactionChangedEvent, ItemDestructionEvent,
     Event, EventPhase, EventType, ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, LifeStateChangeEvent,
-    RoundEvent, SensoryUpdateEvent, SpatialChangeEvent, SpatialChangeType, SpatialEffectChangeEvent,
+    RoundEvent, SensoryUpdateEvent, SpatialChangeEvent, SpatialChangeType, SpatialEffectChangeEvent, SpatialEffectInteractionEvent,
     MovementTrajectory, StepMovementEvent, TakeDamageEvent, TemporaryHitPointsChangedEvent, TurnEvent, WorldInitializedEvent, SavingThrowEvent,
 )
+from dnd.core.life_types import RemainsDisposition
 from dnd.core.item_types import ItemConcentrationSlot, ItemIntegrity, ItemLocation, ItemPresentationState, ItemRemnantState
 from dnd.types.world import CardinalDirection
+from dnd.types.class_features import FontConversion
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult, ObjectResidueState
 from dnd.types.summoning import SummonDepartureCause
 from game.actor_facts import ActorState, ConditionFact, PresentationTarget
 from game.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
 from dnd.actor_projection import remove_previous_item_holdings
 from game.player_facts import (
-    ActionCancellation, ActionFact, ActionReaction, AreaReachFact, AttackFact, ConditionChangeFact, ContentAttribution, DamageRequestFact, DamageResultFact,
+    ActionCancellation, ActionFact, ActionReaction, AreaReachFact, AttackFact, ConditionChangeFact, ItemEffectChangeFact, ContentAttribution, DamageRequestFact, DamageResultFact,
     DeathSaveFact, EquipmentFact, FloorItem, ForcedMovementFact, PortalTransferFact, MechanismActivationFact, HealFact, ItemChargeFact, LifeFact,
     MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage,
     PlayerNode, PlayerObject, PlayerObservation, PlayerSequence, PlayerState,
@@ -43,13 +48,33 @@ from game.player_facts import (
 from game.presentation import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
 from game.replay import RecordedSequence
 from game.event_record import upgrade_recorded_resolutions, upgrade_recorded_spatial_commits
-from game.player_reduction import apply_world_update
+from game.player_reduction import apply_world_update, apply_player_fact
 from game.recording_compat import legacy_damage_reference
 
 
 def _identified(event: Event, identity: UUID | None, observer: UUID) -> bool:
     return identity is not None and (identity == observer or str(observer) in
         event.identified_entity_observer_uuids.get(str(identity), set()))
+
+
+def _action_name(event: ActionEvent, observer: UUID) -> str | None:
+    if event.font_conversion is None or event.source_entity_uuid == observer:
+        return event.name
+    return ("Convert slot to sorcery points" if event.font_conversion.direction == "slot_to_points"
+        else "Convert sorcery points to slot")
+
+
+def _action_log(log: CombatLogEntry | None, fact: PlayerFact | None,
+                observer: UUID) -> CombatLogEntry | None:
+    """Keep a foreign conversion's resource amounts out of its public label too."""
+    if (log is None or not isinstance(fact, ActionFact) or fact.font_conversion is None
+            or fact.source_entity_uuid == observer):
+        return log
+    description = log.data.get("effect_description", "")
+    compact = f"{{cyan:{log.source_name or 'Unknown'}}} uses {{bold:{fact.name}}}"
+    verbose = compact + (f"\n  {description}" if description else "")
+    return log.model_copy(update={"compact": compact, "verbose": verbose, "detailed": verbose,
+        "data": {**log.data, "action_name": fact.name}})
 
 
 def _position_allowed(event: Event, position: tuple[int, int], observer: UUID) -> bool:
@@ -66,7 +91,8 @@ def _step_allowed(event: StepMovementEvent, observer: UUID) -> bool:
 def _forced_allowed(event: ForcedMovementEvent, observer: UUID) -> bool:
     return _identified(event, event.target_entity_uuid, observer) and (
         observer in (event.source_entity_uuid, event.target_entity_uuid)
-        or all(_position_allowed(event, point, observer) for point in (event.start_position, event.end_position)))
+        or all(_position_allowed(event, point, observer)
+               for point in (event.disclosed_path or (event.start_position, event.end_position))))
 
 
 def _visual_loadout(actor: ActorState) -> VisualLoadout:
@@ -76,7 +102,8 @@ def _visual_loadout(actor: ActorState) -> VisualLoadout:
             item_kind=items[identity].item_kind, visual_item_name=items[identity].visual_item_name,
             visual_variant_id=items[identity].visual_variant_id,
             equipped_visual_policy=items[identity].equipped_visual_policy,
-            item_effects=items[identity].item_effects)
+            item_effects=items[identity].item_effects,
+            suppression_provider_uuids=items[identity].suppression_provider_uuids)
         for slot, identity in actor.equipment))
 
 
@@ -86,6 +113,8 @@ def _public_actor(actor: ActorState, observer: UUID) -> PlayerActor:
         appearance=actor.appearance, visual_loadout=_visual_loadout(actor),
         normal_hp=actor.normal_hp, maximum_hp=actor.maximum_hp,
         temporary_hp=actor.temporary_hp, life_state=actor.life_state,
+        remains_disposition=actor.remains_disposition,
+        spatial_disposition=actor.spatial_disposition,
         temporary_hp_grant=actor.temporary_hp_grant,
         armor_class=actor.armor_class, conditions=actor.conditions,
         resolved_size=actor.resolved_size, structural_base_size=actor.structural_base_size,
@@ -118,6 +147,17 @@ def _sensory_fact(event: SensoryUpdateEvent) -> SensoryFact:
         visual_access=event.visual_access, paths_dirty=event.paths_dirty)
 
 
+def _held_item_disclosed(item_uuid: UUID | None, event: Event, observer: UUID,
+                         actors: dict[UUID, ActorState], known: set[UUID],
+                         senses: SensesSnapshot | None) -> bool:
+    if observer in actors and any(item.item_uuid == item_uuid for item in actors[observer].items):
+        return True
+    return any(identity in known and _identified(event, identity, observer)
+        and senses is not None and identity in senses.entities and senses.entities[identity].visual
+        and any(equipped == item_uuid for _, equipped in actor.equipment)
+        for identity, actor in actors.items())
+
+
 def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                   condition: ConditionFact | None, events: tuple[Event, ...],
                   admissions: tuple[ActorAdmission, ...], known: set[UUID],
@@ -134,6 +174,14 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 previous_reach_lineage_uuid=event.previous_reach_lineage_uuid,
                 prerequisite_destruction_lineages=event.prerequisite_destruction_lineages)
         case SpatialEffectChangeEvent():
+            interaction_operation = None
+            by_lineage = {row.lineage_uuid: row for row in events}
+            parent = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
+            while parent is not None:
+                if isinstance(parent, SpatialEffectInteractionEvent) and not parent.canceled:
+                    interaction_operation = parent.operation
+                    break
+                parent = by_lineage.get(parent.parent_lineage) if parent.parent_lineage is not None else None
             if event.operation is SpatialEffectChangeOperation.REMOVED:
                 # Removal's sensory child has already dropped the field. Only
                 # its own entry contact can witness this mechanical removal;
@@ -149,8 +197,22 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                     and position in senses.visible)
                 return SpatialEffectStateFact(spatial_effect_uuid=event.spatial_effect_uuid,
                     positions=positions, previous_state=None, state=None,
-                    operation=event.operation) if positions else None
+                    operation=event.operation, interaction_operation=interaction_operation,
+                    removed_positions=positions) if positions else None
             observed = senses.spatial_effects.get(event.spatial_effect_uuid) if senses is not None else None
+            if event.operation is SpatialEffectChangeOperation.FOOTPRINT_CHANGED:
+                prior = declaration_senses.spatial_effects.get(event.spatial_effect_uuid) if declaration_senses is not None else None
+                removed_positions = tuple(position for position in event.previous_positions
+                    if position not in event.affected_positions and prior is not None and position in prior.positions
+                    and declaration_senses is not None and position in declaration_senses.visible
+                    and senses is not None and position in senses.visible)
+                positions = tuple(position for position in event.affected_positions
+                    if observed is not None and position in observed.positions
+                    and senses is not None and (position in senses.visible or position in observed.visible_volume_positions))
+                return SpatialEffectStateFact(spatial_effect_uuid=event.spatial_effect_uuid,
+                    positions=positions, previous_state=None, state=None, operation=event.operation,
+                    interaction_operation=interaction_operation, removed_positions=removed_positions
+                    ) if positions or removed_positions else None
             if observed is None or (event.operation is not SpatialEffectChangeOperation.CREATED
                     and (event.previous_trap_state is None or event.trap_state is None)
                     and (event.previous_pressed is None or event.pressed is None)):
@@ -164,7 +226,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
             return SpatialEffectStateFact(spatial_effect_uuid=event.spatial_effect_uuid,
                 positions=positions, previous_state=event.previous_trap_state, state=event.trap_state,
                 operation=event.operation, previous_pressed=event.previous_pressed,
-                pressed=event.pressed) if positions else None
+                pressed=event.pressed, interaction_operation=interaction_operation) if positions else None
         case SensoryUpdateEvent():
             return _sensory_fact(event) if event.observer_uuid == observer else None
         case StepMovementEvent():
@@ -219,9 +281,11 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 return None
             deflection_visible = (event.projectile_deflection_position is not None
                 and event.intercepted_by_condition_uuid is not None
-                and ((senses is not None and event.intercepted_by_condition_uuid in senses.spatial_effects)
-                     or (declaration_senses is not None
-                         and event.intercepted_by_condition_uuid in declaration_senses.spatial_effects)))
+                and any(snapshot is not None
+                    and (owner := snapshot.spatial_effects.get(event.intercepted_by_condition_uuid)) is not None
+                    and tuple(floor(value+.5) for value in event.projectile_deflection_position) in owner.positions
+                    and tuple(floor(value+.5) for value in event.projectile_deflection_position) in snapshot.visible
+                    for snapshot in (senses, declaration_senses)))
             return AttackFact(source_entity_uuid=source, target_entity_uuid=target,
                 behavior_id=event.behavior_id, name=event.name, weapon_slot=event.weapon_slot,
                 attack_outcome=event.attack_outcome, damage_types=tuple(event.damage_types),
@@ -239,12 +303,25 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 attack_source_kind=event.attack_source_kind)
         case SpellEvent():
             if event.target_kind == "object":
-                target = event.target_entity_uuid if event.target_entity_uuid in observed_objects else None
+                target = event.target_entity_uuid if event.target_entity_uuid in observed_objects or (
+                    _held_item_disclosed(event.target_entity_uuid, event, observer, actors, known, senses)) else None
             if source is None or (event.target_entity_uuid is not None and target is None):
                 return None
             area = event.area_geometry is not None
-            if not area and event.target_kind == "creature" and any(
-                    not _identified(event, identity, observer) for identity in event.declared_target_entity_uuids):
+            propagated = event.propagation is not None or any(
+                isinstance(child, SpellEvent) and child.parent_lineage == event.lineage_uuid
+                and child.propagation is not None for child in events)
+            if not area and not propagated and event.target_kind == "creature" and any(
+                    not _identified(event, identity, observer) and identity not in observed_objects
+                    for identity in event.declared_target_entity_uuids):
+                return None
+            if event.propagation is not None and source != observer and any(
+                    (endpoint.kind == "creature" and not _identified(event, endpoint.uuid, observer)
+                     or endpoint.kind == "object" and endpoint.uuid not in observed_objects)
+                    or not (_position_allowed(event, endpoint.position, observer)
+                        or senses is not None and endpoint.position in senses.visible
+                        or declaration_senses is not None and endpoint.position in declaration_senses.visible)
+                    for endpoint in (event.propagation.source, event.propagation.target)):
                 return None
             source_position = event.source_position
             if source_position is not None and event.source_entity_uuid != observer and not _position_allowed(event, source_position, observer):
@@ -258,7 +335,11 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                         str(observer) not in event.located_entity_observer_uuids.get(str(source), set())
                         or contact is None or contact.position != source_position):
                     source_position = None
-            area_position = event.aoe_position
+            # A direction pick may lie beyond the visible map; it is not the
+            # line/cone's world anchor. Disclose only its observed native origin.
+            area_position = (event.area_geometry.origin
+                if isinstance(event.area_geometry, (ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry))
+                else event.aoe_position)
             if area_position is not None and not (_position_allowed(event, area_position, observer)
                     or senses is not None and area_position in senses.visible
                     or declaration_senses is not None and area_position in declaration_senses.visible):
@@ -267,7 +348,8 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
             if resolved_positions is not None:
                 resolved_positions = tuple(position for position in resolved_positions
                     if _position_allowed(event, position, observer)
-                    or senses is not None and position in senses.visible)
+                    or senses is not None and position in senses.visible
+                    or declaration_senses is not None and position in declaration_senses.visible)
             return SpellFact(source_entity_uuid=source, target_entity_uuid=target,
                 target_kind=event.target_kind,
                 target_position=event.target_position if event.target_kind == "object" and (
@@ -279,8 +361,10 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 cast_origin=event.cast_origin,
                 source_item_uuid=event.source_item_uuid if event.source_item_uuid in observed_objects else None,
                 declared_target_entity_uuids=tuple(identity for identity in event.declared_target_entity_uuids
-                    if not area or identity in known and _identified(event, identity, observer)),
+                    if (not area and not propagated) or identity in observed_objects
+                    or identity in known and _identified(event, identity, observer)),
                 application=event.application,
+                propagation=event.propagation,
                 attack_outcome=event.attack_outcome,
                 effect_id=event.effect_id,
                 aoe_position=area_position,
@@ -327,6 +411,7 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 or _position_allowed(event, event.end_position, observer)) else None
             if departure is None and arrival is None:
                 return None
+            owner = next((row for row in events if row.lineage_uuid == event.parent_lineage), None)
             return PortalTransferFact(target_entity_uuid=target,
                 # A revealed hatch observation may complete after its nested
                 # transfer. Join only this observer's actual retained evidence.
@@ -336,15 +421,26 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                     or any(isinstance(row, SensoryUpdateEvent) and row.observer_uuid == observer
                         and event.portal_uuid in row.spatial_effects_changed for row in events)) else None,
                 start_position=departure, end_position=arrival, committed=event.committed,
-                portal_content_id=event.portal_content_ref.content_id if event.portal_content_ref is not None else None)
+                portal_content_id=(event.portal_content_ref.content_id if event.portal_content_ref is not None
+                    else owner.behavior_id if isinstance(owner, SpellEvent) else None))
         case ForcedMovementEvent():
             if target is None or not _forced_allowed(event, observer):
                 return None
             return ForcedMovementFact(source_entity_uuid=source, target_entity_uuid=target,
-                start_position=event.start_position, end_position=event.end_position, actual_distance=event.actual_distance)
+                start_position=event.start_position, end_position=event.end_position, actual_distance=event.actual_distance,
+                disclosed_path=event.disclosed_path, start_elevation_feet=event.start_elevation_feet,
+                end_elevation_feet=event.end_elevation_feet, drop_feet=event.drop_feet,
+                landing_kind=event.landing_kind)
         case TakeDamageEvent():
             return (None if target is None else DamageRequestFact( source_entity_uuid=source,
-                target_entity_uuid=target, intercepted_by_condition_uuid=event.intercepted_by_condition_uuid))
+                target_entity_uuid=target, intercepted_by_condition_uuid=event.intercepted_by_condition_uuid,
+                relentless_rage=event.relentless_rage,
+                source_condition_uuid=event.source_condition_uuid if (
+                    senses is not None and event.source_condition_uuid in senses.spatial_effects
+                    or source is not None and source in actors and any(
+                        member.condition_uuid == event.source_condition_uuid
+                        and member.category is not ConditionCategory.INTERNAL
+                        for member in actors[source].conditions)) else None))
         case DamageAppliedEvent():
             if target is None:
                 return None
@@ -405,6 +501,12 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 applied_damage=event.applied_damage, resulting_normal_hp=event.resulting_normal_hp,
                 resulting_temporary_hp=event.resulting_temporary_hp, damage_type=event.damage_type,
                 spatial_source=spatial_source,
+                source_condition_uuid=event.source_condition_uuid if (
+                    senses is not None and event.source_condition_uuid in senses.spatial_effects
+                    or source is not None and source in actors and any(
+                        member.condition_uuid == event.source_condition_uuid
+                        and member.category is not ConditionCategory.INTERNAL
+                        for member in actors[source].conditions)) else None,
                 body_release=release, effect_id=event.effect_id if event.effect_id is not None and senses is not None
                     and any(effect.content_ref.identity_key == event.effect_id
                             for effect in senses.spatial_effects.values()) else None)
@@ -428,13 +530,21 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
         case LifeStateChangeEvent():
             return (None if event.entity_uuid not in known or not _identified(event, event.entity_uuid, observer) else LifeFact(
                 entity_uuid=event.entity_uuid, previous_state=event.previous_state, new_state=event.new_state,
-                reason=event.reason, normal_hit_points=event.normal_hit_points))
+                reason=event.reason, normal_hit_points=event.normal_hit_points,
+                remains_disposition=event.remains_disposition,
+                preserved_equipped_item_uuids=tuple(identity
+                    for death in events if isinstance(death, DeathEvent) and not death.canceled
+                    and death.phase is EventPhase.COMPLETION
+                    and death.lineage_uuid == event.parent_lineage
+                    for identity in death.preserved_item_uuids
+                    if identity in {item for _, item in actors[event.entity_uuid].equipment})))
         case DeathSaveEvent():
             return (None if event.entity_uuid not in known or not _identified(event, event.entity_uuid, observer) else DeathSaveFact(
                 entity_uuid=event.entity_uuid, natural_roll=event.natural_roll, succeeded=event.succeeded))
         case SavingThrowEvent():
             return (None if target is None or event.result is None else SavingThrowFact(
                 target_entity_uuid=target, ability_name=event.ability_name, succeeded=event.result,
+                indomitable_reroll=event.indomitable_reroll,
                 effect_id=event.saving_throw_context.effect_id if event.saving_throw_context is not None else None))
         case ItemResourceChangeEvent():
             return (ItemChargeFact(source_entity_uuid=observer, item_uuid=event.item_uuid,
@@ -448,6 +558,16 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
             return EquipmentFact(source_entity_uuid=owner, visual_loadout=_visual_loadout(actor),
                 armor_class=actor.armor_class, controlled_items=actor.items if owner == observer else None)
         case SpatialChangeEvent():
+            if event.change_type in (SpatialChangeType.OBJECT_PLACED, SpatialChangeType.OBJECT_REMOVED):
+                if event.canceled or event.phase is not EventPhase.COMPLETION or event.object_uuid is None:
+                    return None
+                snapshot = declaration_senses if event.change_type is SpatialChangeType.OBJECT_REMOVED else senses
+                contact = snapshot.objects.get(event.object_uuid) if snapshot is not None else None
+                placement = event.previous_placement if event.change_type is SpatialChangeType.OBJECT_REMOVED else event.placement
+                if contact is None or placement is None or contact.position not in placement.positions:
+                    return None
+                return SpatialFact(change_type=event.change_type, entity_uuid=None, object_uuid=event.object_uuid,
+                    position=contact.position, commit_event_uuid=event.commit_event_uuid)
             identified_entity = event.entity_uuid if _identified(event, event.entity_uuid, observer) else None
             own_position = identified_entity == observer
             if event.change_type not in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT,
@@ -508,6 +628,12 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
         case EncounterEvent():
             return TurnFact(event_type=event.event_type, entity_uuid=None, round_number=None)
         case _ if condition is not None:
+            item = condition.resulting_item
+            if item is not None:
+                return (ItemEffectChangeFact(item_uuid=item.item_uuid,
+                    effect_uuid=condition.condition_uuid, event_type=event.event_type)
+                    if item.item_uuid in observed_objects or _held_item_disclosed(
+                        item.item_uuid, event, observer, actors, known, senses) else None)
             return (None if target is None or condition.category is ConditionCategory.INTERNAL else
                 ConditionChangeFact(target_entity_uuid=target, event_type=event.event_type, condition=condition,
                     consumed=condition.consumed))
@@ -520,7 +646,10 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
         case ActionEvent():
             object_target = event.target_entity_uuid if event.target_entity_uuid in observed_objects else target
             return (None if source is None else ActionFact(source_entity_uuid=source, target_entity_uuid=object_target,
-                behavior_id=event.behavior_id, name=event.name,
+                behavior_id=event.behavior_id, name=_action_name(event, observer),
+                font_conversion=(event.font_conversion if source == observer else
+                    FontConversion(direction=event.font_conversion.direction)
+                    if event.font_conversion is not None else None),
                 source_item_uuid=event.source_item_uuid if event.source_item_uuid in observed_objects else None))
     return None
 
@@ -560,6 +689,7 @@ def _floor_item(item: ItemPresentationState, residues: tuple[ObjectResidueState,
     return FloorItem(item_uuid=item.item_uuid, item_id=item.item_id, name=item.name,
         visual_item_name=item.visual_item_name, visual_variant_id=item.visual_variant_id,
         stack_count=item.stack_count, is_pickable=item.is_pickable, item_effects=item.item_effects,
+        suppression_provider_uuids=item.suppression_provider_uuids,
         map_char=item.map_char, boundary_structure=item.boundary_structure,
         contact_passage=item.contact_passage,
         supported_by_uuid=item.supported_by_uuid,
@@ -569,7 +699,8 @@ def _floor_item(item: ItemPresentationState, residues: tuple[ObjectResidueState,
         concentration_capacity=item.concentration_capacity, concentration_slots=item.concentration_slots,
         door_mechanism=item.door_mechanism, door_swing=item.door_swing, remnant_state=item.remnant_state,
         integrity=item.integrity, destruction_outcome=item.destruction_outcome,
-        construction_owner_uuid=item.construction_owner_uuid, construction_geometry=item.construction_geometry, known_to_creator=item.known_to_creator)
+        construction_owner_uuid=item.construction_owner_uuid, construction_geometry=item.construction_geometry,
+        construction_suppressions=item.construction_suppressions, known_to_creator=item.known_to_creator)
 
 
 _DELTAS = {CardinalDirection.NORTH: (0, 1), CardinalDirection.SOUTH: (0, -1),
@@ -631,7 +762,22 @@ def _observed_object(world: PresentationTarget, remembered: PlayerState, identit
             "faces": tuple(sorted(faces, key=lambda face: face.value)),
         })
     known_objects = set(remembered.objects) | {key for key in world.objects if _object_observed(world, key)}
-    item = obj.item.model_copy(update={"remnant_state": _observed_remnant(obj.item.remnant_state, known_objects)})
+    senses = world.senses
+    previous = remembered.objects.get(identity)
+    retained_suppressions = ({row.provider_uuid: row for row in previous.item.construction_suppressions}
+        if previous is not None else {})
+    suppressions = []
+    for outcome in obj.item.construction_suppressions:
+        provider = senses.spatial_effects.get(outcome.provider_uuid) if senses is not None else None
+        retained_suppression = retained_suppressions.get(outcome.provider_uuid)
+        if provider is not None and provider.area_geometry is not None:
+            retained_suppression = outcome.model_copy(update={"provider_content_ref": provider.content_ref,
+                "area_geometry": provider.area_geometry, "anchor_elevation_steps": provider.anchor_elevation_steps})
+        if retained_suppression is not None:
+            admitted = set(outcome.positions) & (senses.visible if senses is not None else set())
+            suppressions.append(retained_suppression.model_copy(update={"positions": tuple(sorted(admitted))}))
+    item = obj.item.model_copy(update={"remnant_state": _observed_remnant(obj.item.remnant_state, known_objects),
+        "construction_suppressions": tuple(suppressions)})
     return PlayerObject(placement=obj.placement, item=_floor_item(item,
         tuple(retained[identity] for identity in sorted(retained, key=str))))
 
@@ -716,10 +862,11 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
         if (isinstance(declared, (MechanismActivationEvent, DeathEvent))
                 or isinstance(declared, (AttackEvent, SpellEvent)) and declared.target_kind == "object"
                 or isinstance(declared, SpellEvent) and declared.area_geometry is not None
-                or isinstance(declared, SpatialChangeEvent) and declared.terminal_release is not None
-                and declared.change_type is SpatialChangeType.ENTITY_LEFT
+                or isinstance(declared, SpatialChangeEvent) and (
+                    declared.terminal_release is not None and declared.change_type is SpatialChangeType.ENTITY_LEFT
+                    or declared.change_type is SpatialChangeType.OBJECT_REMOVED)
                 or isinstance(declared, SpatialEffectChangeEvent)
-                and declared.operation is SpatialEffectChangeOperation.REMOVED):
+                and declared.operation in (SpatialEffectChangeOperation.REMOVED, SpatialEffectChangeOperation.FOOTPRINT_CHANGED)):
             delivery_starts.setdefault(version.lineage_uuid, version.source_index)
     pending_deliveries = iter(sorted(delivery_starts.items(), key=lambda row: row[1]))
     next_delivery = next(pending_deliveries, None)
@@ -772,6 +919,23 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                         actor = private_actors[identity]
                         observed = replace(remembered.actors[identity], visual_loadout=_visual_loadout(actor),
                                            controlled_items=actor.items if identity == observer else None)
+                        # A gear-only observation cannot roll back the life/HP
+                        # facts already disclosed since its preceding snapshot.
+                        # Read emitted facts, not hidden private actor values.
+                        observed_at = max((indexes[row.event_uuid] for row in observations
+                            if row.actor.uuid == identity), default=-1)
+                        for node in nodes:
+                            if node.canceled or indexes[node.uuid] <= observed_at:
+                                continue
+                            committed = node.fact
+                            if isinstance(committed, LifeFact) and committed.entity_uuid == identity:
+                                observed = replace(observed, life_state=committed.new_state,
+                                    normal_hp=committed.normal_hit_points,
+                                    remains_disposition=committed.remains_disposition)
+                            elif (isinstance(committed, DamageResultFact) and committed.target_entity_uuid == identity
+                                    and committed.resulting_normal_hp is not None and committed.resulting_temporary_hp is not None):
+                                observed = replace(observed, normal_hp=committed.resulting_normal_hp,
+                                    temporary_hp=committed.resulting_temporary_hp)
                         observations.append(PlayerObservation(event_uuid=event.uuid, actor=observed, contact=None))
                         remembered.actors[identity] = observed
             if owner is not None and owner in private_actors:
@@ -827,6 +991,22 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
         fact = _project_fact(event, observer, private_actors, facts.get(event.uuid), events, admissions,
                             set(remembered.actors), observed_objects, private_world.senses,
                             declaration_senses)
+        condition_target = event.target_entity_uuid
+        if (fact is None and event.event_type is EventType.CONDITION_REMOVAL
+                and event.source_entity_uuid == observer and condition_target is not None
+                and condition_target in remembered.actors):
+            # The source receives the end of its own already-known membership.
+            # That does not disclose the absent recipient's current stats or place.
+            removed = facts.get(event.uuid)
+            known_member = next((member for member in remembered.actors[condition_target].conditions
+                if removed is not None and member.condition_uuid == removed.condition_uuid), None)
+            if known_member is not None:
+                fact = ConditionChangeFact(target_entity_uuid=condition_target,
+                    event_type=event.event_type, condition=replace(known_member,
+                        event_uuid=event.uuid, resulting_stats=None, resulting_max_hp=None,
+                        resulting_ac=None, resulting_tile=None, resulting_item=None))
+        if isinstance(fact, ConditionChangeFact) and not event.canceled:
+            apply_player_fact(remembered, fact)
         if isinstance(fact, FactionFact):
             parent = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
             removed = (facts.get(parent.uuid) if parent is not None
@@ -856,14 +1036,18 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                     resulting_hp=event.resulting_hp,
                     damage_type=components[0].damage_type if len(components) == 1 else None)
         if (isinstance(event, ItemDestructionEvent) and not event.canceled
-                and event.resulting_state is not None and event.resulting_state.integrity is ItemIntegrity.DESTROYED):
+                and (event.remains_disposition is RemainsDisposition.DISINTEGRATED
+                     or event.resulting_state is not None and event.resulting_state.integrity is ItemIntegrity.DESTROYED)):
             destroyed = destroyed_contacts.get(event.item_uuid)
             if destroyed is not None:
                 fact = ObjectDestroyedFact(object_uuid=destroyed.item.item_uuid,
                     placement=destroyed.placement, item_id=destroyed.item.item_id,
                     remnant_state=_observed_remnant(event.resulting_state.remnant_state,
-                        observed_objects | set(remembered.objects)),
-                    destruction_outcome=event.resulting_state.destruction_outcome)
+                        observed_objects | set(remembered.objects)) if event.resulting_state is not None else None,
+                    destruction_outcome=event.resulting_state.destruction_outcome if event.resulting_state is not None else None,
+                    remains_disposition=event.remains_disposition, previous_item=destroyed.item,
+                    affected_volume=event.affected_volume,
+                    resulting_placement=event.resulting_placement)
         if (isinstance(event, ItemLocationStateEvent) and event.location is ItemLocation.DESTROYED
                 and event.item_state.item_uuid not in explicit_destructions):
             destroyed = destroyed_contacts.get(event.item_state.item_uuid)
@@ -878,7 +1062,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
         nodes.append(PlayerNode(uuid=event.uuid, lineage_uuid=event.lineage_uuid,
             parent_event=event.parent_event, parent_lineage=event.parent_lineage,
             children_lineages=tuple(event.children_lineages), phase=event.phase,
-            canceled=event.canceled, fact=fact, combat_log=event.combat_log,
+            canceled=event.canceled, fact=fact, combat_log=_action_log(event.combat_log, fact, observer),
             resolution_ref=event.resolution_ref,
             cancellation=ActionCancellation(phase=event.canceled_from_phase,
                 action_economy_spent=event.action_economy_spent, outcome_code=event.outcome_code)

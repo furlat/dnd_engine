@@ -1,0 +1,114 @@
+{
+  "source": "/home/tommaso/Dev/neurodragon_art/sources/weather-sleet-soft-ground-contact-v5-20261004",
+  "production_rgba_recaptured": false,
+  "accepted_rgba_byte_exact": true,
+  "source_metadata_sha256": "e4a94f91e3ecde278cc6b513a74b4932108e96ecbe55161dedff60b30e4ac2f0",
+  "bounds": [
+    -64,
+    64
+  ],
+  "verticalScale": 1.224744871391589,
+  "coordinateBasis": "camera_local_xyz",
+  "banks": [
+    {
+      "bank": "sleet-ground",
+      "file": "sleet-ground-surface.zip",
+      "sha256": "8171fa526ecf1174f0684140a1961a2ff66d716d9c166d0226d300d7196fa956",
+      "pivot": [
+        320.0,
+        358.4079991668402
+      ],
+      "frames": 128,
+      "worldPixels": 31.67838379715733,
+      "adapter": {
+        "adapter_sha256": "01c6b7dc70ffa40e185e2b19aa8414296de90a9eaf449b2cfc6c0806fd48fd9a",
+        "frames": 128
+      },
+      "validation": {
+        "frames": 128,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.34409157507176596
+      }
+    },
+    {
+      "bank": "sleet-back",
+      "file": "sleet-back-surface.zip",
+      "sha256": "c720b2284e1cd3af67c227ba62040ba770c995bb7ff04966174316547f185497",
+      "pivot": [
+        320.0,
+        358.4079991668402
+      ],
+      "frames": 128,
+      "worldPixels": 31.67838379715733,
+      "adapter": {
+        "adapter_sha256": "dec23cc9497dc5b44a3f2374c755674cd1f73b14f19e961a84f708534653494c",
+        "frames": 128
+      },
+      "validation": {
+        "frames": 128,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.5871210693436801
+      }
+    },
+    {
+      "bank": "sleet-front",
+      "file": "sleet-front-surface.zip",
+      "sha256": "14e5c2b50ea10d07f3a698b975b8ba40b5ce13ce990e7eb89e6cb6b7a3b1d024",
+      "pivot": [
+        320.0,
+        358.4079991668402
+      ],
+      "frames": 128,
+      "worldPixels": 31.67838379715733,
+      "adapter": {
+        "adapter_sha256": "cb0893d6059e9c3e739de0b973cf4a8249aa79ae77c3b617f4b363511cd25f2a",
+        "frames": 128
+      },
+      "validation": {
+        "frames": 128,
+        "missingOwnership": 0,
+        "maxCameraErrorPixels": 0.6472425131903151
+      }
+    }
+  ],
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/sleet-surface-companions-20261004",
+  "identities": [
+    "weather.sleet.storm.apply.ground.surface",
+    "weather.sleet.storm.apply.back.surface",
+    "weather.sleet.storm.apply.front.surface",
+    "weather.sleet.storm.hold.ground.surface",
+    "weather.sleet.storm.hold.back.surface",
+    "weather.sleet.storm.hold.front.surface",
+    "weather.sleet.storm.remove.ground.surface",
+    "weather.sleet.storm.remove.back.surface",
+    "weather.sleet.storm.remove.front.surface"
+  ],
+  "files": [
+    {
+      "path": "game/assets/weather_solar_media/surfaces/sleet-ground-surface.zip",
+      "bytes": 35172213,
+      "sha256": "8171fa526ecf1174f0684140a1961a2ff66d716d9c166d0226d300d7196fa956"
+    },
+    {
+      "path": "game/assets/weather_solar_media/surfaces/sleet-back-surface.zip",
+      "bytes": 47287570,
+      "sha256": "c720b2284e1cd3af67c227ba62040ba770c995bb7ff04966174316547f185497"
+    },
+    {
+      "path": "game/assets/weather_solar_media/surfaces/sleet-front-surface.zip",
+      "bytes": 45150642,
+      "sha256": "14e5c2b50ea10d07f3a698b975b8ba40b5ce13ce990e7eb89e6cb6b7a3b1d024"
+    }
+  ],
+  "capture_adapters": {
+    "ground/ExactSleetOwnership.gd": "da30ed0b11d30e199958813e9f06022e3ca8b16a4853421a54ea8ff08e2e0584",
+    "ground/SleetOwnership_ground.gd": "838d8ac9f9cf77b363652df3b9f4580d1e8a1dea303dcc9f9071b85020367436",
+    "back/ExactSleetOwnership.gd": "da30ed0b11d30e199958813e9f06022e3ca8b16a4853421a54ea8ff08e2e0584",
+    "back/SleetOwnership_back.gd": "c136e8adfe40a46b6bb77dda1269782693d8d6a7cc5eb06b873131e789e1f2eb",
+    "front/ExactSleetOwnership.gd": "da30ed0b11d30e199958813e9f06022e3ca8b16a4853421a54ea8ff08e2e0584",
+    "front/SleetOwnership_front.gd": "756140f21a863e35360799486378ae97eab2dff151efc7c7c2bd80a4a8ed5d8a"
+  },
+  "source_project": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/godot-library/projects/lelu-portal",
+  "source_project_sha256": "d2d742917a2a64cf3cbe72d72f01cbd078790335d2f006e9f391741c6d957681",
+  "source_project_files": 1989
+}

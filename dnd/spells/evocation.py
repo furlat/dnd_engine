@@ -9,10 +9,11 @@ Contains: FireBolt, SacredFlame, MagicMissile, Fireball, BurningHands,
 from typing import cast
 from uuid import uuid4
 from dnd.actions import AttackEvent
-from dnd.core.geometry import grid_distance_feet
+from dnd.core.elevation import support_distance_feet
+from dnd.types.actor import ConditionState
 from dnd.core.modifiers import ResistanceModifier, ResistanceStatus
 import random
-from typing import Any, Literal, Optional, List, Set, Tuple
+from typing import Any, Callable, Literal, Optional, List, Set, Tuple
 from uuid import UUID
 
 from dnd.types.physical_access import PhysicalAccess
@@ -21,6 +22,7 @@ from pydantic_core import PydanticUndefined
 
 from dnd.core.base_actions import (
     ActionCategory,
+    AvailableTarget,
     ActionEvent,
     ActionInformationOperation,
     ActionOutcomeProfile,
@@ -40,11 +42,18 @@ from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration, SpellProtectionRegistry
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.core.content.runtime import bind_runtime_action_before_admission
-from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
+from dnd.core.condition_types import ConditionCategory, ConditionTag, DurationType, HazardFilter
 from dnd.core.values import ModifiableValue
 from dnd.core.dice import AttackOutcome
+from dnd.core.effect_types import EffectOrigin, EffectOriginKind, EffectEndpoint, EffectPropagationLink, ApplicationMembership
+from dnd.core.life_types import LifeState
+from dnd.core.saving_throw_types import SavingThrowContext
+from dnd.core.events import SavingThrowEvent
+from dnd.types.senses import OpticalObscurement
+from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from typing import cast as type_cast
 from dnd.core.equipment_types import ArmorType, WeaponSlot
+from dnd.core.item_types import ItemEffectPresentationState, ItemIntegrity
 from dnd.core.events import EventPhase, RangeType, Range, Damage, Healing, ForcedMovementEvent, EventType, EventHandler, Trigger, Event, EventQueue, SpatialChangeEvent, SpatialEffectInteractionEvent
 from dnd.spatial.ignition import ignite_surface_contacts
 from dnd.types.world import OccupancyLayer
@@ -68,13 +77,13 @@ from dnd.types.world import WorldEdgeChannel
 from dnd.entity import Entity
 from dnd.actions import (
     Attack,
+    Shove,
     SpellAction,
     SpellEvent,
-    entity_action_economy_cost_applier,
     entity_action_economy_cost_evaluator,
     commit_forced_movement,
 )
-from dnd.conditions import Blinded, Deafened, Stunned, NoReactions, Concentrating, ConcentrationActionMarker, Restrained
+from dnd.conditions import Blinded, Deafened, Stunned, NoReactions, ConcentrationActionMarker, Restrained
 from dnd.residues import ASHEN_RESIDUE, deposit_area_residue
 from dnd.spells.content_metadata import srd_action_identity, srd_spell_identity
 from dnd.spells.spell_utils import fire_heal_roll_result
@@ -1283,6 +1292,7 @@ class LightningBolt(SpellAction):
 
     At Higher Levels: +1d6 damage per slot level above 3rd.
     """
+    aoe_require_targets: bool = False
     name: str = Field(default="Lightning Bolt", description="Display name for the lightning bolt spell.")
     description: str = Field(default="100ft×5ft line dealing 8d6 lightning damage (DEX save half)", description="Rules-facing summary for the lightning bolt spell.")
     spell_level: int = Field(default=3, description="Spell slot level required to cast lightning bolt; cantrips use 0.")
@@ -1297,6 +1307,16 @@ class LightningBolt(SpellAction):
     valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for lightning bolt.")
 
     base_damage_dice: int = Field(default=8, description="Base number of damage dice rolled by lightning bolt.")
+
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        return self._resolve_area_targets()
+
+    def _finalize_aoe(self, effect_event: ActionEvent) -> None:
+        assert isinstance(effect_event, SpellEvent)
+        origin = effect_event.effect_source_position or effect_event.source_position
+        if origin is not None:
+            excluded = SpellProtectionRegistry.get_excluded_positions(origin, self.spell_level)
+            ignite_surface_contacts(effect_event, set(effect_event.resolved_area_positions or ()) - excluded)
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
@@ -1497,35 +1517,7 @@ class Thunderwave(SpellAction):
         Returns: (final_position, actual_distance_feet, was_blocked, blocked_by)
         """
 
-        grid = get_map()
-        distance_tiles = distance_feet // 5
-        last_valid_pos = start
-        was_blocked = False
-        blocked_by: Optional[str] = None
-
-        current_pos = start
-        actual_distance_feet = 0
-        for _ in range(distance_tiles):
-            next_pos = (current_pos[0] + direction[0], current_pos[1] + direction[1])
-
-            if not grid.can_transition(current_pos, next_pos, target_uuid):
-                was_blocked = True
-                blocked_by = grid.identify_blocker_at(next_pos, target_uuid)
-                break
-
-            entities_at_pos = grid.get_entities_at(next_pos)
-            other_entities = [e for e in entities_at_pos if e != target_uuid]
-            if other_entities:
-                was_blocked = True
-                blocker = BaseBlock.get(other_entities[0])
-                blocked_by = blocker.name if blocker else "entity"
-                break
-
-            last_valid_pos = next_pos
-            current_pos = next_pos
-            actual_distance_feet += 5
-
-        return (last_valid_pos, actual_distance_feet, was_blocked, blocked_by)
+        return Shove.calculate_final_position(start, direction, distance_feet, target_uuid)
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate cube direction. Self-range means no LOS check to target position."""
@@ -1887,6 +1879,8 @@ class CircleOfDeath(SpellAction):
             target_entity_name=target.name,
             status_message=f"CON save: {save_roll.total} vs DC {dc} - {'Success' if success else 'Failure'}"
         )
+        if effect_event.canceled:
+            return effect_event
 
         num_dice = self.get_damage_dice_count()
         damage_bonus = caster.get_spell_damage_bonus()
@@ -1910,7 +1904,10 @@ class CircleOfDeath(SpellAction):
                 amount=final_damage,
                 damage_type=DamageType.NECROTIC,
                 source_entity_uuid=caster.uuid,
-                parent_event=effect_event.uuid
+                parent_event=effect_event.uuid,
+                damage_rolls=[damage_roll],
+                damages=[necrotic_damage],
+                effect_origin=execution_event.get_effect_origin(),
             )
 
         save_text = " (saved for half)" if success else ""
@@ -2039,6 +2036,58 @@ class ConeOfCold(SpellAction):
         )
 
 
+def _source_turn_expiry_handler(owner: BaseCondition, application: Event, *,
+                                at_end: bool, expire: Callable[[Event], None]) -> EventHandler:
+    """Two brief solar/ice deadlines, using native source turns and world rounds.
+
+    A departed or dead source has no next turn; retain the effect until the
+    next world round boundary instead of tying it to a recipient's initiative.
+    """
+    armed = False
+    application_turn = application.turn_execution_id
+
+    def processor(event: Event, _source_uuid: UUID) -> Optional[Event]:
+        nonlocal armed
+        if not owner.applied:
+            return None
+        if event.event_type is EventType.ROUND_END:
+            source = Entity.get(owner.source_entity_uuid)
+            if source is None or not source.is_deployed or source.health.life_state is LifeState.DEAD:
+                expire(event)
+        elif event.source_entity_uuid == owner.source_entity_uuid:
+            if application_turn is not None and event.turn_execution_id == application_turn:
+                return None
+            if event.event_type is EventType.TURN_START:
+                armed = True
+                if not at_end:
+                    expire(event)
+            elif armed:
+                expire(event)
+        return None
+
+    return EventHandler(name=f"{owner.name} source-turn expiry", source_entity_uuid=owner.source_entity_uuid,
+        runs_while_suppressed=True,
+        trigger_conditions=[
+            Trigger(event_type=EventType.TURN_START, event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=owner.source_entity_uuid),
+            Trigger(event_type=EventType.TURN_END, event_phase=EventPhase.EFFECT,
+                event_source_entity_uuid=owner.source_entity_uuid),
+            Trigger(event_type=EventType.ROUND_END, event_phase=EventPhase.EFFECT),
+        ], event_processor=processor)
+
+
+def _share_solar_blindness(owner: BaseCondition, target: Entity, event: Event) -> bool:
+    child = target.active_conditions.get("Blinded")
+    if child is None:
+        child = Blinded(source_entity_uuid=owner.source_entity_uuid, target_entity_uuid=target.uuid,
+            parent_condition=owner.uuid, tags={ConditionTag.MAGICAL}, effect_origin=owner.effect_origin)
+        application = target.add_condition(child, parent_event=event)
+        if application is None or application.canceled or not child.applied:
+            return False
+    owner.add_shared_subcondition(child)
+    return True
+
+
 class SunburstBlindedEffect(BaseCondition):
     """
     Blindness effect from Sunburst spell.
@@ -2051,6 +2100,7 @@ class SunburstBlindedEffect(BaseCondition):
 
     caster_uuid: Optional[UUID] = Field(default=None, description="Caster UUID used for ownership and effect attribution by sunburst blinded effect.")
     spell_dc: int = Field(default=10, description="Spell save DC used by sunburst blinded effect saving throws.")
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
 
@@ -2064,15 +2114,8 @@ class SunburstBlindedEffect(BaseCondition):
         sub_condition_uuids: List[UUID] = []
         handler_uuids: List[UUID] = []
 
-        blinded = Blinded(
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            parent_condition=self.uuid,
-            tags={ConditionTag.MAGICAL}
-        )
-        sub_event = target.add_condition(blinded, parent_event=declaration_event)
-        if sub_event and sub_event.phase == EventPhase.COMPLETION:
-            sub_condition_uuids.append(blinded.uuid)
+        if not _share_solar_blindness(self, target, declaration_event):
+            return [], [], [], [], declaration_event.cancel(status_message="Blinded was not admitted")
 
         if self.caster_uuid:
             handler = self._create_repeat_save_handler()
@@ -2104,27 +2147,23 @@ class SunburstBlindedEffect(BaseCondition):
             if not target:
                 return None
 
-            sunburst_blind = target.active_conditions.get("Sunburst Blindness")
-            if not sunburst_blind or sunburst_blind.uuid != effect_uuid:
+            if effect_uuid not in target.active_conditions_by_uuid:
                 return None
-
-            caster = Entity.get(caster_uuid)
-            if not caster:
-
-                target.remove_condition("Sunburst Blindness", parent_event=event)
-                return None
-
-            save_request = caster.create_saving_throw_request(
+            save_request = SavingThrowEvent(
+                source_entity_uuid=caster_uuid,
                 target_entity_uuid=target.uuid,
+                target_entity_name=target.name,
                 ability_name="constitution",
                 dc=dc,
-                parent_event=event.uuid
+                parent_event=event.uuid,
+                saving_throw_context=SavingThrowContext(cause_id="spell.sunburst",
+                    effect_id="spell.sunburst.repeat_save", condition_id="condition.blinded", is_magical=True),
             )
             _, _, success = target.saving_throw(save_request)
 
             if success:
 
-                target.remove_condition("Sunburst Blindness", parent_event=event)
+                target.remove_condition_by_uuid(effect_uuid, parent_event=event)
             return None
 
         return EventHandler(
@@ -2159,6 +2198,11 @@ class Sunburst(SpellAction):
 
     include_self: bool = Field(default=True, description="Whether sunburst can include the caster among valid targets.")
     valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for sunburst.")
+
+    aoe_require_targets: bool = False
+
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        return self._resolve_area_targets()
 
     base_damage_dice: int = Field(default=12, description="Base number of damage dice rolled by sunburst.")
 
@@ -2221,10 +2265,11 @@ class Sunburst(SpellAction):
             dc=dc,
             parent_event=execution_event.uuid
         )
-        _, save_roll, success = target.saving_throw(save_request)
-
-        if has_disadvantage and mod_uuid:
-            target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_modifier(mod_uuid)
+        try:
+            _, save_roll, success = target.saving_throw(save_request)
+        finally:
+            if mod_uuid is not None:
+                target.saving_throws.get_saving_throw("constitution").bonus.self_static.remove_modifier(mod_uuid)
 
         save_bonus = target.saving_throw_bonus(caster.uuid, "constitution").normalized_score
 
@@ -2239,6 +2284,8 @@ class Sunburst(SpellAction):
             status_message=f"CON save: {save_roll.total} vs DC {dc}"
         )
 
+        if effect_event.canceled:
+            return effect_event
         damage_bonus = caster.get_spell_damage_bonus()
         radiant_damage = Damage(
             source_entity_uuid=caster.uuid,
@@ -2259,10 +2306,12 @@ class Sunburst(SpellAction):
                 amount=final_damage,
                 damage_type=DamageType.RADIANT,
                 source_entity_uuid=caster.uuid,
-                parent_event=effect_event.uuid
+                parent_event=effect_event.uuid,
+                damages=[radiant_damage], damage_rolls=[damage_roll],
+                effect_origin=execution_event.to_effect_origin(),
             )
 
-        if not success:
+        if not success and target.health.life_state is not LifeState.DEAD:
             blind_effect = SunburstBlindedEffect(
                 source_entity_uuid=caster.uuid,
                 target_entity_uuid=target.uuid,
@@ -2279,6 +2328,17 @@ class Sunburst(SpellAction):
             total_damage=final_damage,
             status_message=f"Sunburst: {final_damage} radiant{blind_text} to {target.name}"
         )
+
+    def _finalize_aoe(self, effect_event: SpellEvent) -> None:
+        positions = set(effect_event.resolved_area_positions or ())
+        for condition in tuple(get_map().get_spatial_conditions()):
+            if not isinstance(condition, SpatialCondition):
+                continue
+            origin = condition.effect_origin
+            if (origin is not None and origin.kind is EffectOriginKind.SPELL
+                    and condition.optical_obscurement is OpticalObscurement.MAGICAL_DARKNESS
+                    and not condition.affected_positions.isdisjoint(positions)):
+                condition.deactivate(parent_event=effect_event)
 
 
 def _is_wearing_metal_armor(entity) -> bool:
@@ -2862,7 +2922,6 @@ class EldritchBlast(SpellAction):
             status_message=f"{self.name} hit for {damage_roll.total} force damage"
         )
 
-from dnd.spatial.area_conditions import AreaCondition, SpatialCondition
 from dnd.types.spatial_effects import (
     SpatialEffectAnchorKind,
     SpatialEffectLayer,
@@ -3110,15 +3169,8 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
     if push_dx == 0 and push_dy == 0:
         push_dx = 1
 
-    grid = get_map()
-    current_pos = entity_pos
-    push_dist = 0
-    for _ in range(3):
-        next_pos = (current_pos[0] + push_dx, current_pos[1] + push_dy)
-        if not grid.can_transition(current_pos, next_pos, entity.uuid):
-            break
-        current_pos = next_pos
-        push_dist += 5
+    current_pos, push_dist, blocked, blocked_by = Shove.calculate_final_position(
+        entity_pos, (push_dx, push_dy), 15, entity.uuid)
 
     if current_pos != entity_pos:
         forced_event = ForcedMovementEvent(
@@ -3131,7 +3183,8 @@ def _apply_gust_push(entity: Entity, dc: int, caster_pos: Tuple[int, int],
             direction=(push_dx, push_dy),
             intended_distance=15,
             actual_distance=push_dist,
-            blocked_by_obstacle=push_dist < 15,
+            blocked_by_obstacle=blocked,
+            blocked_by=blocked_by,
             cause="gust_of_wind",
             phase=EventPhase.DECLARATION,
             parent_event=parent_event.uuid,
@@ -3259,11 +3312,12 @@ ICE_STORM_TERRAIN_CONTENT_REF = ContentRef(
 
 
 class IceStormTerrain(AreaCondition):
-    """Temporary difficult terrain from Ice Storm. Lasts 1 round."""
+    """Difficult terrain ending at the end of the caster's next turn."""
     name: str = Field(default="Ice Storm Terrain", description="Display name for the ice storm terrain zone condition.")
     description: str = Field(default="Ground covered in ice - difficult terrain", description="Rules-facing summary for the ice storm terrain zone condition.")
 
     content_ref: ContentRef = Field(default=ICE_STORM_TERRAIN_CONTENT_REF)
+    has_visible_presence: bool = True
     position: Tuple[int, int]
     layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.GROUND_SURFACE)
     occupancy_policy: SpatialEffectOccupancyPolicy = Field(
@@ -3275,28 +3329,46 @@ class IceStormTerrain(AreaCondition):
 
     hazard_filter: Optional[HazardFilter] = Field(default=HazardFilter.ALL, description="Creature relationship filter used for ice storm terrain hazards.")
 
+    def _apply(self, declaration_event: Event):
+        modifiers, handlers, children, spatial_handlers, effect = super()._apply(declaration_event)
+        if effect is None or effect.canceled:
+            return modifiers, handlers, children, spatial_handlers, effect
+
+        def expire(event: Event) -> None:
+            self.deactivate(parent_event=event)
+
+        handler = _source_turn_expiry_handler(self, declaration_event, at_end=True, expire=expire)
+        EventQueue.add_event_handler(handler)
+        handlers.append(handler.uuid)
+        return modifiers, handlers, children, spatial_handlers, effect
+
 
 class IceStorm(SpellAction):
     """Ice Storm - 4th level Evocation
 
     Hail pounds a 20ft-radius, 40ft-high cylinder. DEX save or
-    2d8 bludgeoning + 4d6 cold (half on save). Ground becomes difficult terrain for 1 round.
+    2d8 bludgeoning + 4d6 cold (half on save). Difficult terrain lasts through the caster's next turn.
 
     At Higher Levels: +1d8 bludgeoning per level above 4th.
     """
     name: str = Field(default="Ice Storm", description="Display name for the ice storm spell.")
-    description: str = Field(default="20ft cylinder: 2d8 bludg + 4d6 cold (DEX half), difficult terrain 1 round", description="Rules-facing summary for the ice storm spell.")
+    description: str = Field(default="20ft cylinder: 2d8 bludgeoning + 4d6 cold (DEX half); difficult terrain through the caster's next turn", description="Rules-facing summary for the ice storm spell.")
     spell_level: int = Field(default=4, description="Spell slot level required to cast ice storm; cantrips use 0.")
     spell_school: str = Field(default="evocation", description="D&D school of magic used to classify ice storm.")
     concentration: bool = Field(default=False, description="Whether ice storm creates and maintains a concentration condition.")
     target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for ice storm.")
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=60), description="Range contract used when validating targets for ice storm.")
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=300), description="Range contract used when validating targets for ice storm.")
     projectile_type: Optional[str] = Field(default="rain", description="Projectile visualization hint for ice storm.")
     spell_damage_type: Optional[DamageType] = Field(default=DamageType.BLUDGEONING, description="Primary damage type for VFX")
 
     aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by ice storm to compute affected targets.")
     include_self: bool = Field(default=True, description="Whether ice storm can include the caster among valid targets.")
     valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for ice storm.")
+
+    aoe_require_targets: bool = False
+
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        return self._resolve_area_targets()
 
     base_bludg_dice: int = Field(default=2, description="Domain value for base_bludg_dice on ice storm.")
     cold_dice: int = Field(default=4, description="Domain value for cold_dice on ice storm.")
@@ -3318,6 +3390,11 @@ class IceStorm(SpellAction):
         if not self.end_position:
             return declaration_event.cancel(status_message="No target position")
 
+        error = self.target_position_error(self.end_position)
+        if error is not None:
+            return declaration_event.cancel(status_message=error)
+        if not caster.senses.visible.get(self.end_position, False):
+            return declaration_event.cancel(status_message="Target position is not visible")
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
 
@@ -3348,6 +3425,8 @@ class IceStorm(SpellAction):
             status_message=f"DEX save: {save_roll.total} vs DC {dc}"
         )
 
+        if effect_event.canceled:
+            return effect_event
         bludg_count = self.base_bludg_dice + upcast_bonus
         damage_bonus = caster.get_spell_damage_bonus()
 
@@ -3384,7 +3463,8 @@ class IceStorm(SpellAction):
             source_entity_uuid=caster.uuid,
             damage_rolls=applied_rolls,
             damages=[bludg_damage, cold_damage],
-            parent_event=effect_event.uuid
+            parent_event=effect_event.uuid,
+            effect_origin=execution_event.to_effect_origin(),
         )
 
         return effect_event.with_updates(
@@ -3399,7 +3479,7 @@ class IceStorm(SpellAction):
         self._setup_terrain(effect_event)
 
     def _setup_terrain(self, effect_event: SpellEvent) -> None:
-        """Apply 1-round difficult terrain at the target area."""
+        """Own the resolved footprint until the caster's next turn ends."""
         caster = Entity.get(self.source_entity_uuid)
         if not caster:
             return
@@ -3412,10 +3492,106 @@ class IceStorm(SpellAction):
             source_entity_uuid=caster.uuid,
             position=target_pos,
             effect_origin=effect_event.to_effect_origin(),
+            affected_positions=set(effect_event.resolved_area_positions or ()),
         )
-        terrain.duration.duration_type = DurationType.ROUNDS
-        terrain.duration.duration = 1
         terrain.activate(parent_event=effect_event)
+
+
+class SunbeamBlindedEffect(BaseCondition):
+    """One failed beam's shared blindness, ending on its source's next turn."""
+    name: str = "Sunbeam Blindness"
+    description: str = "Blinded until the start of the caster's next turn."
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+
+    def _apply(self, declaration_event: Event):
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if target is None or not _share_solar_blindness(self, target, declaration_event):
+            return [], [], [], [], declaration_event.cancel(status_message="Blinded was not admitted")
+
+        def expire(event: Event) -> None:
+            target.remove_condition_by_uuid(self.uuid, parent_event=event)
+
+        handler = _source_turn_expiry_handler(self, declaration_event, at_end=False, expire=expire)
+        target.add_event_handler(handler)
+        return [], [handler.uuid], [], [], declaration_event.phase_to(EventPhase.EFFECT)
+
+
+class SunbeamEffect(ConcentrationActionMarker):
+    """The concentration-owned hand light and exact repeat-action grant."""
+    name: str = "Sunbeam"
+    description: str = "Sunlight in the hand; create another beam as an action."
+    condition_category: ConditionCategory = ConditionCategory.STATUS
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
+    duration: Duration = Field(default_factory=lambda: Duration(duration_type=DurationType.ROUNDS, duration=10))
+    light_source_uuid: UUID | None = None
+    _removed_light: SpatialChangeEvent | None = PrivateAttr(default=None)
+
+    def _apply(self, declaration_event: Event):
+        caster = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        if caster is None:
+            return [], [], [], [], declaration_event.cancel(status_message="Caster missing")
+        result = super()._apply(declaration_event)
+        effect = result[4]
+        if effect is not None and not effect.canceled:
+            self.light_source_uuid = get_map().add_light_source(caster.position,
+                bright_radius_feet=30, dim_radius_feet=30, sunlight=True,
+                anchor_uuid=caster.uuid, parent_event=effect.uuid,
+                contribution_owner_uuid=self.uuid)
+        return result
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        if self.light_source_uuid is not None:
+            self._removed_light = get_map().remove_light_source(self.light_source_uuid,
+                parent_event=parent_event.uuid if parent_event else None, publish_event=not self.applied)
+            self.light_source_uuid = None
+        super()._release_owned_runtime_state(parent_event=parent_event)
+
+    def on_membership_changed(self, event: Event) -> None:
+        removed, self._removed_light = self._removed_light, None
+        if removed is not None:
+            get_map()._fire_committed_spatial_event(removed)
+
+
+def _sunbeam_direction_error(spell: SpellAction) -> str | None:
+    caster = Entity.get(spell.source_entity_uuid)
+    if caster is None or spell.end_position is None:
+        return "Caster or beam direction missing"
+    if spell.end_position == caster.position or spell.get_target_distance(spell.end_position) > 60:
+        return "Choose a beam direction within 60ft"
+    return None
+
+
+def _apply_sunbeam(spell: SpellAction, event: SpellEvent, *, dc: int,
+                   origin: EffectOrigin | None) -> SpellEvent:
+    caster = Entity.get(spell.source_entity_uuid)
+    target = Entity.get(spell.target_entity_uuid) if spell.target_entity_uuid else None
+    if caster is None or target is None:
+        return event.cancel(status_message="Caster or target missing")
+    modifier_uuid = None
+    save_bonus = target.saving_throws.get_saving_throw("constitution").bonus.self_static
+    if target.creature_type in (CreatureType.UNDEAD, CreatureType.OOZE):
+        modifier_uuid = save_bonus.add_advantage_modifier(AdvantageModifier(
+            name="Sunbeam (Undead/Ooze)", value=AdvantageStatus.DISADVANTAGE,
+            source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid))
+    try:
+        effect, _, success = spell.resolve_saving_throw(event,
+            caster=caster, target=target, ability_name="constitution", dc=dc)
+    finally:
+        if modifier_uuid is not None:
+            save_bonus.remove_modifier(modifier_uuid)
+    if effect.canceled:
+        return effect
+    damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+        damage_dice=8, dice_numbers=6, damage_bonus=caster.get_spell_damage_bonus(),
+        damage_type=DamageType.RADIANT)
+    roll = damage.get_dice(AttackOutcome.HIT).roll
+    amount = roll.total // 2 if success else roll.total
+    target.receive_damage(amount, DamageType.RADIANT, caster.uuid,
+        damage_rolls=[roll], damages=[damage], parent_event=effect.uuid, effect_origin=origin)
+    if not success and target.health.life_state is not LifeState.DEAD:
+        target.add_condition(SunbeamBlindedEffect(source_entity_uuid=caster.uuid,
+            target_entity_uuid=target.uuid, effect_origin=origin), parent_event=effect)
+    return effect.with_updates(damages=[damage], damage_rolls=[roll], total_damage=amount)
 
 
 @srd_action_identity(
@@ -3426,277 +3602,246 @@ class IceStorm(SpellAction):
     source_page=184,
     sort_order=930,
 )
-class SunbeamStrike(BaseAction):
-    """Action granted by Sunbeam to fire a beam of radiant light each turn."""
-    name: str = Field(default="Sunbeam Strike", description="Display name for the sunbeam strike action.")
-    description: str = Field(default="Fire a beam of brilliant light - 60ft line", description="Rules-facing summary for the sunbeam strike action.")
-    target_type: TargetType = Field(default=TargetType.POSITION_AOE, description="Targeting mode used by action discovery and validation for sunbeam strike.")
-    action_category: ActionCategory = Field(default=ActionCategory.ABILITY, description="Domain value for action_category on sunbeam strike.")
-    aoe_shape: Optional[AoEShape] = Field(default=None, description="Area shape used by sunbeam strike to compute affected targets.")
-    costs: List[Cost] = Field(default_factory=lambda: [
-        Cost(name="Sunbeam Strike", cost_type="actions", cost=1, evaluator=entity_action_economy_cost_evaluator)
-    ], description="Action economy costs paid to execute sunbeam strike.")
-    spell_dc: int = Field(default=10, description="Spell save DC used by sunbeam strike saving throws.")
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Range contract used when validating targets for sunbeam strike.")
-    include_self: bool = Field(default=False, description="Whether sunbeam strike can include the caster among valid targets.")
-    valid_target_filter: str = Field(default="all", description="Relationship filter used when collecting valid targets for sunbeam strike.")
+class SunbeamStrike(SpellAction):
+    """One ordinary paid activation of an exact retained Sunbeam owner."""
+    name: str = "Sunbeam Strike"
+    description: str = "60 by 5ft beam, 6d8 radiant and blindness; CON half."
+    action_category: ActionCategory = ActionCategory.ABILITY
+    spell_level: int = 6
+    spell_school: str = "evocation"
+    alt_skip_slot: bool = True
+    verbal: bool = False
+    target_type: TargetType = TargetType.POSITION_AOE
+    aoe_require_targets: bool = False
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    spell_damage_type: Optional[DamageType] = DamageType.RADIANT
+    projectile_type: Optional[str] = "beam"
+    include_self: bool = False
+    valid_target_filter: str = "all"
+    spell_dc: int = 10
+    grant_condition_uuid: UUID
+    effect_origin: EffectOrigin | None = None
 
     def model_post_init(self, __context: Any) -> None:
         super().model_post_init(__context)
         if self.aoe_shape is None:
-            self.aoe_shape = Line(
-                source_entity_uuid=self.source_entity_uuid,
-                target=self.end_position or (1, 0),
-                length_feet=60,
-                width_feet=5
-            )
+            self.aoe_shape = Line(source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (1, 0), length_feet=60, width_feet=5)
 
-    def _create_event(self) -> Event:
-        return Event(
-            name=self.name,
-            source_entity_uuid=self.source_entity_uuid,
-            target_entity_uuid=self.target_entity_uuid,
-            event_type=EventType.CAST_SPELL,
-            phase=EventPhase.DECLARATION
-        )
+    def _create_declaration_event(self, parent_event: Event | None = None,
+                                  use_register: bool = True) -> Optional[Event]:
+        event = super()._create_declaration_event(parent_event, use_register)
+        if isinstance(event, SpellEvent):
+            return event.with_updates(retained_effect_origin=self.effect_origin)
+        return event
 
-    def _validate(self, declaration_event: Event) -> Optional[Event]:
+    def validate_source_requirements_for_discovery(self) -> bool:
         caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
+        owner = caster.active_conditions_by_uuid.get(self.grant_condition_uuid) if caster else None
+        return owner is not None and owner.applied and owner.contributions_active()
 
-        if "Concentrating" not in caster.active_conditions:
-            return declaration_event.cancel(status_message="Not concentrating on Sunbeam")
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        return self._resolve_area_targets()
 
-        conc = caster.active_conditions.get("Concentrating")
-        if not isinstance(conc, Concentrating) or conc.get_slot_by_spell_name("Sunbeam") is None:
-            return declaration_event.cancel(status_message="Not concentrating on Sunbeam")
+    def _validate(self, event: SpellEvent) -> Optional[ActionEvent]:
+        if not self.validate_source_requirements_for_discovery():
+            return event.cancel(status_message="Sunbeam concentration has ended")
+        error = _sunbeam_direction_error(self)
+        return event.cancel(status_message=error) if error else super()._validate(event)
 
-        if not self.end_position:
-            return declaration_event.cancel(status_message="No direction specified")
-
-        return declaration_event.phase_to(
-            new_phase=EventPhase.EXECUTION,
-            status_message=f"Validated {self.name}"
-        )
-
-    def _apply(self, execution_event: Event) -> Optional[Event]:
-        """Per-target: CON save, 6d8 radiant, Blinded on fail."""
-        caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-
-        if not caster or not target:
-            return execution_event.cancel(status_message="Caster or target not found")
-
-        save_request = caster.create_saving_throw_request(
-            target_entity_uuid=target.uuid,
-            ability_name="constitution",
-            dc=self.spell_dc,
-            parent_event=execution_event.uuid
-        )
-        _, save_roll, success = target.saving_throw(save_request)
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"CON save: {save_roll.total} vs DC {self.spell_dc}"
-        )
-
-        damage_bonus = caster.get_spell_damage_bonus()
-        radiant_damage = Damage(
-            source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
-            damage_dice=8, dice_numbers=6, damage_bonus=damage_bonus,
-            damage_type=DamageType.RADIANT
-        )
-        damage_roll = radiant_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
-        final_damage = damage_roll.total // 2 if success else damage_roll.total
-        target.receive_damage(final_damage, DamageType.RADIANT, caster.uuid, parent_event=effect_event.uuid)
-
-        if not success:
-            blinded = Blinded(
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=target.uuid,
-                tags={ConditionTag.MAGICAL}
-            )
-            blinded.duration.duration_type = DurationType.ROUNDS
-            blinded.duration.duration = 1
-            target.add_condition(blinded, parent_event=effect_event)
-
-        save_text = " (saved for half)" if success else " + Blinded"
-        return effect_event.with_updates(
-            damages=[radiant_damage],
-            damage_rolls=[damage_roll],
-            total_damage=final_damage,
-            status_message=f"Sunbeam deals {final_damage} radiant to {target.name}{save_text}"
-        )
-
-    def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
-        """Spend the action declared by the granted beam."""
-        return entity_action_economy_cost_applier(
-            execution_event,
-            self.source_entity_uuid,
-        )
+    def _apply(self, event: SpellEvent) -> SpellEvent:
+        if not self.validate_source_requirements_for_discovery():
+            return event.cancel(status_message="Sunbeam concentration has ended")
+        return _apply_sunbeam(self, event, dc=self.spell_dc, origin=self.effect_origin)
 
 
 class Sunbeam(SpellAction):
-    """Sunbeam - 6th level Evocation (Concentration)
+    """One initial beam plus a one-minute, concentration-owned light and repeat."""
+    name: str = "Sunbeam"
+    description: str = "60 by 5ft beam, 6d8 radiant and blindness; CON half; repeat as an action."
+    spell_level: int = 6
+    spell_school: str = "evocation"
+    concentration: bool = True
+    spell_damage_type: Optional[DamageType] = DamageType.RADIANT
+    projectile_type: Optional[str] = "beam"
+    target_type: TargetType = TargetType.POSITION_AOE
+    aoe_require_targets: bool = False
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF))
+    include_self: bool = False
+    valid_target_filter: str = "all"
+    spell_dc: int | None = None
+    effect_origin: EffectOrigin | None = None
 
-    A beam of brilliant light flashes out in a 60ft line.
-    CON save or 6d8 radiant + Blinded (half on save, no blind).
-    You can create a new beam each turn as an action.
-    """
-    name: str = Field(default="Sunbeam", description="Display name for the sunbeam spell.")
-    description: str = Field(default="60ft line beam, 6d8 radiant + Blinded (CON half), repeatable", description="Rules-facing summary for the sunbeam spell.")
-    spell_level: int = Field(default=6, description="Spell slot level required to cast sunbeam; cantrips use 0.")
-    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify sunbeam.")
-    spell_damage_type: Optional[DamageType] = Field(default=DamageType.RADIANT, description="Primary damage type for VFX")
-    concentration: bool = Field(default=True, description="Whether sunbeam creates and maintains a concentration condition.")
-    target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode used by action discovery and validation for sunbeam.")
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.SELF), description="Range contract used when validating targets for sunbeam.")
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if self.aoe_shape is None:
+            self.aoe_shape = Line(source_entity_uuid=self.source_entity_uuid,
+                target=self.end_position or (1, 0), length_feet=60, width_feet=5)
 
-    def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        return self._resolve_area_targets()
+
+    def _validate(self, event: SpellEvent) -> Optional[ActionEvent]:
+        error = _sunbeam_direction_error(self)
+        return event.cancel(status_message=error) if error else super()._validate(event)
+
+    def _apply_target_applications(self, execution_event: ActionEvent, effect_event: ActionEvent,
+                                  target_uuids: List[UUID]) -> ActionEvent:
         caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return execution_event.cancel(status_message="Caster not found")
-
-        dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"{caster.name} casts Sunbeam"
-        )
-
-        strike = SunbeamStrike(
-            source_entity_uuid=caster.uuid,
-            spell_dc=dc,
-            template=True
-        )
+        if caster is None:
+            return effect_event.cancel(status_message="Caster missing")
+        self.spell_dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
+        marker = SunbeamEffect(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid,
+            action_name="Sunbeam Strike")
+        strike = SunbeamStrike(source_entity_uuid=caster.uuid, template=True,
+            grant_condition_uuid=marker.uuid, spell_dc=self.spell_dc,
+            cast_at_level=self.cast_at_level, spellcasting_source_id=self.spellcasting_source_id)
+        marker.action_uuid = strike.uuid
+        admitted = self.apply_owned_condition(type_cast(SpellEvent, effect_event), marker)
+        if admitted.canceled or not marker.applied:
+            strike.remove_from_register()
+            return admitted
+        self.effect_origin = marker.effect_origin
+        strike.effect_origin = marker.effect_origin
         caster.register_action(strike)
+        return super()._apply_target_applications(execution_event, admitted, target_uuids)
 
-        concentration = self.ensure_concentration(effect_event)
-        marker = ConcentrationActionMarker(
-            source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            action_name=strike.name
-        )
-        caster.add_condition(marker, parent_event=effect_event)
-        concentration.add_linked_condition(caster.uuid, marker.uuid)
-
-        if self.end_position:
-            first_strike = SunbeamStrike(
-                source_entity_uuid=caster.uuid,
-                end_position=self.end_position,
-                spell_dc=dc,
-                template=False,
-                costs=[],
-            )
-            first_strike.apply()
-
-        return effect_event.with_updates(
-            status_message=f"{caster.name} channels Sunbeam - can fire a beam each turn"
-        )
+    def _apply(self, event: SpellEvent) -> SpellEvent:
+        if self.spell_dc is None:
+            return event.cancel(status_message="Sunbeam was not admitted")
+        return _apply_sunbeam(self, event, dc=self.spell_dc, origin=self.effect_origin)
 
 
 class ChainLightning(SpellAction):
-    """Chain Lightning - 6th level Evocation
+    """One paid bolt and independently selected branches from its primary contact."""
+    name: str = "Chain Lightning"
+    description: str = "10d8 lightning to a primary and up to three selected nearby recipients (DEX half)"
+    spell_level: int = 6
+    spell_school: str = "evocation"
+    target_type: TargetType = TargetType.MULTI_ENTITY
+    multi_target_objects: bool = True
+    allow_same_target: bool = False
+    include_self: bool = True
+    valid_target_filter: str = "all"
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150))
+    projectile_type: Optional[str] = "bolt"
+    spell_damage_type: Optional[DamageType] = DamageType.LIGHTNING
+    _primary_endpoint: EffectEndpoint | None = PrivateAttr(default=None)
+    _source_endpoint: EffectEndpoint | None = PrivateAttr(default=None)
 
-    You create a bolt of lightning that arcs toward a target of your choice
-    within range. Three bolts then leap from that target to up to three other
-    targets within 30 feet. Each target makes a DEX save, taking 10d8 lightning
-    on failure or half on success.
+    def get_multi_target_count(self) -> Optional[int]:
+        return 4 + self.get_upcast_bonus()
 
-    At Higher Levels: +1 additional secondary target per slot level above 6th.
-    """
-    name: str = Field(default="Chain Lightning", description="Display name for the chain lightning spell.")
-    description: str = Field(default="10d8 lightning to primary + up to 3 secondaries (DEX half)", description="Rules-facing summary for the chain lightning spell.")
-    spell_level: int = Field(default=6, description="Spell slot level required to cast chain lightning; cantrips use 0.")
-    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify chain lightning.")
-    target_type: TargetType = Field(default=TargetType.ENTITY, description="Targeting mode used by action discovery and validation for chain lightning.")
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.RANGE, normal=150), description="Range contract used when validating targets for chain lightning.")
-    valid_target_filter: str = Field(default="enemies", description="Relationship filter used when collecting valid targets for chain lightning.")
-    projectile_type: Optional[str] = Field(default="bolt", description="Projectile visualization hint for chain lightning.")
-    spell_damage_type: Optional[DamageType] = Field(default=DamageType.LIGHTNING, description="Primary damage type for VFX")
+    def _contact(self, identity: UUID, origin: Tuple[int, int], distance: int) -> EffectEndpoint | None:
+        caster = Entity.get(self.source_entity_uuid)
+        target = BaseBlock.get(identity)
+        if caster is None or target is None or not target.is_active:
+            return None
+        grid = get_map()
+        if isinstance(target, BaseItem):
+            seen = caster.senses.objects.get(identity)
+            if seen is None or not seen.visual or not target.is_targetable or not target.is_breakable():
+                return None
+            position = grid.attack_object_contact(caster.uuid, identity, range_feet=distance,
+                access=PhysicalAccess.PROJECTILE, subjective=True, origin=origin)
+            placement = grid.get_object_placement(identity)
+            if position is None or placement is None:
+                return None
+            return EffectEndpoint(kind="object", uuid=identity, position=position,
+                                  base_height_steps=placement.base_height_steps)
+        seen = caster.senses.entities.get(identity)
+        if identity != caster.uuid and (seen is None or not seen.visual):
+            return None
+        tile, start = grid.get_tile(*target.position), grid.get_tile(*origin)
+        if tile is None or start is None or support_distance_feet(origin, start.height * 5,
+                target.position, tile.height * 5) > distance:
+            return None
+        if not grid.can_reach_between(origin, target.position, PhysicalAccess.PROJECTILE, caster.uuid):
+            return None
+        return EffectEndpoint(kind="creature", uuid=identity, position=target.position,
+                              base_height_steps=tile.height)
+
+    def get_secondary_target_options(self, primary_uuid: UUID) -> Optional[List[AvailableTarget]]:
+        caster = Entity.get(self.source_entity_uuid)
+        origin = self.get_target_origin()
+        if caster is None or origin is None:
+            return []
+        primary = self._contact(primary_uuid, origin, self.effective_range)
+        if primary is None:
+            return []
+        candidates = {caster.uuid, *caster.senses.entities, *caster.senses.objects} - {primary_uuid}
+        result = []
+        for identity in sorted(candidates, key=str):
+            contact = self._contact(identity, primary.position, 30)
+            target = BaseBlock.get(identity)
+            if contact is not None and target is not None:
+                result.append(AvailableTarget(index=len(result), target_uuid=identity,
+                    target_kind=contact.kind, target_name=target.name, position=contact.position,
+                    distance=support_distance_feet(primary.position, primary.base_height_steps * 5,
+                        contact.position, contact.base_height_steps * 5)))
+        return result
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
-        result = validate_line_of_sight(declaration_event, self.source_entity_uuid)
-        return type_cast(Optional[SpellEvent], result)
+        targets = self.get_all_targets()
+        if not targets or len(targets) > 4 + self.get_upcast_bonus() or len(set(targets)) != len(targets):
+            return declaration_event.cancel(status_message="Choose one primary and distinct secondary targets within the spell limit")
+        origin = self.get_target_origin()
+        primary = self._contact(targets[0], origin, self.effective_range) if origin is not None else None
+        if primary is None:
+            return declaration_event.cancel(status_message="Primary target is not visibly reachable within spell range")
+        if any(self._contact(identity, primary.position, 30) is None for identity in targets[1:]):
+            return declaration_event.cancel(status_message="Every secondary must be visibly reachable within 30 feet of the primary")
+        return declaration_event.phase_to(EventPhase.EXECUTION)
+
+    def _resolve_execution_targets(self) -> Tuple[List[UUID], Optional[Tuple[Tuple[int, int], ...]]]:
+        targets = self.get_all_targets()
+        origin = self.get_target_origin()
+        self._primary_endpoint = self._contact(targets[0], origin, self.effective_range) if targets and origin is not None else None
+        tile = get_map().get_tile(*origin) if origin is not None else None
+        self._source_endpoint = (EffectEndpoint(kind="object" if self.cast_origin == "source_item" else "creature",
+            uuid=(self.source_item_uuid or self.source_entity_uuid) if self.cast_origin == "source_item" else self.source_entity_uuid,
+            position=origin, base_height_steps=tile.height)
+            if tile is not None and origin is not None else None)
+        return targets if self._primary_endpoint is not None else [], None
+
+    def get_application_propagation(self, target_uuid: UUID,
+                                    membership: ApplicationMembership) -> EffectPropagationLink | None:
+        source = self._source_endpoint if membership.index == 0 else self._primary_endpoint
+        if source is None:
+            return None
+        target = self._contact(target_uuid, source.position, self.effective_range if membership.index == 0 else 30)
+        return (EffectPropagationLink(source=source, target=target, application_id=membership.application_id)
+                if target is not None else None)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
-        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
-        if not caster or not target:
-            return execution_event.cancel(status_message="Caster or target not found")
-
+        recipient = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        link = execution_event.propagation
+        if caster is None or not isinstance(recipient, (Entity, BaseItem)) or link is None:
+            return execution_event.cancel(status_message="Lightning contact is no longer admitted")
         dc = caster.spell_save_dc(spellcasting_source_id=self.spellcasting_source_id)
-        upcast_bonus = self.get_upcast_bonus()
-        max_secondaries = 3 + upcast_bonus
-        base_dice = 10 + upcast_bonus
-        damage_bonus = caster.get_spell_damage_bonus()
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            save_ability="dexterity", save_dc=dc,
-            status_message=f"{caster.name} casts Chain Lightning"
-        )
-
-        chain_targets = [target]
-        chain_positions: Set[Tuple[int, int]] = {target.position}
-        chain_uuids = {target.uuid}
-
-        visible_enemy_dict = caster.get_visible_enemies()
-        visible_enemies: List[Entity] = []
-        for e_uuid in visible_enemy_dict:
-            e = Entity.get(e_uuid)
-            if e:
-                visible_enemies.append(e)
-
-        for _ in range(max_secondaries):
-            best_candidate: Optional[Entity] = None
-            best_distance = float('inf')
-
-            for enemy in visible_enemies:
-                if enemy.uuid in chain_uuids or not enemy.has_hp:
-                    continue
-
-                for chain_pos in chain_positions:
-                    dist = enemy.senses.get_feet_distance(chain_pos)
-                    if dist <= 30 and dist < best_distance:
-                        best_distance = dist
-                        best_candidate = enemy
-
-            if best_candidate is None:
-                break
-            chain_targets.append(best_candidate)
-            chain_positions.add(best_candidate.position)
-            chain_uuids.add(best_candidate.uuid)
-
-        total_damage = 0
-        all_damages: List[Damage] = []
-        all_rolls = []
-        for chain_target in chain_targets:
-            save_request = caster.create_saving_throw_request(
-                target_entity_uuid=chain_target.uuid,
-                ability_name="dexterity", dc=dc,
-                parent_event=effect_event.uuid
-            )
-            _, _, success = chain_target.saving_throw(save_request)
-            lightning_damage = Damage(
-                source_entity_uuid=caster.uuid, target_entity_uuid=chain_target.uuid,
-                damage_dice=8, dice_numbers=base_dice, damage_bonus=damage_bonus,
-                damage_type=DamageType.LIGHTNING
-            )
-            damage_roll = lightning_damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
-            final_damage = damage_roll.total // 2 if success else damage_roll.total
-            chain_target.receive_damage(final_damage, DamageType.LIGHTNING, caster.uuid, parent_event=effect_event.uuid)
-            total_damage += final_damage
-            all_damages.append(lightning_damage)
-            all_rolls.append(damage_roll)
-
-        return effect_event.with_updates(
-            damages=all_damages,
-            damage_rolls=all_rolls,
-            total_damage=total_damage,
-            status_message=f"Chain Lightning hits {len(chain_targets)} targets for {total_damage} total lightning damage"
-        )
+        success = False
+        save_roll = None
+        if isinstance(recipient, Entity):
+            request = caster.create_saving_throw_request(target_entity_uuid=recipient.uuid,
+                ability_name="dexterity", dc=dc, parent_event=execution_event.uuid)
+            _, save_roll, success = recipient.saving_throw(request)
+        effect = execution_event.phase_to(EventPhase.EFFECT, target_kind=link.target.kind,
+            target_position=link.target.position, target_base_height_steps=link.target.base_height_steps,
+            save_ability="dexterity", save_dc=dc, save_roll=save_roll, save_success=success)
+        if effect.canceled or not recipient.is_active:
+            return effect
+        damage = Damage(source_entity_uuid=caster.uuid, target_entity_uuid=recipient.uuid,
+            damage_dice=8, dice_numbers=10, damage_bonus=caster.get_spell_damage_bonus(), damage_type=DamageType.LIGHTNING)
+        rolled = damage.get_dice(attack_outcome=AttackOutcome.HIT).roll
+        amount = rolled.total // 2 if success else rolled.total
+        if isinstance(recipient, BaseItem):
+            recipient.receive_damage(amount, DamageType.LIGHTNING, caster.uuid,
+                parent_event=effect, damages=[damage], damage_rolls=[rolled])
+        else:
+            recipient.receive_damage(amount, DamageType.LIGHTNING, caster.uuid,
+                parent_event=effect.uuid, damages=[damage], damage_rolls=[rolled])
+        return effect.with_updates(damages=[damage], damage_rolls=[rolled], total_damage=amount)
 
 
 class PrismaticRestrained(BaseCondition):
@@ -4286,180 +4431,99 @@ class Light(SpellAction):
         )
 
 
-class ContinualFlameObject(BaseBlock):
-    """World-object anchor representing a permanent heatless flame."""
-    name: str = Field(default="Continual Flame", description="Display name for the continual flame object model.")
-    flame_position: Optional[Tuple[int, int]] = Field(default=None, description="Grid position where continual flame object emits light.")
+class ContinualFlameCondition(BaseCondition):
+    """Permanent heatless light owned by the touched item."""
 
-    def place_flame(self, position: Tuple[int, int]) -> None:
-        """Place the visual anchor; the spatial condition owns its light."""
-        self.flame_position = position
-        get_map().place_object(self.uuid, position)
-
-    def destroy(self, parent_event: Optional[Event] = None) -> None:
-        """Remove the anchor; its removal event retires the condition."""
-        if self.flame_position:
-            grid = get_map()
-            grid.remove_object(
-                self.uuid,
-                parent_event=(parent_event.uuid if parent_event is not None else None),
-            )
-            self.flame_position = None
-        BaseBlock.unregister(self.uuid)
-
-
-CONTINUAL_FLAME_CONDITION_CONTENT_REF = ContentRef(
-    pack_id="content.srd_5_1_cc",
-    definition_kind=ContentDefinitionKind.CONDITION,
-    content_id="spatial_effect.spell.continual_flame",
-    content_version=1,
-    definition_contract_hash=(
-        "a74aa0ee0fa241101b5c7d3b2551d638"
-        "6e4817a8ae5ad5e5cadbc4a15d5fdeb0"
-    ),
-)
-
-
-class ContinualFlameCondition(SpatialCondition):
-    """Permanent world-object-anchored light owner."""
-
-    has_visible_presence: bool = True
-    name: str = Field(default="Continual Flame")
-    description: str = Field(
-        default="A permanent heatless flame sheds bright and dim light.",
-    )
-    content_ref: ContentRef = Field(default=CONTINUAL_FLAME_CONDITION_CONTENT_REF)
-    position: Tuple[int, int]
-    anchor_kind: SpatialEffectAnchorKind = Field(
-        default=SpatialEffectAnchorKind.WORLD_OBJECT,
-    )
-    anchor_uuid: UUID = Field(default=PydanticUndefined, validate_default=True)
-    layer: SpatialEffectLayer = Field(default=SpatialEffectLayer.FIELD)
-    occupancy_policy: SpatialEffectOccupancyPolicy = Field(
-        default=SpatialEffectOccupancyPolicy.OVERLAPPING,
-    )
+    name: str = "Continual Flame"
+    description: str = "A permanent heatless flame sheds bright20/dim20 light while exposed."
+    semantic_key: Optional[str] = "condition.spell.continual_flame"
     _light_source_uuid: Optional[UUID] = PrivateAttr(default=None)
+    _light_anchor_uuid: Optional[UUID] = PrivateAttr(default=None)
+    _removed_light: SpatialChangeEvent | None = PrivateAttr(default=None)
 
-    def resolve_condition_footprint(self) -> Set[Tuple[int, int]]:
-        return {self.position} if get_map().has_tile(*self.position) else set()
+    def snapshot_item_effect(self) -> ItemEffectPresentationState:
+        return ItemEffectPresentationState(effect_uuid=self.uuid,
+            behavior_id=self.get_semantic_key(),
+            applied_source_event_cursor=self.applied_source_event_cursor)
 
-    def _apply(
-        self,
-        execution_event: Event,
-    ) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Event]:
-        modifiers, handlers, children, spatial_handlers, effect = super()._apply(
-            execution_event,
-        )
-        self._light_source_uuid = get_map().add_light_source(
-            position=self.position,
-            bright_radius_feet=20,
-            dim_radius_feet=20,
-            anchor_uuid=self.anchor_uuid,
-            parent_event=effect.uuid,
-        )
-        return modifiers, handlers, children, spatial_handlers, effect
+    def _commit_application(self, effect_event: Event) -> None:
+        self.on_owner_placement_committed(effect_event)
 
-    def _change_footprint(
-        self,
-        positions: Set[Tuple[int, int]],
-        *,
-        parent_event: Event,
-    ):
-        """Move the attached light under the footprint-change effect."""
-        change_effect = super()._change_footprint(
-            positions,
-            parent_event=parent_event,
-        )
-        if change_effect is None:
-            return None
-        if self._light_source_uuid is not None:
-            get_map().move_light_source(
-                self._light_source_uuid,
-                self.position,
-                parent_event=change_effect.uuid,
-            )
-        return change_effect
-
-    def _release_owned_runtime_state(
-        self,
-        *,
-        parent_event: Optional[Event] = None,
-    ) -> None:
-        if self._light_source_uuid is not None:
-            change = get_map().remove_light_source(
-                self._light_source_uuid,
-                parent_event=(parent_event.uuid if parent_event is not None else None),
-                publish_event=self._removal_publication is None,
-            )
-            if change is not None and self._removal_publication is not None:
-                self._removal_publication.light_changes.append(change)
+    def on_owner_placement_committed(self, event: Event) -> None:
+        item = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+        if not isinstance(item, BaseItem):
+            return
+        grid = get_map()
+        placement = grid.get_object_placement(item.uuid)
+        anchor_uuid = (item.uuid if placement is not None else
+            item.owner_uuid if item.is_equipped else None)
+        anchor = BaseBlock.get(anchor_uuid) if anchor_uuid is not None else None
+        position = (placement.position if placement is not None else
+            anchor.get_position() if anchor is not None else None)
+        if item.integrity is ItemIntegrity.DESTROYED:
+            anchor_uuid, position = None, None
+        if self._light_source_uuid is not None and anchor_uuid != self._light_anchor_uuid:
+            grid.remove_light_source(self._light_source_uuid, parent_event=event.uuid)
             self._light_source_uuid = None
+        self._light_anchor_uuid = anchor_uuid
+        if position is None or anchor_uuid is None:
+            return
+        if self._light_source_uuid is None:
+            self._light_source_uuid = grid.add_light_source(position=position,
+                bright_radius_feet=20, dim_radius_feet=20,
+                anchor_uuid=anchor_uuid, parent_event=event.uuid, contribution_owner_uuid=self.uuid)
+        else:
+            grid.move_light_source(self._light_source_uuid, position, parent_event=event.uuid)
+
+    def _release_owned_runtime_state(self, *, parent_event: Event | None = None) -> None:
+        if self._light_source_uuid is not None:
+            self._removed_light = get_map().remove_light_source(self._light_source_uuid,
+                parent_event=parent_event.uuid if parent_event else None, publish_event=not self.applied)
+            self._light_source_uuid = None
+            self._light_anchor_uuid = None
         super()._release_owned_runtime_state(parent_event=parent_event)
+
+    def on_membership_changed(self, event: Event) -> None:
+        removed, self._removed_light = self._removed_light, None
+        if removed is not None:
+            get_map()._fire_committed_spatial_event(removed)
 
 
 class ContinualFlame(SpellAction):
-    """Continual Flame - 2nd level Evocation (NOT concentration)
+    """Touch one real item to give it permanent, coverable, heatless light."""
 
-    A flame, equivalent in brightness to a torch, springs forth from an object
-    that you touch. The flame emits no heat and doesn't use oxygen. A continual
-    flame can be covered or hidden but not smothered or quenched.
+    name: str = "Continual Flame"
+    description: str = "Touch: permanent 20ft bright + 20ft dim light on object"
+    spell_level: int = 2
+    spell_school: str = "evocation"
+    concentration: bool = False
+    target_type: TargetType = TargetType.OBJECT
+    include_owned_item_targets: bool = True
+    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5))
 
-    The flame sheds bright light in a 20-foot radius and dim light for an
-    additional 20 feet. Permanent until dispelled.
-    """
-    name: str = Field(default="Continual Flame", description="Display name for the continual flame spell.")
-    description: str = Field(default="Touch: permanent 20ft bright + 20ft dim light on object", description="Rules-facing summary for the continual flame spell.")
-    spell_level: int = Field(default=2, description="Spell slot level required to cast continual flame; cantrips use 0.")
-    spell_school: str = Field(default="evocation", description="D&D school of magic used to classify continual flame.")
-    concentration: bool = Field(default=False, description="Whether continual flame creates and maintains a concentration condition.")
-    target_type: TargetType = Field(default=TargetType.POSITION, description="Targeting mode used by action discovery and validation for continual flame.")
-    spell_range: Range = Field(default_factory=lambda: Range(type=RangeType.REACH, normal=5), description="Range contract used when validating targets for continual flame.")
-
-    def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
+    def physical_access_error(self, *, subjective: bool = False) -> Optional[str]:
+        item = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
         caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return declaration_event.cancel(status_message="Caster not found")
-        if not self.end_position:
-            return declaration_event.cancel(status_message="No target position")
-
-        parent_result = super()._validate(declaration_event)
-        return type_cast(Optional[SpellEvent], parent_result)
+        if not isinstance(item, BaseItem) or item.integrity is not ItemIntegrity.INTACT:
+            return "Continual Flame requires an intact item"
+        if caster is None:
+            return "Caster not found"
+        if (caster.inventory.items.get(item.uuid) is item
+                or any(owned.uuid == item.uuid for owned in caster.equipment.get_all_equipped_items())):
+            return None
+        return super().physical_access_error(subjective=subjective)
 
     def _apply(self, execution_event: SpellEvent) -> Optional[SpellEvent]:
-        caster = Entity.get(self.source_entity_uuid)
-        if not caster:
-            return execution_event.cancel(status_message="Caster not found")
-
-        position = self.end_position
-        if not position:
-            return execution_event.cancel(status_message="No target position")
-
-        effect_event = execution_event.phase_to(
-            new_phase=EventPhase.EFFECT,
-            status_message=f"{caster.name} casts Continual Flame"
-        )
-
-        flame = ContinualFlameObject(
-            source_entity_uuid=caster.uuid
-        )
-        flame.place_flame(position)
-        condition = ContinualFlameCondition(
-            source_entity_uuid=caster.uuid,
-            position=position,
-            anchor_uuid=flame.uuid,
-            faction=caster.faction,
-            effect_origin=execution_event.get_effect_origin(),
-        )
-        activation = condition.activate(parent_event=effect_event)
-        if activation is None or activation.canceled or not condition.applied:
-            flame.destroy(parent_event=effect_event)
-            return execution_event.cancel(
-                status_message="Continual Flame could not be installed",
-            )
-
-        return effect_event.with_updates(
-            status_message=f"A permanent flame springs forth at {position}"
-        )
+        item = BaseBlock.get(self.target_entity_uuid) if self.target_entity_uuid is not None else None
+        if not isinstance(item, BaseItem):
+            return execution_event.cancel(status_message="Target item not found")
+        effect = execution_event.phase_to(EventPhase.EFFECT)
+        condition = ContinualFlameCondition(source_entity_uuid=self.source_entity_uuid,
+            target_entity_uuid=item.uuid, effect_origin=execution_event.get_effect_origin())
+        result = item.add_condition(condition, parent_event=effect)
+        if result is None or result.canceled or not condition.applied:
+            return effect.cancel(status_message="Continual Flame could not be installed")
+        return effect.with_updates(status_message=f"A permanent heatless flame shines from {item.name}")
 
 
 def _get_spellcasting_ability_modifier(caster: Entity) -> int:
@@ -5238,6 +5302,10 @@ class FireShieldEffect(BaseCondition):
 
     _removed_light: SpatialChangeEvent | None = PrivateAttr(default=None)
 
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={"energy_type":
+            DamageType.FIRE if self.shield_kind == "warm" else DamageType.COLD})
+
     def _apply(self, event: Event):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target is None:
@@ -5268,7 +5336,8 @@ class FireShieldEffect(BaseCondition):
                 return None
             attacker = Entity.get(attack.source_entity_uuid)
             owner = Entity.get(owner_uuid)
-            if attacker is None or owner is None or grid_distance_feet(owner.position, attacker.position) > 5:
+            if attacker is None or owner is None or support_distance_feet(owner.position, get_map().get_support_elevation_feet(owner.position),
+                    attacker.position, get_map().get_support_elevation_feet(attacker.position)) > 5:
                 return None
             self.retaliated_lineages.add(attack.lineage_uuid)
             damage = Damage(source_entity_uuid=owner.uuid, target_entity_uuid=attacker.uuid,
@@ -5277,7 +5346,8 @@ class FireShieldEffect(BaseCondition):
             roll = damage.get_dice(AttackOutcome.HIT).roll
             attacker.receive_damage(amount=roll.total, damage_type=damage_type, source_entity_uuid=owner.uuid,
                 parent_event=attack.uuid, damages=[damage], damage_rolls=[roll], effect_origin=self.effect_origin,
-                independent_resolution=True)
+                independent_resolution=True, source_condition_uuid=self.uuid,
+                effect_id="spell.fire_shield.retaliation")
             return None
 
         handler = EventHandler(name="Fire Shield retaliation", source_entity_uuid=target.uuid,

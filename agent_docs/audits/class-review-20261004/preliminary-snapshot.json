@@ -1,0 +1,21 @@
+{
+  "files": {
+    "dnd/types/class_features.py": "0ac018e50dfd918fdc9a94ebd640e041531b1e0819b3acb39a314b134dc1ff56",
+    "dnd/core/events.py": "d8c04b24e92e670a60da0d263428ed905496d8e7fb3831ee260f9f936d6bf515",
+    "dnd/core/base_actions.py": "c0ca8c2b4ebc61401d7c44a1d00713f5631c8211fe43edf1b08fcb664aed015a",
+    "dnd/classes/fighter.py": "07f3899a056f23a49b1b923c072c6d51d1eec8ef6ac64ae1abc4066e226b1aa9",
+    "dnd/classes/barbarian.py": "6e54d20ddbe922e11f04c0578c986cc8347bfa188ec74abc71ea2d1375e5c749",
+    "dnd/classes/sorcerer.py": "97bf30a96587987e4e9a21d062d5f91838901fb9bebb5b7262a3085d02014794",
+    "dnd/classes/rage.py": "ab4745bcfe2962686ac307c20d18ec27e8ab7f32ed1adec502e8ef4c271178aa",
+    "dnd/content/characters/barbarian_grants.py": "19a6e28fb1eb781193f878248a86e306a77bc88ba5009765924b74323d3e4bc3",
+    "game/player_facts.py": "9732a46b2727c981c3d189ef5452d868927dad430417133f63ebdad6d5b3521f",
+    "game/player_projection.py": "80ff39e601494fc09fb04c5f3f06f6dc4e2b9e05a3f47b36ea33948473ebd72e",
+    "game/body_action.py": "529b39b1541c2ae1342b8284cea8e7e6842214859504a956571c6581d0e343aa",
+    "game/stationary_media.py": "7c057af701e90132c2059a6626f307ccb07a037f6287898bbace323c32ff9ef4",
+    "game/data/class_media/source.json": "a0ef452bc6ce89d3ba3cb199edb6559246aaf4c5c6044fb4d08d2f3a25d8c472",
+    "devtools/import_class_media.py": "cebade995fc0d074f2585aaf8c6ce9b90ddb7e08e9474a46a848aac71f3510d6",
+    "tests/engine/test_class_presentation_facts.py": "1dc5901a1dce9eed7254da745ba39aed4ac8849f5daae24aaedeebcf0332b1c5",
+    "tests/game/test_class_feature_privacy.py": "9dbc21900a03b2f3c5f7b83032b6641b6f4c7166c0d59f5eab74009df25164a7"
+  },
+  "sha256": "19555a9258d53aa11e2078834fe8fbe6bda258a0b2b6003d7274144c9a572342"
+}

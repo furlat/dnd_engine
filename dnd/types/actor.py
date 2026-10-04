@@ -2,16 +2,33 @@
 
 from uuid import UUID
 from typing import Literal
+from dataclasses import dataclass
+from enum import Enum
 
 from dnd.core.creature_types import DamageType, Size
 from dnd.core.item_types import ItemConcentrationSlot
 from dnd.types.abilities import AbilityName
+from dnd.types.class_features import MetamagicMode
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from dnd.core.condition_types import (
     ConditionAgencyDenial, ConditionCategory, ConditionRemovalTrigger, ConditionTag,
 )
+
+
+class SpatialDisposition(str, Enum):
+    PRESENT = "present"
+    ABSENT = "absent"
+    RETURN_PENDING = "return_pending"
+    HOME_PLANE = "home_plane"
+
+
+@dataclass(frozen=True)
+class PendingSpatialReturn:
+    origin: tuple[int, int]
+    plane_id: str
+    parent_event_uuid: UUID | None
 
 
 class OutcomeProtection(BaseModel):
@@ -42,9 +59,12 @@ class ConditionState(BaseModel):
     agency_denial: ConditionAgencyDenial
     outcome_protections: tuple[OutcomeProtection, ...]
     applied_source_event_cursor: int | None = None
+    suppression_provider_uuids: tuple[UUID, ...] = ()
     duplicate_count: int | None = Field(default=None, ge=0)
     size_change: Literal["enlarge", "reduce"] | None = None
     energy_type: DamageType | None = None
+    metamagic_mode: MetamagicMode | None = None
+    affected_item_uuid: UUID | None = None
     enhanced_ability: AbilityName | None = None
     concentration_slots: tuple[ItemConcentrationSlot, ...] = ()
 
@@ -71,3 +91,6 @@ class EntityStatsState(BaseModel):
     healing_blocked: bool
     damage_affinities: tuple[tuple[str, str], ...]
     resolved_size: Size | None = None
+    native_plane_id: str = "material"
+    current_plane_id: str = "material"
+    spatial_disposition: SpatialDisposition = SpatialDisposition.PRESENT

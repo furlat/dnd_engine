@@ -1,0 +1,99 @@
+{
+  "neutral_additions": {
+    "dnd.core.events.EntityCreatedEvent": {
+      "remains_disposition": "intact"
+    },
+    "dnd.core.events.SpatialChangeEvent": {
+      "removed_object_volume": null
+    },
+    "dnd.actions.SpellEvent": {
+      "antimagic_exception": null,
+      "item_magic_suppression_provider_uuids": [],
+      "propagation": null,
+      "retained_effect_origin": null
+    },
+    "dnd.core.events.DamageAppliedEvent": {
+      "source_condition_uuid": null
+    },
+    "dnd.core.events.TakeDamageEvent": {
+      "source_condition_uuid": null,
+      "zero_hp_disposition": "intact"
+    },
+    "dnd.core.base_actions.ActionEvent": {
+      "item_magic_suppression_provider_uuids": [],
+      "propagation": null
+    },
+    "dnd.actions.MovementEvent": {
+      "item_magic_suppression_provider_uuids": [],
+      "propagation": null
+    }
+  },
+  "fixtures": {
+    "tests/game/fixtures/legacy-device-destruction.json.gz": {
+      "previous_sha256": "1d2f4386042f321bad7781d6afa75a96ec87e4bf8918907a3a26cd4b93c570c3",
+      "sha256": "ed74d62476692a020544a5cd0cf005533598d543e7945609b24f0cf33ca4fa76",
+      "neutral_field_counts": {
+        "dnd.core.events.EntityCreatedEvent.remains_disposition": 1,
+        "dnd.core.events.SpatialChangeEvent.removed_object_volume": 4,
+        "dnd.actions.SpellEvent.antimagic_exception": 6,
+        "dnd.actions.SpellEvent.item_magic_suppression_provider_uuids": 6,
+        "dnd.actions.SpellEvent.propagation": 6,
+        "dnd.actions.SpellEvent.retained_effect_origin": 6,
+        "dnd.core.events.DamageAppliedEvent.source_condition_uuid": 1,
+        "dnd.core.events.TakeDamageEvent.source_condition_uuid": 3,
+        "dnd.core.events.TakeDamageEvent.zero_hp_disposition": 3,
+        "dnd.core.base_actions.ActionEvent.item_magic_suppression_provider_uuids": 4,
+        "dnd.core.base_actions.ActionEvent.propagation": 4
+      },
+      "preserved_all_existing_values_and_order": true,
+      "strict_passive_decode": true
+    },
+    "tests/game/fixtures/legacy-door-destruction.json.gz": {
+      "previous_sha256": "220347f59dd3efc52710f3077cd22ed293b8182f0370651968ea9d67e7a9b3df",
+      "sha256": "485c20dc7204713cbaf3484fa1f92dfb9704eaf3031bac7717afb686388d61f2",
+      "neutral_field_counts": {
+        "dnd.core.events.SpatialChangeEvent.removed_object_volume": 14,
+        "dnd.core.events.EntityCreatedEvent.remains_disposition": 1,
+        "dnd.core.base_actions.ActionEvent.item_magic_suppression_provider_uuids": 4,
+        "dnd.core.base_actions.ActionEvent.propagation": 4,
+        "dnd.core.events.TakeDamageEvent.source_condition_uuid": 2,
+        "dnd.core.events.TakeDamageEvent.zero_hp_disposition": 2,
+        "dnd.actions.MovementEvent.item_magic_suppression_provider_uuids": 6,
+        "dnd.actions.MovementEvent.propagation": 6
+      },
+      "preserved_all_existing_values_and_order": true,
+      "strict_passive_decode": true
+    },
+    "tests/game/fixtures/legacy-web-destruction.json.gz": {
+      "previous_sha256": "64f8a4107dfeb36570b3ae58ab277a9ea84546b59e0a1fa6f1c254a7dcc0f543",
+      "sha256": "3227ddb143bc698f288a684eb0bd21549858f0d4888a452c6eff5c15da777c83",
+      "neutral_field_counts": {
+        "dnd.core.events.EntityCreatedEvent.remains_disposition": 1,
+        "dnd.core.events.SpatialChangeEvent.removed_object_volume": 74,
+        "dnd.actions.SpellEvent.antimagic_exception": 4,
+        "dnd.actions.SpellEvent.item_magic_suppression_provider_uuids": 4,
+        "dnd.actions.SpellEvent.propagation": 4,
+        "dnd.actions.SpellEvent.retained_effect_origin": 4,
+        "dnd.core.base_actions.ActionEvent.item_magic_suppression_provider_uuids": 4,
+        "dnd.core.base_actions.ActionEvent.propagation": 4,
+        "dnd.actions.MovementEvent.item_magic_suppression_provider_uuids": 4,
+        "dnd.actions.MovementEvent.propagation": 4,
+        "dnd.core.events.TakeDamageEvent.source_condition_uuid": 1,
+        "dnd.core.events.TakeDamageEvent.zero_hp_disposition": 1
+      },
+      "preserved_all_existing_values_and_order": true,
+      "strict_passive_decode": true
+    },
+    "tests/game/fixtures/legacy-completed-actions.json": {
+      "previous_sha256": "d820459de931c167cc18e229ab15db1cf274c46586d9175b331e7161f0350919",
+      "sha256": "be1592a04e23bf1090e209fa73f2b980877efe128c3a925571430127f473d89e",
+      "neutral_fields": [
+        "item_magic_suppression_provider_uuids",
+        "propagation"
+      ],
+      "rows": 4,
+      "absent_action_receipts_preserved": true,
+      "strict_decode": true
+    }
+  }
+}

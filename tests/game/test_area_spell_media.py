@@ -166,7 +166,7 @@ def test_authored_area_recipes_roundtrip_as_plain_json_including_cell_contacts()
     assert restored == recipes
     assert restored.model_dump_json(by_alias=True) == serialized
     for authored, exported in zip(original["spells"], json.loads(serialized)["spells"], strict=True):
-        assert exported["contact"] == {"delayMs": 0, "speedTilesPerSecond": None,
+        assert exported["contact"] == {"delayMs": 0, "launchDelayMs": 0, "speedTilesPerSecond": None,
                                        "cellsByFacing": None, **authored["contact"]}
         for original_track, exported_track in zip(authored["media"], exported["media"], strict=True):
             for field, value in original_track.items():

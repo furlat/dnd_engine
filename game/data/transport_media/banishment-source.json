@@ -1,0 +1,121 @@
+{
+  "source": "/home/tommaso/Dev/neurodragon_art/sources/banishment-departure-echo-v1/registered",
+  "preserved": "/home/tommaso/Dev/neurodragon_art/sources/banishment-departure-echo-v1/installed-registration",
+  "files": [
+    {
+      "path": "game/assets/transport_media/banishment/q0/back-0.png",
+      "bytes": 395089,
+      "sha256": "20a7deebd4a53f9039f799353ddbbff13917b25d75e5471c84652bab43361e27"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q0/back-1.png",
+      "bytes": 48758,
+      "sha256": "4355decc002bb541e77388c11da4735c2522e588507e349e74661d9d60e516e8"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q0/front-0.png",
+      "bytes": 386142,
+      "sha256": "b1cf52bef9d5816f9424398ac3a549e8e75a0f8e49655a7a7d822cec2b9b753a"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q0/front-1.png",
+      "bytes": 77279,
+      "sha256": "f93d18ade4a54adcab129e66d708e99a4d402264de06d4efab2b939868124951"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q1/back-0.png",
+      "bytes": 388179,
+      "sha256": "2cce861dd285a800d98bcd89faab3ed030a3d54d8b9b11d5cffa77d20397aea5"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q1/back-1.png",
+      "bytes": 38482,
+      "sha256": "8a4f768dcb6c8d737bb4fee582530990e1f3677826a7feebec6c75f2e162db9d"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q1/front-0.png",
+      "bytes": 306271,
+      "sha256": "31107bed381d17a10dba074102ce2d4b7ccd4b4b9b547bf8a193f82d8877c621"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q1/front-1.png",
+      "bytes": 94687,
+      "sha256": "34ba75bb89dc3dba762bdd19dc6bfc48bd39f500bac9f79cb1cac3e5a1df2634"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q1/front-2.png",
+      "bytes": 24078,
+      "sha256": "a7ec8bfeb9afe2e13adf01f60381e2138d3f5f4968325bc7b302298eef4b9233"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q1/front-3.png",
+      "bytes": 17044,
+      "sha256": "87d2f9d864479749b2e09e344b645e128474b7373e664bcf95e1fccfd08e5e3d"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q2/back-0.png",
+      "bytes": 334549,
+      "sha256": "6d350b2ddb4a9f855f891dace8d98a231d3679444c45986e5224d4ecbb6aaff7"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q2/back-1.png",
+      "bytes": 47870,
+      "sha256": "d656bcc053373f93f38180cc9bf1cbf6cfd84932cae21e6df0dc6f4edf01ec1c"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q2/back-2.png",
+      "bytes": 25370,
+      "sha256": "b0f3b640cfb9f3088a889f746e0d3dce1facde2030d24d240ffd8ba9f14956d2"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q2/back-3.png",
+      "bytes": 8630,
+      "sha256": "b26aeea808dbacb16e86edd5cebbe1f2201e71c5d22e97b7e2124aaf2a990757"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q2/front-0.png",
+      "bytes": 368550,
+      "sha256": "13871f9c34229271802835a51c03f5a967fb82191a6aa9ea7dee802a21c105e9"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q2/front-1.png",
+      "bytes": 46680,
+      "sha256": "d86163e0db9ab161dd6f53f3056fdf3451dfc81da024da3d8a3c66c8d04dce00"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q3/back-0.png",
+      "bytes": 284649,
+      "sha256": "bfd85cad4457bacde04463d71ead374cdc349cfcb5de9a21dabad8e1301c8e79"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q3/back-1.png",
+      "bytes": 86591,
+      "sha256": "1607b5c634c73e1da904faaa7d54ce7a5d60b9d0c67a1666c5a8bcd99e577de5"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q3/back-2.png",
+      "bytes": 24158,
+      "sha256": "b183f8f95b647b65c06b64c4a45bc023ee57cb126c27664a28f846931ffd0f99"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q3/back-3.png",
+      "bytes": 15008,
+      "sha256": "d090fb8056958e3a1d6f944d16f3feaa59db9337a373e8e913a8319edb3b3cba"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q3/front-0.png",
+      "bytes": 369816,
+      "sha256": "5ab2e4d66cb6f2e15d471d61c781e0d8ecbdad851e6dd2ac9ae1539b4105cb7b"
+    },
+    {
+      "path": "game/assets/transport_media/banishment/q3/front-1.png",
+      "bytes": 38739,
+      "sha256": "0c39c7593ec61b04f473f9e6a080024fca112a6d11ed44102f4177a3db8573ae"
+    }
+  ],
+  "identities": [
+    "transport.banishment.finite.back",
+    "transport.banishment.finite.front"
+  ],
+  "manifest_sha256": "fa43ad9623556f40d124d879d34ab760829f2878465faba45ce09b727cba7954"
+}

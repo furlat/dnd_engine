@@ -63,9 +63,27 @@ class PortalArtSource(_PortalSource):
     exitAperture: PortalApertureSource
 
 
+class DoorwayArt(_PortalSource):
+    """Upright native banks; finite strides are presentation, never grid steps."""
+    back: str
+    front: str
+    scale: PositiveFloat
+    openingMs: PositiveFloat = 750
+    walkingDelayMs: NonNegativeFloat = 400
+    strideMs: PositiveFloat = 700
+    strideCells: PositiveFloat = .9
+    thresholdCells: PositiveFloat = .35
+    transitMs: NonNegativeFloat = 150
+    closingMs: PositiveFloat = 600
+    holdFirstFrame: NonNegativeInt = 24
+    holdEndFrame: PositiveInt = 65
+    fps: PositiveFloat = 32
+
+
 class PortalDocument(_PortalSource):
     banks: dict[str, PortalBankSource]
     bindings: dict[str, PortalArtSource]
+    doorways: dict[str, DoorwayArt] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,7 +134,7 @@ class PortalArt:
 
 
 @lru_cache(maxsize=1)
-def load_portal_art() -> Mapping[str, PortalArt]:
+def load_portal_art() -> Mapping[str, PortalArt | DoorwayArt]:
     root = Path(__file__).resolve().parent
     document = PortalDocument.model_validate_json((root / "data/portals.json").read_text())
     banks = {key: PortalBank(
@@ -124,7 +142,7 @@ def load_portal_art() -> Mapping[str, PortalArt]:
         row.cell, row.columns, row.framesPerPage, row.pivot, row.fps,
         row.openingFrames, row.holdFrames, row.closingFrames)
         for key, row in document.banks.items()}
-    result = {}
+    result: dict[str, PortalArt | DoorwayArt] = dict(document.doorways)
     for identity, row in document.bindings.items():
         h = row.hatch
         hatch = None if h is None else PortalHatch(root / "assets" / h.sheet, root / "assets" / h.front,

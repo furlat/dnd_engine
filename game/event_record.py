@@ -34,7 +34,7 @@ from dnd.core.events import (
     ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, HealRollResultEvent, InstantDeathEvent,
     ItemDestructionEvent, LifeStateChangeEvent, ReviveEvent, RoundEndEvent, RoundEvent, RoundStartEvent,
     SavingThrowD20RollResultEvent, SavingThrowEvent, SensoryUpdateEvent,
-    SkillCheckD20RollResultEvent, SkillCheckEvent, SpatialChangeEvent, SpatialEffectChangeEvent,
+    SkillCheckD20RollResultEvent, SkillCheckEvent, SpatialChangeEvent, SpatialEffectChangeEvent, SpatialEffectInteractionEvent,
     StepMovementEvent, TakeDamageEvent, TurnEndEvent, TurnEvent, TurnStartEvent,
     WorldInitializedEvent, WorldModifiedEvent, TileElevationChangeEvent, TemporaryHitPointsChangedEvent,
 )
@@ -54,7 +54,7 @@ EVENT_MODELS = {f"{model.__module__}.{model.__qualname__}": model for model in (
     DamageRollResultEvent, HealRollResultEvent, TakeDamageEvent, DamageAppliedEvent,
     HealEvent, TemporaryHitPointsChangedEvent, DeathEvent, DeathSaveEvent, InstantDeathEvent, ReviveEvent,
     LifeStateChangeEvent, SensoryUpdateEvent, SpatialChangeEvent, TileElevationChangeEvent,
-    SpatialEffectChangeEvent, StepMovementEvent,
+    SpatialEffectChangeEvent, SpatialEffectInteractionEvent, StepMovementEvent,
     ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, EncounterEvent, EncounterStartEvent, EncounterEndEvent,
     RoundEvent, RoundStartEvent, RoundEndEvent, TurnEvent, TurnStartEvent, TurnEndEvent,
 )}

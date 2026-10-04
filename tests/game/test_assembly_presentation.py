@@ -48,8 +48,8 @@ def test_native_eight_heading_wall_phases_and_subjective_replay(data,program,dir
                     for q in range(4):
                         for offset,phase in ((750,'application'),(3000,'hold')):
                             commands=assembly_media_draw_commands(effect,owner,data,binding,record.applied_ms+offset,
-                                Camera(quadrant=q,zoom=1),record.applied_ms,None)
-                            assert commands
+                                Camera(quadrant=q,zoom=1).with_focus(effect.positions[0]),record.applied_ms,None)
+                            assert commands, (observer, q, offset, effect.positions)
                             assert all('.'+phase+'.' in str(c.evidence[2]) for c in commands)
                             assert sum(pygame.surfarray.array_alpha(c.surface).sum() for c in commands)>0
                     # Unknown owner keeps its clock; sight loss cannot become fracture or retirement.
@@ -61,10 +61,10 @@ def test_native_eight_heading_wall_phases_and_subjective_replay(data,program,dir
                     removed=True
                     for q in range(4):
                         commands=assembly_media_draw_commands(record.effect,owner,data,binding,record.removed_ms+250,
-                            Camera(quadrant=q,zoom=1),record.applied_ms,record.removed_ms)
+                            Camera(quadrant=q,zoom=1).with_focus(effect.positions[0]),record.applied_ms,record.removed_ms)
                         assert commands and all('.removal.' in str(c.evidence[2]) for c in commands)
                         assert not assembly_media_draw_commands(record.effect,owner,data,binding,record.removed_ms+1100,
-                            Camera(quadrant=q,zoom=1),record.applied_ms,record.removed_ms)
+                            Camera(quadrant=q,zoom=1).with_focus(effect.positions[0]),record.applied_ms,record.removed_ms)
             before=after;now+=group.complete_ms+2500
     assert observed and removed
 
@@ -82,7 +82,7 @@ def test_native_closed_ring_and_ordered_connected_path(data,program,form):
                 if binding is None or not any(l.wallAssembly for l in binding.layers):continue
                 limitation=assembly_media_limitation(effect,binding)
                 if limitation is None:
-                    for q in range(4):assert assembly_media_draw_commands(effect,owner,data,binding,3000,Camera(quadrant=q,zoom=1),0,None)
+                    for q in range(4):assert assembly_media_draw_commands(effect,owner,data,binding,3000,Camera(quadrant=q,zoom=1).with_focus(effect.positions[0]),0,None)
                     witnessed=True
         before=after
     # Thorns may disclose only the near opaque shell; its whole-ring bank must not reveal unseen cells.

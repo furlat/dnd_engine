@@ -94,17 +94,20 @@ def field_media_commands(state: PlayerState, data: AnimationData, identity: UUID
     # edge does not require the hidden center's ground tile to be disclosed.
     height = supported[owner] if layer.composition == "clump" else 0
     anchor = project_screen(displayed_source, camera, elevation_steps=height)
-    facing = view_facing("E", camera.quadrant, data)
+    facing = view_facing(layer.worldFacing, camera.quadrant, data)
     samples = registered_media_samples(data, asset_id, binding.assetPhase, frame, facing,
-        scale=binding.scale * radius_scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom,
+        scale=binding.scale * layer.scale * radius_scale * TILE_WIDTH / data.rig.TILE_W * camera.zoom,
         anchor=anchor, rows={}, alpha=alpha, zoom=camera.zoom)
     north, east = camera_axis_vectors(camera.quadrant)
     result = []
     for part_index, sample in enumerate(samples):
         image, destination = sample.image, sample.destination
         if layer.composition == "clump":
-            result.append(DrawCommand(painter_key(displayed_source, elevation_steps=height, quadrant=camera.quadrant,
-                role="actor", identity=(str(identity), str(layer_index), str(part_index))), image, destination, sample.blend,
+            key = painter_key(displayed_source, elevation_steps=height, quadrant=camera.quadrant,
+                role="actor", identity=(str(identity), str(layer_index), str(part_index)))
+            if layer.side != "center":
+                key = (*key[:3], key[3] + (-1 if layer.side == "rear" else 1), key[4])
+            result.append(DrawCommand(key, image, destination, sample.blend,
                 (str(identity), receiving[owner], asset_id, "current", None, "authored", "spatial_media", height,
                  binding.assetPhase, frame)))
             continue

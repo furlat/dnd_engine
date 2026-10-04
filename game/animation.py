@@ -13,8 +13,9 @@ from typing import Literal, overload
 from uuid import UUID
 
 from dnd.core.life_types import LifeState
+from dnd.core.presentation_geometry import AoEPresentationGeometry, LinePresentationGeometry, WallAssemblyPresentationGeometry
 from dnd.types.summoning import SummonManifestation
-from dnd.core.effect_types import ResolutionRef
+from dnd.core.effect_types import ResolutionRef, EffectPropagationLink
 from game.player_facts import PlayerNode
 from dnd.core.condition_types import ConditionTag
 from dnd.types.senses import PerceivedSpatialEffect
@@ -22,9 +23,9 @@ from game.animation_types import (
     AnimationData, AuthoredProjectileAsset, AuthoredProjectilePhase, BodyClip, BodyRig,
     DamageDeath, EquipmentTransitionContext, Facing8, FloatingNumber, HitFlash, PaletteTreatment,
     StudioActorLayer, StudioDamage, StudioProjectile, StudioProjectilePhase, StudioSpellDraft,
-    MediaTimePoint, StudioMediaTrack,
+    MediaTimePoint, ApplicationOutcome, StudioMediaTrack,
     ActionActor, ActionFrameAnchor, BodyContext, BodyContextQualifier, BodyContextRole, RoleDefault,
-    ContentBodyQualifier, StudioCast, StudioEquipment,
+    ContentBodyQualifier, StudioCast, StudioEquipment, ElementColors, ChildAttackPresentation,
 )
 from game.projection import HEIGHT_STEP_PIXELS, TILE_HEIGHT, TILE_WIDTH, inverse_rotate_position, project_world
 from game.device_art import DeviceEmission, device_frame, device_muzzle_offset
@@ -57,6 +58,7 @@ class ObjectContact:
     object_uuid: str
     grid: tuple[float, float]
     elevation_steps: float
+    geometry: WallAssemblyPresentationGeometry | None = None
 
 
 def feedback_identity(contact: ActorContact | ObjectContact) -> str:
@@ -107,8 +109,10 @@ class CastApplication:
     travel_apex_steps: float = 0.0
     hit: bool | None = None
     removed_condition_tags: frozenset[ConditionTag] = frozenset()
+    applied_condition_ids: frozenset[str] = frozenset()
     save_succeeded: bool | None = None
     resolution_ref: ResolutionRef | None = None
+    propagation: EffectPropagationLink | None = None
     results: tuple[PlayerNode, ...] = ()
 
 
@@ -128,9 +132,35 @@ class CastInput:
     ground_target: GroundContact | None = None
     emitter: DeviceEmission | None = None
     area_direction: tuple[int, int] | None = None
+    area_geometry: AoEPresentationGeometry | None = None
+    resolved_area_positions: tuple[tuple[int, int], ...] | None = None
     area_radius_feet: float = 0
     area_propagation: Literal["line_of_effect", "connected"] = "line_of_effect"
     protections: tuple[tuple[UUID, PerceivedSpatialEffect], ...] = ()
+
+
+
+def pose_attachment_anchors(rig: BodyRig, viewed_body: BodySample,
+                            ground: tuple[float, float], scale: float, scale_x: float,
+                            ) -> dict[str, tuple[float, float]]:
+    """Project authored cell points from the actual viewed clip and body frame.
+
+    An unmeasured rig or clip provides no socket; it never borrows a standing
+    pose. These points are independent of projectile torso/rest registration.
+    """
+    result = {}
+    for name, clips in rig.pose_sockets.items():
+        rows = clips.get(viewed_body.clip)
+        if rows is None:
+            continue
+        point = rows[viewed_body.facing][viewed_body.frame]
+        if point is None:
+            continue
+        result[name] = (
+            ground[0] + (point.x - rig.cell_width / 2) * scale * scale_x,
+            ground[1] + (point.y - rig.cell_height + rig.origin_y_from_ground) * scale,
+        )
+    return result
 
 
 def cast_actor_contacts(source: CastInput) -> tuple[ActorContact, ...]:
@@ -412,12 +442,39 @@ def adapt_cast_body(data: AnimationData, contact: ActorContact, cast: StudioCast
         "recovery": cast.recovery.model_copy(update={"enabled": False})})
 
 
+def _layer_palette(layer: StudioActorLayer, colors: ElementColors) -> StudioActorLayer:
+    """Replace automatic effect colors; preserve explicitly authored artwork."""
+    if layer.colors.source == "override":
+        return layer
+    return layer.model_copy(update={"palette": PaletteTreatment(
+        colors=(colors.tertiary, colors.primary, colors.secondary))})
+
+
+def resolve_child_attack_palette(presentation: ChildAttackPresentation,
+                                 colors: ElementColors) -> ChildAttackPresentation:
+    """The owning spell supplies the palette, independently of weapon damage."""
+    return presentation.model_copy(update={"poses": tuple(pose.model_copy(update={
+        "layers": tuple(_layer_palette(layer, colors) for layer in pose.layers)})
+        for pose in presentation.poses)})
+
+
+def _cast_palette(cast: StudioCast, colors: ElementColors) -> StudioCast:
+    """Prepare isolated automatic overlays; explicit source art stays untouched."""
+
+    def resolve(layer: StudioActorLayer | None) -> StudioActorLayer | None:
+        return None if layer is None else _layer_palette(layer, colors)
+
+    return cast.model_copy(update={"weaponGlow": resolve(cast.weaponGlow),
+        "aura": resolve(cast.aura), "slash": resolve(cast.slash),
+        "effects": tuple(_layer_palette(layer, colors) for layer in (cast.effects or ()))})
+
+
 def resolve_cast_recipe(data: AnimationData, contact: ActorContact,
                         recipe: StudioSpellDraft) -> StudioSpellDraft:
     """Resolve the same authored cast for projectile, area and actor-only use."""
     body = resolve_body_context(data, contact, "cast", ContentBodyQualifier(contentRef=recipe.definitionRef))
     if body is None:
-        return recipe
+        return recipe.model_copy(update={"cast": _cast_palette(recipe.cast, recipe.elementColors)})
     cast = adapt_cast_body(data, contact, recipe.cast, body)
     clip_preparation = body_clip(data, contact, body.actor.clip).owns_cast_preparation
     projectile = recipe.projectile
@@ -440,6 +497,12 @@ def context_anchor_ms(data: AnimationData, contact: ActorContact, body: BodyCont
     frame = next(row.frame for row in body.anchors if row.name == name)
     _require_frame(clip, frame, name)
     return (clip.frames - 1 - frame if body.reversed else frame) * 1000 / (clip.fps * body.actor.playbackSpeed)
+
+
+def airborne_weight(progress: float, takeoff: float, landing: float) -> float:
+    """Shared ground-to-ground lift and pose registration envelope."""
+    ramp = max(0., min(1., progress / takeoff, (1 - progress) / (1 - landing)))
+    return ramp * ramp * (3 - 2 * ramp)
 
 
 def context_frame(body: BodyContext, metadata: BodyClip, age_ms: float, *, progress: float | None = None) -> int:
@@ -1153,6 +1216,13 @@ def media_track_duration(data: AnimationData, track: StudioMediaTrack) -> float:
             phase.frames * 1000 / (track.fps or phase.fps or asset.fps))
 
 
+def media_track_opacity(data: AnimationData, track: StudioMediaTrack, age_ms: float) -> float:
+    duration = media_track_duration(data, track)
+    envelope = max(0., min(1., age_ms / track.fadeInMs if track.fadeInMs else 1.,
+        (duration - age_ms) / track.fadeOutMs if track.fadeOutMs else 1.))
+    return track.alpha * (envelope*envelope*(3-2*envelope) if track.fadeCurve == "smoothstep" else envelope)
+
+
 def media_track_frame(data: AnimationData, track: StudioMediaTrack, elapsed_ms: float,
                       facing: Facing8) -> int:
     """Facing-specific source sampling never changes the cast contact clock."""
@@ -1174,19 +1244,36 @@ def _media_segment_frame(at: float, start: float, end: float, first: float, last
     return max(0, min(frames-1, floor(first + progress*(last-first) + 1e-9)))
 
 
-def media_target_applies(track: StudioMediaTrack, application: CastApplication) -> bool:
+def media_target_applies(track: ApplicationOutcome, application: CastApplication) -> bool:
     return (track.requireRemovedConditionTag is None
             or track.requireRemovedConditionTag in application.removed_condition_tags) and (
-            track.requiredSaveSuccess is None or application.save_succeeded is track.requiredSaveSuccess)
+            track.requiredSaveSuccess is None or application.save_succeeded is track.requiredSaveSuccess) and (
+            track.requireAppliedConditionId is None or track.requireAppliedConditionId in application.applied_condition_ids) and (
+            track.requiredLifeState is None or application.resulting_life_state is track.requiredLifeState) and (
+            not track.requireDamageApplied or application.damage_applied) and (
+            not track.rigIds or isinstance(application.target, ActorContact) and application.target.rig_id in track.rigIds)
+
+
+def finite_body_material_end(recipe: StudioSpellDraft, release_ms: float,
+                             applications: tuple[ApplicationTimeline, ...]) -> float:
+    return max(((application.travel_end_ms if track.clock == "contact" else release_ms)
+        + track.startOffsetMs + track.points[-1].elapsedMs
+        for track in recipe.bodyMaterials
+        for application in applications if media_target_applies(track, application.source)), default=release_ms)
 
 
 def finite_media_end(data: AnimationData, tracks: tuple[StudioMediaTrack, ...], release_ms: float,
-                     applications: tuple[CastApplication, ...] = ()) -> float:
+                     applications: tuple[CastApplication, ...] = (),
+                     contact_times: tuple[ApplicationTimeline, ...] = ()) -> float:
     """Finite recipe media joins delivery before recovery; retained contact tails do not."""
     end = release_ms
     for track in tracks:
-        if (track.requireRemovedConditionTag is not None or track.requiredSaveSuccess is not None) and not any(
+        if track.attachment.startswith("target_") and not any(
                 media_target_applies(track, application) for application in applications):
+            continue
+        if track.clock == "contact":
+            end = max((end, *(row.travel_end_ms+track.startOffsetMs+media_track_duration(data,track)
+                for row in contact_times if media_target_applies(track,row.source))))
             continue
         start = release_ms + track.startOffsetMs
         if start < -1e-7:
@@ -1209,26 +1296,59 @@ def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
                                       if target is not None else None)
     facing = facing_for_delta(delta, data) if delta is not None else source.caster.facing
     rule = recipe.contact
-    contact = release + (rule.delayMs if rule is not None else 0)
+    launch = release + (rule.launchDelayMs if rule is not None else 0)
+    contact = launch + (rule.delayMs if rule is not None else 0)
     anchors = [Anchor("action_start", 0), Anchor("release", release)]
-    if not source.applications:
-        anchors.append(Anchor("impact", contact))
     applications = []
     complete = max(body_end, contact)
+    arcs = recipe.arcs
+    arrived: dict[str, float] = {}
+    line_duration = 0.
+    if arcs is not None and arcs.mode == "area_line":
+        if not isinstance(source.area_geometry, LinePresentationGeometry):
+            raise ValueError("line arc delivery requires recorded native line geometry")
+        line_duration = min(arcs.maximumTravelMs,
+            arcs.travelBaseMs + source.area_geometry.length_feet / 5 * arcs.travelPerCellMs)
+        contact = release + line_duration
+        complete = max(complete, contact + arcs.decayEndMs)
+    if not source.applications:
+        anchors.append(Anchor("impact", contact))
     for application in source.applications:
         recipient = application.target
         offset = (recipient.grid[0] - source.caster.grid[0], recipient.grid[1] - source.caster.grid[1])
         arrival = contact
+        start = launch
         if rule is not None:
             if rule.speedTilesPerSecond is not None:
                 arrival += hypot(*offset) * 1000 / rule.speedTilesPerSecond
             if rule.cellsByFacing is not None:
                 arrival += rule.cellsByFacing[facing].get(f"{int(offset[0])}_{int(offset[1])}", 0)
+        if arcs is not None:
+            if arcs.mode == "applications" and application.propagation is not None:
+                link = application.propagation
+                if str(link.source.uuid) != source.caster.actor_uuid:
+                    # Partial observation can omit the parent application while
+                    # retaining the fully disclosed outgoing edge. No hidden
+                    # parent trajectory is reconstructed in that case.
+                    start = arrived.get(str(link.source.uuid), release) + arcs.branchDelayMs
+                distance = hypot(link.target.position[0] - link.source.position[0],
+                    link.target.position[1] - link.source.position[1],
+                    link.target.base_height_steps - link.source.base_height_steps)
+                arrival = start + min(arcs.maximumTravelMs, arcs.travelBaseMs + distance * arcs.travelPerCellMs)
+                arrived[str(link.target.uuid)] = arrival
+            elif arcs.mode == "area_line":
+                line = source.area_geometry
+                assert isinstance(line, LinePresentationGeometry)
+                dx, dy = line.direction
+                along = ((recipient.grid[0] - line.origin[0]) * dx
+                    + (recipient.grid[1] - line.origin[1]) * dy) / hypot(dx, dy)
+                arrival = release + line_duration * max(0., min(1., along / (line.length_feet / 5)))
+            complete = max(complete, arrival + max(arcs.decayEndMs, arcs.contactDecayEndMs))
         damage = resolve_damage(data, application.damage_type, recipe.damage) if application.damage_applied else None
         timing = (compile_damage(data, recipient, damage, arrival, application.resulting_life_state)
                   if damage is not None and isinstance(recipient, ActorContact) else None)
         applications.append(ApplicationTimeline(application, facing,
-            _iso(source.caster.grid, data), _iso(recipient.grid, data), release, arrival, 0, (), damage,
+            _iso(source.caster.grid, data), _iso(recipient.grid, data), start, arrival, 0, (), damage,
             timing.start_ms if timing else None, timing.end_ms if timing else None,
             timing.hp_ms if timing else None, timing.flash_ms if timing else None,
             timing.number_ms if timing else arrival if damage is not None else None,
@@ -1237,10 +1357,14 @@ def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
         anchors.append(Anchor("impact", arrival, identity))
         if timing is not None:
             anchors.extend((Anchor("effect", timing.start_ms, identity), Anchor("vitals", timing.hp_ms, identity)))
-        complete = max(complete, timing.end_ms if timing else arrival)
-    complete = max(complete, finite_media_end(data, recipe.media, release, source.applications))
+        complete = max(complete, timing.end_ms if timing else arrival,
+            arrival + recipe.directed.contactFadeMs if recipe.directed is not None else arrival)
+    if cast.holdUntilContact and applications:
+        body_end = max(body_end, max(row.travel_end_ms for row in applications))
+    complete = max(complete, finite_media_end(data, recipe.media, release, source.applications, tuple(applications)),
+        finite_body_material_end(recipe, release, tuple(applications)))
     ground = (GroundDeliveryTimeline(source.ground_target, facing, _iso(source.caster.grid, data),
-              _iso(source.ground_target.grid, data), release, contact, 0, ())
+              _iso(source.ground_target.grid, data), launch, contact, 0, ())
               if source.ground_target is not None else None)
     recovery_start = complete
     if cast.recovery.enabled:
@@ -1256,6 +1380,9 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
     if spell_id not in data.drafts:
         raise ValueError(f"unknown authored spell binding: {spell_id}")
     recipe = resolve_cast_recipe(data, source.caster, data.drafts[spell_id])
+    if (recipe.projectile is not None and recipe.projectile.requireAttackOutcome
+            and not any(application.hit is not None for application in source.applications)):
+        recipe = recipe.model_copy(update={"projectile": None})
     if body_rate != 1:
         cast = recipe.cast
         assert cast.bodyPlaybackSpeed is not None
@@ -1277,6 +1404,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
                 assert phase is not None
                 update.update({"fps": (track.fps or phase.fps or asset.fps)*body_rate,
                     "durationMs": media_track_duration(data, track)/body_rate,
+                    "fadeInMs": track.fadeInMs/body_rate, "fadeOutMs": track.fadeOutMs/body_rate,
                     "timeMap": tuple(point.model_copy(update={"elapsedMs": point.elapsedMs/body_rate})
                                      for point in track.timeMap),
                     "timeMapsByFacing": ({facing: tuple(point.model_copy(update={
@@ -1325,7 +1453,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
         raise ValueError("cast requires the complete original TS-materialized defaults")
     if len({layer.slot for layer in cast.effects}) != len(cast.effects):
         raise ValueError("duplicate cast effect slots require original last-write clearing semantics")
-    if projectile is None and not recipe.media:
+    if projectile is None and not recipe.media and recipe.contact is None and recipe.arcs is None and recipe.directed is None:
         raise ValueError("cast requires authored projectile or anchored media delivery")
     if recipe.area is not None and source.ground_target is None:
         raise ValueError("area delivery requires its observed ground destination")
@@ -1529,7 +1657,10 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
             delivery_end = max(delivery_end, *(phase.end_ms for phase in application.projectile_intervals))
     if emitter is not None:
         body_end = max(body_end, release + (emitter.art.frame_count - emitter.art.release_frame) * 1000 / emitter.art.fps)
-    recovery_start = max(body_end, delivery_end, finite_media_end(data, recipe.media, release, source.applications))
+    if cast.holdUntilContact and applications:
+        body_end = max(body_end, delivery_end)
+    recovery_start = max(body_end, delivery_end, finite_media_end(data, recipe.media, release, source.applications, tuple(applications)),
+        finite_body_material_end(recipe, release, tuple(applications)))
     complete = recovery_start
     if cast.recovery.enabled:
         complete += body_duration(body_clip(data, source.caster, cast.recovery.bodyClip), cast.recovery.bodyPlaybackSpeed)

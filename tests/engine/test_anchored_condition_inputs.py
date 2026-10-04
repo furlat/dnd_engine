@@ -9,12 +9,12 @@ from dnd.monsters.traits import LeadershipAura
 from dnd.spatial.area_conditions import SpatialCondition
 from dnd.spells.abjuration import AntimagicFieldZone
 from dnd.spells.conjuration import GuardianOfFaithZone, SpiritGuardiansZone
-from dnd.spells.evocation import ContinualFlameCondition, GustOfWindZone
+from dnd.spells.evocation import GustOfWindZone
 
 
 @pytest.mark.parametrize("condition_type", (
     LeadershipAura, AntimagicFieldZone, GuardianOfFaithZone,
-    SpiritGuardiansZone, ContinualFlameCondition, GustOfWindZone,
+    SpiritGuardiansZone, GustOfWindZone,
 ))
 def test_attached_condition_requires_an_explicit_nonnull_anchor(
     condition_type: type[SpatialCondition],

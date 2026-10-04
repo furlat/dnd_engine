@@ -1,0 +1,24 @@
+{
+  "action.environment.heroes_feast.eat": {
+    "socket": "clasped_hands",
+    "sourceOffsetCells": [
+      0.266,
+      0.24,
+      1.1700000000000002
+    ],
+    "count": 18,
+    "delayPerParticle": 0.018,
+    "arcHeightCells": 0.35,
+    "palette": [
+      9757116,
+      15727566
+    ],
+    "brightEvery": 4,
+    "radiusPixels": [
+      4,
+      2.3
+    ],
+    "alpha": 0.85,
+    "blendMode": "screen"
+  }
+}

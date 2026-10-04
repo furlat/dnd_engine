@@ -14,7 +14,8 @@ def test_original_forced_context_shove_recipe_and_feedback_survive_loading() -> 
     recipes = json.loads((source / "contentActionPresentationRecipes.json").read_text())["recipes"]
     shove = next(row for row in recipes if row["definitionRef"]["content_id"] == "action.shove")
     assert data.forced_movement_context.model_dump(mode="json") == contexts["forced_movement"]
-    assert data.shove_recipes["action.shove"].model_dump(mode="json") == shove
+    assert data.shove_recipes["action.shove"].model_dump(mode="json") == {
+        "media": [], "handlerResponse": False, **shove}
     assert {key: value.model_dump(mode="json") for key, value in data.shove_feedback.items()} == contexts["outcome_feedback"]["shove"]
     assert data.shove_recipes["action.shove"].actor.clip == "Kick"
     assert next(row.frame for row in data.shove_recipes["action.shove"].anchors if row.name == "contact") == 7

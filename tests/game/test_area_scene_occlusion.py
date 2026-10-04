@@ -179,7 +179,8 @@ def test_xyz_area_behind_registered_wall_or_door_is_occluded(rendering, scene, q
     state = replace(state, objects={identity: replace(obj, placement=
         obj.placement.model_copy(update={"base_height_steps": height, "top_height_steps": height + obj.placement.top_height_steps - obj.placement.base_height_steps}))
         for identity, obj in state.objects.items()})
-    source = replace(cast.timeline.source, applications=(), ground_target=GroundContact(center, height))
+    source = replace(cast.timeline.source, applications=(), ground_target=GroundContact(center, height),
+                     resolved_area_positions=None)
     timeline = compile_cast(data, "spell.fireball", source)
     boundaries = tuple(obj.placement for obj in state.objects.values()
                        if obj.item.is_open is not True)
@@ -227,7 +228,10 @@ def test_xyz_area_preserves_camera_side_wall_contact(rendering, scene, quadrant,
     positive_camera = quadrant in ((0, 3) if north else (0, 1))
     across = 9 if positive_camera else 6
     center = (6, across) if north else (across, 6)
-    source = replace(cast.timeline.source, applications=(), ground_target=GroundContact(center, 0))
+    # This explicitly relocated compositor input has no native footprint from
+    # the original cast on the opposite side of the boundary.
+    source = replace(cast.timeline.source, applications=(), ground_target=GroundContact(center, 0),
+                     resolved_area_positions=None)
     timeline = compile_cast(data, "spell.fireball", source)
     appearances = {source.caster.actor_uuid: cast.appearances[source.caster.actor_uuid]}
     boundaries = tuple(obj.placement for obj in state.objects.values() if obj.item.is_open is not True)

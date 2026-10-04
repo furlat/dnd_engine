@@ -9,7 +9,7 @@ Implements:
 - Draconic Bloodline: DraconicResilience, ElementalAffinity
 """
 
-from typing import Any, Optional, List, Tuple, Dict, Literal, cast
+from typing import Any, Optional, List, Tuple, Dict, cast
 from uuid import UUID
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
@@ -26,6 +26,9 @@ from dnd.core.events import (
     RangeType,
 )
 from dnd.core.creature_types import DamageType
+from dnd.types.actor import ConditionState
+from dnd.types.class_features import DraconicPresenceMode, FontConversion, FontConversionDirection, MetamagicMode
+from dnd.types.senses import PerceivedSpatialEffect
 from dnd.core.modifiers import (
     NumericalModifier,
     ResistanceModifier,
@@ -174,6 +177,9 @@ class ElementalAffinityResistance(BaseCondition):
         self.name = (
             f"Elemental Affinity Resistance ({self.damage_type.value})"
         )
+
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={"energy_type": self.damage_type})
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -524,9 +530,6 @@ class DragonWings(BaseAction):
         )
 
 
-DraconicPresenceMode = Literal["awe", "fear"]
-
-
 class DraconicPresenceImmunity(BaseCondition):
     """Remember one creature's successful save against one sorcerer."""
 
@@ -654,6 +657,14 @@ class DraconicPresenceAura(AreaCondition):
     )
     zone_shape: str = Field(default="sphere")
     zone_radius_feet: int = Field(default=60)
+    has_visible_presence: bool = True
+
+    def get_spatial_observation(self, positions: set[Tuple[int, int]], *,
+        observer_uuid: UUID, discovered: bool = False) -> Optional[PerceivedSpatialEffect]:
+        observation = super().get_spatial_observation(positions,
+            observer_uuid=observer_uuid, discovered=discovered)
+        return (observation.model_copy(update={"presence_mode": self.mode})
+            if observation is not None else None)
 
     @staticmethod
     def _immunity_name(source_entity_uuid: UUID) -> str:
@@ -982,13 +993,16 @@ class MetamagicActive(BaseCondition):
     name: str = Field(default="MetamagicActive", description="Internal condition name for the active metamagic modifier.")
     description: str = Field(default="Metamagic is active — next spell cast will be modified", description="Rules summary for the pending metamagic override.")
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, description="Condition category used for lifecycle and cleanup.")
-    metamagic_type: str = Field(default="quickened", description="Metamagic option currently modifying the caster's spell templates.")
+    metamagic_type: MetamagicMode = Field(default="quickened", description="Metamagic option currently modifying the caster's spell templates.")
     owning_action_template_uuid: UUID = Field(
         exclude=True,
         description="Exact metamagic action template owning this root.",
     )
 
     _modified_uuids: List[UUID] = PrivateAttr(default_factory=list)
+
+    def snapshot_state(self) -> ConditionState:
+        return super().snapshot_state().model_copy(update={"metamagic_mode": self.metamagic_type})
 
     def _apply(self, declaration_event: Event) -> Tuple[
         List[Tuple[UUID, UUID]],
@@ -1010,7 +1024,7 @@ class MetamagicActive(BaseCondition):
         if self.metamagic_type == "quickened":
             self._modified_uuids = apply_action_overrides(
                 target,
-                filter_fn=lambda a: isinstance(a, SpellAction) and any(
+                filter_fn=lambda a: isinstance(a, SpellAction) and a.is_spell and any(
                     c.cost_type == "actions" for c in a.costs
                 ),
                 overrides={"alt_cost_type": "bonus_actions"},
@@ -1019,7 +1033,7 @@ class MetamagicActive(BaseCondition):
             self._modified_uuids = []
             for template in target.registered_actions:
                 if (
-                    isinstance(template, SpellAction)
+                    isinstance(template, SpellAction) and template.is_spell
                     and template.target_type in (TargetType.ENTITY, TargetType.CREATURE_OR_OBJECT)
                 ):
                     template.alt_target_type = TargetType.MULTI_ENTITY
@@ -1039,7 +1053,7 @@ class MetamagicActive(BaseCondition):
         elif self.metamagic_type == "distant":
             self._modified_uuids = []
             for template in target.registered_actions:
-                if isinstance(template, SpellAction):
+                if isinstance(template, SpellAction) and template.is_spell:
                     if template.spell_range.type == RangeType.RANGE:
                         template.alt_range = template.spell_range.normal * 2
                         self._modified_uuids.append(template.uuid)
@@ -1351,6 +1365,22 @@ METAMAGIC_ACTIONS: Dict[str, type] = {
 SP_TO_SLOT_COST: Dict[int, int] = {1: 2, 2: 3, 3: 5, 4: 6, 5: 7}
 
 
+def _font_conversion_costs(event: ActionEvent, entity_uuid: UUID, slot_level: int,
+    direction: FontConversionDirection) -> ActionEvent:
+    """Record changes made by the existing cost applier for these two actions."""
+    entity = Entity.get(entity_uuid)
+    if entity is None:
+        return entity_action_economy_cost_applier(event, entity_uuid)
+    resource = entity.action_economy.resources.get("sorcery_points")
+    points_before = resource.current if resource is not None else 0
+    slots_before = entity.action_economy.spell_slot_value(slot_level).normalized_score
+    result = entity_action_economy_cost_applier(event, entity_uuid)
+    conversion = FontConversion(direction=direction, slot_level=slot_level,
+        sorcery_points_delta=(resource.current if resource is not None else 0) - points_before,
+        spell_slots_delta=entity.action_economy.spell_slot_value(slot_level).normalized_score - slots_before)
+    return result.with_updates(font_conversion=conversion)
+
+
 class ConvertSlotToSP(BaseAction):
     """Convert one spell slot into sorcery points.
 
@@ -1397,16 +1427,23 @@ class ConvertSlotToSP(BaseAction):
             return execution_event.cancel(status_message="Entity not found")
 
         resource = entity.action_economy.resources.get("sorcery_points")
+        before = resource.current if resource is not None else 0
         if resource:
             resource.current = min(resource.current + self.slot_level, resource.maximum)
 
         return execution_event.phase_to(
             EventPhase.EFFECT,
+            font_conversion=FontConversion(direction="slot_to_points", slot_level=self.slot_level,
+                sorcery_points_delta=(resource.current - before if resource is not None else 0)
+                    + (execution_event.font_conversion.sorcery_points_delta or 0
+                       if execution_event.font_conversion is not None else 0),
+                spell_slots_delta=(execution_event.font_conversion.spell_slots_delta
+                    if execution_event.font_conversion is not None else 0)),
             status_message=f"Slot\u2192SP L{self.slot_level}: gained {self.slot_level} SP",
         )
 
     def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
+        return _font_conversion_costs(execution_event, self.source_entity_uuid, self.slot_level, "slot_to_points")
 
 
 class ConvertSPToSlot(BaseAction):
@@ -1462,6 +1499,7 @@ class ConvertSPToSlot(BaseAction):
 
         slot_cost_type_name: CostType = spell_slot_cost_type(self.slot_level)
         slot_value = entity.action_economy.spell_slot_value(self.slot_level)
+        before = slot_value.normalized_score
 
         cost_modifiers = entity.action_economy.get_cost_modifiers(slot_cost_type_name)
         if cost_modifiers:
@@ -1469,11 +1507,17 @@ class ConvertSPToSlot(BaseAction):
 
         return execution_event.phase_to(
             EventPhase.EFFECT,
+            font_conversion=FontConversion(direction="points_to_slot", slot_level=self.slot_level,
+                sorcery_points_delta=(execution_event.font_conversion.sorcery_points_delta
+                    if execution_event.font_conversion is not None else 0),
+                spell_slots_delta=slot_value.normalized_score - before
+                    + (execution_event.font_conversion.spell_slots_delta or 0
+                       if execution_event.font_conversion is not None else 0)),
             status_message=f"{SP_TO_SLOT_COST.get(self.slot_level, 2)}SP\u2192Slot L{self.slot_level}: created slot",
         )
 
     def _apply_costs(self, execution_event: ActionEvent) -> ActionEvent:
-        return entity_action_economy_cost_applier(execution_event, self.source_entity_uuid)
+        return _font_conversion_costs(execution_event, self.source_entity_uuid, self.slot_level, "points_to_slot")
 
 
 class SorceryPointsFeature(BaseCondition):

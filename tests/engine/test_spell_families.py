@@ -2232,6 +2232,7 @@ def test_eb_15_021_zone_spell_family_entry_turn_start_and_cleanup_edges() -> Non
         spirit_event = SpiritGuardians(
             source_entity_uuid=caster.uuid,
             template=False,
+            excluded_entity_uuids=frozenset({ally.uuid}),
         ).apply()
 
     spirit_event = assert_completed_spell(spirit_event)
@@ -3650,6 +3651,8 @@ def test_eb_15_032_eyebite_blocks_successful_retargets_and_unseen_targets() -> N
 
     reset_spell_family_state(width=12, height=8)
     caster = create_family_caster(position=(1, 1), spell_slots={6: 1})
+    visible = create_family_target(name="Visible Initial Target", position=(5, 1))
+    penalize_save(visible, "wisdom")
     unseen = create_family_target(name="Unseen Target", position=(4, 1))
     unseen.set_invisible(True)
     penalize_save(unseen, "wisdom")
@@ -3658,6 +3661,7 @@ def test_eb_15_032_eyebite_blocks_successful_retargets_and_unseen_targets() -> N
 
     channel_event = Eyebite(
         source_entity_uuid=caster.uuid,
+        target_entity_uuid=visible.uuid,
         effect_choice="sickened",
         template=False,
         costs=[],
@@ -3791,13 +3795,13 @@ def test_eb_15_034_eyebite_panicked_forces_dash_movement_and_distance_cleanup() 
     ).apply()
 
     event = assert_completed_spell(event)
-    assert "Eyebite Panicked" in target.active_conditions
+    assert "Eyebite Panicked" in {condition.get_display_name() for condition in target.active_conditions.values()}
     assert "Frightened" in target.active_conditions
 
     boost_save(target, "wisdom", value=200)
     target.on_turn_end()
 
-    assert "Eyebite Panicked" in target.active_conditions
+    assert "Eyebite Panicked" in {condition.get_display_name() for condition in target.active_conditions.values()}
 
     start_distance = caster.senses.get_feet_distance(target.position)
     target.on_turn_start(round_number=1, turn_index=0)
@@ -3809,7 +3813,7 @@ def test_eb_15_034_eyebite_panicked_forces_dash_movement_and_distance_cleanup() 
     assert target.action_economy.actions.normalized_score == 0
     assert "Dashing" in target.active_conditions
     assert caster.uuid in target.senses.entities
-    assert "Eyebite Panicked" in target.active_conditions
+    assert "Eyebite Panicked" in {condition.get_display_name() for condition in target.active_conditions.values()}
 
     caster.set_invisible(True)
     target.on_turn_start(round_number=2, turn_index=0)
@@ -3817,7 +3821,7 @@ def test_eb_15_034_eyebite_panicked_forces_dash_movement_and_distance_cleanup() 
 
     assert caster.uuid not in target.senses.entities
     assert caster.senses.get_feet_distance(target.position) >= 60
-    assert "Eyebite Panicked" not in target.active_conditions
+    assert "Eyebite Panicked" not in {condition.get_display_name() for condition in target.active_conditions.values()}
     assert "Frightened" not in target.active_conditions
 
 
@@ -3834,7 +3838,7 @@ def test_eb_15_007_mobility_and_sense_utility_spells_change_state() -> None:
 
     see_event = assert_completed_spell(see_event)
     assert "See Invisibility" in caster.active_conditions
-    assert any(mode.sense_type == SensesType.SEE_INVISIBLE for mode in caster.senses.sense_modes)
+    assert any(mode.sense_type == SensesType.SEE_INVISIBLE for mode in caster.senses.get_sense_modes())
     assert "Concentrating" not in caster.active_conditions
 
     caster.action_economy.reset_all_costs()

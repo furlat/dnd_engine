@@ -81,6 +81,11 @@ class Ability(BaseBlock):
     )
     ability_score: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=10, value_name="Ability Score",score_normalizer=ability_score_normalizer), description="The base ability score, typically ranging from 3 to 20 for most characters")
     modifier_bonus: ModifiableValue = Field(default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),base_value=0, value_name="Modifier Bonus"), description="Any additional bonus to the ability modifier, separate from the base score")
+    check_bonus: ModifiableValue = Field(
+        default_factory=lambda: ModifiableValue.create(source_entity_uuid=uuid4(),
+            base_value=0, value_name="Ability Check Bonus"),
+        description="Check-only modifiers, independent of saving throws and attacks.",
+    )
     check_proficiency_sources: ProficiencySourceSet = Field(
         default_factory=ProficiencySourceSet,
         description=(
