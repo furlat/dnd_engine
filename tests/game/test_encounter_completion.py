@@ -73,8 +73,10 @@ def check_encounter_completion(*, capture_dir: Path | None = None) -> GameSummar
         random.setstate(previous)
 
     assert result.encounter_ended and result.historical == result.latest
-    assert spell_rounds == [1, 2] and spent_spell_rounds == [1]
-    assert result.historical.round_number == 2 and result.historical.current_actor_uuid is None
+    # The canonical handaxe Goblin closes into melee and provokes the Fighter;
+    # that real reaction finishes the survivor before a second spell round.
+    assert spell_rounds == [1] and spent_spell_rounds == [1]
+    assert result.historical.round_number == 1 and result.historical.current_actor_uuid is None
     enemies = [state for state in result.historical.actors.values() if state.creature_content_ref is not None]
     assert len(enemies) == 2 and all(state.life_state is LifeState.DEAD for state in enemies)
     endings = [lineage for lineage in result.lineages if isinstance(lineage.root.fact, TurnFact)
@@ -86,10 +88,15 @@ def check_encounter_completion(*, capture_dir: Path | None = None) -> GameSummar
     assert all(frame.pending == 0 and frame.historical_cursor == frame.latest_cursor for frame in after_end)
     assert len(fighter_uuids) == 1
     fighter_uuid = next(iter(fighter_uuids))
+    finishing_reaction, = (event.fact for lineage in result.lineages
+        if isinstance(lineage.root.fact, MovementFact) for event in lineage.events
+        if isinstance(event.fact, DamageFact) and event.fact.stage == "applied"
+        and event.fact.source_entity_uuid == fighter_uuid)
+    assert finishing_reaction.applied_damage == 13 and finishing_reaction.resulting_normal_hp == -11
     assert any(isinstance(lineage.root.fact, MovementFact) and lineage.root.fact.source_entity_uuid == fighter_uuid
                for lineage in result.lineages)
     casts = [lineage.root.fact for lineage in result.lineages if isinstance(lineage.root.fact, SpellFact)]
-    assert len(casts) == 2
+    assert len(casts) == 1
     for lineage in result.lineages:
         for event in lineage.events:
             fact = event.fact

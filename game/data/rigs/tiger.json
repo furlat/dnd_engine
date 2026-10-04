@@ -517,9 +517,39 @@
           },
           "reversed": true
         }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "flying",
+          "trajectory": "path",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "once",
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              1,
+              0
+            ]
+          ]
+        }
       }
     ],
-    "shadow_alpha": 1
+    "shadow_alpha": 1,
+    "lifecycle_scale": 0.76
   },
   "resources": {
     "/rigs/tiger/body/Idle.png": "game/assets/rigs/tiger/body/Idle.png",

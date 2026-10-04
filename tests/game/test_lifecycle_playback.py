@@ -11,7 +11,7 @@ import pytest
 
 from dnd.core.life_types import LifeState
 from dnd.runtime_reset import reset_engine_runtime
-from game.animation import body_clip, sample_cast, sample_idle_body
+from game.animation import ActorContact, body_clip, sample_cast, sample_idle_body
 from game.animation_draw import LoadedBodyRows
 from game.animation_data import load_animation_data
 from game.animation_draw import AnimationDrawCommand, actor_draw_commands
@@ -212,7 +212,7 @@ def test_owned_lethal_delivery_keeps_its_original_timing_and_exactly_one_body(
     data: AnimationData, pygame_runtime: None, family: str,
 ) -> None:
     if family == "attack":
-        captured = attack_history("weapon.longsword", 17, opportunity=True, maximum_hp=4)
+        captured = attack_history("weapon.longsword", 27, opportunity=True, maximum_hp=4)
         before, (lineage,) = player_history(captured)
         bound = bind_attack(before, lineage, data)
         assert bound is not None
@@ -277,7 +277,7 @@ def test_owned_lethal_delivery_keeps_its_original_timing_and_exactly_one_body(
 def test_opportunity_downing_falls_and_holds_with_original_dying_child_badge(
     data: AnimationData, pygame_runtime: None,
 ) -> None:
-    captured = attack_history("weapon.longsword", 17, opportunity=True, whole_movement=True,
+    captured = attack_history("weapon.longsword", 27, opportunity=True, whole_movement=True,
                                      maximum_hp=4, uses_death_saves=True)
     before, (lineage,) = player_history(captured)
     motion = bind_motion(before, lineage, data)
@@ -292,6 +292,7 @@ def test_opportunity_downing_falls_and_holds_with_original_dying_child_badge(
     cue, = (row for row in group.lifecycle if isinstance(row.event.fact, LifeFact)
             and row.event.fact.new_state is LifeState.DYING)
     assert isinstance(cue.event.fact, LifeFact)
+    assert isinstance(attack.target, ActorContact)
     clip = body_clip(data, attack.target, data.damage_context.bodyClip)
     assert cue.start_ms == pytest.approx(timing.start_ms +
         data.damage_context.conditionFrame * 1000 / (clip.fps * data.damage_context.bodyPlaybackSpeed))
@@ -317,7 +318,7 @@ def test_opportunity_downing_falls_and_holds_with_original_dying_child_badge(
     assert pending.displayed.actors[target_uuid].normal_hp == 4
     assert pending.displayed.actors[target_uuid].life_state is LifeState.ALIVE
     damage_number, = (track for track in tracks if track.kind == "number")
-    assert damage_number.value == attack.damage_total == 6
+    assert damage_number.value == attack.damage_total == 5
     for time in (timing.hp_ms, timing.end_ms, group.complete_ms):
         displayed = sample_choreography(group, time)
         vital, = (value for value in displayed.vitals if value.actor_uuid == str(target_uuid))

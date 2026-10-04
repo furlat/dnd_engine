@@ -12,7 +12,7 @@ from typing import Iterator
 from uuid import uuid4
 
 from dnd.actions import AttackEvent, JumpEvent, MovementEvent
-from dnd.actions_functional import execute_by_index, get_available_actions, setup_standard_actions
+from dnd.actions_functional import execute_by_index, get_available_actions, setup_standard_actions, register_spell
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.body_responses import BLOOD_BODY_RESPONSE, install_body_response
@@ -29,11 +29,13 @@ from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.monsters.bestiary_content import BESTIARY_CREATURE_RECIPES_BY_ID
+from dnd.monsters.goblins import GOBLIN_RECIPES_BY_ID
 from dnd.monsters.traits import GhoulClawsParalysisFeature
 from dnd.reactions import add_opportunity_attack_handler
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.enchantment import SleepEffect
+from dnd.spells.transmutation import Fly
 from game.presentation import (
     CompletedLineage, PresentationTarget, capture_interval, capture_lineage,
     reduce_interval, reduce_lineage,
@@ -72,8 +74,11 @@ def attack_history(
             install_body_response(hero, BLOOD_BODY_RESPONSE)
         hero.compose_entity()
         setup_standard_actions(hero)
+        watcher_recipe = (GOBLIN_RECIPES_BY_ID["goblin_reedshot"]
+            if goblin_source and weapon_slot is WeaponSlot.RANGED_MAIN
+            else BESTIARY_CREATURE_RECIPES_BY_ID["goblin"])
         watchers = tuple(materialize_creature(
-            BESTIARY_CREATURE_RECIPES_BY_ID["goblin"], runtime_entity_uuid=uuid4(),
+            watcher_recipe, runtime_entity_uuid=uuid4(),
             display_name="Goblin", faction="monsters", position=position,
             deployment_role=CreatureDeploymentRole(role_id="scenario.attack_animation_test"),
             possession_mode=CreaturePossessionMode.INCLUDE_DEFAULT_POSSESSIONS,
@@ -251,13 +256,28 @@ def _capture_operation(
 
 
 def movement_with_paralysis(
-    seed: int, maximum_hp: int = 80, *, movement_behavior: str = "action.move",
+    seed: int, maximum_hp: int = 80, *, movement_behavior: str = "action.move", flight: bool = False,
 ) -> CapturedHistory:
     """Compatibility case: detach just the original complete Move or Jump."""
     with _condition_encounter(maximum_hp=maximum_hp) as (before, mover, reactor, encounter):
+        if flight:
+            register_spell(mover, Fly, caster_level=7)
+            cast = next(row for row in mover.registered_actions if isinstance(row, Fly)).instantiate(
+                target_entity_uuid=mover.uuid, alt_skip_slot=True).apply()
+            assert cast is not None and not cast.canceled
+            baseline = capture_interval(name="Flight before opportunity attack", start_cursor=0,
+                end_cursor=EventQueue.event_cursor(), observer_uuid=reactor.uuid,
+                battlefield_id="battlefield.open_floor_bright")
+            before, _ = reduce_interval(None, baseline)
         random.seed(seed)
         cursor = EventQueue.event_cursor()
-        root = _condition_action(mover, movement_behavior, (2, 3))
+        if flight:
+            available = get_available_actions(mover)
+            choice = next(row for row in available.all_actions if row.template_name == "Flying Movement")
+            selected = next(row for row in choice.valid_targets if row.position == (2, 3))
+            root = execute_by_index(mover, choice.template_name, selected.index, available=available)
+        else:
+            root = _condition_action(mover, movement_behavior, (2, 3))
         assert isinstance(root, (MovementEvent, JumpEvent))
         _, roots = _capture_operation(before, cursor, mover, reactor, encounter)
         lineage, = (lineage for lineage in roots if lineage.root.uuid == root.uuid)

@@ -274,8 +274,9 @@ def test_native_turn_after_lethal_oa_preserves_metadata_without_redisclosing_act
             operation = advance_controller(session)
             receive(operation)
             assert operation.boundary is not None
+            if operation.boundary.status == "encounter_ended":
+                break
             if operation.boundary.status != "waiting_for_human":
-                assert operation.boundary.status != "encounter_ended"
                 continue
             if commands == 4:
                 break
@@ -300,7 +301,10 @@ def test_native_turn_after_lethal_oa_preserves_metadata_without_redisclosing_act
                 extras = tuple(option.target_uuid for option in (targets[1], targets[0])
                                if option.target_uuid is not None)
                 receive(execute_player_action(session, actor, missile, targets[0], extra_target_uuids=extras))
-        assert commands == 4 and latest.round_number == 2 and latest.current_actor_uuid in acted
+        # The current melee Goblin closes in and dies to the Fighter's native OA,
+        # ending the encounter before another player turn starts.
+        assert operation.boundary.status == "encounter_ended"
+        assert commands == 4 and latest.round_number == 1 and latest.current_actor_uuid is None
         undisclosed = [(lineage.root, after) for lineage, after in histories
                        if isinstance(lineage.root, TurnEvent)
                        and str(observer.uuid) not in lineage.root.identified_entity_observer_uuids.get(

@@ -60,6 +60,7 @@ from dnd.items.spell_items import SpellGrantingWearable, EmberQuiverActivation
 from dnd.spells.transmutation import Longstrider
 from dnd.spells.abjuration import Resistance
 from dnd.content.items.roster_item_definitions import ROSTER_EMBER_DEFINITIONS, ROSTER_MAUL_DEFINITION, ROSTER_WEAPON_DEFINITIONS, ROSTER_GEAR_DEFINITIONS, ROSTER_CARRIED_DEFINITIONS, ROSTER_INVENTORY_DEFINITIONS
+from dnd.content.items.roster_item_definitions import ROSTER_WEAPON_APPEARANCE_DEFINITIONS, ROSTER_WEARABLE_APPEARANCE_DEFINITIONS
 from dnd.content.items.window_definitions import WINDOW_DEFINITIONS
 from dnd.content.items.window_builders import build_window_component
 from dnd.content.items.trap_hardware_builders import TRAP_HARDWARE_PROFILES, build_trap_hardware
@@ -447,6 +448,8 @@ def _spell_wearable_builder(definition: SpellWearableDefinition) -> ItemBuilder:
 
 
 DIRECT_ITEM_BUILDERS: Mapping[str, ItemBuilder] = MappingProxyType({
+    **{item_id: _weapon_definition_builder(definition) for item_id, definition in ROSTER_WEAPON_APPEARANCE_DEFINITIONS.items()},
+    **{item_id: _wearable_definition_builder(definition) for item_id, definition in ROSTER_WEARABLE_APPEARANCE_DEFINITIONS.items()},
     **{item_id: _spell_wearable_builder(definition) for item_id, definition in POWERED_WEARABLE_DEFINITIONS.items()},
     **{p.wall.item_id: _window_component_builder(family, insert=False) for family, p in WINDOW_DEFINITIONS.items()},
     **{p.insert.item_id: _window_component_builder(family, insert=True) for family, p in WINDOW_DEFINITIONS.items() if p.insert is not None},

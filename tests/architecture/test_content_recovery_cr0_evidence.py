@@ -31,6 +31,7 @@ from dnd.monsters.configured_srd_creatures import (
 from dnd.monsters.srd_roster import SRD_CREATURE_DECLARATIONS
 from dnd.monsters.multiattack_definitions import (
     BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS,
+    GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS,
     SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS,
 )
 
@@ -1398,15 +1399,19 @@ def test_every_structural_definition_has_one_exact_authored_owner() -> None:
     }
     historical = {row.ref.identity_key for row in SRD_MULTIATTACK_CONFIGURATION_DECLARATIONS}
     current_body = {row.ref.identity_key for row in BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS}
+    current_goblins = {row.ref.identity_key for row in GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS}
     assert len(historical) == 11
     assert len(current_body) == len(BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS) == 5
+    assert len(current_goblins) == len(GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS) == 2
     assert not historical & current_body
-    assert structural_identities == historical | current_body
+    assert not current_goblins & (historical | current_body)
+    assert structural_identities == historical | current_body | current_goblins
     manifest_rows = _definition_manifest_rows()
     assert set(manifest_rows) >= historical
     for identity in sorted(historical):
         _validate_static_owner(identity, "structural_definition")
-    for row in BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS:
+    for row in (*BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS,
+                *GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS):
         assert declarations[row.ref.identity_key] is row
         assert sum(candidate.ref.identity_key == row.ref.identity_key
                    for candidate in BUILT_IN_DECLARATION_INVENTORY) == 1

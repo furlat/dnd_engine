@@ -7,7 +7,8 @@ remain in content compositions and rig JSON, never in this producer's rules.
 import random
 from uuid import uuid4
 
-from dnd.actions import AttackEvent, MovementEvent
+from dnd.actions import MovementEvent
+from dnd.core.base_actions import ActionEvent
 from dnd.actions_functional import execute_by_index, get_available_actions
 from dnd.content.characters.premades import FIGHTER_PREMADE_ID, create_premade_character
 from dnd.content_system.creature_materialization import materialize_creature
@@ -34,6 +35,7 @@ from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 def creature_history(
     creature_identity: str, *, weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN, seed: int = 17,
+    multiattack: bool = False,
 ) -> CapturedHistory:
     """Move, make the selected attack, then duel a native Fighter until death.
 
@@ -97,8 +99,6 @@ the next operation. Native rules own rolls, defenses, resources and life state.
         movement = execute_by_index(creature, move.template_name, target.index, available=available)
         assert isinstance(movement, MovementEvent) and creature.position == (4, 3)
         retain(start)
-        # The creature's normal attack is the covered body vocabulary. Native
-        # Multiattack remains available but is not substituted for this case.
         for _ in range(10):
             actor = encounter.get_current_entity()
             assert actor is not None
@@ -107,15 +107,18 @@ the next operation. Native rules own rolls, defenses, resources and life state.
             for _attack in range(2 if actor is fighter else 1):
                 available = get_available_actions(actor)
                 attack = next((row for row in available.all_actions
-                               if row.behavior_id in ("action.attack", "action.feature.extra_attack")
-                               and row.weapon_slot == selected_slot.value
+                               if ((actor is creature and multiattack
+                                    and row.behavior_id == "action.monster.multiattack")
+                                   or (not (actor is creature and multiattack)
+                                       and row.behavior_id in ("action.attack", "action.feature.extra_attack")
+                                       and row.weapon_slot == selected_slot.value))
                                and any(target.position == target_actor.position for target in row.valid_targets)), None)
                 if attack is None:
                     break
                 option = next(row for row in attack.valid_targets if row.position == target_actor.position)
                 start = EventQueue.event_cursor()
                 event = execute_by_index(actor, attack.template_name, option.index, available=available)
-                assert isinstance(event, AttackEvent) and event.phase is EventPhase.COMPLETION
+                assert isinstance(event, ActionEvent) and event.phase is EventPhase.COMPLETION
                 retain(start)
                 if target_actor.health.life_state is LifeState.DEAD:
                     return capture_history(before, tuple(history), observers=(ObserverCapture("fighter", fighter.uuid, before.reducer_cursor),

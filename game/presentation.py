@@ -637,7 +637,7 @@ def _retained_event(event: Event, observer_uuid: UUID) -> Event:
             copied = event.model_copy(update={**common, "shover_athletics": None})
         case AreaReachEvent() | MovementEvent() | JumpEvent() | TraverseConnectorEvent() | StepMovementEvent() | ForcedMovementEvent() | PortalTransferEvent() | MechanismActivationEvent():
             copied = event.model_copy(update=common)
-        case EntityFactionChangedEvent() | SensoryUpdateEvent() | LifeStateChangeEvent() | DeathEvent() | HealEvent() | TemporaryHitPointsChangedEvent() | ConditionStateChangedEvent():
+        case EntityCreatedEvent() | EntityFactionChangedEvent() | SensoryUpdateEvent() | LifeStateChangeEvent() | DeathEvent() | HealEvent() | TemporaryHitPointsChangedEvent() | ConditionStateChangedEvent():
             copied = event.model_copy(update=common)
         case DeathSaveEvent() | ReviveEvent() | InstantDeathEvent() | TurnEvent() | RoundEvent() | EncounterEvent():
             copied = event.model_copy(update=common)

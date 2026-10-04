@@ -174,7 +174,8 @@ def test_movement_preserves_source_timing_with_the_selected_local_media() -> Non
     media = json.loads((DATA_ROOT.parent / "movement-media.json").read_text())
     data = load_animation_data()
     expected = {**source["contexts"]["voluntary_movement"],
-                "walkMedia": media["walkMedia"], "jumpMedia": media["jumpMedia"]}
+                "walkMedia": media["walkMedia"], "jumpMedia": media["jumpMedia"],
+                "flight": media["flight"]}
     assert data.movement_context.model_dump(mode="json", exclude_unset=True) == expected
 
 

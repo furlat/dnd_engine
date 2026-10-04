@@ -20,14 +20,15 @@ from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.runtime import HandlerDispatchOutcome
 from dnd.core.events import (
     AreaReachEvent,
-    DamageAppliedEvent, DeathSaveEvent, EncounterEvent, EntityCreatedEvent, EntityFactionChangedEvent, ItemDestructionEvent,
-    Event, ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, LifeStateChangeEvent,
+    DamageAppliedEvent, DeathEvent, DeathSaveEvent, EncounterEvent, EntityCreatedEvent, EntityFactionChangedEvent, ItemDestructionEvent,
+    Event, EventPhase, EventType, ForcedMovementEvent, PortalTransferEvent, MechanismActivationEvent, HealEvent, LifeStateChangeEvent,
     RoundEvent, SensoryUpdateEvent, SpatialChangeEvent, SpatialChangeType, SpatialEffectChangeEvent,
     MovementTrajectory, StepMovementEvent, TakeDamageEvent, TemporaryHitPointsChangedEvent, TurnEvent, WorldInitializedEvent, SavingThrowEvent,
 )
 from dnd.core.item_types import ItemConcentrationSlot, ItemIntegrity, ItemLocation, ItemPresentationState, ItemRemnantState
 from dnd.types.world import CardinalDirection
 from dnd.types.residues import BodyReleaseRegion, BodyReleaseResult, ObjectResidueState
+from dnd.types.summoning import SummonDepartureCause
 from game.actor_facts import ActorState, ConditionFact, PresentationTarget
 from game.actor_projection import actor_fact_owner, actor_from_birth, apply_actor_fact
 from dnd.actor_projection import remove_previous_item_holdings
@@ -37,7 +38,7 @@ from game.player_facts import (
     MovementFact, ObjectDamageFact, ObjectDestroyedFact, PlayerActor, PlayerFact, PlayerInitialization, PlayerLineage,
     PlayerNode, PlayerObject, PlayerObservation, PlayerSequence, PlayerState,
     PlayerWorld, SensoryFact, ShoveFact, SpatialFact, SpatialEffectStateFact, SpellFact, StepFact, TurnFact,
-    VersionRow, VisualItem, VisualLoadout, WorldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact,
+    VersionRow, VisualItem, VisualLoadout, WorldUpdate, TemporaryHitPointsFact, SavingThrowFact, FactionFact, CreationWitness,
 )
 from game.presentation import ActorAdmission, CompletedLineage, IntervalEnvelope, ObjectiveRow, apply_world_fact
 from game.replay import RecordedSequence
@@ -460,8 +461,11 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 and _step_allowed(parent, observer))
             departed_contact = (declaration_senses.entities.get(event.entity_uuid)
                 if declaration_senses is not None and event.entity_uuid is not None else None)
-            witnessed_departure = (event.change_type is SpatialChangeType.ENTITY_LEFT
-                and event.terminal_release is not None and departed_contact is not None
+            terminal = (event.change_type is SpatialChangeType.ENTITY_LEFT
+                and event.phase is EventPhase.COMPLETION and not event.canceled
+                and event.terminal_release is not None
+                and event.terminal_release.entity_uuid == event.entity_uuid)
+            witnessed_departure = (terminal and departed_contact is not None
                 and departed_contact.visual and departed_contact.position == event.position)
             located_arrival = (event.change_type is SpatialChangeType.ENTITY_ENTERED
                 and str(observer) in event.located_entity_observer_uuids.get(str(event.entity_uuid), set()))
@@ -476,11 +480,26 @@ def _project_fact(event: Event, observer: UUID, actors: dict[UUID, ActorState],
                 departure is not None and _position_allowed(event, departure, observer))
             arrival_allowed = own_position or parent_geometry or located_arrival or (
                 arrival is not None and _position_allowed(event, arrival, observer))
+            contact = senses.entities.get(identified_entity) if senses is not None else None
+            birth = next((row for row in events if isinstance(row, EntityCreatedEvent)
+                and row.entity_uuid == event.entity_uuid
+                and row.phase is EventPhase.COMPLETION and not row.canceled
+                and row.parent_lineage is not None and row.parent_lineage == event.parent_lineage
+                and row.summon_origin is not None
+                and row.summon_origin.cast_lineage_uuid == row.parent_lineage), None)
+            creation = (CreationWitness(birth_event_uuid=birth.uuid, manifestation=birth.summon_origin.manifestation)
+                if event.change_type is SpatialChangeType.ENTITY_ENTERED
+                and event.phase is EventPhase.COMPLETION and not event.canceled
+                and event.old_position is None and event.previous_occupancy_layer is None
+                and birth is not None and birth.summon_origin is not None
+                and contact is not None and contact.visual and contact.position == event.position else None)
             return SpatialFact(change_type=event.change_type, entity_uuid=identified_entity, position=event.position,
                 commit_event_uuid=event.commit_event_uuid,
                 previous_occupancy_layer=event.previous_occupancy_layer if departure_allowed else None,
                 occupancy_layer=event.occupancy_layer if arrival_allowed else None,
-                terminal_departure=event.change_type is SpatialChangeType.ENTITY_LEFT and event.terminal_release is not None)
+                terminal_departure=terminal,
+                terminal_cause=event.terminal_release.cause if witnessed_departure and event.terminal_release is not None else None,
+                creation=creation)
         case TurnEvent():
             return TurnFact(event_type=event.event_type, entity_uuid=event.entity_uuid
                 if _identified(event, event.entity_uuid, observer) else None, round_number=event.round_number)
@@ -687,13 +706,14 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
     pending = iter(sorted(admissions, key=lambda row: indexes[row.event_uuid]))
     admission = next(pending, None)
     by_lineage = {event.lineage_uuid: event for event in events}
+    version_lineages = {row.event_uuid: row.lineage_uuid for row in versions}
     # A delivery can obscure itself; a field removal clears its contact through
     # a sensory child before completing. Retain each event's entry sight: a
     # nested event must not borrow its outer root's earlier observation.
     delivery_starts: dict[UUID, int] = {}
     for version in versions:
         declared = by_lineage.get(version.lineage_uuid)
-        if (isinstance(declared, MechanismActivationEvent)
+        if (isinstance(declared, (MechanismActivationEvent, DeathEvent))
                 or isinstance(declared, (AttackEvent, SpellEvent)) and declared.target_kind == "object"
                 or isinstance(declared, SpellEvent) and declared.area_geometry is not None
                 or isinstance(declared, SpatialChangeEvent) and declared.terminal_release is not None
@@ -792,9 +812,37 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
                 and event.target_entity_uuid in private_world.objects
                 and _object_observed(private_world, event.target_entity_uuid)):
             observed_objects.add(event.target_entity_uuid)
+        declaration_senses = delivery_declarations.get(event.lineage_uuid)
+        if (isinstance(event, SpatialChangeEvent)
+                and event.change_type is SpatialChangeType.ENTITY_LEFT
+                and event.terminal_release is not None
+                and event.terminal_release.cause is SummonDepartureCause.DEFEATED):
+            # Death removes living contacts before retiring a summon. Retain
+            # only the exact causing death's entry sight, never root visibility.
+            cause_lineage = (version_lineages.get(event.terminal_release.parent_event_uuid)
+                if event.terminal_release.parent_event_uuid is not None else None)
+            cause = by_lineage.get(cause_lineage) if cause_lineage is not None else None
+            if isinstance(cause, DeathEvent) and not cause.canceled and cause.entity_uuid == event.entity_uuid:
+                declaration_senses = delivery_declarations.get(cause.lineage_uuid)
         fact = _project_fact(event, observer, private_actors, facts.get(event.uuid), events, admissions,
                             set(remembered.actors), observed_objects, private_world.senses,
-                            delivery_declarations.get(event.lineage_uuid))
+                            declaration_senses)
+        if isinstance(fact, FactionFact):
+            parent = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
+            removed = (facts.get(parent.uuid) if parent is not None
+                and parent.event_type is EventType.CONDITION_REMOVAL
+                and parent.phase is EventPhase.COMPLETION and not parent.canceled
+                and parent.target_entity_uuid == fact.entity_uuid else None)
+            actor = private_actors.get(fact.entity_uuid)
+            origin = actor.summon_origin if actor is not None else None
+            contact = private_world.senses.entities.get(fact.entity_uuid) if private_world.senses is not None else None
+            if (event.phase is EventPhase.COMPLETION and not event.canceled
+                    and removed is not None and actor is not None and origin is not None
+                    and origin.control_condition_uuid is not None
+                    and removed.condition_uuid == origin.control_condition_uuid
+                    and any(row.condition_uuid == origin.existence_condition_uuid for row in actor.conditions)
+                    and contact is not None and contact.visual):
+                fact = replace(fact, control_lost=True)
         if (isinstance(event, TakeDamageEvent) and not event.canceled
                 and event.final_damage is not None and event.resulting_hp is not None):
             identity = event.target_entity_uuid

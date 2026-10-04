@@ -20,15 +20,15 @@ from dnd.core.events import WorldTileState
 from game.animation import (
     ActorContact, ObjectContact, BodySample, CastSample, CastTimeline, GeometryProjectileSample, NumberSample, feedback_identity, cast_actor_contacts,
     ProjectileSample, body_clip, body_elevation_steps, body_rig, project_geometry_projectile, project_projectile,
-    projectile_registration, projectile_phase_scale, projectile_contact, view_facing, cast_deliveries, actor_rest_pose,
+    projectile_registration, projectile_phase_scale, projectile_contact, view_facing, cast_deliveries, actor_rest_pose, death_body_context,
 )
 from game.animation_types import AnimationData, BodyRig, DepthMode, ElementColors, Facing8, PaletteTreatment, ParticleMediaAsset, StudioActorLayer, RigLayer as RigLayer
 from game.action_media import ActionStripCue, ActionStripSample
 from game.attack import AttackSample, AttackTimeline, attack_actor_contacts, attack_projectile_contact, project_attack_projectile
-from game.condition_animation import ConditionAppearance, condition_body_pose, condition_contact
-from game.condition_types import ConditionLiveCopies
+from game.condition_animation import ConditionAppearance, ConditionRigLayer, condition_body_pose, condition_contact
+from game.condition_types import ConditionAppearanceLayer, ConditionLiveCopies
 from game.item_effects import item_material
-from game.body_effects import distort_body, ghost_body
+from game.body_effects import distort_body, ghost_body, reveal_body
 from game.body_pose_types import BodyTrailPose
 from game.condition_draw import (CONDITION_BODY_SLOTS, compose_condition_layers, condition_body_color,
     condition_body_ramp, blend_body_ramp, condition_body_outline)
@@ -237,6 +237,18 @@ def _actor_media_requests(data: AnimationData, actors: tuple[ActorMediaRequest, 
                 if layer.category not in binding.sheets:
                     raise ValueError(f"missing required rig layer: {contact.rig_id}/{clip}/{layer.category}")
                 body_requests.setdefault((contact.rig_id, clip, layer.category), set()).update(rows)
+        for clip in clips:
+            for layer in body_clip(data, contact, clip).layers:
+                body_requests.setdefault((contact.rig_id, clip, layer.category), set()).update(rows)
+            # A membership can enter/leave inside this head. Preload compatible
+            # authored extras with its requested body clips, never during drawing.
+            for recipe in data.condition_recipes.values():
+                for extra in recipe.persistent.appearanceLayers:
+                    if (extra.category in rig.slot_categories.get(extra.slot, ())
+                            and not (extra.anatomy == "wings" and rig.native_wings)):
+                        if extra.category not in rig.clips[clip].sheets:
+                            raise ValueError(f"missing condition appearance bank: {contact.rig_id}/{clip}/{extra.category}")
+                        body_requests.setdefault((contact.rig_id, clip, extra.category), set()).update(rows)
     return body_requests
 
 
@@ -257,6 +269,12 @@ def _load_body_rows(data: AnimationData, requests: Mapping[tuple[str, str, str],
             body_rows[rig_id, clip, category, row] = sheet.subsurface(
                 (0, row * rig.cell_height, expected[0], rig.cell_height)
             ).copy()
+        for recipe in data.condition_recipes.values():
+            for extra in recipe.persistent.appearanceLayers:
+                if extra.category == category and extra.tint2 is None and extra.tint3 is None:
+                    for row in rows:
+                        _appearance_material(body_rows[rig_id, clip, category, row], extra,
+                                             (data.media_root, rig_id, clip, row))
     return MappingProxyType(body_rows)
 
 
@@ -287,7 +305,8 @@ def load_attack_media(timeline: AttackTimeline, appearances: Mapping[str, tuple[
     if isinstance(timeline.target, ActorContact):
         target_clips.add(actor_rest_pose(data, timeline.target) or "Idle")
     if timeline.damage_timing is not None:
-        target_clips.add(data.death_context.bodyClip if timeline.resulting_life_state is LifeState.DEAD
+        target_clips.add(death_body_context(data, timeline.target).actor.clip
+                         if timeline.resulting_life_state is LifeState.DEAD and isinstance(timeline.target, ActorContact)
                          else data.damage_context.bodyClip)
         # Attack HP and life commit at hp_ms, so a lethal hit can begin with
         # TakeDamage before entering the authored death clip.
@@ -327,7 +346,7 @@ def load_animation_media(timeline: CastTimeline,
     for application in timeline.applications:
         if isinstance(application.source.target, ActorContact) and application.damage_start_ms is not None:
             target_clips[application.source.target.actor_uuid].add(
-                data.death_context.bodyClip if application.source.resulting_life_state is LifeState.DEAD
+                death_body_context(data, application.source.target).actor.clip if application.source.resulting_life_state is LifeState.DEAD
                 else data.damage_context.bodyClip)
         if isinstance(application.source.target, ActorContact) and application.life_body is not None:
             target_clips[application.source.target.actor_uuid].add(application.life_body.clip)
@@ -358,7 +377,7 @@ def load_animation_media(timeline: CastTimeline,
                 or not isinstance(application.source.target, ActorContact)):
             continue
         target = application.source.target
-        clip = (data.death_context.bodyClip if target.life_state is LifeState.DEAD
+        clip = (death_body_context(data, target).actor.clip if target.life_state is LifeState.DEAD
                 or application.source.resulting_life_state is LifeState.DEAD else data.damage_context.bodyClip)
         for quadrant in range(4):
             pose = BodySample(target.actor_uuid, clip, 0, view_facing(target.facing, quadrant, data))
@@ -386,14 +405,44 @@ def load_animation_media(timeline: CastTimeline,
                           AreaMedia(area_boundaries, area_solids, area_supports) if timeline.source.ground_target is not None else None)
 
 
+def _appearance_material(image: pygame.Surface, layer: ConditionAppearanceLayer,
+                         source_key: tuple[object, ...]) -> pygame.Surface:
+    """Existing palette-zone replacement; bounded emission preserves source alpha."""
+    key = ("condition-appearance", *source_key, layer)
+    cached = cached_palette(key)
+    if cached is not None:
+        return cached
+    colored = item_material(image, (), layer.slot, {}, category=layer.category, base_tint=layer.tint)
+    if layer.glowStrength:
+        colored = colored.copy()
+        pixels = pygame.surfarray.pixels3d(colored)
+        pixels[:] = np.clip(np.rint(pixels.astype(float)
+            + np.array(_rgb(layer.tint)) * layer.glowStrength), 0, 255).astype(np.uint8)
+        del pixels
+    return retain_palette(key, colored)
+
+
+def condition_rig_layers(rig: BodyRig, appearance: tuple[RigLayer, ...],
+                         condition: ConditionAppearance | None) -> tuple[ConditionRigLayer, ...]:
+    """Compatible transient anatomy adds to equipment without occupying its slot."""
+    if condition is None:
+        return ()
+    equipped = {layer.category for layer in appearance}
+    return tuple(row for row in condition.rig_layers
+        if row.layer.category not in equipped
+        and row.layer.category in rig.slot_categories.get(row.layer.slot, ())
+        and not (row.layer.anatomy == "wings" and rig.native_wings))
+
+
 def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLayer, ...],
                 body_rows: BodyRows, data: AnimationData,
                 flash: int | PaletteTreatment | None, *, only_shadow: bool | None = None,
                 condition: ConditionAppearance | None = None) -> pygame.Surface:
     rig = body_rig(data, contact)
+    extra_layers = condition_rig_layers(rig, appearance, condition)
     treatment = flash if isinstance(flash, PaletteTreatment) and only_shadow is not True else None
     key = (data.media_root, contact.rig_id, body.clip, body.facing, appearance,
-           body.hide_weapon, body.hidden_slots, body.cast_layers, treatment)
+           body.hide_weapon, body.hidden_slots, body.cast_layers, treatment, extra_layers)
     colored_row = cached_palette(key) if treatment is not None else None
     if colored_row is not None:
         colored = colored_row.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
@@ -405,7 +454,7 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
     # Palette mapping is cached per complete pose row, never repeated per frame.
     width = rig.cell_width * body_clip(data, contact, body.clip).frames if treatment else rig.cell_width
     result = pygame.Surface((width, rig.cell_height), pygame.SRCALPHA)
-    layers = {layer.slot: layer for layer in appearance}
+    layers = {layer.slot: layer for layer in (*appearance, *rig.clips[body.clip].layers)}
     # AnimatedEntity._updateHeadVisibility: ordinary helmets cover hair;
     # crowns Head5/Head8 preserve it. The identity layer remains in appearance.
     if "helmet" in layers and layers["helmet"].category not in {"Head5", "Head8"}:
@@ -432,6 +481,21 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             continue
         overlay = overlays.get(slot)
         layer = layers.get(slot)
+        for extra in extra_layers:
+            if extra.layer.slot != slot or extra.alpha <= 0:
+                continue
+            atlas = body_rows[contact.rig_id, body.clip, extra.layer.category, row]
+            colored = (_colored(atlas, flash) if isinstance(flash, int) else
+                atlas if treatment is not None else _appearance_material(atlas, extra.layer,
+                    (data.media_root, contact.rig_id, body.clip, row)))
+            if treatment is None:
+                colored = colored.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
+            if extra.alpha != 1:
+                colored = colored.copy()
+                colored.set_alpha(round(extra.alpha * 255))
+            if flash is None and condition is not None and condition.body_color is not None:
+                colored = condition_body_color(colored, condition.body_color)
+            result.blit(colored, (0, 0))
         if overlay is None and layer is None:
             continue
         if overlay is not None:
@@ -484,7 +548,7 @@ def _ramp_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
     plain_condition = replace(condition, body_ramp=None)
     key = ("condition-ramp", data.media_root, contact.rig_id, body.clip, body.facing, material_layers,
            body.hide_weapon, body.hidden_slots, material_body.cast_layers, condition.body_color,
-           ramp.colors, ramp.mapping, ramp.gain)
+           ramp.colors, ramp.mapping, ramp.gain, condition.rig_layers)
     row = cached_palette(key)
     if row is None:
         frames = body_clip(data, contact, body.clip).frames
@@ -529,6 +593,8 @@ def pose_attachment_anchors(rig: BodyRig, viewed_body: BodySample,
         if rows is None:
             continue
         point = rows[viewed_body.facing][viewed_body.frame]
+        if point is None:
+            continue
         result[name] = (
             ground[0] + (point.x - rig.cell_width / 2) * scale * scale_x,
             ground[1] + (point.y - rig.cell_height + rig.origin_y_from_ground) * scale,
@@ -543,6 +609,7 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
                 ghost: tuple[tuple[int, int, int, int], float] | None = None,
                 copy_recipe: ConditionLiveCopies | None = None, copy_slot: int = 0,
                 body_opacity: float = 1.,
+                coverage: float = 1.,
                 ) -> tuple[pygame.Surface, tuple[int, int]]:
     material = data.body_materials.get(contact.manifestation) if contact.manifestation is not None else None
     if material is not None and only_shadow is not True:
@@ -563,6 +630,8 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
                            time_ms=condition.time_ms if condition else 0., slot=copy_slot)
     if condition is not None and condition.distortion is not None and not only_shadow:
         image, _ = distort_body(image, condition.distortion, condition.time_ms, condition.distortion_strength)
+    if coverage != 1.:
+        image = reveal_body(image, coverage)
     if body_opacity != 1.:
         image = image.copy()
         alpha = pygame.surfarray.pixels_alpha(image)
@@ -581,6 +650,8 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
         poses = rig.pose_sockets.get(body.registration_socket, {}).get(body.clip)
         if poses is not None:
             point = poses[viewed_body.facing][body.frame]
+            if point is None:
+                raise ValueError(f"Unmeasured pose registration: {body.registration_socket}/{body.clip}/{body.frame}")
             registration = (
                 (rig.cell_width / 2 - point.x)
                       * scale * contact.visual_scale_x * body_scale[0] * body.registration_weight,
@@ -764,6 +835,7 @@ def actor_painter_key(data: AnimationData, body: BodySample, contact: ActorConta
         return key
     facing = view_facing(body.facing, camera.quadrant, data)
     point, origin = points[body.clip][facing][body.frame], points["Idle"][facing][0]
+    assert point is not None and origin is not None
     scale = contact.visual_scale * TILE_WIDTH / data.rig.TILE_W
     return (key[0], key[1] + (point.y - origin.y) * scale,
             key[2] + (point.x - origin.x) * scale * contact.visual_scale_x, key[3], key[4])
@@ -772,7 +844,8 @@ def actor_painter_key(data: AnimationData, body: BodySample, contact: ActorConta
 def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorContact,
                         layers: tuple[RigLayer, ...], body_rows: BodyRows, camera: Camera,
                         *, flash: int | PaletteTreatment | None = None,
-                        condition: ConditionAppearance | None = None) -> tuple[AnimationDrawCommand, ...]:
+                        condition: ConditionAppearance | None = None,
+                        coverage: float = 1.) -> tuple[AnimationDrawCommand, ...]:
     """Compose one explicitly sampled actor using the map's shared painter."""
     contact = condition_contact(contact, condition)
     body = condition_body_pose(data, body, contact, condition)
@@ -784,6 +857,7 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
         height = contact.elevation_steps if shadow else body_elevation_steps(contact, data)
         image, destination = _actor_blit(
             body, contact, layers, body_rows, data, camera, flash, only_shadow=shadow,
+            coverage=coverage,
             condition=(replace(condition, alpha=condition.alpha * (
                 1 - condition.distortion_strength * (1 - condition.distortion.bodyOpacity)))
                        if condition is not None and condition.distortion is not None and not shadow else condition),
@@ -807,7 +881,7 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
             image, destination = _actor_blit(body, copy_contact, layers, body_rows, data, camera, None,
                 only_shadow=False, condition=copy_appearance,
                 ghost=(copies.recipe.palette, copies.recipe.paletteMaximum), copy_recipe=copies.recipe, copy_slot=slot,
-                body_opacity=copies.recipe.opacity * opacity)
+                body_opacity=copies.recipe.opacity * opacity, coverage=coverage)
             height = body_elevation_steps(copy_contact, data)
             commands.append(AnimationDrawCommand(actor_painter_key(data, body, copy_contact, camera,
                 role="actor", height=height, identity=(contact.actor_uuid, "copy", str(slot))),
@@ -825,7 +899,7 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
             image, destination = _actor_blit(body, contour_contact, layers, body_rows, data, camera, None,
                 only_shadow=False, condition=replace(condition, layers=(), live_copies=None,
                     alpha=condition.alpha * contour.opacity * condition.distortion_strength),
-                    ghost=(recipe.palette, recipe.paletteMaximum))
+                    ghost=(recipe.palette, recipe.paletteMaximum), coverage=coverage)
             height = body_elevation_steps(contour_contact, data)
             commands.append(AnimationDrawCommand(actor_painter_key(data, body, contour_contact, camera,
                 role="actor", height=height, identity=(contact.actor_uuid, "contour", str(index))),

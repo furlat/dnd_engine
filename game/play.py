@@ -21,7 +21,7 @@ import pygame
 from dnd.runtime_reset import reset_engine_runtime
 from game.animation import (
     BodySample, CastSample, CastTimeline, EquipmentSample, EquipmentTimeline, VitalsSample,
-    crossed_anchors, sample_cast, sample_equipment, sample_idle_body,
+    crossed_anchors, sample_cast, sample_equipment, sample_idle_body, death_body_context,
 )
 from game.animation_data import load_animation_data
 from game.animation_draw import (
@@ -243,7 +243,7 @@ async def _run(
                             equipment_media = load_actor_media(data, (
                                 *((contact, active.appearances[identity],
                                    ("Idle", active.timeline.recipe.bodyClip) if identity == actor_id
-                                   else ("Idle", data.death_context.bodyClip))
+                                   else ("Idle", death_body_context(data, contact).actor.clip))
                                   for identity, contact in active.contacts.items()),
                                 (active.timeline.actor, active.replacement, ("Idle",)),
                             ))

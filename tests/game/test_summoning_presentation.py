@@ -27,10 +27,11 @@ from dnd.types.summoning import SummonManifestation
 from game.animation import ActorContact, BodySample
 from game.animation_data import DATA_ROOT, load_animation_data
 from game.animation_draw import actor_draw_commands, load_actor_media
+from dnd.conditions import Prone
 from game.animation_types import RigLayer
 from game.choreography import bind_choreography, sample_choreography
 from game.body_presentation import sample_body_presentation
-from game.player_facts import ActionFact, FactionFact, SpatialFact, SpellFact
+from game.player_facts import ActionFact, DamageResultFact, FactionFact, SpatialFact, SpellFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, observe_actors, reduce_lineage
 from game.presentation import capture_interval, reduce_interval
@@ -40,7 +41,7 @@ from game.scene import scene_actors
 from tests.game.visibility_scenarios import visibility_history
 
 
-def summon_history(ending, *, visibility="visible", family="animals"):
+def summon_history(ending, *, visibility="visible", family="animals", death_saves=False, prone_before_departure=False):
     reset_engine_runtime()
     if not SERVER_CONTENT_SYSTEM_RUNTIME.is_installed:
         SERVER_CONTENT_SYSTEM_RUNTIME.install(bootstrap_content_system())
@@ -83,6 +84,11 @@ def summon_history(ending, *, visibility="visible", family="animals"):
         member = next(iter(system.memberships.values()))
         identity = member.entity.uuid
         origin = member.existence.origin
+        member.entity.uses_death_saves = death_saves
+        if prone_before_departure:
+            member.entity.add_condition(Prone(source_entity_uuid=witness.uuid))
+        if visibility == "hidden_departure":
+            Entity.update_entity_position(witness, (25, 2))
         if ending == "control_loss":
             if visibility == "reacquire":
                 Entity.update_entity_position(witness, (25, 2))
@@ -93,9 +99,10 @@ def summon_history(ending, *, visibility="visible", family="animals"):
         elif ending == "defeat":
             member.entity.receive_damage(member.entity.get_hp(), DamageType.FORCE, witness.uuid)
             assert identity not in game.entities
+        elif ending == "instant_death":
+            member.entity.receive_instant_death(witness.uuid)
+            assert identity not in game.entities
         else:
-            if visibility == "hidden_departure":
-                Entity.update_entity_position(witness, (25, 2))
             caster.action_economy.reset_all_costs()
             row = next(row for row in get_available_actions(caster, legal_only=True).all_actions
                        if row.behavior_id == "action.summon.dismiss")
@@ -151,7 +158,12 @@ def test_recorded_lifetime_faction_and_manifestation_without_native_registry(his
             for elapsed in (bound.complete_ms, *(at for at, displayed in bound.states
                     if identity in displayed.actors and not displayed.actors[identity].present)):
                 frame = sample_body_presentation(bound.before, state, data, elapsed, elapsed, {}, choreography=bound)
-                assert not any(pose.actor.contact.actor_uuid == str(identity) for pose in frame.poses)
+                retiring = [cue for cue in bound.entity_lifecycle
+                    if cue.phase == "departure" and cue.actor.contact.actor_uuid == str(identity)
+                    and cue.start_ms <= elapsed < cue.body_end_ms]
+                poses = [pose for pose in frame.poses if pose.actor.contact.actor_uuid == str(identity)]
+                # Native presence is gone; only the finite, witnessed dissolve remains.
+                assert bool(poses) == bool(retiring)
     assert observed and observed[0].present and observed[0].faction == "heroes"
     if ending == "control_loss":
         assert not departures and factions
@@ -178,8 +190,32 @@ def test_ordinary_native_sight_loss_does_not_retire_a_lifetime():
     assert state.senses is not None and subject not in state.senses.entities
 
 
-def test_unseen_terminal_departure_does_not_reveal_retirement():
-    history, identity, _ = summon_history("dismiss", visibility="hidden_departure")
+@pytest.mark.parametrize("death_saves", (False, True))
+def test_lethal_summon_hit_keeps_witnessed_blood_before_terminal_departure(death_saves):
+    history, identity, _ = summon_history("defeat", death_saves=death_saves)
+    for view in ("caster", "witness"):
+        state, roots = decode_player_sequence(encode_player_sequence(project_sequence(history.views[view])))
+        injuries = [node for root in roots for node in root.events
+            if isinstance(node.fact, DamageResultFact) and node.fact.target_entity_uuid == identity]
+        injury_node, = injuries
+        injury = injury_node.fact
+        assert isinstance(injury, DamageResultFact)
+        assert injury.body_release is not None
+        assert injury.body_release.release_id == "body.blood"
+        assert injury.body_release.position == (4, 2)
+        departures = [node for root in roots for node in root.events
+            if isinstance(node.fact, SpatialFact) and node.fact.terminal_departure]
+        departure, = departures
+        order = {row.event_uuid: row.source_index for root in roots for row in root.version_rows}
+        assert order[injury_node.uuid] < order[departure.uuid]
+        for root in roots:
+            state = reduce_lineage(state, root)
+        assert not state.actors[identity].present
+
+
+@pytest.mark.parametrize("ending", ("dismiss", "defeat", "instant_death"))
+def test_unseen_terminal_departure_does_not_reveal_retirement(ending):
+    history, identity, _ = summon_history(ending, visibility="hidden_departure")
     state, roots = decode_player_sequence(encode_player_sequence(project_sequence(history.views["witness"])))
     assert not any(isinstance(node.fact, SpatialFact) and node.fact.terminal_departure
                    for root in roots for node in root.events)
@@ -219,7 +255,7 @@ def test_fey_palette_replaces_real_body_rgb_and_preserves_separate_shadow(data, 
     rig = data.rigs["smallscale.demonbeast01"]
     contact = ActorContact("summon", (0, 0), "S", data.rig.TILE_W / TILE_WIDTH, rig_id="smallscale.demonbeast01")
     layers = tuple(RigLayer(slot, categories[0], alpha=.5 if slot == "shadow" else 1.)
-                   for slot, categories in rig.slot_categories.items())
+                   for slot, categories in rig.slot_categories.items() if slot in ("body", "shadow"))
     rows = load_actor_media(data, ((contact, layers, ("Idle",)),), all_facings=True)
     originals = {key: pygame.image.tobytes(image, "RGBA") for key, image in rows.items()}
     camera = Camera(zoom=1, quadrant=quadrant)
@@ -253,26 +289,39 @@ def test_native_summon_and_dismiss_share_existing_gesture_release(family, data):
                 before = reduce_lineage(before, root)
                 continue
             group = bind_choreography(before, root, data)
-            gesture, = group.body_actions
-            assert gesture.clip == "Special1" and gesture.enabled
-            assert gesture.effect_ms == pytest.approx(8 * 1000 / 12)
-            assert not gesture.gaps
-            pending = sample_body_presentation(before, group.after, data, gesture.effect_ms - 1,
-                gesture.effect_ms - 1, {}, choreography=group)
-            released = sample_body_presentation(before, group.after, data, gesture.effect_ms,
-                gesture.effect_ms, {}, choreography=group)
+            if isinstance(fact, SpellFact) and group.nodes:
+                timeline = group.nodes[0].bound.timeline
+                assert timeline.release_ms is not None
+                effect_ms = group.nodes[0].start_ms + timeline.release_ms
+                caster_id = str(fact.source_entity_uuid)
+            else:
+                gesture, = group.body_actions
+                assert gesture.clip == "Special1" and gesture.enabled
+                effect_ms = gesture.effect_ms
+                caster_id = gesture.contact.actor_uuid
+                assert not gesture.gaps
+            assert effect_ms == pytest.approx(8 * 1000 / 12)
+            pending = sample_body_presentation(before, group.after, data, effect_ms - 1,
+                effect_ms - 1, {}, choreography=group)
+            released = sample_body_presentation(before, group.after, data, effect_ms,
+                effect_ms, {}, choreography=group)
             caster_pose, = (pose for pose in pending.poses
-                           if pose.actor.contact.actor_uuid == gesture.contact.actor_uuid)
+                           if pose.actor.contact.actor_uuid == caster_id)
             assert caster_pose.body.clip == "Special1" and caster_pose.body.frame == 7
             present_before = any(pose.actor.contact.actor_uuid == str(identity) for pose in pending.poses)
             present_after = any(pose.actor.contact.actor_uuid == str(identity) for pose in released.poses)
             if isinstance(fact, SpellFact):
                 assert not present_before and present_after
             else:
-                assert present_before and not present_after
+                assert present_before and present_after
+                assert not released.displayed.actors[identity].present
+                cue, = (row for row in group.entity_lifecycle if row.phase == "departure")
+                gone = sample_body_presentation(before, group.after, data, cue.body_end_ms,
+                    cue.body_end_ms, {}, choreography=group)
+                assert not any(pose.body.actor_uuid == str(identity) for pose in gone.poses)
             assert group.after == reduce_lineage(before, root)
-            assert sample_body_presentation(before, group.after, data, gesture.effect_ms - 1,
-                gesture.effect_ms - 1, {}, choreography=group) == pending
+            assert sample_body_presentation(before, group.after, data, effect_ms - 1,
+                effect_ms - 1, {}, choreography=group) == pending
             before = group.after
             checked.append(fact.behavior_id)
         assert checked == ["spell.conjure_" + family, "action.summon.dismiss"]

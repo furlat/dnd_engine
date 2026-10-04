@@ -151,7 +151,9 @@ def iter_combat_demo(
                     extra_target_uuids=[str(actors[2].uuid), str(recipient.uuid)], available=available,
                 )
             else:
-                first_attack_seed = 17 if goblin_recipient else 0
+                # The current 7-HP Goblin survives this first 4-damage hit,
+                # leaving the second real cast to exercise miss or lethal injury.
+                first_attack_seed = 58 if goblin_recipient else 0
                 random.seed(first_attack_seed if cast_number == 1 else second_attack_seed)
                 terminal = encounter.execute_action(caster.uuid, action.template_name, target_option.index)
             if terminal is None or terminal.canceled or terminal.phase is not EventPhase.COMPLETION:

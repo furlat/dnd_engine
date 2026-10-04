@@ -27,24 +27,48 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
-**October 3 — final summoning/Fly phase is at a planning checkpoint.**
-The human accepted the delivered summoning artwork and requested a combined
-[final-phase plan](agent_docs/SUMMONING_FLY_FINAL_PHASE_PLAN_2026-10-03.md):
-received injury/blood and Prone/death corrections, shared ground-to-ground Fly
-presentation including native-wing demons, flight clipping/trajectories, and the
-accepted summon arrival/departure/control-break effects. No other spells enter
-this phase. The old gallery did not exercise incoming lethal damage adequately;
-current smoke evidence exposes retirement before damage observer-evidence capture.
-The bounded existing blood/scale/pose corrections are partly implemented, but that
-ordering fix, Fly and lifecycle VFX integration remain pending. No flight-to-Run
-substitution remains. This active amendment supersedes the broader completion
-wording below; prior receipts remain historical evidence, not proof of this phase.
-Both independent reviewers approve the final design; exact-hash verdicts are in
-the [review receipt](agent_docs/audits/SUMMONING_FLY_FINAL_PHASE_PLAN_REVIEWS_2026-10-03.md).
-The subsequent human scale correction is implemented and independently reviewed:
-all six demons use 1.00, no rules-Size-derived artwork resizing. All 18 animal
-scales were audited: none is below 1.00; approved enlargements remain. Existing
-recordings retain the previous scales until regenerated.
+**October 4 — human visual corrections following the final gallery.**
+Wolf now uses the requested 2.00 original scale. Original alternate deaths are
+bound for six demons and fifteen Goblins; intact Prone/downed/recovery remains.
+Fallen creatures skip standing death wind-ups and existing falls keep their clock.
+Latest focused checks: 75 + 87 passed; changed-code typing: zero errors/warnings.
+Six native Wolf2.00 and 18 terminal-art recordings pass (934 checks, zero gaps).
+Independent source/art/pixel correction reviews approve within their recorded
+scopes. No implementation blocker remains. Current 134-file source snapshot SHA256:
+`96605c30162fc3e2100d12d19d75a844a0083d94299d7d2b68185903aead49e6`.
+See the [acceptance report](agent_docs/audits/SUMMONING_FINAL_ACCEPTANCE_2026-10-04.md)
+for exact bounded evidence; the completed full-suite records below predate this extension.
+
+**October 4 — final summoning/Fly + 17 Goblin implementation and validation complete; final review receipts closing.**
+The authorized [final-phase plan](agent_docs/SUMMONING_FLY_FINAL_PHASE_PLAN_2026-10-03.md)
+and [Goblin amendment](agent_docs/GOBLIN_ROSTER_FINAL_PHASE_PLAN_2026-10-03.md)
+are implemented. See the [acceptance report](agent_docs/audits/SUMMONING_FINAL_ACCEPTANCE_2026-10-04.md)
+for current evidence; earlier checkpoints below describe historical states.
+
+The accepted summon arrival/departure/control-break art, actual injury/blood/death,
+shared ground-to-ground flight, source-owned Fly appearance and all 17 original
+Goblin rigs/content are present. Riders are single combatants; Goblin17 owns an
+ordinary Pistol. Dedicated Goblins and all demons retain original scale 1.00;
+approved animal enlargements remain. No additional spell or mount/ammunition
+system entered this phase. Fixed second-weapon pose and modular Pistol donor
+geometry remain the disclosed artwork approximations.
+
+All 2,840 native and 3,228 client cases are accounted for after documented fixture
+corrections and passing complete affected-file reruns; original failing receipts
+are retained. Active dnd/game/authoring-tool typing has 0 errors/warnings. The
+[standard 69-clip gallery](http://127.0.0.1:8768/summoning-final-acceptance-20261004/runs/20261004-final-acceptance/index.html)
+contains 35 native experiments, 1,563 passing recorder checks and 0 presentation gaps.
+It preserves 68 original recordings plus one separately recaptured height case on
+existing supported terrain. Four-camera pixel inspections and source approvals
+are recorded independently; these do not claim every frame was manually watched.
+
+Final source snapshot: 131 files, SHA256
+`7975e7086cbceecf396594a9dc8d613ab48dc63f5e241a083834f97cd0faf7c3`.
+The implementation ledger and final acceptance report hold permanent validation
+logs and exact provenance. Final independent completion receipts are closing;
+no pending implementation task remains in this authorized phase. Work remains
+uncommitted on the shared checkout at base `cd6d4ec363c0640595ec1f9b1b6ad9cda11baaef`.
+No external chat was contacted.
 
 **October 3 — summoning and the first 24-creature batch complete.**
 The human-approved [unified plan](agent_docs/SUMMONING_BACKEND_PLAN_2026-10-03.md)

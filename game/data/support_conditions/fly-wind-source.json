@@ -1,0 +1,39 @@
+{
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx",
+  "windows": {
+    "apply": [
+      0,
+      31
+    ],
+    "hold": [
+      31,
+      95
+    ],
+    "release": [
+      95,
+      128
+    ]
+  },
+  "fps": 32,
+  "identities": [
+    "support.fly.wind.apply.back",
+    "support.fly.wind.hold.back",
+    "support.fly.wind.release.back",
+    "support.fly.wind.apply.front",
+    "support.fly.wind.hold.front",
+    "support.fly.wind.release.front"
+  ],
+  "files": [
+    {
+      "path": "game/assets/fly_wind/media/longstrider-back/0.png",
+      "bytes": 170765,
+      "sha256": "f6fe532b1d4f5e7085498072c8c8e5a5a33476e3f5424136943e5a4f171ac9fe"
+    },
+    {
+      "path": "game/assets/fly_wind/media/longstrider-front/0.png",
+      "bytes": 73631,
+      "sha256": "790b3d1f30e3ec093cb2b93198af1c297245e2eb1916e83e3f5e0da0ad0aab3b"
+    }
+  ],
+  "source_metadata": "wind.json"
+}

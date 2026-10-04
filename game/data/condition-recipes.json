@@ -7980,6 +7980,510 @@
       "responses": [],
       "reactionCastBinding": null,
       "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "class_feature",
+        "content_id": "class_feature.sorcerer.dragon_wings.active",
+        "content_version": 1,
+        "definition_contract_hash": "2687590eedb36e5161aef83b10fbd3a38f68581b0d93ebdf0e283294ae8c2e6c"
+      },
+      "label": "Dragon Wings",
+      "disposition": "authored",
+      "mediaFailurePolicy": "omit_optional_track",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "action",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "action",
+              "content_id": "action.class.sorcerer.dragon_wings.toggle",
+              "content_version": 1,
+              "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=manifest; effect=condition.dragon_wings; disposition=beneficial; target=actor; gates=configuration:toggle=manifest"
+          },
+          {
+            "effect": "remove",
+            "triggerType": "action",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "action",
+              "content_id": "action.class.sorcerer.dragon_wings.toggle",
+              "content_version": 1,
+              "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=dismiss; effect=condition.dragon_wings.remove; disposition=neutral; target=actor; gates=configuration:toggle=dismiss"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "ambient_passive",
+        "presentationDomains": [
+          "equipment_weapon"
+        ],
+        "visualFamily": "flight.manifested-wings"
+      },
+      "composition": {
+        "group": "back-adornment",
+        "exclusiveGroup": "back-adornment",
+        "priority": 80,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [
+          {
+            "id": "manifested-flight-wings",
+            "slot": "backpack",
+            "category": "Bag8",
+            "tint": 16777215,
+            "priority": 100,
+            "anatomy": "wings"
+          }
+        ],
+        "layers": []
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 10705124,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 13510595,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.fly",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Fly",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "ambient_passive",
+        "presentationDomains": [
+          "equipment_weapon",
+          "body"
+        ],
+        "visualFamily": "flight.manifested-wings"
+      },
+      "composition": {
+        "group": "flight",
+        "exclusiveGroup": null,
+        "priority": 70,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [
+          {
+            "id": "fly-wings",
+            "slot": "backpack",
+            "category": "Bag8",
+            "tint": 7456229,
+            "priority": 90,
+            "anatomy": "wings",
+            "glowStrength": 0.15
+          }
+        ],
+        "layers": [
+          {
+            "id": "fly-wind-back",
+            "assetId": "fly_wind_back",
+            "category": "FlyWind",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "offsetY": -24,
+            "opacity": 0.95,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 20,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "behind_body"
+          },
+          {
+            "id": "fly-wind-front",
+            "assetId": "fly_wind_front",
+            "category": "FlyWind",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "body",
+            "offsetY": -24,
+            "opacity": 0.95,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 20,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 900,
+        "feedbackEnabled": false,
+        "feedbackColor": 7456229,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 700,
+        "feedbackEnabled": false,
+        "feedbackColor": 7456229,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "condition",
+        "content_id": "condition.summoned",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Summoned",
+      "disposition": "state_only",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "state_only",
+        "presentationDomains": [
+          "hud_only"
+        ],
+        "visualFamily": "summoning.membership"
+      },
+      "composition": {
+        "group": "summoning",
+        "exclusiveGroup": null,
+        "priority": 0,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": []
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "condition",
+        "content_id": "condition.summon_control",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Summon Control",
+      "disposition": "state_only",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "state_only",
+        "presentationDomains": [
+          "hud_only"
+        ],
+        "visualFamily": "summoning.membership"
+      },
+      "composition": {
+        "group": "summoning",
+        "exclusiveGroup": null,
+        "priority": 0,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": []
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "trait",
+        "content_id": "trait.innate_flight",
+        "content_version": 1,
+        "definition_contract_hash": "8b81685f804e251441a0107c1620212c9d441cf2d4c30a29cd5c34d344201c9a"
+      },
+      "label": "Innate Flight",
+      "disposition": "state_only",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "state_only",
+        "presentationDomains": [
+          "hud_only"
+        ],
+        "visualFamily": "innate.flight"
+      },
+      "composition": {
+        "group": "innate",
+        "exclusiveGroup": null,
+        "priority": 0,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": []
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "trait",
+        "content_id": "trait.magic_resistance",
+        "content_version": 1,
+        "definition_contract_hash": "8b81685f804e251441a0107c1620212c9d441cf2d4c30a29cd5c34d344201c9a"
+      },
+      "label": "Magic Resistance",
+      "disposition": "state_only",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "state_only",
+        "presentationDomains": [
+          "hud_only"
+        ],
+        "visualFamily": "innate.magic_resistance"
+      },
+      "composition": {
+        "group": "innate",
+        "exclusiveGroup": null,
+        "priority": 0,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": []
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "trait",
+        "content_id": "trait.attack_hit_save_rider",
+        "content_version": 1,
+        "definition_contract_hash": "8b81685f804e251441a0107c1620212c9d441cf2d4c30a29cd5c34d344201c9a"
+      },
+      "label": "Attack Hit Save Rider",
+      "disposition": "state_only",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "state_only",
+        "presentationDomains": [
+          "hud_only"
+        ],
+        "visualFamily": "innate.attack_rider"
+      },
+      "composition": {
+        "group": "innate",
+        "exclusiveGroup": null,
+        "priority": 0,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": []
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "trait",
+        "content_id": "trait.keen_perception",
+        "content_version": 1,
+        "definition_contract_hash": "8b81685f804e251441a0107c1620212c9d441cf2d4c30a29cd5c34d344201c9a"
+      },
+      "label": "Keen Perception",
+      "disposition": "state_only",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "state_only",
+        "presentationDomains": [
+          "hud_only"
+        ],
+        "visualFamily": "innate.perception"
+      },
+      "composition": {
+        "group": "innate",
+        "exclusiveGroup": null,
+        "priority": 0,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": []
+      },
+      "application": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 0,
+        "feedbackEnabled": false,
+        "feedbackColor": 16777215,
+        "effects": []
+      }
     }
   ]
 }

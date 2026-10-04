@@ -11,7 +11,8 @@ from uuid import UUID
 
 from dnd.core.events import EventType
 from game.animation import (ActorContact, BodySample, body_context, context_duration, context_anchor_ms,
-                            resolve_body_context, sample_context_body, sample_idle_body, facing_for_delta)
+                            resolve_body_context, resolve_cast_recipe,
+                            sample_context_body, sample_idle_body, facing_for_delta)
 from game.animation_types import (ActionFeedback, AnimationData, BodyActionRecipe, Facing8,
                                   StudioActorLayer, StudioCondition, StudioRecovery, StudioSpellDraft)
 from game.animation_types import BodyContext, ContentBodyQualifier, ActionFrameAnchor
@@ -87,8 +88,7 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
     action = data.body_action_recipes.get(recipe_id) if isinstance(fact, ActionFact) else None
     if draft is None and action is None:
         return None
-    if draft is not None and (draft.projectile is not None or draft.area is not None
-            or draft.media and behavior_id not in data.relocation_actions):
+    if draft is not None and (draft.projectile is not None or draft.area is not None):
         return None
     actor = before.actors.get(source_uuid)
     if actor is None or not (str(actor.uuid) in contacts or actor_is_visible(before, actor)):
@@ -112,7 +112,12 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
     hide_weapon = False
     enabled = True
     cast_layers = ()
+    cast_body = None
     if draft is not None:
+        cast_body = resolve_body_context(data, contact, "cast", ContentBodyQualifier(contentRef=draft.definitionRef))
+        draft = resolve_cast_recipe(data, contact, draft)
+        if draft.media and behavior_id not in data.relocation_actions:
+            return None
         cast = draft.cast
         if cast.bodyPlaybackSpeed is None or cast.equipment is None:
             raise ValueError("body cast requires materialized Studio defaults")
@@ -151,6 +156,9 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
             media = data.interruptions.reactions.get(behavior_id)
             if media is not None:
                 cast_layers = media.castLayers
+            cast_body = resolve_body_context(data, contact, "cast", ContentBodyQualifier(contentRef=action.definitionRef))
+            if cast_body is not None:
+                cast_layers = ()  # Original accents follow the selected body's clip.
             other = before.actors.get(target_uuid) if target_uuid is not None else None
             target = contacts.get(str(target_uuid))
             if target is None and other is not None and actor_is_visible(before, other):
@@ -164,8 +172,10 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
     else:
         assert action is not None
         qualifier = ContentBodyQualifier(contentRef=action.definitionRef)
-    selected = resolve_body_context(data, contact, "body_action", qualifier, body_context(
-        clip, speed, enabled=enabled, anchors=(ActionFrameAnchor(name="effect", frame=effect_frame),)))
+    selected = (cast_body.model_copy(update={"anchors": (ActionFrameAnchor(name="effect",
+        frame=next(anchor.frame for anchor in cast_body.anchors if anchor.name == "release")),)})
+        if cast_body is not None else resolve_body_context(data, contact, "body_action", qualifier, body_context(
+            clip, speed, enabled=enabled, anchors=(ActionFrameAnchor(name="effect", frame=effect_frame),))))
     selected = selected.model_copy(update={"actor": selected.actor.model_copy(update={
         "playbackSpeed": selected.actor.playbackSpeed * action_playback_rate(data, actor)})})
     recovery_body = resolve_body_context(data, contact, "body_action_recovery", qualifier, body_context(

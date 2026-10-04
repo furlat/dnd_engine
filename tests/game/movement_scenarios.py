@@ -57,6 +57,7 @@ def movement_history(
     battlefield_id: str = "battlefield.open_floor_bright",
     behavior: Literal["action.move", "action.jump"] = "action.move",
     boost: Literal["none", "haste", "bonus-dash"] = "none",
+    flight: bool = False,
 ) -> CapturedHistory:
     """Execute discovered choices; Haste's actual cast establishes the baseline.
 
@@ -92,6 +93,8 @@ def movement_history(
                 (build_authored_item("apparel.cloth_shoes.red", actor.uuid), BodyPart.FEET),
             ))
             setup_standard_actions(actor)
+            if actor is mover and flight:
+                register_spell(actor, Fly, caster_level=7)
             if built.definition.light_level == "darkness":
                 actor.senses.add_sense_mode_source(actor.uuid,
                     SenseMode(sense_type=SensesType.DARKVISION, range_feet=60))
@@ -112,6 +115,10 @@ def movement_history(
         encounter.start_turn()
         while encounter.get_current_entity() is not (caster or mover):
             encounter.next_turn()
+        if flight:
+            applied = next(row for row in mover.registered_actions if isinstance(row, Fly)).instantiate(
+                target_entity_uuid=mover.uuid, alt_skip_slot=True).apply()
+            assert applied is not None and not applied.canceled
         cursor = EventQueue.event_cursor()
         startup = capture_interval(name="movement route startup", start_cursor=0, end_cursor=cursor,
             observer_uuid=mover.uuid, battlefield_id=battlefield_id,)
@@ -178,7 +185,8 @@ def movement_history(
             assert mover.action_economy.bonus_actions.normalized_score == 0
         for destination in route[1:]:
             available = get_available_actions(mover)
-            action = next(row for row in available.all_actions if row.behavior_id == behavior and row.valid_targets)
+            action = next(row for row in available.all_actions if row.behavior_id == behavior and row.valid_targets
+                          and (not flight or row.template_name == "Flying Movement"))
             option = next(row for row in action.valid_targets if row.position == destination)
             movement_before = mover.action_economy.movement_remaining()
             cursor = EventQueue.event_cursor()

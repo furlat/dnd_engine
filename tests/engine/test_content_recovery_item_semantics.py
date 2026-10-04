@@ -99,6 +99,10 @@ def test_equipment_and_attacks_preserve_active_weapon_stance(
         position=(1, 1),
         faction="heroes",
     )
+    # The art-matched Goblin01 kit has a handaxe; this scenario needs both sets.
+    bow = build_authored_item("weapon.shortbow", attacker.uuid)
+    assert attacker.loot_item(bow)
+    assert attacker.equip_item(bow.uuid, WeaponSlot.RANGED_MAIN)
     adjacent = _deployed_bestiary_actor(
         game,
         "skeleton",

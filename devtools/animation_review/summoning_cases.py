@@ -170,7 +170,8 @@ def summoning_history(
             # and spends half its speed; Stand Up is not a standard template.
             turn(summon)
             assert "Prone" not in summon.active_conditions
-            assert summon.action_economy.movement_remaining() == summon.action_economy.get_base_value("movement") // 2
+            base_movement = summon.action_economy.get_base_value("movement")
+            assert summon.action_economy.movement_remaining() == base_movement - base_movement // 2
             for _ in range(20):
                 if summon.get_normal_hp() <= 0:
                     break

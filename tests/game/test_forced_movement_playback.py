@@ -87,9 +87,12 @@ def body_pixels(command: AnimationDrawCommand) -> bytes:
     return pygame.image.tobytes(command[1], "RGBA")
 
 
-@pytest.mark.parametrize("case_id", ["shove-success", "shove-partly-blocked", "shove-goblin", "telekinesis-displacement"])
+@pytest.mark.parametrize("case_id,brace_frame", [
+    ("shove-success", 3), ("shove-partly-blocked", 3),
+    ("shove-goblin", 5), ("telekinesis-displacement", 3),
+])
 def test_native_displacement_plays_brace_travel_release_and_idle_without_latest_leaking(
-    data: AnimationData, fonts: tuple[pygame.font.Font, pygame.font.Font], case_id: str,
+    data: AnimationData, fonts: tuple[pygame.font.Font, pygame.font.Font], case_id: str, brace_frame: int,
 ) -> None:
     scene = load_scene(case_id, data)
     group = scene.group
@@ -101,7 +104,7 @@ def test_native_displacement_plays_brace_travel_release_and_idle_without_latest_
     frame_ms = 1000 / clip.fps
     start_ms = 7 * 1000 / 12 if group.shoves else 0
     assert cue.start_ms == pytest.approx(start_ms)
-    assert cue.travel_start_ms == pytest.approx(start_ms + 3 * frame_ms)
+    assert cue.travel_start_ms == pytest.approx(start_ms + brace_frame * frame_ms)
     assert cue.travel_end_ms - cue.travel_start_ms == pytest.approx(420)
     assert cue.body_end_ms == pytest.approx(start_ms + (clip.frames - 1) * frame_ms + 420)
     assert group.after.actors[target].last_visual_position != cue.actor.grid
@@ -117,11 +120,11 @@ def test_native_displacement_plays_brace_travel_release_and_idle_without_latest_
         released = frame_at(scene, data, fonts, cue.travel_end_ms + frame_ms + .001, camera)
         assert actor_body(first, identity)[4][8:10] == ("TakeDamage", 0)
         for frame in (brace, travelling, end_travel):
-            assert actor_body(frame, identity)[4][8:10] == ("TakeDamage", 3)
+            assert actor_body(frame, identity)[4][8:10] == ("TakeDamage", brace_frame)
         assert body_pixels(actor_body(brace, identity)) == body_pixels(actor_body(travelling, identity))
         assert actor_contact(travelling, identity).grid == pytest.approx(expected)
         assert actor_contact(end_travel, identity).grid == end
-        assert actor_body(released, identity)[4][8:10] == ("TakeDamage", 4)
+        assert actor_body(released, identity)[4][8:10] == ("TakeDamage", brace_frame + 1)
         # The two-cell shoves have already reached their first cell at 75%
         # travel. Its received position commits there, before the final cell.
         reached = (5, 3) if case_id in ("shove-success", "shove-goblin") else cue.actor.grid

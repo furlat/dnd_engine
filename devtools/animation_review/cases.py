@@ -51,6 +51,8 @@ class ConstructionCase(BaseModel):
 class FlightCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["flight"]
+    recipient: Literal["modular-backpack", "huntsman", "wolf"] | None = None
+    geometry: bool = False
 
 
 class ItemPowerCase(BaseModel):
@@ -64,6 +66,7 @@ class ParalysisCase(BaseModel):
     seed: int
     maximum_hp: Literal[4, 80] = 80
     movement_behavior: Literal["action.move", "action.jump"] = "action.move"
+    flight: bool = False
 
 
 class CastCase(BaseModel):
@@ -116,6 +119,8 @@ class CreatureCase(BaseModel):
     creature_identity: str
     weapon_slot: WeaponSlot = WeaponSlot.MELEE_MAIN
     seed: int = 17
+    multiattack: bool = False
+    spell: Literal["web", "fire_bolt"] | None = None
 
 
 class EquipmentCase(BaseModel):
@@ -165,6 +170,7 @@ class MovementCase(BaseModel):
     battlefield_id: str = "battlefield.open_floor_bright"
     behavior: Literal["action.move", "action.jump"] = "action.move"
     boost: Literal["none", "haste", "bonus-dash"] = "none"
+    flight: bool = False
 
 
 class ConcealmentCase(BaseModel):

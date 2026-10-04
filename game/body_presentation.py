@@ -12,6 +12,7 @@ from game.condition_animation import condition_contact, condition_transition_app
 from game.attack import attack_actor_contacts, BoundAttack
 from game.scene import SceneActor, available_clips, scene_actors
 from game.visual_position import VisualPosition, placed_contact
+from game.entity_lifecycle import lifecycle_body_progress, retiring_pose
 from game.body_pose_types import ActorPose as ActorPose
 
 
@@ -123,7 +124,8 @@ def sample_body_presentation(before: PlayerState, after: PlayerState | None, dat
             clip_loadouts.discard(body.actor_uuid)
     if movement_sample is not None and movement_sample.contact is not None:
         contact = movement_sample.contact
-        if contact.actor_uuid not in bodies:
+        selected = bodies.get(contact.actor_uuid)
+        if selected is None or (contact.body_lift_px > 0 and selected.clip == "Idle"):
             body = sample_idle_body(data, contact, presentation_ms) if complete else movement_sample.body
             if body is not None:
                 bodies[contact.actor_uuid] = body
@@ -149,5 +151,21 @@ def sample_body_presentation(before: PlayerState, after: PlayerState | None, dat
         *(actor for identity, actor in clip_actors.items() if identity not in present))
     poses = tuple(ActorPose(actor, bodies.get(actor.contact.actor_uuid)
                            or sample_idle_body(data, actor.contact, presentation_ms)) for actor in pose_actors)
+    if group_sample is not None:
+        visible_poses = {pose.actor.contact.actor_uuid: pose for pose in poses}
+        for cue, age in group_sample.entity_lifecycle:
+            identity = cue.actor.contact.actor_uuid
+            if age < cue.start_ms or cue.phase == "bond":
+                continue
+            if cue.phase == "departure":
+                # Replace any retained action body rather than drawing it twice.
+                visible_poses.pop(identity, None)
+                retiring = retiring_pose(cue, age)
+                if retiring is not None:
+                    visible_poses[identity] = retiring
+            elif identity in visible_poses:
+                visible_poses[identity] = replace(visible_poses[identity],
+                                                  coverage=lifecycle_body_progress(cue, age))
+        poses = tuple(visible_poses.values())
     return BodyPresentation(displayed, actors, poses, complete, shown_hp, resulting_facings,
                             resulting_positions, group, group_sample, group_elapsed, movement_sample)

@@ -71,7 +71,7 @@ class SummoningSystem:
         self._removal_participant = BaseBlock.register_condition_removal_participant(self)
         self._settled_hook = BaseBlock.register_condition_graph_settled_hook(self._settled)
         EventQueue.add_pre_completion_system(self._system_name, self,
-            {EventType.CONDITION_REMOVAL, EventType.DAMAGE_APPLIED, EventType.DEATH, EventType.INSTANT_DEATH})
+            {EventType.CONDITION_REMOVAL, EventType.TAKE_DAMAGE, EventType.DEATH, EventType.INSTANT_DEATH})
         game.add_close_callback(self.close)
 
     def placement_error(self, caster_uuid: UUID, selection: SummonSelection, *, subjective: bool) -> str | None:

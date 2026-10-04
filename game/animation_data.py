@@ -24,7 +24,7 @@ from game.animation_types import (
     DeathContext, DeathSaveContext, EquipmentTransitionContext, FloatingFeedbackStyle, ForcedMovementContext,
     ForcedMovementProfile, FrozenMap, HealingContext, Identifier, LifecycleFeedback, LifeStateContext,
     MovementMediaTrack, MovementReactionContext, ProjectileStorage, RigLayer, RigTables, ShoveRecipe, StudioDraftFile, StudioSpellDraft,
-    VoluntaryMovementContext, MovementPresentation, Point, PoseSockets, FacingMap,
+    VoluntaryMovementContext, MovementPresentation, EntityLifecyclePhase, Point, PoseSockets, FacingMap,
     InterruptionPresentation,
     ContentBodyQualifier,
 )
@@ -90,7 +90,8 @@ def resolve_actor_layers(
     """
     rig = data.rigs[rig_id]
     if rig_id != data.root_rig:
-        appearance_slots = tuple(slot for slot in rig.slot_order if slot != "slash")
+        clip_slots = {layer.slot for clip in rig.clips.values() for layer in clip.layers}
+        appearance_slots = tuple(slot for slot in rig.slot_order if slot != "slash" and slot not in clip_slots)
         if any(len(rig.slot_categories[slot]) != 1 for slot in appearance_slots):
             raise ValueError(f"fixed actor rig requires one category per slot: {rig_id}")
         return tuple(
@@ -343,7 +344,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         draft_versions[ref] = drafts_file.version
         identities.add(ref.identity_key)
     if authored_bundles is None:
-        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media", "curse_media", "divine_media", "control_media", "fire_media", "lightning_media", "summoning_spells")
+        authored_bundles = tuple(data_root.parent / name for name in ("codexfx", "spell_recovery", "ice_spells", "cantrips", "area_spells", "support_spells", "pending_spells", "control_spells", "liquid_media", "persistent_spells", "counterspell_media", "globe_media", "healing_spells", "support_conditions", "wall_media", "surface_contact_media", "curse_media", "divine_media", "control_media", "fire_media", "lightning_media", "summoning_spells", "summoning_media")
                                  if (data_root.parent / name).is_dir())
     bundle_resources: dict[str, Path] = {}
     projectile_storage: dict[str, ProjectileStorage] = {}
@@ -352,7 +353,14 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     effect_drafts: dict[str, StudioSpellDraft] = {}
     effect_versions: dict[str, int] = {}
     action_deliveries: dict[str, str] = {}
+    entity_lifecycle_media: dict[str, EntityLifecyclePhase] = {}
     for bundle in authored_bundles:
+        lifecycle_path = bundle / "lifecycle.json"
+        if lifecycle_path.exists():
+            phases = TypeAdapter(dict[str, EntityLifecyclePhase]).validate_json(_read(lifecycle_path))
+            if set(phases) - {"arrival", "departure", "bond"} or set(phases) & set(entity_lifecycle_media):
+                raise ValueError("unknown or duplicate entity lifecycle phase")
+            entity_lifecycle_media.update(phases)
         resource_bindings = _ResourceBindings.model_validate_json(_read(bundle / "bindings.json"))
         action_deliveries.update(resource_bindings.actionDeliveries)
         for identity, ref in resource_bindings.spells.items():
@@ -492,7 +500,8 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         for identity, row in world.spatial_effects.items()})
     movement_media = MovementPresentation.model_validate_json(_read(DATA_ROOT.parent / "movement-media.json"))
     movement_context = movement_context.model_copy(update={
-        "walkMedia": movement_media.walkMedia, "jumpMedia": movement_media.jumpMedia})
+        "walkMedia": movement_media.walkMedia, "jumpMedia": movement_media.jumpMedia,
+        "flight": movement_media.flight})
     data = AnimationData(
         interruptions=InterruptionPresentation.model_validate_json(_read(DATA_ROOT.parent / "interruptions.json")),
         devices=load_device_art(),
@@ -549,6 +558,7 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
             _read(data_root / "body-release-bindings.json"))),
         relocation_actions=frozenset(bindings.relocations),
         portals=load_portal_art(),
+        entity_lifecycle_media=MappingProxyType(entity_lifecycle_media),
         action_playback_rates=movement_media.actionPlaybackRates,
         action_deliveries=MappingProxyType(action_deliveries),
         movement_reference_speed_feet=movement_media.referenceSpeedFeet,
@@ -559,6 +569,14 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
     )
     installed_rig_ids = frozenset(TypeAdapter(Identifier).validate_python(
         json.loads(_read(path))["rig_id"]) for path in (data_root.parent / "rigs").glob("*.json"))
+    for phase, recipe in data.entity_lifecycle_media.items():
+        if (phase in ("arrival", "departure")) != (recipe.bodyFadeMs is not None):
+            raise ValueError("arrival/departure require body markers; bond media never changes presence")
+        for tracks in recipe.tracksByManifestation.values():
+            for track in tracks:
+                asset = data.projectile_assets.get(track.assetId)
+                if asset is None or asset.phases.impact is None or track.assetPhase != "impact":
+                    raise ValueError(f"lifecycle track has no registered impact phase: {track.assetId}")
     validate_rig_body_contexts(data, installed_rig_ids=installed_rig_ids)
     return data
 
@@ -567,7 +585,7 @@ def validate_rig_body_contexts(data: AnimationData, *, installed_rig_ids: frozen
     """Admit portable overrides against this installed authored vocabulary."""
     action_refs = tuple(recipe.definitionRef for recipe in (*data.drafts.values(), *data.body_action_recipes.values()))
     condition_refs = tuple(recipe.definitionRef for recipe in data.condition_recipes.values())
-    references = {"body_action": action_refs, "body_action_recovery": action_refs,
+    references = {"body_action": action_refs, "body_action_recovery": action_refs, "cast": action_refs,
         "condition_entry": condition_refs, "condition_hold": condition_refs, "condition_exit": condition_refs,
         "shove": tuple(recipe.definitionRef for recipe in data.shove_recipes.values()),
         "save_avoidance": tuple(recipe.definitionRef for recipe in data.drafts.values())}
@@ -584,8 +602,12 @@ def validate_rig_body_contexts(data: AnimationData, *, installed_rig_ids: frozen
             # Alternate body selection does not erase the existing damage/life
             # owners. Their shared clips and callback frames must remain usable.
             damage, death = data.damage_context, data.death_context
+            death_clip = next((binding.body.actor.clip for binding in rig.body_contexts
+                               if binding.role == "death"), death.bodyClip)
+            # Death samples its own Die clip. The legacy damage.deathFrame is
+            # not a TakeDamage callback and must not reject shorter hit banks.
             requirements = [("Idle", 0), (damage.bodyClip, max(damage.flashFrame, damage.numberFrame,
-                damage.conditionFrame, damage.deathFrame)), (death.bodyClip, death.equipmentHideFrame)]
+                damage.conditionFrame)), (death_clip, death.equipmentHideFrame)]
             for pose in data.life_state_context.bodyPoses.values():
                 if pose.bodyPose is not None:
                     requirements.append((pose.bodyPose, 0))

@@ -1,5 +1,133 @@
 # Summoning implementation checkpoints
 
+## Human visual corrections — 4 October
+
+Wolf is now exactly 2.00× its original size. Original terminal death art is bound
+for all six demons and fifteen Goblins, with intact Prone/downed/recovery retained.
+Already fallen bodies do not restart an upright death animation; existing shared
+falls keep their clock. No gameplay/event expansion. Current source snapshot has
+134 files, SHA256 `96605c30162fc3e2100d12d19d75a844a0083d94299d7d2b68185903aead49e6`.
+Latest focused checks pass 75 + 87 cases, changed-code typing is clean, and the
+six Wolf2.00 recordings pass. All 18 death-art recordings also pass; the combined
+24-clip gallery has 934 checks and zero gaps. Independent source/art/pixel reviews
+approve within their stated scopes; see the current [acceptance report](audits/SUMMONING_FINAL_ACCEPTANCE_2026-10-04.md).
+
+## Final-phase completion evidence — 4 October
+
+The approved summoning/Fly phase and all 17 dedicated Goblins are implemented.
+The [final acceptance report](audits/SUMMONING_FINAL_ACCEPTANCE_2026-10-04.md)
+is the current status record; the earlier packet checkpoints below retain their
+historical pending wording and must not be used as the current task list.
+
+- Authoritative injury/death complete before summon retirement; permitted lifecycle
+  evidence drives accepted arrival, departure and Fey control-break media.
+- Shared ground-to-ground flight uses original airborne source poses, continuous
+  lift and existing world clipping. Fly wings preserve equipment, avoid duplicate
+  native wings and release with their owning condition. Native-wing demons remain
+  distinct; non-winged fixed rigs use the accepted wind art.
+- All 17 Goblin kits, original rigs and normal actions are registered. Riders are
+  single combatants, Goblin17 uses normal Pistol Attack, all dedicated Goblins/demons
+  remain 1.00 scale, and approved animal enlargements remain.
+- Full active validation accounts for 2,840 native and 3,228 client cases after
+  explicitly documented fixture corrections and passing affected-file reruns.
+  Runtime/tool typing 0 errors/warnings. No additional backend/render mechanics were
+  introduced to satisfy stale fixtures. Exact logs and per-failure evidence:
+  `.runtime/summoning-final-acceptance-20261004/validation/reconciliation.json`.
+- The standard final gallery contains 69 clips / 35 native scenarios, 1,563 passing
+  checks, 0 gaps and 17,945 frames at 32 FPS. It preserves 68 original passing recordings
+  plus a separately captured supported-height case. All originals remain archived.
+  Independent reviews cover actual representative lifecycle, blood/death, flight,
+  geometry, caster/dual/ranged actions and all 17 Goblin rigs.
+- Final source snapshot 131 files SHA256
+  `7975e7086cbceecf396594a9dc8d613ab48dc63f5e241a083834f97cd0faf7c3`.
+  Final independent completion receipts are closing; source and pixel approvals
+  are already recorded. No commit has been made.
+
+## Earlier implementation checkpoint — 4 October
+
+The human authorized the complete final-phase plan. Base commit is
+`cd6d4ec363c` (`post - first content`); work remains uncommitted on the shared checkout.
+They explicitly selected both remaining proposals: single-combatant wolf-riders
+and an ordinary Pistol item for Goblin17. No external chat communication.
+
+- Packet A damage/terminal ordering is implemented: retirement follows enclosing
+  damage completion; exact causing Death entry sight preserves witnessed terminal
+  departure after DEAD removes living contacts. Hidden events remain withheld.
+  121 passed in 39.47s across summoning presentation, lifecycle, terminal consequences
+  and retirement ownership. Both independent anti-slop/ECS reviewers approve this
+  bounded packet. This does not establish final visual acceptance.
+- Packet E native and client/data source are complete and independently approved.
+  All 17 kits, ordinary Pistol and 83 possessions use existing native builders.
+  42 native checks pass. Native rig/attack/cast/reaction playback checks pass,
+  including actual Goblin07/15 Multiattack selecting mainhand then offhand clips.
+  Source evidence lives in `.runtime/goblin-final-20261003/SOURCE_STUDY.md`;
+  499 original PNGs imported through current rig resources. Final gallery pending.
+- Packet B shared flight is implemented and double reviewed: 40 focused checks
+  passed, covering continuous ground-to-ground lift, real reaction speed/held poses,
+  and late/early terrain support clearance. Original measured frame registrations
+  preserve the selected sprites/shadows; no flight-to-Run substitution.
+- Packet C Fly condition appearance is implemented and double reviewed: 15 focused
+  Fly checks plus 23 existing condition/lifetime checks pass. Bag8 wings preserve
+  backpacks and do not duplicate native/equipped wings. Native same-spell Fly
+  replacement is unchanged; passive overlapping visual memberships are tested
+  separately. Two original wind pages are reused without introducing another spell.
+- Packet D source is implemented and its retained-pose correction is independently
+  approved by both reviewers. S1 uses existing cast
+  media and original measured hand points (42 existing/focused checks and 6 final
+  S1 checks). S2/S3/S5 follow minimal witnessed native provenance, shared scheduling
+  and finite contact-media tails. Public birth facts expose no private recipe or
+  summoner record. Optional explicit initial condition identity fixes lost trait
+  bindings without guessing from legacy semantic keys. Thirty-two original media
+  pages (4,640,796 bytes) are installed privately and locally with exact hashes.
+  Retirement now preserves the permitted pre-cleanup appearance/pose, including
+  Prone, while current damage/death owns its life state. Final focused lifecycle
+  checks: 52 passed in27.11s; dnd/game typing:0 errors/warnings. Earlier combined
+  flight/appearance/lifecycle check:77 passed in40.39s. Both reviewers verified
+  the pre-cleanup Prone/Die retention and passive appearance override. Combined
+  final source/footage acceptance is still in progress.
+- Packet F is captured and frozen:35 native experiments,69 actual observer inputs,
+  875 complete lineages/5,669 retained nodes. Fresh-data presentation preflight
+  binds all873 presentation heads without gaps, exceptions, unsupported conditions
+  or missing observed metadata. Final serial32-FPS gallery and the remaining client
+  suite are running; no final-phase completion or full visual acceptance is claimed.
+  A missing Fly cast binding now selects the existing Special1 gesture; four passive
+  innate traits explicitly declare state-only membership. No additional artwork or
+  gameplay system was added. These data corrections are independently approved by
+  both reviewers, and24 affected Fly/lifecycle checks pass.
+
+October4 receipts: `.runtime/fly-condition-20261004/receipt.json`,
+`.runtime/summoning-cast-20261004/receipt.json`,
+`.runtime/summoning-final-media-20261003/manifest-install.json`.
+Full native/AI/architecture/progression/packaging run:
+`/tmp/final-phase-native-suite.log`:2,838 passed,2 failures in412.42s. Both failures
+were outdated Goblin test inputs/expectations: the stance test assumed the newly
+art-matched Goblin01 still owned a bow, and the structural-owner inventory omitted
+the two approved Goblin Multiattacks. The stance scenario now explicitly equips
+its required bow; the inventory checks exact unique ownership of the two new
+definitions without changing historical evidence. Both complete affected files
+then passed all10 checks in7.12s (`/tmp/final-phase-native-reconciliation.log`).
+All2,840 native cases are accounted for; no backend fix was needed for these two.
+The full game run reached the first884 client cases, then its old loaded demo
+entered a stale two-cast turn loop after killing the now7-HP Goblin on cast1.
+The demo now uses a seeded nonlethal4-damage first hit; the real second cast still
+exercises miss/death. Other initial failures were obsolete Goblin01 bow/attack
+pose assumptions and the explicit new flight-media field. Corrections use canonical
+Goblin03 for bow scenarios and original Goblin01 strike/release timing. The affected
+attack/projectile/map files pass76 checks; combat-history file passes5.
+The remaining2,344 client cases restart at `test_combat_play.py` in
+`/tmp/final-phase-game-remainder.log`, with a JUnit receipt. Final reconciliation pending.
+
+Current final source snapshot: `.runtime/summoning-final-acceptance-20261004/source-final-snapshot.json`,
+SHA256 `8059df6cbab94bafb519a18fc7faba0b6615a34d241a19fb6b6f9e08e83b4585` (119 files).
+Original recorded input remains unchanged. Binding evidence:
+`.runtime/summoning-final-acceptance-20261004/binding-preflight.md`.
+Final gallery render: `runs/20261003T231132Z-2970cd` beneath that acceptance root.
+
+Packet A reviewed SHA256: system.py `cbde6afd2cff196910df31f46a5a5e3248c729e936eec8bd6e25354c56c22516`;
+player_projection.py `4b26621c2acc24799342f1ea996a696c1d9568873eea503b3648b4086270ee38`;
+regression `9d5f7742af1a57815ba07cd69d60519b5b67a970bafe8dcc14e7cb50c0540b5c`.
+Earlier checkpoint wording below records prior state, not the active status.
+
 ## Current amendment — native injury, flight and accepted summoning artwork
 
 **Human scale correction, 3 October:** all six demons now use original scale
@@ -14,9 +142,14 @@ Direct construction of all 24 canonical recipes verified six demon values of
 Stag/Ostrich/Lion 1.50; Tiger/Raptor 1.55; Bison 1.65; Brown Bear 1.70;
 Polar Bear/Blue Raptor 1.80; Rhinoceros 1.85; Stegosaurus 2.35;
 Elephant/Triceratops 2.40; Mammoth 2.60. Existing approved enlargements remain.
-Older out-of-batch Goblin appearance is 0.82, also present in base commit
-`5ff3d983`; reported separately, unchanged here. Previously rendered clips are
-immutable and still show the old demon multipliers until the next recording.
+**Subsequent human Goblin correction:** the canonical dedicated Goblin01 now
+uses1.00 in `bestiary_content._build_goblin`; direct canonical materialization
+verified1.00 and unchanged modular archer/caster0.82. Source pixels and gameplay
+Size remain unchanged. The human requested the remaining dedicated Goblins too;
+the [17-sheet Goblin amendment](GOBLIN_ROSTER_FINAL_PHASE_PLAN_2026-10-03.md) is
+part of the final-phase plan, with source/item/action evidence and double review.
+No new Goblin roster, artwork import or ability has been implemented in this
+planning pass. Previously rendered clips retain the old scale until regenerated.
 
 The human requested a planning checkpoint for the
 [final phase](SUMMONING_FLY_FINAL_PHASE_PLAN_2026-10-03.md), and explicitly accepted

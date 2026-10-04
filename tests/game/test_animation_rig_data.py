@@ -50,8 +50,9 @@ def test_explicit_goblin_binding_preserves_original_sheets_and_semantic_mapping(
     document = json.loads(BINDING.read_text())
     rig = data.rigs[RIG_ID]
     assert rig.model_dump(mode="json", exclude_unset=True) == document["rig"]
-    assert not rig.pose_sockets  # This fixed rig has no authored head/face tracks.
-    assert {name: clip.source_clip for name, clip in rig.clips.items()} == {
+    assert set(rig.pose_sockets) == {"ground_depth"}  # No invented head/face tracks.
+    assert {name: rig.clips[name].source_clip for name in
+            ("Idle", "TakeDamage", "Die", "Run", "Rolling", "Attack1", "Attack2")} == {
         "Idle": "Idle", "TakeDamage": "TakeDamage 1", "Die": "Die 1",
         "Run": "Run", "Rolling": "Roll 1",
         "Attack1": "Attack 1", "Attack2": "Attack 2",

@@ -1,0 +1,2345 @@
+[
+  {
+    "assetId": "summoning.natural.cast.back",
+    "displayName": "summoning.natural.cast.back",
+    "kind": "projectile",
+    "sheet": "/summoning/natural/cast/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.natural.cast.front",
+    "displayName": "summoning.natural.cast.front",
+    "kind": "projectile",
+    "sheet": "/summoning/natural/cast/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fey_spirit.cast.back",
+    "displayName": "summoning.fey_spirit.cast.back",
+    "kind": "projectile",
+    "sheet": "/summoning/fey_spirit/cast/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fey_spirit.cast.front",
+    "displayName": "summoning.fey_spirit.cast.front",
+    "kind": "projectile",
+    "sheet": "/summoning/fey_spirit/cast/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fiend.cast.back",
+    "displayName": "summoning.fiend.cast.back",
+    "kind": "projectile",
+    "sheet": "/summoning/fiend/cast/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fiend.cast.front",
+    "displayName": "summoning.fiend.cast.front",
+    "kind": "projectile",
+    "sheet": "/summoning/fiend/cast/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.natural.arrival.ground",
+    "displayName": "summoning.natural.arrival.ground",
+    "kind": "projectile",
+    "sheet": "/summoning/natural/arrival/ground.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 56
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 56,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.natural.arrival.back",
+    "displayName": "summoning.natural.arrival.back",
+    "kind": "projectile",
+    "sheet": "/summoning/natural/arrival/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 56
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 56,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.natural.arrival.front",
+    "displayName": "summoning.natural.arrival.front",
+    "kind": "projectile",
+    "sheet": "/summoning/natural/arrival/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 56
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 56,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fey_spirit.arrival.ground",
+    "displayName": "summoning.fey_spirit.arrival.ground",
+    "kind": "projectile",
+    "sheet": "/summoning/fey_spirit/arrival/ground.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 56
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 56,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fey_spirit.arrival.back",
+    "displayName": "summoning.fey_spirit.arrival.back",
+    "kind": "projectile",
+    "sheet": "/summoning/fey_spirit/arrival/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 56
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 56,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fey_spirit.arrival.front",
+    "displayName": "summoning.fey_spirit.arrival.front",
+    "kind": "projectile",
+    "sheet": "/summoning/fey_spirit/arrival/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 56
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 56,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fiend.arrival.ground",
+    "displayName": "summoning.fiend.arrival.ground",
+    "kind": "projectile",
+    "sheet": "/summoning/fiend/arrival/ground.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 56
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 56,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fiend.arrival.back",
+    "displayName": "summoning.fiend.arrival.back",
+    "kind": "projectile",
+    "sheet": "/summoning/fiend/arrival/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 56
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 56,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fiend.arrival.front",
+    "displayName": "summoning.fiend.arrival.front",
+    "kind": "projectile",
+    "sheet": "/summoning/fiend/arrival/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 56
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 56,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.natural.departure.ground",
+    "displayName": "summoning.natural.departure.ground",
+    "kind": "projectile",
+    "sheet": "/summoning/natural/departure/ground.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.natural.departure.back",
+    "displayName": "summoning.natural.departure.back",
+    "kind": "projectile",
+    "sheet": "/summoning/natural/departure/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.natural.departure.front",
+    "displayName": "summoning.natural.departure.front",
+    "kind": "projectile",
+    "sheet": "/summoning/natural/departure/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fey_spirit.departure.ground",
+    "displayName": "summoning.fey_spirit.departure.ground",
+    "kind": "projectile",
+    "sheet": "/summoning/fey_spirit/departure/ground.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fey_spirit.departure.back",
+    "displayName": "summoning.fey_spirit.departure.back",
+    "kind": "projectile",
+    "sheet": "/summoning/fey_spirit/departure/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fey_spirit.departure.front",
+    "displayName": "summoning.fey_spirit.departure.front",
+    "kind": "projectile",
+    "sheet": "/summoning/fey_spirit/departure/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fiend.departure.ground",
+    "displayName": "summoning.fiend.departure.ground",
+    "kind": "projectile",
+    "sheet": "/summoning/fiend/departure/ground.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fiend.departure.back",
+    "displayName": "summoning.fiend.departure.back",
+    "kind": "projectile",
+    "sheet": "/summoning/fiend/departure/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fiend.departure.front",
+    "displayName": "summoning.fiend.departure.front",
+    "kind": "projectile",
+    "sheet": "/summoning/fiend/departure/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 48
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 48,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.natural.bond.ground",
+    "displayName": "summoning.natural.bond.ground",
+    "kind": "projectile",
+    "sheet": "/summoning/natural/bond/ground.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.natural.bond.back",
+    "displayName": "summoning.natural.bond.back",
+    "kind": "projectile",
+    "sheet": "/summoning/natural/bond/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.natural.bond.front",
+    "displayName": "summoning.natural.bond.front",
+    "kind": "projectile",
+    "sheet": "/summoning/natural/bond/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1916721,
+        3303759,
+        4820577,
+        6601077,
+        9099655,
+        11855781,
+        14283719,
+        15791836
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fey_spirit.bond.ground",
+    "displayName": "summoning.fey_spirit.bond.ground",
+    "kind": "projectile",
+    "sheet": "/summoning/fey_spirit/bond/ground.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fey_spirit.bond.back",
+    "displayName": "summoning.fey_spirit.bond.back",
+    "kind": "projectile",
+    "sheet": "/summoning/fey_spirit/bond/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fey_spirit.bond.front",
+    "displayName": "summoning.fey_spirit.bond.front",
+    "kind": "projectile",
+    "sheet": "/summoning/fey_spirit/bond/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        1322057,
+        2377576,
+        3500684,
+        4625850,
+        7519701,
+        10541030,
+        12773101,
+        14873585
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fiend.bond.ground",
+    "displayName": "summoning.fiend.bond.ground",
+    "kind": "projectile",
+    "sheet": "/summoning/fiend/bond/ground.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fiend.bond.back",
+    "displayName": "summoning.fiend.bond.back",
+    "kind": "projectile",
+    "sheet": "/summoning/fiend/bond/back.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ],
+      "tolerance": 0
+    }
+  },
+  {
+    "assetId": "summoning.fiend.bond.front",
+    "displayName": "summoning.fiend.bond.front",
+    "kind": "projectile",
+    "sheet": "/summoning/fiend/bond/front.png",
+    "frame": {
+      "width": 384,
+      "height": 384,
+      "rows": 8,
+      "cols": 24
+    },
+    "fps": 32,
+    "rowOrder": [
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW",
+      "N",
+      "NE"
+    ],
+    "phases": {
+      "impact": {
+        "start": 0,
+        "frames": 24,
+        "fps": 32,
+        "loop": false
+      }
+    },
+    "anchor": {
+      "x": 0.5,
+      "y": 0.65
+    },
+    "defaultScale": 1,
+    "palettePreview": {
+      "colors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ]
+    },
+    "paletteSwap": {
+      "originalColors": [
+        2105376,
+        4079166,
+        6184542,
+        8421504,
+        10724259,
+        12895428,
+        14803425,
+        16053492
+      ],
+      "targetColors": [
+        2563620,
+        4859696,
+        7615036,
+        10832450,
+        13199438,
+        14913123,
+        15579531,
+        16047546
+      ],
+      "tolerance": 0
+    }
+  }
+]

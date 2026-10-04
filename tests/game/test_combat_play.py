@@ -87,9 +87,9 @@ def test_canonical_goblin_uses_fixed_rig_and_actual_gear_health_on_the_map(
     first, second = summary.timelines
     assert first.source.caster.rig_id == "neuroclient.modular"
     assert first.source.applications[0].target.rig_id == "smallscale.goblin01"
-    assert first.source.applications[0].target.visual_scale == 0.82
+    assert first.source.applications[0].target.visual_scale == 1.00
     assert first.source.applications[0].target.elevation_steps == 2
-    assert (first.source.applications[0].target.hp, first.source.applications[0].resulting_hp, second.source.applications[0].target.hp) == (10, 3, 3)
+    assert (first.source.applications[0].target.hp, first.source.applications[0].resulting_hp, second.source.applications[0].target.hp) == (7, 3, 3)
     assert second.source.applications[0].damage_applied is lethal
     actor = summary.latest.actors[UUID(first.source.applications[0].target.actor_uuid)]
     assert actor.creature_content_ref == "content.neurodragon:creature:creature.goblin@1"

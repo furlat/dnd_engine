@@ -1,0 +1,223 @@
+{
+  "revision": "summoning-lifecycle-v1",
+  "source": "/home/tommaso/.codex/worktrees/1aac/dnd_engine/output/weapon-vfx/summoning-vfx-study",
+  "sourceManifestSha256": "3aa0d6bdc12fc0acd610eba3a09c0f1330fa7ce7cf72a99514bb9b4954cb639c",
+  "sourceStatusPreserved": "review_candidate",
+  "cameraBanks": 44,
+  "selectedFrameLayerSamples": 1728,
+  "assetIds": [
+    "summoning.natural.cast.back",
+    "summoning.natural.cast.front",
+    "summoning.fey_spirit.cast.back",
+    "summoning.fey_spirit.cast.front",
+    "summoning.fiend.cast.back",
+    "summoning.fiend.cast.front",
+    "summoning.natural.arrival.ground",
+    "summoning.natural.arrival.back",
+    "summoning.natural.arrival.front",
+    "summoning.fey_spirit.arrival.ground",
+    "summoning.fey_spirit.arrival.back",
+    "summoning.fey_spirit.arrival.front",
+    "summoning.fiend.arrival.ground",
+    "summoning.fiend.arrival.back",
+    "summoning.fiend.arrival.front",
+    "summoning.natural.departure.ground",
+    "summoning.natural.departure.back",
+    "summoning.natural.departure.front",
+    "summoning.fey_spirit.departure.ground",
+    "summoning.fey_spirit.departure.back",
+    "summoning.fey_spirit.departure.front",
+    "summoning.fiend.departure.ground",
+    "summoning.fiend.departure.back",
+    "summoning.fiend.departure.front",
+    "summoning.natural.bond.ground",
+    "summoning.natural.bond.back",
+    "summoning.natural.bond.front",
+    "summoning.fey_spirit.bond.ground",
+    "summoning.fey_spirit.bond.back",
+    "summoning.fey_spirit.bond.front",
+    "summoning.fiend.bond.ground",
+    "summoning.fiend.bond.back",
+    "summoning.fiend.bond.front"
+  ],
+  "files": [
+    {
+      "path": "game/assets/summoning_media/assets/arrival-q0-back.png",
+      "bytes": 224637,
+      "sha256": "9dbf98523b3601f43d83614a681bce79fca4e94d2fc403971aaf8812e1ddaed6"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/arrival-q0-front.png",
+      "bytes": 221469,
+      "sha256": "b7173a6dd5f3e8a3f4442a95cdbbe3c8237c074a59add6cb3727ab0ce42808c3"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/arrival-q0-ground.png",
+      "bytes": 332146,
+      "sha256": "5051890b0915a93a905abfac818534c562acb16bde7d0faa8e75db17b2654fb5"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/arrival-q1-back.png",
+      "bytes": 213069,
+      "sha256": "ec452128e491b7c90d0b7714e27ef4f66721c00e2f3e3a31da62f1a05be3c1df"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/arrival-q1-front.png",
+      "bytes": 211629,
+      "sha256": "84bf82be841ac8faace482f048d64872af6c74686493f8e63df90c4431c3aeaf"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/arrival-q1-ground.png",
+      "bytes": 331252,
+      "sha256": "33eb9b31f575d7100a07f695d44b62909410550c98ce418ada7eefb5655bdc77"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/arrival-q2-ground.png",
+      "bytes": 332278,
+      "sha256": "2d81d13b8dbe10f422022db460a537107ca24687dd3eae6a0b4d8dafecafb268"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/arrival-q3-ground.png",
+      "bytes": 331662,
+      "sha256": "142524bc1d1d1eb78e4bba6439da7f0f482f7eafa4d695c0e66bb3d65fbd4a05"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/bond-q0-back.png",
+      "bytes": 57089,
+      "sha256": "07b981bf048f302d917e4c4612f374fa6960d22ef6e76567af78cd71ebe460b1"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/bond-q0-front.png",
+      "bytes": 78430,
+      "sha256": "7d0a765f4902093e6570403afc0a22ad6dd8590eedcfec83caae11a03839fbdc"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/bond-q0-ground.png",
+      "bytes": 139138,
+      "sha256": "9c2e093adaab82b8e399c81f6ec7837b42352c1272fb349ef569aa1ef5560ef2"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/bond-q1-back.png",
+      "bytes": 53139,
+      "sha256": "66d74981fe1e595578bb9077e4c79954fcd3ec96d43e56265f6fd43f20684aab"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/bond-q1-front.png",
+      "bytes": 70801,
+      "sha256": "ee0a1d36651acf515b3d81cb47f25efdf36516675fb008886b460bb6d32dd901"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/bond-q1-ground.png",
+      "bytes": 139333,
+      "sha256": "b09f9cb430bf3b26c28215360f2883303854ea811c675b958924375fadac981d"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/bond-q2-ground.png",
+      "bytes": 139138,
+      "sha256": "743f5895c6db5bc75ed0a7f63897fde09aa147ad44374d1eb77fc5f17c1c3f50"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/bond-q3-ground.png",
+      "bytes": 139433,
+      "sha256": "ecb0f52b1c93789c160b1d6c76db4d9309c43d78ec04bebabe605c64fa46aa43"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/cast-q0-back.png",
+      "bytes": 15632,
+      "sha256": "58e4b153be4a6f61f261350b2297e2d40bcfc438e22c5b88858549907eaead01"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/cast-q0-front.png",
+      "bytes": 18532,
+      "sha256": "5e3696b014f2a31a9a750adfe3e4374c51855a693c2bb2783108d141df732620"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/cast-q1-back.png",
+      "bytes": 14303,
+      "sha256": "9cc6a6065214532f2b49d6b1a93fb9dfcd86491918ad6e934b0c983b5f68c418"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/cast-q1-front.png",
+      "bytes": 15985,
+      "sha256": "37fedeba09e9d225e629e5124d67e00fb1d537b5a4aa6224ee2710b57bb17c84"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/cast-q2-back.png",
+      "bytes": 15707,
+      "sha256": "b3ba8d3c33b7b12a849ebb2fe4bc8a313d5122a0e2e89e4d18830a2a238fc837"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/cast-q2-front.png",
+      "bytes": 18271,
+      "sha256": "1a49f080ff504e6d533a02bf9023ec174e5c750d670d157c54c179b21c604be2"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/cast-q3-back.png",
+      "bytes": 14368,
+      "sha256": "0fc0edd73e6d10202ee70793728439823332cd63bd0fc30762f821bf2b4762f2"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/cast-q3-front.png",
+      "bytes": 15864,
+      "sha256": "322ecd208288b3c3c7969bcaae665f38d657d0001d050aa53830ec81a7bb4b9a"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/departure-q0-back.png",
+      "bytes": 134124,
+      "sha256": "d0b32229404b21f5deef58b059415b364d6c03d0e70ba8564a7d13fa00a66f28"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/departure-q0-front.png",
+      "bytes": 170463,
+      "sha256": "e1e2ee445de7a330044ead5aa017fbcc7f4cf667f115768d4948cfc7ad4cc9a8"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/departure-q0-ground.png",
+      "bytes": 226815,
+      "sha256": "f5f40b9c2765d1b1e7b1d34af29274b6e919f5df4994e6e9bb4ddefa6036c14a"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/departure-q1-back.png",
+      "bytes": 124388,
+      "sha256": "f99cb79f662a262320e8c2f39e3e95da690d0f49b8c0df216aea7d4c26c09b55"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/departure-q1-front.png",
+      "bytes": 161175,
+      "sha256": "1062f66f4316acc2e9e2cfc9ac703f653adaa6458244be67e6301b11ea63be02"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/departure-q1-ground.png",
+      "bytes": 226621,
+      "sha256": "e0c1c13554f6e7cacbba026acd4438715f2572b0590ab1a6ce69063528112b99"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/departure-q2-ground.png",
+      "bytes": 227076,
+      "sha256": "c2d22d27372e28b57fb5253c21c8d547532712da2e6661b405376db736153f87"
+    },
+    {
+      "path": "game/assets/summoning_media/assets/departure-q3-ground.png",
+      "bytes": 226829,
+      "sha256": "26038f0d0771dd752398bef159c2ebfe011c4933dcd3bebfa979e7f99dba3a34"
+    }
+  ],
+  "runtimePaletteStatus": "asset paletteSwap populated; shared runtime consumer owned by parent",
+  "sharedManifestStatus": "candidate entries only; merge with current release after other imports",
+  "registration": {
+    "canvas": [
+      384,
+      384
+    ],
+    "pivot": [
+      192,
+      249.6
+    ],
+    "fps": 32,
+    "worldPixelsPerCell": [
+      128,
+      64
+    ],
+    "nativePixels": true
+  }
+}

@@ -44,6 +44,7 @@ class WeaponKind(str, Enum):
     GREATCLUB = "greatclub"
     MAUL = "maul"
     MUSKET = "musket"
+    PISTOL = "pistol"
 
 
 class WeaponSlot(str, Enum):

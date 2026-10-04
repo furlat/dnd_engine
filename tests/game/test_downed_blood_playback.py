@@ -29,6 +29,7 @@ def test_actual_downed_review_releases_blood_at_held_body_and_leaves_native_floo
     target = injury.target_entity_uuid
     assert target is not None
     assert release is not None and release.release_id == "body.blood"
+    assert injury.applied_damage == 5 and injury.resulting_normal_hp == -1
     assert release.pattern == "slashing" and release.primary_damage_type is DamageType.SLASHING
     assert not release.critical_hit
     receiving = {cell for region in release.regions for cell in region.positions}

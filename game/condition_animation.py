@@ -19,7 +19,7 @@ from game.animation import (ActorContact, BodySample, BodyTransition, NumberSamp
 from game.animation_types import AnimationData, FloatingFeedbackStyle, StudioCondition, ContentBodyQualifier
 from game.condition_types import (Activity, ConditionBodyColor, ConditionLabel, ConditionRecipe, ConditionTransition,
                                   ConditionBodyDistortion, ConditionLiveCopies, ConditionBodyRamp, ConditionTransitionEffect,
-                                  ConditionFrozenPose, ConditionBodyOutline)
+                                  ConditionFrozenPose, ConditionBodyOutline, ConditionAppearanceLayer)
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer, supported_layer
 from game.actor_facts import ConditionFact
 from game.player_facts import ConditionChangeFact, PlayerNode
@@ -33,6 +33,13 @@ class LiveCopyAppearance:
     # (slot, world offset fraction, opacity fraction), sampled on the shared clock.
     slots: tuple[tuple[int, float, float], ...] = ()
     layers: tuple[tuple[int, tuple[ResolvedConditionLayer, ...]], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionRigLayer:
+    layer: ConditionAppearanceLayer
+    owner_uuid: UUID
+    alpha: float = 1.
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +65,7 @@ class ConditionAppearance:
     outline_age_ms: float | None = None
     body_pose_ref: ContentRef | None = None
     frozen_pose_ref: ContentRef | None = None
+    rig_layers: tuple[ConditionRigLayer, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,7 +132,8 @@ def persistent_limitations(recipe: ConditionRecipe,
         *(f"Condition equipment modifier unsupported: {identity}/{modifier.id}"
           for modifier in persistent.equipmentModifiers
           if recipe.classification.runtimeRole != "equipment_or_weapon_state"),
-        *(f"Condition rig layer unsupported: {identity}/{layer.id}" for layer in persistent.appearanceLayers),
+        *(f"Condition rig layer colors unsupported: {identity}/{layer.id}" for layer in persistent.appearanceLayers
+          if layer.tint2 is not None or layer.tint3 is not None),
         *(f"Condition response strip unsupported: {identity}/{effect.id}"
           for response in recipe.responses for effect in response.effects
           if effect.assetId not in media or media[effect.assetId].asset_id is None),
@@ -175,6 +184,7 @@ def resolve_condition_appearance(
     pose_ref = frozen_ref = None
     outline_owner = None
     layers: list[ResolvedConditionLayer] = []
+    rig_layers: dict[tuple[str, str], ConditionRigLayer] = {}
     for recipe in ordered:
         composition = recipe.composition
         if (composition.exclusiveGroup and composition.exclusiveGroup in claimed
@@ -187,6 +197,9 @@ def resolve_condition_appearance(
         selected.append(identity)
         persistent = recipe.persistent
         owner = owners[recipe.definitionRef.identity_key]
+        for layer in sorted(persistent.appearanceLayers, key=lambda row: -row.priority):
+            if layer.tint2 is None and layer.tint3 is None:
+                rig_layers.setdefault((layer.slot, layer.category), ConditionRigLayer(layer, owner))
         member = facts.get(owner)
         if member is not None and member.state is not None:
             if persistent.bodyScale is not None:
@@ -227,7 +240,8 @@ def resolve_condition_appearance(
     return ConditionAppearance(alpha, body, tuple(selected), tuple(dict.fromkeys(unsupported)), pose, label,
                                selected_layers, scale=scale, live_copies=copies, distortion=distortion, body_ramp=ramp,
                                frozen_pose=frozen, body_outline=outline, outline_owner_uuid=outline_owner,
-                               body_pose_ref=pose_ref, frozen_pose_ref=frozen_ref)
+                               body_pose_ref=pose_ref, frozen_pose_ref=frozen_ref,
+                               rig_layers=tuple(rig_layers.values()))
 
 
 def condition_contact(contact: ActorContact, appearance: ConditionAppearance | None) -> ActorContact:
@@ -349,12 +363,15 @@ def compile_condition(
         changed and (applied or not media_activated and not change.consumed)) else 0
     ramp_duration = (recipe.persistent.bodyRamp.applicationMs if applied else recipe.persistent.bodyRamp.removalMs
                      ) if changed and recipe.persistent.bodyRamp is not None else 0.
+    appearance_duration = (transition.durationMs if
+        {(row.layer.slot, row.layer.category) for row in old_appearance.rig_layers}
+        != {(row.layer.slot, row.layer.category) for row in new_appearance.rig_layers} else 0.)
     unsupported = tuple(dict.fromkeys((
         *old_appearance.unsupported, *new_appearance.unsupported,
         *transition_limitations(recipe.definitionRef.content_id, transition, media),
     )))
     return ConditionTimeline(
-        event.uuid, change.target_entity_uuid, start, start + max(alpha_duration, media_duration, ramp_duration),
+        event.uuid, change.target_entity_uuid, start, start + max(alpha_duration, media_duration, ramp_duration, appearance_duration),
         before, after, old_appearance, new_appearance,
         ("+" if applied else "−") + fact.name if feedback else None,
         transition.feedbackColor, badge_style, unsupported,
@@ -377,6 +394,11 @@ def sample_condition(timeline: ConditionTimeline, elapsed_ms: float) -> Conditio
         + (timeline.after_appearance.alpha - timeline.before_appearance.alpha) * eased
     ), scale=timeline.before_appearance.scale
         + (timeline.after_appearance.scale - timeline.before_appearance.scale) * eased)
+    old = {(row.layer.slot, row.layer.category): row for row in timeline.before_appearance.rig_layers}
+    new = {(row.layer.slot, row.layer.category): row for row in timeline.after_appearance.rig_layers}
+    appearance = replace(appearance, rig_layers=(
+        *(replace(row, alpha=1. if key in old else eased) for key, row in new.items()),
+        *(replace(row, alpha=1. - eased) for key, row in old.items() if key not in new and eased < 1.)))
     feedback = None
     style = timeline.badge_style
     if timeline.feedback_text is not None and elapsed_ms < timeline.start_ms + style.durationMs:
@@ -405,5 +427,14 @@ def condition_transition_appearances(
         actor = str(timeline.target_uuid)
         if actor in result and timeline.start_ms <= elapsed_ms < timeline.complete_ms:
             sample = sample_condition(timeline, elapsed_ms).appearance
-            result[actor] = replace(result[actor], alpha=sample.alpha, scale=sample.scale)
+            before = {(row.layer.slot, row.layer.category): row for row in timeline.before_appearance.rig_layers}
+            after = {(row.layer.slot, row.layer.category): row for row in timeline.after_appearance.rig_layers}
+            changed = before.keys() ^ after.keys()
+            current = {(row.layer.slot, row.layer.category): row for row in result[actor].rig_layers}
+            for row in sample.rig_layers:
+                key = row.layer.slot, row.layer.category
+                if key in changed and (key not in current or current[key].owner_uuid == row.owner_uuid):
+                    current[key] = row
+            result[actor] = replace(result[actor], alpha=sample.alpha, scale=sample.scale,
+                                    rig_layers=tuple(current.values()))
     return result

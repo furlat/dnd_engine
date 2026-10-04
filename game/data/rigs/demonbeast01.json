@@ -19,7 +19,8 @@
     },
     "slot_order": [
       "shadow",
-      "body"
+      "body",
+      "effect"
     ],
     "slot_categories": {
       "shadow": [
@@ -27,6 +28,9 @@
       ],
       "body": [
         "DemonBeast01"
+      ],
+      "effect": [
+        "DemonBeast01Effect"
       ]
     },
     "clips": {
@@ -128,6 +132,22 @@
           "DemonBeast01": "/rigs/demonbeast01/body/Crouch walk.png",
           "DemonBeast01Shadow": "/rigs/demonbeast01/shadow/Crouch walk.png"
         }
+      },
+      "Death": {
+        "source_clip": "Explode Copy",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast01": "/rigs/demonbeast01/body/Explode Copy.png",
+          "DemonBeast01Shadow": "/rigs/demonbeast01/shadow/Explode Copy.png",
+          "DemonBeast01Effect": "/rigs/demonbeast01/effect/Explode Copy.png"
+        },
+        "layers": [
+          {
+            "slot": "effect",
+            "category": "DemonBeast01Effect"
+          }
+        ]
       }
     },
     "body_anchor": {
@@ -168,27 +188,1482 @@
           "x": 85,
           "y": 78
         }
+      },
+      "Death": {
+        "E": {
+          "x": 62.39,
+          "y": 74.69
+        },
+        "SE": {
+          "x": 64.74,
+          "y": 74.86
+        },
+        "S": {
+          "x": 65.72,
+          "y": 77.03
+        },
+        "SW": {
+          "x": 65.76,
+          "y": 77.46
+        },
+        "W": {
+          "x": 65.27,
+          "y": 78.91
+        },
+        "NW": {
+          "x": 62.07,
+          "y": 79.09
+        },
+        "N": {
+          "x": 60.47,
+          "y": 77.46
+        },
+        "NE": {
+          "x": 60.96,
+          "y": 75.24
+        }
       }
     },
     "body_contexts": [
-      {"role": "movement","qualifier": {"kind": "default"},"body": {"actor": {"enabled": true,"clip": "Run","playbackSpeed": 1,"hiddenSlots": [],"media": []},"playback": "loop"}},
-      {"role": "movement_recovery","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
-      {"role": "movement","qualifier": {"kind": "movement","movement_mode": "walking","trajectory": "direct_arc","connector_presentation_key": null},"body": {"actor": {"enabled": true,"clip": "Rolling","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.25,3],[0.7,10],[1,14]]}},
-      {"role": "movement","qualifier": {"kind": "movement","movement_mode": "walking","trajectory": "connector_transfer","connector_presentation_key": "window"},"body": {"actor": {"enabled": true,"clip": "CrouchWalk","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.28,3],[0.48,7],[0.52,7],[0.72,11],[1,14]]}},
-      {"role": "movement","qualifier": {"kind": "movement","movement_mode": null,"trajectory": "direct_arc","connector_presentation_key": null},"body": {"actor": {"enabled": true,"clip": "Rolling","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.25,3],[0.7,10],[1,14]]}},
-      {"role": "movement","qualifier": {"kind": "movement","movement_mode": null,"trajectory": "connector_transfer","connector_presentation_key": "window"},"body": {"actor": {"enabled": true,"clip": "CrouchWalk","playbackSpeed": 1,"hiddenSlots": [],"media": []},"frameKeys": [[0,0],[0.28,3],[0.48,7],[0.52,7],[0.72,11],[1,14]]}},
-      {"role": "shove","qualifier": {"kind": "default"},"body": {"actor": {"enabled": true,"clip": "Attack2","playbackSpeed": 1,"hiddenSlots": [],"media": []},"anchors": [{"name": "contact","frame": 6}]}},
-      {"role": "forced_movement","qualifier": {"kind": "default"},"body": {"actor": {"enabled": true,"clip": "TakeDamage","playbackSpeed": 1,"hiddenSlots": [],"media": []},"anchors": [{"name": "brace","frame": 5}]}},
-      {"role": "forced_movement_recovery","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
-      {"role": "body_action","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
-      {"role": "body_action_recovery","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
-      {"role": "equipment","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
-      {"role": "healing","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
-      {"role": "save_avoidance","qualifier": {"kind": "default"},"body": {"actor": {"enabled": false,"clip": "Idle","playbackSpeed": 1,"hiddenSlots": [],"media": []}}},
-      {"role": "condition_entry","qualifier": {"kind": "content","contentRef": {"pack_id": "core.rules","definition_kind": "condition","content_id": "condition.prone","content_version": 1,"definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"}},"body": {"actor": {"enabled": true,"clip": "Die","playbackSpeed": 1.5,"hiddenSlots": [],"media": []}}},
-      {"role": "condition_hold","qualifier": {"kind": "content","contentRef": {"pack_id": "core.rules","definition_kind": "condition","content_id": "condition.prone","content_version": 1,"definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"}},"body": {"actor": {"enabled": true,"clip": "Die","playbackSpeed": 1,"hiddenSlots": [],"media": []},"playback": "final_rest","restFrame": 14}},
-      {"role": "condition_exit","qualifier": {"kind": "content","contentRef": {"pack_id": "core.rules","definition_kind": "condition","content_id": "condition.prone","content_version": 1,"definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"}},"body": {"actor": {"enabled": true,"clip": "Die","playbackSpeed": 1.5,"hiddenSlots": [],"media": []},"reversed": true}}
-    ]
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "loop"
+        }
+      },
+      {
+        "role": "movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Rolling",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "CrouchWalk",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Rolling",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.25,
+              3
+            ],
+            [
+              0.7,
+              10
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "CrouchWalk",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "shove",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Attack2",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "contact",
+              "frame": 6
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "TakeDamage",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "brace",
+              "frame": 5
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "equipment",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "healing",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "save_avoidance",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_entry",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_hold",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "final_rest",
+          "restFrame": 14
+        }
+      },
+      {
+        "role": "condition_exit",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "reversed": true
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "flying",
+          "trajectory": "path",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "once",
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              1,
+              0
+            ]
+          ]
+        }
+      },
+      {
+        "role": "death",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Death",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "once"
+        }
+      }
+    ],
+    "lifecycle_scale": 0.6,
+    "pose_sockets": {
+      "ground_depth": {
+        "Idle": {
+          "E": [
+            {
+              "x": 63.35,
+              "y": 82.7
+            },
+            {
+              "x": 63.31,
+              "y": 82.69
+            },
+            {
+              "x": 63.39,
+              "y": 82.63
+            },
+            {
+              "x": 63.49,
+              "y": 82.65
+            },
+            {
+              "x": 63.48,
+              "y": 82.47
+            },
+            {
+              "x": 63.67,
+              "y": 82.48
+            },
+            {
+              "x": 63.71,
+              "y": 82.5
+            },
+            {
+              "x": 63.87,
+              "y": 82.37
+            },
+            {
+              "x": 63.81,
+              "y": 82.33
+            },
+            {
+              "x": 63.78,
+              "y": 82.31
+            },
+            {
+              "x": 63.66,
+              "y": 82.16
+            },
+            {
+              "x": 63.66,
+              "y": 82.3
+            },
+            {
+              "x": 63.4,
+              "y": 82.59
+            },
+            {
+              "x": 63.41,
+              "y": 82.6
+            },
+            {
+              "x": 63.35,
+              "y": 82.7
+            }
+          ],
+          "SE": [
+            {
+              "x": 63.1,
+              "y": 82.59
+            },
+            {
+              "x": 63.07,
+              "y": 82.59
+            },
+            {
+              "x": 63.36,
+              "y": 82.65
+            },
+            {
+              "x": 63.49,
+              "y": 82.6
+            },
+            {
+              "x": 63.75,
+              "y": 82.57
+            },
+            {
+              "x": 63.78,
+              "y": 82.59
+            },
+            {
+              "x": 63.94,
+              "y": 82.58
+            },
+            {
+              "x": 63.98,
+              "y": 82.5
+            },
+            {
+              "x": 64.03,
+              "y": 82.57
+            },
+            {
+              "x": 63.99,
+              "y": 82.49
+            },
+            {
+              "x": 63.99,
+              "y": 82.53
+            },
+            {
+              "x": 63.95,
+              "y": 82.53
+            },
+            {
+              "x": 63.6,
+              "y": 82.56
+            },
+            {
+              "x": 63.49,
+              "y": 82.54
+            },
+            {
+              "x": 63.1,
+              "y": 82.59
+            }
+          ],
+          "S": [
+            {
+              "x": 63.33,
+              "y": 82.5
+            },
+            {
+              "x": 63.32,
+              "y": 82.53
+            },
+            {
+              "x": 63.46,
+              "y": 82.51
+            },
+            {
+              "x": 63.53,
+              "y": 82.67
+            },
+            {
+              "x": 63.65,
+              "y": 82.75
+            },
+            {
+              "x": 63.69,
+              "y": 82.71
+            },
+            {
+              "x": 63.77,
+              "y": 82.7
+            },
+            {
+              "x": 63.92,
+              "y": 82.75
+            },
+            {
+              "x": 63.87,
+              "y": 82.82
+            },
+            {
+              "x": 63.97,
+              "y": 82.82
+            },
+            {
+              "x": 63.97,
+              "y": 82.79
+            },
+            {
+              "x": 63.94,
+              "y": 82.7
+            },
+            {
+              "x": 63.49,
+              "y": 82.56
+            },
+            {
+              "x": 63.53,
+              "y": 82.61
+            },
+            {
+              "x": 63.33,
+              "y": 82.5
+            }
+          ],
+          "SW": [
+            {
+              "x": 63.6,
+              "y": 82.45
+            },
+            {
+              "x": 63.54,
+              "y": 82.41
+            },
+            {
+              "x": 63.44,
+              "y": 82.39
+            },
+            {
+              "x": 63.38,
+              "y": 82.47
+            },
+            {
+              "x": 63.53,
+              "y": 82.53
+            },
+            {
+              "x": 63.49,
+              "y": 82.67
+            },
+            {
+              "x": 63.43,
+              "y": 82.81
+            },
+            {
+              "x": 63.42,
+              "y": 83.03
+            },
+            {
+              "x": 63.49,
+              "y": 83.08
+            },
+            {
+              "x": 63.34,
+              "y": 82.93
+            },
+            {
+              "x": 63.52,
+              "y": 82.92
+            },
+            {
+              "x": 63.53,
+              "y": 82.77
+            },
+            {
+              "x": 63.67,
+              "y": 82.66
+            },
+            {
+              "x": 63.69,
+              "y": 82.48
+            },
+            {
+              "x": 63.6,
+              "y": 82.45
+            }
+          ],
+          "W": [
+            {
+              "x": 63.64,
+              "y": 82.44
+            },
+            {
+              "x": 63.65,
+              "y": 82.36
+            },
+            {
+              "x": 63.7,
+              "y": 82.41
+            },
+            {
+              "x": 63.68,
+              "y": 82.49
+            },
+            {
+              "x": 63.59,
+              "y": 82.6
+            },
+            {
+              "x": 63.52,
+              "y": 82.67
+            },
+            {
+              "x": 63.29,
+              "y": 82.86
+            },
+            {
+              "x": 63.22,
+              "y": 82.89
+            },
+            {
+              "x": 63.2,
+              "y": 83.09
+            },
+            {
+              "x": 63.26,
+              "y": 83.02
+            },
+            {
+              "x": 63.14,
+              "y": 82.98
+            },
+            {
+              "x": 63.45,
+              "y": 82.78
+            },
+            {
+              "x": 63.39,
+              "y": 82.59
+            },
+            {
+              "x": 63.71,
+              "y": 82.43
+            },
+            {
+              "x": 63.64,
+              "y": 82.44
+            }
+          ],
+          "NW": [
+            {
+              "x": 63.74,
+              "y": 82.58
+            },
+            {
+              "x": 63.74,
+              "y": 82.52
+            },
+            {
+              "x": 63.64,
+              "y": 82.49
+            },
+            {
+              "x": 63.46,
+              "y": 82.55
+            },
+            {
+              "x": 63.34,
+              "y": 82.51
+            },
+            {
+              "x": 63.27,
+              "y": 82.62
+            },
+            {
+              "x": 62.99,
+              "y": 82.49
+            },
+            {
+              "x": 62.95,
+              "y": 82.54
+            },
+            {
+              "x": 62.92,
+              "y": 82.53
+            },
+            {
+              "x": 62.9,
+              "y": 82.56
+            },
+            {
+              "x": 62.88,
+              "y": 82.55
+            },
+            {
+              "x": 63.13,
+              "y": 82.56
+            },
+            {
+              "x": 63.43,
+              "y": 82.48
+            },
+            {
+              "x": 63.59,
+              "y": 82.53
+            },
+            {
+              "x": 63.74,
+              "y": 82.58
+            }
+          ],
+          "N": [
+            {
+              "x": 63.77,
+              "y": 82.6
+            },
+            {
+              "x": 63.72,
+              "y": 82.57
+            },
+            {
+              "x": 63.57,
+              "y": 82.55
+            },
+            {
+              "x": 63.59,
+              "y": 82.57
+            },
+            {
+              "x": 63.46,
+              "y": 82.44
+            },
+            {
+              "x": 63.31,
+              "y": 82.35
+            },
+            {
+              "x": 63.16,
+              "y": 82.32
+            },
+            {
+              "x": 63.05,
+              "y": 82.35
+            },
+            {
+              "x": 62.99,
+              "y": 82.38
+            },
+            {
+              "x": 62.93,
+              "y": 82.35
+            },
+            {
+              "x": 62.87,
+              "y": 82.28
+            },
+            {
+              "x": 63.11,
+              "y": 82.42
+            },
+            {
+              "x": 63.33,
+              "y": 82.39
+            },
+            {
+              "x": 63.51,
+              "y": 82.42
+            },
+            {
+              "x": 63.77,
+              "y": 82.6
+            }
+          ],
+          "NE": [
+            {
+              "x": 63.68,
+              "y": 82.64
+            },
+            {
+              "x": 63.57,
+              "y": 82.71
+            },
+            {
+              "x": 63.54,
+              "y": 82.64
+            },
+            {
+              "x": 63.64,
+              "y": 82.62
+            },
+            {
+              "x": 63.65,
+              "y": 82.6
+            },
+            {
+              "x": 63.63,
+              "y": 82.45
+            },
+            {
+              "x": 63.31,
+              "y": 82.41
+            },
+            {
+              "x": 63.32,
+              "y": 82.25
+            },
+            {
+              "x": 63.53,
+              "y": 82.15
+            },
+            {
+              "x": 63.62,
+              "y": 82.16
+            },
+            {
+              "x": 63.46,
+              "y": 82.22
+            },
+            {
+              "x": 63.49,
+              "y": 82.35
+            },
+            {
+              "x": 63.5,
+              "y": 82.57
+            },
+            {
+              "x": 63.44,
+              "y": 82.69
+            },
+            {
+              "x": 63.68,
+              "y": 82.64
+            }
+          ]
+        },
+        "Death": {
+          "E": [
+            {
+              "x": 62.2,
+              "y": 81.67
+            },
+            {
+              "x": 62.39,
+              "y": 80.48
+            },
+            {
+              "x": 62.84,
+              "y": 79.65
+            },
+            {
+              "x": 62.43,
+              "y": 79.92
+            },
+            {
+              "x": 61.14,
+              "y": 80.64
+            },
+            {
+              "x": 61.58,
+              "y": 81.65
+            },
+            {
+              "x": 61.57,
+              "y": 81.86
+            },
+            {
+              "x": 62.25,
+              "y": 81.42
+            },
+            {
+              "x": 62.42,
+              "y": 81.32
+            },
+            {
+              "x": 61.87,
+              "y": 81.23
+            },
+            {
+              "x": 61.64,
+              "y": 81.2
+            },
+            {
+              "x": 61.65,
+              "y": 81.21
+            },
+            {
+              "x": 61.65,
+              "y": 81.21
+            },
+            {
+              "x": 61.65,
+              "y": 81.21
+            },
+            {
+              "x": 61.62,
+              "y": 81.24
+            }
+          ],
+          "SE": [
+            {
+              "x": 63.64,
+              "y": 81.29
+            },
+            {
+              "x": 65.0,
+              "y": 80.61
+            },
+            {
+              "x": 65.95,
+              "y": 80.21
+            },
+            {
+              "x": 65.56,
+              "y": 80.06
+            },
+            {
+              "x": 63.92,
+              "y": 80.1
+            },
+            {
+              "x": 63.13,
+              "y": 80.97
+            },
+            {
+              "x": 62.88,
+              "y": 81.33
+            },
+            {
+              "x": 63.88,
+              "y": 81.07
+            },
+            {
+              "x": 63.85,
+              "y": 81.23
+            },
+            {
+              "x": 63.65,
+              "y": 80.96
+            },
+            {
+              "x": 63.58,
+              "y": 80.66
+            },
+            {
+              "x": 63.48,
+              "y": 80.67
+            },
+            {
+              "x": 63.5,
+              "y": 80.66
+            },
+            {
+              "x": 63.5,
+              "y": 80.66
+            },
+            {
+              "x": 63.48,
+              "y": 80.67
+            }
+          ],
+          "S": [
+            {
+              "x": 64.94,
+              "y": 81.7
+            },
+            {
+              "x": 66.62,
+              "y": 81.95
+            },
+            {
+              "x": 67.85,
+              "y": 82.05
+            },
+            {
+              "x": 67.62,
+              "y": 81.83
+            },
+            {
+              "x": 66.37,
+              "y": 81.07
+            },
+            {
+              "x": 65.1,
+              "y": 81.28
+            },
+            {
+              "x": 64.59,
+              "y": 81.32
+            },
+            {
+              "x": 65.21,
+              "y": 81.74
+            },
+            {
+              "x": 65.13,
+              "y": 81.81
+            },
+            {
+              "x": 65.2,
+              "y": 81.53
+            },
+            {
+              "x": 65.4,
+              "y": 81.23
+            },
+            {
+              "x": 65.35,
+              "y": 81.23
+            },
+            {
+              "x": 65.35,
+              "y": 81.23
+            },
+            {
+              "x": 65.35,
+              "y": 81.23
+            },
+            {
+              "x": 65.35,
+              "y": 81.23
+            }
+          ],
+          "SW": [
+            {
+              "x": 65.4,
+              "y": 82.71
+            },
+            {
+              "x": 66.48,
+              "y": 83.72
+            },
+            {
+              "x": 67.1,
+              "y": 84.35
+            },
+            {
+              "x": 67.22,
+              "y": 83.79
+            },
+            {
+              "x": 67.14,
+              "y": 82.9
+            },
+            {
+              "x": 65.93,
+              "y": 82.66
+            },
+            {
+              "x": 65.56,
+              "y": 82.28
+            },
+            {
+              "x": 65.77,
+              "y": 83.0
+            },
+            {
+              "x": 65.73,
+              "y": 83.12
+            },
+            {
+              "x": 66.13,
+              "y": 82.94
+            },
+            {
+              "x": 66.46,
+              "y": 82.75
+            },
+            {
+              "x": 66.45,
+              "y": 82.75
+            },
+            {
+              "x": 66.46,
+              "y": 82.76
+            },
+            {
+              "x": 66.45,
+              "y": 82.75
+            },
+            {
+              "x": 66.45,
+              "y": 82.77
+            }
+          ],
+          "W": [
+            {
+              "x": 64.88,
+              "y": 83.53
+            },
+            {
+              "x": 64.66,
+              "y": 84.69
+            },
+            {
+              "x": 64.19,
+              "y": 85.51
+            },
+            {
+              "x": 64.73,
+              "y": 85.32
+            },
+            {
+              "x": 65.85,
+              "y": 84.58
+            },
+            {
+              "x": 65.34,
+              "y": 83.54
+            },
+            {
+              "x": 65.36,
+              "y": 83.44
+            },
+            {
+              "x": 64.76,
+              "y": 83.73
+            },
+            {
+              "x": 64.56,
+              "y": 83.82
+            },
+            {
+              "x": 65.11,
+              "y": 83.98
+            },
+            {
+              "x": 65.45,
+              "y": 84.1
+            },
+            {
+              "x": 65.42,
+              "y": 84.12
+            },
+            {
+              "x": 65.42,
+              "y": 84.12
+            },
+            {
+              "x": 65.42,
+              "y": 84.12
+            },
+            {
+              "x": 65.42,
+              "y": 84.12
+            }
+          ],
+          "NW": [
+            {
+              "x": 63.48,
+              "y": 83.82
+            },
+            {
+              "x": 62.1,
+              "y": 84.5
+            },
+            {
+              "x": 61.12,
+              "y": 84.95
+            },
+            {
+              "x": 61.54,
+              "y": 85.11
+            },
+            {
+              "x": 63.04,
+              "y": 85.0
+            },
+            {
+              "x": 63.66,
+              "y": 84.26
+            },
+            {
+              "x": 64.06,
+              "y": 83.83
+            },
+            {
+              "x": 63.06,
+              "y": 83.99
+            },
+            {
+              "x": 63.15,
+              "y": 83.89
+            },
+            {
+              "x": 63.35,
+              "y": 84.19
+            },
+            {
+              "x": 63.5,
+              "y": 84.4
+            },
+            {
+              "x": 63.57,
+              "y": 84.39
+            },
+            {
+              "x": 63.57,
+              "y": 84.39
+            },
+            {
+              "x": 63.57,
+              "y": 84.39
+            },
+            {
+              "x": 63.59,
+              "y": 84.38
+            }
+          ],
+          "N": [
+            {
+              "x": 62.24,
+              "y": 83.52
+            },
+            {
+              "x": 60.32,
+              "y": 83.24
+            },
+            {
+              "x": 59.21,
+              "y": 83.1
+            },
+            {
+              "x": 59.63,
+              "y": 83.35
+            },
+            {
+              "x": 60.67,
+              "y": 84.14
+            },
+            {
+              "x": 61.9,
+              "y": 83.96
+            },
+            {
+              "x": 62.38,
+              "y": 83.83
+            },
+            {
+              "x": 61.66,
+              "y": 83.44
+            },
+            {
+              "x": 61.85,
+              "y": 83.34
+            },
+            {
+              "x": 61.63,
+              "y": 83.62
+            },
+            {
+              "x": 61.57,
+              "y": 83.99
+            },
+            {
+              "x": 61.58,
+              "y": 83.99
+            },
+            {
+              "x": 61.6,
+              "y": 84.0
+            },
+            {
+              "x": 61.62,
+              "y": 84.01
+            },
+            {
+              "x": 61.62,
+              "y": 84.01
+            }
+          ],
+          "NE": [
+            {
+              "x": 61.58,
+              "y": 82.44
+            },
+            {
+              "x": 60.6,
+              "y": 81.55
+            },
+            {
+              "x": 59.84,
+              "y": 80.94
+            },
+            {
+              "x": 59.7,
+              "y": 81.3
+            },
+            {
+              "x": 60.01,
+              "y": 82.25
+            },
+            {
+              "x": 61.06,
+              "y": 82.59
+            },
+            {
+              "x": 61.48,
+              "y": 82.85
+            },
+            {
+              "x": 61.03,
+              "y": 82.29
+            },
+            {
+              "x": 61.22,
+              "y": 82.04
+            },
+            {
+              "x": 60.93,
+              "y": 82.28
+            },
+            {
+              "x": 60.65,
+              "y": 82.44
+            },
+            {
+              "x": 60.65,
+              "y": 82.42
+            },
+            {
+              "x": 60.65,
+              "y": 82.42
+            },
+            {
+              "x": 60.65,
+              "y": 82.42
+            },
+            {
+              "x": 60.65,
+              "y": 82.42
+            }
+          ]
+        }
+      }
+    }
   },
   "resources": {
     "/rigs/demonbeast01/body/Idle.png": "game/assets/rigs/demonbeast01/body/Idle.png",
@@ -208,7 +1683,10 @@
     "/rigs/demonbeast01/body/Attack 3.png": "game/assets/rigs/demonbeast01/body/Attack 3.png",
     "/rigs/demonbeast01/shadow/Attack 3.png": "game/assets/rigs/demonbeast01/shadow/Attack 3.png",
     "/rigs/demonbeast01/body/Crouch walk.png": "game/assets/rigs/demonbeast01/body/Crouch walk.png",
-    "/rigs/demonbeast01/shadow/Crouch walk.png": "game/assets/rigs/demonbeast01/shadow/Crouch walk.png"
+    "/rigs/demonbeast01/shadow/Crouch walk.png": "game/assets/rigs/demonbeast01/shadow/Crouch walk.png",
+    "/rigs/demonbeast01/body/Explode Copy.png": "game/assets/rigs/demonbeast01/body/Explode Copy.png",
+    "/rigs/demonbeast01/shadow/Explode Copy.png": "game/assets/rigs/demonbeast01/shadow/Explode Copy.png",
+    "/rigs/demonbeast01/effect/Explode Copy.png": "game/assets/rigs/demonbeast01/effect/Explode Copy.png"
   },
   "provenance": {
     "archive": {
@@ -306,6 +1784,21 @@
         "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 1/Shadows/Crouch walk.png",
         "bytes": 24221,
         "sha256": "0dc7d6769775e59228eac98fd174b321bfcc4f9e12f8e46e6063e88525867250"
+      },
+      "/rigs/demonbeast01/body/Explode Copy.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 1/Explode Copy.png",
+        "bytes": 134907,
+        "sha256": "9873bbe8ef8729aeb067286b406847c10c4f7b3286eec3bc06ea885c727011fb"
+      },
+      "/rigs/demonbeast01/shadow/Explode Copy.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 1/Shadows/Explode Copy.png",
+        "bytes": 53999,
+        "sha256": "223e7373b4dcd0550374eb6ee71b5809b55a70692fa83b64b40e582f0ccbdf66"
+      },
+      "/rigs/demonbeast01/effect/Explode Copy.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 1/Effects/Explode Copy.png",
+        "bytes": 642635,
+        "sha256": "0775ae6639471c0393a40589e61f291451633de6d75f3e33b70e96982dbeb388"
       }
     },
     "adaptation": "Demon Beast 1 is a reviewed visual adaptation for the bounded canonical Dretch, not a vendor identification. Historical Attack1/2/5/6 aliases remain available; current rig-scoped Bite and Claws profiles select Attack 2 and Attack 3 respectively with their reviewed frame-6 contacts; there is no ranged mapping. Fifteen meaningful 128 px columns, eight visually reviewed E, SE, S, SW, W, NW, N, NE rows. The PNG-only package declares no FPS/pivot. 12 fps and support pixel (64,83), origin_y_from_ground 45, are execution adaptations informed by the separate idle shadow centroid (~63.5,82.6). Separate shadow alpha 0.5 reuses the fixed-rig appearance policy. No effects, block variants or full package imported.",
@@ -341,6 +1834,14 @@
       "ordinary_actions": "Body action, recovery, equipment, healing and optional save-avoidance gestures explicitly disabled with neutral Idle. Existing native effects, feedback and child joins remain authoritative. Shove uses the primary physical strike; forced movement uses TakeDamage brace 5.",
       "unarmed": "Rig-scoped unarmed physical-strike adaptation uses the inspected primary motion; this grants no native action.",
       "validation_scope": "Original strip/direction/support inspection and typed binding checks; full live native fight, historical replay, height/occlusion and Fey material acceptance are separate packet-5 integration checks."
+    },
+    "terminal_death_review": {
+      "selection": "Separate terminal Death only. Existing Die, Prone, DYING/STABLE and reverse recovery remain unchanged.",
+      "timing": "15 original frames at existing explicit project adaptation 12 FPS; source PNGs declare no FPS.",
+      "registration": "Ground depth uses original separate shadow alpha-weighted centroids with measured Idle reference. Body/source pixels and native contact are unchanged.",
+      "rest_attachment": "Original body alpha centroid, preserving the demon attachment convention.",
+      "effects": "Original separated effect layer stays frame-matched, including retained frame14 residue; no native explosion or blood event.",
+      "source_edge_contact_alpha_gt32": []
     }
   }
 }

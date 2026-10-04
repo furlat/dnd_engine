@@ -1,0 +1,1711 @@
+{
+  "rig_id": "smallscale.goblin12",
+  "creature_content_refs": [
+    "content.neurodragon:creature:creature.goblin_ashhide@1"
+  ],
+  "rig": {
+    "cell_width": 128,
+    "cell_height": 128,
+    "origin_y_from_ground": 59,
+    "shadow_alpha": 0.5,
+    "body_anchor": {
+      "x": 64,
+      "y": 53
+    },
+    "facing_rows": {
+      "E": 0,
+      "SE": 1,
+      "S": 2,
+      "SW": 3,
+      "W": 4,
+      "NW": 5,
+      "N": 6,
+      "NE": 7
+    },
+    "slot_order": [
+      "shadow",
+      "body"
+    ],
+    "slot_categories": {
+      "shadow": [
+        "Goblin12Shadow"
+      ],
+      "body": [
+        "Goblin12"
+      ]
+    },
+    "clips": {
+      "Idle": {
+        "source_clip": "Idle 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin12": "/rigs/goblin12/body/Idle 1.png",
+          "Goblin12Shadow": "/rigs/goblin12/shadow/Idle 1.png"
+        }
+      },
+      "Run": {
+        "source_clip": "Run",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin12": "/rigs/goblin12/body/Run.png",
+          "Goblin12Shadow": "/rigs/goblin12/shadow/Run.png"
+        }
+      },
+      "Walk": {
+        "source_clip": "Walk",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin12": "/rigs/goblin12/body/Walk.png",
+          "Goblin12Shadow": "/rigs/goblin12/shadow/Walk.png"
+        }
+      },
+      "CrouchWalk": {
+        "source_clip": "Crouch walk",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin12": "/rigs/goblin12/body/Crouch walk.png",
+          "Goblin12Shadow": "/rigs/goblin12/shadow/Crouch walk.png"
+        }
+      },
+      "TakeDamage": {
+        "source_clip": "Take Damage",
+        "frames": 6,
+        "fps": 12,
+        "sheets": {
+          "Goblin12": "/rigs/goblin12/body/Take Damage.png",
+          "Goblin12Shadow": "/rigs/goblin12/shadow/Take Damage.png"
+        }
+      },
+      "Die": {
+        "source_clip": "Die",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin12": "/rigs/goblin12/body/Die.png",
+          "Goblin12Shadow": "/rigs/goblin12/shadow/Die.png"
+        }
+      },
+      "Taunt": {
+        "source_clip": "Taunt",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin12": "/rigs/goblin12/body/Taunt.png",
+          "Goblin12Shadow": "/rigs/goblin12/shadow/Taunt.png"
+        }
+      },
+      "Attack1": {
+        "source_clip": "Attack 1",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin12": "/rigs/goblin12/body/Attack 1.png",
+          "Goblin12Shadow": "/rigs/goblin12/shadow/Attack 1.png"
+        }
+      },
+      "Attack2": {
+        "source_clip": "Attack 2",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin12": "/rigs/goblin12/body/Attack 2.png",
+          "Goblin12Shadow": "/rigs/goblin12/shadow/Attack 2.png"
+        }
+      },
+      "Attack3": {
+        "source_clip": "Attack 3",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "Goblin12": "/rigs/goblin12/body/Attack 3.png",
+          "Goblin12Shadow": "/rigs/goblin12/shadow/Attack 3.png"
+        }
+      }
+    },
+    "pose_sockets": {
+      "ground_depth": {
+        "Idle": {
+          "E": [
+            {
+              "x": 69.1,
+              "y": 68.85
+            },
+            {
+              "x": 69.09,
+              "y": 68.86
+            },
+            {
+              "x": 69.11,
+              "y": 68.83
+            },
+            {
+              "x": 69.14,
+              "y": 68.85
+            },
+            {
+              "x": 69.12,
+              "y": 68.86
+            },
+            {
+              "x": 69.14,
+              "y": 68.84
+            },
+            {
+              "x": 69.11,
+              "y": 68.85
+            },
+            {
+              "x": 69.15,
+              "y": 68.87
+            },
+            {
+              "x": 69.2,
+              "y": 68.82
+            },
+            {
+              "x": 69.21,
+              "y": 68.81
+            },
+            {
+              "x": 69.2,
+              "y": 68.82
+            },
+            {
+              "x": 69.14,
+              "y": 68.84
+            },
+            {
+              "x": 69.15,
+              "y": 68.83
+            },
+            {
+              "x": 69.08,
+              "y": 68.87
+            },
+            {
+              "x": 69.09,
+              "y": 68.85
+            }
+          ],
+          "SE": [
+            {
+              "x": 67.47,
+              "y": 72.68
+            },
+            {
+              "x": 67.48,
+              "y": 72.69
+            },
+            {
+              "x": 67.49,
+              "y": 72.68
+            },
+            {
+              "x": 67.52,
+              "y": 72.64
+            },
+            {
+              "x": 67.56,
+              "y": 72.67
+            },
+            {
+              "x": 67.55,
+              "y": 72.72
+            },
+            {
+              "x": 67.55,
+              "y": 72.71
+            },
+            {
+              "x": 67.58,
+              "y": 72.73
+            },
+            {
+              "x": 67.59,
+              "y": 72.72
+            },
+            {
+              "x": 67.57,
+              "y": 72.72
+            },
+            {
+              "x": 67.58,
+              "y": 72.72
+            },
+            {
+              "x": 67.57,
+              "y": 72.68
+            },
+            {
+              "x": 67.52,
+              "y": 72.65
+            },
+            {
+              "x": 67.48,
+              "y": 72.67
+            },
+            {
+              "x": 67.48,
+              "y": 72.69
+            }
+          ],
+          "S": [
+            {
+              "x": 63.77,
+              "y": 76.11
+            },
+            {
+              "x": 63.77,
+              "y": 76.12
+            },
+            {
+              "x": 63.78,
+              "y": 76.16
+            },
+            {
+              "x": 63.78,
+              "y": 76.16
+            },
+            {
+              "x": 63.79,
+              "y": 76.19
+            },
+            {
+              "x": 63.79,
+              "y": 76.22
+            },
+            {
+              "x": 63.79,
+              "y": 76.26
+            },
+            {
+              "x": 63.79,
+              "y": 76.27
+            },
+            {
+              "x": 63.79,
+              "y": 76.26
+            },
+            {
+              "x": 63.79,
+              "y": 76.23
+            },
+            {
+              "x": 63.79,
+              "y": 76.21
+            },
+            {
+              "x": 63.79,
+              "y": 76.19
+            },
+            {
+              "x": 63.79,
+              "y": 76.19
+            },
+            {
+              "x": 63.78,
+              "y": 76.14
+            },
+            {
+              "x": 63.77,
+              "y": 76.12
+            }
+          ],
+          "SW": [
+            {
+              "x": 59.74,
+              "y": 72.92
+            },
+            {
+              "x": 59.73,
+              "y": 72.93
+            },
+            {
+              "x": 59.72,
+              "y": 72.96
+            },
+            {
+              "x": 59.67,
+              "y": 72.93
+            },
+            {
+              "x": 59.66,
+              "y": 72.96
+            },
+            {
+              "x": 59.66,
+              "y": 72.98
+            },
+            {
+              "x": 59.64,
+              "y": 72.98
+            },
+            {
+              "x": 59.63,
+              "y": 72.99
+            },
+            {
+              "x": 59.61,
+              "y": 73.01
+            },
+            {
+              "x": 59.65,
+              "y": 72.98
+            },
+            {
+              "x": 59.68,
+              "y": 72.95
+            },
+            {
+              "x": 59.67,
+              "y": 72.95
+            },
+            {
+              "x": 59.68,
+              "y": 72.94
+            },
+            {
+              "x": 59.71,
+              "y": 72.95
+            },
+            {
+              "x": 59.74,
+              "y": 72.93
+            }
+          ],
+          "W": [
+            {
+              "x": 57.98,
+              "y": 69.12
+            },
+            {
+              "x": 57.97,
+              "y": 69.1
+            },
+            {
+              "x": 57.91,
+              "y": 69.07
+            },
+            {
+              "x": 57.91,
+              "y": 69.07
+            },
+            {
+              "x": 57.86,
+              "y": 69.07
+            },
+            {
+              "x": 57.82,
+              "y": 69.07
+            },
+            {
+              "x": 57.86,
+              "y": 69.1
+            },
+            {
+              "x": 57.88,
+              "y": 69.11
+            },
+            {
+              "x": 57.83,
+              "y": 69.07
+            },
+            {
+              "x": 57.82,
+              "y": 69.05
+            },
+            {
+              "x": 57.84,
+              "y": 69.08
+            },
+            {
+              "x": 57.89,
+              "y": 69.07
+            },
+            {
+              "x": 57.91,
+              "y": 69.07
+            },
+            {
+              "x": 57.93,
+              "y": 69.08
+            },
+            {
+              "x": 57.98,
+              "y": 69.12
+            }
+          ],
+          "NW": [
+            {
+              "x": 59.4,
+              "y": 66.82
+            },
+            {
+              "x": 59.37,
+              "y": 66.77
+            },
+            {
+              "x": 59.36,
+              "y": 66.75
+            },
+            {
+              "x": 59.33,
+              "y": 66.65
+            },
+            {
+              "x": 59.33,
+              "y": 66.64
+            },
+            {
+              "x": 59.31,
+              "y": 66.64
+            },
+            {
+              "x": 59.33,
+              "y": 66.64
+            },
+            {
+              "x": 59.3,
+              "y": 66.6
+            },
+            {
+              "x": 59.32,
+              "y": 66.61
+            },
+            {
+              "x": 59.32,
+              "y": 66.62
+            },
+            {
+              "x": 59.34,
+              "y": 66.65
+            },
+            {
+              "x": 59.34,
+              "y": 66.67
+            },
+            {
+              "x": 59.35,
+              "y": 66.7
+            },
+            {
+              "x": 59.36,
+              "y": 66.74
+            },
+            {
+              "x": 59.39,
+              "y": 66.8
+            }
+          ],
+          "N": [
+            {
+              "x": 63.25,
+              "y": 64.6
+            },
+            {
+              "x": 63.25,
+              "y": 64.56
+            },
+            {
+              "x": 63.25,
+              "y": 64.48
+            },
+            {
+              "x": 63.26,
+              "y": 64.47
+            },
+            {
+              "x": 63.25,
+              "y": 64.37
+            },
+            {
+              "x": 63.26,
+              "y": 64.36
+            },
+            {
+              "x": 63.26,
+              "y": 64.39
+            },
+            {
+              "x": 63.27,
+              "y": 64.4
+            },
+            {
+              "x": 63.26,
+              "y": 64.32
+            },
+            {
+              "x": 63.26,
+              "y": 64.29
+            },
+            {
+              "x": 63.25,
+              "y": 64.36
+            },
+            {
+              "x": 63.25,
+              "y": 64.47
+            },
+            {
+              "x": 63.26,
+              "y": 64.47
+            },
+            {
+              "x": 63.25,
+              "y": 64.55
+            },
+            {
+              "x": 63.25,
+              "y": 64.56
+            }
+          ],
+          "NE": [
+            {
+              "x": 67.44,
+              "y": 66.5
+            },
+            {
+              "x": 67.42,
+              "y": 66.54
+            },
+            {
+              "x": 67.4,
+              "y": 66.57
+            },
+            {
+              "x": 67.44,
+              "y": 66.47
+            },
+            {
+              "x": 67.46,
+              "y": 66.46
+            },
+            {
+              "x": 67.48,
+              "y": 66.41
+            },
+            {
+              "x": 67.49,
+              "y": 66.41
+            },
+            {
+              "x": 67.53,
+              "y": 66.34
+            },
+            {
+              "x": 67.54,
+              "y": 66.31
+            },
+            {
+              "x": 67.5,
+              "y": 66.37
+            },
+            {
+              "x": 67.49,
+              "y": 66.4
+            },
+            {
+              "x": 67.45,
+              "y": 66.46
+            },
+            {
+              "x": 67.43,
+              "y": 66.52
+            },
+            {
+              "x": 67.4,
+              "y": 66.56
+            },
+            {
+              "x": 67.42,
+              "y": 66.54
+            }
+          ]
+        },
+        "Die": {
+          "E": [
+            {
+              "x": 68.15,
+              "y": 68.8
+            },
+            {
+              "x": 68.06,
+              "y": 68.6
+            },
+            {
+              "x": 68.07,
+              "y": 68.2
+            },
+            {
+              "x": 67.79,
+              "y": 67.07
+            },
+            {
+              "x": 67.13,
+              "y": 65.88
+            },
+            {
+              "x": 66.39,
+              "y": 65.23
+            },
+            {
+              "x": 65.82,
+              "y": 65.22
+            },
+            {
+              "x": 65.75,
+              "y": 65.83
+            },
+            {
+              "x": 66.28,
+              "y": 66.49
+            },
+            {
+              "x": 66.71,
+              "y": 67.4
+            },
+            {
+              "x": 66.58,
+              "y": 67.86
+            },
+            {
+              "x": 66.28,
+              "y": 68.88
+            },
+            {
+              "x": 65.49,
+              "y": 69.23
+            },
+            {
+              "x": 65.19,
+              "y": 70.09
+            },
+            {
+              "x": 64.72,
+              "y": 70.39
+            }
+          ],
+          "SE": [
+            {
+              "x": 66.84,
+              "y": 72.22
+            },
+            {
+              "x": 66.99,
+              "y": 72.16
+            },
+            {
+              "x": 67.77,
+              "y": 71.68
+            },
+            {
+              "x": 68.38,
+              "y": 70.4
+            },
+            {
+              "x": 68.85,
+              "y": 68.51
+            },
+            {
+              "x": 69.22,
+              "y": 67.03
+            },
+            {
+              "x": 69.69,
+              "y": 66.33
+            },
+            {
+              "x": 70.17,
+              "y": 66.53
+            },
+            {
+              "x": 71.2,
+              "y": 67.46
+            },
+            {
+              "x": 72.3,
+              "y": 68.97
+            },
+            {
+              "x": 72.84,
+              "y": 69.81
+            },
+            {
+              "x": 73.21,
+              "y": 70.97
+            },
+            {
+              "x": 73.71,
+              "y": 71.9
+            },
+            {
+              "x": 74.53,
+              "y": 73.28
+            },
+            {
+              "x": 74.91,
+              "y": 73.92
+            }
+          ],
+          "S": [
+            {
+              "x": 63.55,
+              "y": 75.14
+            },
+            {
+              "x": 63.14,
+              "y": 75.09
+            },
+            {
+              "x": 63.31,
+              "y": 75.68
+            },
+            {
+              "x": 63.86,
+              "y": 76.24
+            },
+            {
+              "x": 64.95,
+              "y": 74.66
+            },
+            {
+              "x": 66.31,
+              "y": 72.46
+            },
+            {
+              "x": 67.73,
+              "y": 71.48
+            },
+            {
+              "x": 69.03,
+              "y": 71.5
+            },
+            {
+              "x": 70.5,
+              "y": 72.95
+            },
+            {
+              "x": 71.73,
+              "y": 74.73
+            },
+            {
+              "x": 73.47,
+              "y": 76.03
+            },
+            {
+              "x": 75.13,
+              "y": 77.61
+            },
+            {
+              "x": 76.82,
+              "y": 78.83
+            },
+            {
+              "x": 77.72,
+              "y": 80.44
+            },
+            {
+              "x": 78.44,
+              "y": 81.41
+            }
+          ],
+          "SW": [
+            {
+              "x": 60.18,
+              "y": 72.3
+            },
+            {
+              "x": 60.11,
+              "y": 72.0
+            },
+            {
+              "x": 60.68,
+              "y": 71.99
+            },
+            {
+              "x": 61.63,
+              "y": 71.73
+            },
+            {
+              "x": 63.23,
+              "y": 71.62
+            },
+            {
+              "x": 64.74,
+              "y": 72.3
+            },
+            {
+              "x": 65.93,
+              "y": 73.35
+            },
+            {
+              "x": 66.72,
+              "y": 74.75
+            },
+            {
+              "x": 66.87,
+              "y": 76.82
+            },
+            {
+              "x": 66.7,
+              "y": 79.06
+            },
+            {
+              "x": 68.11,
+              "y": 80.9
+            },
+            {
+              "x": 69.41,
+              "y": 82.9
+            },
+            {
+              "x": 71.28,
+              "y": 84.72
+            },
+            {
+              "x": 72.18,
+              "y": 86.46
+            },
+            {
+              "x": 73.15,
+              "y": 87.62
+            }
+          ],
+          "W": [
+            {
+              "x": 58.8,
+              "y": 68.85
+            },
+            {
+              "x": 59.07,
+              "y": 68.54
+            },
+            {
+              "x": 59.15,
+              "y": 68.62
+            },
+            {
+              "x": 59.76,
+              "y": 68.53
+            },
+            {
+              "x": 60.58,
+              "y": 68.72
+            },
+            {
+              "x": 61.85,
+              "y": 69.54
+            },
+            {
+              "x": 62.9,
+              "y": 71.29
+            },
+            {
+              "x": 63.31,
+              "y": 73.43
+            },
+            {
+              "x": 63.29,
+              "y": 76.04
+            },
+            {
+              "x": 62.94,
+              "y": 78.58
+            },
+            {
+              "x": 63.22,
+              "y": 81.17
+            },
+            {
+              "x": 63.01,
+              "y": 83.15
+            },
+            {
+              "x": 63.25,
+              "y": 85.33
+            },
+            {
+              "x": 62.94,
+              "y": 87.27
+            },
+            {
+              "x": 63.07,
+              "y": 88.4
+            }
+          ],
+          "NW": [
+            {
+              "x": 59.84,
+              "y": 66.82
+            },
+            {
+              "x": 59.62,
+              "y": 66.19
+            },
+            {
+              "x": 59.03,
+              "y": 65.84
+            },
+            {
+              "x": 58.86,
+              "y": 66.02
+            },
+            {
+              "x": 58.87,
+              "y": 66.31
+            },
+            {
+              "x": 58.97,
+              "y": 67.14
+            },
+            {
+              "x": 58.67,
+              "y": 68.57
+            },
+            {
+              "x": 58.14,
+              "y": 70.45
+            },
+            {
+              "x": 57.31,
+              "y": 72.46
+            },
+            {
+              "x": 56.8,
+              "y": 74.91
+            },
+            {
+              "x": 56.54,
+              "y": 77.58
+            },
+            {
+              "x": 55.54,
+              "y": 79.92
+            },
+            {
+              "x": 54.98,
+              "y": 82.25
+            },
+            {
+              "x": 54.39,
+              "y": 83.93
+            },
+            {
+              "x": 53.73,
+              "y": 85.03
+            }
+          ],
+          "N": [
+            {
+              "x": 63.51,
+              "y": 64.87
+            },
+            {
+              "x": 63.64,
+              "y": 64.5
+            },
+            {
+              "x": 63.29,
+              "y": 64.54
+            },
+            {
+              "x": 62.58,
+              "y": 64.38
+            },
+            {
+              "x": 61.62,
+              "y": 64.91
+            },
+            {
+              "x": 60.53,
+              "y": 65.8
+            },
+            {
+              "x": 59.42,
+              "y": 66.8
+            },
+            {
+              "x": 58.21,
+              "y": 67.38
+            },
+            {
+              "x": 56.73,
+              "y": 68.29
+            },
+            {
+              "x": 55.45,
+              "y": 69.36
+            },
+            {
+              "x": 54.15,
+              "y": 71.14
+            },
+            {
+              "x": 52.83,
+              "y": 73.02
+            },
+            {
+              "x": 51.07,
+              "y": 75.25
+            },
+            {
+              "x": 50.29,
+              "y": 76.74
+            },
+            {
+              "x": 49.68,
+              "y": 77.8
+            }
+          ],
+          "NE": [
+            {
+              "x": 67.08,
+              "y": 66.74
+            },
+            {
+              "x": 67.07,
+              "y": 66.5
+            },
+            {
+              "x": 66.84,
+              "y": 66.23
+            },
+            {
+              "x": 66.02,
+              "y": 65.64
+            },
+            {
+              "x": 64.73,
+              "y": 65.58
+            },
+            {
+              "x": 63.41,
+              "y": 66.02
+            },
+            {
+              "x": 62.33,
+              "y": 66.65
+            },
+            {
+              "x": 61.52,
+              "y": 67.27
+            },
+            {
+              "x": 61.03,
+              "y": 67.59
+            },
+            {
+              "x": 60.58,
+              "y": 67.79
+            },
+            {
+              "x": 58.96,
+              "y": 67.74
+            },
+            {
+              "x": 57.72,
+              "y": 68.6
+            },
+            {
+              "x": 55.85,
+              "y": 69.75
+            },
+            {
+              "x": 54.8,
+              "y": 71.06
+            },
+            {
+              "x": 54.19,
+              "y": 72.2
+            }
+          ]
+        }
+      }
+    },
+    "rest_pose_anchors": {
+      "Die": {
+        "E": {
+          "x": 64.72,
+          "y": 70.39
+        },
+        "SE": {
+          "x": 74.91,
+          "y": 73.92
+        },
+        "S": {
+          "x": 78.44,
+          "y": 81.41
+        },
+        "SW": {
+          "x": 73.15,
+          "y": 87.62
+        },
+        "W": {
+          "x": 63.07,
+          "y": 88.4
+        },
+        "NW": {
+          "x": 53.73,
+          "y": 85.03
+        },
+        "N": {
+          "x": 49.68,
+          "y": 77.8
+        },
+        "NE": {
+          "x": 54.19,
+          "y": 72.2
+        }
+      }
+    },
+    "body_contexts": [
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Run",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "loop"
+        }
+      },
+      {
+        "role": "movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              1,
+              0
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "walking",
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "CrouchWalk",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "direct_arc",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              1,
+              0
+            ]
+          ]
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": null,
+          "trajectory": "connector_transfer",
+          "connector_presentation_key": "window"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "CrouchWalk",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.28,
+              3
+            ],
+            [
+              0.48,
+              7
+            ],
+            [
+              0.52,
+              7
+            ],
+            [
+              0.72,
+              11
+            ],
+            [
+              1,
+              14
+            ]
+          ]
+        }
+      },
+      {
+        "role": "shove",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Attack2",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "contact",
+              "frame": 6
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "TakeDamage",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "anchors": [
+            {
+              "name": "brace",
+              "frame": 5
+            }
+          ]
+        }
+      },
+      {
+        "role": "forced_movement_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "body_action_recovery",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "equipment",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "healing",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "save_avoidance",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": false,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_entry",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          }
+        }
+      },
+      {
+        "role": "condition_hold",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "final_rest",
+          "restFrame": 14
+        }
+      },
+      {
+        "role": "condition_exit",
+        "qualifier": {
+          "kind": "content",
+          "contentRef": {
+            "pack_id": "core.rules",
+            "definition_kind": "condition",
+            "content_id": "condition.prone",
+            "content_version": 1,
+            "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+          }
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Die",
+            "playbackSpeed": 1.5,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "reversed": true
+        }
+      },
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "flying",
+          "trajectory": "path",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "once",
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              1,
+              0
+            ]
+          ]
+        }
+      }
+    ]
+  },
+  "resources": {
+    "/rigs/goblin12/body/Idle 1.png": "game/assets/rigs/goblin12/body/Idle 1.png",
+    "/rigs/goblin12/shadow/Idle 1.png": "game/assets/rigs/goblin12/shadow/Idle 1.png",
+    "/rigs/goblin12/body/Run.png": "game/assets/rigs/goblin12/body/Run.png",
+    "/rigs/goblin12/shadow/Run.png": "game/assets/rigs/goblin12/shadow/Run.png",
+    "/rigs/goblin12/body/Walk.png": "game/assets/rigs/goblin12/body/Walk.png",
+    "/rigs/goblin12/shadow/Walk.png": "game/assets/rigs/goblin12/shadow/Walk.png",
+    "/rigs/goblin12/body/Crouch walk.png": "game/assets/rigs/goblin12/body/Crouch walk.png",
+    "/rigs/goblin12/shadow/Crouch walk.png": "game/assets/rigs/goblin12/shadow/Crouch walk.png",
+    "/rigs/goblin12/body/Take Damage.png": "game/assets/rigs/goblin12/body/Take Damage.png",
+    "/rigs/goblin12/shadow/Take Damage.png": "game/assets/rigs/goblin12/shadow/Take Damage.png",
+    "/rigs/goblin12/body/Die.png": "game/assets/rigs/goblin12/body/Die.png",
+    "/rigs/goblin12/shadow/Die.png": "game/assets/rigs/goblin12/shadow/Die.png",
+    "/rigs/goblin12/body/Taunt.png": "game/assets/rigs/goblin12/body/Taunt.png",
+    "/rigs/goblin12/shadow/Taunt.png": "game/assets/rigs/goblin12/shadow/Taunt.png",
+    "/rigs/goblin12/body/Attack 1.png": "game/assets/rigs/goblin12/body/Attack 1.png",
+    "/rigs/goblin12/shadow/Attack 1.png": "game/assets/rigs/goblin12/shadow/Attack 1.png",
+    "/rigs/goblin12/body/Attack 2.png": "game/assets/rigs/goblin12/body/Attack 2.png",
+    "/rigs/goblin12/shadow/Attack 2.png": "game/assets/rigs/goblin12/shadow/Attack 2.png",
+    "/rigs/goblin12/body/Attack 3.png": "game/assets/rigs/goblin12/body/Attack 3.png",
+    "/rigs/goblin12/shadow/Attack 3.png": "game/assets/rigs/goblin12/shadow/Attack 3.png"
+  },
+  "provenance": {
+    "archive": {
+      "name": "2D Orcs and Goblins - TopDown - V1.0.zip",
+      "bytes": 348119526,
+      "sha256": "8dac87acaeb1cde338d7b9c00727d4fa106e2f98de26bd6ec095ed49cc0e05ea"
+    },
+    "files": {
+      "/rigs/goblin12/body/Idle 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Idle 1.png",
+        "bytes": 151113,
+        "sha256": "6dd761fcab3f7fc265c9a02b1da1e63a0a5615a04924eb60319df15f76361681"
+      },
+      "/rigs/goblin12/shadow/Idle 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Shadows/Idle 1.png",
+        "bytes": 149580,
+        "sha256": "73c2f4298ed4364f163c92ffa71a4d66b09b2d69b251e7b775f5a621fc8425d0"
+      },
+      "/rigs/goblin12/body/Run.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Run.png",
+        "bytes": 348526,
+        "sha256": "93ac40a57dc3724ef2a1f401cf6bfe3ad373b0a0bc661ad7e07b885cd7420aaa"
+      },
+      "/rigs/goblin12/shadow/Run.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Shadows/Run.png",
+        "bytes": 335819,
+        "sha256": "ad191dbdc7ec4d863c5a898b51db873fc4e3cdce057abed5466a7b46bb1b7051"
+      },
+      "/rigs/goblin12/body/Walk.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Walk.png",
+        "bytes": 324116,
+        "sha256": "28dbdfb0ed80b1504be7e4b6c978c10b1c99eae7243bd151cd7b5351e3495e59"
+      },
+      "/rigs/goblin12/shadow/Walk.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Shadows/Walk.png",
+        "bytes": 308339,
+        "sha256": "af18278f18b26327b91008a317356b8b1be822e0137834f0083d896822317a81"
+      },
+      "/rigs/goblin12/body/Crouch walk.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Crouch walk.png",
+        "bytes": 329849,
+        "sha256": "67d70283c5db02f412693a499bd5a9ff5120c7c7e1f4cc06600a5b4d60594a25"
+      },
+      "/rigs/goblin12/shadow/Crouch walk.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Shadows/Crouch walk.png",
+        "bytes": 300211,
+        "sha256": "aa90a5bb8bc987ff1a07f686d1ed830021d5a4a5fcccedd8a59d6e0c0eead6e5"
+      },
+      "/rigs/goblin12/body/Take Damage.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Take Damage.png",
+        "bytes": 153618,
+        "sha256": "6f228d3474979f881b4e6e6e4c128b52c722f17612a30722aa04e0ae91caa456"
+      },
+      "/rigs/goblin12/shadow/Take Damage.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Shadows/Take Damage.png",
+        "bytes": 131804,
+        "sha256": "b1108ec2f8b1b0e208c426fd1f6b9c6c0f9eed3229f248d5cd78f8e5ea1d6dd0"
+      },
+      "/rigs/goblin12/body/Die.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Die.png",
+        "bytes": 421505,
+        "sha256": "1754aeb054de5f9b82173b6ddc0155d2aa3a428436d4e2d178febd2f83e18491"
+      },
+      "/rigs/goblin12/shadow/Die.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Shadows/Die.png",
+        "bytes": 387264,
+        "sha256": "c3f7dfd71aef61be55e1de06dcb54f3c68ae60756026340b849157d7a6d1938e"
+      },
+      "/rigs/goblin12/body/Taunt.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Taunt.png",
+        "bytes": 360667,
+        "sha256": "a62ce7bc278e5820777139b996e00deb2220227b2f8fee89578b12bdf2505dd6"
+      },
+      "/rigs/goblin12/shadow/Taunt.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Shadows/Taunt.png",
+        "bytes": 309037,
+        "sha256": "ce1aa1d224478b3ac6f67312631e82e9ed6f4cbde0eae0d0933664b36943cb68"
+      },
+      "/rigs/goblin12/body/Attack 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Attack 1.png",
+        "bytes": 266168,
+        "sha256": "9093c36bdeea8deb3cd6f4b3f3592d2a3ec7ce652f6a2aff19ec5400d0887dc1"
+      },
+      "/rigs/goblin12/shadow/Attack 1.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Shadows/Attack 1.png",
+        "bytes": 192618,
+        "sha256": "49d36e4f01328bcd41c06e4b9aec3c4ffd2641b655db6ae788598815d224fa36"
+      },
+      "/rigs/goblin12/body/Attack 2.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Attack 2.png",
+        "bytes": 259133,
+        "sha256": "2108df5abcf6226380d54b7ecc9cb4833d7994256959fa9996f9c232f393cd55"
+      },
+      "/rigs/goblin12/shadow/Attack 2.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Shadows/Attack 2.png",
+        "bytes": 186417,
+        "sha256": "3d23dc3e3771034672e776602eb0a4d428ed73c4ed1849044849e17eb24c60e1"
+      },
+      "/rigs/goblin12/body/Attack 3.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Attack 3.png",
+        "bytes": 343067,
+        "sha256": "e309cb622420bd94d72893a653e005f7435045c94ae2ec7e0a0c097623ab64d3"
+      },
+      "/rigs/goblin12/shadow/Attack 3.png": {
+        "archive_member": "2D Orcs and Goblins - TopDown - V1.0/Seperate shadows and effects/Goblin 12/Shadows/Attack 3.png",
+        "bytes": 324122,
+        "sha256": "53b121435449a71a7935d47193da40d8836078a43833ee4a59fb5e74cf4814de"
+      }
+    },
+    "adaptation": {
+      "timing": "12 FPS and release/contact markers are authored adaptations, not vendor metadata.",
+      "scale": "1.00; complete original 128px cells, source body and shadow remain byte-for-byte.",
+      "ground": "Body support is (64,87), or (64,69) for single-combatant riders. Prone/death depth uses measured original shadow centroids.",
+      "effects": "Only nonempty caster accents and Goblin17 muzzle flash are clip-owned original layers. They cause no gameplay effects.",
+      "neutral_actions": "Shared body contexts retain Idle for interactions without source gestures. Non-winged Fly holds Idle with shared magical lift."
+    }
+  }
+}

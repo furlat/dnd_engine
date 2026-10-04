@@ -159,7 +159,9 @@ def test_multicell_jump_resolves_its_actual_reaction_before_takeoff_or_stops_gro
         assert visible_contact(resumed).grid == visible_contact(held).grid and resumed.lift_px == held.lift_px
         midpoint_ms = reaction.end_ms + duration / 2
         midpoint = sample_motion(motion, data, midpoint_ms)
-        assert visible_contact(midpoint).grid == tuple((3 + end) / 2 for end in destination) and midpoint.lift_px == arc
+        assert visible_contact(midpoint).grid == pytest.approx(
+            tuple((3 + end) / 2 for end in destination), rel=0, abs=1e-9)
+        assert midpoint.lift_px == arc
         assert visible_contact(final).grid == destination and visible_contact(final).body_lift_px == 0
         count = body_clip(data, motion.actor, motion.clip).frames
         samples = [sample_motion(motion, data, reaction.end_ms + duration * (index + .5) / count)

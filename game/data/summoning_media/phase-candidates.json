@@ -1,0 +1,527 @@
+{
+  "phases": {
+    "cast": {
+      "durationMs": 750.0,
+      "tracksByManifestation": {
+        "natural": [
+          {
+            "id": "cast.back",
+            "assetId": "summoning.natural.cast.back",
+            "assetPhase": "impact",
+            "attachment": "source_hand",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "cast.front",
+            "assetId": "summoning.natural.cast.front",
+            "assetPhase": "impact",
+            "attachment": "source_hand",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ],
+        "fey_spirit": [
+          {
+            "id": "cast.back",
+            "assetId": "summoning.fey_spirit.cast.back",
+            "assetPhase": "impact",
+            "attachment": "source_hand",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "cast.front",
+            "assetId": "summoning.fey_spirit.cast.front",
+            "assetPhase": "impact",
+            "attachment": "source_hand",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ],
+        "fiend": [
+          {
+            "id": "cast.back",
+            "assetId": "summoning.fiend.cast.back",
+            "assetPhase": "impact",
+            "attachment": "source_hand",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "cast.front",
+            "assetId": "summoning.fiend.cast.front",
+            "assetPhase": "impact",
+            "attachment": "source_hand",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ]
+      },
+      "sourceMarkers": {
+        "frames": 24,
+        "seconds": 0.75,
+        "releaseFrame": 8,
+        "releaseSeconds": 0.25,
+        "schedule": "start at recorded caster release minus .25 seconds"
+      }
+    },
+    "arrival": {
+      "durationMs": 1750.0,
+      "tracksByManifestation": {
+        "natural": [
+          {
+            "id": "arrival.ground",
+            "assetId": "summoning.natural.arrival.ground",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "ground"
+          },
+          {
+            "id": "arrival.back",
+            "assetId": "summoning.natural.arrival.back",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "arrival.front",
+            "assetId": "summoning.natural.arrival.front",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ],
+        "fey_spirit": [
+          {
+            "id": "arrival.ground",
+            "assetId": "summoning.fey_spirit.arrival.ground",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "ground"
+          },
+          {
+            "id": "arrival.back",
+            "assetId": "summoning.fey_spirit.arrival.back",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "arrival.front",
+            "assetId": "summoning.fey_spirit.arrival.front",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ],
+        "fiend": [
+          {
+            "id": "arrival.ground",
+            "assetId": "summoning.fiend.arrival.ground",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "ground"
+          },
+          {
+            "id": "arrival.back",
+            "assetId": "summoning.fiend.arrival.back",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "arrival.front",
+            "assetId": "summoning.fiend.arrival.front",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ]
+      },
+      "sourceMarkers": {
+        "frames": 56,
+        "seconds": 1.75,
+        "bodyRevealFrame": 20,
+        "bodyRevealSeconds": 0.625,
+        "revealBlend": [
+          0.5,
+          0.625
+        ],
+        "tailEndSeconds": 1.75
+      }
+    },
+    "departure": {
+      "durationMs": 1500.0,
+      "tracksByManifestation": {
+        "natural": [
+          {
+            "id": "departure.ground",
+            "assetId": "summoning.natural.departure.ground",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1500.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "ground"
+          },
+          {
+            "id": "departure.back",
+            "assetId": "summoning.natural.departure.back",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1500.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "departure.front",
+            "assetId": "summoning.natural.departure.front",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1500.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ],
+        "fey_spirit": [
+          {
+            "id": "departure.ground",
+            "assetId": "summoning.fey_spirit.departure.ground",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1500.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "ground"
+          },
+          {
+            "id": "departure.back",
+            "assetId": "summoning.fey_spirit.departure.back",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1500.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "departure.front",
+            "assetId": "summoning.fey_spirit.departure.front",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1500.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ],
+        "fiend": [
+          {
+            "id": "departure.ground",
+            "assetId": "summoning.fiend.departure.ground",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1500.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "ground"
+          },
+          {
+            "id": "departure.back",
+            "assetId": "summoning.fiend.departure.back",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1500.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "departure.front",
+            "assetId": "summoning.fiend.departure.front",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 1500.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ]
+      },
+      "sourceMarkers": {
+        "frames": 48,
+        "seconds": 1.5,
+        "bodyDisappearanceFrame": 22,
+        "bodyDisappearanceSeconds": 0.6875,
+        "dissolveBlend": [
+          0.1875,
+          0.6875
+        ],
+        "tailEndSeconds": 1.5
+      }
+    },
+    "bond": {
+      "durationMs": 750.0,
+      "tracksByManifestation": {
+        "natural": [
+          {
+            "id": "bond.ground",
+            "assetId": "summoning.natural.bond.ground",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "ground"
+          },
+          {
+            "id": "bond.back",
+            "assetId": "summoning.natural.bond.back",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "bond.front",
+            "assetId": "summoning.natural.bond.front",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ],
+        "fey_spirit": [
+          {
+            "id": "bond.ground",
+            "assetId": "summoning.fey_spirit.bond.ground",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "ground"
+          },
+          {
+            "id": "bond.back",
+            "assetId": "summoning.fey_spirit.bond.back",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "bond.front",
+            "assetId": "summoning.fey_spirit.bond.front",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ],
+        "fiend": [
+          {
+            "id": "bond.ground",
+            "assetId": "summoning.fiend.bond.ground",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "ground"
+          },
+          {
+            "id": "bond.back",
+            "assetId": "summoning.fiend.bond.back",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "behind_body"
+          },
+          {
+            "id": "bond.front",
+            "assetId": "summoning.fiend.bond.front",
+            "assetPhase": "impact",
+            "attachment": "target_ground",
+            "fps": 32,
+            "durationMs": 750.0,
+            "loop": false,
+            "scale": 1,
+            "scaleWithActor": false,
+            "viewFacing": "E",
+            "depth": "front_body"
+          }
+        ]
+      },
+      "sourceMarkers": {
+        "frames": 24,
+        "seconds": 0.75,
+        "releaseFrame": 6,
+        "releaseSeconds": 0.1875,
+        "bodyRemainsPresent": true
+      }
+    }
+  },
+  "nativePixels": true,
+  "supportedEffectScale": {
+    "minimum": 0.5,
+    "maximum": 1.65,
+    "small": 0.6,
+    "ordinary": 1.0,
+    "large": 1.55,
+    "scalesEffectOnly": true,
+    "baseSupportCells": {
+      "diameter": 2.5,
+      "height": 1.3
+    },
+    "selection": "Use measured visual bounds/ground support; no multiplication by character rig scale."
+  }
+}

@@ -12,6 +12,10 @@ below; implementation receipts live in
 **Current final-phase amendment:** after reviewing the initial gallery, the human
 requested [these bounded corrections and Fly/summoning visual integrations](SUMMONING_FLY_FINAL_PHASE_PLAN_2026-10-03.md).
 The summoning artwork is explicitly accepted; Fly is the only added spell visual.
+The subsequent [17-sheet Goblin amendment](GOBLIN_ROSTER_FINAL_PHASE_PLAN_2026-10-03.md)
+adds ordinary Goblin content and its source bindings, with no new summon choices.
+The original24-creature scope below describes the completed earlier packet;
+these explicitly linked amendments own the current additional work.
 That linked amendment is part of this unified delivery and supplies the current
 remaining implementation/acceptance work. It is at a planning checkpoint, not an
 assertion that the new integrations are already complete.

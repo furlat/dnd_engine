@@ -122,7 +122,7 @@ def test_native_turn_saves_and_recovery_preserve_life_hp_and_complete_ancestry(
 def test_native_opportunity_damage_downs_player_without_committing_the_interrupted_step() -> None:
     random_state = random.getstate()
     captured = attack_history(
-        "weapon.longsword", 17, opportunity=True, whole_movement=True,
+        "weapon.longsword", 27, opportunity=True, whole_movement=True,
         maximum_hp=4, uses_death_saves=True,
     )
     before, lineage = captured.before, captured.lineages[0]

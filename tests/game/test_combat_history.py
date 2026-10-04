@@ -229,7 +229,7 @@ def test_canonical_goblin_marker_and_cast_history_survive_turns_and_runtime_rese
         actor for actor in seed.actors.values()
         if actor.creature_content_ref == "content.neurodragon:creature:creature.goblin@1"
     )
-    assert recipient.normal_hp == 10
+    assert recipient.normal_hp == 7
 
     hit = next(script)
     assert isinstance(hit, CompletedLineage)
@@ -258,7 +258,7 @@ def test_canonical_goblin_marker_and_cast_history_survive_turns_and_runtime_rese
     assert hp_anchor is not None
     first_times = (0.0, hp_anchor - 0.01, hp_anchor, first.timeline.complete_ms)
     first_samples = tuple(sample_cast(first.timeline, elapsed) for elapsed in first_times)
-    assert tuple(sample.vitals[0].hp for sample in first_samples) == (10, 10, 3, 3)
+    assert tuple(sample.vitals[0].hp for sample in first_samples) == (7, 7, 3, 3)
     assert latest_first == first.after
 
     # Requesting the second operation advances actual Encounter turns, including
@@ -280,7 +280,7 @@ def test_canonical_goblin_marker_and_cast_history_survive_turns_and_runtime_rese
     latest_second = reduce_lineage(latest_first, public_second)
     assert tuple(
         state.actors[recipient.uuid].normal_hp for state in (seed, latest_first, latest_second)
-    ) == (10, 3, expected_hp)
+    ) == (7, 3, expected_hp)
     assert latest_second.actors[recipient.uuid].life_state is expected_life
     assert second.timeline.source.applications[0].target.hp == 3
     assert second.after == latest_second

@@ -11,9 +11,11 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 import pytest
 
 from dnd.core.base_actions import AvailableActionsResult
+from dnd.core.events import EventType
+from dnd.core.life_types import LifeState
 from game.controls import ActionSelection, EndTurn
 from game.encounter_play import GameSummary, run
-from game.player_facts import DamageFact, PlayerState, SpellFact
+from game.player_facts import DamageFact, MovementFact, PlayerState, SpellFact, TurnFact
 
 
 def check_layout(
@@ -21,6 +23,7 @@ def check_layout(
     players: tuple[tuple[int, int], tuple[int, int]],
     enemies: tuple[tuple[int, int], tuple[int, int]],
     *,
+    expected_ended: bool,
     capture_dir: Path | None = None,
 ) -> GameSummary:
     acted: set[UUID] = set()
@@ -60,7 +63,24 @@ def check_layout(
 
     assert result.player_commands == 4 and len(acted) == 2
     assert result.historical == result.latest
-    assert result.historical.current_actor_uuid in acted and result.historical.round_number == 2
+    assert result.encounter_ended is expected_ended
+    assert result.historical.round_number == (1 if expected_ended else 2)
+    endings = [lineage for lineage in result.lineages if isinstance(lineage.root.fact, TurnFact)
+               and lineage.root.fact.event_type is EventType.ENCOUNTER_END]
+    assert len(endings) == int(expected_ended)
+    if expected_ended:
+        assert result.historical.current_actor_uuid is None and not result.frames[-1].input_ready
+        assert all(actor.life_state is LifeState.DEAD for actor in result.historical.actors.values()
+                   if actor.creature_content_ref is not None)
+        # At these three close layouts the surviving handaxe Goblin approaches
+        # through the Fighter's reach and dies to its native opportunity hit.
+        finishing_reaction, = (event.fact for lineage in result.lineages
+            if isinstance(lineage.root.fact, MovementFact) for event in lineage.events
+            if isinstance(event.fact, DamageFact) and event.fact.stage == "applied"
+            and event.fact.source_entity_uuid in acted)
+        assert finishing_reaction.applied_damage == 13 and finishing_reaction.resulting_normal_hp == -11
+    else:
+        assert result.historical.current_actor_uuid in acted
     assert result.frames[-1].pending == 0
     casts = [lineage for lineage in result.lineages if isinstance(lineage.root.fact, SpellFact)]
     assert len(casts) == 1
@@ -83,11 +103,11 @@ def check_layout(
     return result
 
 
-@pytest.mark.parametrize("quadrant,players,enemies", (
-    (0, ((5, 5), (5, 7)), ((9, 5), (9, 7))),
-    (1, ((9, 5), (9, 7)), ((5, 5), (5, 7))),
-    (2, ((5, 5), (7, 5)), ((5, 9), (7, 9))),
-    (3, ((4, 4), (5, 3)), ((9, 9), (10, 8))),
+@pytest.mark.parametrize("quadrant,players,enemies,expected_ended", (
+    (0, ((5, 5), (5, 7)), ((9, 5), (9, 7)), True),
+    (1, ((9, 5), (9, 7)), ((5, 5), (5, 7)), True),
+    (2, ((5, 5), (7, 5)), ((5, 9), (7, 9)), True),
+    (3, ((4, 4), (5, 3)), ((9, 9), (10, 8)), False),
 ), ids=("east", "west-swapped", "south", "diagonal"))
-def test_discovered_player_actions_and_native_round_settle_in_each_layout(quadrant, players, enemies) -> None:
-    check_layout(quadrant, players, enemies)
+def test_discovered_player_actions_and_native_round_settle_in_each_layout(quadrant, players, enemies, expected_ended) -> None:
+    check_layout(quadrant, players, enemies, expected_ended=expected_ended)

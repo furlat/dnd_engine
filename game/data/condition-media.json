@@ -1582,6 +1582,28 @@
       "world_basis": "E",
       "actor_top_clearance_px": 3,
       "removal_fade_ms": 400
+    },
+    "fly_wind_back": {
+      "category": "FlyWind",
+      "animation": "loop",
+      "asset_id": "support.fly.wind.hold.back",
+      "application_asset_id": "support.fly.wind.apply.back",
+      "application_mode": "sequence",
+      "removal_asset_id": "support.fly.wind.release.back",
+      "removal_crossfade_ms": 125,
+      "scale": 0.5555555555555556,
+      "world_basis": "E"
+    },
+    "fly_wind_front": {
+      "category": "FlyWind",
+      "animation": "loop",
+      "asset_id": "support.fly.wind.hold.front",
+      "application_asset_id": "support.fly.wind.apply.front",
+      "application_mode": "sequence",
+      "removal_asset_id": "support.fly.wind.release.front",
+      "removal_crossfade_ms": 125,
+      "scale": 0.5555555555555556,
+      "world_basis": "E"
     }
   }
 }

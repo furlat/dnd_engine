@@ -81,9 +81,14 @@ def cast_media_placement(timeline: CastTimeline, track: StudioMediaTrack,
         sockets = recipe.cast.sourceSockets
         if sockets is None:
             raise ValueError("source-hand media requires authored cast sockets")
-        socket = sockets.release[viewed]
-        if track.startOffsetMs < 0 and sockets.preparation is not None and body is not None:
-            socket = sockets.preparation[viewed][body.frame] or socket
+        # A world-oriented effect bank and the caster's viewed hand are separate
+        # registrations. Orbit media can stay on E while the body faces elsewhere.
+        hand_facing = view_facing(body.facing if body is not None else timeline.facing,
+                                  camera.quadrant, data)
+        socket = sockets.release[hand_facing]
+        if (track.startOffsetMs < 0 and sockets.preparation is not None
+                and body is not None and body.clip == recipe.cast.actionClip):
+            socket = sockets.preparation[hand_facing][body.frame] or socket
         dx, dy = _socket(data, contact, camera, point=(socket.x, socket.y))
         anchor = anchor[0] + dx, anchor[1] + dy
     elif track.attachment == "target_body" and isinstance(contact, ActorContact):

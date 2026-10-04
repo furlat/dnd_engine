@@ -2,6 +2,8 @@
 
 from dnd.core.life_types import LifeState
 from devtools.animation_review.summoning_cases import summoning_history
+from devtools.animation_review.flight_cases import fly_lifetime_history
+from devtools.animation_review.creature_spell_cases import creature_spell_history
 from devtools.animation_review.control_cases import control_spell_history
 from game.combat_demo import capture_combat_demo
 from game.replay import CapturedHistory
@@ -90,8 +92,9 @@ def produce(case: ReviewCase) -> CapturedHistory:
             return CapturedHistory(native.initialization, before, native.lineages)
         case ConstructionCase() as scenario:
             return construction_history(material=scenario.material)
-        case FlightCase():
-            return flight_history()
+        case FlightCase() as scenario:
+            return (flight_history() if scenario.recipient is None
+                    else fly_lifetime_history(recipient=scenario.recipient, geometry=scenario.geometry))
         case ItemPowerCase():
             return item_power_history()
         case AssemblyCase() as scenario:
@@ -216,8 +219,10 @@ def produce(case: ReviewCase) -> CapturedHistory:
                 mechanism=scenario.mechanism, destination=scenario.destination,
             )
         case CreatureCase() as scenario:
+            if scenario.spell is not None:
+                return creature_spell_history(scenario.creature_identity, spell=scenario.spell)
             return creature_history(scenario.creature_identity, weapon_slot=scenario.weapon_slot,
-                                                seed=scenario.seed)
+                                                seed=scenario.seed, multiattack=scenario.multiattack)
         case EquipmentCase() as scenario:
             return equipment_sequence_history(replacement=scenario.replacement, attacks=scenario.attacks)
         case ItemTransferCase() as scenario:
@@ -237,7 +242,7 @@ def produce(case: ReviewCase) -> CapturedHistory:
                 sight_grant=scenario.sight_grant, stealth_face=scenario.stealth_face, reveal=scenario.reveal)
         case MovementCase() as scenario:
             return movement_history(route=scenario.route, battlefield_id=scenario.battlefield_id,
-                                                behavior=scenario.behavior, boost=scenario.boost)
+                                                behavior=scenario.behavior, boost=scenario.boost, flight=scenario.flight)
         case AttackCase() as scenario:
             return attack_history(
                 scenario.weapon, scenario.seed, opportunity=scenario.opportunity,
@@ -248,7 +253,7 @@ def produce(case: ReviewCase) -> CapturedHistory:
             )
         case ParalysisCase() as scenario:
             return movement_with_paralysis(
-                scenario.seed, scenario.maximum_hp, movement_behavior=scenario.movement_behavior,
+                scenario.seed, scenario.maximum_hp, movement_behavior=scenario.movement_behavior, flight=scenario.flight,
             )
         case ParalysisLifecycleCase() as scenario:
             return paralysis_lifecycle(

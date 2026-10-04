@@ -7,7 +7,7 @@ sample is fetched, not its authored phase clock, registration or direction.
 from __future__ import annotations
 
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import gzip
 from pathlib import Path
 import struct
@@ -16,6 +16,8 @@ from zipfile import ZipFile
 
 import numpy as np
 import pygame
+
+from game.spell_palette import cached_palette, retain_palette, replace_palette
 
 from game.animation_types import (
     AnimationData, AuthoredProjectileAsset, BlendMode, Facing8, ProjectileSprite, SurfaceArchive, MaskedMediaTint,
@@ -223,7 +225,7 @@ def _surface_packet(cache: ProjectileFrameCache, path: Path, blends: tuple[Liter
     return tuple(sources)
 
 
-def projectile_frame_layers(
+def _projectile_frame_layers(
     data: AnimationData, asset: AuthoredProjectileAsset,
     phase_name: Literal["cast", "travel", "impact"], frame: int, direction: Facing8,
     visual: ProjectileSprite, legacy_rows: Mapping[tuple[str, int], pygame.Surface], *,
@@ -347,3 +349,31 @@ def projectile_frame_layers(
         image = legacy_rows[asset.assetId, row].subsurface((column * width, 0, width, height)).copy()
         image = _remember(cache, key, _prepare(image, visual.tint, visual.alpha, visual.blendMode))
     return (ProjectileFrameImage(image, pygame.BLEND_RGB_ADD if visual.blendMode == "add" else 0),)
+
+
+def projectile_frame_layers(
+    data: AnimationData, asset: AuthoredProjectileAsset,
+    phase_name: Literal["cast", "travel", "impact"], frame: int, direction: Facing8,
+    visual: ProjectileSprite, legacy_rows: Mapping[tuple[str, int], pygame.Surface], *,
+    cache: ProjectileFrameCache = SHARED_PROJECTILE_FRAMES,
+    masked_tint: MaskedMediaTint | None = None,
+) -> tuple[ProjectileFrameImage, ...]:
+    palette = asset.paletteSwap
+    if palette is None:
+        return _projectile_frame_layers(data, asset, phase_name, frame, direction, visual,
+            legacy_rows, cache=cache, masked_tint=masked_tint)
+    if masked_tint is not None:
+        raise ValueError("exact asset palettes cannot also use a material color mask")
+    neutral = visual.model_copy(update={"tint": 0xFFFFFF, "alpha": 1., "blendMode": "normal"})
+    layers = _projectile_frame_layers(data, asset, phase_name, frame, direction, neutral,
+        legacy_rows, cache=cache)
+    result = []
+    for index, layer in enumerate(layers):
+        key = ("asset_palette", str(data.media_root), asset.assetId, phase_name, frame, direction,
+               index, palette.model_dump_json(), visual.tint, visual.alpha, visual.blendMode)
+        image = cached_palette(key)
+        if image is None:
+            image = _prepare(replace_palette(layer.image, palette), visual.tint, visual.alpha, visual.blendMode)
+            retain_palette(key, image)
+        result.append(replace(layer, image=image))
+    return tuple(result)

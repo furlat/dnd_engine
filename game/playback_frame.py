@@ -138,11 +138,11 @@ def sample_playback_frame(
         condition_appearances = condition_transition_appearances(group.conditions, group_elapsed, condition_appearances)
     for pose in body_frame.poses:
         actor, body = pose.actor, pose.body
-        appearance = condition_appearances[body.actor_uuid]
+        appearance = pose.appearance_override or condition_appearances.get(body.actor_uuid, actor.condition)
         flash = next((value.flash for value in group_sample.vitals if value.actor_uuid == body.actor_uuid), None
                      ) if group_sample is not None else None
         extra = (*extra, *actor_draw_commands(data, body, actor.contact, actor.layers, body_media,
-                                              camera, flash=flash, condition=appearance))
+                                              camera, flash=flash, condition=appearance, coverage=pose.coverage))
     if group is not None and group_sample is not None:
         assert group_media is not None
         extra = (*extra, *choreography_draw_commands(group, group_sample, group_media,

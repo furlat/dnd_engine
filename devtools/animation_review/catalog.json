@@ -2742,6 +2742,7 @@
     "description": "Actual opportunity damage releases normal humanoid blood, downs a player using death saves and stops the Step. The body falls and remains at the interrupted movement position while the legal origin and recorded floor residue stay in their native cells.",
     "scenario": {
       "kind": "attack",
+      "seed": 27,
       "opportunity": true,
       "maximum_hp": 4,
       "uses_death_saves": true,

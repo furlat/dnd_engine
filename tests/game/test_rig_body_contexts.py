@@ -10,10 +10,11 @@ import pytest
 from pydantic import ValidationError
 
 from dnd.core.events import MovementTrajectory
+from dnd.core.life_types import LifeState
 from dnd.types.world import MovementMode
 from game.animation import (
-    ActorContact, BodySample, body_context, compile_equipment,
-    resolve_body_context, sample_equipment,
+    ActorContact, BodySample, CastApplication, CastInput, body_context, compile_cast, compile_equipment,
+    resolve_body_context, sample_cast, sample_equipment,
 )
 from game.animation_data import load_animation_data, validate_rig_body_contexts, resolve_player_layers
 from game.animation_draw import LoadedBodyRows, actor_draw_commands
@@ -88,6 +89,35 @@ def binding(role, *, clip="Alternate", marker=None, frame=2, speed=1., qualifier
 
 def contact(data):
     return ActorContact(str(uuid4()), (3, 3), "S", 1, rig_id=data.root_rig)
+
+
+def test_alternate_death_never_replays_upright_after_a_volley_downing(data):
+    caster = contact(data)
+    target = ActorContact("target", (6, 3), "S", 1, hp=1, rig_id="smallscale.goblin01")
+    source = CastInput("volley", caster, (
+        CastApplication("down", target, True, 1, 0, LifeState.DYING),
+        CastApplication("dead", target, True, 1, 0, LifeState.DEAD),
+    ))
+    timeline = compile_cast(data, "spell.magic_missile", source)
+    down, dead = timeline.applications
+    assert down.hp_ms is not None and dead.damage_start_ms is not None
+    assert down.life_body is not None
+    assert dead.damage_start_ms < down.hp_ms + down.life_body.frames * 1000 / down.life_body.fps
+    def victim(at):
+        return next(body for body in sample_cast(timeline, at).bodies if body.actor_uuid == "target")
+    assert victim(down.hp_ms).clip == "Die"
+    beginning = victim(dead.damage_start_ms)
+    assert (beginning.clip, beginning.frame) == ("Death", 14)
+    assert victim(dead.damage_start_ms + 250) == beginning
+    assert (victim(timeline.complete_ms).clip, victim(timeline.complete_ms).frame) == ("Death", 14)
+    assert victim(dead.damage_start_ms) == beginning
+    # An already dead recipient holds the source's final frame, without a replay.
+    corpse = replace(target, life_state=LifeState.DEAD, hp=0)
+    repeated = compile_cast(data, "spell.magic_missile", CastInput("later", caster, (
+        CastApplication("corpse", corpse, True, 1, 0, LifeState.DEAD),)))
+    assert all((body.clip, body.frame) == ("Death", 14)
+               for at in (0, repeated.release_ms, repeated.complete_ms)
+               for body in sample_cast(repeated, at).bodies if body.actor_uuid == "target")
 
 
 def test_json_roundtrip_and_exact_then_default_then_shared_are_order_independent(data):
@@ -301,6 +331,8 @@ def test_attack_profiles_respect_exact_rig_item_source_and_outcome(data, seed):
     recipe = data.attack_recipes[fact.behavior_id]
     original = select_attack_profile(recipe, fact, data.root_rig)
     assert original is not None
+    goblin_original = select_attack_profile(recipe, fact, "smallscale.goblin01")
+    assert goblin_original is not None and goblin_original.id == "goblin01-physical"
     match = original.match.model_copy(update={"rigIds": (data.root_rig,),
         "sourceItemIds": (fact.source_item_id,), "sourceKinds": ("equipped",)})
     selected = original.model_copy(update={"id": "rig-specific", "precedence": 1000, "match": match,
@@ -311,7 +343,7 @@ def test_attack_profiles_respect_exact_rig_item_source_and_outcome(data, seed):
     adapted = authored(data)
     adapted = replace(adapted, attack_recipes={**adapted.attack_recipes, fact.behavior_id: recipe})
     assert select_attack_profile(recipe, fact, data.root_rig) == selected
-    assert select_attack_profile(recipe, fact, "smallscale.goblin01") == original
+    assert select_attack_profile(recipe, fact, "smallscale.goblin01") == goblin_original
     assert select_attack_profile(recipe, replace(fact, attack_source_kind="natural"), data.root_rig) != selected
     assert select_attack_profile(recipe, replace(fact, source_item_id="weapon.dagger"), data.root_rig) != selected
     bound = bind_attack(before, root, adapted)

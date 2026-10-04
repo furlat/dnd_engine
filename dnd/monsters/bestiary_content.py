@@ -45,7 +45,6 @@ from dnd.core.equipment_types import BodyPart
 from dnd.entity import Entity
 from dnd.monsters.bestiary import (
     create_caster,
-    create_goblin,
     create_goblin_archer,
     create_goblin_caster,
     create_skeleton,
@@ -54,6 +53,7 @@ from dnd.monsters.bestiary import (
     create_skeleton_warrior,
 )
 from dnd.monsters.skeleton_abilities import MarkTargetAction
+from dnd.monsters.goblins import ASHHOOK, build_goblin
 from dnd.spells.evocation import BurningHands, FireBolt, Fireball, MagicMissile
 from dnd.spells.illusion import Invisibility
 
@@ -266,7 +266,7 @@ _GOBLIN_CASTER_WARDROBE = (
     _wardrobe_item("apparel.cloth_shoes.dark", BodyPart.FEET),
 )
 BESTIARY_CREATURE_WARDROBE_GRANTS_BY_KEY = MappingProxyType({
-    "goblin": _GOBLIN_WARDROBE,
+    "goblin": ASHHOOK.possessions,
     "goblin_archer": _GOBLIN_WARDROBE,
     **{
         f"generic_caster.{variant}": grants
@@ -302,21 +302,7 @@ def _build_goblin(
     parameters: GoblinParameters,
 ) -> Entity:
     context = CreatureBuildContext.model_validate(raw_context)
-    entity = create_goblin(
-        source_id=context.runtime_entity_uuid,
-        name=context.display_name,
-        position=context.position,
-        faction=context.faction,
-        weight=parameters.weight,
-        possession_mode=context.possession_mode,
-        content_ref=context.requested_ref,
-    )
-    apply_creature_possessions(
-        entity,
-        _GOBLIN_WARDROBE,
-        possession_mode=context.possession_mode,
-    )
-    return entity
+    return build_goblin(context, ASHHOOK, weight=parameters.weight)
 
 
 @creature_factory(

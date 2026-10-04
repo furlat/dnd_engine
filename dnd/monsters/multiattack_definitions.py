@@ -294,3 +294,23 @@ BODY_MULTIATTACK_CONFIGURATIONS_BY_ID = MappingProxyType({
     row.ref.content_id.removeprefix("action.monster.multiattack."): row
     for row in BODY_MULTIATTACK_CONFIGURATION_DECLARATIONS
 })
+
+
+GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS = tuple(
+    _declaration(
+        content_id=f"action.monster.multiattack.{key}", display_name=f"{name} Multiattack",
+        icon_key="ui.filter-attacks", source_anchor="Authored Goblin roster, 2026-10-03",
+        steps=((WeaponSlot.MELEE_MAIN, 1), (WeaponSlot.MELEE_OFF, 1)), sort_order=120 + index,
+        pack_id="content.neurodragon",
+        provenance=ContentProvenance(primary_source_id="neurodragon.original_b2b3930",
+            source_anchor="Authored Goblin roster, 2026-10-03",
+            relation=ContentProvenanceRelation.ORIGINAL_CONTENT,
+            fidelity=ContentFidelity.COMPLETE, review_status=ContentReviewStatus.REVIEWED,
+            notes="One main-hand and one off-hand attack through the shared Multiattack executor."),
+    )
+    for index, (key, name) in enumerate((("goblin_briarling", "Briarling"), ("goblin_gloomplate", "Gloomplate")))
+)
+GOBLIN_MULTIATTACK_CONFIGURATIONS_BY_ID = MappingProxyType({
+    row.ref.content_id.removeprefix("action.monster.multiattack."): row
+    for row in GOBLIN_MULTIATTACK_CONFIGURATION_DECLARATIONS
+})

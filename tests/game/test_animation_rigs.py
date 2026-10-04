@@ -50,6 +50,12 @@ def with_clip(data: AnimationData, rig_id: str, clip: str, *,
     for clips in document["pose_sockets"].values():
         if clip in clips:
             clips[clip] = {facing: points[:frames] for facing, points in clips[clip].items()}
+    # This fixture changes the recipient's clip domain. Its optional Prone hold
+    # must use that hypothetical last frame as well.
+    for binding in document["body_contexts"]:
+        body = binding["body"]
+        if body["actor"]["clip"] == clip and body["restFrame"] is not None:
+            body["restFrame"] = frames - 1
     rig = BodyRig.model_validate_json(json.dumps(document))
     return replace(data, rigs=MappingProxyType({**data.rigs, rig_id: rig}))
 
@@ -171,6 +177,10 @@ def test_target_death_uses_its_own_duration_and_terminal_frame(data: AnimationDa
 def test_missing_target_clip_rejects_before_playback(data: AnimationData, clip: str, lethal: bool) -> None:
     document = data.rigs[GOBLIN].model_dump(mode="json")
     del document["clips"][clip]
+    # Isolate the cast boundary's required clip check from earlier validation
+    # of optional movement/Prone sockets which now reference these same banks.
+    document["body_contexts"] = []
+    document["pose_sockets"] = {}
     rig = BodyRig.model_validate_json(json.dumps(document))
     selected = replace(data, rigs=MappingProxyType({**data.rigs, GOBLIN: rig}))
     with pytest.raises(ValueError, match=f"missing body clip mapping: {GOBLIN}/{clip}"):

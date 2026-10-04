@@ -133,7 +133,38 @@
           "y": 77
         }
       }
-    }
+    },
+    "body_contexts": [
+      {
+        "role": "movement",
+        "qualifier": {
+          "kind": "movement",
+          "movement_mode": "flying",
+          "trajectory": "path",
+          "connector_presentation_key": null
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Idle",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "once",
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              1,
+              0
+            ]
+          ]
+        }
+      }
+    ]
   },
   "resources": {
     "/rigs/orc01/body/Idle.png": "game/assets/rigs/orc01/body/Idle.png",

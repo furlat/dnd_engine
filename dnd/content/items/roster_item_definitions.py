@@ -3,7 +3,7 @@ from dataclasses import replace
 from types import MappingProxyType
 from typing import Mapping
 
-from dnd.content.items.authored_item_definitions import AUTHORED_WEAPON_DEFINITIONS, WeaponDefinition, WearableDefinition, AuthoredItemDefinition
+from dnd.content.items.authored_item_definitions import AUTHORED_WEAPON_DEFINITIONS, AUTHORED_WEARABLE_DEFINITIONS, WeaponDefinition, WearableDefinition, AuthoredItemDefinition
 from dnd.content.items.item_composition import named_item, with_extra_damage, with_weapon_bonus
 from dnd.core.creature_types import DamageType
 from dnd.types.materials import Material
@@ -68,6 +68,12 @@ ROSTER_MAUL_DEFINITION = WeaponDefinition(
 # Ordinary carried gear uses the existing hand/attack path. Specialist focus,
 # ammunition, loading, tool checks and container contents are deliberately deferred.
 ROSTER_CARRIED_DEFINITIONS: Mapping[str, WeaponDefinition] = MappingProxyType({
+    "weapon.pistol": WeaponDefinition("weapon.pistol", "Pistol",
+        "A one-handed ranged weapon. No ammunition counting or Loading mechanics.",
+        ("gear", "weapon", "ranged"), damage_die=8, damage_type=DamageType.PIERCING,
+        properties=(WeaponProperty.RANGED, WeaponProperty.MARTIAL),
+        range_kind="range", normal_range_feet=30, long_range_feet=90,
+        visual_item_name="Musket", weapon_kind=WeaponKind.PISTOL, material=Material.METAL),
     "focus.wand": WeaponDefinition("focus.wand", "Wand",
         "An ordinary carried wand; no charges or focus-component mechanics.",
         ("gear", "focus", "carried"), visual_item_name="Wand"),
@@ -101,4 +107,43 @@ ROSTER_INVENTORY_DEFINITIONS: Mapping[str, AuthoredItemDefinition] = MappingProx
     "gear.saddle": AuthoredItemDefinition("gear.saddle", "Saddle and Tack",
         "An ordinary inventory possession; mounted equipment behavior is deferred.",
         ("gear", "saddle", "tack"), visual_item_name="Saddle and Tack"),
+})
+
+# Selected ordinary appearances retain their base rules when transferred or looted.
+ROSTER_WEAPON_APPEARANCE_DEFINITIONS: Mapping[str, WeaponDefinition] = MappingProxyType({
+    item_id: replace(AUTHORED_WEAPON_DEFINITIONS[base_id], item_id=item_id, visual_variant_id=variant)
+    for item_id, base_id, variant in (
+        ('weapon.roster.quarterstaff_a0000005', 'weapon.quarterstaff', 'a0000005'),
+        ('weapon.roster.shortbow_20000002', 'weapon.shortbow', '20000002'),
+        ('weapon.roster.shortbow_a0000007', 'weapon.shortbow', 'a0000007'),
+    )
+})
+
+_ROSTER_APPEARANCE_BASES = {**AUTHORED_WEARABLE_DEFINITIONS, **ROSTER_GEAR_DEFINITIONS}
+
+# Selected ordinary appearances retain their base rules when transferred or looted.
+ROSTER_WEARABLE_APPEARANCE_DEFINITIONS: Mapping[str, WearableDefinition] = MappingProxyType({
+    item_id: replace(_ROSTER_APPEARANCE_BASES[base_id], item_id=item_id, visual_variant_id=variant)
+    for item_id, base_id, variant in (
+        ('apparel.roster.armored_boots_b000000d', 'apparel.armored_boots', 'b000000d'),
+        ('apparel.roster.bracers_g0000003', 'apparel.bracers', 'g0000003'),
+        ('apparel.roster.cloth_hood_44e704af2cf6', 'apparel.cloth_hood', 'roster.44e704af2cf6'),
+        ('apparel.roster.cloth_hood_7d8178761a23', 'apparel.cloth_hood', 'roster.7d8178761a23'),
+        ('apparel.roster.cloth_hood_828192008429', 'apparel.cloth_hood', 'roster.828192008429'),
+        ('apparel.roster.common_clothes_16dea1f65105', 'apparel.common_clothes', 'roster.16dea1f65105'),
+        ('apparel.roster.common_clothes_21ae119f8607', 'apparel.common_clothes', 'roster.21ae119f8607'),
+        ('apparel.roster.common_clothes_3b03cd4905fa', 'apparel.common_clothes', 'roster.3b03cd4905fa'),
+        ('apparel.roster.gauntlets_g0000009', 'apparel.gauntlets', 'g0000009'),
+        ('apparel.roster.iron_helmet_h000000a', 'apparel.iron_helmet', 'h000000a'),
+        ('apparel.roster.iron_helmet_6b64ee00bd15', 'apparel.iron_helmet', 'roster.6b64ee00bd15'),
+        ('apparel.roster.robes_51a81ec5104c', 'apparel.robes', 'roster.51a81ec5104c'),
+        ('apparel.roster.robes_ac36c74adec6', 'apparel.robes', 'roster.ac36c74adec6'),
+        ('armor.roster.armor_scraps_5b5b6ba7ea35', 'armor.armor_scraps', 'roster.5b5b6ba7ea35'),
+        ('armor.roster.armor_scraps_8ab959786f2a', 'armor.armor_scraps', 'roster.8ab959786f2a'),
+        ('armor.roster.armor_scraps_d6b6c79a6d59', 'armor.armor_scraps', 'roster.d6b6c79a6d59'),
+        ('armor.roster.armor_scraps_f8d0f71d39aa', 'armor.armor_scraps', 'roster.f8d0f71d39aa'),
+        ('gear.roster.quiver_6c39094102d0', 'gear.quiver', 'roster.6c39094102d0'),
+        ('shield.roster.shield_a000000a', 'shield.shield', 'a000000a'),
+        ('shield.roster.wooden_90000006', 'shield.wooden', '90000006'),
+    )
 })

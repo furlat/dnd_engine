@@ -4,8 +4,9 @@ Date: 2026-10-03. Status: design for independent anti-slop and anti-OOP/ECS/impo
 review; implementation has not started for the new integrations below.
 
 This is the final amendment to [the unified summoning plan](SUMMONING_BACKEND_PLAN_2026-10-03.md),
-not a new roster or spell expansion. The human requested a planning checkpoint
-before proceeding and explicitly **accepted the summoning artwork in this chat**.
+including the subsequently requested **17-sheet Goblin roster amendment**.
+The human requested a planning checkpoint before proceeding and explicitly
+**accepted the summoning artwork in this chat**.
 That acceptance supersedes the artist handoff's older candidate label. Integration
 acceptance still requires native gameplay. No Git commit is part of this work.
 
@@ -21,9 +22,13 @@ Deliver these together:
    material and needs no additional halo artwork.
 4. Verify six demon scales against original silhouettes and show them together
    with a modular human on real paving. Preserve intended differences.
+5. Remove inherited shrinking from dedicated Goblin art and deliver the
+   [complete Goblin content/artwork plan](GOBLIN_ROSTER_FINAL_PHASE_PLAN_2026-10-03.md),
+   including its required source/gear/action crosswalk. This linked document is
+   part of the same deliverable and review scope, not a separate backlog.
 
-No Telekinesis, Antimagic, other queued spells, new monsters, creature mechanics,
-airborne combat/hovering, stacked multi-Z, new body artwork, or external artist
+No Telekinesis, Antimagic, other queued spells, monsters outside these Goblins,
+new rule systems, airborne combat/hovering, stacked multi-Z, new body artwork, or external artist
 messages. Existing native Fly grants speed and permits admitted ground-to-ground
 movement; this phase does not add a second flight action or pathfinder.
 
@@ -80,9 +85,12 @@ neutral shadow RGB; reveal/removal can fade body and shadow together.
 Small 0.82 / Large 1.28 multipliers; gameplay Size does not authorize a change in
 their artwork scale. No demon enlargement or shrinking is proposed. Original
 128-pixel cells contain different silhouettes; do not normalize their bounds.
-Preserve the explicitly approved animal enlargements: Wolf 1.30, Raptor 1.55,
+Preserve the explicitly approved animal enlargements: Wolf 2.00 (October 4 explicit 200% request), Raptor 1.55,
 Mammoth 2.60 and the other already approved animal values. Audit current animals
 for unintended shrinking and report any older out-of-batch scaling separately.
+Dedicated Goblin01 and all sixteen newly planned Goblin sheets also use 1.00.
+The inherited Goblin01 0.82 is removed; raw/modular Goblin variants are separate
+and unchanged. The Goblin amendment specifies their content identities and kits.
 
 ## 3. Work packets and exact ownership
 
@@ -259,7 +267,16 @@ replacement, not tint multiplication. VFX scale is independent of body scale:
 supported range 0.50–1.65; the art's Wolf 0.68/Mammoth 1.65 examples are starting
 values to check with the current canonical bodies, not gameplay sizes.
 
-### E. Clipping, installation and acceptance
+### E. Goblin content and source bindings
+
+Execute the linked [Goblin amendment](GOBLIN_ROSTER_FINAL_PHASE_PLAN_2026-10-03.md)
+as part of this phase, following its native → data → integrated acceptance steps.
+Its gear and creature definitions reuse existing owners; original sprites bind
+to the existing rig/action vocabulary. Preserve its explicit mounted-art product
+gate and do not introduce mount rules. Its source review also feeds the shared
+flight/pose coverage so these newly admitted rigs do not bypass B or C.
+
+### F. Clipping, installation and acceptance
 
 Reuse `game/boundary_occlusion.py`, current world/body ordering, observed contacts
 and existing visibility masks. Source front/back banks only wrap their owner;
@@ -296,6 +313,7 @@ are not visual acceptance. Final reviewers examine the combined source and clips
 | Appearance | Equipment/wings/facing/frame alignment; original grounded shadows; backpack preserved; overlapping grants and removal; one fixed non-winged Fly recipient; no duplicated wings. |
 | Summoning | Three families; small and large body; birth then immediate action; dismissal/expiry/sustain-loss/defeat; Fey control loss with no despawn; replacement; hidden creation/retirement, reacquisition and seek. |
 | Geometry | Foreground/background solid wall, window aperture, adjacent actor, support-height edge; moving body and media obey the same current contact and masks. |
+| Goblin roster | All17 source rows accounted; exact current item variants and native stats; original1.00 proportions; standard actions, both hands, spells, reactions, item transfer, injury/death and per-rig semantic coverage. The two mounted sheets respect the explicit product gate. |
 | Architecture | No backend media IDs, new native duplicate events, species executors, late imports, live-engine reads during playback, speculative fallback or import cycle. |
 
 Use `HOW_TO_TEST.md`: native commands/events and recorded packets as test inputs,
@@ -315,3 +333,40 @@ claiming those old clips prove this phase. Completion requires the integrated
 native gallery, inspected flight and lifecycle outcomes, exact source/media
 receipts and both independent final approvals. This planning checkpoint itself
 does not claim any new art is installed or any new flight pose is accepted.
+
+## October 4 human visual-review corrections
+
+The human reviewed the final native gallery and requested a larger Wolf: change
+its canonical appearance from 1.30 to 2.00 (200% of the original sprite), with no other creature scale, native
+statistics, footprint or original-pixel change. Recapture the three affected
+ordinary/summoned/Fly scenarios separately; preserve previous frozen evidence.
+
+The human also requested original alternative death art to distinguish death
+from Prone. Original-source inspection confirms explosion death banks for all
+six current demon rigs and a second fall for fifteen Goblins; riders11/12 have
+only one death bank and keep it. Use only genuine originals and their separated
+shadow/effect layers. Prone, DYING, STABLE and getting up retain the intact Die1.
+Only terminal DEAD selects the new explosion/Die2 clip; this is visual, with no
+new death rule, event, AI action, explosion damage or loot consequence.
+
+Extend the existing rig body-context vocabulary with terminal `death` selection,
+using the same passive clip/speed registration and default shared death context.
+A single selection helper in `game/animation.py` serves duration, sampling, retained
+corpse pose and the existing media loaders. No species branch, new registry,
+handler or event channel. `animation_types.py` admits a finite forward death body;
+`animation_data.py` validates its original resources and supported frames. Existing
+`BodyClip.layers` holds an original separated explosion-effects sheet. All layer
+registration, world clipping and source shadows remain shared. The human's later
+October 4 correction forbids standing up just to die: an already resting
+Prone/DYING/STABLE creature settles directly to the selected terminal clip's final
+corpse frame. If a shared fall is still running when death commits, preserve its
+original clock and completion; if the terminal clip differs, settle its final
+frame at that death boundary. Full alternate death playback is for upright deaths.
+The intact downed clip must never become an explosion or reverse one during recovery.
+
+Verify actual native death, nonterminal downing/Prone/recovery, corpse seeking and
+summon departure after death, plus original layer/pivot integrity. Reuse current
+recorded-event gallery inputs where compatible, with explicit new render provenance.
+Both independent reviewers assess this bounded extension and its final footage;
+previous full-suite results remain linked, with affected suites rerun for this
+new visual selection change rather than claiming the old run covers it.

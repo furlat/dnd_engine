@@ -36,7 +36,7 @@ def actor_from_birth(birth: EntityCreatedEvent) -> ActorState:
         summon_origin=birth.summon_origin,
         conditions=tuple(ConditionFact(event_uuid=birth.uuid,
             condition_uuid=state.condition_uuid, name=state.name, category=state.category,
-            behavior_id=None, resulting_max_hp=None, resulting_ac=None, state=state)
+            behavior_id=state.behavior_id, resulting_max_hp=None, resulting_ac=None, state=state)
             for state in birth.initial_condition_states),
     )
 

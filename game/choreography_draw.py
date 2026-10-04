@@ -9,7 +9,7 @@ import pygame
 from dnd.core.life_types import LifeState
 from dnd.types.world import WorldEdgeChannel
 from game.area_media import AreaMedia, AreaSolid
-from game.animation import cast_actor_contacts, ActorContact, CastSample, actor_rest_pose, BodySample
+from game.animation import cast_actor_contacts, ActorContact, CastSample, actor_rest_pose, BodySample, death_body_context, sample_idle_body
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, RigLayer
 from game.animation_draw import (
@@ -120,7 +120,7 @@ def load_choreography_media(bound: BoundChoreography, *,
         if healing.contact is not None and healing.body_context is not None and healing.body_context.actor.enabled and healing.data is not None:
             load(healing.contact, (healing.body_context.actor.clip, "Idle"), healing.data)
     for damage in bound.damage:
-        clips = {"Idle", damage.data.death_context.bodyClip if damage.resulting_life_state is LifeState.DEAD
+        clips = {"Idle", death_body_context(damage.data, damage.contact).actor.clip if damage.resulting_life_state is LifeState.DEAD
                  else damage.data.damage_context.bodyClip}
         rest_pose = actor_rest_pose(damage.data, damage.contact)
         if rest_pose is not None:
@@ -134,9 +134,15 @@ def load_choreography_media(bound: BoundChoreography, *,
         if not life.state_owned:
             load(life.contact, ("Idle",), life.data)
         if life.death_end_ms is not None and not life.state_owned:
-            load(life.contact, (life.data.death_context.bodyClip,), life.data)
+            load(life.contact, (death_body_context(life.data, life.contact).actor.clip,), life.data)
         if life.body is not None:
             load(life.contact, (life.body.clip, "Idle"), life.data)
+    for cue in bound.entity_lifecycle:
+        contact = cue.actor.contact
+        resting = condition_body_pose(cue.data, sample_idle_body(cue.data, contact, 0.),
+                                      contact, cue.actor.condition)
+        load_actor_media(cue.data, ((contact, cue.actor.layers,
+            ("Idle", resting.clip, death_body_context(cue.data, contact).actor.clip)),), body_rows=body_rows, all_facings=True)
     for cue in bound.movements:
         for child in load_motion_media(cue.timeline, cue.data, body_rows=body_rows).values():
             attacks.update(child.attacks)

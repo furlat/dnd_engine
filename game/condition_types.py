@@ -146,6 +146,8 @@ class ConditionAppearanceLayer(_Record):
     tint2: Color | None = None
     tint3: Color | None = None
     priority: Priority
+    anatomy: Literal["wings"] | None = None
+    glowStrength: Annotated[float, Field(ge=0, le=.5)] = 0.
 
 
 class ConditionLabel(_Record):

@@ -39,7 +39,8 @@ def ranged_scene(request: pytest.FixtureRequest) -> Iterator[tuple[PlayerState, 
             captured = attack_history("weapon.shortbow", seed, weapon_slot=WeaponSlot.RANGED_MAIN,
                 goblin_source=goblin_source, maximum_hp=maximum_hp, watcher_positions=(position,))
             before, (lineage,) = player_history(captured)
-            data = load_animation_data(rig_files=(Path("game/data/rigs/goblin01.json"),))
+            data = load_animation_data(rig_files=(Path("game/data/rigs/goblin01.json"),
+                                                 Path("game/data/rigs/goblin03.json")))
             bound = bind_attack(before, lineage, data)
             assert bound is not None and bound.timeline.projectile is not None
             yield before, bound, load_attack_media(bound.timeline, bound.appearances)

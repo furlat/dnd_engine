@@ -548,6 +548,7 @@ class AuthoredProjectileAsset(AuthoredRecord):
     defaultScale: Positive
     tags: tuple[str, ...] | None = None
     palettePreview: PalettePreview
+    paletteSwap: PaletteSwap | None = None
     source: ProjectileSource | None = None
     validation: ProjectileValidation | None = None
 
@@ -706,9 +707,14 @@ class BodyClip(AuthoredRecord):
     frames: Annotated[int, Field(ge=1)]
     fps: Positive
     sheets: FrozenMap[str]
+    # Original accents registered to this body's frames, e.g. a muzzle flash.
+    # They own no attack, delivery, or effect timing of their own.
+    layers: tuple[RigLayer, ...] = ()
+    owns_cast_preparation: bool = False
+    source_sockets: SourceSockets | None = None
 
 
-PoseSockets = FrozenMap[FrozenMap[FacingMap[tuple[Point, ...]]]]
+PoseSockets = FrozenMap[FrozenMap[FacingMap[tuple[Point | None, ...]]]]
 
 
 class ActionActor(AuthoredRecord):
@@ -727,7 +733,7 @@ class ActionFrameAnchor(AuthoredRecord):
 BodyContextRole = Literal[
     "movement", "movement_recovery", "shove", "forced_movement", "forced_movement_recovery",
     "body_action", "body_action_recovery", "equipment", "condition_entry", "condition_hold",
-    "condition_exit", "healing", "save_avoidance",
+    "condition_exit", "healing", "save_avoidance", "cast", "death",
 ]
 
 
@@ -784,9 +790,11 @@ class RigBodyContextBinding(AuthoredRecord):
 
     @model_validator(mode="after")
     def validate_context(self) -> RigBodyContextBinding:
+        if self.role == "death" and (self.body.playback != "once" or self.body.reversed or self.body.frameKeys):
+            raise ValueError("terminal death requires finite forward source playback")
         movement = self.role in ("movement", "movement_recovery")
         content_roles = {"shove", "body_action", "body_action_recovery", "condition_entry",
-                         "condition_hold", "condition_exit", "save_avoidance"}
+                         "condition_hold", "condition_exit", "save_avoidance", "cast"}
         if (isinstance(self.qualifier, MovementBodyQualifier) and not movement
                 or isinstance(self.qualifier, ContentBodyQualifier) and self.role not in content_roles):
             raise ValueError("body qualifier does not belong to this context role")
@@ -797,7 +805,7 @@ class RigBodyContextBinding(AuthoredRecord):
         if not self.body.actor.enabled and self.role not in optional:
             raise ValueError(f"required {self.role} body cannot be disabled")
         required = {"shove": {"contact"}, "forced_movement": {"brace"},
-                    "body_action": {"effect"}, "equipment": {"commit"}}
+                    "body_action": {"effect"}, "equipment": {"commit"}, "cast": {"prepare", "release"}}
         names = {anchor.name for anchor in self.body.anchors}
         supported = required.get(self.role, set())
         if names != supported and (self.body.actor.enabled or names):
@@ -821,6 +829,8 @@ class BodyRig(AuthoredRecord):
     origin_y_from_ground: float
     shadow_alpha: Annotated[float, Field(ge=0, le=1)] = 0.5
     body_anchor: Point | None = None
+    lifecycle_scale: Annotated[float, Field(ge=.5, le=1.65)] = 1.
+    native_wings: bool = False
     rest_pose_anchors: FrozenMap[FacingMap[Point]] = Field(default_factory=dict)
     # Socket / semantic clip / viewed facing / sampled frame, in full-cell pixels.
     pose_sockets: PoseSockets = Field(default_factory=dict)
@@ -835,7 +845,7 @@ class BodyRig(AuthoredRecord):
         return {pose: dict(points) for pose, points in value.items()}
 
     @field_serializer("pose_sockets")
-    def serialize_pose_sockets(self, value: PoseSockets) -> dict[str, dict[str, dict[Facing8, tuple[Point, ...]]]]:
+    def serialize_pose_sockets(self, value: PoseSockets) -> dict[str, dict[str, dict[Facing8, tuple[Point | None, ...]]]]:
         return {socket: {clip: dict(rows) for clip, rows in clips.items()}
                 for socket, clips in value.items()}
 
@@ -857,14 +867,27 @@ class BodyRig(AuthoredRecord):
         for clip in self.clips.values():
             if not clip.sheets or not set(clip.sheets) <= categories:
                 raise ValueError("body clip sheets must use declared rig categories")
+            if len({layer.slot for layer in clip.layers}) != len(clip.layers):
+                raise ValueError("body clip layers require unique slots")
+            for layer in clip.layers:
+                if (layer.slot in {"body", "shadow"}
+                        or layer.category not in self.slot_categories.get(layer.slot, ())
+                        or layer.category not in clip.sheets
+                        or layer.alpha != 1 or layer.tint != 0xFFFFFF
+                        or layer.item_uuid is not None or layer.item_effects):
+                    raise ValueError("body clip accents require their own declared slot and sheet")
+            if clip.owns_cast_preparation and not clip.layers:
+                raise ValueError("clip-owned cast preparation requires original accent layers")
         if "ground_depth" in self.pose_sockets and "Idle" not in self.pose_sockets["ground_depth"]:
             raise ValueError("ground depth points require an Idle reference")
-        for clips in self.pose_sockets.values():
+        for socket, clips in self.pose_sockets.items():
             for name, rows in clips.items():
                 if name not in self.clips or set(rows) != facings:
                     raise ValueError("pose sockets require an existing clip and all eight facings")
                 if any(len(points) != self.clips[name].frames for points in rows.values()):
-                    raise ValueError("pose sockets require one point per body frame")
+                    raise ValueError("pose sockets require one entry per body frame")
+                if socket == "ground_depth" and any(point is None for points in rows.values() for point in points):
+                    raise ValueError("ground depth requires a measured point for every frame")
         keys: set[tuple[str, str]] = set()
         for binding in self.body_contexts:
             key = binding.role, binding.qualifier.model_dump_json()
@@ -1189,6 +1212,23 @@ class ConnectorMovementProfile(AuthoredRecord):
         return self
 
 
+class FlightMovementProfile(AuthoredRecord):
+    """Visual ground-to-ground lift over a disclosed, continuous path."""
+
+    clearancePx: Annotated[float, Field(gt=0, le=200)]
+    takeoffFraction: Annotated[float, Field(gt=0, lt=1)]
+    landingFraction: Annotated[float, Field(gt=0, lt=1)]
+    body: BodyContext
+
+    @model_validator(mode="after")
+    def validate_phases(self) -> FlightMovementProfile:
+        if self.takeoffFraction + self.landingFraction > 1:
+            raise ValueError("flight takeoff and landing must fit within its path")
+        if self.body.playback != "once" or not self.body.actor.enabled:
+            raise ValueError("flight requires one normalized airborne body sequence")
+        return self
+
+
 class VoluntaryMovementContext(AuthoredRecord):
     walkClip: Literal["Run", "Walk"]
     walkPlaybackSpeed: Annotated[float, Field(ge=0.1, le=8)]
@@ -1208,6 +1248,7 @@ class VoluntaryMovementContext(AuthoredRecord):
     jumpMedia: tuple[MovementMediaTrack, ...]
     jumpRecovery: MovementRecovery
     connectorProfiles: dict[str, ConnectorMovementProfile] = Field(default_factory=dict)
+    flight: FlightMovementProfile | None = None
 
     @model_validator(mode="after")
     def validate_jump_duration(self) -> VoluntaryMovementContext:
@@ -1223,6 +1264,7 @@ class MovementPresentation(AuthoredRecord):
     actionPlaybackRates: FrozenMap[Positive]
     walkMedia: tuple[MovementMediaTrack, ...]
     jumpMedia: tuple[MovementMediaTrack, ...]
+    flight: FlightMovementProfile | None = None
 
 
 class FloatingFeedbackStyle(AuthoredRecord):
@@ -1666,6 +1708,26 @@ class ConstructionMediaBinding(AuthoredRecord):
         return self
 
 
+class EntityLifecyclePhase(AuthoredRecord):
+    durationMs: Positive
+    tracksByManifestation: FrozenMap[tuple[StudioMediaTrack, ...]]
+    bodyFadeMs: tuple[NonNegative, Positive] | None = None
+
+    @model_validator(mode="after")
+    def finite_clocks(self) -> EntityLifecyclePhase:
+        if self.bodyFadeMs is not None and not 0 <= self.bodyFadeMs[0] < self.bodyFadeMs[1] <= self.durationMs:
+            raise ValueError("lifecycle body fade must fit its finite media")
+        if set(self.tracksByManifestation) - {"natural", "fey_spirit", "fiend"}:
+            raise ValueError("unknown lifecycle manifestation")
+        for tracks in self.tracksByManifestation.values():
+            for track in tracks:
+                if track.loop or track.durationMs is None or not 0 <= track.startOffsetMs < self.durationMs:
+                    raise ValueError("lifecycle media must have finite nonnegative clocks")
+                if track.startOffsetMs + track.durationMs > self.durationMs:
+                    raise ValueError("lifecycle track exceeds its phase")
+        return self
+
+
 @dataclass(frozen=True, slots=True)
 class AnimationData:
     interruptions: InterruptionPresentation
@@ -1718,3 +1780,4 @@ class AnimationData:
     concentration_media: Mapping[str, SpatialMediaBinding] = field(default_factory=dict)
     construction_media: Mapping[str, ConstructionMediaBinding] = field(default_factory=dict)
     body_materials: Mapping[SummonManifestation, BodyMaterial] = field(default_factory=dict)
+    entity_lifecycle_media: Mapping[str, EntityLifecyclePhase] = field(default_factory=dict)

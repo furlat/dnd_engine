@@ -118,11 +118,16 @@ def test_movement_commit_versions_survive_current_and_legacy_player_archives():
     assert EventQueue.event_cursor() == 0
 
 
-def test_one_attack_retains_multiple_results_without_duplicate_injury(received_attack):
-    before, (original,) = decode_player_sequence(encode_player_sequence(received_attack))
+def test_one_attack_retains_multiple_results_without_duplicate_injury():
+    # Keep this public multi-result fixture nonlethal. Seed 17 now kills the
+    # canonical 7 HP Goblin; its retained life commit would contradict an added
+    # later damage packet carrying a different final HP.
+    history = attack_history("weapon.longsword", 10)
+    before, (original,) = decode_player_sequence(encode_player_sequence(project_sequence(history.views["hero"])))
     first = next(node for node in original.events if isinstance(node.fact, DamageResultFact))
     packet = first.fact
     assert isinstance(packet, DamageResultFact)
+    assert packet.applied_damage == 1 and packet.resulting_normal_hp == 6
     extra = replace(first, uuid=uuid4(), lineage_uuid=uuid4(), fact=replace(packet,
         applied_damage=1, resulting_normal_hp=packet.resulting_normal_hp-1))
     events = []

@@ -31,12 +31,16 @@ def data() -> AnimationData:
 def test_actual_damage_keeps_packet_and_normalized_life_facts_while_seeking(
     data: AnimationData, maximum_hp: int, death_saves: bool, life: LifeState,
 ) -> None:
-    captured = attack_history("weapon.longsword", 17, opportunity=True,
+    # Canonical Goblin01's handaxe: seed 27 hits for 5 without a critical or
+    # massive-damage death, so death-save policy remains the only distinction.
+    captured = attack_history("weapon.longsword", 27 if maximum_hp == 4 else 17, opportunity=True,
         maximum_hp=maximum_hp, uses_death_saves=death_saves)
     before, lineage = captured.before, captured.lineages[0]
     event, = (row for row in lineage.events if isinstance(row, TakeDamageEvent))
     native = native_branch(lineage, event)
     packet, = (row for row in native.events if isinstance(row, DamageAppliedEvent))
+    if maximum_hp == 4:
+        assert packet.applied_damage == 5 and packet.resulting_normal_hp == -1
     before, (lineage,) = player_history(captured)
     branch = lineage_branch(lineage, next(node for node in lineage.events if node.uuid == event.uuid))
     assert event.target_entity_uuid is not None

@@ -322,5 +322,29 @@
       "fitToMotion": false,
       "alpha": 1
     }
-  ]
+  ],
+  "flight": {
+    "clearancePx": 24,
+    "takeoffFraction": 0.2,
+    "landingFraction": 0.2,
+    "body": {
+      "actor": {
+        "enabled": true,
+        "clip": "AttackRun",
+        "playbackSpeed": 1,
+        "hiddenSlots": [],
+        "media": []
+      },
+      "frameKeys": [
+        [
+          0,
+          7
+        ],
+        [
+          1,
+          7
+        ]
+      ]
+    }
+  }
 }

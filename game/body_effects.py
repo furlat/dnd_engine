@@ -8,6 +8,26 @@ import pygame
 from game.condition_types import ConditionBodyDistortion, ConditionLiveCopies
 
 
+def reveal_body(image: pygame.Surface, coverage: float) -> pygame.Surface:
+    """Stable source-pixel dissolve, preserving RGB, registration and transparency."""
+    if coverage >= 1:
+        return image
+    result = image.copy()
+    alpha = pygame.surfarray.pixels_alpha(result)
+    if coverage <= 0:
+        alpha[:] = 0
+    else:
+        occupied = np.nonzero(alpha)[1]
+        if occupied.size:
+            top, bottom = occupied.min(), occupied.max()
+            x, y = np.indices(result.get_size())
+            threshold = (bottom-y)/max(1, bottom-top)*.84 + ((x*73+y*157) % 97)/97*.16
+            blend = np.clip((coverage-threshold+.06)/.12, 0, 1)
+            alpha[:] = np.rint(alpha * blend*blend*(3-2*blend))
+    del alpha
+    return result
+
+
 def ghost_body(image: pygame.Surface, palette: tuple[int, int, int, int], maximum: float,
                *, copies: ConditionLiveCopies | None = None, time_ms: float = 0., slot: int = 0) -> pygame.Surface:
     result = image.copy()

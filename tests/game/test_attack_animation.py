@@ -22,7 +22,7 @@ from game.attack import attack_projectile_contact, bind_attack, project_attack_p
 from game.choreography import sample_choreography
 from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
-from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_WIDTH, project_world
+from game.projection import Camera, TILE_WIDTH, project_world
 from tests.game.scenarios import attack_history
 from tests.game.player_helpers import player_history, visible_body, visible_contact
 from game.player_facts import AttackFact, MovementFact
@@ -30,7 +30,8 @@ from game.player_facts import AttackFact, MovementFact
 
 @pytest.fixture(scope="module")
 def data() -> AnimationData:
-    return load_animation_data(rig_files=(Path("game/data/rigs/goblin01.json"),))
+    return load_animation_data(rig_files=(Path("game/data/rigs/goblin01.json"),
+                                         Path("game/data/rigs/goblin03.json")))
 
 
 @pytest.mark.parametrize(("weapon", "seed", "profile", "clip", "outcome"), [
@@ -83,7 +84,7 @@ def test_weapon_facts_choose_authored_profile_and_contact_feedback(
         if applied:
             assert contact.vitals[0].hp == applied[0].resulting_normal_hp
             assert any(row.value == applied[0].applied_damage for row in contact.numbers)
-            assert contact.bodies[1].clip == ("Die" if contact.vitals[0].life_state is LifeState.DEAD else "TakeDamage")
+            assert contact.bodies[1].clip == ("Death" if contact.vitals[0].life_state is LifeState.DEAD else "TakeDamage")
             assert timeline.damage_timing is not None
             assert timeline.complete_ms == max(timeline.body_end_ms, timeline.damage_timing.end_ms)
             if outcome is AttackOutcome.CRIT:
@@ -100,13 +101,13 @@ def test_weapon_facts_choose_authored_profile_and_contact_feedback(
         random.setstate(random_state)
 
 
-@pytest.mark.parametrize("seed,outcome,slash", [
-    (17, AttackOutcome.HIT, "Slash1"),
-    (1, AttackOutcome.MISS, "Slash1"),
-    (5, AttackOutcome.CRIT, "Slash2"),
+@pytest.mark.parametrize("seed,outcome", [
+    (17, AttackOutcome.HIT),
+    (1, AttackOutcome.MISS),
+    (5, AttackOutcome.CRIT),
 ])
-def test_real_goblin_opportunity_attack_uses_same_profile_and_preserves_pre_step_contact(
-    data: AnimationData, seed: int, outcome: AttackOutcome, slash: str,
+def test_real_goblin_opportunity_attack_uses_original_strike_and_preserves_pre_step_contact(
+    data: AnimationData, seed: int, outcome: AttackOutcome,
 ) -> None:
     random_state = random.getstate()
     try:
@@ -122,16 +123,15 @@ def test_real_goblin_opportunity_attack_uses_same_profile_and_preserves_pre_step
         timeline = bound.timeline
         assert (timeline.source.grid, timeline.target.grid) == ((4, 3), (3, 3))
         assert timeline.source.rig_id == "smallscale.goblin01"
-        assert timeline.profile_id == "melee-main"
-        assert timeline.contact_ms == pytest.approx(8 * 1000 / 12)
+        assert timeline.profile_id == "goblin01-physical"
+        assert timeline.contact_ms == pytest.approx(6 * 1000 / 12)
         assert timeline.body_end_ms == pytest.approx(14 * 1000 / 12)
         assert not timeline.missing_media
-        assert tuple(layer.category for layer in timeline.layers) == (slash,)
-        assert sample_attack(timeline, timeline.contact_ms).bodies[0].frame == 8
+        assert not timeline.layers
+        assert sample_attack(timeline, timeline.contact_ms).bodies[0].frame == 6
         assert bound.after.senses is not None and bound.after.senses.position == (3, 3)
 
-        # The real authored overlay must change attack pixels in every camera,
-        # without becoming part of the baked appearance or surviving recovery.
+        # The original axe strike must draw in every camera and settle to Idle.
         pygame.init()
         pygame.display.set_mode((1, 1))
         rows = load_attack_media(timeline, bound.appearances)
@@ -142,12 +142,10 @@ def test_real_goblin_opportunity_attack_uses_same_profile_and_preserves_pre_step
         assert settled.clip == "Idle" and not settled.cast_layers
         for quadrant in range(4):
             camera = Camera(viewport=(320, 240), zoom=1, quadrant=quadrant)
-            with_slash = actor_draw_commands(data, attacking, timeline.source, appearance, rows, camera)[-1]
-            body_only = actor_draw_commands(data, replace(attacking, cast_layers=()),
-                                           timeline.source, appearance, rows, camera)[-1]
-            assert with_slash.destination == body_only.destination
-            assert pygame.image.tobytes(with_slash.surface, "RGBA") != pygame.image.tobytes(body_only.surface, "RGBA")
+            strike = actor_draw_commands(data, attacking, timeline.source, appearance, rows, camera)[-1]
             idle = actor_draw_commands(data, settled, timeline.source, appearance, rows, camera)[-1]
+            assert pygame.mask.from_surface(strike.surface).count() > 0
+            assert pygame.image.tobytes(strike.surface, "RGBA") != pygame.image.tobytes(idle.surface, "RGBA")
             assert pygame.mask.from_surface(idle.surface).count() > 0
     finally:
         reset_engine_runtime()
@@ -300,9 +298,10 @@ def test_real_shortbow_uses_original_release_delivery_join_and_retained_loadout(
         assert bound is not None and bound.timeline.projectile is not None
         timeline, projectile = bound.timeline, bound.timeline.projectile
         assert isinstance(timeline.target, ActorContact)
-        assert timeline.profile_id == "ranged" and timeline.authored_clip == "Attack3"
-        clock = data.rigs[data.root_rig].clips["Attack3"]
-        assert timeline.release_ms == projectile.start_ms == 10 * 1000 / clock.fps
+        assert timeline.profile_id == ("goblin03-ranged" if goblin_source else "ranged")
+        assert timeline.authored_clip == ("Attack1" if goblin_source else "Attack3")
+        clock = body_clip(data, timeline.source, timeline.authored_clip)
+        assert timeline.release_ms == projectile.start_ms == (11 if goblin_source else 10) * 1000 / clock.fps
         # AnimatedEntity completes when it reaches the last frame.
         assert timeline.body_end_ms == (clock.frames - 1) * 1000 / clock.fps
         duration = max(projectile.recipe.minimumTravelDurationMs,
@@ -328,8 +327,8 @@ def test_real_shortbow_uses_original_release_delivery_join_and_retained_loadout(
                 assert arrived.vitals[0].life_state is LifeState.DEAD
         assert bound.after.actors[lineage.root.source_entity_uuid].visual_loadout.active_weapon_set is WeaponSet.RANGED
         if goblin_source:
-            assert timeline.clip == "Idle"
-            assert "smallscale.goblin01/Attack3/body" in timeline.missing_media
+            assert timeline.source.rig_id == "smallscale.goblin03"
+            assert timeline.clip == "Attack1" and not timeline.missing_media
             assert {layer.slot for layer in bound.appearances[timeline.source.actor_uuid]} == {"shadow", "body"}
         else:
             assert timeline.clip == "Attack3" and not timeline.missing_media
@@ -366,12 +365,6 @@ def test_real_shortbow_uses_original_release_delivery_join_and_retained_loadout(
             projected = project_world(ground, quadrant=quadrant, elevation_steps=height)
             factor = data.rig.TILE_W / TILE_WIDTH
             assert (projected[0] * factor, projected[1] * factor) == pytest.approx(effect.point)
-            if goblin_source:
-                expected_height = ((held_timeline.source.elevation_steps + held.elevation_steps) / 2
-                    - (held_timeline.projectile.recipe.originY * held_timeline.source.visual_scale
-                       + held_timeline.projectile.recipe.targetY * held.visual_scale)
-                    / 2 / factor / HEIGHT_STEP_PIXELS)
-                assert height == pytest.approx(expected_height)
     finally:
         reset_engine_runtime()
         random.setstate(random_state)

@@ -15,14 +15,14 @@ from dnd.core.condition_types import ConditionCategory
 from dnd.core.events import EventType, MovementTrajectory, SpatialChangeType
 from dnd.core.life_types import LifeState
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
-from dnd.types.world import OccupancyLayer
+from dnd.types.world import MovementMode, OccupancyLayer
 from game.projection import HEIGHT_STEP_PIXELS, TILE_WIDTH
 from game.connector_motion import passage_point
 from game.animation import (
-    DamageTiming, ActorContact, BodySample, BodyTransition, CastSample, VitalsSample, body_clip, body_duration, body_frame,
+    DamageTiming, ActorContact, BodySample, BodyTransition, CastSample, VitalsSample, body_rig, body_clip, body_frame,
     sample_cast, sample_damage_body, sample_equipment, facing_for_delta, sample_idle_body, resolve_damage,
     media_track_duration, actor_rest_pose, compile_life_body, sample_body_transition,
-    body_context, resolve_body_context, context_duration, context_frame, sample_context_body,
+    body_context, resolve_body_context, context_duration, context_frame, sample_context_body, death_body_context,
 )
 from game.animation_types import (AnimationData, Facing8, LifecycleFeedback, StudioCondition,
                                   BodyContext, MovementBodyQualifier, MovementRecovery, RoleDefault)
@@ -60,6 +60,7 @@ from game.world_animation import (
 from game.device_art import device_bank
 from game.environment_art import load_environment_art
 from game.environment_animation import remnant_bank
+from game.entity_lifecycle import EntityLifecycleCue, bind_entity_lifecycle, lifecycle_phase
 from game.player_reduction import copy_target, lineage_branch, reduce_lineage, reduce_nodes, observe_actors, stage_actors, stage_lineage, state_before_event as _before_event
 from game.stationary_media import StationaryMediaCue
 from game.spatial_contact_media import bind_spatial_contacts, ground_contact_is_authored, bind_suppression_media, damage_sweep_recipe
@@ -171,6 +172,7 @@ class BoundChoreography:
     contact_media: tuple[StationaryMediaCue, ...] = ()
     reaction_media: tuple[ReactionMediaCue, ...] = ()
     condition_responses: tuple[ConditionResponseCue, ...] = ()
+    entity_lifecycle: tuple[EntityLifecycleCue, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +189,7 @@ class ChoreographySample:
     portals: tuple[tuple[PortalTransferCue, float], ...] = ()
     stationary_media: tuple[tuple[StationaryMediaCue, float], ...] = ()
     reaction_media: tuple[tuple[ReactionMediaCue, float], ...] = ()
+    entity_lifecycle: tuple[tuple[EntityLifecycleCue, float], ...] = ()
 
 
 def _bound_damage_timing(event: PlayerNode, owner: ActionNode) -> tuple[DamageTiming | None, ActorContact | None]:
@@ -340,6 +343,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     movements: list[MotionCue] = []
     strips: list[ActionStripCue] = []
     contact_media: list[StationaryMediaCue] = []
+    entity_lifecycle: list[EntityLifecycleCue] = []
     damage_sweep_starts: dict[UUID, float] = {}
     residue_reveals: list[ResidueReveal] = []
     actor_order: list[tuple[UUID, int, bool]] = []
@@ -467,6 +471,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             child_ends.extend(cue.end_ms for cue in strips if owned_by(cue.event_uuid, event_uuid))
             child_ends.extend(cue.end_ms for cue in body_hops if owned_by(cue.event_uuid, event_uuid))
             child_ends.extend(cue.end_ms for cue in condition_responses.values() if owned_by(cue.event_uuid, event_uuid))
+            child_ends.extend(cue.body_end_ms for cue in entity_lifecycle
+                              if owned_by(cue.event_uuid, event_uuid))
             if not child_ends:
                 continue
             if is_body:
@@ -489,6 +495,46 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 nodes[index] = replace(node, bound=replace(node.bound, timeline=timeline))
             end = max(end, node.start_ms + timeline.complete_ms)
         return end
+
+    def bind_lifecycle(event: PlayerNode, at: float,
+                       placed_contacts: Mapping[str, ActorContact]) -> EntityLifecycleCue | None:
+        fact = event.fact
+        phase = lifecycle_phase(fact)
+        if phase is not None and isinstance(fact, (SpatialFact, FactionFact)) and fact.entity_uuid is not None:
+            prior = _before_event(before, lineage, event)
+            witnessed = (reduce_lineage(prior, lineage_branch(lineage, event))
+                         if phase == "arrival" else prior)
+            parent = by_lineage.get(event.parent_lineage) if event.parent_lineage is not None else None
+            if (phase == "departure" and parent is not None and isinstance(parent.fact, ConditionChangeFact)
+                    and parent.fact.event_type is EventType.CONDITION_REMOVAL
+                    and parent.fact.target_entity_uuid == fact.entity_uuid):
+                # Terminal removal owns its condition/item cleanup children.
+                # Retain the permitted appearance at that exact boundary.
+                witnessed = _before_event(before, lineage, parent)
+            actor = witnessed.actors.get(fact.entity_uuid)
+            if actor is not None and actor_is_visible(witnessed, actor):
+                contact = actor_contact(witnessed, actor, data, (facings or {}).get(str(actor.uuid), "S"))
+                placed = placed_contacts.get(contact.actor_uuid)
+                if placed is not None:
+                    contact = replace(contact, grid=placed.grid, elevation_steps=placed.elevation_steps,
+                                      body_lift_px=placed.body_lift_px, facing=placed.facing)
+                cue_at = at
+                if phase == "departure":
+                    # Finish this actor's received injury/death before its terminal
+                    # body fade. The native removal itself is already committed.
+                    cue_at = max([cue_at, *(timing.end_ms for identity, timing in result_placements.items()
+                        if order[identity] < order[event.uuid]
+                        and isinstance(result := by_uuid[identity].fact, DamageFact)
+                        and result.target_entity_uuid == fact.entity_uuid),
+                        *(row.body_end_ms or row.death_end_ms or row.start_ms for row in lifecycle
+                          if row.contact.actor_uuid == contact.actor_uuid)])
+                bound_lifecycle = bind_entity_lifecycle(event.uuid, phase, actor, contact, data, cue_at)
+                if bound_lifecycle is not None:
+                    cue, media = bound_lifecycle
+                    entity_lifecycle.append(cue)
+                    contact_media.extend(media)
+                    return cue
+        return None
 
     def visit(event: PlayerNode, at: float, owner: ActionNode | None = None,
               override: StudioCondition | None = None,
@@ -1019,6 +1065,11 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                     end = max(end, at + bound_equipment.timeline.complete_ms)
             except (ValueError, NotImplementedError) as error:
                 gaps.append((event.uuid, str(error)))
+        entity_cue = bind_lifecycle(event, state_at_effect if state_at_effect is not None else at, placed_contacts)
+        if entity_cue is not None:
+            end = max(end, entity_cue.body_end_ms)
+            if entity_cue.phase == "departure":
+                at = state_at_effect = entity_cue.start_ms
         if state_at_effect is not None:
             # The authored release/contact owns these received state changes.
             # Other primitives keep their existing condition/HP/equipment timing.
@@ -1168,8 +1219,10 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                             feedback = None
                         if not state_owned and fact.new_state is LifeState.DEAD:
                             death = data.death_context
-                            death_end = at if actor_rest_pose(data, contact) is not None else (
-                                at + body_duration(body_clip(data, contact, death.bodyClip), death.bodyPlaybackSpeed))
+                            body = death_body_context(data, contact)
+                            death_end = at if (contact.life_state is LifeState.DEAD
+                                              or actor_rest_pose(data, contact) is not None) else (
+                                at + context_duration(data, contact, body))
                             if death.hiddenSlots or death.media:
                                 gaps.append((event.uuid, "Standalone death hiddenSlots/media are not bound"))
                         if not state_owned:
@@ -1360,7 +1413,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                                  for cue in movements for change in cue.timeline.residue_reveals),
                              body_hops=tuple(body_hops), portals=tuple(portals), stationary_media=tuple(stationary),
                              turn_starts=tuple(turn_starts), contact_media=tuple(contact_media),
-                             reaction_media=tuple(reaction_media), condition_responses=tuple(condition_responses.values()))
+                             reaction_media=tuple(reaction_media), condition_responses=tuple(condition_responses.values()),
+                             entity_lifecycle=tuple(entity_lifecycle))
 
 
 def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> ChoreographySample:
@@ -1375,6 +1429,7 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
     portal_samples = [(cue, elapsed_ms) for cue in bound.portals]
     stationary_samples = [(cue, elapsed_ms) for cue in bound.stationary_media]
     reaction_samples = [(cue, elapsed_ms) for cue in bound.reaction_media]
+    entity_lifecycle_samples = [(cue, elapsed_ms) for cue in bound.entity_lifecycle]
     strips = [sample for cue in bound.strips
               if (sample := sample_action_strip(cue, elapsed_ms)) is not None]
     for cue in bound.body_actions:
@@ -1532,6 +1587,7 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
             portal_samples.extend(child.portals)
             stationary_samples.extend(child.stationary_media)
             reaction_samples.extend(child.reaction_media)
+            entity_lifecycle_samples.extend(child.entity_lifecycle)
     for cue in bound.portals:
         if portal_actor_hidden(cue, elapsed_ms):
             hidden.add(cue.actor_uuid)
@@ -1544,7 +1600,8 @@ def sample_choreography(bound: BoundChoreography, elapsed_ms: float) -> Choreogr
                 contacts.setdefault(cue.actor_uuid, actor_contact(displayed, actor, cue.data, cue.arrival.facing))
     return ChoreographySample(displayed, tuple(clips), conditions, tuple(vitals.values()),
                               elapsed_ms >= bound.complete_ms, tuple(bodies.values()), tuple(contacts.values()), tuple(strips),
-                              frozenset(hidden), tuple(portal_samples), tuple(stationary_samples), tuple(reaction_samples))
+                              frozenset(hidden), tuple(portal_samples), tuple(stationary_samples), tuple(reaction_samples),
+                              tuple(entity_lifecycle_samples))
 
 
 # Passive descriptions for the developer inventory. These never dispatch events.
@@ -1592,6 +1649,9 @@ class MotionLeg:
     passage_body_height_px: float = 0
     passage_socket: str | None = None
     passage_hold_fraction: float = 0
+    lift_phase_edges: tuple[float, float] | None = None
+    # Source-pixel riser height and admitted original-edge fractions (pauses may split an edge).
+    support_riser: tuple[float, float, float] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1634,9 +1694,12 @@ def _resolve_motion_body(timeline: MotionTimeline, data: AnimationData, movement
                          recovery: MovementRecovery) -> MotionTimeline:
     qualifier = MovementBodyQualifier(movement_mode=movement.movement_mode, trajectory=movement.trajectory,
                                       connector_presentation_key=movement.connector_presentation_key)
-    selected = resolve_body_context(data, timeline.actor, "movement", qualifier, body_context(
+    flight = (data.movement_context.flight if movement.movement_mode is MovementMode.FLYING
+              and movement.trajectory is MovementTrajectory.PATH else None)
+    default = (flight.body if flight is not None else body_context(
         timeline.clip, timeline.playback_speed, loop=timeline.body_loops).model_copy(
             update={"frameKeys": timeline.body_frame_keys}))
+    selected = resolve_body_context(data, timeline.actor, "movement", qualifier, default)
     recovered = resolve_body_context(data, timeline.actor, "movement_recovery", qualifier, body_context(
         recovery.bodyClip, recovery.bodyPlaybackSpeed, enabled=recovery.enabled))
     recovery_start = timeline.complete_ms
@@ -1831,7 +1894,7 @@ def _bind_jump(target: PlayerState, lineage: PlayerLineage, jump: MovementFact,
             contacts={**contacts, actor.actor_uuid: held} if held is not None else contacts,
             activated_conditions=activated_conditions)
         if held is not None and group.complete_ms > 0:
-            reactions.append(MotionReaction(group, held, None, elapsed, elapsed + group.complete_ms))
+            reactions.append(MotionReaction(group, held, None, elapsed, elapsed + group.complete_ms, held.body_lift_px))
             elapsed += group.complete_ms
     states.append((elapsed, final))
     transitions = merge_world_transitions(world_transitions(target, states), launch_transitions,
@@ -1852,6 +1915,44 @@ def _visible_contact(state: PlayerState, actor_uuid: UUID, data: AnimationData,
                      facing: Facing8 = "S") -> ActorContact | None:
     actor = state.actors.get(actor_uuid)
     return actor_contact(state, actor, data, facing) if actor is not None and actor_is_visible(state, actor) else None
+
+
+def _flight_path_phases(children: tuple[PlayerNode, ...], subject: UUID,
+                        clearance: float, height_scale: float) -> dict[UUID, tuple[float, float, float]]:
+    """Parameterize only adjacent, disclosed committed edges, never a root path.
+
+    An opaque or rejected edge ends the span. A stopped attempt therefore reaches
+    its last admitted support before its reaction, without inventing a return leg.
+    """
+    result: dict[UUID, tuple[float, float, float]] = {}
+    span: list[tuple[UUID, StepFact]] = []
+
+    def finish() -> None:
+        distances = [hypot(step.to_position[0] - step.from_position[0],
+                           step.to_position[1] - step.from_position[1]) for _, step in span]
+        total = sum(distances)
+        if not total:
+            span.clear()
+            return
+        height = max(clearance, *(abs(step.to_elevation_feet-step.from_elevation_feet) / 5 * height_scale
+                                  for _, step in span))
+        distance = 0.
+        for (identity, _), length in zip(span, distances, strict=True):
+            result[identity] = (distance / total, (distance + length) / total, height)
+            distance += length
+        span.clear()
+
+    for node in children:
+        step = node.fact
+        if not isinstance(step, StepFact) or step.source_entity_uuid != subject or not step.committed:
+            finish()
+            continue
+        if span and (span[-1][1].to_position != step.from_position
+                     or span[-1][1].to_elevation_feet != step.from_elevation_feet):
+            finish()
+        span.append((node.uuid, step))
+    finish()
+    return result
 
 
 def bind_motion(target: PlayerState, lineage: PlayerLineage,
@@ -1885,6 +1986,10 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
     contacts = contacts or {}
     actor = contacts.get(reference.actor_uuid, reference)
     context = data.movement_context
+    flight = (context.flight if root.movement_mode is MovementMode.FLYING
+              and root.trajectory is MovementTrajectory.PATH else None)
+    flight_phases = (_flight_path_phases(children, root.source_entity_uuid, flight.clearancePx,
+        HEIGHT_STEP_PIXELS * data.rig.TILE_W / TILE_WIDTH) if flight is not None else {})
     connector_profile = context.connectorProfiles.get(root.connector_presentation_key) if root.connector_presentation_key is not None else None
     arc_height = connector_profile.arcHeightPx if connector_profile is not None else 0
     partial_jump = root.trajectory is MovementTrajectory.DIRECT_ARC
@@ -1980,6 +2085,11 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
         passage_socket = None
         passage_hold_fraction = 0.0
         arc_height = connector_profile.arcHeightPx if connector_profile is not None and step.committed else 0
+        phase_from, phase_to = 0., 1.
+        lift_phase_edges = None
+        if flight is not None and step.committed:
+            phase_from, phase_to, arc_height = flight_phases[node.uuid]
+            lift_phase_edges = (flight.takeoffFraction, 1 - flight.landingFraction)
         if step.committed and connector_profile is not None and connector_profile.passageBodyHeightPx is not None:
             opening = passage_point(working, start, end)
             if opening is not None:
@@ -2018,21 +2128,28 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
             if reaction_context.bodyEnabled or reaction_context.media or reaction_context.recovery.enabled:
                 return None
             fraction = min(0.35, max(0.12, reaction_context.movementLeadInMs / context.walkStepDurationMs))
+            if flight is not None and not step.committed:
+                fraction = 0.  # No admitted flight: resolve the veto on its known ground support.
             continuation = start[0] + delta[0] * fraction, start[1] + delta[1] * fraction
             continuation_height = height + (end_height - height) * fraction
-            lead_end = elapsed + reaction_context.movementLeadInMs
-            legs.append(MotionLeg(start, continuation, height, continuation_height,
-                                  elapsed, lead_end, body_start, arc_height_px=arc_height, curve_to=fraction, initial_lift_px=initial_lift,
+            lead_end = elapsed + ((duration*fraction if flight is not None else reaction_context.movementLeadInMs) if fraction else 0)
+            if fraction:
+                legs.append(MotionLeg(start, continuation, height, continuation_height,
+                                  elapsed, lead_end, body_start, arc_height_px=arc_height,
+                                  curve_from=phase_from, curve_to=phase_from+(phase_to-phase_from)*fraction, initial_lift_px=initial_lift,
                                   speed_scale=speed_scale, path_bend=path_bend,
                                   passage_scale=passage_scale, passage_body_height_px=passage_body_height,
-                                  passage_socket=passage_socket, passage_hold_fraction=passage_hold_fraction))
+                                  passage_socket=passage_socket, passage_hold_fraction=passage_hold_fraction,
+                                  lift_phase_edges=lift_phase_edges,
+                                  support_riser=(abs(end_height-height)*HEIGHT_STEP_PIXELS*data.rig.TILE_W/TILE_WIDTH, 0., fraction) if flight is not None else None))
             elapsed = lead_end
             facing = facing_for_delta(delta, data)
             for attack_node in attacks:
                 attack = attack_node.fact
                 assert isinstance(attack, (AttackFact, SpellFact))
                 current = working.actors[step.source_entity_uuid]
-                held = replace(motion_leg_contact(leg_actor, legs[-1], data, lead_end),
+                held = replace(motion_leg_contact(leg_actor, legs[-1], data, lead_end) if fraction
+                               else replace(leg_actor, grid=start, elevation_steps=height, body_lift_px=initial_lift),
                                hp=current.normal_hp, life_state=current.life_state, facing=facing)
                 group = bind_choreography(working, lineage_branch(lineage, attack_node), data,
                     facings={actor.actor_uuid: facing}, contacts={**contacts, actor.actor_uuid: held},
@@ -2047,10 +2164,13 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
             duration *= 1 - fraction
         if step.committed:
             legs.append(MotionLeg(continuation, end, continuation_height, end_height,
-                                  elapsed, elapsed + duration, body_start, arc_height_px=arc_height, curve_from=fraction,
+                                  elapsed, elapsed + duration, body_start, arc_height_px=arc_height,
+                                  curve_from=phase_from+(phase_to-phase_from)*fraction, curve_to=phase_to,
                                   initial_lift_px=initial_lift, speed_scale=speed_scale, path_bend=path_bend,
                                   passage_scale=passage_scale, passage_body_height_px=passage_body_height,
-                                  passage_socket=passage_socket, passage_hold_fraction=passage_hold_fraction))
+                                  passage_socket=passage_socket, passage_hold_fraction=passage_hold_fraction,
+                                  lift_phase_edges=lift_phase_edges,
+                                  support_riser=(abs(end_height-height)*HEIGHT_STEP_PIXELS*data.rig.TILE_W/TILE_WIDTH, fraction, 1.) if flight is not None else None))
             elapsed += duration
             # The committed edge owns departure and arrival consequences.
             # Both use the same lineage compositor, including an empty discharge.
@@ -2064,12 +2184,11 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
                                                 AttackFact, SpellFact)) for row in entered.events)
                         or ground_contact_is_authored(working, entry.fact, data)):
                     continue
-                held = replace(leg_actor, grid=end, elevation_steps=end_height,
-                               facing=facing_for_delta(delta, data), body_lift_px=0)
+                held = motion_leg_contact(leg_actor, legs[-1], data, legs[-1].end_ms)
                 group = bind_choreography(working, entered, data,
                     contacts={**contacts, actor.actor_uuid: held}, activated_conditions=activated_conditions)
                 if group.complete_ms > 0:
-                    reactions.append(MotionReaction(group, held, None, elapsed, elapsed + group.complete_ms))
+                    reactions.append(MotionReaction(group, held, None, elapsed, elapsed + group.complete_ms, held.body_lift_px))
                     elapsed += group.complete_ms
                     body_start = elapsed
                 else:
@@ -2083,7 +2202,7 @@ def bind_motion(target: PlayerState, lineage: PlayerLineage,
             settled_lift = initial_lift * (1 - fraction)
             if settled is not None:
                 settled = (motion_leg_contact(settled, legs[-1], data, legs[-1].end_ms)
-                           if attacks else replace(settled, grid=continuation,
+                           if attacks and fraction else replace(settled, grid=continuation,
                                elevation_steps=continuation_height, body_lift_px=settled_lift))
                 settled_lift = settled.body_lift_px
             break
@@ -2129,8 +2248,20 @@ def motion_leg_contact(actor: ActorContact, leg: MotionLeg, data: AnimationData,
     progress = min(1.0, max(0.0, (elapsed_ms-leg.start_ms)/(leg.end_ms-leg.start_ms)))
     delta = leg.end[0]-leg.start[0], leg.end[1]-leg.start[1]
     curve = leg.curve_from+(leg.curve_to-leg.curve_from)*progress
-    lift = (leg.arc_height_px * passage_weight(curve, leg.passage_hold_fraction)
+    if leg.lift_phase_edges is None:
+        weight = passage_weight(curve, leg.passage_hold_fraction)
+    else:
+        takeoff, landing = leg.lift_phase_edges
+        ramp = max(0., min(1., curve / takeoff, (1 - curve) / (1 - landing)))
+        weight = ramp * ramp * (3 - 2 * ramp)
+    lift = (leg.arc_height_px * weight
             + leg.initial_lift_px * (1 - curve))
+    if leg.support_riser is not None:
+        riser, first, last = leg.support_riser
+        edge_progress = first + (last - first) * progress
+        # At the tile boundary the feet must clear the higher support, including
+        # late rises/early descents where the whole-path envelope is already low.
+        lift = max(lift, riser * min(edge_progress, 1 - edge_progress))
     bend_weight = 4 * curve * (1 - curve)
     return replace(actor, grid=(leg.start[0]+delta[0]*progress+leg.path_bend[0]*bend_weight,
                                leg.start[1]+delta[1]*progress+leg.path_bend[1]*bend_weight),
@@ -2175,7 +2306,13 @@ def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: flo
         bodies = [body for clip_sample in active_sample.clips for body in clip_sample.sample.bodies
                   if body.actor_uuid == contact.actor_uuid]
         bodies.extend(body for body in active_sample.bodies if body.actor_uuid == contact.actor_uuid)
-        body = bodies[-1] if bodies else sample_idle_body(data, contact, elapsed)
+        held_leg = next((leg for leg in reversed(timeline.legs)
+                         if leg.lift_phase_edges is not None and leg.end_ms <= active.start_ms), None)
+        active_bodies = [body for body in bodies if body.clip != "Idle"]
+        body = (active_bodies[-1] if active_bodies else
+                _motion_leg_body(timeline, held_leg, contact, data, held_leg.end_ms)
+                if held_leg is not None and contact.body_lift_px > 0 else
+                bodies[-1] if bodies else sample_idle_body(data, contact, elapsed))
         return MotionSample(contact, body, active.lift_px, False, active.choreography,
                             elapsed - active.start_ms, tuple(vitals.values()), displayed, active_sample)
     if (timeline.recovery_body is not None and timeline.recovery_body.actor.enabled
@@ -2195,7 +2332,6 @@ def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: flo
         return MotionSample(contact, sample_idle_body(data, contact, elapsed) if contact is not None else None,
                             contact.body_lift_px if contact is not None else 0, complete,
                             displayed_vitals=tuple(vitals.values()), displayed=displayed)
-    progress = min(1.0, max(0.0, (elapsed - leg.start_ms) / (leg.end_ms - leg.start_ms)))
     contact = motion_leg_contact(timeline.actor, leg, data, elapsed)
     facing, lift = contact.facing, contact.body_lift_px
     current = vitals.get(contact.actor_uuid)
@@ -2203,6 +2339,14 @@ def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: flo
         contact = replace(contact, hp=current.hp, life_state=current.life_state)
     if complete and timeline.settled_contact is not None:
         contact = replace(timeline.settled_contact, facing=facing)
+    return MotionSample(contact, _motion_leg_body(timeline, leg, contact, data, elapsed, clip),
+                        lift, complete, displayed_vitals=tuple(vitals.values()), displayed=displayed)
+
+
+def _motion_leg_body(timeline: MotionTimeline, leg: MotionLeg, contact: ActorContact,
+                     data: AnimationData, elapsed: float, clip: str | None = None) -> BodySample:
+    """One source pose for moving and paused portions of the same admitted leg."""
+    progress = min(1., max(0., (elapsed-leg.start_ms)/(leg.end_ms-leg.start_ms)))
     selected = clip or timeline.clip
     metadata = body_clip(data, contact, selected)
     if timeline.body_context is not None and selected == timeline.clip:
@@ -2228,7 +2372,12 @@ def sample_motion(timeline: MotionTimeline, data: AnimationData, elapsed_ms: flo
     tuck = passage_weight(phase, leg.passage_hold_fraction) ** 2
     scale = (1 + (leg.passage_scale[0] - 1) * tuck,
              1 + (leg.passage_scale[1] - 1) * tuck)
-    return MotionSample(contact, BodySample(contact.actor_uuid, selected, frame, facing,
-                        scale=scale, scale_anchor_height_px=leg.passage_body_height_px,
-                        registration_socket=leg.passage_socket, registration_weight=tuck),
-                        lift, complete, displayed_vitals=tuple(vitals.values()), displayed=displayed)
+    socket, weight = leg.passage_socket, tuck
+    if leg.lift_phase_edges is not None and "airborne_support" in body_rig(data, contact).pose_sockets:
+        socket = "airborne_support"
+        takeoff, landing = leg.lift_phase_edges
+        ramp = max(0., min(1., phase / takeoff, (1-phase)/(1-landing)))
+        weight = ramp*ramp*(3-2*ramp)
+    return BodySample(contact.actor_uuid, selected, frame, contact.facing,
+        scale=scale, scale_anchor_height_px=leg.passage_body_height_px,
+        registration_socket=socket, registration_weight=weight)

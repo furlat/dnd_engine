@@ -36,6 +36,7 @@ class ConditionState(BaseModel):
     name: str
     category: ConditionCategory
     semantic_key: str
+    behavior_id: str | None = None
     tags: tuple[ConditionTag, ...]
     removal_triggers: tuple[ConditionRemovalTrigger, ...]
     agency_denial: ConditionAgencyDenial

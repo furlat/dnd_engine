@@ -19,7 +19,8 @@
     },
     "slot_order": [
       "shadow",
-      "body"
+      "body",
+      "effect"
     ],
     "slot_categories": {
       "body": [
@@ -27,6 +28,9 @@
       ],
       "shadow": [
         "DemonBeast5Shadow"
+      ],
+      "effect": [
+        "DemonBeast5Effect"
       ]
     },
     "clips": {
@@ -101,6 +105,22 @@
           "DemonBeast5": "/rigs/demonbeast05/body/Jump.png",
           "DemonBeast5Shadow": "/rigs/demonbeast05/shadow/Jump.png"
         }
+      },
+      "Death": {
+        "source_clip": "Explode Copy",
+        "frames": 15,
+        "fps": 12,
+        "sheets": {
+          "DemonBeast5": "/rigs/demonbeast05/body/Explode Copy.png",
+          "DemonBeast5Shadow": "/rigs/demonbeast05/shadow/Explode Copy.png",
+          "DemonBeast5Effect": "/rigs/demonbeast05/effect/Explode Copy.png"
+        },
+        "layers": [
+          {
+            "slot": "effect",
+            "category": "DemonBeast5Effect"
+          }
+        ]
       }
     },
     "body_anchor": {
@@ -140,6 +160,40 @@
         "NE": {
           "x": 91,
           "y": 74
+        }
+      },
+      "Death": {
+        "E": {
+          "x": 58.06,
+          "y": 72.6
+        },
+        "SE": {
+          "x": 67.17,
+          "y": 70.72
+        },
+        "S": {
+          "x": 75.02,
+          "y": 74.33
+        },
+        "SW": {
+          "x": 75.06,
+          "y": 80.79
+        },
+        "W": {
+          "x": 68.08,
+          "y": 84.57
+        },
+        "NW": {
+          "x": 60.05,
+          "y": 85.22
+        },
+        "N": {
+          "x": 55.95,
+          "y": 81.19
+        },
+        "NE": {
+          "x": 55.64,
+          "y": 76.24
         }
       }
     },
@@ -346,12 +400,30 @@
         "body": {
           "actor": {
             "enabled": true,
-            "clip": "Idle",
+            "clip": "Jump",
             "playbackSpeed": 1,
             "hiddenSlots": [],
             "media": []
           },
-          "playback": "loop"
+          "playback": "once",
+          "frameKeys": [
+            [
+              0,
+              0
+            ],
+            [
+              0.2,
+              1
+            ],
+            [
+              0.8,
+              1
+            ],
+            [
+              1,
+              0
+            ]
+          ]
         }
       },
       {
@@ -634,8 +706,1214 @@
           },
           "reversed": true
         }
+      },
+      {
+        "role": "death",
+        "qualifier": {
+          "kind": "default"
+        },
+        "body": {
+          "actor": {
+            "enabled": true,
+            "clip": "Death",
+            "playbackSpeed": 1,
+            "hiddenSlots": [],
+            "media": []
+          },
+          "playback": "once"
+        }
       }
-    ]
+    ],
+    "pose_sockets": {
+      "airborne_support": {
+        "Jump": {
+          "E": [
+            {
+              "x": 58.0,
+              "y": 86
+            },
+            {
+              "x": 56.5,
+              "y": 84
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "SE": [
+            {
+              "x": 62.0,
+              "y": 82
+            },
+            {
+              "x": 58.5,
+              "y": 80
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "S": [
+            {
+              "x": 66.0,
+              "y": 77
+            },
+            {
+              "x": 65.0,
+              "y": 77
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "SW": [
+            {
+              "x": 73.0,
+              "y": 81
+            },
+            {
+              "x": 67.0,
+              "y": 78
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "W": [
+            {
+              "x": 73.5,
+              "y": 82
+            },
+            {
+              "x": 70.0,
+              "y": 79
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "NW": [
+            {
+              "x": 70.5,
+              "y": 87
+            },
+            {
+              "x": 67.0,
+              "y": 86
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "N": [
+            {
+              "x": 63.0,
+              "y": 92
+            },
+            {
+              "x": 63.5,
+              "y": 90
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "NE": [
+            {
+              "x": 55.5,
+              "y": 91
+            },
+            {
+              "x": 60.0,
+              "y": 88
+            },
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      },
+      "ground_depth": {
+        "Idle": {
+          "E": [
+            {
+              "x": 67.03,
+              "y": 82.27
+            },
+            {
+              "x": 67.18,
+              "y": 82.24
+            },
+            {
+              "x": 67.18,
+              "y": 82.15
+            },
+            {
+              "x": 67.06,
+              "y": 82.1
+            },
+            {
+              "x": 66.82,
+              "y": 81.87
+            },
+            {
+              "x": 66.7,
+              "y": 81.97
+            },
+            {
+              "x": 66.67,
+              "y": 81.96
+            },
+            {
+              "x": 66.57,
+              "y": 81.97
+            },
+            {
+              "x": 66.47,
+              "y": 81.95
+            },
+            {
+              "x": 66.61,
+              "y": 81.97
+            },
+            {
+              "x": 66.59,
+              "y": 82.1
+            },
+            {
+              "x": 66.67,
+              "y": 81.75
+            },
+            {
+              "x": 66.74,
+              "y": 81.73
+            },
+            {
+              "x": 66.91,
+              "y": 82.19
+            },
+            {
+              "x": 67.02,
+              "y": 82.26
+            }
+          ],
+          "SE": [
+            {
+              "x": 66.41,
+              "y": 83.92
+            },
+            {
+              "x": 66.54,
+              "y": 83.94
+            },
+            {
+              "x": 66.5,
+              "y": 83.89
+            },
+            {
+              "x": 66.41,
+              "y": 83.92
+            },
+            {
+              "x": 66.43,
+              "y": 83.77
+            },
+            {
+              "x": 66.34,
+              "y": 83.73
+            },
+            {
+              "x": 66.3,
+              "y": 83.69
+            },
+            {
+              "x": 66.11,
+              "y": 83.64
+            },
+            {
+              "x": 66.39,
+              "y": 83.56
+            },
+            {
+              "x": 66.29,
+              "y": 83.56
+            },
+            {
+              "x": 66.33,
+              "y": 83.7
+            },
+            {
+              "x": 66.18,
+              "y": 83.84
+            },
+            {
+              "x": 66.24,
+              "y": 83.87
+            },
+            {
+              "x": 66.62,
+              "y": 83.72
+            },
+            {
+              "x": 66.37,
+              "y": 83.94
+            }
+          ],
+          "S": [
+            {
+              "x": 64.07,
+              "y": 85.03
+            },
+            {
+              "x": 63.94,
+              "y": 85.04
+            },
+            {
+              "x": 64.33,
+              "y": 85.05
+            },
+            {
+              "x": 64.14,
+              "y": 84.89
+            },
+            {
+              "x": 64.21,
+              "y": 84.87
+            },
+            {
+              "x": 64.61,
+              "y": 84.78
+            },
+            {
+              "x": 64.46,
+              "y": 84.71
+            },
+            {
+              "x": 64.32,
+              "y": 84.74
+            },
+            {
+              "x": 64.29,
+              "y": 84.69
+            },
+            {
+              "x": 64.3,
+              "y": 84.61
+            },
+            {
+              "x": 64.35,
+              "y": 84.68
+            },
+            {
+              "x": 64.41,
+              "y": 84.75
+            },
+            {
+              "x": 64.37,
+              "y": 84.87
+            },
+            {
+              "x": 64.4,
+              "y": 84.95
+            },
+            {
+              "x": 64.04,
+              "y": 85.01
+            }
+          ],
+          "SW": [
+            {
+              "x": 61.46,
+              "y": 84.6
+            },
+            {
+              "x": 61.44,
+              "y": 84.67
+            },
+            {
+              "x": 61.34,
+              "y": 84.6
+            },
+            {
+              "x": 61.65,
+              "y": 84.6
+            },
+            {
+              "x": 61.9,
+              "y": 84.63
+            },
+            {
+              "x": 61.79,
+              "y": 84.51
+            },
+            {
+              "x": 62.04,
+              "y": 84.6
+            },
+            {
+              "x": 62.07,
+              "y": 84.56
+            },
+            {
+              "x": 62.05,
+              "y": 84.44
+            },
+            {
+              "x": 61.89,
+              "y": 84.43
+            },
+            {
+              "x": 61.87,
+              "y": 84.45
+            },
+            {
+              "x": 61.96,
+              "y": 84.59
+            },
+            {
+              "x": 61.52,
+              "y": 84.46
+            },
+            {
+              "x": 61.46,
+              "y": 84.42
+            },
+            {
+              "x": 61.57,
+              "y": 84.6
+            }
+          ],
+          "W": [
+            {
+              "x": 59.87,
+              "y": 82.92
+            },
+            {
+              "x": 59.82,
+              "y": 82.9
+            },
+            {
+              "x": 59.94,
+              "y": 83.05
+            },
+            {
+              "x": 60.1,
+              "y": 82.97
+            },
+            {
+              "x": 60.26,
+              "y": 83.24
+            },
+            {
+              "x": 60.41,
+              "y": 83.09
+            },
+            {
+              "x": 60.41,
+              "y": 83.23
+            },
+            {
+              "x": 60.51,
+              "y": 83.23
+            },
+            {
+              "x": 60.53,
+              "y": 83.15
+            },
+            {
+              "x": 60.44,
+              "y": 83.31
+            },
+            {
+              "x": 60.37,
+              "y": 83.1
+            },
+            {
+              "x": 60.27,
+              "y": 83.25
+            },
+            {
+              "x": 60.22,
+              "y": 83.31
+            },
+            {
+              "x": 60.05,
+              "y": 82.95
+            },
+            {
+              "x": 59.87,
+              "y": 82.89
+            }
+          ],
+          "NW": [
+            {
+              "x": 60.47,
+              "y": 81.3
+            },
+            {
+              "x": 60.4,
+              "y": 81.16
+            },
+            {
+              "x": 60.48,
+              "y": 81.19
+            },
+            {
+              "x": 60.39,
+              "y": 81.25
+            },
+            {
+              "x": 60.63,
+              "y": 81.29
+            },
+            {
+              "x": 60.6,
+              "y": 81.42
+            },
+            {
+              "x": 60.62,
+              "y": 81.44
+            },
+            {
+              "x": 60.6,
+              "y": 81.66
+            },
+            {
+              "x": 60.65,
+              "y": 81.59
+            },
+            {
+              "x": 60.79,
+              "y": 81.43
+            },
+            {
+              "x": 60.57,
+              "y": 81.48
+            },
+            {
+              "x": 60.72,
+              "y": 81.32
+            },
+            {
+              "x": 60.62,
+              "y": 81.32
+            },
+            {
+              "x": 60.47,
+              "y": 81.36
+            },
+            {
+              "x": 60.47,
+              "y": 81.3
+            }
+          ],
+          "N": [
+            {
+              "x": 63.01,
+              "y": 80.12
+            },
+            {
+              "x": 63.06,
+              "y": 80.09
+            },
+            {
+              "x": 62.74,
+              "y": 80.11
+            },
+            {
+              "x": 63.04,
+              "y": 80.29
+            },
+            {
+              "x": 62.78,
+              "y": 80.3
+            },
+            {
+              "x": 62.54,
+              "y": 80.41
+            },
+            {
+              "x": 62.59,
+              "y": 80.43
+            },
+            {
+              "x": 62.55,
+              "y": 80.47
+            },
+            {
+              "x": 62.72,
+              "y": 80.54
+            },
+            {
+              "x": 62.75,
+              "y": 80.49
+            },
+            {
+              "x": 62.86,
+              "y": 80.5
+            },
+            {
+              "x": 62.43,
+              "y": 80.4
+            },
+            {
+              "x": 62.65,
+              "y": 80.3
+            },
+            {
+              "x": 62.55,
+              "y": 80.18
+            },
+            {
+              "x": 62.86,
+              "y": 80.11
+            }
+          ],
+          "NE": [
+            {
+              "x": 65.46,
+              "y": 80.51
+            },
+            {
+              "x": 65.48,
+              "y": 80.45
+            },
+            {
+              "x": 65.72,
+              "y": 80.57
+            },
+            {
+              "x": 65.42,
+              "y": 80.53
+            },
+            {
+              "x": 65.2,
+              "y": 80.54
+            },
+            {
+              "x": 65.14,
+              "y": 80.66
+            },
+            {
+              "x": 65.12,
+              "y": 80.69
+            },
+            {
+              "x": 65.01,
+              "y": 80.71
+            },
+            {
+              "x": 64.91,
+              "y": 80.7
+            },
+            {
+              "x": 64.83,
+              "y": 80.63
+            },
+            {
+              "x": 65.02,
+              "y": 80.61
+            },
+            {
+              "x": 65.08,
+              "y": 80.6
+            },
+            {
+              "x": 65.13,
+              "y": 80.57
+            },
+            {
+              "x": 65.39,
+              "y": 80.6
+            },
+            {
+              "x": 65.5,
+              "y": 80.57
+            }
+          ]
+        },
+        "Death": {
+          "E": [
+            {
+              "x": 63.36,
+              "y": 81.44
+            },
+            {
+              "x": 63.36,
+              "y": 78.41
+            },
+            {
+              "x": 61.79,
+              "y": 78.43
+            },
+            {
+              "x": 59.9,
+              "y": 78.62
+            },
+            {
+              "x": 57.53,
+              "y": 77.5
+            },
+            {
+              "x": 57.05,
+              "y": 76.35
+            },
+            {
+              "x": 56.5,
+              "y": 76.09
+            },
+            {
+              "x": 56.72,
+              "y": 75.42
+            },
+            {
+              "x": 56.99,
+              "y": 75.34
+            },
+            {
+              "x": 56.98,
+              "y": 75.48
+            },
+            {
+              "x": 56.85,
+              "y": 75.92
+            },
+            {
+              "x": 56.83,
+              "y": 75.93
+            },
+            {
+              "x": 56.81,
+              "y": 75.94
+            },
+            {
+              "x": 56.81,
+              "y": 75.94
+            },
+            {
+              "x": 56.79,
+              "y": 75.96
+            }
+          ],
+          "SE": [
+            {
+              "x": 64.27,
+              "y": 81.78
+            },
+            {
+              "x": 68.19,
+              "y": 79.42
+            },
+            {
+              "x": 66.67,
+              "y": 78.79
+            },
+            {
+              "x": 64.96,
+              "y": 78.08
+            },
+            {
+              "x": 64.56,
+              "y": 76.38
+            },
+            {
+              "x": 65.31,
+              "y": 75.36
+            },
+            {
+              "x": 65.75,
+              "y": 74.67
+            },
+            {
+              "x": 66.41,
+              "y": 74.46
+            },
+            {
+              "x": 66.42,
+              "y": 74.41
+            },
+            {
+              "x": 66.08,
+              "y": 74.48
+            },
+            {
+              "x": 65.69,
+              "y": 74.66
+            },
+            {
+              "x": 65.74,
+              "y": 74.63
+            },
+            {
+              "x": 65.66,
+              "y": 74.7
+            },
+            {
+              "x": 65.65,
+              "y": 74.67
+            },
+            {
+              "x": 65.68,
+              "y": 74.67
+            }
+          ],
+          "S": [
+            {
+              "x": 65.21,
+              "y": 82.39
+            },
+            {
+              "x": 70.02,
+              "y": 82.58
+            },
+            {
+              "x": 69.76,
+              "y": 81.41
+            },
+            {
+              "x": 69.18,
+              "y": 80.03
+            },
+            {
+              "x": 70.81,
+              "y": 78.56
+            },
+            {
+              "x": 72.54,
+              "y": 78.12
+            },
+            {
+              "x": 73.3,
+              "y": 77.92
+            },
+            {
+              "x": 74.1,
+              "y": 77.96
+            },
+            {
+              "x": 74.33,
+              "y": 78.2
+            },
+            {
+              "x": 74.14,
+              "y": 78.21
+            },
+            {
+              "x": 73.6,
+              "y": 78.11
+            },
+            {
+              "x": 73.63,
+              "y": 78.06
+            },
+            {
+              "x": 73.67,
+              "y": 78.08
+            },
+            {
+              "x": 73.63,
+              "y": 78.12
+            },
+            {
+              "x": 73.61,
+              "y": 78.1
+            }
+          ],
+          "SW": [
+            {
+              "x": 64.67,
+              "y": 83.0
+            },
+            {
+              "x": 67.97,
+              "y": 85.52
+            },
+            {
+              "x": 68.98,
+              "y": 84.79
+            },
+            {
+              "x": 70.3,
+              "y": 83.78
+            },
+            {
+              "x": 72.97,
+              "y": 83.16
+            },
+            {
+              "x": 74.66,
+              "y": 83.95
+            },
+            {
+              "x": 75.47,
+              "y": 83.96
+            },
+            {
+              "x": 75.85,
+              "y": 84.49
+            },
+            {
+              "x": 75.73,
+              "y": 84.81
+            },
+            {
+              "x": 75.49,
+              "y": 84.55
+            },
+            {
+              "x": 75.28,
+              "y": 84.24
+            },
+            {
+              "x": 75.24,
+              "y": 84.23
+            },
+            {
+              "x": 75.33,
+              "y": 84.23
+            },
+            {
+              "x": 75.34,
+              "y": 84.24
+            },
+            {
+              "x": 75.29,
+              "y": 84.26
+            }
+          ],
+          "W": [
+            {
+              "x": 63.58,
+              "y": 83.69
+            },
+            {
+              "x": 63.63,
+              "y": 86.9
+            },
+            {
+              "x": 65.33,
+              "y": 86.8
+            },
+            {
+              "x": 67.03,
+              "y": 86.65
+            },
+            {
+              "x": 69.71,
+              "y": 87.6
+            },
+            {
+              "x": 70.1,
+              "y": 88.69
+            },
+            {
+              "x": 70.46,
+              "y": 89.21
+            },
+            {
+              "x": 70.18,
+              "y": 89.7
+            },
+            {
+              "x": 70.12,
+              "y": 89.76
+            },
+            {
+              "x": 70.09,
+              "y": 89.57
+            },
+            {
+              "x": 70.15,
+              "y": 89.17
+            },
+            {
+              "x": 70.08,
+              "y": 89.13
+            },
+            {
+              "x": 70.08,
+              "y": 89.17
+            },
+            {
+              "x": 70.09,
+              "y": 89.15
+            },
+            {
+              "x": 70.12,
+              "y": 89.13
+            }
+          ],
+          "NW": [
+            {
+              "x": 62.62,
+              "y": 83.4
+            },
+            {
+              "x": 59.17,
+              "y": 85.54
+            },
+            {
+              "x": 60.39,
+              "y": 86.47
+            },
+            {
+              "x": 62.05,
+              "y": 87.15
+            },
+            {
+              "x": 62.4,
+              "y": 88.82
+            },
+            {
+              "x": 61.65,
+              "y": 89.67
+            },
+            {
+              "x": 61.36,
+              "y": 90.55
+            },
+            {
+              "x": 60.75,
+              "y": 90.67
+            },
+            {
+              "x": 60.68,
+              "y": 90.65
+            },
+            {
+              "x": 60.94,
+              "y": 90.62
+            },
+            {
+              "x": 61.42,
+              "y": 90.48
+            },
+            {
+              "x": 61.42,
+              "y": 90.48
+            },
+            {
+              "x": 61.4,
+              "y": 90.42
+            },
+            {
+              "x": 61.32,
+              "y": 90.5
+            },
+            {
+              "x": 61.28,
+              "y": 90.37
+            }
+          ],
+          "N": [
+            {
+              "x": 61.91,
+              "y": 82.67
+            },
+            {
+              "x": 57.07,
+              "y": 82.69
+            },
+            {
+              "x": 57.26,
+              "y": 83.84
+            },
+            {
+              "x": 57.49,
+              "y": 85.01
+            },
+            {
+              "x": 56.01,
+              "y": 86.48
+            },
+            {
+              "x": 54.2,
+              "y": 86.91
+            },
+            {
+              "x": 53.56,
+              "y": 87.17
+            },
+            {
+              "x": 52.92,
+              "y": 87.11
+            },
+            {
+              "x": 52.71,
+              "y": 86.92
+            },
+            {
+              "x": 52.9,
+              "y": 86.99
+            },
+            {
+              "x": 53.53,
+              "y": 86.97
+            },
+            {
+              "x": 53.49,
+              "y": 86.97
+            },
+            {
+              "x": 53.44,
+              "y": 86.98
+            },
+            {
+              "x": 53.43,
+              "y": 86.98
+            },
+            {
+              "x": 53.56,
+              "y": 86.96
+            }
+          ],
+          "NE": [
+            {
+              "x": 62.31,
+              "y": 82.1
+            },
+            {
+              "x": 58.95,
+              "y": 79.52
+            },
+            {
+              "x": 57.83,
+              "y": 80.48
+            },
+            {
+              "x": 56.65,
+              "y": 81.36
+            },
+            {
+              "x": 53.94,
+              "y": 81.97
+            },
+            {
+              "x": 52.65,
+              "y": 81.38
+            },
+            {
+              "x": 51.58,
+              "y": 81.26
+            },
+            {
+              "x": 51.14,
+              "y": 80.77
+            },
+            {
+              "x": 51.28,
+              "y": 80.46
+            },
+            {
+              "x": 51.61,
+              "y": 80.64
+            },
+            {
+              "x": 51.73,
+              "y": 80.86
+            },
+            {
+              "x": 51.78,
+              "y": 80.91
+            },
+            {
+              "x": 51.82,
+              "y": 80.91
+            },
+            {
+              "x": 51.82,
+              "y": 80.87
+            },
+            {
+              "x": 51.76,
+              "y": 80.88
+            }
+          ]
+        }
+      }
+    },
+    "native_wings": true,
+    "lifecycle_scale": 0.75
   },
   "resources": {
     "/rigs/demonbeast05/body/Idle.png": "game/assets/rigs/demonbeast05/body/Idle.png",
@@ -653,7 +1931,10 @@
     "/rigs/demonbeast05/body/Crouch walk.png": "game/assets/rigs/demonbeast05/body/Crouch walk.png",
     "/rigs/demonbeast05/shadow/Crouch walk.png": "game/assets/rigs/demonbeast05/shadow/Crouch walk.png",
     "/rigs/demonbeast05/body/Jump.png": "game/assets/rigs/demonbeast05/body/Jump.png",
-    "/rigs/demonbeast05/shadow/Jump.png": "game/assets/rigs/demonbeast05/shadow/Jump.png"
+    "/rigs/demonbeast05/shadow/Jump.png": "game/assets/rigs/demonbeast05/shadow/Jump.png",
+    "/rigs/demonbeast05/body/Explode Copy.png": "game/assets/rigs/demonbeast05/body/Explode Copy.png",
+    "/rigs/demonbeast05/shadow/Explode Copy.png": "game/assets/rigs/demonbeast05/shadow/Explode Copy.png",
+    "/rigs/demonbeast05/effect/Explode Copy.png": "game/assets/rigs/demonbeast05/effect/Explode Copy.png"
   },
   "provenance": {
     "files": {
@@ -736,6 +2017,21 @@
         "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 5/Shadows/Jump.png",
         "bytes": 38903,
         "sha256": "da100feaf4707a5afcf43ab174c88c1e7c4408fb908417c75d5af1f2efe38aa2"
+      },
+      "/rigs/demonbeast05/body/Explode Copy.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 5/Explode Copy.png",
+        "bytes": 142265,
+        "sha256": "896f48440dbef0c09230e983fff0dbde91f3544eebbfef73d323e25453a1c2f7"
+      },
+      "/rigs/demonbeast05/shadow/Explode Copy.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 5/Shadows/Explode Copy.png",
+        "bytes": 56286,
+        "sha256": "2ccf3778de84f9f626d1cff1412b8b01e9a6a320184eb1a625634b3fa8f63ecf"
+      },
+      "/rigs/demonbeast05/effect/Explode Copy.png": {
+        "archive_member": "Spritesheets with seperated shadows and effects/Demon Beast 5/Effects/Explode Copy.png",
+        "bytes": 643601,
+        "sha256": "e5a4a0d9cd93311acf851c30ba3bf137d7326efa2bd6b2999b4b236df477889c"
       }
     },
     "archive": {
@@ -764,11 +2060,88 @@
       },
       "outcomes": "Hit, miss, critical, opportunity and native Multiattack children select the same explicit anatomical row. One emitted attack fact owns one contact; art turns and repeated swipes create no extra native hits. Separate AttackVfx tracks are explicitly empty.",
       "movement": "Run owns the gait only. Native recorded path/height owns displacement. Jump uses Jump as an explicitly normalized pack jump/roll adaptation. Window uses CrouchWalk with its own frame keys and existing connector passage scale.",
-      "flight": "The prior planted Idle placeholder is retained temporarily pending integration with the shared Fly presentation. It is not accepted as a glide or flight gait. Ground Run is not a flying adaptation. The pack has no Fly strip; original Jump airborne poses remain available for source-grounded selection through the shared flight mode. Native path, height and lift remain authoritative.",
+      "flight": "Original intact selected source poses; authored sole support observations retain one shared visual lift. No reconstructed skeleton motion.",
       "prone": "Intact non-exploding fall, explicit frame-14 living rest pose, reverse stand-up. Death continues to use the compatible shared death owner; summoned departure is separate.",
       "ordinary_actions": "Body action, recovery, equipment, healing and optional save-avoidance gestures explicitly disabled with neutral Idle. Existing native effects, feedback and child joins remain authoritative. Shove uses the primary physical strike; forced movement uses TakeDamage brace 5.",
       "unarmed": "Rig-scoped unarmed physical-strike adaptation uses the inspected primary motion; this grants no native action.",
       "validation_scope": "Original strip/direction/support inspection and typed binding checks; full live native fight, historical replay, height/occlusion and Fey material acceptance are separate packet-5 integration checks."
+    },
+    "terminal_death_review": {
+      "selection": "Separate terminal Death only. Existing Die, Prone, DYING/STABLE and reverse recovery remain unchanged.",
+      "timing": "15 original frames at existing explicit project adaptation 12 FPS; source PNGs declare no FPS.",
+      "registration": "Ground depth uses original separate shadow alpha-weighted centroids with measured Idle reference. Body/source pixels and native contact are unchanged.",
+      "rest_attachment": "Original body alpha centroid, preserving the demon attachment convention.",
+      "effects": "Original separated effect layer stays frame-matched, including retained frame14 residue; no native explosion or blood event.",
+      "source_edge_contact_alpha_gt32": [
+        {
+          "facing": "SE",
+          "frame": 7
+        },
+        {
+          "facing": "SE",
+          "frame": 8
+        },
+        {
+          "facing": "SE",
+          "frame": 9
+        },
+        {
+          "facing": "SE",
+          "frame": 10
+        },
+        {
+          "facing": "SE",
+          "frame": 11
+        },
+        {
+          "facing": "SE",
+          "frame": 12
+        },
+        {
+          "facing": "SE",
+          "frame": 13
+        },
+        {
+          "facing": "SE",
+          "frame": 14
+        },
+        {
+          "facing": "S",
+          "frame": 6
+        },
+        {
+          "facing": "S",
+          "frame": 7
+        },
+        {
+          "facing": "S",
+          "frame": 8
+        },
+        {
+          "facing": "S",
+          "frame": 9
+        },
+        {
+          "facing": "S",
+          "frame": 10
+        },
+        {
+          "facing": "S",
+          "frame": 11
+        },
+        {
+          "facing": "S",
+          "frame": 12
+        },
+        {
+          "facing": "S",
+          "frame": 13
+        },
+        {
+          "facing": "S",
+          "frame": 14
+        }
+      ]
     }
   }
 }

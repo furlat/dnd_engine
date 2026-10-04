@@ -23,6 +23,7 @@ from dnd.content.items.authored_item_definitions import (
 from dnd.content.items.roster_item_definitions import (
     ROSTER_CARRIED_DEFINITIONS, ROSTER_EMBER_DEFINITIONS, ROSTER_GEAR_DEFINITIONS,
     ROSTER_INVENTORY_DEFINITIONS, ROSTER_WEAPON_DEFINITIONS, ROSTER_MAUL_DEFINITION,
+    ROSTER_WEAPON_APPEARANCE_DEFINITIONS, ROSTER_WEARABLE_APPEARANCE_DEFINITIONS,
 )
 from dnd.content.items.window_definitions import WINDOW_DEFINITIONS
 from dnd.content.items.door_profiles import DOOR_PROFILES
@@ -233,6 +234,7 @@ def test_cri_public_item_inventory_is_complete_and_direct() -> None:
         | set(LIQUID_BARREL_PROFILES)
         | set(POWERED_WEARABLE_DEFINITIONS)
         | set(ROSTER_WEAPON_DEFINITIONS) | set(ROSTER_EMBER_DEFINITIONS)
+        | set(ROSTER_WEAPON_APPEARANCE_DEFINITIONS) | set(ROSTER_WEARABLE_APPEARANCE_DEFINITIONS)
         | set(ROSTER_GEAR_DEFINITIONS) | set(ROSTER_CARRIED_DEFINITIONS) | set(ROSTER_INVENTORY_DEFINITIONS)
         | {ROSTER_MAUL_DEFINITION.item_id}
         | {profile.wall.item_id for profile in WINDOW_DEFINITIONS.values()}

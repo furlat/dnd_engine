@@ -960,7 +960,7 @@ def _configure_wolf(context: CreatureBuildContext) -> Entity:
         movement=40,
         skills={"perception": True, "stealth": True},
     )
-    entity.appearance.visual_scale = 1.3
+    entity.appearance.visual_scale = 2.0
     install_body_response(entity, BLOOD_BODY_RESPONSE)
     register_keen_hearing_and_smell(entity)
     register_pack_tactics(entity)

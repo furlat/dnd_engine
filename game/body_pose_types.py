@@ -18,6 +18,8 @@ class SceneActor:
 class ActorPose:
     actor: SceneActor
     body: BodySample
+    coverage: float = 1.
+    appearance_override: ConditionAppearance | None = None
 
 
 @dataclass(frozen=True, slots=True)

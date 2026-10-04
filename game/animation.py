@@ -24,6 +24,7 @@ from game.animation_types import (
     StudioActorLayer, StudioDamage, StudioProjectile, StudioProjectilePhase, StudioSpellDraft,
     MediaTimePoint, StudioMediaTrack,
     ActionActor, ActionFrameAnchor, BodyContext, BodyContextQualifier, BodyContextRole, RoleDefault,
+    ContentBodyQualifier, StudioCast, StudioEquipment,
 )
 from game.projection import HEIGHT_STEP_PIXELS, TILE_HEIGHT, TILE_WIDTH, inverse_rotate_position, project_world
 from game.device_art import DeviceEmission, device_frame, device_muzzle_offset
@@ -387,6 +388,51 @@ def context_duration(data: AnimationData, contact: ActorContact, body: BodyConte
     return body_duration(body_clip(data, contact, body.actor.clip), body.actor.playbackSpeed) if body.actor.enabled else 0.
 
 
+def death_body_context(data: AnimationData, contact: ActorContact) -> BodyContext:
+    """Select terminal death independently of recoverable downed/condition poses."""
+    return resolve_body_context(data, contact, "death", RoleDefault(),
+        body_context(data.death_context.bodyClip, data.death_context.bodyPlaybackSpeed))
+
+
+def adapt_cast_body(data: AnimationData, contact: ActorContact, cast: StudioCast,
+                    body: BodyContext) -> StudioCast:
+    """An explicit rig gesture replaces only the source body's presentation.
+
+    Original frame-registered accents come from BodyClip.layers. Spell delivery
+    and target effects remain in the shared recipe, with this rig's hand socket.
+    """
+    release = next(anchor.frame for anchor in body.anchors if anchor.name == "release")
+    sockets = body_clip(data, contact, body.actor.clip).source_sockets
+    if sockets is None:
+        raise ValueError(f"cast gesture requires hand sockets: {contact.rig_id}/{body.actor.clip}")
+    return cast.model_copy(update={"actionClip": body.actor.clip,
+        "bodyPlaybackSpeed": body.actor.playbackSpeed, "releaseFrame": release,
+        "sourceSockets": sockets, "equipment": StudioEquipment(kind="unchanged"),
+        "weaponGlow": None, "aura": None, "effects": (), "slash": None,
+        "recovery": cast.recovery.model_copy(update={"enabled": False})})
+
+
+def resolve_cast_recipe(data: AnimationData, contact: ActorContact,
+                        recipe: StudioSpellDraft) -> StudioSpellDraft:
+    """Resolve the same authored cast for projectile, area and actor-only use."""
+    body = resolve_body_context(data, contact, "cast", ContentBodyQualifier(contentRef=recipe.definitionRef))
+    if body is None:
+        return recipe
+    cast = adapt_cast_body(data, contact, recipe.cast, body)
+    clip_preparation = body_clip(data, contact, body.actor.clip).owns_cast_preparation
+    projectile = recipe.projectile
+    if projectile is not None:
+        preparation = next(anchor.frame for anchor in body.anchors if anchor.name == "prepare")
+        if preparation >= cast.releaseFrame:
+            raise ValueError("cast preparation must precede release")
+        projectile = projectile.model_copy(update={"sourceSockets": cast.sourceSockets,
+            "prepare": projectile.prepare.model_copy(update={"startFrame": preparation,
+                "enabled": projectile.prepare.enabled and not clip_preparation})})
+    media = tuple(track for track in recipe.media
+                  if not clip_preparation or track.attachment != "source_hand")
+    return recipe.model_copy(update={"cast": cast, "projectile": projectile, "media": media})
+
+
 def context_anchor_ms(data: AnimationData, contact: ActorContact, body: BodyContext, name: str) -> float:
     if not body.actor.enabled:
         return 0.
@@ -418,9 +464,9 @@ def sample_context_body(data: AnimationData, contact: ActorContact, body: BodyCo
     return BodySample(contact.actor_uuid, body.actor.clip, context_frame(body, metadata, age_ms), contact.facing)
 
 
-def life_body_pose(data: AnimationData, state: LifeState) -> str | None:
+def life_body_pose(data: AnimationData, contact: ActorContact, state: LifeState) -> str | None:
     if state is LifeState.DEAD:
-        return data.death_context.bodyClip
+        return death_body_context(data, contact).actor.clip
     if state is LifeState.ALIVE:
         return None
     presentation = data.life_state_context.bodyPoses.get(state.value)
@@ -428,7 +474,7 @@ def life_body_pose(data: AnimationData, state: LifeState) -> str | None:
 
 
 def actor_rest_pose(data: AnimationData, contact: ActorContact) -> str | None:
-    return life_body_pose(data, contact.life_state) or contact.rest_pose
+    return life_body_pose(data, contact, contact.life_state) or contact.rest_pose
 
 
 def compile_body_transition(data: AnimationData, contact: ActorContact,
@@ -452,7 +498,7 @@ def compile_life_body(data: AnimationData, contact: ActorContact, resulting_stat
                       remaining_condition_pose: str | None) -> BodyTransition | None:
     """A changed life-owned pose enters/exits once; an extant rest owner stays."""
     old = actor_rest_pose(data, contact)
-    new = life_body_pose(data, resulting_state) or remaining_condition_pose
+    new = life_body_pose(data, contact, resulting_state) or remaining_condition_pose
     if old == new:
         return None
     state = contact.life_state if resulting_state is LifeState.ALIVE else resulting_state
@@ -495,7 +541,7 @@ def sample_idle_body(data: AnimationData, actor: ActorContact, elapsed_ms: float
     """Sample a retained actor between actions, preserving its final death pose."""
     if not isfinite(elapsed_ms) or elapsed_ms < 0:
         raise ValueError("elapsed time must be finite and nonnegative")
-    clip = life_body_pose(data, actor.life_state) or "Idle"
+    clip = life_body_pose(data, actor, actor.life_state) or "Idle"
     metadata = body_clip(data, actor, clip)
     frame = (metadata.frames - 1 if clip != "Idle"
              else body_frame(elapsed_ms, metadata.fps, metadata.frames, loop=True))
@@ -1014,8 +1060,9 @@ def compile_damage(data: AnimationData, target: ActorContact, damage: StudioDama
         raise ValueError("disclosed death requires enabled authored death presentation")
     if terminal or lethal:
         end = start
+        death = death_body_context(data, target)
         if lethal and not terminal and actor_rest_pose(data, target) is None:
-            end += body_duration(body_clip(data, target, data.death_context.bodyClip), data.death_context.bodyPlaybackSpeed)
+            end += context_duration(data, target, death)
         return DamageTiming(start, end, start, start, start)
     metadata = body_clip(data, target, data.damage_context.bodyClip)
     _require_frame(metadata, damage.floatingNumber.frame, "vitals")
@@ -1040,6 +1087,20 @@ def sample_damage_body(data: AnimationData, target: ActorContact, elapsed_ms: fl
                        life_start_ms: float | None = None,
                        life_body: BodyTransition | None = None) -> BodySample:
     """One recipient body; callers select the latest actual hit/death interval."""
+    if death_start_ms is not None and elapsed_ms >= death_start_ms:
+        death = death_body_context(data, target)
+        if target.life_state is not LifeState.DEAD:
+            if life_body is not None and life_start_ms is not None and elapsed_ms >= life_start_ms:
+                if life_body.clip == death.actor.clip:
+                    falling = sample_body_transition(life_body, elapsed_ms - life_start_ms)
+                    if falling is not None:
+                        return falling
+            elif actor_rest_pose(data, target) is None:
+                return sample_context_body(data, target, death, elapsed_ms - death_start_ms)
+        # A fallen creature never replays an upright wind-up. Alternate terminal
+        # art settles directly to its corpse; a shared fall keeps its own clock.
+        return BodySample(target.actor_uuid, death.actor.clip,
+                          body_clip(data, target, death.actor.clip).frames - 1, target.facing)
     if life_body is not None and life_start_ms is not None:
         body = sample_body_transition(life_body, elapsed_ms - life_start_ms)
         if body is not None:
@@ -1058,11 +1119,7 @@ def sample_damage_body(data: AnimationData, target: ActorContact, elapsed_ms: fl
         # is no standing hit flinch to resume after that finite wake gesture.
         return sample_idle_body(data, target, elapsed_ms)
     clip, start, speed = "Idle", 0.0, 1.0
-    if target.life_state == LifeState.DEAD:
-        clip = data.death_context.bodyClip
-    elif death_start_ms is not None:
-        clip, start, speed = data.death_context.bodyClip, death_start_ms, data.death_context.bodyPlaybackSpeed
-    elif start_ms is not None and end_ms is not None:
+    if start_ms is not None and end_ms is not None:
         if elapsed_ms < end_ms:
             clip, start, speed = data.damage_context.bodyClip, start_ms, data.damage_context.bodyPlaybackSpeed
         else:
@@ -1198,7 +1255,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
     """Compile one cast body and its ordered sprite/dart applications."""
     if spell_id not in data.drafts:
         raise ValueError(f"unknown authored spell binding: {spell_id}")
-    recipe = data.drafts[spell_id]
+    recipe = resolve_cast_recipe(data, source.caster, data.drafts[spell_id])
     if body_rate != 1:
         cast = recipe.cast
         assert cast.bodyPlaybackSpeed is not None
@@ -1422,7 +1479,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
         damage_start = damage_end = hp_ms = flash_ms = number_ms = None
         life_body = None
         if isinstance(target, ActorContact) and target.life_state == LifeState.DEAD:
-            body_clip(data, target, data.death_context.bodyClip)
+            body_clip(data, target, death_body_context(data, target).actor.clip)
         if damage is not None and isinstance(target, ActorContact):
             previous = next((row.source.resulting_life_state for row in reversed(applications)
                              if feedback_identity(row.source.target) == target.actor_uuid

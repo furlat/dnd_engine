@@ -35,7 +35,7 @@ from dnd.types.world_placement import BoundaryStructure, WorldObjectPlacement
 from dnd.types.abilities import AbilityName
 from dnd.types.actor import TemporaryHitPointsGrant
 from dnd.types.actor_facts import ConditionFact
-from dnd.types.summoning import SummonManifestation
+from dnd.types.summoning import SummonManifestation, SummonDepartureCause
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -329,6 +329,13 @@ class ConditionChangeFact:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class CreationWitness:
+    """Observed first placement tied to its exact recorded native birth."""
+    birth_event_uuid: UUID
+    manifestation: SummonManifestation
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SpatialFact:
     kind: Literal["spatial"] = "spatial"
     change_type: SpatialChangeType
@@ -338,6 +345,8 @@ class SpatialFact:
     previous_occupancy_layer: OccupancyLayer | None = None
     occupancy_layer: OccupancyLayer | None = None
     terminal_departure: bool = False
+    terminal_cause: SummonDepartureCause | None = None
+    creation: CreationWitness | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -345,6 +354,7 @@ class FactionFact:
     kind: Literal["faction"] = "faction"
     entity_uuid: UUID
     faction_after: str | None
+    control_lost: bool = False
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

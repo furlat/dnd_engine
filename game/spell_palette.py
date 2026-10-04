@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pygame
 
-from game.animation_types import PaletteTreatment
+from game.animation_types import PaletteTreatment, PaletteSwap
 
 
 @dataclass(slots=True)
@@ -79,5 +79,19 @@ def recolor_palette(image: pygame.Surface, treatment: PaletteTreatment, *,
     index = np.minimum(len(colors) - 1, (value * len(colors)).astype(int))
     pixels = pygame.surfarray.pixels3d(result)
     pixels[:] = colors[index]
+    del pixels
+    return result
+
+
+def replace_palette(image: pygame.Surface, palette: PaletteSwap) -> pygame.Surface:
+    """Replace explicit authored source colors without modifying alpha or other colors."""
+    result = image.copy()
+    source = pygame.surfarray.array3d(image).astype(np.int16)
+    visible = pygame.surfarray.array_alpha(image) > 0
+    pixels = pygame.surfarray.pixels3d(result)
+    for original, target in zip(palette.originalColors, palette.targetColors, strict=True):
+        color = np.array((original >> 16 & 255, original >> 8 & 255, original & 255))
+        match = visible & (np.abs(source-color).max(axis=2) <= palette.tolerance*255)
+        pixels[match] = (target >> 16 & 255, target >> 8 & 255, target & 255)
     del pixels
     return result

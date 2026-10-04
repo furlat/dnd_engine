@@ -718,6 +718,7 @@ class BaseCondition(BaseObject):
         return ConditionState(
             condition_uuid=self.uuid, name=self.get_display_name(),
             category=self.condition_category, semantic_key=self.get_semantic_key(),
+            behavior_id=self.behavior_binding.behavior_id if self.behavior_binding is not None else None,
             tags=tuple(sorted(self.tags, key=lambda tag: tag.value)),
             removal_triggers=tuple(sorted(self.removal_triggers, key=lambda trigger: trigger.value)),
             agency_denial=self.agency_denial, outcome_protections=self.outcome_protections,
