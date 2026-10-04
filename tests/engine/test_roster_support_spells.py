@@ -26,7 +26,6 @@ from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.spells.transmutation import Barkskin, Fly, Longstrider, Shillelagh
 from dnd.spells.evocation import FireShield
-from dnd.spells.conjuration import ProduceFlame
 from dnd.spells.transmutation import HasteEffect, SlowedEffect
 from dnd.types.world import MovementMode
 
@@ -124,24 +123,6 @@ def test_shillelagh_exact_item_release_and_strength_choice(game):
     assert "Shillelagh" not in caster.active_conditions
     assert staff.attack_damage_die(caster.uuid) == original_die
     assert not staff.attack_is_magical(caster.uuid)
-
-
-def test_produce_flame_retains_then_consumes_light_and_hurl_action_on_miss(game):
-    caster = actor(game)
-    enemy = actor(game,"Enemy",(5,2),"foes")
-    cast(ProduceFlame,caster)
-    flame = caster.active_conditions["Produce Flame"]
-    light_uuid = flame.light_source_uuid
-    assert light_uuid is not None
-    hurl = next(action for action in caster.registered_actions if action.name == "Hurl Produce Flame")
-    caster.action_economy.reset_all_costs()
-    with fixed_dice_faces(1):
-        result = hurl.instantiate(target_entity_uuid=enemy.uuid).apply()
-    assert result is not None and not result.canceled
-    assert "Produce Flame" not in caster.active_conditions
-    assert not any(action.name == "Hurl Produce Flame" for action in caster.registered_actions)
-    assert flame.light_source_uuid is None
-    assert not EventQueue.get_events_by_type(EventType.TAKE_DAMAGE)
 
 
 @pytest.mark.parametrize("kind,resisted,retaliation",[("warm",DamageType.COLD,DamageType.FIRE),("chill",DamageType.FIRE,DamageType.COLD)])
@@ -271,7 +252,7 @@ def test_shillelagh_uses_wood_and_weapon_kind_for_named_items(game):
 
 
 @pytest.mark.parametrize('spell_type,name', [(Longstrider,'Longstrider'), (Barkskin,'Barkskin'),
-    (Fly,'Fly'), (Shillelagh,'Shillelagh'), (ProduceFlame,'Produce Flame'), (FireShield,'Fire Shield')])
+    (Fly,'Fly'), (Shillelagh,'Shillelagh'), (FireShield,'Fire Shield')])
 @pytest.mark.parametrize('event_type,phase', [(EventType.CONDITION_APPLICATION, EventPhase.DECLARATION),
     (EventType.CONDITION_APPLICATION, EventPhase.EXECUTION), (EventType.CONDITION_APPLICATION, EventPhase.EFFECT),
     (EventType.CAST_SPELL, EventPhase.EFFECT)])

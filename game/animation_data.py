@@ -237,7 +237,8 @@ def _root_body_rig(rig: RigTables, resources: Mapping[str, Path], body_anchor: P
         pose_sockets=pose_sockets,
         facing_rows=rig.FACING_ROW, slot_order=rig.SLOT_RENDER_ORDER,
         slot_categories=rig.SLOT_CATEGORIES,
-        clips={name: BodyClip(source_clip=name, frames=rig.SHEET_COLS, fps=rig.ANIM_FPS, sheets=sheets)
+        clips={name: BodyClip(source_clip=name, frames=rig.SHEET_COLS, fps=rig.ANIM_FPS,
+                             sheets=sheets, anchors=rig.CLIP_ANCHORS.get(name, ()))
                for name, sheets in clips.items()},
     )
 

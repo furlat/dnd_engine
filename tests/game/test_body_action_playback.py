@@ -76,17 +76,16 @@ def test_utility_drafts_keep_their_selected_source_release_without_projectile(da
     for identity in ("spell.invisibility", "spell.greater_invisibility", "spell.see_invisibility", "spell.true_seeing"):
         draft = data.drafts[identity]
         assert draft.projectile is None and draft.area is None
-        release_frame = 7 if identity in ("spell.see_invisibility", "spell.true_seeing") else 8
-        assert (draft.cast.actionClip, draft.cast.bodyPlaybackSpeed, draft.cast.releaseFrame) == ("Special1", 1, release_frame)
+        assert (draft.cast.actionClip, draft.cast.bodyPlaybackSpeed, draft.cast.releaseFrame) == ("Special1", 1, 11)
         assert draft.cast.effects == () and not draft.cast.recovery.enabled
 
 
-def test_actual_self_cast_releases_condition_at_frame_eight_in_all_views(histories, data, graphics):
+def test_actual_self_cast_releases_condition_at_authored_frame_in_all_views(histories, data, graphics):
     before, root = selected(histories["invisibility"], "subject", "spell.invisibility")
     group = bind_choreography(before, root, data)
     assert len(group.body_actions) == 1 and not group.nodes and not group.gaps
     cue = group.body_actions[0]
-    assert cue.effect_ms == pytest.approx(8 / 12 * 1000)
+    assert cue.effect_ms == pytest.approx(data.drafts["spell.invisibility"].cast.releaseFrame / 12 * 1000)
     assert group.complete_ms == pytest.approx(14 / 12 * 1000)
     actor_id = UUID(cue.contact.actor_uuid)
     prior = sample_choreography(group, cue.effect_ms - 1)

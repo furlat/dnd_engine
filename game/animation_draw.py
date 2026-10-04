@@ -216,6 +216,8 @@ def load_cast_rows(data: AnimationData, contact: ActorContact, clip_name: str,
             if layer.colors.source == "auto":
                 assert layer.palette is not None  # validated by the row key above
                 image = recolor_palette(image, layer.palette,
+                    noise=(palette_noise(data.resources[layer.palette.noiseSheet])
+                           if layer.palette.noiseSheet is not None else None),
                     cell_size=(rig.cell_width, rig.cell_height))
             elif layer.sourceSheet is None:
                 image = _colored(image, layer.colors.primary, data.vfx_source_hues.get(layer.category))
@@ -1049,7 +1051,8 @@ def animation_draw_commands(timeline: CastTimeline, sample: CastSample,
                             layer.image, layer.destination, layer.blend,
                             (source.root_event_uuid, position, effect.asset_id, "current", None, "authored",
                              "projectile", height, effect.phase, effect.column, effect.application_id),
-                            volume=cast_surface_volume(timeline, layer, media.area, position, height),
+                            volume=cast_surface_volume(timeline, layer, media.area, position, height,
+                                                      support_clipping=authored_phase.supportClipping),
                             world_depth_group=(source.root_event_uuid, effect.phase, effect.application_id or "")))
                     continue
                 layers = _projectile_layer_blits(timeline, effect, media, camera, coverage=projectile_coverage)

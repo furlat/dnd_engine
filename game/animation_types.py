@@ -199,6 +199,7 @@ class StudioProjectilePhase(AuthoredRecord):
     timeMap: tuple[MediaTimePoint, ...] = ()
     overlapContactMs: NonNegative = 0
     composition: Literal["billboard", "xyz_volume"] = "billboard"
+    supportClipping: Literal["physical", "raised"] = "physical"
 
 
 class TargetLocalDelivery(AuthoredRecord):
@@ -501,6 +502,7 @@ class StudioMediaTrack(ApplicationOutcome):
     poseSocket: Identifier | None = None
     whenPresenceMode: DraconicPresenceMode | None = None
     composition: Literal["billboard", "xyz_volume", "clump"] = "billboard"
+    supportClipping: Literal["physical", "raised"] = "physical"
     blendMode: Literal["normal", "screen"] = "normal"
     assetPhase: Literal["cast", "travel", "impact"] = "impact"
     clock: Literal["release", "contact"] = "release"
@@ -680,9 +682,24 @@ class StudioCancellationMedia(AuthoredRecord):
         return self
 
 
+class StudioCastPalette(AuthoredRecord):
+    """A cast variant selected from its own received application evidence."""
+    whenEnergyType: DamageType
+    conditionId: Identifier | None = None
+    spatialContentId: Identifier | None = None
+    colors: ElementColors
+
+    @model_validator(mode="after")
+    def one_owner(self) -> StudioCastPalette:
+        if (self.conditionId is None) == (self.spatialContentId is None):
+            raise ValueError("cast palette requires one condition or spatial owner")
+        return self
+
+
 class StudioSpellDraft(AuthoredRecord):
     definitionRef: ContentRef
     elementColors: ElementColors
+    castPalettes: tuple[StudioCastPalette, ...] = ()
     cast: StudioCast
     projectile: StudioProjectile | None = None
     area: StudioArea | None = None
@@ -725,11 +742,26 @@ class StudioDraftFile(AuthoredRecord):
         return self
 
 
+class MediaFrameAnchor(AuthoredRecord):
+    """A named phase-relative source frame, independent of body frame limits."""
+    name: Identifier
+    frame: NonNegative
+
+
 class AuthoredProjectilePhase(AuthoredRecord):
     start: Annotated[int, Field(ge=0)]
     frames: Annotated[int, Field(ge=1)]
     fps: Positive | None = None
     loop: bool
+    anchors: tuple[MediaFrameAnchor, ...] = ()
+
+    @model_validator(mode="after")
+    def valid_anchors(self) -> AuthoredProjectilePhase:
+        if len({row.name for row in self.anchors}) != len(self.anchors):
+            raise ValueError("media phase requires unique anchors")
+        if any(row.frame >= self.frames for row in self.anchors):
+            raise ValueError("media anchor is outside its source phase")
+        return self
 
 
 class ProjectileFrame(AuthoredRecord):
@@ -924,6 +956,11 @@ class ProjectileStorage(AuthoredRecord):
     phases: FrozenMap[ProjectileFrameStorage]
 
 
+class ActionFrameAnchor(AuthoredRecord):
+    name: Identifier
+    frame: BodyFrame
+
+
 class RigTables(AuthoredRecord):
     FACING_ROW: FacingMap[int]
     FACING_CYCLE: tuple[Facing8, ...]
@@ -938,6 +975,7 @@ class RigTables(AuthoredRecord):
     RIG_ORIGIN_Y_FROM_GROUND: float
     TILE_W: Positive
     TILE_H: Positive
+    CLIP_ANCHORS: FrozenMap[tuple[ActionFrameAnchor, ...]] = Field(default_factory=dict)
 
 
 class BodyClip(AuthoredRecord):
@@ -952,6 +990,15 @@ class BodyClip(AuthoredRecord):
     layers: tuple[RigLayer, ...] = ()
     owns_cast_preparation: bool = False
     source_sockets: SourceSockets | None = None
+    anchors: tuple[ActionFrameAnchor, ...] = ()
+
+    @model_validator(mode="after")
+    def valid_anchors(self) -> BodyClip:
+        if len({row.name for row in self.anchors}) != len(self.anchors):
+            raise ValueError("body clip requires unique anchors")
+        if any(row.frame >= self.frames for row in self.anchors):
+            raise ValueError("body clip anchor is outside its frames")
+        return self
 
 
 PoseSockets = FrozenMap[FrozenMap[FacingMap[tuple[Point | None, ...]]]]
@@ -963,11 +1010,6 @@ class ActionActor(AuthoredRecord):
     playbackSpeed: Positive
     hiddenSlots: tuple[str, ...]
     media: tuple[JsonValue, ...]
-
-
-class ActionFrameAnchor(AuthoredRecord):
-    name: Identifier
-    frame: BodyFrame
 
 
 BodyContextRole = Literal[
@@ -2048,7 +2090,9 @@ class SpatialMediaBinding(AuthoredRecord):
     loopCrossfadeMs: NonNegative = 0
     quenchVariants: tuple[ContactSweepVariant, ...] = ()
     formationFadeMs: NonNegative = 0
+    formationCommitMs: NonNegative = 0
     removalFadeMs: NonNegative = 0
+    removalCommitMs: NonNegative = 0
     removalEasing: Literal["linear", "smoothstep"] = "linear"
     referenceRadiusFeet: Positive | None = None
     surfaceHeightScale: Positive = 1
@@ -2120,7 +2164,9 @@ class ConstructionMediaBinding(AuthoredRecord):
     lengthFeet: Positive
     heightFeet: Positive
     pixelScale: Positive = 1
+    formationCommitMs: NonNegative = 0
     removalDurationMs: Positive | None = None
+    removalCommitMs: NonNegative = 0
 
     @model_validator(mode="after")
     def unique_headings(self) -> "ConstructionMediaBinding":

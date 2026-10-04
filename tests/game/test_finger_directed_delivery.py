@@ -122,6 +122,10 @@ def test_delayed_launch_is_opt_in_and_native_socket_rotates_with_world_facing(da
     assert max(distances)-min(distances)<1e-9
     assert len({tuple(np.round(p,6)) for p in points})==8
     for draft in data.drafts.values():
-        if draft.definitionRef.content_id!='spell.finger_of_death':
+        identity = draft.definitionRef.content_id
+        # Cone of Cold already holds its beam pose through contact without
+        # opting into Finger's separate delayed-launch clock.
+        if identity not in ('spell.finger_of_death', 'spell.cone_of_cold'):
             assert not draft.cast.holdUntilContact
+        if identity != 'spell.finger_of_death':
             assert draft.contact is None or draft.contact.launchDelayMs==0

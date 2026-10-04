@@ -446,8 +446,9 @@ def _layer_palette(layer: StudioActorLayer, colors: ElementColors) -> StudioActo
     """Replace automatic effect colors; preserve explicitly authored artwork."""
     if layer.colors.source == "override":
         return layer
-    return layer.model_copy(update={"palette": PaletteTreatment(
-        colors=(colors.tertiary, colors.primary, colors.secondary))})
+    palette = layer.palette or PaletteTreatment(colors=(colors.tertiary, colors.primary, colors.secondary))
+    return layer.model_copy(update={"palette": palette.model_copy(update={
+        "colors": (colors.tertiary, colors.primary, colors.secondary)})})
 
 
 def resolve_child_attack_palette(presentation: ChildAttackPresentation,
@@ -840,7 +841,8 @@ def projectile_contact(timeline: CastTimeline, effect: ProjectileSample | Geomet
         dx, dy = (point[0] - straight[0]) * factor, (point[1] - straight[1]) * factor
         offset = inverse_rotate_position((dx / TILE_WIDTH + dy / TILE_HEIGHT,
                                           dy / TILE_HEIGHT - dx / TILE_WIDTH), quadrant)
-        ground = ground[0] + offset[0], ground[1] + offset[1]
+        zero = inverse_rotate_position((0., 0.), quadrant)
+        ground = ground[0] + offset[0] - zero[0], ground[1] + offset[1] - zero[1]
     return ground, height
 
 
@@ -1206,6 +1208,33 @@ def sample_damage_number(data: AnimationData, actor_uuid: str, damage: StudioDam
     return NumberSample(actor_uuid, total, row.label, row.color, progress, alpha, application_id)
 
 
+def media_phase_anchor_ms(phase: AuthoredProjectilePhase, name: str, *, fps: float,
+                          time_map: tuple[MediaTimePoint, ...] = (),
+                          duration_ms: float | None = None, fit_duration: bool = False,
+                          occurrence: int | None = None) -> float:
+    """Materialize a source keypoint through the consumer's resolved clock.
+
+    Consumers pass their facing-specific, rate-adjusted map/FPS. A held anchor
+    has no unique frame occurrence and needs an explicit measured time instead.
+    """
+    frame = next(row.frame for row in phase.anchors if row.name == name)
+    if not time_map:
+        return frame * (duration_ms / phase.frames if fit_duration and duration_ms is not None else 1000 / fps)
+    dates = []
+    for first, last in zip(time_map, time_map[1:]):
+        if first.sourceFrame == last.sourceFrame:
+            if frame == first.sourceFrame:
+                raise ValueError(f"held media anchor requires a measured time override: {name}")
+        elif min(first.sourceFrame, last.sourceFrame) <= frame <= max(first.sourceFrame, last.sourceFrame):
+            dates.append(first.elapsedMs + (frame-first.sourceFrame)
+                / (last.sourceFrame-first.sourceFrame) * (last.elapsedMs-first.elapsedMs))
+    dates = sorted(set(dates))
+    if (not dates or occurrence is None and len(dates) != 1
+            or occurrence is not None and not 0 <= occurrence < len(dates)):
+        raise ValueError(f"unreachable or ambiguous media anchor: {name}")
+    return dates[occurrence if occurrence is not None else 0]
+
+
 def media_track_duration(data: AnimationData, track: StudioMediaTrack) -> float:
     asset = data.projectile_assets[track.assetId]
     phase = {"cast": asset.phases.cast, "travel": asset.phases.travel, "impact": asset.phases.impact}[track.assetPhase]
@@ -1375,11 +1404,12 @@ def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
                         recovery_start, complete, tuple(sorted(anchors, key=lambda anchor: anchor.at_ms)), ground)
 
 
-def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_rate: float = 1) -> CastTimeline:
+def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_rate: float = 1,
+                 recipe: StudioSpellDraft | None = None) -> CastTimeline:
     """Compile one cast body and its ordered sprite/dart applications."""
     if spell_id not in data.drafts:
         raise ValueError(f"unknown authored spell binding: {spell_id}")
-    recipe = resolve_cast_recipe(data, source.caster, data.drafts[spell_id])
+    recipe = resolve_cast_recipe(data, source.caster, recipe or data.drafts[spell_id])
     if (recipe.projectile is not None and recipe.projectile.requireAttackOutcome
             and not any(application.hit is not None for application in source.applications)):
         recipe = recipe.model_copy(update={"projectile": None})

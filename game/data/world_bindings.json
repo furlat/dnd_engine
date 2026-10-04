@@ -3752,7 +3752,9 @@
       "removalFadeMs": 630,
       "removalEasing": "smoothstep",
       "referenceRadiusFeet": 20,
-      "movementSpeedCellsPerSecond": 2
+      "movementSpeedCellsPerSecond": 2,
+      "formationCommitMs": 1000.0,
+      "removalCommitMs": 630
     },
     "spatial_effect.spell.incendiary_cloud": {
       "layers": [
@@ -3785,7 +3787,9 @@
       "scale": 0.5,
       "removalFadeMs": 630,
       "removalEasing": "smoothstep",
-      "referenceRadiusFeet": 20
+      "referenceRadiusFeet": 20,
+      "formationCommitMs": 1000.0,
+      "removalCommitMs": 630
     },
     "spatial_effect.spell.darkness": {
       "layers": [
@@ -3801,7 +3805,9 @@
       "scale": 0.5,
       "removalFadeMs": 630,
       "removalEasing": "smoothstep",
-      "referenceRadiusFeet": 15
+      "referenceRadiusFeet": 15,
+      "formationCommitMs": 1000.0,
+      "removalCommitMs": 630
     },
     "spatial_effect.spell.stinking_cloud": {
       "layers": [
@@ -3817,7 +3823,9 @@
       "scale": 0.5,
       "removalFadeMs": 630,
       "removalEasing": "smoothstep",
-      "referenceRadiusFeet": 20
+      "referenceRadiusFeet": 20,
+      "formationCommitMs": 1000.0,
+      "removalCommitMs": 630
     },
     "spatial_effect.spell.globe_of_invulnerability": {
       "layers": [
@@ -4211,7 +4219,9 @@
       "fps": 32,
       "scale": 0.5,
       "removalFadeMs": 600,
-      "removalEasing": "smoothstep"
+      "removalEasing": "smoothstep",
+      "formationCommitMs": 250.0,
+      "removalCommitMs": 600
     },
     "spatial_effect.spell.wall_of_thorns": {
       "layers": [
@@ -5544,7 +5554,9 @@
       "holdStartFrame": 0,
       "holdFrames": 64,
       "fps": 32,
-      "scale": 1.4285714285714286
+      "scale": 1.4285714285714286,
+      "formationCommitMs": 968.75,
+      "removalCommitMs": 500
     },
     "spatial_effect.spell.antimagic_field": {
       "layers": [
@@ -8563,7 +8575,9 @@
       "lengthFeet": 10,
       "heightFeet": 10,
       "pixelScale": 1,
-      "removalDurationMs": 850
+      "removalDurationMs": 850,
+      "formationCommitMs": 843.75,
+      "removalCommitMs": 850
     },
     "spell_construction.ice.section": {
       "directions": [
@@ -8854,7 +8868,9 @@
         "applicationMs": 850,
         "destructionMs": 2300,
         "removalMs": 750
-      }
+      },
+      "formationCommitMs": 843.75,
+      "removalCommitMs": 850
     },
     "spell_construction.force.section": {
       "lengthFeet": 10,
@@ -8883,7 +8899,9 @@
         "destructionMs": 2500,
         "removalMs": 850,
         "motes": "/construction/force-motes.json"
-      }
+      },
+      "formationCommitMs": 850,
+      "removalCommitMs": 850
     }
   }
 }

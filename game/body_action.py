@@ -16,9 +16,9 @@ from game.animation import (ActorContact, BodySample, body_context, context_dura
 from game.animation_types import (ActionFeedback, AnimationData, BodyActionRecipe, Facing8,
                                   StudioActorLayer, StudioCondition, StudioRecovery, StudioSpellDraft)
 from game.animation_types import BodyContext, ContentBodyQualifier, ActionFrameAnchor
-from game.combat import actor_contact, actor_is_visible
+from game.combat import actor_contact, actor_is_visible, received_cast_palette
 from game.player_facts import (ActionFact, AttackFact, ConditionChangeFact, DamageRequestFact,
-    SavingThrowFact, PlayerNode, PlayerState, SpellFact)
+    SavingThrowFact, PlayerNode, PlayerState, SpellFact, PlayerLineage)
 from game.animation_rates import action_playback_rate
 
 
@@ -96,7 +96,8 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
                      *, start_ms: float, facings: Mapping[str, Facing8],
                      contacts: Mapping[str, ActorContact],
                      reaction_source_uuid: UUID | None = None,
-                     subject: BodyActionSubject | None = None) -> BodyActionCue | None:
+                     subject: BodyActionSubject | None = None,
+                     lineage: PlayerLineage | None = None) -> BodyActionCue | None:
     fact = event.fact
     if subject is not None:
         behavior_id, source_uuid, target_uuid = subject.behavior_id, subject.source_uuid, subject.target_uuid
@@ -152,6 +153,8 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
     cast_layers = ()
     cast_body = None
     if draft is not None:
+        if lineage is not None:
+            draft = received_cast_palette(draft, lineage)
         cast_body = resolve_body_context(data, contact, "cast", ContentBodyQualifier(contentRef=draft.definitionRef))
         draft = resolve_cast_recipe(data, contact, draft)
         if ((draft.media and behavior_id not in data.relocation_actions)

@@ -1520,10 +1520,10 @@
       "asset_id": "control.hold_human.hold.back",
       "application_asset_id": "control.hold_human.apply.back",
       "application_fade_ms": [
-        1506.25,
-        1656.25
+        602.5,
+        662.5
       ],
-      "sustain_start_ms": 1506.25,
+      "sustain_start_ms": 602.5,
       "removal_asset_id": "control.hold_human.release.back",
       "removal_crossfade_ms": 150,
       "scale": 0.5
@@ -1534,10 +1534,10 @@
       "asset_id": "control.hold_human.hold.front",
       "application_asset_id": "control.hold_human.apply.front",
       "application_fade_ms": [
-        1506.25,
-        1656.25
+        602.5,
+        662.5
       ],
-      "sustain_start_ms": 1506.25,
+      "sustain_start_ms": 602.5,
       "removal_asset_id": "control.hold_human.release.front",
       "removal_crossfade_ms": 150,
       "scale": 0.5

@@ -132,7 +132,6 @@ CONDITION_BEHAVIOR_IDENTITY_SPECS: tuple[
     _srd(monster_traits.MagicResistance,ContentDefinitionKind.TRAIT,"trait.magic_resistance"),
     _srd(monster_traits.InnateFlight,ContentDefinitionKind.TRAIT,"trait.innate_flight"),
     _srd(monster_traits.LifeDrainReduction,ContentDefinitionKind.CONDITION,"condition.wight.life_drain"),
-    _srd(conjuration.ProduceFlameEffect, ContentDefinitionKind.CONDITION, "condition.spell.produce_flame"),
     _srd(transmutation.ShillelaghEffect, ContentDefinitionKind.CONDITION, "condition.spell.shillelagh"),
     _srd(transmutation.LongstriderEffect, ContentDefinitionKind.CONDITION, "condition.spell.longstrider"),
     _srd(transmutation.BarkskinEffect, ContentDefinitionKind.CONDITION, "condition.spell.barkskin"),

@@ -31,7 +31,7 @@ def test_ordered_volley_plays_behind_latest_without_losing_repeated_target(repla
     assert tuple(application.damage_total for application in first.source.applications) == (5, 5, 2)
     assert tuple(application.resulting_hp for application in first.source.applications) == (75, 75, 73)
     assert tuple(application.resulting_hp for application in second.source.applications) == (70, 73, 66)
-    assert first.release_ms == pytest.approx(2000 / 3)
+    assert first.release_ms == pytest.approx(7000 / 12)
     assert tuple(application.travel_start_ms - first.release_ms for application in first.applications) == pytest.approx((0, 80, 160))
     assert summary.completed_casts == 2
     assert summary.completed_lineages == (6 if replace_weapon else 2)

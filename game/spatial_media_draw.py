@@ -8,6 +8,7 @@ from uuid import UUID
 
 from dnd.core.presentation_geometry import CylinderPresentationGeometry, LinePresentationGeometry, SpherePresentationGeometry
 from dnd.core.events import WorldTileState
+from dnd.core.geometry import circle_positions
 from dnd.types.world import WorldEdgeChannel
 from dnd.types.world_placement import WorldObjectPlacement
 from game.animation import ActorContact, facing_for_delta, view_facing
@@ -60,10 +61,24 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
         tuple(state.tiles.values()))
     visible = frozenset(senses.visible)
     commands = []
-    effects = {**senses.spatial_effects, **{owner: record.effect for owner, record in lifetimes.items()
-        if record.removed_ms is not None and record.removed_ms <= presentation_ms
-        and presentation_ms < record.removed_ms + maintained_removal_duration(
-            data, data.spatial_media[record.effect.content_ref.content_id])}}
+    effects = dict(senses.spatial_effects)
+    pending_grants = {}
+    for owner, record in lifetimes.items():
+        if (record.applied_ms is not None and record.committed_ms is not None
+                and record.applied_ms <= presentation_ms < record.committed_ms):
+            # Retained future shape is not a future sight grant. Each formation
+            # sample borrows only currently disclosed supports for this frame.
+            positions = tuple(position for position in record.effect.positions if position in visible)
+            current = senses.spatial_effects.get(owner)
+            if positions:
+                pending_grants[owner] = visible
+                effects[owner] = record.effect.model_copy(update={"positions": positions,
+                    "visible_volume_positions": positions,
+                    "upper_volume_surfaces": current.upper_volume_surfaces if current is not None else ()})
+        elif (record.removed_ms is not None and record.removed_ms <= presentation_ms
+                < record.removed_ms + maintained_removal_duration(
+                    data, data.spatial_media[record.effect.content_ref.content_id])):
+            effects[owner] = record.effect
     moving = {sample.transition.identity: sample for sample in transitions
               if sample.transition.spatial_motion is not None
               and 0 <= sample.elapsed_ms < sample.transition.spatial_motion.duration_ms}
@@ -136,7 +151,8 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
         if any(layer.wallAssembly is not None for layer in binding.layers):
             commands.extend(assembly_media_draw_commands(effect, identity, data, binding,
                 presentation_ms, camera, start, removed, area, exclusions,
-                tuple(position for suppression in protections for position in suppression.positions),
+                tuple(position for suppression in protections for position in suppression.positions
+                      if identity not in pending_grants or position in pending_grants[identity]),
                 tuple(anchors.values()), tuple(row.recipient for row in lifetime.damage_contacts
                     if row.formation and UUID(row.recipient.actor_uuid) in anchors) if lifetime is not None else (),
                 tuple((row.recipient, row.at_ms) for row in lifetime.damage_contacts)
@@ -213,7 +229,8 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
                     # the authored cloud above/outside it remains drawable.
                     admitted = tuple(dict.fromkeys((*admitted,
                         *(position for suppression in effect.suppressions
-                          if suppression in protections for position in suppression.positions))))
+                          if suppression in protections for position in suppression.positions
+                          if identity not in pending_grants or position in pending_grants[identity]))))
                 commands.extend(field_media_commands(state, data, identity, geometry, admitted,
                     binding, layer, layer_index, asset_id, frame, camera, alpha, translation,
                     anchor_elevation_steps=effect.anchor_elevation_steps, area=area, exclusions=exclusions,
@@ -224,6 +241,14 @@ def spatial_media_draw_commands(state: PlayerState, data: AnimationData, present
         origin = geometry.origin if isinstance(geometry, LinePresentationGeometry) else geometry.center
         origin_tile = state.tiles.get(origin)
         if isinstance(geometry, SpherePresentationGeometry):
+            if identity in pending_grants:
+                x0, y0, x1, y1 = state.world.bounds
+                supports = {p for p in circle_positions(geometry.center, geometry.radius_feet // 5)
+                            if x0 <= p[0] <= x1 and y0 <= p[1] <= y1}
+                if not supports <= pending_grants[identity]:
+                    # This whole-bank billboard has no XYZ permission mask.
+                    # It cannot claim partially disclosed formation surfaces.
+                    continue
             # Current surface observation is independent of sight of the center
             # ground/occupants. Remembered geometry alone is not permission.
             if not effect.visible_volume_positions and not visible.intersection(effect.positions):

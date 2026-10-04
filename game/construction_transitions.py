@@ -1,5 +1,7 @@
 """Creation cues require a witnessed construction owner, not mere acquisition."""
 
+from typing import Mapping
+from uuid import UUID
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 from dnd.core.events import SpatialChangeType
 from game.animation_types import AnimationData
@@ -9,7 +11,8 @@ from game.world_animation import WorldTransition
 
 
 def construction_creation_transitions(before: PlayerState, states: list[tuple[float, PlayerState]],
-        lineage: PlayerLineage, data: AnimationData) -> tuple[WorldTransition, ...]:
+        lineage: PlayerLineage, data: AnimationData, *,
+        formation_starts: Mapping[UUID, float] | None = None) -> tuple[WorldTransition, ...]:
     created = {node.fact.spatial_effect_uuid for node in lineage.events if not node.canceled
         and isinstance(node.fact, SpatialEffectStateFact)
         and node.fact.operation is SpatialEffectChangeOperation.CREATED}
@@ -25,7 +28,10 @@ def construction_creation_transitions(before: PlayerState, states: list[tuple[fl
             if (identity in known or binding is None or construction_media_limitation(obj, binding) is not None
                     or identity not in sections and obj.item.construction_owner_uuid not in owners):
                 continue
-            result.append(WorldTransition(identity, 'creation', None, None, at,
+            owner = obj.item.construction_owner_uuid
+            starts = formation_starts or {}
+            start = starts.get(identity, starts.get(owner, at) if owner is not None else at)
+            result.append(WorldTransition(identity, 'creation', None, None, start,
                 duration_ms=construction_duration(data, binding, 'application')))
             known.add(identity)
     return tuple(result)

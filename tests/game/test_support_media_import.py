@@ -117,7 +117,8 @@ def test_support_recipes_retain_duration_ground_registration_and_no_damage():
         assert recipe.damage is None and recipe.projectile is None and recipe.area is None
         assert recipe.contact is not None and recipe.contact.delayMs == 0
         assert recipe.cast.weaponGlow is not None
-        assert recipe.cast.weaponGlow.sourceSheet == f"/support-spells/{name}/cast.png"
+        assert recipe.cast.weaponGlow.category == "Magic2"
+        assert recipe.cast.weaponGlow.sourceSheet == f"/spritesheets/Magic2/{recipe.cast.actionClip}.png"
         assert recipe.cast.weaponGlow.sourceSheet in data.resources
         assert len(recipe.media) == 2
         for track, depth in zip(recipe.media, ("behind_body", "front_body"), strict=True):

@@ -1,0 +1,3529 @@
+{
+  "schema": "offline-spell-casting-assignments",
+  "version": 1,
+  "date": "2026-10-04",
+  "scope": "All existing spells and derived presentations, visual authoring only. Magic2 baseline, exact owning palette and delivered noise; no Buffs.",
+  "assignments": [
+    {
+      "identity": "spell.acid_splash",
+      "level": 0,
+      "source_file": "game/data/spell_recovery/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Direct a splash of acid toward the selected victims; the delivered splash owns the affected area. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a splash of acid toward the selected victims; the delivered splash owns the affected area.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.chill_touch",
+      "level": 0,
+      "source_file": "game/data/ice_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Direct a necrotic grasp at the victim; the recipient hand art supplies its identity, so do not add a skull. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a necrotic grasp at the victim; the recipient hand art supplies its identity, so do not add a skull.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.eldritch_blast",
+      "level": 0,
+      "source_file": "game/data/spell_recovery/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Release a force bolt toward the victim; repeated beams need a short readable hand flourish. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Release a force bolt toward the victim; repeated beams need a short readable hand flourish.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.fire_bolt",
+      "level": 0,
+      "source_file": "game/data/spell_recovery/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Point and ignite a single outgoing fire projectile; its main flame trail carries the attack. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Point and ignite a single outgoing fire projectile; its main flame trail carries the attack.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.guidance",
+      "level": 0,
+      "source_file": "game/data/support_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Transfer a quiet guiding blessing by touch; no surrounding field is created. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Transfer a quiet guiding blessing by touch; no surrounding field is created.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.light",
+      "level": 0,
+      "source_file": "game/data/support_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Place light on the selected target; the hand gesture precedes the target light, rather than declaring a caster aura. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Place light on the selected target; the hand gesture precedes the target light, rather than declaring a caster aura.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.poison_spray",
+      "level": 0,
+      "source_file": "game/data/cantrips/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Expel a short directed spray of poison toward the victim; retain the existing spray as the main footprint. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Expel a short directed spray of poison toward the victim; retain the existing spray as the main footprint.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.produce_flame",
+      "level": 0,
+      "source_file": "game/data/support_conditions/nature-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Gather flame in the hand and retain it at rest; the hurl continuation releases that flame as a projectile. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Gather flame in the hand and retain it at rest; the hurl continuation releases that flame as a projectile.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.ray_of_frost",
+      "level": 0,
+      "source_file": "game/data/ice_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Release a narrow frost ray from the registered hand toward one victim. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Release a narrow frost ray from the registered hand toward one victim.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.resistance",
+      "level": 0,
+      "source_file": "game/data/support_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Transfer a defensive blessing by touch with a quiet hand accent. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Transfer a defensive blessing by touch with a quiet hand accent.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.sacred_flame",
+      "level": 0,
+      "source_file": "game/data/cantrips/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Invoke radiant fire at the recipient from above; opening upward suits the descending main effect. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke radiant fire at the recipient from above; opening upward suits the descending main effect.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.shillelagh",
+      "level": 0,
+      "source_file": "game/data/support_conditions/nature-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Infuse the held wooden weapon with nature magic; a restrained hand gesture directs the infusion into the weapon. Hand energy channels into the held wooden weapon; preserve equipment visibility and verify the infusion at the weapon.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Infuse the held wooden weapon with nature magic; a restrained hand gesture directs the infusion into the weapon.",
+      "gesture_meaning": "Hand energy channels into the held wooden weapon; preserve equipment visibility and verify the infusion at the weapon.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.shocking_grasp",
+      "level": 0,
+      "source_file": "game/data/cantrips/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Deliver electricity at melee contact through the overhead striking gesture; the received electric contact remains the hit owner. The overhead chopping stroke provides a forceful melee contact.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Deliver electricity at melee contact through the overhead striking gesture; the received electric contact remains the hit owner.",
+      "gesture_meaning": "The overhead chopping stroke provides a forceful melee contact.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.thaumaturgy",
+      "level": 0,
+      "source_file": "game/data/support_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "quiet",
+      "rationale": "Gather a minor supernatural manifestation; keep the caster hands restrained for this utility cantrip. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Gather a minor supernatural manifestation; keep the caster hands restrained for this utility cantrip.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.true_strike",
+      "level": 0,
+      "source_file": "game/data/support_spells/true-strike-draft.json",
+      "section": "spells",
+      "mode": "child_attack",
+      "clip": "actual weapon pose",
+      "release_frame": "actual weapon release",
+      "speed": "actual attack clock",
+      "layers": [
+        "Magic2"
+      ],
+      "material": "spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "rationale": "Infuse the actual equipped weapon attack; the real weapon pose and release remain authoritative. The actual equipped child attack determines motion and release.",
+      "power_budget": "quiet",
+      "manifestation": "Infuse the actual equipped weapon attack; the real weapon pose and release remain authoritative.",
+      "gesture_meaning": "The actual equipped child attack determines motion and release.",
+      "effect_meaning": [],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides."
+    },
+    {
+      "identity": "spell.bane",
+      "level": 1,
+      "source_file": "game/data/pending_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Distribute a weakening invocation over the chosen recipients; opening the arms expresses several recipients without extra area damage. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Distribute a weakening invocation over the chosen recipients; opening the arms expresses several recipients without extra area damage.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.bless",
+      "level": 1,
+      "source_file": "game/data/pending_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Distribute a blessing to chosen allies with an open-arm invocation; recipient marks own the actual targets. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Distribute a blessing to chosen allies with an open-arm invocation; recipient marks own the actual targets.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.burning_hands",
+      "level": 1,
+      "source_file": "game/data/area_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack6",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Drive a short fire cone forward; the low thrust expresses expulsion and its main cone remains unobscured. The low forward thrust expels the directed main effect.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Drive a short fire cone forward; the low thrust expresses expulsion and its main cone remains unobscured.",
+      "gesture_meaning": "The low forward thrust expels the directed main effect.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.charm_person",
+      "level": 1,
+      "source_file": "game/data/control_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Direct an influence toward one person; a small hand gesture leaves the recipient charm cue readable. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct an influence toward one person; a small hand gesture leaves the recipient charm cue readable.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.color_spray",
+      "level": 1,
+      "source_file": "game/data/control_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Direct a fan of colored light toward recipients; the main fan supplies its shape, not a floor ornament. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a fan of colored light toward recipients; the main fan supplies its shape, not a floor ornament.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.command",
+      "level": 1,
+      "source_file": "game/data/control_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.15,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Address a selected creature with a directed gesture; the command outcome is shown at that creature. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Address a selected creature with a directed gesture; the command outcome is shown at that creature.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.cure_wounds",
+      "level": 1,
+      "source_file": "game/data/support_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Transfer healing through touch; a tight contour supports the gesture without inventing a healing field. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Transfer healing through touch; a tight contour supports the gesture without inventing a healing field.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.expeditious_retreat",
+      "level": 1,
+      "source_file": "game/data/pending_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Invoke a change to the caster own mobility; opening the arms is a self activation rather than a projectile. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke a change to the caster own mobility; opening the arms is a self activation rather than a projectile.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.false_life",
+      "level": 1,
+      "source_file": "game/data/pending_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Gather temporary vitality into the caster; a tight body contour supports this self transformation. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Gather temporary vitality into the caster; a tight body contour supports this self transformation.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.fog_cloud",
+      "level": 1,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Invoke a drifting cloud at the selected area; caster motion gathers vapor while the main cloud owns obscuration. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke a drifting cloud at the selected area; caster motion gathers vapor while the main cloud owns obscuration.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.grease",
+      "level": 1,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack4",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Drive a slippery film into the selected ground area; the ground strike has no explosive spikes or extra mechanical impact. The raised hand drops into a ground strike before recovering low.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Drive a slippery film into the selected ground area; the ground strike has no explosive spikes or extra mechanical impact.",
+      "gesture_meaning": "The raised hand drops into a ground strike before recovering low.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.guiding_bolt",
+      "level": 1,
+      "source_file": "game/data/spell_recovery/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Send a radiant bolt along its registered hand path; the victim mark and main bolt convey its strength. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Send a radiant bolt along its registered hand path; the victim mark and main bolt convey its strength.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.healing_word",
+      "level": 1,
+      "source_file": "game/data/support_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.15,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Direct a brief healing word at the chosen ally; keep the short gesture suitable for repeated use. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a brief healing word at the chosen ally; keep the short gesture suitable for repeated use.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.hellish_rebuke",
+      "level": 1,
+      "source_file": "game/data/pending_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.15,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Direct retaliatory fire at the triggering attacker; no broad caster-floor burst is implied. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct retaliatory fire at the triggering attacker; no broad caster-floor burst is implied.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.ice_knife",
+      "level": 1,
+      "source_file": "game/data/ice_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Cast a single ice blade toward the victim; its later native burst belongs to the knife impact, not the casting accent. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Cast a single ice blade toward the victim; its later native burst belongs to the knife impact, not the casting accent.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.inflict_wounds",
+      "level": 1,
+      "source_file": "game/data/pending_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Deliver necrotic power by a forceful overhead contact strike; the melee gesture is deliberate rather than a distant bolt. The overhead chopping stroke provides a forceful melee contact.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Deliver necrotic power by a forceful overhead contact strike; the melee gesture is deliberate rather than a distant bolt.",
+      "gesture_meaning": "The overhead chopping stroke provides a forceful melee contact.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.jump",
+      "level": 1,
+      "source_file": "game/data/pending_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Transfer improved jumping ability by touch; recipient movement capability does not require a sky invocation. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Transfer improved jumping ability by touch; recipient movement capability does not require a sky invocation.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.longstrider",
+      "level": 1,
+      "source_file": "game/data/support_conditions/longstrider-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Transfer enhanced stride by touch; preserve the recipient speed presentation. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Transfer enhanced stride by touch; preserve the recipient speed presentation.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.mage_armor",
+      "level": 1,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Place a protective armor ward on the selected recipient by touch; the recipient ward supplies the visible shell. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Place a protective armor ward on the selected recipient by touch; the recipient ward supplies the visible shell.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.magic_missile",
+      "level": 1,
+      "source_file": "game/data/codexfx/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Point to release guided force darts in the received target allocation order; restrained accents keep repeated releases readable. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Point to release guided force darts in the received target allocation order; restrained accents keep repeated releases readable.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.sanctuary",
+      "level": 1,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Direct a protective sanctuary toward the selected ally; the ward appears at that ally. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a protective sanctuary toward the selected ally; the ward appears at that ally.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.shield",
+      "level": 1,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.15,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Raise a defensive off-hand parry; Attack5 Effect1 is the labeled small shield-like hand flare. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Raise a defensive off-hand parry; Attack5 Effect1 is the labeled small shield-like hand flare.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.shield_of_faith",
+      "level": 1,
+      "source_file": "game/data/support_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Direct a protective blessing to the selected ally; recipient shield artwork owns its enclosure. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a protective blessing to the selected ally; recipient shield artwork owns its enclosure.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.sleep",
+      "level": 1,
+      "source_file": "game/data/spell_recovery/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Send drowsiness toward the selected area; the soft cloud and native falling victims carry the result. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Send drowsiness toward the selected area; the soft cloud and native falling victims carry the result.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.thunderwave",
+      "level": 1,
+      "source_file": "game/data/area_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Open outward to release a caster-centered thunder pulse; the main wave communicates its real radius. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Open outward to release a caster-centered thunder pulse; the main wave communicates its real radius.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.aid",
+      "level": 2,
+      "source_file": "game/data/healing_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Open the arms to share vitality among the chosen allies; no extra caster-ground impact is added. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Open the arms to share vitality among the chosen allies; no extra caster-ground impact is added.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.barkskin",
+      "level": 2,
+      "source_file": "game/data/support_conditions/nature-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Touch the recipient to harden their skin as bark; the recipient bark material owns the transformation. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch the recipient to harden their skin as bark; the recipient bark material owns the transformation.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.blindness_deafness",
+      "level": 2,
+      "source_file": "game/data/control_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Direct a sensory affliction to the chosen victim; each derived mode retains its distinct condition and palette. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a sensory affliction to the chosen victim; each derived mode retains its distinct condition and palette.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.blur",
+      "level": 2,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Invoke distortion around the caster body; a tight contour supports the self illusion without a second large silhouette. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke distortion around the caster body; a tight contour supports the self illusion without a second large silhouette.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.continual_flame",
+      "level": 2,
+      "source_file": "game/data/fire_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Kindle continuing flame on a touched target; a directed hand gesture leaves the target fire as the main result. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Kindle continuing flame on a touched target; a directed hand gesture leaves the target fire as the main result.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.darkness",
+      "level": 2,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Gather an obscuring dark field at the chosen area; main cloud formation determines visible obscuration. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Gather an obscuring dark field at the chosen area; main cloud formation determines visible obscuration.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.darkvision",
+      "level": 2,
+      "source_file": "game/data/support_conditions/sensory-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Transfer improved sight by touch; no additional cloud, ray or light source is implied. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Transfer improved sight by touch; no additional cloud, ray or light source is implied.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.enhance_ability",
+      "level": 2,
+      "source_file": "game/data/support_conditions/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Transfer the selected ability enhancement by touch; its six variants share the transfer gesture, not an invented summon. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Transfer the selected ability enhancement by touch; its six variants share the transfer gesture, not an invented summon.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.enlarge_reduce",
+      "level": 2,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Direct a size transformation toward the chosen recipient; the recipient scale change is the principal result. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a size transformation toward the chosen recipient; the recipient scale change is the principal result.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.gust_of_wind",
+      "level": 2,
+      "source_file": "game/data/area_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack6",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Thrust a stream of wind forward; the registered wind corridor supplies its reach and direction. The low forward thrust expels the directed main effect.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Thrust a stream of wind forward; the registered wind corridor supplies its reach and direction.",
+      "gesture_meaning": "The low forward thrust expels the directed main effect.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.hold_person",
+      "level": 2,
+      "source_file": "game/data/control_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Direct restraint toward a person; the connected chains at the victim express the actual hold. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct restraint toward a person; the connected chains at the victim express the actual hold.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.invisibility",
+      "level": 2,
+      "source_file": "game/data/neuroclient/spell-studio-drafts.materialized.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Transfer invisibility by touch; the recipient disappearance is distinct from a caster transformation. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Transfer invisibility by touch; the recipient disappearance is distinct from a caster transformation.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.lesser_restoration",
+      "level": 2,
+      "source_file": "game/data/healing_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Touch the recipient to remove an eligible affliction; keep the cleansing result at the recipient. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch the recipient to remove an eligible affliction; keep the cleansing result at the recipient.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.mirror_image",
+      "level": 2,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Gather duplicating illusions around the caster; the main image art supplies the copies, not orbiting caster accents. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Gather duplicating illusions around the caster; the main image art supplies the copies, not orbiting caster accents.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.misty_step",
+      "level": 2,
+      "source_file": "game/data/pending_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Gather the caster into a short teleport; its departure/arrival art carries relocation. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Gather the caster into a short teleport; its departure/arrival art carries relocation.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.prayer_of_healing",
+      "level": 2,
+      "source_file": "game/data/support_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Open the arms to distribute healing among allies; the prayer is broader than a single touch but not a damaging ground burst. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Open the arms to distribute healing among allies; the prayer is broader than a single touch but not a damaging ground burst.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.protection_from_poison",
+      "level": 2,
+      "source_file": "game/data/support_conditions/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Touch a recipient to cleanse/protect against poison; the condition art stays recipient-owned. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch a recipient to cleanse/protect against poison; the condition art stays recipient-owned.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.scorching_ray",
+      "level": 2,
+      "source_file": "game/data/fire_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Point through successive fiery ray releases; one hand flare avoids clutter during the rapid multi-hit sequence. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Point through successive fiery ray releases; one hand flare avoids clutter during the rapid multi-hit sequence.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.see_invisibility",
+      "level": 2,
+      "source_file": "game/data/support_conditions/sensory-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Invoke enhanced perception in the caster; keep the small self activation separate from newly disclosed contacts. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke enhanced perception in the caster; keep the small self activation separate from newly disclosed contacts.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.shatter",
+      "level": 2,
+      "source_file": "game/data/pending_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Direct a resonant burst toward the selected area; the distant impact owns the destructive footprint. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a resonant burst toward the selected area; the distant impact owns the destructive footprint.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.silence",
+      "level": 2,
+      "source_file": "game/data/control_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Gather a quiet zone at the selected area; the main sphere forms before its visible sensory transition. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Gather a quiet zone at the selected area; the main sphere forms before its visible sensory transition.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.spike_growth",
+      "level": 2,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack4",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect2"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Strike the ground to raise thorny growth; upward accent spikes express growth while the distant native field owns affected cells. The raised hand drops into a ground strike before recovering low.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Strike the ground to raise thorny growth; upward accent spikes express growth while the distant native field owns affected cells.",
+      "gesture_meaning": "The raised hand drops into a ground strike before recovering low.",
+      "effect_meaning": [
+        "successive upward energy pillars"
+      ],
+      "competition": "Tall caster-local preparation spikes must not read as extra terrain or hide nearby thorn-field growth; inspect the combined ground silhouettes.",
+      "progression": "Deliberate broad growth signature despite level 2: one spike accent, with no stacked body aura."
+    },
+    {
+      "identity": "spell.web",
+      "level": 2,
+      "source_file": "game/data/spell_recovery/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "focused",
+      "rationale": "Direct sticky strands toward the selected area; the main web owns actual restraint and ground coverage. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct sticky strands toward the selected area; the main web owns actual restraint and ground coverage.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.beacon_of_hope",
+      "level": 3,
+      "source_file": "game/data/divine_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Open the arms to invoke hope for chosen allies; body-local energy avoids suggesting an extra restraining cage. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Open the arms to invoke hope for chosen allies; body-local energy avoids suggesting an extra restraining cage.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.bestow_curse",
+      "level": 3,
+      "source_file": "game/data/curse_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Reach toward a touched victim to lay the chosen curse; the recipient cage/marks own its four derived outcomes. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Reach toward a touched victim to lay the chosen curse; the recipient cage/marks own its four derived outcomes.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.call_lightning",
+      "level": 3,
+      "source_file": "game/data/lightning_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Invoke lightning from above with raised/opening arms; repeated bolt calls retain their established restrained gesture. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke lightning from above with raised/opening arms; repeated bolt calls retain their established restrained gesture.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.conjure_animals",
+      "level": 3,
+      "source_file": "game/data/summoning_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Invoke animal manifestations at the selected placements; finite summon art owns each creature arrival. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke animal manifestations at the selected placements; finite summon art owns each creature arrival.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.conjure_fiend",
+      "level": 3,
+      "source_file": "game/data/summoning_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Invoke a fiend manifestation at its placement; no decorative orbiting bodies imply additional summoned creatures. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke a fiend manifestation at its placement; no decorative orbiting bodies imply additional summoned creatures.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.daylight",
+      "level": 3,
+      "source_file": "game/data/divine_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Gather and release a daylight source into the selected area; the main light appearance owns illumination. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Gather and release a daylight source into the selected area; the main light appearance owns illumination.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.fear",
+      "level": 3,
+      "source_file": "game/data/control_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Direct terror toward the affected creatures; the existing Frightened visual is the sole persistent fear owner. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct terror toward the affected creatures; the existing Frightened visual is the sole persistent fear owner.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.fireball",
+      "level": 3,
+      "source_file": "game/data/spell_recovery/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Point and launch fire toward the selected ground contact; the explosion happens at the delivered impact, not the caster feet. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Point and launch fire toward the selected ground contact; the explosion happens at the delivered impact, not the caster feet.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.fly",
+      "level": 3,
+      "source_file": "game/data/support_conditions/fly-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Touch a recipient to grant flight speed; the wing/flight presentation remains on the recipient. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch a recipient to grant flight speed; the wing/flight presentation remains on the recipient.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.haste",
+      "level": 3,
+      "source_file": "game/data/pending_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Direct acceleration to the selected recipient; preserve their actual timed movement/condition result. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct acceleration to the selected recipient; preserve their actual timed movement/condition result.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.hypnotic_pattern",
+      "level": 3,
+      "source_file": "game/data/control_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Direct a hypnotic pattern into its area; the maintained rotating ground spiral remains the principal hypnosis art. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a hypnotic pattern into its area; the maintained rotating ground spiral remains the principal hypnosis art.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.lightning_bolt",
+      "level": 3,
+      "source_file": "game/data/electric_media/electric-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Point along a straight lightning corridor using its proven hand registration; the emitted source freezes at release. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Point along a straight lightning corridor using its proven hand registration; the emitted source freezes at release.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.mass_healing_word",
+      "level": 3,
+      "source_file": "game/data/divine_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.15,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Open the arms to distribute a healing word among allies; its frequent verbal activation uses a tight contour. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Open the arms to distribute a healing word among allies; its frequent verbal activation uses a tight contour.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.protection_from_energy",
+      "level": 3,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Touch a recipient to grant the chosen energy protection; all five energy variants retain their own palette. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch a recipient to grant the chosen energy protection; all five energy variants retain their own palette.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.remove_curse",
+      "level": 3,
+      "source_file": "game/data/support_conditions/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Touch the recipient to dissolve a curse; this is cleansing rather than a new caster-centered invocation field. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch the recipient to dissolve a curse; this is cleansing rather than a new caster-centered invocation field.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.sleet_storm",
+      "level": 3,
+      "source_file": "game/data/weather_solar_media/weather-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Invoke falling sleet across the selected area; the skyward/opening gesture suits the descending storm. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke falling sleet across the selected area; the skyward/opening gesture suits the descending storm.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.slow",
+      "level": 3,
+      "source_file": "game/data/control_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Direct a slowing affliction toward selected victims; the target condition, not caster spikes, communicates the effect. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a slowing affliction toward selected victims; the target condition, not caster spikes, communicates the effect.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.spirit_guardians",
+      "level": 3,
+      "source_file": "game/data/holy_media/holy-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Invoke orbiting guardian spirits around the caster; the main orbit art supplies the spirits and energy variant. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke orbiting guardian spirits around the caster; the main orbit art supplies the spirits and energy variant.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.stinking_cloud",
+      "level": 3,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Gather a noxious cloud at the selected area; the cloud owns its footprint and obscuration. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Gather a noxious cloud at the selected area; the cloud owns its footprint and obscuration.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.wind_wall",
+      "level": 3,
+      "source_file": "game/data/control_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack4",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Strike the ground to raise a wind barrier; the expanding particle ring accompanies the strike without defining wall coverage. The raised hand drops into a ground strike before recovering low.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Strike the ground to raise a wind barrier; the expanding particle ring accompanies the strike without defining wall coverage.",
+      "gesture_meaning": "The raised hand drops into a ground strike before recovering low.",
+      "effect_meaning": [
+        "expanding foot ring and upward particles"
+      ],
+      "competition": "The large caster-local floor ring can resemble a second affected area or obscure a nearby forming wall. Inspect both together; retain only if their origins stay clear.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.banishment",
+      "level": 4,
+      "source_file": "game/data/transport_media/transport-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Direct an expulsion at the chosen victim; recipient departure remains the principal manifestation. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct an expulsion at the chosen victim; recipient departure remains the principal manifestation.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.blight",
+      "level": 4,
+      "source_file": "game/data/necrotic_media/damage-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect3"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Point necrotic destruction at the victim; the large skull is this spell unique casting signature. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Point necrotic destruction at the victim; the large skull is this spell unique casting signature.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "large directional skull"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.death_ward",
+      "level": 4,
+      "source_file": "game/data/support_conditions/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Touch the recipient to place a protective death ward; the selected ally receives the continuing protection. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch the recipient to place a protective death ward; the selected ally receives the continuing protection.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.dimension_door",
+      "level": 4,
+      "source_file": "game/data/transport_media/transport-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Invoke paired passage openings; ingress joins immediate emergence through the actual relocation owner. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke paired passage openings; ingress joins immediate emergence through the actual relocation owner.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.fire_shield",
+      "level": 4,
+      "source_file": "game/data/support_conditions/nature-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Invoke a fire/cold protection around the caster; the cast palette follows the actual warm/chill shield material. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke a fire/cold protection around the caster; the cast palette follows the actual warm/chill shield material.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.freedom_of_movement",
+      "level": 4,
+      "source_file": "game/data/support_conditions/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Touch a recipient to grant freedom from movement restrictions; no new movement path is invented by the accent. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch a recipient to grant freedom from movement restrictions; no new movement path is invented by the accent.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.greater_invisibility",
+      "level": 4,
+      "source_file": "game/data/neuroclient/spell-studio-drafts.materialized.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Touch a recipient to grant sustained invisibility; the recipient material disappearance owns the result. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch a recipient to grant sustained invisibility; the recipient material disappearance owns the result.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.guardian_of_faith",
+      "level": 4,
+      "source_file": "game/data/holy_media/holy-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Invoke a stationary guardian at its selected placement; the ground clump is a summon location, not an earth impact. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke a stationary guardian at its selected placement; the ground clump is a summon location, not an earth impact.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.ice_storm",
+      "level": 4,
+      "source_file": "game/data/weather_solar_media/weather-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Invoke falling ice above the selected field; the skyward gesture precedes descending main storm art. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke falling ice above the selected field; the skyward gesture precedes descending main storm art.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.stoneskin",
+      "level": 4,
+      "source_file": "game/data/support_conditions/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Touch the recipient to harden their body as stone; do not confuse this skin transfer with raising a physical wall. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch the recipient to harden their body as stone; do not confuse this skin transfer with raising a physical wall.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.wall_of_fire",
+      "level": 4,
+      "source_file": "game/data/wall_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack4",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Strike the ground to ignite rising flame sections; a ground-ring ignition pulse is caster-local, not an extra fire field. The raised hand drops into a ground strike before recovering low.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Strike the ground to ignite rising flame sections; a ground-ring ignition pulse is caster-local, not an extra fire field.",
+      "gesture_meaning": "The raised hand drops into a ground strike before recovering low.",
+      "effect_meaning": [
+        "expanding foot ring and upward particles"
+      ],
+      "competition": "The large caster-local floor ring can resemble a second affected area or obscure a nearby forming wall. Inspect both together; retain only if their origins stay clear.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.cloudkill",
+      "level": 5,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Invoke a continuing poisonous cloud in the area; its moving cloud remains the main threat and visibility owner. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke a continuing poisonous cloud in the area; its moving cloud remains the main threat and visibility owner.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.cone_of_cold",
+      "level": 5,
+      "source_file": "game/data/weather_solar_media/cone-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack6",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Thrust a broad cold breath forward; the original cone direction/material supplies the exact emitted shape. The low forward thrust expels the directed main effect.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Thrust a broad cold breath forward; the original cone direction/material supplies the exact emitted shape.",
+      "gesture_meaning": "The low forward thrust expels the directed main effect.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.flame_strike",
+      "level": 5,
+      "source_file": "game/data/fire_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Call descending fire and radiance from above; opening upward matches the main vertical strike. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Call descending fire and radiance from above; opening upward matches the main vertical strike.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.greater_restoration",
+      "level": 5,
+      "source_file": "game/data/healing_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Touch the recipient to perform stronger cleansing; retain a compact gesture so the recipient cleansing art remains clear. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch the recipient to perform stronger cleansing; retain a compact gesture so the recipient cleansing art remains clear.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.hold_monster",
+      "level": 5,
+      "source_file": "game/data/control_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Direct restraint at a creature; the chain connection expresses the actual hold. Existing human-chain scaling and pending Ogre registration require distinct validation. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct restraint at a creature; the chain connection expresses the actual hold. Existing human-chain scaling and pending Ogre registration require distinct validation.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.insect_plague",
+      "level": 5,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Invoke a swarm into the selected area; avoid orbiting caster bodies that could be mistaken for extra summons. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke a swarm into the selected area; avoid orbiting caster bodies that could be mistaken for extra summons.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.mass_cure_wounds",
+      "level": 5,
+      "source_file": "game/data/healing_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Open the arms to distribute healing over the selected allies; the recipient healing media owns the reach. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Open the arms to distribute healing over the selected allies; the recipient healing media owns the reach.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.telekinesis",
+      "level": 5,
+      "source_file": "game/data/utility_media/telekinesis-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Direct force toward the selected victim and destination; repeated movement actions need a restrained registered pointing gesture. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct force toward the selected victim and destination; repeated movement actions need a restrained registered pointing gesture.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.wall_of_force",
+      "level": 5,
+      "source_file": "game/data/wall_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack4",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Strike the ground to establish force panels; a tight contour leaves transparent membrane geometry legible. The raised hand drops into a ground strike before recovering low.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Strike the ground to establish force panels; a tight contour leaves transparent membrane geometry legible.",
+      "gesture_meaning": "The raised hand drops into a ground strike before recovering low.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.wall_of_stone",
+      "level": 5,
+      "source_file": "game/data/control_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack4",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect2"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "empowered",
+      "rationale": "Strike the ground to raise stone sections; upward accent pillars reinforce rising material without adding wall segments. The raised hand drops into a ground strike before recovering low.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Strike the ground to raise stone sections; upward accent pillars reinforce rising material without adding wall segments.",
+      "gesture_meaning": "The raised hand drops into a ground strike before recovering low.",
+      "effect_meaning": [
+        "successive upward energy pillars"
+      ],
+      "competition": "Inspect caster pillars/ground burst against the actual wall bases, section boundaries and emergence. The main wall must remain the readable structure.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.chain_lightning",
+      "level": 6,
+      "source_file": "game/data/electric_media/electric-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Point to the first lightning victim using the proven registration; the main branching arcs express subsequent victims. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Point to the first lightning victim using the proven registration; the main branching arcs express subsequent victims.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.circle_of_death",
+      "level": 6,
+      "source_file": "game/data/necrotic_media/damage-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect3"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Open to invoke a spreading necrotic wave; the rising particle column is distinct from Blight skull art. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Open to invoke a spreading necrotic wave; the rising particle column is distinct from Blight skull art.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "particle ring followed by a rising vertical column"
+      ],
+      "competition": "The early particle orbit is wide before the narrower invocation column. Inspect alongside the main area to avoid competing silhouettes.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.conjure_fey",
+      "level": 6,
+      "source_file": "game/data/summoning_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Invoke a spirit manifestation at the selected placement; the main summon art and spirit body material identify the creature. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke a spirit manifestation at the selected placement; the main summon art and spirit body material identify the creature.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.disintegrate",
+      "level": 6,
+      "source_file": "game/data/necrotic_media/disintegrate-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Point a narrow destructive ray at the selected victim; its main ray and dissolution carry the high power. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Point a narrow destructive ray at the selected victim; its main ray and dissolution carry the high power.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.eyebite",
+      "level": 6,
+      "source_file": "game/data/control_media/eyebite-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Direct the selected gaze affliction toward a victim; repeated gaze applications need compact casting rather than large floor impacts. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct the selected gaze affliction toward a victim; repeated gaze applications need compact casting rather than large floor impacts.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.globe_of_invulnerability",
+      "level": 6,
+      "source_file": "game/data/globe_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Gather a protective globe around the caster; body-local energy lets the transparent dome remain readable. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Gather a protective globe around the caster; body-local energy lets the transparent dome remain readable.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.harm",
+      "level": 6,
+      "source_file": "game/data/necrotic_media/damage-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Point necrotic harm at a selected victim; its recipient damage material supplies severity without reusing Blight skull. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Point necrotic harm at a selected victim; its recipient damage material supplies severity without reusing Blight skull.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.heal",
+      "level": 6,
+      "source_file": "game/data/healing_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Direct a major healing transfer at the selected ally; the recipient healing burst supplies strength. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a major healing transfer at the selected ally; the recipient healing burst supplies strength.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.heroes_feast",
+      "level": 6,
+      "source_file": "game/data/holy_media/holy-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Invoke a magical feast at its placement; the table emergence supplies the object, without a destructive ground slam. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke a magical feast at its placement; the table emergence supplies the object, without a destructive ground slam.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.sunbeam",
+      "level": 6,
+      "source_file": "game/data/weather_solar_media/weather-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect1"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Point repeated radiant beams along the proven hand path; keep the emitter stationary after release and repeated casts restrained. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Point repeated radiant beams along the proven hand path; keep the emitter stationary after release and repeated casts restrained.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "small off-hand directional flare/parry"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "Restrained frequent/repeated activation; main media owns power."
+    },
+    {
+      "identity": "spell.true_seeing",
+      "level": 6,
+      "source_file": "game/data/support_conditions/sensory-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Touch the recipient to enhance perception; newly visible entities stay governed by actual received sensory state. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch the recipient to enhance perception; newly visible entities stay governed by actual received sensory state.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.wall_of_ice",
+      "level": 6,
+      "source_file": "game/data/control_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack4",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect3"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Strike the ground to form ice sections; descending energy disperses from the feet before the registered ice rises. The raised hand drops into a ground strike before recovering low.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Strike the ground to form ice sections; descending energy disperses from the feet before the registered ice rises.",
+      "gesture_meaning": "The raised hand drops into a ground strike before recovering low.",
+      "effect_meaning": [
+        "descending energy then a foot-centered radial burst"
+      ],
+      "competition": "Inspect caster pillars/ground burst against the actual wall bases, section boundaries and emergence. The main wall must remain the readable structure.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.wall_of_thorns",
+      "level": 6,
+      "source_file": "game/data/control_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack4",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect2"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Strike the ground to grow thorn sections; upward accent spikes support plant growth without implying extra affected cells. The raised hand drops into a ground strike before recovering low.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Strike the ground to grow thorn sections; upward accent spikes support plant growth without implying extra affected cells.",
+      "gesture_meaning": "The raised hand drops into a ground strike before recovering low.",
+      "effect_meaning": [
+        "successive upward energy pillars"
+      ],
+      "competition": "Inspect caster pillars/ground burst against the actual wall bases, section boundaries and emergence. The main wall must remain the readable structure.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.divine_word",
+      "level": 7,
+      "source_file": "game/data/divine_media/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Open the arms to pronounce a broad divine invocation; actual recipient results determine who is affected. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Open the arms to pronounce a broad divine invocation; actual recipient results determine who is affected.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.finger_of_death",
+      "level": 7,
+      "source_file": "game/data/finger_media/finger-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Point a lethal necrotic ray at the victim; the main ray/recipient outcome carries death, without a second skull motif. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Point a lethal necrotic ray at the victim; the main ray/recipient outcome carries death, without a second skull motif.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.regenerate",
+      "level": 7,
+      "source_file": "game/data/support_conditions/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Touch the recipient to transfer regeneration; continuing healing belongs to their condition rather than an invented floor field. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Touch the recipient to transfer regeneration; continuing healing belongs to their condition rather than an invented floor field.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.antimagic_field",
+      "level": 8,
+      "source_file": "game/data/utility_media/antimagic-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect3"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Open to invoke a suppressing field around the caster; the rising column is a casting flourish, not a physical cage. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Open to invoke a suppressing field around the caster; the rising column is a casting flourish, not a physical cage.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "particle ring followed by a rising vertical column"
+      ],
+      "competition": "The early particle orbit is wide before the narrower invocation column. Inspect alongside the main area to avoid competing silhouettes. The column must read as invocation, not restraints on the caster.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.incendiary_cloud",
+      "level": 8,
+      "source_file": "game/data/persistent_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Invoke a burning cloud in the selected area; the main cloud owns its fire and continuing footprint. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Invoke a burning cloud in the selected area; the main cloud owns its fire and continuing footprint.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.power_word_stun",
+      "level": 8,
+      "source_file": "game/data/necrotic_media/power-words-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Direct a stunning word at one victim; a restrained gesture preserves readability of the immediate target result. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a stunning word at one victim; a restrained gesture preserves readability of the immediate target result.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.sunburst",
+      "level": 8,
+      "source_file": "game/data/weather_solar_media/weather-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect4"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Open to invoke a radiant dome at the selected area; body-local accents keep the main dome silhouette unobscured. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Open to invoke a radiant dome at the selected area; body-local accents keep the main dome silhouette unobscured.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "broad pose-matched contour/afterimage"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.mass_heal",
+      "level": 9,
+      "source_file": "game/data/healing_spells/spell-studio-drafts.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Special1",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect3"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Open the arms to distribute a major healing invocation; a rising energy column expresses the cast without extra affected cells. The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Open the arms to distribute a major healing invocation; a rising energy column expresses the cast without extra affected cells.",
+      "gesture_meaning": "The hands gather through a knee dip, then the arms rise and open to invoke the manifestation.",
+      "effect_meaning": [
+        "particle ring followed by a rising vertical column"
+      ],
+      "competition": "The early particle orbit is wide before the narrower invocation column. Inspect alongside the main area to avoid competing silhouettes.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    },
+    {
+      "identity": "spell.power_word_kill",
+      "level": 9,
+      "source_file": "game/data/necrotic_media/power-words-draft.json",
+      "section": "spells",
+      "mode": "ordinary",
+      "clip": "Attack5",
+      "speed": 1.0,
+      "layers": [
+        "Magic2",
+        "Effect5"
+      ],
+      "material": "automatic spell palette + existing noise",
+      "noise_sheet": "/spell-palettes/source-hand-noise.png",
+      "gamma": 0.65,
+      "power_budget": "major",
+      "rationale": "Direct a lethal word at one victim; native instant death and existing kill art govern the result, not a fabricated damage packet. The measured forward hand extension addresses the selected target directly.",
+      "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
+      "manifestation": "Direct a lethal word at one victim; native instant death and existing kill art govern the result, not a fabricated damage packet.",
+      "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
+      "effect_meaning": [
+        "tight pose-matched contour"
+      ],
+      "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
+      "progression": "One deliberate accent; the spell main material and result communicate strength, with no stacked signatures."
+    }
+  ],
+  "derived": [
+    {
+      "identity": "spell.ice_knife.burst",
+      "owner": "spell.ice_knife",
+      "cast_enabled": false,
+      "source_candidates": [
+        [
+          "game/data/ice_spells/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "disabled cast stays disabled; shown in owner sequence"
+    },
+    {
+      "identity": "control.blinded",
+      "owner": "spell.blindness_deafness",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/control_spells/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "control.deafened",
+      "owner": "spell.blindness_deafness",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/control_spells/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "support.protection_from_energy.acid",
+      "owner": "spell.protection_from_energy",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/persistent_spells/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "support.protection_from_energy.cold",
+      "owner": "spell.protection_from_energy",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/persistent_spells/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "support.protection_from_energy.fire",
+      "owner": "spell.protection_from_energy",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/persistent_spells/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "support.protection_from_energy.lightning",
+      "owner": "spell.protection_from_energy",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/persistent_spells/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "support.protection_from_energy.thunder",
+      "owner": "spell.protection_from_energy",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/persistent_spells/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "support.enhance_ability.strength",
+      "owner": "spell.enhance_ability",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/support_conditions/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "support.enhance_ability.constitution",
+      "owner": "spell.enhance_ability",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/support_conditions/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "support.enhance_ability.dexterity",
+      "owner": "spell.enhance_ability",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/support_conditions/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "support.enhance_ability.intelligence",
+      "owner": "spell.enhance_ability",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/support_conditions/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "support.enhance_ability.wisdom",
+      "owner": "spell.enhance_ability",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/support_conditions/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "support.enhance_ability.charisma",
+      "owner": "spell.enhance_ability",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/support_conditions/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "control.bestow_curse.option_1",
+      "owner": "spell.bestow_curse",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/curse_media/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "control.bestow_curse.option_2",
+      "owner": "spell.bestow_curse",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/curse_media/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "control.bestow_curse.option_3",
+      "owner": "spell.bestow_curse",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/curse_media/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "control.bestow_curse.option_4",
+      "owner": "spell.bestow_curse",
+      "cast_enabled": true,
+      "source_candidates": [
+        [
+          "game/data/curse_media/spell-studio-drafts.json",
+          "effectDrafts"
+        ]
+      ],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "reaction.spell.hellish_rebuke",
+      "owner": "spell.hellish_rebuke",
+      "cast_enabled": true,
+      "source_candidates": [],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "action.spell.produce_flame.hurl",
+      "owner": "spell.produce_flame",
+      "cast_enabled": true,
+      "source_candidates": [],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "action.spell.eyebite.strike",
+      "owner": "spell.eyebite",
+      "cast_enabled": true,
+      "source_candidates": [],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "action.spell.call_lightning.strike",
+      "owner": "spell.call_lightning",
+      "cast_enabled": true,
+      "source_candidates": [],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "action.spell.telekinesis.move",
+      "owner": "spell.telekinesis",
+      "cast_enabled": true,
+      "source_candidates": [],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    },
+    {
+      "identity": "action.spell.sunbeam.strike",
+      "owner": "spell.sunbeam",
+      "cast_enabled": true,
+      "source_candidates": [],
+      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
+    }
+  ],
+  "notes": [
+    "Visual level budgets add no gameplay power. Major-word/repeat casts may use tighter accents to keep main Godot effects readable.",
+    "Attack3 remains a real bow gesture through True Strike child attacks. No imaginary bow or extra spectral-arrow art is invented.",
+    "Release/preparation/sockets are selected together. Fixed rig gesture overrides remain independent."
+  ]
+}

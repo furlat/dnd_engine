@@ -12,6 +12,34 @@ validator unchanged. This revision does not change recorded gameplay events.
 This is a data/execution contract for the current Python client and a future TS
 adapter. It is not another event protocol or a requirement to port the client now.
 
+## Casting motion and media keypoints
+
+`BodyClip.anchors` names measured source frames using `ActionFrameAnchor`.
+Root modular defaults come from `RigTables.CLIP_ANCHORS` in the existing rig
+document; fixed-rig body contexts remain authoritative. The offline cast author
+materializes preparation/release into ordinary recipes. Its selections can
+override those defaults only with an explicit reason, and can preserve exact
+layer materials through typed `layer_overrides`. Reapplying a settled selection
+must leave the recipes unchanged.
+
+`AuthoredProjectilePhase.anchors` uses `MediaFrameAnchor`, whose range is the
+media phase rather than the body's 15 frames. Materialization must consume the
+actual facing/rate-adjusted time map or FPS/duration-fit clock. Repeated crossings
+require a selected occurrence; a held anchor requires a measured time override.
+These are offline numeric keypoints, not new native event types.
+
+Maintained media lifetimes retain witnessed `applied_ms` separately from actual
+`committed_ms` after causal joins. Pending artwork uses current cell/surface
+permission and never places future objects/obscuration in the sampled player
+state. Unsupported partially disclosed whole-bank billboards are withheld.
+Spatial and construction bindings also expose `removalCommitMs`: the minimum
+offset from witnessed removal artwork to displayed field/object clearance.
+Whole sensory/world updates and their related observations join all contributing
+source dates. The retained `removed_ms` remains the art start so delayed clearance
+does not restart the fade. These dates never delay authoritative engine state.
+The current repair still needs enabled asset milestones and pixel acceptance;
+default-zero formation offsets do not certify this timing path.
+
 ## Interrupted actions and linked reactions
 
 `interruptions.json` selects authored prefixes by an explicit native outcome,

@@ -22,11 +22,16 @@ def register_construction_lifetimes(retained: Mapping[UUID, ConstructionMediaLif
     for visit in walk_bound_timelines(choreography, motion):
         timeline = visit.timeline
         states = timeline.states
-        for state in (timeline.before, *(state for _, state in states)):
+        known = set(timeline.before.objects)
+        for at, state in ((0., timeline.before), *states):
             for identity, obj in state.objects.items():
                 if obj.item.item_id in data.construction_media and obj.item.construction_geometry is not None:
                     old = result.get(identity)
                     result[identity] = replace(old, object=obj) if old is not None else ConstructionMediaLifetime(obj)
+                    if identity not in known and result[identity].committed_ms is None:
+                        result[identity] = replace(result[identity],
+                            committed_ms=absolute_start_ms + visit.offset_ms + at)
+                    known.add(identity)
         transitions = timeline.world_transitions
         dust_owners = {row.identity for row in transitions if row.object_dust is not None}
         for transition in transitions:

@@ -10,7 +10,7 @@ from dnd.core.base_block import BaseBlock, PreparedConditionApplication
 from dnd.core.base_conditions import ConditionRemovalEvent
 from dnd.core.events import Event, EventHandler, EventPhase, EventQueue, EventType, Trigger
 from dnd.core.gridmap import get_map
-from dnd.spells.conjuration import ProduceFlameEffect, SpiritGuardiansSlowSource, SpiritGuardiansSlowed, WebRestrained
+from dnd.spells.conjuration import SpiritGuardiansSlowSource, SpiritGuardiansSlowed, WebRestrained
 from dnd.spells.divination import SeeInvisibilityEffect, TrueSeeingEffect
 from dnd.spells.evocation import ContinualFlameCondition, LightEffect, FireShieldEffect
 from dnd.spells.transmutation import DarkvisionEffect
@@ -84,7 +84,7 @@ def test_removing_granted_sense_preserves_same_baseline_sense(kind, sense, dista
     assert sum(mode.sense_type is sense and mode.range_feet == distance for mode in target.senses.sense_modes) == 1
 
 
-@pytest.mark.parametrize('kind', [LightEffect, ProduceFlameEffect, FireShieldEffect])
+@pytest.mark.parametrize('kind', [LightEffect, FireShieldEffect])
 def test_light_condition_removal_commits_before_light_observers(kind):
     caster = strong_entity('Caster', (1, 1), 'heroes')
     target = strong_entity('Recipient', (2, 1), 'heroes')

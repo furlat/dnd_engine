@@ -32,7 +32,8 @@ WeatherSolarProgram = Literal['ice_storm', 'sleet_storm', 'sunbeam', 'sunburst']
 
 def weather_solar_history(*, program: WeatherSolarProgram, empty: bool = False,
                           expire: bool = False, heading: int = 0, hidden: bool = False,
-                          countered: bool = False, repeat: bool = False) -> CapturedHistory:
+                          countered: bool = False, repeat: bool = False,
+                          caster_position: tuple[int, int] | None = None) -> CapturedHistory:
     previous_random = random.getstate()
     reset_engine_runtime()
     battlefield = 'battlefield.open_floor_bright' if program == 'ice_storm' else 'battlefield.weather_review'
@@ -43,6 +44,8 @@ def weather_solar_history(*, program: WeatherSolarProgram, empty: bool = False,
         direction = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1))[heading]
         center = (7, 7) if program == 'ice_storm' else (14, 14)
         source = center if program == 'sunbeam' else (1, 7) if program == 'ice_storm' else (4, 14)
+        if caster_position is not None:
+            source = caster_position
         destination = (center[0] + direction[0]*4, center[1] + direction[1]*4) if program == 'sunbeam' else center
         positions = [('caster', source)]
         if not empty:

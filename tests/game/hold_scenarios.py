@@ -21,13 +21,15 @@ from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.enchantment import HoldPerson, HoldMonster
+from dnd.spells.transmutation import EnlargeReduceEffect
 from dnd.conditions import Paralyzed
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
 def hold_history(*, program: Literal['hold_person', 'hold_monster'], saved: bool = False,
-                 retain_paralysis: bool = False) -> CapturedHistory:
+                 retain_paralysis: bool = False,
+                 size_change: Literal['enlarge', 'reduce'] | None = None) -> CapturedHistory:
     random_state = random.getstate()
     reset_engine_runtime()
     battlefield = "battlefield.open_floor_bright"
@@ -61,6 +63,11 @@ def hold_history(*, program: Literal['hold_person', 'hold_monster'], saved: bool
         with fixed_dice_faces(10, 10, 10, 10):
             encounter.start_encounter()
         encounter.start_turn()
+        if size_change is not None:
+            event = recipient.add_condition(EnlargeReduceEffect(source_entity_uuid=caster.uuid,
+                target_entity_uuid=recipient.uuid, mode=size_change))
+            assert event is not None and not event.canceled
+            assert "Enlarge/Reduce" in recipient.active_conditions
 
         def perform(actor: Entity, behavior: str, destination: tuple[int, int]) -> None:
             while encounter.get_current_entity() is not actor:

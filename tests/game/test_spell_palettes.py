@@ -15,7 +15,7 @@ from game.body_action import bind_body_action
 from game.player_facts import SpellFact
 from game.player_reduction import reduce_lineage
 from game.projection import Camera
-from game.spell_palette import recolor_palette
+from game.spell_palette import palette_noise, recolor_palette
 from tests.game.player_helpers import player_history
 from tests.game.support_conditions_scenarios import support_condition_history
 
@@ -118,15 +118,9 @@ def test_dark_noise_treatment_preserves_body_alpha_and_has_black_and_green_regio
 
 @pytest.mark.parametrize("spell", tuple(s for s in SPELLS if s != "magic_missile"))
 def test_selected_cast_overlay_has_exact_spell_colors_and_complete_rig_geometry(data, spell):
-    recipe = data.drafts["spell." + spell]
-    flash = recipe.damage.hitFlash.palette
-    assert flash is not None
+    contact = ActorContact("caster", (0, 0), "E", .5)
+    recipe = resolve_cast_recipe(data, contact, data.drafts["spell." + spell])
     cast = recipe.cast
-    allowed = colors(flash)
-    if spell == "chill_touch":
-        assert recipe.projectile is not None and recipe.projectile.sprite is not None
-        allowed = {((c >> 16) & 255, (c >> 8) & 255, c & 255) for c in
-            data.projectile_assets[recipe.projectile.sprite.assetId].palettePreview.colors}
     for layer in (cast.weaponGlow, cast.aura, cast.slash, *(cast.effects or ())):
         if layer is None or not layer.enabled or layer.hidden:
             continue
@@ -138,8 +132,18 @@ def test_selected_cast_overlay_has_exact_spell_colors_and_complete_rig_geometry(
         assert baked.height >= (max(rig.facing_rows.values()) + 1) * rig.cell_height
         alpha = pygame.surfarray.array_alpha(baked)
         assert np.any(alpha == 0) and np.any(alpha > 0)
-        assert rgb_set(baked) <= allowed
-        assert len(rgb_set(baked)) > 1
+        rows = {}
+        load_cast_rows(data, contact, cast.actionClip, contact.facing, (layer,), rows)
+        assert layer.palette is not None and layer.palette.noiseSheet is not None
+        for key, image in rows.items():
+            raw = baked.subsurface((0, key[3] * rig.cell_height, image.width, image.height))
+            assert np.array_equal(pygame.surfarray.array_alpha(raw), pygame.surfarray.array_alpha(image))
+            assert visible_colors(image) <= colors(layer.palette)
+            assert len(visible_colors(image)) > 1
+            expected = recolor_palette(raw, layer.palette,
+                noise=palette_noise(data.resources[layer.palette.noiseSheet]),
+                cell_size=(rig.cell_width, rig.cell_height))
+            assert pygame.image.tobytes(image, "RGBA") == pygame.image.tobytes(expected, "RGBA")
 
 
 def test_authored_palette_roundtrips_as_data_and_mapping_preserves_partial_alpha(data):
@@ -173,7 +177,11 @@ def test_automatic_cast_palette_replaces_pixels_and_shared_sheet_cache_is_isolat
         selected_data = replace(data, drafts={**data.drafts, "spell.fire_bolt": draft})
         timelines.append(compile_cast(selected_data, "spell.fire_bolt", source))
     # Explicit override of exactly the same source must still retain its baked pixels.
-    timelines.append(compile_cast(data, "spell.fire_bolt", source))
+    overridden = original.model_copy(update={"cast": original.cast.model_copy(update={
+        "weaponGlow": layer.model_copy(update={"colors": layer.colors.model_copy(update={"source": "override"})}),
+        "aura": None, "effects": ()})})
+    override_data = replace(data, drafts={**data.drafts, "spell.fire_bolt": overridden})
+    timelines.append(compile_cast(override_data, "spell.fire_bolt", source))
     rows = {}
     baked = pygame.image.load(data.resources[layer.sourceSheet]).convert_alpha()
     rig = data.rigs[contact.rig_id]
@@ -204,7 +212,7 @@ def test_automatic_cast_palette_replaces_pixels_and_shared_sheet_cache_is_isolat
             body = next(body for body in sample.bodies if body.actor_uuid == "caster")
             base_body = next(body for body in base.bodies if body.actor_uuid == "caster")
             assert (body.clip, body.frame, body.facing) == (base_body.clip, base_body.frame, base_body.facing)
-            assert body.cast_layers == (resolved,)
+            assert resolved in body.cast_layers
             load_cast_rows(data, contact, body.clip, body.facing, body.cast_layers, rows)
         assert all(pygame.image.tobytes(rows[key], "RGBA") == pixels for key, pixels in snapshot.items())
 
@@ -239,7 +247,7 @@ def test_actor_only_cast_uses_the_same_automatic_hand_palette(data):
         fact = root.root.fact
         if isinstance(fact, SpellFact) and fact.behavior_id == "spell.death_ward":
             cue = bind_body_action(before, root.root, selected_data, start_ms=0, facings={}, contacts={})
-            assert cue is not None and len(cue.cast_layers) == 1
+            assert cue is not None and cue.cast_layers
             rows = {}
             load_cast_rows(data, cue.contact, cue.clip, cue.contact.facing, cue.cast_layers, rows)
             assert rows
@@ -258,6 +266,10 @@ def test_current_spell_hands_match_their_spell_palette_before_release(data, spel
     resolved = resolve_cast_recipe(data, contact, draft)
     layer = resolved.cast.weaponGlow
     assert layer is not None and layer.enabled and not layer.hidden
+    authored = draft.cast.weaponGlow
+    assert authored is not None and authored.palette is not None and layer.palette is not None
+    assert layer.palette.gamma == authored.palette.gamma
+    assert layer.palette.noiseSheet == authored.palette.noiseSheet
     rows = {}
     load_cast_rows(data, contact, resolved.cast.actionClip, 'E', (layer,), rows)
     expected = colors(PaletteTreatment(colors=(draft.elementColors.tertiary,

@@ -136,8 +136,6 @@ ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
     _srd(monster_traits.InnateInvisibility,"action.monster.innate_invisibility","Innate Invisibility","Concentrate on indefinite innate invisibility.",root_owned=True),
     _srd(monster_traits.WightLifeDrain,"action.monster.wight.life_drain","Life Drain","Intrinsic necrotic contact with saved maximum HP reduction.",root_owned=True),
     _original(spell_items.EmberQuiverActivation,"action.item.ember_quiver","Ember Quiver","Apply a ten-round fire coating to an equipped bow or crossbow."),
-    _srd(conjuration.HurlProduceFlame, "action.spell.produce_flame.hurl", "Hurl Produce Flame", "Hurl the retained hand flame."),
-    _srd(conjuration.DismissProduceFlame, "action.spell.produce_flame.dismiss", "Dismiss Produce Flame", "Dismiss the retained hand flame."),
     _srd(evocation.DismissFireShield, "action.spell.fire_shield.dismiss", "Dismiss Fire Shield", "Dismiss the retained fire or cold shield."),
     # SRD-compatible standard and class actions not in the core starter set.
     _srd(actions.Drop, "action.core.drop", "Drop", "Drop one carried item onto the current tile."),

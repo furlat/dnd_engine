@@ -7,6 +7,7 @@ import numpy as np
 from dnd.actions import AttackEvent
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY, BaseObject
 from dnd.core.events import EventQueue
+from game.animation import view_facing
 from game.animation_data import load_animation_data
 from game.animation_draw import actor_draw_commands, load_attack_media, load_cast_rows
 from game.attack import BoundAttack, bind_attack, sample_attack
@@ -78,8 +79,9 @@ def test_serialized_child_attack_keeps_weapon_and_outcome_with_one_authored_over
         assert bound.appearances == ordinary.appearances
         literal, = [layer for layer in timeline.layers if layer.sourceSheet is not None]
         assert literal.slot == "weaponGlow"
-        assert literal.sourceSheet == "/support-spells/true_strike/" + (
-            "Ranged1-Attack3-charge.png" if ranged else "Melee3-Attack6-charge.png")
+        assert literal.sourceSheet == f"/spritesheets/Magic2/{timeline.clip}.png"
+        assert literal.colors.source == "auto" and literal.palette is not None
+        assert literal.palette.noiseSheet == "/spell-palettes/source-hand-noise.png"
         assert timeline.release_ms == (pytest.approx(10 * 1000 / 12) if ranged else None)
         if not ranged:
             assert timeline.contact_ms == pytest.approx(7 * 1000 / 12)
@@ -95,7 +97,7 @@ def test_serialized_child_attack_keeps_weapon_and_outcome_with_one_authored_over
 
 
 @pytest.mark.parametrize("ranged", (False, True))
-def test_literal_weapon_charge_draws_in_rig_slots_and_preserves_baked_on_off_frames(data, ranged):
+def test_matching_magic_hands_follow_original_sheet_frames_in_actual_weapon_attack(data, ranged):
     history = true_strike_history(ranged=ranged)
     before, root = player_cast(history.views["caster"])
     attack, = [node for node in root.events if isinstance(node.fact, AttackFact)]
@@ -106,10 +108,17 @@ def test_literal_weapon_charge_draws_in_rig_slots_and_preserves_baked_on_off_fra
     charged = node.bound
     rows = load_attack_media(charged.timeline, charged.appearances)
     plain_rows = load_attack_media(ordinary.timeline, ordinary.appearances)
+    layer, = [layer for layer in charged.timeline.layers if layer.slot == "weaponGlow"]
+    assert layer.sourceSheet is not None
+    source = pygame.image.load(data.resources[layer.sourceSheet]).convert_alpha()
+    rig = data.rigs[charged.timeline.source.rig_id]
     for quadrant in range(4):
         camera = Camera(quadrant=quadrant, zoom=.5).with_focus(charged.timeline.source.grid)
-        for frame in (0, 1, 7, 10, 14):
+        facing = view_facing(charged.timeline.facing, quadrant, data)
+        row = rig.facing_rows[facing]
+        for frame in range(15):
             elapsed = (frame + .1) * 1000 / 12
+            charged_body = sample_attack(charged.timeline, elapsed).bodies[0]
             images = []
             for bound, media in ((charged, rows), (ordinary, plain_rows)):
                 body = sample_attack(bound.timeline, elapsed).bodies[0]
@@ -118,7 +127,10 @@ def test_literal_weapon_charge_draws_in_rig_slots_and_preserves_baked_on_off_fra
                 actor, = [draw for draw in draws if draw.evidence[6] == "actor"]
                 images.append((actor.destination, pygame.image.tobytes(actor.surface, "RGBA")))
             assert images[0][0] == images[1][0]
-            assert (images[0][1] != images[1][1]) is (frame == 7), (ranged, quadrant, frame)
+            alpha = pygame.surfarray.array_alpha(source.subsurface((frame * rig.cell_width,
+                row * rig.cell_height, rig.cell_width, rig.cell_height)))
+            active = charged_body.clip == charged.timeline.clip and bool(charged_body.cast_layers)
+            assert (images[0][1] != images[1][1]) == (active and bool(alpha.any())), (ranged, quadrant, frame)
 
 
 @pytest.mark.parametrize("miss", (False, True))

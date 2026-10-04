@@ -18,16 +18,16 @@ from tests.game.player_helpers import player_history
 from tests.game.test_summoning_presentation import summon_history
 
 
-# First measured visible palm at release frame 8 in the accepted Special1
-# hand-sockets.json. These are full 128px cell coordinates, not effect pivots.
+# Reviewed frame 11 and preparation frame 6 from the original measured Special1
+# hand paths. These are full 128px cell coordinates, not effect pivots.
 RELEASE_PALMS = {
-    "E": (79., 57.), "SE": (60., 66.), "S": (55., 66.75), "SW": (47.6, 62.2),
-    "W": (50.833333333333336, 64.83333333333333), "NW": (54.8, 66.6),
-    "N": (59., 51.), "NE": (82.4, 59.8),
+    "E": (59.05, 41.4), "SE": (72.022, 42.239), "S": (80.556, 48.944), "SW": (79.857, 57.857),
+    "W": (70.955, 63.773), "NW": (58.591, 63.318),
+    "N": (50.115, 57.192), "NE": (50.05, 48.15),
 }
 PREPARATION_PALMS = {
-    "E": (77.5, 52.5), "SE": (59.5, 66.5), "S": (48.8, 66.6), "SW": (44.25, 57.),
-    "W": (52., 66.75), "NW": (48.8, 59.), "N": (54.5, 50.5), "NE": (85.4, 60.8),
+    "E": (76.812, 53.938), "SE": (80.233, 61.967), "S": (74.955, 69.136), "SW": (63.9, 71.4),
+    "W": (53.567, 67.633), "NW": (50.167, 59.633), "N": (55.4, 52.7), "NE": (66.5, 50.),
 }
 
 
@@ -63,7 +63,7 @@ def test_native_summon_uses_shared_cast_media_at_original_release_and_seeks(data
             assert isinstance(node.bound, BoundCast) and not group.gaps
             timeline = node.bound.timeline
             assert timeline.recipe.cast.actionClip == "Special1"
-            assert timeline.release_ms == pytest.approx(8 * 1000 / 12)
+            assert timeline.release_ms == pytest.approx(11 * 1000 / 12)
             assert {track.assetId for track in timeline.recipe.media} == {
                 f"summoning.{material}.cast.back", f"summoning.{material}.cast.front"}
             assert all(track.startOffsetMs == -250 and track.durationMs == 750

@@ -41,7 +41,7 @@ def test_authored_export_is_locally_decodable_and_preserves_source_contract() ->
     )
 
 
-def test_authored_media_selection_preserves_existing_studio_choreography() -> None:
+def test_authored_media_selection_preserves_delivery_and_result_contract() -> None:
     original = StudioDraftFile.model_validate_json(
         (ROOT / "game/data/neuroclient/spell-studio-drafts.materialized.json").read_text()
     )
@@ -50,9 +50,12 @@ def test_authored_media_selection_preserves_existing_studio_choreography() -> No
     after = imported.spells[0]
     before = next(row for row in original.spells if row.definitionRef == after.definitionRef)
     assert after.definitionRef.content_id == "spell.magic_missile"
-    assert (after.cast, after.condition, after.elementColors) == (
-        before.cast, before.condition, before.elementColors,
-    )
+    # Casting selection now has an independently reviewed owner recipe. The
+    # imported delivery/result data still retains its original contract.
+    assert (after.condition, after.elementColors) == (before.condition, before.elementColors)
+    assert (after.cast.equipment, after.cast.recovery) == (before.cast.equipment, before.cast.recovery)
+    assert (after.cast.actionClip, after.cast.releaseFrame) == ("Attack5", 7)
+    assert after.cast.weaponGlow is not None and after.cast.weaponGlow.category == "Magic2"
     first, second = before.projectile, after.projectile
     assert first is not None and second is not None
     assert first.geometry.enabled and first.sprite is None
@@ -76,7 +79,11 @@ def test_authored_media_selection_preserves_existing_studio_choreography() -> No
         "basis": "body", "liftY": 0, "forwardPx": 0, "axisPx": 0,
     }
     assert second.sourceAnchorsByFacing is None
-    assert second.prepare == first.prepare  # Available cast frames do not enable preparation.
+    assert second.sourceSockets == after.cast.sourceSockets
+    assert second.sourceSockets is not None
+    # The selected pose owns the preparation frame, but available cast frames
+    # still do not enable this optional phase or alter its other settings.
+    assert second.prepare.model_copy(update={"startFrame": first.prepare.startFrame}) == first.prepare
     assert not second.prepare.enabled
     for phase in (second.travel, second.impact):
         assert phase.enabled and phase.assetId == second.sprite.assetId

@@ -249,7 +249,8 @@ def directed_draw_commands(timeline: CastTimeline, sample: CastSample, camera: C
     contacts[caster.actor_uuid] = caster
     body = next((body for body in sample.bodies if body.actor_uuid==caster.actor_uuid),None)
     source = _point(timeline,caster,camera,hand=True,
-        body_frame=body.frame if body is not None and body.clip==timeline.recipe.cast.actionClip else None)
+        body_frame=body.frame if time < timeline.release_ms and body is not None
+        and body.clip==timeline.recipe.cast.actionClip else None)
     if spec.mode == 'ground_strike':
         return _ground_strike_contacts(timeline, sample, camera, area, source, texture, random)
     paths: list[tuple[np.ndarray,float,float,float]] = []

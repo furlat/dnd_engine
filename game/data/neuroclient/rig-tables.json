@@ -252,5 +252,77 @@
   ],
   "RIG_ORIGIN_Y_FROM_GROUND": 41,
   "TILE_W": 64,
-  "TILE_H": 32
+  "TILE_H": 32,
+  "CLIP_ANCHORS": {
+    "Special1": [
+      {
+        "name": "prepare",
+        "frame": 8
+      },
+      {
+        "name": "release",
+        "frame": 11
+      },
+      {
+        "name": "recover",
+        "frame": 13
+      }
+    ],
+    "Attack4": [
+      {
+        "name": "prepare",
+        "frame": 6
+      },
+      {
+        "name": "release",
+        "frame": 9
+      },
+      {
+        "name": "recover",
+        "frame": 11
+      }
+    ],
+    "Attack5": [
+      {
+        "name": "prepare",
+        "frame": 4
+      },
+      {
+        "name": "release",
+        "frame": 7
+      },
+      {
+        "name": "recover",
+        "frame": 11
+      }
+    ],
+    "Attack6": [
+      {
+        "name": "prepare",
+        "frame": 3
+      },
+      {
+        "name": "release",
+        "frame": 6
+      },
+      {
+        "name": "recover",
+        "frame": 9
+      }
+    ],
+    "Attack1": [
+      {
+        "name": "prepare",
+        "frame": 3
+      },
+      {
+        "name": "release",
+        "frame": 6
+      },
+      {
+        "name": "recover",
+        "frame": 10
+      }
+    ]
+  }
 }

@@ -156,12 +156,15 @@ def test_rebake_uses_explicit_originals_and_preserves_palette_alpha_geometry_and
         archive, installed, output_root = (tmp_path / name for name in ('archive', 'installed', 'rebaked'))
         data = replace(data, media_root=installed, resources={
             key: installed / path.relative_to(data.media_root) for key, path in data.resources.items()})
-        source = pygame.Surface((4, 2), pygame.SRCALPHA)
+        source = pygame.Surface((128, 128), pygame.SRCALPHA)
+        noise = pygame.Surface(source.get_size())
         alphas = ((255, 255, 64, 0), (255, 255, 128, 192))
-        for y, row in enumerate(alphas):
-            for x, alpha in enumerate(row):
+        for y in range(source.height):
+            for x in range(source.width):
+                alpha = alphas[y % 2][x % 4]
                 gray = 255 if x % 2 else 0
                 source.set_at((x, y), (gray, gray, gray, alpha))
+                noise.set_at((x, y), (gray, gray, gray))
         expected, selected_before, sources_before = {}, {}, {}
         for recipe in (*draft.spells, *draft.effectDrafts.values()):
             cast = recipe.cast
@@ -171,7 +174,13 @@ def test_rebake_uses_explicit_originals_and_preserves_palette_alpha_geometry_and
                 if layer is None or not layer.enabled or layer.hidden or layer.palette is None:
                     continue
                 assert layer.sourceSheet is not None
-                assert layer.palette.noiseSheet is None, 'Noise treatment has a separate palette test.'
+                if layer.palette.noiseSheet is not None:
+                    # Deterministic dark/bright endpoints exercise the authored
+                    # noise input without changing the expected palette stops.
+                    noise_path = archive / data.resources[layer.palette.noiseSheet].relative_to(installed)
+                    noise_path.parent.mkdir(parents=True, exist_ok=True)
+                    pygame.image.save(noise, noise_path)
+                    sources_before[noise_path] = noise_path.read_bytes()
                 source_path = archive / data.resources[f'/spritesheets/{layer.category}/{cast.actionClip}.png'].relative_to(installed)
                 source_path.parent.mkdir(parents=True, exist_ok=True)
                 pygame.image.save(source, source_path)
@@ -186,8 +195,9 @@ def test_rebake_uses_explicit_originals_and_preserves_palette_alpha_geometry_and
         for output, palette in expected.items():
             actual = pygame.image.load(output)
             assert actual.get_size() == source.get_size()
-            for y, row in enumerate(alphas):
-                for x, alpha in enumerate(row):
+            for y in range(source.height):
+                for x in range(source.width):
+                    alpha = alphas[y % 2][x % 4]
                     color = palette.colors[-1 if x % 2 else 0]
                     assert tuple(actual.get_at((x, y))) == (
                         (color >> 16) & 255, (color >> 8) & 255, color & 255, alpha)

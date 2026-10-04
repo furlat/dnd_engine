@@ -31,6 +31,7 @@ class ConstructionMediaLifetime:
     removed_ms: float | None = None
     collapse_contacts: tuple[tuple[float,float,float], ...] = ()
     membrane_impulses: tuple[tuple[float, tuple[float,float,float]], ...] = ()
+    committed_ms: float | None = None
 
 
 def construction_duration(data: AnimationData, binding: ConstructionMediaBinding, phase: str) -> float:
@@ -79,8 +80,15 @@ def construction_media_draw_commands(state: PlayerState, data: AnimationData, no
         return ()
     result = []
     objects = {identity: obj for identity, obj in state.objects.items() if identity in senses.objects}
+    pending = {}
     for identity, record in lifetimes.items():
-        if ((record.destroyed_ms is not None and record.destroyed_ms <= now_ms
+        if (record.applied_ms is not None and record.committed_ms is not None
+                and record.applied_ms <= now_ms < record.committed_ms):
+            admitted = tuple(p for p in record.object.placement.positions if p in senses.visible)
+            if admitted:
+                objects[identity] = record.object
+                pending[identity] = admitted
+        elif ((record.destroyed_ms is not None and record.destroyed_ms <= now_ms
                 or record.removed_ms is not None and record.removed_ms <= now_ms)
                 and any(position in senses.visible for position in record.object.placement.positions)):
             objects[identity] = record.object
@@ -111,10 +119,11 @@ def construction_media_draw_commands(state: PlayerState, data: AnimationData, no
             and row.anchor_elevation_steps is not None and row.provider_content_ref is not None
             and row.provider_content_ref.content_id in data.spatial_media)
         if binding.surface is not None and (not binding.surface.domeOnly or isinstance(geometry.path, WallDome)):
-            if binding.surface.material == 'force_membrane' and isinstance(geometry.path, WallSegment) and dust is None:
+            if (binding.surface.material == 'force_membrane' and isinstance(geometry.path, WallSegment)
+                    and dust is None and identity not in pending):
                 path = geometry.path
                 remaining = [(other_id, other) for other_id, other, other_dust, _ in entries
-                    if other_id != identity and other_id not in consumed and other_dust is None
+                    if other_id != identity and other_id not in consumed and other_id not in pending and other_dust is None
                     and other.item.construction_owner_uuid == obj.item.construction_owner_uuid
                     and other.item.item_id == obj.item.item_id]
                 while remaining:
@@ -151,8 +160,9 @@ def construction_media_draw_commands(state: PlayerState, data: AnimationData, no
                         destination=(command.destination[0]+offset[0], command.destination[1]+offset[1]),
                         volume=None, world_depth_group=None))
             else:
-                result.extend(command._replace(volume=replace(command.volume, exclusions=exclusions))
-                    if exclusions and command.volume is not None else command for command in commands)
+                result.extend(command._replace(volume=replace(command.volume, exclusions=exclusions,
+                    admitted=pending.get(identity, command.volume.admitted)))
+                    if command.volume is not None else command for command in commands)
             continue
         assert isinstance(geometry.path, WallSegment)
         if (record is not None and record.removed_ms is not None
@@ -206,11 +216,19 @@ def construction_media_draw_commands(state: PlayerState, data: AnimationData, no
                         image, offset = silhouette_dust(image,dust_recipe,dust_age,dust.seed)
                         destination = destination[0]+offset[0],destination[1]+offset[1]
                     volume = None
-                    if exclusions and dust is None:
+                    if (exclusions or identity in pending) and dust is None:
                         if part.positions is None or part.ownership is None:
-                            raise ValueError('Suppressed construction requires genuine source coordinates')
-                        volume = SurfaceVolume(origin, geometry.base_height_steps, 0, part.positions,
-                            part.ownership, part.vertical_scale, exclusions=exclusions, resolved_occupancy=True)
+                            if exclusions:
+                                raise ValueError('Suppressed construction requires genuine source coordinates')
+                            # Original section banks have no XYZ samples. They
+                            # can form only when the whole footprint is already
+                            # disclosed; never manufacture screen-tile masks.
+                            if not set(obj.placement.positions).issubset(pending[identity]):
+                                continue
+                        else:
+                            volume = SurfaceVolume(origin, geometry.base_height_steps, 0, part.positions,
+                                part.ownership, part.vertical_scale, exclusions=exclusions,
+                                admitted=pending.get(identity), resolved_occupancy=True)
                     result.append(DrawCommand(painter_key(point, elevation_steps=geometry.base_height_steps,
                         quadrant=camera.quadrant, role='actor', identity=(str(identity), str(index), str(side), str(part_index))),
                         image, destination, part.blend,

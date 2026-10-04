@@ -1,9 +1,6 @@
-"""Retained flame use is an attack, with shared defenses and action costs."""
-from uuid import uuid4
-
+"""Direct Produce Flame uses ordinary spell costs, defenses and damage."""
 import pytest
 
-from dnd.classes.sorcerer import MetamagicActive
 from dnd.core.creature_types import DamageType
 from dnd.core.dice import fixed_dice_faces
 from dnd.core.events import EventPhase, EventQueue, EventType
@@ -15,110 +12,83 @@ from tests.engine.test_roster_support_spells import actor, cast, game
 from tests.manual.spell_regression_support import force_save_result
 
 
-def retained_flame(caster):
-    cast(ProduceFlame, caster)
-    caster.action_economy.reset_all_costs()
-    return next(action for action in caster.registered_actions if action.name == "Hurl Produce Flame")
-
-
-def test_retained_flame_can_be_thrown_in_silence_without_casting_again(game):
-    caster, enemy = actor(game), actor(game, "Enemy", (5, 2), "foes")
-    silencer = actor(game, "Silencer", (2, 5))
-    hurl = retained_flame(caster)
-    result = Silence(source_entity_uuid=silencer.uuid, end_position=caster.position, alt_skip_slot=True).apply()
-    assert result is not None and not result.canceled
-    blocked = ProduceFlame(source_entity_uuid=caster.uuid, target_entity_uuid=caster.uuid).apply()
-    assert blocked is not None and blocked.canceled
-    caster.action_economy.reset_all_costs()
+@pytest.mark.parametrize('level,dice', [(1,1),(5,2),(11,3),(17,4)])
+@pytest.mark.parametrize('hit', [True,False])
+def test_direct_flame_damage_cost_and_no_retained_state(game, level, dice, hit):
+    caster, enemy = actor(game), actor(game, 'Enemy', (5,2), 'foes')
     hp = enemy.get_hp()
-    with fixed_dice_faces(15, 4):
-        result = hurl.instantiate(target_entity_uuid=enemy.uuid).apply()
-    assert result is not None and result.phase is EventPhase.COMPLETION
-    assert result.event_type is EventType.BASE_ACTION
+    lights = tuple(caster.get_attached_light_sources())
+    actions = {a.uuid for a in caster.registered_actions}
+    with fixed_dice_faces(*([15]+[4]*dice if hit else [1])):
+        result = ProduceFlame(source_entity_uuid=caster.uuid,target_entity_uuid=enemy.uuid,caster_level=level).apply()
+    assert result is not None and not result.canceled
+    assert result.event_type is EventType.CAST_SPELL
+    assert enemy.get_hp() == hp - (4*dice if hit else 0)
     assert caster.action_economy.actions.normalized_score == 0
-    assert enemy.get_hp() < hp
-    assert "Produce Flame" not in caster.active_conditions
+    assert 'Produce Flame' not in caster.active_conditions
+    assert tuple(caster.get_attached_light_sources()) == lights
+    assert {a.uuid for a in caster.registered_actions} == actions
 
 
-@pytest.mark.parametrize("saves", [False, True])
-def test_retained_flame_respects_sanctuary_before_spending_or_consuming(game, saves):
-    caster, enemy = actor(game), actor(game, "Warded", (5, 2), "foes")
-    hurl = retained_flame(caster)
-    cast(Sanctuary, enemy)
-    force_save_result(caster, "wisdom", succeeds=saves)
-    with fixed_dice_faces(15, 4):
-        result = hurl.instantiate(target_entity_uuid=enemy.uuid).apply()
-    assert result is not None and result.canceled is not saves
-    assert caster.action_economy.actions.normalized_score == int(not saves)
-    assert ("Produce Flame" in caster.active_conditions) is not saves
-
-
-def test_throwing_retained_flame_breaks_own_sanctuary_even_on_miss(game):
-    caster, enemy = actor(game), actor(game, "Enemy", (5, 2), "foes")
-    hurl = retained_flame(caster)
-    cast(Sanctuary, caster)
-    caster.action_economy.reset_all_costs()
-    with fixed_dice_faces(1):
-        result = hurl.instantiate(target_entity_uuid=enemy.uuid).apply()
+def test_direct_flame_cannot_cast_in_silence(game):
+    caster, enemy = actor(game), actor(game,'Enemy',(5,2),'foes')
+    silencer = actor(game,'Silencer',(2,5))
+    result = Silence(source_entity_uuid=silencer.uuid,end_position=caster.position,alt_skip_slot=True).apply()
     assert result is not None and not result.canceled
-    assert "Sanctuary" not in caster.active_conditions
-
-
-@pytest.mark.parametrize("kind", ["quickened", "twinned", "distant"])
-def test_metamagic_does_not_change_retained_flame_action(game, kind):
-    caster = actor(game)
-    hurl = retained_flame(caster)
-    caster.add_condition(MetamagicActive(source_entity_uuid=caster.uuid,
-        target_entity_uuid=caster.uuid, metamagic_type=kind, owning_action_template_uuid=uuid4()))
-    assert hurl.alt_cost_type is None and hurl.alt_range is None and hurl.alt_target_count is None
-
-
-def test_retained_flame_critical_keeps_two_death_save_failures(game):
-    caster, enemy = actor(game), actor(game, "Dying enemy", (5, 2), "foes")
-    enemy.uses_death_saves = True
-    enemy.receive_damage(enemy.get_hp(), DamageType.FORCE, caster.uuid)
-    assert enemy.health.life_state is LifeState.DYING
-    hurl = retained_flame(caster)
-    # Unconscious advantage and ranged Prone disadvantage cancel.
-    with fixed_dice_faces(20, 2, 2):
-        result = hurl.instantiate(target_entity_uuid=enemy.uuid).apply()
-    assert result is not None and not result.canceled
-    assert enemy.death_save_failures == 2
-    assert not any(e.canceled for e in EventQueue.get_events_by_type(EventType.DAMAGE_APPLIED))
-
-
-@pytest.mark.parametrize("retained", [False, True])
-def test_flame_rejects_out_of_range_target_before_payment_or_consumption(game, retained):
-    caster, enemy = actor(game), actor(game, "Too far", (9, 2), "foes")
-    hurl = retained_flame(caster) if retained else None
-    hp = enemy.get_hp()
-    action = (hurl.instantiate(target_entity_uuid=enemy.uuid) if hurl is not None else
-        ProduceFlame(source_entity_uuid=caster.uuid, target_entity_uuid=enemy.uuid))
-    result = action.apply()
+    result = ProduceFlame(source_entity_uuid=caster.uuid,target_entity_uuid=enemy.uuid).apply()
     assert result is not None and result.canceled
     assert caster.action_economy.actions.normalized_score == 1
-    assert enemy.get_hp() == hp
-    assert ("Produce Flame" in caster.active_conditions) is retained
 
 
-@pytest.mark.parametrize("protection", [GlobeOfInvulnerability, AntimagicField])
-def test_retained_flame_is_still_a_spell_effect_for_zone_protection(game, protection):
-    caster, enemy = actor(game), actor(game, "Defender", (7, 2), "foes")
-    hurl = retained_flame(caster)
-    cast(protection, enemy)
-    hp = enemy.get_hp()
-    with fixed_dice_faces(15, 4, 20):
-        result = hurl.instantiate(target_entity_uuid=enemy.uuid).apply()
+@pytest.mark.parametrize('saves',[False,True])
+def test_direct_flame_respects_sanctuary_before_payment(game,saves):
+    caster,enemy=actor(game),actor(game,'Warded',(5,2),'foes')
+    cast(Sanctuary,enemy)
+    force_save_result(caster,'wisdom',succeeds=saves)
+    with fixed_dice_faces(15,4):
+        result=ProduceFlame(source_entity_uuid=caster.uuid,target_entity_uuid=enemy.uuid).apply()
+    assert result is not None and result.canceled is not saves
+    assert caster.action_economy.actions.normalized_score == int(not saves)
+
+
+def test_direct_flame_breaks_own_sanctuary_on_miss(game):
+    caster,enemy=actor(game),actor(game,'Enemy',(5,2),'foes')
+    cast(Sanctuary,caster)
+    caster.action_economy.reset_all_costs()
+    with fixed_dice_faces(1):
+        result=ProduceFlame(source_entity_uuid=caster.uuid,target_entity_uuid=enemy.uuid).apply()
+    assert result is not None and not result.canceled
+    assert 'Sanctuary' not in caster.active_conditions
+
+
+def test_direct_flame_critical_keeps_two_death_save_failures(game):
+    caster,enemy=actor(game),actor(game,'Dying enemy',(5,2),'foes')
+    enemy.uses_death_saves=True
+    enemy.receive_damage(enemy.get_hp(),DamageType.FORCE,caster.uuid)
+    assert enemy.health.life_state is LifeState.DYING
+    with fixed_dice_faces(20,2,2):
+        result=ProduceFlame(source_entity_uuid=caster.uuid,target_entity_uuid=enemy.uuid).apply()
+    assert result is not None and not result.canceled
+    assert enemy.death_save_failures == 2
+
+
+@pytest.mark.parametrize('self_target',[False,True])
+def test_direct_flame_rejects_self_or_range_before_payment(game,self_target):
+    caster,enemy=actor(game),actor(game,'Too far',(9,2),'foes')
+    target=caster if self_target else enemy
+    hp=target.get_hp()
+    result=ProduceFlame(source_entity_uuid=caster.uuid,target_entity_uuid=target.uuid).apply()
+    assert result is not None and result.canceled
+    assert caster.action_economy.actions.normalized_score == 1
+    assert target.get_hp() == hp
+
+
+@pytest.mark.parametrize('protection',[GlobeOfInvulnerability,AntimagicField])
+def test_direct_flame_respects_spell_protection(game,protection):
+    caster,enemy=actor(game),actor(game,'Defender',(7,2),'foes')
+    cast(protection,enemy)
+    hp=enemy.get_hp()
+    with fixed_dice_faces(15,4,20):
+        result=ProduceFlame(source_entity_uuid=caster.uuid,target_entity_uuid=enemy.uuid).apply()
     assert result is not None and result.canceled
     assert enemy.get_hp() == hp
-    assert "Produce Flame" in caster.active_conditions
-
-
-def test_retained_flame_damage_keeps_original_spell_origin(game):
-    caster, enemy = actor(game), actor(game, "Enemy", (5, 2), "foes")
-    hurl = retained_flame(caster)
-    origin = caster.active_conditions["Produce Flame"].effect_origin
-    with fixed_dice_faces(15, 4):
-        result = hurl.instantiate(target_entity_uuid=enemy.uuid).apply()
-    assert result is not None and not result.canceled
-    assert result.get_effect_origin() == origin

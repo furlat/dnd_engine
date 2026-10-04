@@ -338,7 +338,7 @@ SPELL_CATALOG_METADATA_SPECS: tuple[
     (summoning.ConjureAnimals, _catalog('conjure_animals', 'Summon one beast; higher slots unlock stronger creatures.', 'position', 'ranged', 60, 'none', concentration=True, classes=('druid', 'ranger'))),
     (summoning.ConjureFey, _catalog('conjure_fey', 'Summon a beast-shaped Fey spirit; lost concentration leaves it hostile for the remaining duration.', 'position', 'ranged', 60, 'none', concentration=True, classes=('druid', 'warlock'))),
     (summoning.ConjureFiend, _catalog('conjure_fiend', 'Summon one fiend while concentration holds; higher slots unlock stronger forms.', 'position', 'ranged', 60, 'none', concentration=True, classes=('warlock', 'wizard'))),
-    (conjuration.ProduceFlame, _catalog('produce_flame', 'Hand flame; hurl30ft for1d8 fire, bright/dim10ft for10minutes.', 'entity', 'ranged', 30, 'single_projectile', projectile='bolt', damage=(DamageType.FIRE,), attack_roll=True, classes=('druid',))),
+    (conjuration.ProduceFlame, _catalog('produce_flame', 'Direct30ft ranged spell attack for1d8 fire; no retained flame or light.', 'entity', 'ranged', 30, 'single_projectile', projectile='bolt', damage=(DamageType.FIRE,), attack_roll=True, classes=('druid',))),
     (transmutation.Shillelagh, _catalog('shillelagh', 'Bonus action: held club/staff becomes magical,d8 for1minute; optional casting ability.', 'self', 'self', 0, 'self', classes=('druid',))),
     (transmutation.Longstrider, _catalog('longstrider', 'Touch: speed+10ft for1hour; upcast adds recipients.', 'multi_entity', 'touch', 5, 'touch', multi_target=_multi_target(1, 1, False), classes=('bard','druid','ranger','wizard'))),
     (transmutation.Barkskin, _catalog('barkskin', 'Touch: AC floor16, concentration1hour.', 'entity', 'touch', 5, 'touch', concentration=True, classes=('druid','ranger'))),
@@ -858,7 +858,6 @@ _SPELL_GRANTED_ACTION_TYPES_BY_CLASS: Mapping[
     type[SpellAction],
     tuple[type[object], ...],
 ] = MappingProxyType({
-    conjuration.ProduceFlame: (conjuration.HurlProduceFlame, conjuration.DismissProduceFlame),
     evocation.FireShield: (evocation.DismissFireShield,),
     conjuration.HeroesFeast: (
         conjuration.EatFromFeast,

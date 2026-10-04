@@ -3,7 +3,7 @@
 import pytest
 
 from dnd.core.life_types import LifeState
-from game.animation import media_target_applies
+from game.animation import media_target_applies, media_phase_anchor_ms
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography
 from game.combat import BoundCast
@@ -43,8 +43,12 @@ def test_native_words_only_show_the_contact_the_recipient_received(data, program
                     deaths = [cue for cue in group.lifecycle if isinstance(cue.event.fact, LifeFact)
                               and cue.event.fact.new_state is LifeState.DEAD]
                     assert bool(deaths) == expected
+                    asset = data.projectile_assets['necrotic.kill.front']
+                    assert asset.phases.impact is not None
+                    impact = media_phase_anchor_ms(asset.phases.impact, 'contact', fps=asset.fps)
+                    assert timeline.recipe.contact.delayMs == impact
                     for cue in deaths:
-                        assert cue.start_ms >= clip.start_ms + timeline.release_ms + 550
+                        assert cue.start_ms == pytest.approx(clip.start_ms + timeline.release_ms + impact)
                 contacts += 1
             state = reduce_lineage(state, root)
         assert contacts == 1

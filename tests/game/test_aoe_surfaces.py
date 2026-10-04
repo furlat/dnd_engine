@@ -16,11 +16,15 @@ import pytest
 
 from dnd.core.events import WorldTileState
 from dnd.core.presentation_geometry import LinePresentationGeometry
+from dnd.core.geometry import circle_positions
+from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.core.world_edges import ElevationSurfaceKind, SlopeAxis
 from dnd.types.materials import TileSurface, Material
 from dnd.types.world import LightLevel, CardinalDirection
-from game.animation_types import PackedSurfaceFrames, PackedSurfaceComponent, ProjectileFrameStorage, ProjectileStorage
+from game.animation_types import PackedSurfaceFrames, PackedSurfaceComponent, ProjectileFrameStorage, ProjectileStorage, RigLayer
 from game.animation_data import load_animation_data
+from game.animation import ActorContact, CastInput, GroundContact, compile_cast, sample_cast
+from game.animation_draw import animation_draw_commands, load_animation_media
 from game.player_facts import PlayerFact, SpellFact
 from game.projection import Camera, rotate_position
 from game.registered_media import registered_media_samples
@@ -136,6 +140,38 @@ def test_line_geometry_clips_translated_surface_to_native_width_and_length(quadr
 @pytest.fixture(scope='module')
 def production_data():
     return load_animation_data()
+
+
+@pytest.mark.parametrize('quadrant', range(4))
+@pytest.mark.parametrize('spell,frame', [('fireball',29),('sleep',17)])
+def test_open_ground_cast_preserves_original_round_fringe(production_data, display, quadrant, spell, frame):
+    center = (7,3)
+    bounds = (0,0,14,14)
+    admitted = tuple(p for p in circle_positions(center,4) if p[1] >= 0)
+    source = CastInput('round-fringe', ActorContact('caster',(3,3),'E',1), (), GroundContact(center),
+        area_geometry=SpherePresentationGeometry(center=center,radius_feet=20),
+        resolved_area_positions=admitted,area_radius_feet=20,area_propagation='connected')
+    timeline = compile_cast(production_data,'spell.'+spell,source)
+    # Sleep's original ground mist includes a soft below-base fringe. A raised
+    # obstacle may occlude it, but its own flat receiving floor must not cut it.
+    supports = tuple(support((x,z)) for x in range(15) for z in range(15)) if spell=='sleep' else ()
+    media = load_animation_media(timeline,{'caster':(RigLayer('body','NakedBody'),)},area_supports=supports)
+    assert timeline.ground_delivery is not None
+    asset = production_data.projectile_assets[timeline.ground_delivery.projectile_intervals[-1].asset.assetId]
+    assert asset.phases.impact is not None
+    at = timeline.ground_delivery.travel_end_ms + (frame+.01)*1000/(asset.phases.impact.fps or asset.fps)
+    camera = Camera(quadrant=quadrant)
+    commands = [row for row in animation_draw_commands(timeline,sample_cast(timeline,at),media,camera,include_bodies=False)
+                if row.volume is not None and row.evidence[8]=='impact']
+    assert commands
+    for command in commands:
+        actual,_ = compose_volume(command.surface,command.volume,camera,visual_boundaries=(),world_bounds=bounds)
+        owned = command.volume.ownership != 0
+        assert np.array_equal(pygame.surfarray.array_alpha(actual)[owned],
+                              pygame.surfarray.array_alpha(command.surface)[owned])
+        assert np.array_equal(pygame.surfarray.array3d(actual)[owned],
+                              pygame.surfarray.array3d(command.surface)[owned])
+        assert not pygame.surfarray.array_alpha(actual)[~owned].any()
 
 
 @pytest.mark.parametrize('quadrant', range(4))

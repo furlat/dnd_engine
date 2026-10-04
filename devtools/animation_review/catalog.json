@@ -15485,6 +15485,31 @@
     "settled_hold_ms": 1600
   },
   {
+    "id": "sunburst-full-disclosure",
+    "title": "Sunburst \u00b7 full disclosed dome",
+    "tags": [
+      "spell",
+      "weather",
+      "solar",
+      "packet4"
+    ],
+    "description": "Native cast from four cells away, keeping the entire circle within sight. Compare with sunburst-area, whose far edge exceeds the caster sight range.",
+    "framing": "scene",
+    "scenario": {
+      "kind": "weather-solar",
+      "program": "sunburst",
+      "expire": true,
+      "repeat": false,
+      "empty": false,
+      "caster_position": [
+        10,
+        14
+      ]
+    },
+    "tail_duration_ms": 1200,
+    "settled_hold_ms": 1600
+  },
+  {
     "id": "sunburst-empty",
     "title": "Sunburst Empty",
     "tags": [
@@ -17069,5 +17094,47 @@
       "program": "thorns",
       "form": "ring"
     }
+  },
+  {
+    "id": "control-hold-monster-enlarge",
+    "title": "Hold Monster \u00b7 enlarge \u00b7 connection and release",
+    "tags": [
+      "control-queue",
+      "paired-observers",
+      "four-corners",
+      "native-conditions"
+    ],
+    "description": "Native Enlarge/Reduce changes the recipient before a real Hold Monster cast. Check the same accepted humanoid chains at the resulting body scale in all cameras.",
+    "scenario": {
+      "kind": "hold",
+      "program": "hold_monster",
+      "saved": false,
+      "retain_paralysis": false,
+      "size_change": "enlarge"
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 3000,
+    "framing": "actors"
+  },
+  {
+    "id": "control-hold-monster-reduce",
+    "title": "Hold Monster \u00b7 reduce \u00b7 connection and release",
+    "tags": [
+      "control-queue",
+      "paired-observers",
+      "four-corners",
+      "native-conditions"
+    ],
+    "description": "Native Enlarge/Reduce changes the recipient before a real Hold Monster cast. Check the same accepted humanoid chains at the resulting body scale in all cameras.",
+    "scenario": {
+      "kind": "hold",
+      "program": "hold_monster",
+      "saved": false,
+      "retain_paralysis": false,
+      "size_change": "reduce"
+    },
+    "settled_hold_ms": 2500,
+    "tail_duration_ms": 3000,
+    "framing": "actors"
   }
 ]

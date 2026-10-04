@@ -27,6 +27,49 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**October 5 — spell presentation repair implementation and targeted evidence.**
+The [repair report](agent_docs/audits/SPELL_PRESENTATION_REPAIR_ACCEPTANCE_2026-10-05.md)
+records the shared projection, authoring, palette, condition and formation/clearance
+corrections, with a persistent50-clip guide covering all24reported issues. The old
+model-switch checkpoint is superseded. Measured formation/clearance offsets are
+now enabled. The affected suite passed194tests; final Daylight/weather36 and
+Power Word7checks pass; scoped typing and offline authoring are clean. Independent
+source review approved the ECS/DAG/disclosure paths; sampled visual review receipt
+is linked from the repair report. The original298clips remain archival and unchanged.
+
+**October 4 — user review exposed spell presentation regressions; repairs open.**
+The 298-clip gallery is archival evidence, not current visual acceptance. The
+[complete categorized repair plan](agent_docs/SPELL_PRESENTATION_REPAIR_PLAN_2026-10-04.md)
+records every reported geometry, hand-origin, palette, motion, condition and
+transition issue. It requires reusable measured animation keypoints/sockets,
+separate VFX formation/state-commit dates, and independent anti-slop/ECS reviews.
+Candidate fixes exist, but the full correction has not received final visual
+verification or approval. Earlier completion checkpoints below describe the
+preceding implementation and must not override this newly exposed work.
+
+**October 4 — reviewed all-spell modular casting assignments implemented.**
+The [assignment table](agent_docs/art/SPELL_CAST_ASSIGNMENTS_2026-10-04.md)
+now drives the existing Studio recipes: 126 canonical owners and 24 derived
+presentations. Original Magic2 and selected Effect1/3/4/5 use exact owning-palette
+replacement with the existing delivered noise material; explicit overrides,
+True Strike's real weapon attack and fixed-rig native gestures remain intact.
+The generic offline author command writes existing data, with no new runtime
+registry, backend rule, condition or event system. This supersedes the earlier
+"selection pass has not been implemented" checkpoints below.
+The [feature trace](agent_docs/audits/SPELL_CASTING_FEATURE_TRACE_2026-10-04.md)
+links the implementation and independent reviews. The persistent standard
+[gallery](http://127.0.0.1:8768/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/index.html)
+contains 298 native four-camera clips on real timber tiles: 5,560 recorder checks,
+zero gaps and exact executed coverage of all 150 loaded identities. All 19
+assigned motion/layer combinations have bounded sampled pixel evidence.
+The full client run's 3,524 passes and 34 older-expectation failures reconcile
+with 161 passing complete affected-file cases; architecture has 82 passes and
+scoped production/authoring typing has zero errors/warnings. Production stayed
+fixed throughout the complete export and client run. Final independent anti-slop
+and ECS/evidence reviews closed with no remaining implementation blocker. The backend-only
+`necrotic_bless` and `prismatic_spray` definitions still lack pre-existing visual
+recipes; this visual assignment task did not invent their main media.
+
 **October 4 — modular motion/effect authoring reference.**
 The [visual catalog](agent_docs/art/MODULAR_CASTING_CATALOG_2026-10-04.md)
 and adjacent JSON describe 30 body motions and 240 motion/layer combinations,

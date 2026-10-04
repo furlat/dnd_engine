@@ -1506,7 +1506,8 @@ def draw_frame(
     for command in commands:
         if command.volume is not None:
             image, depth = compose_volume(command.surface, command.volume, camera,
-                destination=command.destination, visual_boundaries=registered_boundaries)
+                destination=command.destination, visual_boundaries=registered_boundaries,
+                world_bounds=target.world.bounds)
             composed.append(command._replace(surface=image, volume=None, world_depth=depth))
             continue
         if command.area is None:

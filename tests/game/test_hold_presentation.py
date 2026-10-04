@@ -42,9 +42,12 @@ def test_native_hold_clear_and_save_keep_separate_paralysis_facts(data, program,
             for cue in group.body_actions:
                 if cue.recipe_id == 'spell.' + program:
                     witnessed_cast = True
-                    assert cue.clip == 'Special1'
-                    assert len(cue.cast_layers) == 1
-                    assert cue.cast_layers[0].category in body_clip(data,cue.contact,cue.clip).sheets
+                    assert cue.clip == 'Attack5'
+                    assert {layer.slot for layer in cue.cast_layers} == {'weaponGlow', 'aura'}
+                    assert next(layer.category for layer in cue.cast_layers
+                                if layer.slot == 'weaponGlow') == 'Magic2'
+                    assert all(layer.category in body_clip(data,cue.contact,cue.clip).sheets
+                               for layer in cue.cast_layers)
             for node in group.nodes:
                 if isinstance(node.bound, BoundCast):
                     assert node.bound.timeline.recipe.definitionRef.content_id == 'spell.' + program

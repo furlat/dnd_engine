@@ -9,7 +9,7 @@ from dnd.core.events import EventQueue
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from devtools.animation_review.control_cases import control_spell_history
 from game.animation_data import load_animation_data
-from game.choreography import bind_choreography, bind_motion
+from game.choreography import bind_choreography, bind_motion, sample_choreography
 from game.player_reduction import reduce_lineage
 from game.projection import Camera, painter_key
 from game.spatial_media_draw import spatial_media_draw_commands
@@ -64,13 +64,16 @@ def test_real_silence_application_sustain_and_continuing_removal_fade(rendering,
         camera = Camera(quadrant=quadrant, zoom=.35, viewport=(640, 480)).with_focus(geometry.center)
         def sample(state, at):
             return spatial_media_draw_commands(state, data, at, camera, lifetimes=records)
-        first = sample(active, applied + 500)
+        # Sample inside frame 16: subtraction at a fractional cast release can
+        # put the exact 500 ms boundary just before it through float rounding.
+        frame_midpoint = 1000 / 32 / 2
+        first = sample(active, applied + 500 + frame_midpoint)
         assert first and all(".application." in row.evidence[2] for row in first)
-        assert {row.evidence[-1] for row in first} == {16}  # 500 ms at 32 FPS
-        hold = sample(active, applied + 2000)
+        assert {row.evidence[-1] for row in first} == {16}
+        hold = sample(active, applied + 2000 + frame_midpoint)
         assert hold and all(".sustain." in row.evidence[2] for row in hold)
         assert {row.evidence[-1] for row in hold} == {16}
-        assert _picture(sample(active, applied + 6000)) == _picture(hold)
+        assert _picture(sample(active, applied + 6000 + frame_midpoint)) == _picture(hold)
         # Whole rear/front surfaces surround occupants and retain their tall art.
         center_depth = painter_key(geometry.center, elevation_steps=0, quadrant=quadrant,
                                    role="actor", identity="recipient")
@@ -84,7 +87,7 @@ def test_real_silence_application_sustain_and_continuing_removal_fade(rendering,
         assert _picture(at_end) != _picture(fading)
         assert {row.evidence[-1] for row in at_end} != {row.evidence[-1] for row in fading}
         assert not sample(before, end + 600)
-        assert _picture(sample(active, applied + 2000)) == _picture(hold), "Backward seeking is pure"
+        assert _picture(sample(active, applied + 2000 + frame_midpoint)) == _picture(hold), "Backward seeking is pure"
     assert EventQueue.event_cursor() == 0
 
 
@@ -127,3 +130,75 @@ def test_cold_acquisition_and_lost_origin_do_not_replay_or_guess_a_sphere(render
         spatial_effects={identity: effect.model_copy(update={"positions": (geometry.center,)})}))
     assert _picture(spatial_media_draw_commands(partial, data, 4600, camera, lifetimes=reacquired)) == _picture(
         spatial_media_draw_commands(state, data, 4600, camera, lifetimes=reacquired))
+
+
+def test_formation_art_precedes_received_field_admission_and_seeks_cleanly(rendering):
+    """A visible forming sphere must not silence the scene at its empty first frame."""
+    data, history = rendering
+    before, roots = player_history(history)
+    root = roots[0]
+    after = reduce_lineage(before, root)
+    identity, effect = next(iter(after.senses.spatial_effects.items()))
+    content_id = effect.content_ref.content_id
+    binding = data.spatial_media[content_id].model_copy(update={"formationCommitMs": 1000.})
+    authored = replace(data, spatial_media={**data.spatial_media, content_id: binding})
+    group = bind_choreography(before, root, authored)
+    records = register_spatial_lifetimes({}, before, authored, absolute_start_ms=0,
+        lineage=root, choreography=group)
+    record = records[identity]
+    assert record.applied_ms is not None and record.committed_ms is not None
+    assert record.committed_ms >= record.applied_ms + 1000.
+    camera = Camera(viewport=(640, 480)).with_focus(effect.area_geometry.center)
+
+    def frame(at):
+        state = sample_choreography(group, at).displayed
+        commands = spatial_media_draw_commands(state, authored, at, camera, lifetimes=records)
+        return state, commands
+
+    at = record.applied_ms + 500.
+    forming, commands = frame(at)
+    assert identity not in forming.senses.spatial_effects
+    assert commands and all(".application." in row.evidence[2] for row in commands)
+    formed, _ = frame(record.committed_ms)
+    assert identity in formed.senses.spatial_effects
+    sought, again = frame(at)
+    assert sought == forming and _picture(again) == _picture(commands)
+    # Looking at one disclosed support cannot reveal a whole pending sphere.
+    hidden = replace(forming, senses=replace(forming.senses, visible=frozenset()))
+    assert not spatial_media_draw_commands(hidden, authored, at, camera, lifetimes=records)
+    assert reduce_lineage(before, root) == after
+
+
+def test_removal_art_precedes_field_clearance_without_restarting_the_fade(rendering):
+    data, history = rendering
+    before, roots = player_history(history)
+    content_id = next(iter(reduce_lineage(before, roots[0]).senses.spatial_effects.values())).content_ref.content_id
+    binding = data.spatial_media[content_id].model_copy(update={"removalCommitMs": 300.})
+    authored = replace(data, spatial_media={**data.spatial_media, content_id: binding})
+    records = {}
+    clock = 0.
+    checked = False
+    for root in roots:
+        motion = bind_motion(before, root, authored)
+        group = None if motion is not None else bind_choreography(before, root, authored)
+        records = register_spatial_lifetimes(records, before, authored, absolute_start_ms=clock,
+            lineage=root, choreography=group, motion=motion)
+        after = reduce_lineage(before, root)
+        for identity, record in records.items():
+            if record.removed_ms is None or identity not in before.senses.spatial_effects:
+                continue
+            assert group is not None
+            start = record.removed_ms - clock
+            fading = sample_choreography(group, start + 150.).displayed
+            cleared = sample_choreography(group, start + 300.).displayed
+            assert identity in fading.senses.spatial_effects
+            assert identity not in cleared.senses.spatial_effects
+            camera = Camera(viewport=(640, 480)).with_focus(record.effect.area_geometry.center)
+            first = spatial_media_draw_commands(fading, authored, record.removed_ms + 150., camera, lifetimes=records)
+            last = spatial_media_draw_commands(cleared, authored, record.removed_ms + 300., camera, lifetimes=records)
+            assert first and last and _picture(first) != _picture(last)
+            assert sample_choreography(group, start + 150.).displayed == fading
+            checked = True
+        before = after
+        clock += (motion.complete_ms if motion is not None else group.complete_ms) + 1800.
+    assert checked

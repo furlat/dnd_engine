@@ -6,7 +6,6 @@ import pytest
 from game.animation_data import load_animation_data
 from game.choreography import BoundChoreography, bind_choreography, walk_bound_timelines
 from game.condition_animation import resolve_condition_appearance
-from game.condition_media_lifetime import register_condition_lifetimes
 from game.condition_draw import condition_body_ramp
 from game.combat import BoundCast
 from game.player_reduction import reduce_lineage
@@ -75,34 +74,25 @@ def test_bark_operator_follows_current_alpha_and_cell_uv(data):
 
 
 @pytest.mark.parametrize('program', ['produce_hit', 'produce_miss', 'produce_recast'])
-def test_retained_flame_is_consumed_at_source_release_before_contact(data, program):
+def test_direct_flame_has_one_projectile_per_cast_and_no_retained_state(data, program):
     state, roots = player_history(nature_spell_history(program=program), role='caster')
-    lifetimes = {}
-    clock = 0.
-    checked = False
+    casts = 0
     for root in roots:
         group = bind_choreography(state, root, data)
         assert not group.gaps
-        lifetimes = register_condition_lifetimes(lifetimes, state, data,
-            absolute_start_ms=clock, lineage=root, choreography=group)
         for node in group.nodes:
             if not isinstance(node.bound, BoundCast):
                 continue
             timeline = node.bound.timeline
-            if not any(row.source.hit is not None for row in timeline.applications):
+            if timeline.recipe.definitionRef.content_id != 'spell.produce_flame':
                 continue
-            flame = next(row for row in lifetimes.values()
-                if row.behavior_id == 'condition.spell.produce_flame')
-            release = node.start_ms + timeline.release_ms
-            assert flame.consumed_ms == pytest.approx(clock + release)
-            assert flame.removed_ms == flame.consumed_ms
+            casts += 1
+            assert len(timeline.applications) == 1
             assert all(row.travel_end_ms > timeline.release_ms for row in timeline.applications)
-            assert not any(interval.name == 'prepare' for row in timeline.applications
-                for interval in row.projectile_intervals)
-            checked = True
         state = reduce_lineage(state, root)
-        clock += group.complete_ms + 25
-    assert checked
+        assert not any(member.behavior_id == 'condition.spell.produce_flame'
+            for actor in state.actors.values() for member in actor.conditions)
+    assert casts == (2 if program == 'produce_recast' else 1)
 
 
 def test_compatible_nature_buffs_all_keep_their_authored_treatment(data):
@@ -111,6 +101,6 @@ def test_compatible_nature_buffs_all_keep_their_authored_treatment(data):
         state = reduce_lineage(state, root)
     actor = state.actors[state.observer_uuid]
     appearance = resolve_condition_appearance(actor.conditions, data.condition_recipes, data.condition_media)
-    expected = {'condition.spell.' + name for name in ('shillelagh', 'barkskin', 'fire_shield', 'produce_flame')}
+    expected = {'condition.spell.' + name for name in ('shillelagh', 'barkskin', 'fire_shield')}
     assert expected <= set(appearance.matched_behavior_ids)
     assert appearance.item_modifiers

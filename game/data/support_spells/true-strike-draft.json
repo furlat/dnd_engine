@@ -38,19 +38,28 @@
             "clip": "Attack6",
             "layers": [
               {
-                "id": "true-strike.weapon-charge",
+                "id": "cast-weaponGlow",
                 "slot": "weaponGlow",
                 "enabled": true,
                 "hidden": false,
-                "category": "Melee3",
+                "category": "Magic2",
                 "colors": {
-                  "source": "override",
+                  "source": "auto",
                   "primary": 14401923,
-                  "secondary": 15851436,
-                  "tertiary": 16773322,
-                  "mode": "multiTint"
+                  "mode": "paletteSwap"
                 },
-                "sourceSheet": "/support-spells/true_strike/Melee3-Attack6-charge.png"
+                "sourceSheet": "/spritesheets/Magic2/Attack6.png",
+                "palette": {
+                  "colors": [
+                    16773322,
+                    14401923,
+                    15851436
+                  ],
+                  "gamma": 0.65,
+                  "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                  "untinted": false
+                },
+                "blendMode": "normal"
               }
             ]
           },
@@ -60,19 +69,28 @@
             "clip": "Attack3",
             "layers": [
               {
-                "id": "true-strike.weapon-charge",
+                "id": "cast-weaponGlow",
                 "slot": "weaponGlow",
                 "enabled": true,
                 "hidden": false,
-                "category": "Ranged1",
+                "category": "Magic2",
                 "colors": {
-                  "source": "override",
+                  "source": "auto",
                   "primary": 14401923,
-                  "secondary": 15851436,
-                  "tertiary": 16773322,
-                  "mode": "multiTint"
+                  "mode": "paletteSwap"
                 },
-                "sourceSheet": "/support-spells/true_strike/Ranged1-Attack3-charge.png"
+                "sourceSheet": "/spritesheets/Magic2/Attack3.png",
+                "palette": {
+                  "colors": [
+                    16773322,
+                    14401923,
+                    15851436
+                  ],
+                  "gamma": 0.65,
+                  "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                  "untinted": false
+                },
+                "blendMode": "normal"
               }
             ]
           },
@@ -81,17 +99,28 @@
             "clip": "Attack1",
             "layers": [
               {
-                "id": "true-strike.cast-hands",
+                "id": "cast-weaponGlow",
                 "slot": "weaponGlow",
                 "enabled": true,
                 "hidden": false,
                 "category": "Magic2",
-                "sourceSheet": "/support-spells/cast-hands/Magic2-Attack1.png",
                 "colors": {
                   "source": "auto",
-                  "mode": "paletteSwap",
-                  "primary": 16777215
-                }
+                  "primary": 14401923,
+                  "mode": "paletteSwap"
+                },
+                "sourceSheet": "/spritesheets/Magic2/Attack1.png",
+                "palette": {
+                  "colors": [
+                    16773322,
+                    14401923,
+                    15851436
+                  ],
+                  "gamma": 0.65,
+                  "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                  "untinted": false
+                },
+                "blendMode": "normal"
               }
             ]
           },
@@ -100,17 +129,28 @@
             "clip": "Attack2",
             "layers": [
               {
-                "id": "true-strike.cast-hands",
+                "id": "cast-weaponGlow",
                 "slot": "weaponGlow",
                 "enabled": true,
                 "hidden": false,
                 "category": "Magic2",
-                "sourceSheet": "/support-spells/cast-hands/Magic2-Attack2.png",
                 "colors": {
                   "source": "auto",
-                  "mode": "paletteSwap",
-                  "primary": 16777215
-                }
+                  "primary": 14401923,
+                  "mode": "paletteSwap"
+                },
+                "sourceSheet": "/spritesheets/Magic2/Attack2.png",
+                "palette": {
+                  "colors": [
+                    16773322,
+                    14401923,
+                    15851436
+                  ],
+                  "gamma": 0.65,
+                  "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                  "untinted": false
+                },
+                "blendMode": "normal"
               }
             ]
           },
@@ -119,17 +159,28 @@
             "clip": "Attack3",
             "layers": [
               {
-                "id": "true-strike.cast-hands",
+                "id": "cast-weaponGlow",
                 "slot": "weaponGlow",
                 "enabled": true,
                 "hidden": false,
                 "category": "Magic2",
-                "sourceSheet": "/support-spells/cast-hands/Magic2-Attack3.png",
                 "colors": {
                   "source": "auto",
-                  "mode": "paletteSwap",
-                  "primary": 16777215
-                }
+                  "primary": 14401923,
+                  "mode": "paletteSwap"
+                },
+                "sourceSheet": "/spritesheets/Magic2/Attack3.png",
+                "palette": {
+                  "colors": [
+                    16773322,
+                    14401923,
+                    15851436
+                  ],
+                  "gamma": 0.65,
+                  "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                  "untinted": false
+                },
+                "blendMode": "normal"
               }
             ]
           },
@@ -138,17 +189,28 @@
             "clip": "Attack4",
             "layers": [
               {
-                "id": "true-strike.cast-hands",
+                "id": "cast-weaponGlow",
                 "slot": "weaponGlow",
                 "enabled": true,
                 "hidden": false,
                 "category": "Magic2",
-                "sourceSheet": "/support-spells/cast-hands/Magic2-Attack4.png",
                 "colors": {
                   "source": "auto",
-                  "mode": "paletteSwap",
-                  "primary": 16777215
-                }
+                  "primary": 14401923,
+                  "mode": "paletteSwap"
+                },
+                "sourceSheet": "/spritesheets/Magic2/Attack4.png",
+                "palette": {
+                  "colors": [
+                    16773322,
+                    14401923,
+                    15851436
+                  ],
+                  "gamma": 0.65,
+                  "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                  "untinted": false
+                },
+                "blendMode": "normal"
               }
             ]
           },
@@ -157,17 +219,28 @@
             "clip": "Attack5",
             "layers": [
               {
-                "id": "true-strike.cast-hands",
+                "id": "cast-weaponGlow",
                 "slot": "weaponGlow",
                 "enabled": true,
                 "hidden": false,
                 "category": "Magic2",
-                "sourceSheet": "/support-spells/cast-hands/Magic2-Attack5.png",
                 "colors": {
                   "source": "auto",
-                  "mode": "paletteSwap",
-                  "primary": 16777215
-                }
+                  "primary": 14401923,
+                  "mode": "paletteSwap"
+                },
+                "sourceSheet": "/spritesheets/Magic2/Attack5.png",
+                "palette": {
+                  "colors": [
+                    16773322,
+                    14401923,
+                    15851436
+                  ],
+                  "gamma": 0.65,
+                  "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                  "untinted": false
+                },
+                "blendMode": "normal"
               }
             ]
           },
@@ -176,17 +249,28 @@
             "clip": "Attack6",
             "layers": [
               {
-                "id": "true-strike.cast-hands",
+                "id": "cast-weaponGlow",
                 "slot": "weaponGlow",
                 "enabled": true,
                 "hidden": false,
                 "category": "Magic2",
-                "sourceSheet": "/support-spells/cast-hands/Magic2-Attack6.png",
                 "colors": {
                   "source": "auto",
-                  "mode": "paletteSwap",
-                  "primary": 16777215
-                }
+                  "primary": 14401923,
+                  "mode": "paletteSwap"
+                },
+                "sourceSheet": "/spritesheets/Magic2/Attack6.png",
+                "palette": {
+                  "colors": [
+                    16773322,
+                    14401923,
+                    15851436
+                  ],
+                  "gamma": 0.65,
+                  "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                  "untinted": false
+                },
+                "blendMode": "normal"
               }
             ]
           }

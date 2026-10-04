@@ -41,12 +41,13 @@ class SpatialMediaLifetime:
     damage_contacts: tuple[SpatialDamageContact, ...] = ()
     facings: tuple[tuple[float, Facing8], ...] = ()
     retired_cells: tuple[tuple[tuple[int, int], float], ...] = ()
+    committed_ms: float | None = None
 
 
 def _observed(state: PlayerState, data: AnimationData) -> dict[UUID, PerceivedSpatialEffect]:
     return {owner: effect for owner, effect in state.senses.spatial_effects.items()
             if (binding := data.spatial_media.get(effect.content_ref.content_id)) is not None
-            and (maintained_removal_duration(data, binding) or any(layer.applicationAssetId is not None
+            and (binding.formationCommitMs or maintained_removal_duration(data, binding) or any(layer.applicationAssetId is not None
                  or layer.recipientTrackId is not None for layer in binding.layers))
             } if state.senses is not None else {}
 
@@ -115,12 +116,17 @@ def register_spatial_lifetimes(
                 if isinstance(application.target, ActorContact) and media_target_applies(track, application)))
     edges = [row for visit in visits
              for row in _edges(visit.timeline.before, visit.timeline.states, data, visit.offset_ms)]
+    formation_starts = {row.identity: row.start_ms + visit.offset_ms for visit in visits
+        for row in visit.timeline.world_transitions if row.field == "creation"}
     for at, owner, effect, added in sorted(edges, key=lambda row: row[0]):
         old = result.get(owner)
         if added and old is None:
             wanted = {layer.recipientTrackId for layer in data.spatial_media[effect.content_ref.content_id].layers}
-            result[owner] = SpatialMediaLifetime(effect, absolute_start_ms + at if owner in created else None,
-                recipient_endpoints=tuple(row for row in created_recipients.get(owner, ()) if row.track_id in wanted))
+            start = formation_starts.get(owner) if owner in created else None
+            result[owner] = SpatialMediaLifetime(effect,
+                absolute_start_ms + start if start is not None else None,
+                recipient_endpoints=tuple(row for row in created_recipients.get(owner, ()) if row.track_id in wanted),
+                committed_ms=absolute_start_ms + at)
         elif not added and old is not None and old.removed_ms is None and owner in removed:
             result[owner] = replace(old, effect=effect, removed_ms=absolute_start_ms + at)
     # Reuse the already bound packet contacts and HP dates. An owner or actor

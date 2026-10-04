@@ -18,6 +18,7 @@ from dnd.core.presentation_geometry import LinePresentationGeometry
 from dnd.core.world_edges import SlopeAxis, progressive_elevation_transition
 from game.area_media import AreaSolid, BoundarySprite, boundary_segment
 from game.projection import Camera, inverse_rotate_position, project_world
+from game.spatial_field import sphere_field_owners
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +53,7 @@ class SurfaceVolume:
     # must not turn those grants into cloud in front of the known wall face.
     upper_only: np.ndarray | None = None
     line_geometry: LinePresentationGeometry | None = None
+    support_clipping: Literal["physical", "raised"] = "physical"
 
 
 @lru_cache(maxsize=32)
@@ -230,6 +232,7 @@ def _visual_boundary_coverage(keep: np.ndarray, depth: np.ndarray, x: np.ndarray
 def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera, *,
                    destination: tuple[int, int] = (0, 0),
                    visual_boundaries: tuple[BoundarySprite, ...] | None = None,
+                   world_bounds: tuple[int, int, int, int] | None = None,
                    ) -> tuple[pygame.Surface, np.ndarray]:
     """Return masked color plus ground depths for the shared painter splitter."""
     local = volume.positions
@@ -258,9 +261,19 @@ def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
         keep &= reachable
     if volume.supports:
         floor_height = observed_support_heights(x, z, volume.supports)
-        keep &= ~(height < floor_height - .001)
+        below = height < floor_height - .001
+        if volume.support_clipping == "raised":
+            below &= floor_height > volume.elevation + dh + .001
+        keep &= ~below
     if volume.admitted is not None:
         cells_x, cells_z = np.floor(x+.5).astype(np.int32), np.floor(z+.5).astype(np.int32)
+        if volume.radius > 0 and world_bounds is not None:
+            cells = sphere_field_owners(np.stack((cells_x,cells_z),axis=2),
+                (round(volume.center[0]),round(volume.center[1])), int(volume.radius), world_bounds)
+            if cells is None:
+                keep[:] = False
+            else:
+                cells_x,cells_z = cells[:,:,0],cells[:,:,1]
         admitted = np.zeros(owned.shape, dtype=bool)
         for px, pz in volume.admitted:
             admitted |= (cells_x == px) & (cells_z == pz)

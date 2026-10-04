@@ -277,3 +277,22 @@ manifest. Public selections are in `game/data/finger_media/`. Keep independent
 camera resources, owner headings, paired layers, original pivots and32FPS clocks;
 do not rotate a 2D isometric hand to invent another heading. The procedural donor
 uses the existing world compositor; its palette differs from the bone hand.
+# October 4 — original modular casting banks
+
+The reviewed [casting assignments](agent_docs/art/SPELL_CAST_ASSIGNMENTS_2026-10-04.md)
+select 21 original Magic2/Effect1/3/4/5 motion banks (7,659,330 bytes total).
+Six already installed Magic2 banks are reused by resource address; fifteen
+original banks are installed without painting, resizing or alpha changes.
+Private source receipt:
+`/home/tommaso/Dev/neurodragon_art/sources/modular-casting-20261004`.
+Production manifest remains `/home/tommaso/Dev/neurodragon_art-production/art-manifest.json`.
+The review archive keeps the per-bank source/runtime SHA256 receipt. Automatic
+palette replacement and the existing delivered noise texture recolor only
+isolated overlay pixels. Runtime retains the ordinary Studio recipes.
+
+October 5 repair additionally selects the original `Effect2/Attack4.png` and
+`Effect3/Attack4.png` banks for the reviewed ground-cast assignments. The two
+unchanged sheets total 1,523,231 bytes; exact local/private hashes and the prior
+private installer manifest are retained in
+`/home/tommaso/Dev/neurodragon_art/sources/modular-casting-repair-20261005/`.
+Their ordinary NeuroClient resource bindings are installed with the sheets.

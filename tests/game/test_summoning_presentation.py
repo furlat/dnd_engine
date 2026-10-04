@@ -300,14 +300,17 @@ def test_native_summon_and_dismiss_share_existing_gesture_release(family, data):
                 effect_ms = gesture.effect_ms
                 caster_id = gesture.contact.actor_uuid
                 assert not gesture.gaps
-            assert effect_ms == pytest.approx(8 * 1000 / 12)
+            # The reviewed spell gesture releases at 11; the independent
+            # existing dismiss action retains its original frame-8 clock.
+            release_frame = 11 if isinstance(fact, SpellFact) else 8
+            assert effect_ms == pytest.approx(release_frame * 1000 / 12)
             pending = sample_body_presentation(before, group.after, data, effect_ms - 1,
                 effect_ms - 1, {}, choreography=group)
             released = sample_body_presentation(before, group.after, data, effect_ms,
                 effect_ms, {}, choreography=group)
             caster_pose, = (pose for pose in pending.poses
                            if pose.actor.contact.actor_uuid == caster_id)
-            assert caster_pose.body.clip == "Special1" and caster_pose.body.frame == 7
+            assert caster_pose.body.clip == "Special1" and caster_pose.body.frame == release_frame - 1
             present_before = any(pose.actor.contact.actor_uuid == str(identity) for pose in pending.poses)
             present_after = any(pose.actor.contact.actor_uuid == str(identity) for pose in released.poses)
             if isinstance(fact, SpellFact):

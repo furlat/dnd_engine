@@ -185,7 +185,8 @@
     "spell.dimension_door": {
       "back": "transport.dimension_door.finite.back",
       "front": "transport.dimension_door.finite.front",
-      "scale": 1.3392857142857142
+      "scale": 1.3392857142857142,
+      "transitMs": 0
     }
   }
 }

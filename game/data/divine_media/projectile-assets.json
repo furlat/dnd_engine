@@ -210,7 +210,13 @@
         "start": 0,
         "frames": 47,
         "fps": 32,
-        "loop": false
+        "loop": false,
+        "anchors": [
+          {
+            "name": "formed",
+            "frame": 8
+          }
+        ]
       }
     },
     "anchor": {
@@ -256,7 +262,13 @@
         "start": 0,
         "frames": 47,
         "fps": 32,
-        "loop": false
+        "loop": false,
+        "anchors": [
+          {
+            "name": "formed",
+            "frame": 8
+          }
+        ]
       }
     },
     "anchor": {

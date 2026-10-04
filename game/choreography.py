@@ -232,7 +232,8 @@ def _observed_commit(fact: PlayerFact | None, source_lineages: Mapping[UUID, UUI
         return None
     sources = {source_lineages[row.source_event_uuid] for row in fact.observed_changes
                if row.source_event_uuid in source_lineages}
-    return milestones.get(next(iter(sources))) if len(sources) == 1 else None
+    dates = [milestones[source] for source in sources if source in milestones]
+    return max(dates) if dates and len(dates) == len(sources) else None
 
 
 def _destruction_transition(before: PlayerState, lineage: PlayerLineage, event: PlayerNode,
@@ -400,6 +401,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
         for event in lineage.events if isinstance(event.fact, SensoryFact)
         for identity, effect in event.fact.spatial_effects_changed.items()})
     spatial_contents = {identity: effect.content_ref.content_id for identity, effect in spatial_effects.items()}
+    formation_starts: dict[UUID, float] = {}
+    section_starts: dict[UUID, float] = {}
     # Creation's applied damage can precede its completion/observation in native
     # ancestry. Bind only shell facts actually disclosed in this same lineage.
     created_effects = {event.fact.spatial_effect_uuid: tuple(
@@ -928,6 +931,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 state_at_effect = at
         if isinstance(fact, SpatialEffectStateFact):
             state_at_effect = at
+            if fact.operation is SpatialEffectChangeOperation.CREATED and not event.canceled:
+                formation_starts[fact.spatial_effect_uuid] = at
             spatial_media = data.spatial_media.get(spatial_contents.get(fact.spatial_effect_uuid, ""))
             if spatial_media is not None:
                 if fact.removed_positions and any(layer.cellVariants for layer in spatial_media.layers):
@@ -940,10 +945,12 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                             positions=effect.positions if effect is not None else (),
                             suppressed=bool(effect.suppressions) if effect is not None else False)) is not None:
                         gaps.append((event.uuid, limitation))
-                if fact.operation is SpatialEffectChangeOperation.REMOVED:
+                if (fact.operation is SpatialEffectChangeOperation.REMOVED
+                        and event.lineage_uuid not in destruction_owners):
                     recorded_transitions.append(WorldTransition(fact.spatial_effect_uuid, "removal", None, None, at))
                 elif (fact.operation is SpatialEffectChangeOperation.CREATED
-                      and any(layer.applicationAssetId is not None for layer in spatial_media.layers)):
+                      and (spatial_media.formationCommitMs > 0
+                           or any(layer.applicationAssetId is not None for layer in spatial_media.layers))):
                     recorded_transitions.append(WorldTransition(fact.spatial_effect_uuid, "creation", None, None, at))
                 elif (fact.operation is SpatialEffectChangeOperation.FOOTPRINT_CHANGED
                       and spatial_media.movementSpeedCellsPerSecond is not None):
@@ -959,7 +966,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                             duration_ms=field_motion.duration_ms, spatial_motion=field_motion))
                         end = max(end, at + field_motion.duration_ms)
                         at = observation_at = state_at_effect = end
-            if spatial_media is None and fact.operation is SpatialEffectChangeOperation.REMOVED:
+            if (spatial_media is None and fact.operation is SpatialEffectChangeOperation.REMOVED
+                    and event.lineage_uuid not in destruction_owners):
                 previous = before.senses.spatial_effects.get(fact.spatial_effect_uuid) if before.senses is not None else None
                 if previous is not None and any(obj.item.item_id in data.construction_media
                         and obj.item.construction_owner_uuid == fact.spatial_effect_uuid
@@ -1020,7 +1028,11 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             if end > at:
                 at = observation_at = state_at_effect = end
         if (isinstance(fact, SpatialFact) and fact.object_uuid is not None
-                and fact.change_type is SpatialChangeType.OBJECT_REMOVED):
+                and fact.change_type is SpatialChangeType.OBJECT_PLACED and not event.canceled):
+            section_starts[fact.object_uuid] = state_at_effect if state_at_effect is not None else at
+        if (isinstance(fact, SpatialFact) and fact.object_uuid is not None
+                and fact.change_type is SpatialChangeType.OBJECT_REMOVED
+                and event.lineage_uuid not in destruction_owners):
             original = before.objects.get(fact.object_uuid)
             binding = data.construction_media.get(original.item.item_id) if original is not None else None
             if binding is not None:
@@ -1078,7 +1090,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
         if isinstance(fact, (ActionFact, SpellFact)) and not application and not linked_effect and child_attack is None:
             try:
                 body_action = bind_body_action(_before_event(before, lineage, event), event, data,
-                    start_ms=at, facings=facings or {}, contacts=placed_contacts)
+                    start_ms=at, facings=facings or {}, contacts=placed_contacts,
+                    lineage=lineage_branch(lineage, event))
             except (ValueError, NotImplementedError) as error:
                 gaps.append((event.uuid, str(error)))
             if (body_action is None and isinstance(fact, ActionFact) and fact.behavior_id is not None
@@ -1479,6 +1492,127 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
     for reaction in reactions:
         cue = next((cue for cue in external_reactions if cue.event_uuid == reaction.root.uuid), None)
         observations.extend((cue.start_ms if cue is not None else 0., row) for row in reaction.observations)
+    # Artwork and spatial admission/clearance have separate authored dates.
+    # Keep each received world/sensory update indivisible and downstream of
+    # every source it observes; the latest native reduction is untouched.
+    received_objects = {obj.placement.object_uuid: obj for update in lineage.world_updates
+        for obj in update.objects}
+    known_objects = {**before.objects, **received_objects}
+    removal_commits: dict[UUID, float] = {}
+    for transition in recorded_transitions:
+        if transition.field != "removal":
+            continue
+        identity = transition.identity
+        binding = data.spatial_media.get(spatial_contents.get(identity, ""))
+        offsets = [binding.removalCommitMs] if binding is not None else []
+        offsets.extend(binding.removalCommitMs for object_id, obj in known_objects.items()
+            if (object_id == identity or obj.item.construction_owner_uuid == identity)
+            and (binding := data.construction_media.get(obj.item.item_id)) is not None)
+        removal_commits[identity] = transition.start_ms + max(offsets, default=0.)
+    formation_commits: dict[UUID, float] = {}
+    for identity, start in formation_starts.items():
+        binding = data.spatial_media.get(spatial_contents.get(identity, ""))
+        offsets = [binding.formationCommitMs] if binding is not None else []
+        offsets.extend(binding.formationCommitMs for obj in received_objects.values()
+            if obj.item.construction_owner_uuid == identity
+            and (binding := data.construction_media.get(obj.item.item_id)) is not None)
+        formation_commits[identity] = start + max(offsets, default=0.)
+    for identity, start in section_starts.items():
+        obj = received_objects.get(identity)
+        binding = data.construction_media.get(obj.item.item_id) if obj is not None else None
+        if binding is not None:
+            formation_commits[identity] = start + binding.formationCommitMs
+    spatial_source_commits: dict[UUID, float] = {}
+    for event in lineage.events:
+        if (not event.canceled and isinstance(event.fact, SpatialEffectStateFact)
+                and event.fact.operation in (SpatialEffectChangeOperation.CREATED, SpatialEffectChangeOperation.REMOVED)):
+            commits = (formation_commits if event.fact.operation is SpatialEffectChangeOperation.CREATED
+                       else removal_commits)
+            commit_at = commits.get(event.fact.spatial_effect_uuid)
+            if commit_at is not None:
+                spatial_source_commits[event.lineage_uuid] = commit_at
+                commit_milestones[event.lineage_uuid] = max(commit_at,
+                    commit_milestones.get(event.lineage_uuid, commit_at))
+        elif (not event.canceled and isinstance(event.fact, SpatialFact)
+                and event.fact.object_uuid is not None
+                and event.fact.change_type is SpatialChangeType.OBJECT_PLACED):
+            commit_at = formation_commits.get(event.fact.object_uuid)
+            if commit_at is not None:
+                spatial_source_commits[event.lineage_uuid] = commit_at
+                commit_milestones[event.lineage_uuid] = max(commit_at,
+                    commit_milestones.get(event.lineage_uuid, commit_at))
+    # A received sensory update may name only its cause, rather than repeat
+    # the changed field. Carry the exact source deadline through its retained
+    # ancestry, including nodes without a fact. Do not use unrelated cast or
+    # sibling deadlines to infer ownership.
+    spatial_causal_commits: dict[UUID, float] = {}
+    for event in lineage.events:
+        sources = [event]
+        if isinstance(event.fact, SensoryFact) and event.fact.cause_event_uuid is not None:
+            cause_lineage = observation_lineages.get(event.fact.cause_event_uuid)
+            cause = by_lineage.get(cause_lineage) if cause_lineage is not None else None
+            if cause is not None:
+                sources.append(cause)
+        dates = []
+        for source in sources:
+            ancestor: PlayerNode | None = source
+            while ancestor is not None:
+                if ancestor.lineage_uuid in spatial_source_commits:
+                    dates.append(spatial_source_commits[ancestor.lineage_uuid])
+                ancestor = by_lineage.get(ancestor.parent_lineage) if ancestor.parent_lineage is not None else None
+        if dates:
+            spatial_causal_commits[event.lineage_uuid] = max(dates)
+            commit_milestones[event.lineage_uuid] = max(max(dates),
+                commit_milestones.get(event.lineage_uuid, 0.))
+    dated_nodes = []
+    for at, node in state_nodes:
+        fact = node.fact
+        owners = set()
+        removed = set()
+        if isinstance(fact, SpatialEffectStateFact) and fact.operation is SpatialEffectChangeOperation.CREATED:
+            owners.add(fact.spatial_effect_uuid)
+        elif isinstance(fact, SpatialEffectStateFact) and fact.operation is SpatialEffectChangeOperation.REMOVED:
+            removed.add(fact.spatial_effect_uuid)
+        update = world_events.get(node.uuid)
+        if update is not None:
+            owners.update(obj.placement.object_uuid for obj in update.objects)
+            owners.update(obj.item.construction_owner_uuid for obj in update.objects
+                if obj.item.construction_owner_uuid is not None)
+            removed.update(update.objects_removed)
+            removed.update(known_objects[identity].item.construction_owner_uuid
+                for identity in update.objects_removed if identity in known_objects
+                and known_objects[identity].item.construction_owner_uuid is not None)
+        if isinstance(fact, SpatialFact) and fact.object_uuid is not None and fact.change_type is SpatialChangeType.OBJECT_PLACED:
+            owners.add(fact.object_uuid)
+            obj = received_objects.get(fact.object_uuid)
+            if obj is not None and obj.item.construction_owner_uuid is not None:
+                owners.add(obj.item.construction_owner_uuid)
+        elif isinstance(fact, SpatialFact) and fact.object_uuid is not None and fact.change_type is SpatialChangeType.OBJECT_REMOVED:
+            removed.add(fact.object_uuid)
+            obj = known_objects.get(fact.object_uuid)
+            if obj is not None and obj.item.construction_owner_uuid is not None:
+                removed.add(obj.item.construction_owner_uuid)
+        at = max((at, *(formation_commits[owner] for owner in owners if owner in formation_commits),
+                  *(removal_commits[owner] for owner in removed if owner in removal_commits)))
+        commit_milestones[node.lineage_uuid] = max(at, commit_milestones.get(node.lineage_uuid, at))
+        dated_nodes.append((at, node))
+    state_nodes = []
+    for at, node in sorted(dated_nodes, key=lambda row: order[row[1].uuid]):
+        spatial_commit = spatial_causal_commits.get(node.lineage_uuid)
+        if spatial_commit is not None:
+            at = max(at, spatial_commit)
+        observed_at = _observed_commit(by_uuid[node.uuid].fact, observation_lineages, commit_milestones)
+        if observed_at is not None:
+            at = max(at, observed_at)
+        if isinstance(node.fact, SensoryFact):
+            at = max((at, *(formation_commits[owner]
+                for owner in node.fact.spatial_effects_changed if owner in formation_commits),
+                *(removal_commits[owner] for owner in node.fact.spatial_effects_removed
+                  if owner in removal_commits)))
+        commit_milestones[node.lineage_uuid] = max(at, commit_milestones.get(node.lineage_uuid, at))
+        state_nodes.append((at, node))
+    observations = [(max(at, commit_milestones.get(observation_lineages[row.event_uuid], at)), row)
+        for at, row in observations]
     states: list[tuple[float, PlayerState]] = []
     state = displayed_before
     version_rows = tuple(row for root in (*reactions, lineage) for row in root.version_rows)
@@ -1491,7 +1625,8 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             tuple(update for update in lineage.world_updates if update.event_uuid in identities))
         states.append((at, state))
         complete = max(complete, at)
-    recorded_transitions.extend(construction_creation_transitions(displayed_before, states, lineage, data))
+    recorded_transitions.extend(construction_creation_transitions(displayed_before, states, lineage, data,
+        formation_starts={**formation_starts, **section_starts}))
     transitions = {(row.identity, row.field, row.start_ms): row
                    for row in (*world_transitions(displayed_before, states), *recorded_transitions,
                        *(replace(change, start_ms=change.start_ms + cue.start_ms)

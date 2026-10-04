@@ -5961,7 +5961,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "offsetY": 16
           },
           {
             "id": "curse.ability.rings.front",
@@ -5986,7 +5987,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "offsetY": 16
           },
           {
             "id": "curse.ability.mark.back",
@@ -6065,7 +6067,8 @@
               "tertiary": 16777215
             },
             "durationMs": 1750,
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "offsetY": 16
           },
           {
             "id": "curse.ability.rings.front.removal",
@@ -6080,7 +6083,8 @@
               "tertiary": 16777215
             },
             "durationMs": 1750,
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "offsetY": 16
           },
           {
             "id": "curse.ability.mark.back.removal",
@@ -6229,7 +6233,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "offsetY": 16
           },
           {
             "id": "curse.attack.rings.front",
@@ -6254,7 +6259,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "offsetY": 16
           },
           {
             "id": "curse.attack.mark.back",
@@ -6333,7 +6339,8 @@
               "tertiary": 16777215
             },
             "durationMs": 1750,
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "offsetY": 16
           },
           {
             "id": "curse.attack.rings.front.removal",
@@ -6348,7 +6355,8 @@
               "tertiary": 16777215
             },
             "durationMs": 1750,
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "offsetY": 16
           },
           {
             "id": "curse.attack.mark.back.removal",
@@ -6497,7 +6505,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "offsetY": 16
           },
           {
             "id": "curse.inaction.rings.front",
@@ -6522,7 +6531,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "offsetY": 16
           },
           {
             "id": "curse.inaction.mark.back",
@@ -6601,7 +6611,8 @@
               "tertiary": 16777215
             },
             "durationMs": 1750,
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "offsetY": 16
           },
           {
             "id": "curse.inaction.rings.front.removal",
@@ -6616,7 +6627,8 @@
               "tertiary": 16777215
             },
             "durationMs": 1750,
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "offsetY": 16
           },
           {
             "id": "curse.inaction.mark.back.removal",
@@ -6765,7 +6777,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "offsetY": 16
           },
           {
             "id": "curse.damage.rings.front",
@@ -6790,7 +6803,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "offsetY": 16
           },
           {
             "id": "curse.damage.mark.back",
@@ -6869,7 +6883,8 @@
               "tertiary": 16777215
             },
             "durationMs": 1750,
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "offsetY": 16
           },
           {
             "id": "curse.damage.rings.front.removal",
@@ -6884,7 +6899,8 @@
               "tertiary": 16777215
             },
             "durationMs": 1750,
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "offsetY": 16
           },
           {
             "id": "curse.damage.mark.back.removal",
@@ -7242,7 +7258,7 @@
             "assetId": "control.hold_human.back",
             "category": "Hold human",
             "animation": "hold",
-            "fps": 32,
+            "fps": 80,
             "attachment": "body",
             "priority": 75,
             "colors": {
@@ -7267,7 +7283,7 @@
             "assetId": "control.hold_human.front",
             "category": "Hold human",
             "animation": "hold",
-            "fps": 32,
+            "fps": 80,
             "attachment": "body",
             "priority": 75,
             "colors": {
@@ -7384,7 +7400,7 @@
             "assetId": "control.hold_human.back",
             "category": "Hold human",
             "animation": "hold",
-            "fps": 32,
+            "fps": 80,
             "attachment": "body",
             "priority": 75,
             "colors": {
@@ -7409,7 +7425,7 @@
             "assetId": "control.hold_human.front",
             "category": "Hold human",
             "animation": "hold",
-            "fps": 32,
+            "fps": 80,
             "attachment": "body",
             "priority": 75,
             "colors": {
@@ -9799,107 +9815,6 @@
           ]
         }
       ]
-    },
-    {
-      "definitionRef": {
-        "pack_id": "content.srd_5_1_cc",
-        "definition_kind": "condition",
-        "content_id": "condition.spell.produce_flame",
-        "content_version": 1,
-        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
-      },
-      "label": "Produce Flame",
-      "disposition": "authored",
-      "mediaFailurePolicy": "fail_transaction",
-      "relationships": {
-        "incomingTriggers": [],
-        "relatedStates": [],
-        "grantsActions": []
-      },
-      "classification": {
-        "runtimeRole": "actor_state",
-        "visualIntensity": "normal",
-        "presentationDomains": [
-          "actor"
-        ],
-        "visualFamily": "condition.spell.produce_flame"
-      },
-      "composition": {
-        "group": "condition.spell.produce_flame",
-        "exclusiveGroup": null,
-        "priority": 40,
-        "maxLayers": 1
-      },
-      "persistent": {
-        "alphaMultiplier": 1,
-        "bodyColor": null,
-        "equipmentModifiers": [],
-        "appearanceLayers": [],
-        "layers": [
-          {
-            "id": "held-flame-back",
-            "assetId": "nature.produce.back",
-            "category": "nature_utility",
-            "animation": "hold",
-            "fps": 32,
-            "attachment": "hand",
-            "priority": 40,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "activeDuring": [
-              "idle",
-              "move",
-              "jump",
-              "forced_move",
-              "attack",
-              "cast",
-              "act",
-              "hit"
-            ],
-            "drawOrder": "behind_body"
-          },
-          {
-            "id": "held-flame-front",
-            "assetId": "nature.produce.front",
-            "category": "nature_utility",
-            "animation": "hold",
-            "fps": 32,
-            "attachment": "hand",
-            "priority": 40,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "activeDuring": [
-              "idle",
-              "move",
-              "jump",
-              "forced_move",
-              "attack",
-              "cast",
-              "act",
-              "hit"
-            ],
-            "drawOrder": "in_front_of_body"
-          }
-        ]
-      },
-      "application": {
-        "durationMs": 0,
-        "feedbackEnabled": false,
-        "feedbackColor": 16777215,
-        "effects": []
-      },
-      "removal": {
-        "durationMs": 0,
-        "feedbackEnabled": false,
-        "feedbackColor": 16777215,
-        "effects": []
-      }
     },
     {
       "definitionRef": {

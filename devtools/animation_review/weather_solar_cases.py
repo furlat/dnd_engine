@@ -13,3 +13,4 @@ class WeatherSolarCase(BaseModel):
     expire: bool = False
     repeat: bool = False
     heading: int = Field(default=0, ge=0, le=7)
+    caster_position: tuple[int, int] | None = None

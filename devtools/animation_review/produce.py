@@ -129,7 +129,8 @@ def produce(case: ReviewCase) -> CapturedHistory:
         case CurseCase() as scenario:
             return curse_history(option=scenario.option, saved=scenario.saved)
         case HoldCase() as scenario:
-            return hold_history(program=scenario.program, saved=scenario.saved, retain_paralysis=scenario.retain_paralysis)
+            return hold_history(program=scenario.program, saved=scenario.saved,
+                retain_paralysis=scenario.retain_paralysis, size_change=scenario.size_change)
         case SlowCase() as scenario:
             return slow_history(saved=scenario.saved)
         case SharedConditionCase() as scenario:
@@ -152,7 +153,8 @@ def produce(case: ReviewCase) -> CapturedHistory:
             return holy_spell_history(program=scenario.program,immune=scenario.immune,expire=scenario.expire)
         case WeatherSolarCase() as scenario:
             return weather_solar_history(program=scenario.program, empty=scenario.empty,
-                expire=scenario.expire, heading=scenario.heading, repeat=scenario.repeat)
+                expire=scenario.expire, heading=scenario.heading, repeat=scenario.repeat,
+                caster_position=scenario.caster_position)
         case NatureSpellCase() as scenario:
             return nature_spell_history(program=scenario.program, immune=scenario.immune)
         case PowerWordCase() as scenario:

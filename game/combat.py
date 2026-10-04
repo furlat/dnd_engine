@@ -20,9 +20,9 @@ from game.animation import (
     ActorContact, ObjectContact, CastApplication, CastInput, CastTimeline, EquipmentTimeline, GroundContact, compile_cast, compile_equipment,
 )
 from game.animation_data import resolve_player_layers
-from game.animation_types import AnimationData, Facing8, RigLayer
+from game.animation_types import AnimationData, Facing8, RigLayer, StudioSpellDraft
 from game.player_facts import (
-    ActionFact, AreaReachFact, ConditionChangeFact, DamageResultFact, EquipmentFact, LifeFact, ObjectDamageFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SavingThrowFact, SpellFact,
+    ActionFact, AreaReachFact, ConditionChangeFact, DamageResultFact, EquipmentFact, LifeFact, ObjectDamageFact, PlayerActor, PlayerLineage, PlayerNode, PlayerState, SavingThrowFact, SpellFact, SensoryFact, SpatialEffectStateFact,
 )
 from game.player_reduction import reduce_lineage, state_before_event
 from game.device_art import DeviceEmission, device_bank
@@ -30,6 +30,38 @@ from game.condition_animation import resolve_condition_appearance
 from game.animation_rates import action_playback_rate
 from game.area_media import AreaSolid
 from dnd.core.events import EventType, WorldTileState
+from dnd.types.spatial_effects import SpatialEffectChangeOperation
+
+
+def received_cast_palette(recipe: StudioSpellDraft, lineage: PlayerLineage) -> StudioSpellDraft:
+    """Select only from this cast's witnessed, uncanceled applications."""
+    if not recipe.castPalettes:
+        return recipe
+    created = {node.fact.spatial_effect_uuid for node in lineage.events if not node.canceled
+        and isinstance(node.fact, SpatialEffectStateFact)
+        and node.fact.operation is SpatialEffectChangeOperation.CREATED}
+    matches = []
+    for variant in recipe.castPalettes:
+        for node in lineage.events:
+            if node.canceled:
+                continue
+            fact = node.fact
+            condition_match = (isinstance(fact, ConditionChangeFact)
+                and fact.event_type is EventType.CONDITION_APPLICATION
+                and fact.condition.behavior_id == variant.conditionId
+                and fact.condition.state is not None
+                and fact.condition.state.energy_type is variant.whenEnergyType)
+            spatial_match = (isinstance(fact, SensoryFact) and any(
+                owner in created and effect.content_ref.content_id == variant.spatialContentId
+                and effect.energy_type is variant.whenEnergyType
+                for owner, effect in fact.spatial_effects_changed.items()))
+            if condition_match or spatial_match:
+                matches.append(variant.colors)
+    if not matches:
+        return recipe
+    if any(colors != matches[0] for colors in matches):
+        raise ValueError("conflicting received cast palettes")
+    return recipe.model_copy(update={"elementColors": matches[0]})
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,8 +345,10 @@ def bind_cast(
                                for fact in (spell, *(fact for _, fact in spell_applications)) if fact is not None
                                for suppression in fact.suppressions)
                            if target.senses is not None and identity in target.senses.spatial_effects))
-    timeline = compile_cast(data, (spell.effect_id if spell is not None else None) or root.behavior_id,
-                            source, body_rate=action_playback_rate(data, caster))
+    recipe_id = (spell.effect_id if spell is not None else None) or root.behavior_id
+    recipe = received_cast_palette(data.drafts[recipe_id], lineage)
+    timeline = compile_cast(data, recipe_id, source,
+                            body_rate=action_playback_rate(data, caster), recipe=recipe)
     appearances = {
         contact.actor_uuid: resolve_player_layers(data, contact_actors[actor_uuid], rig_id=contact.rig_id)
         for actor_uuid, contact in actor_contacts.items()

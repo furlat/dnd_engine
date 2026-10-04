@@ -1,7 +1,7 @@
 """Registered finite media on the shared cast clock; no spell identities or rules."""
 
 from math import atan2, floor
-from typing import Mapping, NamedTuple
+from typing import Literal, Mapping, NamedTuple
 
 import pygame
 
@@ -158,7 +158,8 @@ def cast_media_placement(timeline: CastTimeline, track: StudioMediaTrack,
 
 def cast_surface_volume(timeline: CastTimeline, sample: RegisteredMediaSample, area: AreaMedia | None,
                         center: tuple[float, float], height: float, *,
-                        translation: tuple[float, float, float] = (0, 0, 0)) -> SurfaceVolume:
+                        translation: tuple[float, float, float] = (0, 0, 0),
+                        support_clipping: Literal["physical", "raised"] = "physical") -> SurfaceVolume:
     source, data = timeline.source, timeline.data
     assert sample.positions is not None and sample.ownership is not None
     exclusions = tuple(ExcludedSphere(str(identity), protection.area_geometry.center,
@@ -172,8 +173,9 @@ def cast_surface_volume(timeline: CastTimeline, sample: RegisteredMediaSample, a
         area.boundaries if area is not None else (), exclusions,
         area.solids if area is not None else (), area.supports if area is not None else (),
         source.area_propagation, admitted=area.admitted if area is not None else None,
-        translation=translation, resolved_occupancy=area is not None and area.admitted is not None,
-        line_geometry=source.area_geometry if isinstance(source.area_geometry, LinePresentationGeometry) else None)
+        translation=translation,
+        line_geometry=source.area_geometry if isinstance(source.area_geometry, LinePresentationGeometry) else None,
+        support_clipping=support_clipping)
 
 
 def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera: Camera,
@@ -241,7 +243,8 @@ def cast_media_draw_commands(timeline: CastTimeline, sample: CastSample, camera:
                     commands.append(DrawCommand(key, layer.image, layer.destination, SCREEN_BLEND if track.blendMode == "screen" else layer.blend,
                         (source.root_event_uuid, grid, asset.assetId, "current", None, "authored",
                          "cast_media", height, track.id, frame),
-                        volume=cast_surface_volume(timeline, layer, area, grid, height, translation=translation),
+                        volume=cast_surface_volume(timeline, layer, area, grid, height, translation=translation,
+                                                  support_clipping=track.supportClipping),
                         world_depth_group=(source.root_event_uuid, "cast-media")))
                     continue
                 commands.append(DrawCommand(key, layer.image, layer.destination, SCREEN_BLEND if track.blendMode == "screen" else layer.blend,

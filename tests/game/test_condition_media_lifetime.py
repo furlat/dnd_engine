@@ -77,7 +77,11 @@ def test_actual_membership_contact_later_heads_removal_and_seek(data, captured, 
                 owner = grants[0].grant.instance_uuid
                 applied_ms = records[owner].applied_ms
                 assert applied_ms is not None
-                entry = applied_ms - clock
+                # Sample the retained local boundary directly. Subtracting an
+                # absolute float clock can round it just before application.
+                entry = next(at for at, state in group.states
+                    if state.actors[grants[0].entity_uuid].temporary_hp_grant == grants[0].grant)
+                assert applied_ms == pytest.approx(clock + entry)
                 early = sample_choreography(group, entry - .001).displayed
                 actual = sample_choreography(group, entry).displayed
                 identity = str(grants[0].entity_uuid)

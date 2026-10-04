@@ -63,7 +63,7 @@ def test_cast_relocates_once_at_release_with_received_destination_height(data, b
         assert reached.contacts[0].grid == destination
         expected = actor_contact(latest, latest.actors[actor_id], data)
         assert reached.contacts[0].elevation_steps == expected.elevation_steps
-        assert reached.bodies[0].frame == 8, "relocation must continue the same cast, not restart it"
+        assert reached.bodies[0].frame == 11, "relocation must continue the same cast, not restart it"
         assert not reached.complete
         assert actor_contact(pending.displayed, pending.displayed.actors[actor_id], data).grid == origin
         assert actor_contact(reached.displayed, reached.displayed.actors[actor_id], data).grid == destination

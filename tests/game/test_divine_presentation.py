@@ -21,6 +21,7 @@ from game.condition_animation import resolve_condition_appearance
 from game.condition_media_lifetime import ConditionMediaLifetime, sample_condition_lifetimes
 from game.condition_sampling import sample_condition_media
 from game.player_projection import project_sequence
+from game.player_facts import SensoryFact, VersionRow
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from tests.game.divine_scenarios import divine_history
 
@@ -95,6 +96,55 @@ def test_beacon_witnessed_formation_enters_hold_and_clear_preserves_current_fram
     assert len(tail) == 2
     assert all(sample_condition_media(data, layer)[0].alpha == pytest.approx(.5) for layer in tail)
     assert not sample_condition_lifetimes({str(actor): empty}, removed, data, 4700)[str(actor)].layers
+
+
+@pytest.mark.parametrize("observer", ("caster", "recipient"))
+@pytest.mark.parametrize("split_update", (False, True))
+def test_daylight_lighting_clears_with_the_visible_field_not_before(data, observer, split_update):
+    history = divine_history(program="daylight")
+    before, roots = decode_player_sequence(encode_player_sequence(project_sequence(history.views[observer])))
+    checked = False
+    for root in roots:
+        after = reduce_lineage(before, root)
+        assert before.senses is not None and after.senses is not None
+        removed = before.senses.spatial_effects.keys() - after.senses.spatial_effects.keys()
+        if removed:
+            if split_update:
+                # Older public recordings deliver lighting and field removal
+                # separately, under the same real removal ancestry. Preserve
+                # all received values; only their packet grouping changes.
+                source = next(node for node in root.events if isinstance(node.fact, SensoryFact)
+                    and node.fact.effective_light_levels_changed and node.fact.spatial_effects_removed)
+                fact = source.fact
+                assert isinstance(fact, SensoryFact)
+                lighting = replace(source, fact=replace(fact, spatial_effects_removed=frozenset()))
+                field = replace(source, uuid=uuid4(), lineage_uuid=uuid4(),
+                    fact=replace(fact, effective_light_levels_changed={}))
+                events = tuple(lighting if node.uuid == source.uuid else
+                    replace(node, children_lineages=(*node.children_lineages, field.lineage_uuid))
+                    if node.lineage_uuid == source.parent_lineage else node for node in root.events)
+                source_index = max(row.source_index for row in root.version_rows) + 1
+                root = replace(root, events=(*events, field), end_cursor=max(root.end_cursor, source_index + 1),
+                    version_rows=(*root.version_rows, VersionRow(event_uuid=field.uuid,
+                        lineage_uuid=field.lineage_uuid,
+                        source_index=source_index)))
+                assert reduce_lineage(before, root).senses == after.senses
+            group = bind_choreography(before, root, data)
+            fade = data.spatial_media["spatial_effect.spell.daylight"].removalCommitMs
+            assert fade > 0
+            for at in (0., fade / 2, fade - .001):
+                fading = sample_choreography(group, at).displayed
+                assert fading.senses is not None
+                assert removed <= fading.senses.spatial_effects.keys()
+                assert fading.senses.effective_light_levels == before.senses.effective_light_levels
+            cleared = sample_choreography(group, fade).displayed
+            assert cleared.senses is not None
+            assert cleared.senses.effective_light_levels == after.senses.effective_light_levels
+            assert not removed & cleared.senses.spatial_effects.keys()
+            assert sample_choreography(group, 0).displayed.senses == before.senses
+            checked = True
+        before = after
+    assert checked
 
 
 @pytest.mark.parametrize("program", ("mass_healing_word", "divine_word"))

@@ -82,7 +82,7 @@ def nature_spell_history(*, program: NatureProgram, immune: bool = False) -> Cap
         before,_=reduce_interval(None,initial)
         turn(caster)
         if program == 'coexist':
-            for name in ('Barkskin', 'Fire Shield', 'Produce Flame', 'Shillelagh'):
+            for name in ('Barkskin', 'Fire Shield', 'Shillelagh'):
                 turn(caster)
                 apply(caster, name, target_entity_uuid=caster.uuid, alt_skip_slot=True)
         elif program in ('warm','chill'):
@@ -109,18 +109,14 @@ def nature_spell_history(*, program: NatureProgram, immune: bool = False) -> Cap
         else:
             # Separate actors before casting, so ranged disadvantage does not hide hit/miss intent.
             apply(caster, "Move", end_position=(2,6), path=[(4,6),(3,6),(2,6)])
-            if program=='produce_initial':
-                with fixed_dice_faces(19,4,4,4):
-                    apply(caster, "Produce Flame", target_entity_uuid=recipient.uuid)
-            else:
-                apply(caster, "Produce Flame", target_entity_uuid=caster.uuid)
+            with fixed_dice_faces(*([1] if program == 'produce_miss' else [19,4,4,4])):
+                apply(caster, "Produce Flame", target_entity_uuid=recipient.uuid)
+            if program == 'produce_recast':
                 turn(recipient)
                 apply(recipient, "Dodge")
                 turn(caster)
-                apply(caster, "Move", end_position=(2,7), path=[(2,6),(2,7)])
-                with fixed_dice_faces(*( [1,1] if program=='produce_miss' else [19,19,4,4,4])):
-                    apply(caster, "Produce Flame" if program=='produce_recast' else "Hurl Produce Flame",
-                        target_entity_uuid=recipient.uuid)
+                with fixed_dice_faces(19,19,4,4,4):
+                    apply(caster, "Produce Flame", target_entity_uuid=recipient.uuid)
         captured=capture_history(before,(),observers=tuple(ObserverCapture(role,a.uuid,baseline) for role,a in actors.items()))
         primary=captured.views['caster']
         return CapturedHistory(primary.initialization,before,primary.lineages,captured.views)

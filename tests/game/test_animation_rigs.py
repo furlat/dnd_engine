@@ -47,6 +47,9 @@ def with_clip(data: AnimationData, rig_id: str, clip: str, *,
               fps: float, frames: int) -> AnimationData:
     document = data.rigs[rig_id].model_dump(mode="json")
     document["clips"][clip].update(fps=fps, frames=frames)
+    # This hypothetical clip is testing recipe feedback/release validation,
+    # rather than the original motion's now separately authored defaults.
+    document["clips"][clip]["anchors"] = []
     for clips in document["pose_sockets"].values():
         if clip in clips:
             clips[clip] = {facing: points[:frames] for facing, points in clips[clip].items()}
@@ -133,7 +136,7 @@ def test_caster_clip_metadata_controls_release_prepare_and_recovery(data: Animat
     assert timeline.release_ms == pytest.approx(7000 / 6)
     assert timeline.body_end_ms == pytest.approx(14000 / 6)
     prepare = next((phase for phase in timeline.applications[0].projectile_intervals if phase.name == 'prepare'))
-    assert prepare.start_ms == pytest.approx(1000 / 6)
+    assert prepare.start_ms == pytest.approx(4000 / 6)
     assert prepare.end_ms == pytest.approx(timeline.release_ms)
     assert sample_cast(timeline, 250).bodies[0].frame == 1
     assert sample_cast(timeline, 250).bodies[1].frame == 3

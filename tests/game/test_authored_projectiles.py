@@ -9,10 +9,10 @@ import pytest
 
 from game.animation import (
     ActorContact, CastApplication, CastInput, CastTimeline, GroundContact, ProjectileSample,
-    compile_cast, project_projectile, projectile_contact, sample_cast,
+    compile_cast, project_projectile, projectile_contact, sample_cast, media_phase_anchor_ms,
 )
 from game.animation_data import DATA_ROOT, load_animation_data
-from game.animation_types import StudioSpellDraft
+from game.animation_types import StudioSpellDraft, MediaFrameAnchor, MediaTimePoint
 from game.device_art import DeviceEmission, device_bank
 from game.projection import TILE_WIDTH, project_world
 
@@ -37,6 +37,30 @@ def effect_at(timeline: CastTimeline, index: int, progress: float) -> Projectile
                   if effect.application_id == application.source.application_id)
     assert isinstance(effect, ProjectileSample)
     return effect
+
+
+@pytest.mark.parametrize("rate, duration, fit, expected", ((20., None, False, 200.),
+    (40., None, False, 100.), (20., 900., True, 200.)))
+def test_authored_media_keypoint_uses_the_consuming_clock(timeline, rate, duration, fit, expected):
+    phase = timeline.data.projectile_assets[timeline.recipe.projectile.sprite.assetId].phases.impact
+    phase = phase.model_copy(update={"anchors": (MediaFrameAnchor(name="contact", frame=4),)})
+    assert media_phase_anchor_ms(phase, "contact", fps=rate,
+        duration_ms=duration, fit_duration=fit) == pytest.approx(expected)
+
+
+def test_authored_media_keypoint_requires_an_unambiguous_mapped_occurrence(timeline):
+    phase = timeline.data.projectile_assets[timeline.recipe.projectile.sprite.assetId].phases.impact
+    phase = phase.model_copy(update={"anchors": (MediaFrameAnchor(name="contact", frame=4),)})
+    mapping = tuple(MediaTimePoint(elapsedMs=at, sourceFrame=frame)
+        for at, frame in ((0., 0.), (200., 8.), (400., 0.)))
+    with pytest.raises(ValueError, match="ambiguous"):
+        media_phase_anchor_ms(phase, "contact", fps=32., time_map=mapping)
+    assert media_phase_anchor_ms(phase, "contact", fps=32., time_map=mapping, occurrence=0) == 100.
+    assert media_phase_anchor_ms(phase, "contact", fps=32., time_map=mapping, occurrence=1) == 300.
+    held = tuple(MediaTimePoint(elapsedMs=at, sourceFrame=frame)
+        for at, frame in ((0., 0.), (100., 4.), (200., 4.), (300., 8.)))
+    with pytest.raises(ValueError, match="held"):
+        media_phase_anchor_ms(phase, "contact", fps=32., time_map=held)
 
 
 def test_default_bundle_replaces_geometry_without_changing_body_delivery_or_vital_clock(timeline: CastTimeline) -> None:
@@ -104,6 +128,28 @@ def test_authored_sprite_spread_and_depth_follow_the_shared_bezier(timeline: Cas
     assert tuple(a - b for a, b in zip(projected_first, projected_last)) == pytest.approx(
         tuple((a - b) * factor for a, b in zip(first.point, last.point)),
     )
+
+
+@pytest.mark.parametrize("quadrant", range(4))
+@pytest.mark.parametrize("elevation", (0, 2))
+def test_curved_missile_contacts_remain_between_the_actual_raised_actors(
+    timeline: CastTimeline, quadrant: int, elevation: int,
+) -> None:
+    source = replace(timeline.source,
+        caster=replace(timeline.source.caster, grid=(16, 22), elevation_steps=elevation),
+        applications=tuple(replace(row, target=replace(row.target,
+            grid=(16, 20) if row.target.actor_uuid == "A" else (18, 20),
+            elevation_steps=elevation)) for row in timeline.source.applications))
+    raised = compile_cast(timeline.data, "spell.magic_missile", source)
+    # Repeated A darts have opposite curves. Their average must stay on the
+    # real support chord in every camera, including its release/contact ends.
+    for progress in (0., .25, .5, .75, 1.):
+        first = replace(effect_at(raised, 0, .5), progress=progress)
+        last = replace(effect_at(raised, 2, .5), progress=progress)
+        a, ah = projectile_contact(raised, first, quadrant=quadrant)
+        b, bh = projectile_contact(raised, last, quadrant=quadrant)
+        assert ah == bh
+        assert tuple((x+y)/2 for x,y in zip(a,b)) == pytest.approx((16, 22-2*progress))
 
 
 def test_target_vector_sprite_rotation_retains_the_original_initial_curve_tangent(timeline: CastTimeline) -> None:

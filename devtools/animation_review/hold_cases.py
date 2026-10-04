@@ -11,3 +11,4 @@ class HoldCase(BaseModel):
     program: Literal['hold_person', 'hold_monster']
     saved: bool = False
     retain_paralysis: bool = False
+    size_change: Literal['enlarge', 'reduce'] | None = None
