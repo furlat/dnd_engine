@@ -10,7 +10,7 @@ from dnd.core.gridmap import get_map
 from dnd.core.effect_types import AntimagicException
 from dnd.types.world import MovementMode
 from dnd.conditions import Invisible
-from dnd.core.base_block import SensesType
+from dnd.core.base_block import SensesType, LightLevel
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.core.equipment_types import WeaponSlot, WeaponProperty
 from dnd.blocks.equipment import Weapon
@@ -23,7 +23,11 @@ from dnd.conditions import Hidden
 from dnd.conditions import Poisoned
 from dnd.spells.wall_constructions import WallOfForce, WallOfForceZone, WallOfStone, WallOfStoneZone
 from dnd.types.physical_access import PhysicalAccess
-from dnd.spells.abjuration import AntimagicField, AntimagicFieldZone
+from dnd.spells.abjuration import AntimagicField, AntimagicFieldZone, ShieldBuff
+from dnd.spells.enchantment import CommandHaltEffect
+from dnd.spells.necromancy import NoHealing
+from dnd.spells.evocation import GuidingBoltMarked, Light, ContinualFlame
+from dnd.spells.transmutation import RegeneratingEffect
 from dnd.spells.transmutation import HasteEffect, Telekinesis
 from dnd.spells.transmutation import DarkvisionEffect
 from dnd.spells.conjuration import GreaseZone, HeroesFeastSource, MistyStep, GuardianOfFaith, GuardianOfFaithZone
@@ -363,3 +367,75 @@ def test_antimagic_blocks_magical_transfer_path_and_landing_but_not_its_permissi
     assert target.position==(4,4)
     assert target.get_normal_hp()==before
     assert caster.get_action_template("Telekinesis: Move") is not None
+
+
+@pytest.mark.parametrize('effect_type', [ShieldBuff, CommandHaltEffect, RegeneratingEffect])
+def test_suppressed_turn_deadlines_do_not_reactivate_later(game, effect_type):
+    caster, target = actor(game), actor(game, 'Recipient', (3, 2))
+    effect = effect_type(source_entity_uuid=target.uuid, target_entity_uuid=target.uuid)
+    target.add_condition(effect)
+    target.health.damage_taken = 20
+    cast(AntimagicField, caster)
+    assert not effect.contributions_active()
+    for turn in range(1, 11 if effect_type is RegeneratingEffect else 2):
+        target.on_turn_start(round_number=turn)
+        target.on_turn_end()
+    assert effect.uuid not in target.active_conditions_by_uuid
+    assert target.health.damage_taken == 20
+    caster.remove_condition('Concentrating')
+    assert effect.uuid not in target.active_conditions_by_uuid
+
+
+def test_magical_healing_prevention_suppresses_without_overwriting_baseline(game):
+    caster, target = actor(game), actor(game, 'Recipient', (3, 2))
+    effect = NoHealing(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+        tags={ConditionTag.MAGICAL})
+    target.add_condition(effect)
+    assert target.health.is_healing_blocked()
+    cast(AntimagicField, caster)
+    assert not target.health.is_healing_blocked()
+    caster.remove_condition('Concentrating')
+    assert target.health.is_healing_blocked()
+    target.health.healing_blocked = True
+    target.remove_condition_by_uuid(effect.uuid)
+    assert target.health.is_healing_blocked()
+    target.health.healing_blocked = False
+    assert not target.health.is_healing_blocked()
+
+
+def test_guiding_mark_expires_inside_field(game):
+    caster, target = actor(game), actor(game, 'Recipient', (3, 2))
+    mark = GuidingBoltMarked(source_entity_uuid=caster.uuid, target_entity_uuid=target.uuid,
+        caster_uuid=caster.uuid)
+    target.add_condition(mark)
+    cast(AntimagicField, caster)
+    assert not mark.contributions_active()
+    caster.on_turn_end()
+    caster.on_turn_start(round_number=2)
+    caster.on_turn_end()
+    assert mark.uuid not in target.active_conditions_by_uuid
+    caster.remove_condition('Concentrating')
+    assert mark.uuid not in target.active_conditions_by_uuid
+
+
+@pytest.mark.parametrize("spell", [Light, ContinualFlame])
+def test_cast_light_suppresses_and_restores_without_replacement(game, spell):
+    caster, field_caster = actor(game), actor(game, 'Field', (3, 3))
+    grid = get_map()
+    for x in range(18):
+        for y in range(8):
+            grid.set_tile_base_light((x, y), LightLevel.DARKNESS)
+    target = caster
+    if spell is ContinualFlame:
+        target = build_authored_item('weapon.club', caster.uuid)
+        target.place_on_grid((3, 2))
+    cast(spell, caster, target)
+    condition = target.active_conditions['Light' if spell is Light else 'Continual Flame']
+    tile = grid.get_tile(3, 2)
+    assert tile is not None and tile.resolved_light_level is LightLevel.BRIGHT_LIGHT
+    cast(AntimagicField, field_caster)
+    assert not condition.contributions_active()
+    assert tile.resolved_light_level is LightLevel.DARKNESS
+    field_caster.remove_condition('Concentrating')
+    assert condition.contributions_active()
+    assert tile.resolved_light_level is LightLevel.BRIGHT_LIGHT

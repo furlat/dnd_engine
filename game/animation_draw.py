@@ -18,8 +18,9 @@ import numpy as np
 import pygame
 
 from dnd.core.life_types import LifeState
-from dnd.core.events import WorldTileState
+from dnd.types.event_facts import WorldTileState
 from game.animation import (
+    effective_layer_palette,
     pose_attachment_anchors, ActorContact, ObjectContact, BodySample, CastSample, CastTimeline, GeometryProjectileSample, NumberSample, feedback_identity, cast_actor_contacts,
     ProjectileSample, body_clip, body_elevation_steps, body_rig, project_geometry_projectile, project_projectile,
     projectile_registration, projectile_phase_scale, projectile_contact, view_facing, cast_deliveries, actor_rest_pose, death_body_context,
@@ -34,7 +35,7 @@ from game.item_effects import item_material
 from game.item_draw import compose_item_attachments
 from game.body_effects import distort_body, ghost_body, reveal_body, silhouette_dust, absence_silhouette
 from game.body_pose_types import BodyTrailPose
-from game.condition_draw import (CONDITION_BODY_SLOTS, compose_condition_layers, condition_body_color,
+from game.condition_draw import (CONDITION_BODY_SLOTS, body_ramp_cacheable, compose_condition_layers, condition_body_color,
     condition_body_ramp, blend_body_ramp, condition_body_outline)
 from game.projectile_media import projectile_frame_layers
 from game.media_coverage import covered_media
@@ -42,7 +43,8 @@ from game.cast_media import cast_media_draw_commands, preload_cast_media, cast_s
 from game.spell_palette import cached_palette, palette_noise, recolor_palette, retain_palette
 from game.particle_media import sample_particles, sample_vapor
 from game.blood_draw import blood_particle_image
-from game.area_media import AreaSolid, AreaLayer, AreaMedia, mask_ground_area
+from game.area_media import AreaLayer, AreaMedia, mask_ground_area
+from game.animation_types import AreaSolid
 from game.draw_commands import DrawCommand as AnimationDrawCommand
 from game.media_blend import SCREEN_BLEND, blit_media
 from game.directed_media import directed_draw_commands, preload_directed_media
@@ -201,11 +203,9 @@ def _colored(frame: pygame.Surface, tint: int, source_hue: float | None = None) 
 
 
 def _cast_row_key(layer: StudioActorLayer) -> str:
-    if layer.colors.source == "auto":
-        if layer.palette is None:
-            raise ValueError("automatic cast palette must be resolved from its spell before loading")
-        return f"cast:auto:{layer.sourceSheet or layer.category}:{layer.palette.model_dump_json()}"
-    return layer.sourceSheet or f"cast:{layer.category}:{layer.colors.primary}:{layer.colors.secondary}"
+    palette = effective_layer_palette(layer)
+    treatment = "source" if palette is None else palette.model_dump_json()
+    return f"cast:{layer.sourceSheet or layer.category}:{treatment}"
 
 
 def load_cast_rows(data: AnimationData, contact: ActorContact, clip_name: str,
@@ -224,19 +224,12 @@ def load_cast_rows(data: AnimationData, contact: ActorContact, clip_name: str,
         sheet = pygame.image.load(data.resources[layer.sourceSheet or clip.sheets[layer.category]]).convert_alpha()
         for row in missing:
             image = sheet.subsurface((0, row * rig.cell_height, clip.frames * rig.cell_width, rig.cell_height)).copy()
-            if layer.colors.source == "auto":
-                assert layer.palette is not None  # validated by the row key above
-                image = recolor_palette(image, layer.palette,
-                    noise=(palette_noise(data.resources[layer.palette.noiseSheet])
-                           if layer.palette.noiseSheet is not None else None),
+            palette = effective_layer_palette(layer)
+            if palette is not None:
+                image = recolor_palette(image, palette,
+                    noise=(palette_noise(data.resources[palette.noiseSheet])
+                           if palette.noiseSheet is not None else None),
                     cell_size=(rig.cell_width, rig.cell_height))
-            elif layer.sourceSheet is None:
-                image = _colored(image, layer.colors.primary, data.vfx_source_hues.get(layer.category))
-                if layer.category == "Magic3" and layer.colors.secondary is not None:
-                    rgb = pygame.surfarray.pixels3d(image)
-                    white = np.linalg.norm(rgb.astype(np.float32) / 255 - 1, axis=2) < .5
-                    rgb[white] = _rgb(layer.colors.secondary)
-                    del rgb
             rows[contact.rig_id, clip_name, key, row] = image
 
 
@@ -386,9 +379,7 @@ def load_animation_media(timeline: CastTimeline,
     for layer in (cast.weaponGlow, cast.aura, *(cast.effects or ()), cast.slash):
         if layer is None or not layer.enabled or layer.hidden:
             continue
-        # Legacy overrides without an isolated export still require a supported source policy.
-        if layer.colors.source == "override" and layer.sourceSheet is None and (layer.category not in data.vfx_source_hues or layer.category in {"Effect2", "Effect4", "Buff9"}):
-            raise ValueError(f"cast-layer color policy has no selected pixel proof: {layer.category}")
+        effective_layer_palette(layer)  # Validate the same treatment used by loading and its cache.
         if layer.category not in caster_rig.slot_categories.get(layer.slot, ()):
             raise ValueError(f"cast layer is unavailable on rig: {source.caster.rig_id}/{layer.slot}/{layer.category}")
         if layer.category not in body_clip(data, source.caster, cast.actionClip).sheets:
@@ -579,17 +570,22 @@ def _ramp_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
     material_layers = tuple(layer for layer in appearance if layer.slot in CONDITION_BODY_SLOTS)
     material_body = replace(body, cast_layers=tuple(layer for layer in body.cast_layers if layer.slot in CONDITION_BODY_SLOTS))
     plain_condition = replace(condition, body_ramp=None)
-    if ramp.mapping in {"bark_texture", "flowing_film"}:
-        assert ramp.texture is not None
+    # Cache selection cannot change item ownership or material composition order.
+    # Conservatively evaluate the current frame when owned modifiers are present.
+    static_ramp = body_ramp_cacheable(ramp)
+    if not static_ramp or condition.item_modifiers:
         original = _body_image(material_body, contact, material_layers, body_rows, data, None,
             only_shadow=False, condition=plain_condition)
-        return condition_body_ramp(original, ramp, texture=palette_noise(data.resources[ramp.texture]),
-            cell_size=(rig.cell_width, rig.cell_height), strength=condition.ramp_strength,
+        mapped = condition_body_ramp(original, ramp,
+            texture=palette_noise(data.resources[ramp.texture]) if ramp.texture else None,
+            normal_texture=palette_noise(data.resources[ramp.normalTexture]) if ramp.normalTexture else None,
+            cell_size=(rig.cell_width, rig.cell_height),
+            strength=1. if static_ramp else condition.ramp_strength,
             age_ms=condition.ramp_age_ms)
-    plain_condition = replace(plain_condition, item_modifiers=())
+        return blend_body_ramp(original, mapped, condition.ramp_strength) if static_ramp else mapped
     key = ("condition-ramp", data.media_root, contact.rig_id, body.clip, body.facing, material_layers,
            body.hide_weapon, body.hidden_slots, material_body.cast_layers, condition.body_color,
-           ramp.colors, ramp.mapping, ramp.gain, ramp.texture, ramp.textureRepeats, ramp.textureWeight, condition.rig_layers)
+           ramp, condition.rig_layers)
     row = cached_palette(key)
     if row is None:
         frames = body_clip(data, contact, body.clip).frames

@@ -14,7 +14,8 @@ from game.animation_data import load_animation_data
 from game.animation_draw import LoadedBodyRows, RigLayer, draw_animation, load_actor_media, load_animation_media
 from game.animation_types import BodyRig, StudioSpellDraft
 from game.projection import Camera, project_screen
-from game.scene import SceneActor, load_scene_media, scene_draw_commands
+from game.body_pose_types import SceneActor
+from game.scene import load_scene_media, scene_draw_commands
 
 
 APPEARANCE = tuple(RigLayer(slot, category, alpha=0.5 if slot == "shadow" else 1) for slot, category in (

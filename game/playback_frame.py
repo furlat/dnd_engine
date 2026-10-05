@@ -33,7 +33,7 @@ from game.motion import MotionTimeline
 from game.motion_media import MotionMediaCue, motion_media_draw_commands
 from game.player_facts import PlayerState
 from game.projection import Camera, TILE_WIDTH, project_screen
-from game.scene import SceneActor
+from game.body_pose_types import SceneActor
 from game.visual_position import VisualPosition
 from game.residue_media import ResidueRevealSample, sample_residue_reveals
 from game.world_animation import WorldTransitionSample, sample_world_transitions
@@ -43,16 +43,18 @@ from game.combat import BoundCast
 from game.cast_media import sample_cast_body_materials
 from game.finite_material import sample_material_track
 from game.component_particles import intake_commands, rising_mote_commands
-from game.spatial_response import spatial_response_draw_commands
+from game.spatial_response_draw import spatial_response_draw_commands
 from game.forced_movement import sample_displacement_layers
 from game.spatial_media_draw import spatial_media_draw_commands
 from game.spatial_media_lifetime import SpatialMediaLifetime
 from game.animation_types import ItemAttachmentStart
 from game.item_draw import item_ground_commands
-from game.construction_media import ConstructionMediaLifetime, construction_media_draw_commands
-from game.concentration_media import ConcentrationMediaLifetime, concentration_media_draw_commands
+from game.construction_media import construction_media_draw_commands
+from game.construction_transitions import ConstructionMediaLifetime
+from game.concentration_media import ConcentrationMediaLifetime
+from game.concentration_draw import concentration_media_draw_commands
 from game.portal_draw import portal_draw_commands, clip_portal_bodies
-from game.deposit_media import observed_deposits
+from game.deposit_media import DepositStart, observed_deposits
 from game.deposit_draw import deposit_draw_commands
 from game.body_presentation import sample_body_presentation
 from game.body_history import BodyHistoryHead, sample_body_trails
@@ -86,7 +88,7 @@ def sample_playback_frame(
     item_starts: Mapping[UUID, ItemAttachmentStart] = MappingProxyType({}),
     construction_lifetimes: Mapping[UUID, ConstructionMediaLifetime] = MappingProxyType({}),
     concentration_lifetimes: Mapping[UUID, ConcentrationMediaLifetime] = MappingProxyType({}),
-    deposit_starts: Mapping[UUID, float] = MappingProxyType({}),
+    deposit_starts: Mapping[UUID, DepositStart] = MappingProxyType({}),
     positions: Mapping[str, VisualPosition] | None = None,
     feedback_viewport: pygame.Rect | None = None,
     body_history: tuple[BodyHistoryHead, ...] = (),

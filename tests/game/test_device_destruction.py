@@ -34,7 +34,8 @@ from game.player_reduction import decode_player_sequence, encode_player_sequence
 from game.presentation import capture_interval, capture_lineages
 from game.projection import Camera, project_screen
 from game.replay import RecordedSequence
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from tests.game.web_scenarios import web_history
 from tests.game.device_scenarios import device_history
 

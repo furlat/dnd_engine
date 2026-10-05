@@ -28,8 +28,8 @@ from game.player_reduction import reduce_lineage, state_before_event
 from game.device_art import DeviceEmission, device_bank
 from game.condition_animation import resolve_condition_appearance
 from game.animation_rates import action_playback_rate
-from game.area_media import AreaSolid
-from dnd.core.events import EventType, WorldTileState
+from game.animation_types import AreaSolid
+from dnd.types.event_facts import EventType, WorldTileState
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
 
 

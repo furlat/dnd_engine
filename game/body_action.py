@@ -9,7 +9,8 @@ from dataclasses import dataclass, replace
 from typing import Mapping
 from uuid import UUID
 
-from dnd.core.events import EventType
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference, TimingMeasurement, record_timing
+from dnd.types.event_facts import EventType
 from game.animation import (ActorContact, BodySample, body_context, context_duration, context_anchor_ms,
                             resolve_body_context, resolve_cast_recipe,
                             sample_context_body, sample_idle_body, facing_for_delta)
@@ -57,6 +58,7 @@ class BodyActionCue:
     body_context: BodyContext | None = None
     recovery_body: BodyContext | None = None
     save_success: bool | None = None
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,21 +226,39 @@ def bind_body_action(before: PlayerState, event: PlayerNode, data: AnimationData
         recovery.bodyClip if recovery else "Idle", recovery.bodyPlaybackSpeed if recovery else 1,
         enabled=recovery.enabled if recovery else False))
     clip, speed, enabled = selected.actor.clip, selected.actor.playbackSpeed, selected.actor.enabled
-    body_end = start_ms + context_duration(data, contact, selected)
-    effect_ms = start_ms + context_anchor_ms(data, contact, selected, "effect")
+    body_duration_ms = context_duration(data, contact, selected)
+    effect_offset_ms = context_anchor_ms(data, contact, selected, "effect")
+    body_end = start_ms + body_duration_ms
+    effect_ms = start_ms + effect_offset_ms
+    evidence: list[TimingEvidence] = []
+    start = TimingOperand(TimingReference('event', event.uuid, 'start'), start_ms)
+    record_timing(evidence, TimingReference('event', event.uuid, 'body_end'), 'body_end',
+        (replace(start, offset_ms=body_duration_ms, authored_field='body_context.duration'),), body_end)
+    record_timing(evidence, TimingReference('event', event.uuid, 'effect'), 'body_effect',
+        (replace(start, offset_ms=effect_offset_ms, authored_field='body_context.anchors.effect', measurements=(
+            TimingMeasurement('body.playbackSpeed', speed),)),), effect_ms)
     cue = BodyActionCue(event.uuid, contact, data, recipe_id, clip, speed, start_ms, effect_ms,
         body_end, body_end, body_end, enabled, hidden_slots, hide_weapon,
         recovery, condition, feedback, tuple(gaps), interaction_object_uuid,
         behavior_id in data.relocation_actions, cast_layers, selected, recovery_body,
-        subject.save_success if subject is not None else None)
+        subject.save_success if subject is not None else None, timing_evidence=tuple(evidence))
     return join_body_action(cue, data, body_end)
 
 
-def join_body_action(cue: BodyActionCue, data: AnimationData, child_end_ms: float) -> BodyActionCue:
+def join_body_action(cue: BodyActionCue, data: AnimationData, child_end_ms: float, *,
+                     child_evidence: tuple[TimingOperand, ...] = ()) -> BodyActionCue:
     """Both original leaves await the body and its children before restoring slots."""
     join = max(cue.body_end_ms, child_end_ms)
     recovery_duration = context_duration(data, cue.contact, cue.recovery_body) if cue.recovery_body is not None else 0
-    return replace(cue, join_ms=join, complete_ms=join + recovery_duration)
+    evidence = list(cue.timing_evidence)
+    body = next((TimingOperand(row.target, row.at_ms, row.index) for row in reversed(evidence)
+        if row.target.anchor == 'body_end'), TimingOperand(TimingReference('event', cue.event_uuid, 'body_end'), cue.body_end_ms))
+    joined = record_timing(evidence, TimingReference('event', cue.event_uuid, 'join'), 'body_join',
+        (body, *(child_evidence or (TimingOperand(TimingReference('event', cue.event_uuid, 'join'), child_end_ms),))),
+        join, 'maximum')
+    record_timing(evidence, TimingReference('event', cue.event_uuid, 'complete'), 'body_complete',
+        (replace(joined, offset_ms=recovery_duration, authored_field='recovery_body.duration'),), join + recovery_duration)
+    return replace(cue, join_ms=join, complete_ms=join + recovery_duration, timing_evidence=tuple(evidence))
 
 
 def sample_body_action(cue: BodyActionCue, data: AnimationData, elapsed_ms: float) -> BodySample | None:

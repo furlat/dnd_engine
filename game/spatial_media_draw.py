@@ -7,13 +7,14 @@ from typing import Mapping
 from uuid import UUID
 
 from dnd.core.presentation_geometry import CylinderPresentationGeometry, LinePresentationGeometry, SpherePresentationGeometry
-from dnd.core.events import WorldTileState
+from dnd.types.event_facts import WorldTileState
 from dnd.core.geometry import circle_positions
 from dnd.types.world import WorldEdgeChannel
 from dnd.types.world_placement import WorldObjectPlacement
 from game.animation import ActorContact, facing_for_delta, view_facing
 from game.animation_types import AnimationData, Facing8
-from game.area_media import AreaLayer, AreaMedia, AreaSolid
+from game.area_media import AreaLayer, AreaMedia
+from game.animation_types import AreaSolid
 from game.draw_commands import DrawCommand
 from game.player_facts import PlayerState
 from game.projection import Camera, TILE_WIDTH, painter_key, project_screen, rotate_position, inverse_rotate_position

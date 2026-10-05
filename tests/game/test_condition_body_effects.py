@@ -26,7 +26,8 @@ from game.player_reduction import decode_player_sequence, reduce_lineage, encode
 from game.player_projection import project_sequence
 from game.playback_frame import sample_playback_frame
 from game.projection import Camera, project_screen, TILE_WIDTH
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from tests.game.test_spell14_native_facts import actors, saved_views
 from tests.game.persistent_spell_scenarios import persistent_spell_history
 

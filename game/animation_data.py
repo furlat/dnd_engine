@@ -11,7 +11,7 @@ from game.device_art import load_device_art, load_device_wrecks
 
 from pydantic import Field, JsonValue, TypeAdapter
 
-from dnd.blocks.appearance import AppearanceConfig
+from dnd.types.appearance import AppearanceConfig
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
 from dnd.types.summoning import SummonManifestation
 from dnd.core.equipment_types import BodyPart, VisualLoadoutSlot, WeaponSet, WeaponSlot
@@ -238,7 +238,8 @@ def _root_body_rig(rig: RigTables, resources: Mapping[str, Path], body_anchor: P
         facing_rows=rig.FACING_ROW, slot_order=rig.SLOT_RENDER_ORDER,
         slot_categories=rig.SLOT_CATEGORIES,
         clips={name: BodyClip(source_clip=name, frames=rig.SHEET_COLS, fps=rig.ANIM_FPS,
-                             sheets=sheets, anchors=rig.CLIP_ANCHORS.get(name, ()))
+                             sheets=sheets, anchors=rig.CLIP_ANCHORS.get(name, ()),
+                             description=rig.CLIP_DESCRIPTIONS.get(name))
                for name, sheets in clips.items()},
     )
 
@@ -678,6 +679,8 @@ def load_animation_data(data_root: Path = DATA_ROOT, *,
         ramp = recipe.persistent.bodyRamp
         if ramp is not None and ramp.texture is not None and ramp.texture not in data.resources:
             raise ValueError(f"Condition material requires registered texture: {ramp.texture}")
+        if ramp is not None and ramp.normalTexture is not None and ramp.normalTexture not in data.resources:
+            raise ValueError(f"Condition material requires registered normal texture: {ramp.normalTexture}")
     validate_rig_body_contexts(data, installed_rig_ids=installed_rig_ids)
     return data
 

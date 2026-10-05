@@ -1812,6 +1812,7 @@ class RegeneratingEffect(BaseCondition):
     The effect tracks ten combat rounds and removes itself once the counter is
     exhausted. It is not concentration-linked by the Regenerate spell.
     """
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     name: str = Field(default="Regenerating", description="Condition name.")
     description: str = Field(
         default="Regenerating: heals 1 HP at the start of each turn",
@@ -1840,6 +1841,7 @@ class RegeneratingEffect(BaseCondition):
                     event_source_entity_uuid=self.target_entity_uuid
                 )
             ],
+            runs_while_suppressed=True,
             event_processor=self._on_turn_start
         )
         target.add_event_handler(handler)
@@ -1854,12 +1856,13 @@ class RegeneratingEffect(BaseCondition):
         if not target:
             return event
 
-        target.receive_healing(
-            1, self.source_entity_uuid,
-            source_description="Regenerate: 1 HP",
-            source_condition_uuid=self.uuid,
-            parent_event=event.uuid
-        )
+        if self.contributions_active():
+            target.receive_healing(
+                1, self.source_entity_uuid,
+                source_description="Regenerate: 1 HP",
+                source_condition_uuid=self.uuid,
+                parent_event=event.uuid
+            )
 
         self.rounds_remaining -= 1
         if self.rounds_remaining <= 0:

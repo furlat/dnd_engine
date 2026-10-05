@@ -13,7 +13,8 @@ from game.playback_frame import sample_playback_frame
 from game.player_facts import SpellFact
 from game.player_reduction import reduce_lineage, stage_lineage
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from tests.game.antimagic_scenarios import antimagic_history
 from tests.game.forced_movement_scenarios import forced_movement_history
 from tests.game.player_helpers import player_history

@@ -13,7 +13,8 @@ from game.choreography import BoundChoreography, ChoreographySample, MotionTimel
 from game.player_facts import PlayerState, LifeFact
 from game.condition_animation import condition_contact, condition_transition_appearances, resolve_condition_appearance
 from game.attack import attack_actor_contacts, BoundAttack
-from game.scene import SceneActor, available_clips, scene_actors
+from game.body_pose_types import SceneActor
+from game.scene_actors import available_clips, scene_actors
 from game.visual_position import VisualPosition, placed_contact
 from game.entity_lifecycle import lifecycle_body_progress, retiring_pose
 from game.body_pose_types import ActorPose as ActorPose

@@ -1643,7 +1643,8 @@ class CommandNextTurnEffect(BaseCondition):
                 return None
 
             self._commanded_turn_started = True
-            self._activate_commanded_turn(event, target)
+            if self.contributions_active():
+                self._activate_commanded_turn(event, target)
             return None
 
         return EventHandler(
@@ -1656,6 +1657,7 @@ class CommandNextTurnEffect(BaseCondition):
                     event_source_entity_uuid=target_uuid,
                 )
             ],
+            runs_while_suppressed=True,
             event_processor=processor,
         )
 
@@ -1693,6 +1695,7 @@ class CommandNextTurnEffect(BaseCondition):
                     event_source_entity_uuid=target_uuid,
                 )
             ],
+            runs_while_suppressed=True,
             event_processor=processor,
         )
 

@@ -88,6 +88,8 @@ class PortalDocument(_PortalSource):
 
 @dataclass(frozen=True, slots=True)
 class PortalBank:
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
     pages: tuple[tuple[Path, ...], ...]
     cell: tuple[int, int]
     columns: int
@@ -101,6 +103,8 @@ class PortalBank:
 
 @dataclass(frozen=True, slots=True)
 class PortalHatch:
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
     sheet: Path
     front: Path
     cell: tuple[int, int]
@@ -112,6 +116,8 @@ class PortalHatch:
 
 @dataclass(frozen=True, slots=True)
 class PortalAperture:
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
     shape: Literal["diamond", "ellipse"]
     half_width_px: float
     half_height_px: float
@@ -119,6 +125,8 @@ class PortalAperture:
 
 @dataclass(frozen=True, slots=True)
 class PortalArt:
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
     entrance: PortalBank
     exit: PortalBank
     hatch: PortalHatch | None

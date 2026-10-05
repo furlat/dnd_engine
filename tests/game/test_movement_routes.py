@@ -21,7 +21,8 @@ from game.presentation import reduce_lineage
 from game.player_reduction import reduce_lineage as reduce_player
 from tests.game.player_helpers import player_history, visible_body, visible_contact
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.choreography_draw import load_motion_media
 from tests.game.movement_scenarios import movement_history
 from tests.game.scenarios import attack_history

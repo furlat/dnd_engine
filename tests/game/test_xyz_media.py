@@ -11,7 +11,8 @@ import pytest
 from dnd.types.world import CardinalDirection
 from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementKind
 from game.animation_types import PackedSurfaceFrames, ProjectileFrameStorage, ProjectileStorage
-from game.area_media import AreaSolid, BoundarySprite
+from game.area_media import BoundarySprite
+from game.animation_types import AreaSolid
 from game.draw_commands import DrawCommand
 from game.fixture_depth import partition_world_depth, split_world_depth
 from game.projectile_media import ProjectileFrameCache, frame_cache_usage, projectile_frame_layers

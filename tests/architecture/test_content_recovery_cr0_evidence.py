@@ -118,6 +118,12 @@ def _git(*arguments: str) -> bytes:
 
 
 def _artifact_bytes(row: dict[str, Any]) -> bytes:
+    frozen = row.get("frozen_git_object")
+    if frozen is not None:
+        payload = _git("show", frozen)
+        # The freeze recorded Windows checkout bytes, not Git's LF blob.
+        assert row["frozen_line_endings"] == "crlf"
+        return payload.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
     location = row["git_object_or_path"]
     if row["source_tier"] == "current_reconstructed_engine":
         return (REPOSITORY_ROOT / location).read_bytes()
@@ -1415,3 +1421,16 @@ def test_every_structural_definition_has_one_exact_authored_owner() -> None:
         assert declarations[row.ref.identity_key] is row
         assert sum(candidate.ref.identity_key == row.ref.identity_key
                    for candidate in BUILT_IN_DECLARATION_INVENTORY) == 1
+
+
+def test_frozen_icon_snapshot_differs_only_by_explicit_grapple_retirement() -> None:
+    """The historical freeze stays immutable; today's one retirement is explicit."""
+    frozen = _artifact_json("current.icon_bindings")
+    current = json.loads((REPOSITORY_ROOT / "content_data/ledgers/content_icon_bindings.json").read_bytes())
+    retired = [row for row in frozen["definitions"]
+               if row["content_ref"]["content_id"] == "condition.grappled"]
+    assert len(retired) == 1
+    retained = [row for row in frozen["definitions"] if row not in retired]
+    assert current["definitions"] == retained
+    assert {key: value for key, value in current.items() if key not in ("definitions", "binding_digest")} == {
+        key: value for key, value in frozen.items() if key not in ("definitions", "binding_digest")}

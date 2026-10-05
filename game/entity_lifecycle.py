@@ -12,6 +12,7 @@ from game.body_pose_types import ActorPose, SceneActor
 from game.condition_animation import condition_body_pose, resolve_condition_appearance
 from game.player_facts import FactionFact, PlayerActor, PlayerFact, SpatialFact
 from game.stationary_media import StationaryMediaCue
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +23,7 @@ class EntityLifecycleCue:
     start_ms: float
     recipe: EntityLifecyclePhase
     data: AnimationData
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
     @property
     def body_end_ms(self) -> float:
@@ -53,7 +55,11 @@ def bind_entity_lifecycle(event_uuid: UUID, phase: Literal["arrival", "departure
         return None
     appearance = resolve_condition_appearance(actor.conditions, data.condition_recipes, data.condition_media)
     scene_actor = SceneActor(contact, resolve_player_layers(data, actor, rig_id=contact.rig_id), appearance)
-    cue = EntityLifecycleCue(event_uuid, phase, scene_actor, start_ms, recipe, data)
+    body_duration = recipe.bodyFadeMs[1] if recipe.bodyFadeMs else 0.
+    evidence = (TimingEvidence(0, TimingReference('event', event_uuid, 'body_end'), 'body_end', 'offset',
+        (TimingOperand(TimingReference('event', event_uuid, 'start'), start_ms, offset_ms=body_duration,
+            authored_field=f'entity_lifecycle.{phase}.bodyFadeMs[1]' if recipe.bodyFadeMs else None),), start_ms + body_duration),)
+    cue = EntityLifecycleCue(event_uuid, phase, scene_actor, start_ms, recipe, data, evidence)
     scale = body_rig(data, contact).lifecycle_scale
     media = tuple(StationaryMediaCue(event_uuid, track.model_copy(update={"scale": track.scale * scale}),
         contact.grid, contact.elevation_steps, contact.facing, start_ms + track.startOffsetMs,

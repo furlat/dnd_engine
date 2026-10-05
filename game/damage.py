@@ -10,6 +10,7 @@ from game.animation import (
     resolve_damage, sample_damage_body,
 )
 from game.animation_types import AnimationData, StudioDamage
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference
 from game.combat import actor_contact
 from game.player_reduction import PlayerCausalIndex, index_player_lineage
 from game.player_facts import DamageRequestFact, DamageResultFact, LifeFact, PlayerLineage, PlayerNode, PlayerState
@@ -27,6 +28,7 @@ class DamageCue:
     resulting_life_state: LifeState
     owned_life_events: frozenset[UUID]
     data: AnimationData
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,10 +79,12 @@ def bind_damage(before: PlayerState, lineage: PlayerLineage, data: AnimationData
     # Entering DYING can normalize the packet's intermediate negative HP.
     hp = changes[-1][1].normal_hit_points if changes else packet.resulting_normal_hp
     damage = resolve_damage(data, packet.damage_type.value)
-    timing = compile_damage(data, target, damage, start_ms, life)
+    evidence: list[TimingEvidence] = []
+    timing = compile_damage(data, target, damage, start_ms, life, timing_evidence=evidence,
+        contact_evidence=TimingOperand(TimingReference('event', root_node.uuid, 'contact'), start_ms))
     return DamageCue(root_node.uuid, target, timing, damage, results,
                      sum(packet.applied_damage for packet in packets), hp, life,
-                     frozenset(identity for identity, _ in changes), data)
+                     frozenset(identity for identity, _ in changes), data, tuple(evidence))
 
 
 def sample_damage(cue: DamageCue, elapsed_ms: float) -> DamageSample:

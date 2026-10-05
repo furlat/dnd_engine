@@ -9,7 +9,7 @@ from math import hypot
 from typing import Mapping
 from uuid import UUID
 
-from dnd.core.events import SpatialChangeType
+from dnd.types.event_facts import SpatialChangeType
 from dnd.types.event_facts import LandingKind, MovementTrajectory
 from dnd.types.world import MovementMode, OccupancyLayer
 from game.animation import (
@@ -24,6 +24,7 @@ from game.player_facts import ForcedMovementFact, PlayerLineage, PlayerNode, Pla
 from game.player_reduction import reduce_lineage
 from game.condition_media import ResolvedConditionLayer
 from game.condition_types import ConditionLayer
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference, TimingMeasurement, record_timing
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +40,7 @@ class ShoveCue:
     feedback: LifecycleFeedback
     data: AnimationData
     body_context: BodyContext | None = None
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +70,7 @@ class ForcedMovementCue:
     flight: FlightMovementProfile | None = None
     flight_body: BodyContext | None = None
     layers: tuple[ConditionLayer, ...] = ()
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
 
 def bind_shove(before: PlayerState, node: PlayerNode, data: AnimationData,
@@ -95,9 +98,14 @@ def bind_shove(before: PlayerState, node: PlayerNode, data: AnimationData,
                      anchors=(ActionFrameAnchor(name="contact", frame=frame),)))
     outcome = ("resisted" if not event.contest_success else "succeeded_prone" if event.knocked_prone
                else "succeeded_blocked" if event.push_distance == 0 else "succeeded_push")
+    evidence: list[TimingEvidence] = []
+    contact_offset = context_anchor_ms(data, source, selected, "contact")
+    record_timing(evidence, TimingReference('event', node.uuid, 'contact'), 'shove_contact',
+        (TimingOperand(TimingReference('event', node.uuid, 'start'), start_ms, offset_ms=contact_offset,
+            authored_field='shove.selected_body.contact'),), start_ms + contact_offset)
     return ShoveCue(node.uuid, source, target, selected.actor.clip, selected.actor.playbackSpeed,
         start_ms, start_ms + context_anchor_ms(data, source, selected, "contact"),
-        start_ms + context_duration(data, source, selected), data.shove_feedback[outcome], data, selected)
+        start_ms + context_duration(data, source, selected), data.shove_feedback[outcome], data, selected, tuple(evidence))
 
 
 def motion_progress(value: float, curve: str, *, inverse: bool = False) -> float:
@@ -171,24 +179,49 @@ def bind_forced_movement(before: PlayerState, lineage: PlayerLineage,
         cumulative[index] / total) for index, grid in enumerate(grids))
     speed = selected.actor.playbackSpeed
     brace_frame = next(row.frame for row in selected.anchors if row.name == "brace")
-    travel_start = start_ms + context_anchor_ms(data, actor, selected, "brace")
+    evidence: list[TimingEvidence] = []
+    brace_delay = context_anchor_ms(data, actor, selected, "brace")
+    travel_start = start_ms + brace_delay
+    start_source = TimingOperand(TimingReference('event', node.uuid, 'start'), start_ms)
+    travel_source = record_timing(evidence, TimingReference('event', node.uuid, 'launch'), 'displacement_start',
+        (replace(start_source, offset_ms=brace_delay, authored_field='forced_movement.selected_body.brace'),), travel_start)
     for layer in layers:
         media = data.condition_media[layer.assetId]
         if media.application_asset_id is not None:
             asset = data.projectile_assets[media.application_asset_id]
             phase = asset.phases.impact
             assert phase is not None
-            travel_start = max(travel_start, start_ms + phase.frames * 1000 / (phase.fps or asset.fps))
+            opening_duration = phase.frames * 1000 / (phase.fps or asset.fps)
+            travel_start = max(travel_start, start_ms + opening_duration)
+            travel_source = record_timing(evidence, travel_source.reference, 'displacement_start',
+                (travel_source, replace(start_source, offset_ms=opening_duration,
+                    authored_field=f'condition_media.{layer.assetId}.application', measurements=(
+                        TimingMeasurement('impact.frames', phase.frames), TimingMeasurement('impact.fps', phase.fps or asset.fps)))),
+                travel_start, 'maximum')
     duration = profile.duration_ms * context.durationScale
     body_end = travel_start + duration + context_duration(data, actor, selected) - context_anchor_ms(data, actor, selected, "brace")
+    travel_end_source = record_timing(evidence, TimingReference('event', node.uuid, 'contact'), 'displacement_travel',
+        (replace(travel_source, offset_ms=duration, authored_field='forced_movement.duration', measurements=(
+            TimingMeasurement('profile.duration_ms', profile.duration_ms), TimingMeasurement('context.durationScale', context.durationScale))),),
+        travel_start + duration)
+    body_end_source = record_timing(evidence, TimingReference('event', node.uuid, 'body_end'), 'displacement_complete',
+        (replace(travel_end_source, offset_ms=context_duration(data, actor, selected)-brace_delay,
+            authored_field='forced_movement.selected_body.remaining'),), body_end)
     complete = body_end + context_duration(data, actor, recovery)
+    complete_source = record_timing(evidence, TimingReference('event', node.uuid, 'complete'), 'displacement_complete',
+        (replace(body_end_source, offset_ms=context_duration(data, actor, recovery), authored_field='forced_movement.recovery'),), complete)
     for layer in layers:
         media = data.condition_media[layer.assetId]
         if media.removal_asset_id is not None:
             asset = data.projectile_assets[media.removal_asset_id]
             phase = asset.phases.impact
             assert phase is not None
-            complete = max(complete, travel_start + duration + phase.frames * 1000 / (phase.fps or asset.fps))
+            closing_duration = phase.frames * 1000 / (phase.fps or asset.fps)
+            complete = max(complete, travel_start + duration + closing_duration)
+            complete_source = record_timing(evidence, complete_source.reference, 'displacement_complete',
+                (complete_source, replace(travel_end_source, offset_ms=closing_duration,
+                    authored_field=f'condition_media.{layer.assetId}.removal', measurements=(
+                        TimingMeasurement('impact.frames', phase.frames), TimingMeasurement('impact.fps', phase.fps or asset.fps)))), complete, 'maximum')
     arrivals: list[tuple[UUID, float]] = []
     entered_index = 0
     for identity, row in spatial:
@@ -199,12 +232,16 @@ def bind_forced_movement(before: PlayerState, lineage: PlayerLineage,
         if finite_transfer:
             progress = 0. if row.occupancy_layer is OccupancyLayer.AIR else 1.
         at = travel_start + duration * motion_progress(progress, context.motionCurve, inverse=True)
+        record_timing(evidence, TimingReference('event', identity, 'admission'), 'displacement_travel',
+            (replace(travel_source, offset_ms=duration * motion_progress(progress, context.motionCurve, inverse=True),
+                authored_field='forced_movement.motionCurve', measurements=(TimingMeasurement('path.progress', progress),
+                    TimingMeasurement('travel.duration_ms', duration))),), at)
         arrivals.append((identity, at))
         if row.change_type is SpatialChangeType.ENTITY_ENTERED:
             entered_index += 1
     return ForcedMovementCue(node.uuid, actor, points, tuple(arrivals), selected.actor.clip,
         brace_frame, speed, start_ms, travel_start, travel_start + duration, body_end, complete,
-        data, selected, recovery, flight, flight_body, layers)
+        data, selected, recovery, flight, flight_body, layers, tuple(evidence))
 
 
 def sample_displacement_layers(cue: ForcedMovementCue, elapsed_ms: float) -> tuple[ResolvedConditionLayer, ...]:

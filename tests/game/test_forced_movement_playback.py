@@ -25,7 +25,8 @@ from game.choreography_draw import ChoreographyMedia, load_choreography_media
 from game.feedback import choreography_feedback
 from game.playback_frame import PlaybackFrame, sample_playback_frame
 from game.projection import Camera, TILE_WIDTH, project_screen
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.animation_draw import LoadedBodyRows
 from game.condition_sampling import sample_condition_media
 from game.forced_movement import sample_displacement_layers

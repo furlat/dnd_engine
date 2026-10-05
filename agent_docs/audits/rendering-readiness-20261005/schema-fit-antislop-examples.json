@@ -1,0 +1,2721 @@
+[
+  {
+    "example": "ranged attack",
+    "trace": ".runtime/bow-release-fix/review/runs/20261003T112253Z-424e7f/cases/ranged-hit/trace.json",
+    "trace_sha256": "afeee5343ee522ff8d0d1a32390a2e1d9c2131ba02e9d52b0786c61875e517c8",
+    "recorded_source": {
+      "branch": "codex/recovery-design",
+      "commit": "f04f84906845d7d2d67e2eb5de615dab0224dc22",
+      "dirty": null
+    },
+    "head_index": 0,
+    "head_uuid": "ab729cbc-4b05-465d-b853-a8d13412f3ac",
+    "presentation_start_ms": 375.0,
+    "payload": {
+      "nodes": [
+        {
+          "event_uuid": "ab729cbc-4b05-465d-b853-a8d13412f3ac",
+          "start_ms": 0.0,
+          "primitive": "attack",
+          "timeline": {
+            "root_event_uuid": "ab729cbc-4b05-465d-b853-a8d13412f3ac",
+            "source": {
+              "actor_uuid": "b97fe6ce-93c1-4a9f-bfa1-467bdec76978",
+              "grid": [
+                3.0,
+                3.0
+              ],
+              "facing": "SE",
+              "visual_scale": 1.0,
+              "hp": 80,
+              "life_state": "alive",
+              "elevation_steps": 0.0,
+              "rig_id": "neuroclient.modular",
+              "visual_scale_x": 1.0,
+              "body_lift_px": 0.0,
+              "rest_pose": null,
+              "condition_scale": 1.0
+            },
+            "target": {
+              "actor_uuid": "7c713ee5-e473-4ba3-820b-b176e1f0e447",
+              "grid": [
+                7.0,
+                3.0
+              ],
+              "facing": "S",
+              "visual_scale": 0.82,
+              "hp": 10,
+              "life_state": "alive",
+              "elevation_steps": 0.0,
+              "rig_id": "smallscale.goblin01",
+              "visual_scale_x": 1.0,
+              "body_lift_px": 0.0,
+              "rest_pose": null,
+              "condition_scale": 1.0
+            },
+            "profile_id": "ranged",
+            "clip": "Attack3",
+            "playback_speed": 1.0,
+            "facing": "SE",
+            "contact_ms": 1100.9209593551657,
+            "body_end_ms": 1166.6666666666667,
+            "complete_ms": 2267.5876260218324,
+            "layers": [
+              {
+                "id": "attack.slash",
+                "slot": "slash",
+                "enabled": true,
+                "hidden": false,
+                "category": "Slash1",
+                "colors": {
+                  "source": "override",
+                  "primary": 16777215,
+                  "secondary": null,
+                  "tertiary": null,
+                  "mode": "tint"
+                },
+                "sourceSheet": null,
+                "palette": null
+              }
+            ],
+            "damage": {
+              "impactDelayMs": 0.0,
+              "hitFlash": {
+                "enabled": true,
+                "frame": 0,
+                "durationMs": 150.0,
+                "color": 16737860,
+                "palette": null
+              },
+              "floatingNumber": {
+                "enabled": true,
+                "frame": 0,
+                "durationMs": 900.0,
+                "label": "Piercing",
+                "color": 16737860
+              },
+              "death": {
+                "enabled": true,
+                "frame": 14
+              }
+            },
+            "damage_timing": {
+              "start_ms": 1100.9209593551657,
+              "end_ms": 2267.5876260218324,
+              "hp_ms": 1100.9209593551657,
+              "flash_ms": 1100.9209593551657,
+              "number_ms": 1100.9209593551657,
+              "life_body": null
+            },
+            "damage_total": 4,
+            "resulting_hp": 6,
+            "resulting_life_state": null,
+            "feedback": null,
+            "missing_media": [],
+            "projectile": {
+              "start_ms": 833.3333333333334,
+              "end_ms": 1100.9209593551657,
+              "from_point": [
+                18.5,
+                70.0
+              ],
+              "to_point": [
+                128.0,
+                146.88
+              ],
+              "element_colors": {
+                "primary": 13421772,
+                "secondary": 8947848,
+                "tertiary": 16777215
+              }
+            },
+            "authored_clip": "Attack3",
+            "release_ms": 833.3333333333334,
+            "results": [
+              {
+                "uuid": "428c271c-200c-4a50-b4e3-1269c89342fa",
+                "lineage_uuid": "f4638761-aa5f-4b8f-bc21-324ac02c4b5b",
+                "parent_event": "7f218621-a821-463a-b7a6-1fb006367eed",
+                "parent_lineage": "06a9bab2-11f4-4c41-99ee-e6180d4c0d59",
+                "phase": "completion",
+                "canceled": false,
+                "fact": {
+                  "kind": "damage",
+                  "stage": "applied",
+                  "source_entity_uuid": "b97fe6ce-93c1-4a9f-bfa1-467bdec76978",
+                  "target_entity_uuid": "7c713ee5-e473-4ba3-820b-b176e1f0e447",
+                  "applied_damage": 4,
+                  "resulting_normal_hp": 6,
+                  "resulting_temporary_hp": 0,
+                  "damage_type": "Piercing",
+                  "body_release": {
+                    "release_id": "body.blood",
+                    "position": [
+                      7,
+                      3
+                    ],
+                    "occupancy_layer": "ground",
+                    "deposited_position": [
+                      7,
+                      3
+                    ],
+                    "pattern": "piercing",
+                    "critical_hit": false,
+                    "regions": [
+                      {
+                        "ellipse": {
+                          "center": [
+                            7.45,
+                            3.0
+                          ],
+                          "radius_x": 2.25,
+                          "radius_y": 1.45,
+                          "angle": 0.0
+                        },
+                        "positions": [
+                          [
+                            5,
+                            2
+                          ],
+                          [
+                            5,
+                            3
+                          ],
+                          [
+                            5,
+                            4
+                          ],
+                          [
+                            6,
+                            2
+                          ],
+                          [
+                            6,
+                            3
+                          ],
+                          [
+                            6,
+                            4
+                          ],
+                          [
+                            7,
+                            2
+                          ],
+                          [
+                            7,
+                            3
+                          ],
+                          [
+                            7,
+                            4
+                          ],
+                          [
+                            8,
+                            2
+                          ],
+                          [
+                            8,
+                            3
+                          ],
+                          [
+                            8,
+                            4
+                          ],
+                          [
+                            9,
+                            2
+                          ],
+                          [
+                            9,
+                            3
+                          ],
+                          [
+                            9,
+                            4
+                          ],
+                          [
+                            10,
+                            2
+                          ],
+                          [
+                            10,
+                            3
+                          ],
+                          [
+                            10,
+                            4
+                          ]
+                        ],
+                        "elevation_steps": 0
+                      }
+                    ],
+                    "primary_damage_type": "Piercing",
+                    "secondary_damage_type": null
+                  },
+                  "effect_id": null,
+                  "spatial_source": null
+                },
+                "resolution_ref": {
+                  "kind": "event",
+                  "lineage_uuid": "0309249d-df52-4924-af93-6a24a63e5ffd"
+                },
+                "cancellation": null,
+                "content_attributions": []
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "example": "zero-duration action",
+    "trace": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/pending-retreat-dash/trace.json",
+    "trace_sha256": "396560289b6c31278225380729de72b7079af147bc77aa3ee07d2ad3e83cd8b8",
+    "recorded_source": {
+      "branch": "codex/recovery-design",
+      "commit": "b7e202dd36060215462c5068ea01524c66fe34fe",
+      "dirty": null
+    },
+    "head_index": 8,
+    "head_uuid": "9d785229-30a2-4234-91d0-de52cc4cf9c1",
+    "presentation_start_ms": 2208.3333333333335,
+    "payload": {
+      "body_actions": [
+        {
+          "event_uuid": "9d785229-30a2-4234-91d0-de52cc4cf9c1",
+          "contact": {
+            "actor_uuid": "fab9c5d0-d0e4-4fbb-83b2-a0825a24ae24",
+            "grid": [
+              4.0,
+              6.0
+            ],
+            "facing": "SE",
+            "visual_scale": 1.0,
+            "hp": 120,
+            "life_state": "alive",
+            "elevation_steps": 0.0,
+            "rig_id": "neuroclient.modular",
+            "visual_scale_x": 1.0,
+            "body_lift_px": 0.0,
+            "rest_pose": null,
+            "condition_scale": 1.0,
+            "manifestation": null
+          },
+          "recipe_id": "action.spell.expeditious_retreat.dash",
+          "clip": "Idle",
+          "playback_speed": 1.0,
+          "start_ms": 0.0,
+          "effect_ms": 0.0,
+          "body_end_ms": 0.0,
+          "join_ms": 0.0,
+          "complete_ms": 0.0,
+          "enabled": false,
+          "hidden_slots": [],
+          "hide_weapon_during_body": false,
+          "recovery": null,
+          "condition": null,
+          "feedback": null,
+          "gaps": [],
+          "interaction_object_uuid": null,
+          "relocates": false,
+          "cast_layers": [],
+          "body_context": {
+            "actor": {
+              "enabled": false,
+              "clip": "Idle",
+              "playbackSpeed": 1.0,
+              "hiddenSlots": [],
+              "media": []
+            },
+            "anchors": [
+              {
+                "name": "effect",
+                "frame": 0
+              }
+            ],
+            "playback": "once",
+            "reversed": false,
+            "frameKeys": [],
+            "restFrame": null
+          },
+          "recovery_body": {
+            "actor": {
+              "enabled": false,
+              "clip": "Idle",
+              "playbackSpeed": 1.0,
+              "hiddenSlots": [],
+              "media": []
+            },
+            "anchors": [],
+            "playback": "once",
+            "reversed": false,
+            "frameKeys": [],
+            "restFrame": null
+          },
+          "save_success": null
+        }
+      ],
+      "state_times_ms": [
+        0.0
+      ]
+    }
+  },
+  {
+    "example": "cast child join",
+    "trace": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/fly-lifetime-modular-backpack/trace.json",
+    "trace_sha256": "6185282fa94b487f7b10af851fd977d95434c0af81b05e59e1dfdad16272113c",
+    "recorded_source": {
+      "branch": "codex/recovery-design",
+      "commit": "b7e202dd36060215462c5068ea01524c66fe34fe",
+      "dirty": null
+    },
+    "head_index": 0,
+    "head_uuid": "733a7aee-f185-4875-9ccb-45a7fdaa45b7",
+    "presentation_start_ms": 375.0,
+    "payload": {
+      "body_actions": [
+        {
+          "event_uuid": "733a7aee-f185-4875-9ccb-45a7fdaa45b7",
+          "contact": {
+            "actor_uuid": "367a0b05-39fc-45ef-b852-0829db5ef392",
+            "grid": [
+              4.0,
+              6.0
+            ],
+            "facing": "SE",
+            "visual_scale": 1.0,
+            "hp": 80,
+            "life_state": "alive",
+            "elevation_steps": 0.0,
+            "rig_id": "neuroclient.modular",
+            "visual_scale_x": 1.0,
+            "body_lift_px": 0.0,
+            "rest_pose": null,
+            "condition_scale": 1.0,
+            "manifestation": null
+          },
+          "recipe_id": "spell.fly",
+          "clip": "Special1",
+          "playback_speed": 1.0,
+          "start_ms": 0.0,
+          "effect_ms": 916.6666666666666,
+          "body_end_ms": 1166.6666666666667,
+          "join_ms": 1816.6666666666665,
+          "complete_ms": 1816.6666666666665,
+          "enabled": true,
+          "hidden_slots": [],
+          "hide_weapon_during_body": true,
+          "recovery": {
+            "enabled": false,
+            "bodyClip": "Taunt",
+            "bodyPlaybackSpeed": 1.0
+          },
+          "condition": {
+            "anchor": "effect",
+            "delayMs": 0.0,
+            "feedbackEnabled": true
+          },
+          "feedback": null,
+          "gaps": [],
+          "interaction_object_uuid": null,
+          "relocates": false,
+          "cast_layers": [
+            {
+              "id": "cast-weaponGlow",
+              "slot": "weaponGlow",
+              "enabled": true,
+              "hidden": false,
+              "category": "Magic2",
+              "colors": {
+                "source": "auto",
+                "primary": 13169919,
+                "secondary": null,
+                "tertiary": null,
+                "mode": "paletteSwap"
+              },
+              "sourceSheet": "/spritesheets/Magic2/Special1.png",
+              "palette": {
+                "colors": [
+                  3570590,
+                  13169919,
+                  7067629
+                ],
+                "gamma": 0.65,
+                "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                "untinted": false
+              },
+              "blendMode": "normal"
+            },
+            {
+              "id": "cast-aura",
+              "slot": "aura",
+              "enabled": true,
+              "hidden": false,
+              "category": "Effect4",
+              "colors": {
+                "source": "auto",
+                "primary": 13169919,
+                "secondary": null,
+                "tertiary": null,
+                "mode": "paletteSwap"
+              },
+              "sourceSheet": "/spritesheets/Effect4/Special1.png",
+              "palette": {
+                "colors": [
+                  3570590,
+                  13169919,
+                  7067629
+                ],
+                "gamma": 0.65,
+                "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                "untinted": false
+              },
+              "blendMode": "normal"
+            }
+          ],
+          "body_context": {
+            "actor": {
+              "enabled": true,
+              "clip": "Special1",
+              "playbackSpeed": 1.0,
+              "hiddenSlots": [],
+              "media": []
+            },
+            "anchors": [
+              {
+                "name": "effect",
+                "frame": 11
+              }
+            ],
+            "playback": "once",
+            "reversed": false,
+            "frameKeys": [],
+            "restFrame": null
+          },
+          "recovery_body": {
+            "actor": {
+              "enabled": false,
+              "clip": "Taunt",
+              "playbackSpeed": 1.0,
+              "hiddenSlots": [],
+              "media": []
+            },
+            "anchors": [],
+            "playback": "once",
+            "reversed": false,
+            "frameKeys": [],
+            "restFrame": null
+          },
+          "save_success": null
+        }
+      ],
+      "state_times_ms": [
+        916.6666666666666
+      ]
+    }
+  },
+  {
+    "example": "equipment item identity",
+    "trace": ".runtime/items-module-20261002/accepted-review/runs/20261002T141505Z-e83b81/cases/item-dagger-transfer-melee-main/trace.json",
+    "trace_sha256": "c9ae92ac5b90f180eeae1c015527f5aced4f52698a3653a7f8dc05320809dddc",
+    "recorded_source": {
+      "branch": "codex/recovery-design",
+      "commit": "998e3ce3ead17ec3b304008c9fbf8a8538c93668",
+      "dirty": null
+    },
+    "head_index": 12,
+    "head_uuid": "d9971f2a-2771-4bc6-aba9-bdf874a6bbd0",
+    "presentation_start_ms": 9763.888888888889,
+    "payload": {
+      "equipment": [
+        {
+          "event_uuid": "d9971f2a-2771-4bc6-aba9-bdf874a6bbd0",
+          "start_ms": 0,
+          "timeline": {
+            "root_event_uuid": "d9971f2a-2771-4bc6-aba9-bdf874a6bbd0",
+            "actor": {
+              "actor_uuid": "5d8acc8d-0571-41a3-8ba7-8f1bf14dd4bc",
+              "grid": [
+                4.0,
+                3.0
+              ],
+              "facing": "S",
+              "visual_scale": 1.0,
+              "hp": 80,
+              "life_state": "alive",
+              "elevation_steps": 0.0,
+              "rig_id": "neuroclient.modular",
+              "visual_scale_x": 1.0,
+              "body_lift_px": 0.0,
+              "rest_pose": null,
+              "condition_scale": 1.0
+            },
+            "commit_ms": 111.11111111111111,
+            "complete_ms": 388.8888888888889
+          },
+          "replacement": [
+            {
+              "slot": "shadow",
+              "category": "Shadow",
+              "tint": 16777215,
+              "alpha": 0.5,
+              "item_effects": [],
+              "item_uuid": null
+            },
+            {
+              "slot": "body",
+              "category": "NakedBody",
+              "tint": 14527112,
+              "alpha": 1.0,
+              "item_effects": [],
+              "item_uuid": null
+            },
+            {
+              "slot": "legs",
+              "category": "Legs1",
+              "tint": 6693410,
+              "alpha": 1.0,
+              "item_effects": [],
+              "item_uuid": "2463084e-a59f-4651-a142-e439482193bf"
+            },
+            {
+              "slot": "chest",
+              "category": "Chest14",
+              "tint": 11154227,
+              "alpha": 1.0,
+              "item_effects": [],
+              "item_uuid": "2463084e-a59f-4651-a142-e439482193bf"
+            },
+            {
+              "slot": "belt",
+              "category": "Belt2",
+              "tint": 13412932,
+              "alpha": 1.0,
+              "item_effects": [],
+              "item_uuid": "2463084e-a59f-4651-a142-e439482193bf"
+            },
+            {
+              "slot": "offhand",
+              "category": "Offhand2",
+              "tint": 3359829,
+              "alpha": 1.0,
+              "item_effects": [
+                {
+                  "effect_uuid": "e3d5f3e5-5889-4ceb-94d8-99f177389cbb",
+                  "contribution_uuid": "799327de-8de5-4b5b-9104-fed2f5d94f52",
+                  "behavior_id": "condition.consumable.weapon_coat.fire",
+                  "damage_type": "Fire",
+                  "applied_source_event_cursor": 33
+                }
+              ],
+              "item_uuid": "b6916386-1fd9-4f91-9be8-38d900e141f0"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "example": "movement and nested damage",
+    "trace": ".runtime/cleanup-20261003/acceptance/runs/20261003T021756Z-043126/cases/damage-resolution-walk/trace.json",
+    "trace_sha256": "683535fffb38b16bff98b33208143b3fe25cda5481d4b9308d41b4349171b7d0",
+    "recorded_source": {
+      "branch": "codex/recovery-design",
+      "commit": "981079bc0208dbb23f3ccc927347eef77fef4c30",
+      "dirty": null
+    },
+    "head_index": 0,
+    "head_uuid": "4fd133a7-e6bc-4adc-97e9-ecbcbc352448",
+    "presentation_start_ms": 375.0,
+    "payload": {
+      "legs": [
+        {
+          "start": [
+            4.0,
+            3.0
+          ],
+          "end": [
+            5.0,
+            3.0
+          ],
+          "start_height": 0.0,
+          "end_height": 0.0,
+          "start_ms": 0.0,
+          "end_ms": 416.6666666666667,
+          "body_start_ms": 0.0,
+          "arc_height_px": 0.0,
+          "curve_from": 0.0,
+          "curve_to": 1.0,
+          "initial_lift_px": 0.0,
+          "speed_scale": 1.0,
+          "path_bend": [
+            0.0,
+            0.0
+          ],
+          "passage_scale": [
+            1.0,
+            1.0
+          ],
+          "passage_body_height_px": 0.0,
+          "passage_socket": null,
+          "passage_hold_fraction": 0.0
+        },
+        {
+          "start": [
+            5.0,
+            3.0
+          ],
+          "end": [
+            6.0,
+            3.0
+          ],
+          "start_height": 0.0,
+          "end_height": 0.0,
+          "start_ms": 1583.3333333333335,
+          "end_ms": 2000.0000000000002,
+          "body_start_ms": 1166.6666666666667,
+          "arc_height_px": 0.0,
+          "curve_from": 0.0,
+          "curve_to": 1.0,
+          "initial_lift_px": 0.0,
+          "speed_scale": 1.0,
+          "path_bend": [
+            0.0,
+            0.0
+          ],
+          "passage_scale": [
+            1.0,
+            1.0
+          ],
+          "passage_body_height_px": 0.0,
+          "passage_socket": null,
+          "passage_hold_fraction": 0.0
+        }
+      ],
+      "reactions": [
+        {
+          "start_ms": 416.6666666666667,
+          "end_ms": 1583.3333333333335,
+          "held_grid": [
+            5,
+            3
+          ],
+          "lift_px": 0,
+          "group": {
+            "root_uuid": "18851343-3667-41bf-806a-cb33602b7425",
+            "complete_ms": 1166.6666666666667,
+            "state_times_ms": [
+              0
+            ],
+            "observations": [
+              {
+                "at_ms": 0,
+                "event_uuid": "d69a318a-039a-4785-b9c0-c1bb694791f1",
+                "actor_uuid": "dd14cb7d-fe09-4ac2-bd28-52284b332c5d"
+              }
+            ],
+            "shoves": [],
+            "forced_movement": [],
+            "damage": [
+              {
+                "event_uuid": "fd9a76dd-8c7b-44bb-bf66-8d4667b0a452",
+                "contact": {
+                  "actor_uuid": "f16c8727-3858-4c2c-8cf6-4cd89ec3a5fb",
+                  "grid": [
+                    5.0,
+                    3.0
+                  ],
+                  "facing": "SE",
+                  "visual_scale": 1.0,
+                  "hp": 20,
+                  "life_state": "alive",
+                  "elevation_steps": 0.0,
+                  "rig_id": "neuroclient.modular",
+                  "visual_scale_x": 1.0,
+                  "body_lift_px": 0.0,
+                  "rest_pose": null,
+                  "condition_scale": 1.0
+                },
+                "timing": {
+                  "start_ms": 0.0,
+                  "end_ms": 1166.6666666666667,
+                  "hp_ms": 0.0,
+                  "flash_ms": 0.0,
+                  "number_ms": 0.0,
+                  "life_body": null
+                },
+                "damage": {
+                  "impactDelayMs": 0.0,
+                  "hitFlash": {
+                    "enabled": true,
+                    "frame": 0,
+                    "durationMs": 150.0,
+                    "color": 16737860,
+                    "palette": null
+                  },
+                  "floatingNumber": {
+                    "enabled": true,
+                    "frame": 0,
+                    "durationMs": 900.0,
+                    "label": "Piercing",
+                    "color": 16737860
+                  },
+                  "death": {
+                    "enabled": true,
+                    "frame": 14
+                  }
+                },
+                "results": [
+                  {
+                    "uuid": "c09d5e93-227d-4e4b-952b-beede69a6a63",
+                    "lineage_uuid": "d9d4fbe7-0bf2-4f03-b5a4-9eadfa79697c",
+                    "parent_event": "3e58869b-074a-455f-aef4-bd1d031bbb6c",
+                    "parent_lineage": "d195393c-3044-417f-adc6-61f82f4e162b",
+                    "phase": "completion",
+                    "canceled": false,
+                    "fact": {
+                      "kind": "damage",
+                      "stage": "applied",
+                      "source_entity_uuid": "dd14cb7d-fe09-4ac2-bd28-52284b332c5d",
+                      "target_entity_uuid": "f16c8727-3858-4c2c-8cf6-4cd89ec3a5fb",
+                      "applied_damage": 2,
+                      "resulting_normal_hp": 18,
+                      "resulting_temporary_hp": 0,
+                      "damage_type": "Piercing",
+                      "body_release": null,
+                      "effect_id": "content.srd_5_1_cc:condition:spatial_effect.spell.spike_growth@1",
+                      "spatial_source": null
+                    },
+                    "resolution_ref": {
+                      "kind": "event",
+                      "lineage_uuid": "d195393c-3044-417f-adc6-61f82f4e162b"
+                    },
+                    "cancellation": null,
+                    "content_attributions": []
+                  }
+                ],
+                "applied_damage": 2,
+                "resulting_hp": 18,
+                "resulting_life_state": "alive",
+                "owned_life_events": []
+              }
+            ],
+            "body_actions": [],
+            "body_hops": [],
+            "portals": [],
+            "nodes": [],
+            "conditions": [],
+            "healing": [],
+            "lifecycle": [],
+            "equipment": [],
+            "movements": [],
+            "gaps": []
+          }
+        },
+        {
+          "start_ms": 2000.0000000000002,
+          "end_ms": 3166.666666666667,
+          "held_grid": [
+            6,
+            3
+          ],
+          "lift_px": 0,
+          "group": {
+            "root_uuid": "1d8c719f-2e75-4467-9052-c7d9bbe814d8",
+            "complete_ms": 1166.6666666666667,
+            "state_times_ms": [
+              0
+            ],
+            "observations": [],
+            "shoves": [],
+            "forced_movement": [],
+            "damage": [
+              {
+                "event_uuid": "b8bc7e22-9f80-4375-a296-f35323dce324",
+                "contact": {
+                  "actor_uuid": "f16c8727-3858-4c2c-8cf6-4cd89ec3a5fb",
+                  "grid": [
+                    6.0,
+                    3.0
+                  ],
+                  "facing": "SE",
+                  "visual_scale": 1.0,
+                  "hp": 18,
+                  "life_state": "alive",
+                  "elevation_steps": 0.0,
+                  "rig_id": "neuroclient.modular",
+                  "visual_scale_x": 1.0,
+                  "body_lift_px": 0.0,
+                  "rest_pose": null,
+                  "condition_scale": 1.0
+                },
+                "timing": {
+                  "start_ms": 0.0,
+                  "end_ms": 1166.6666666666667,
+                  "hp_ms": 0.0,
+                  "flash_ms": 0.0,
+                  "number_ms": 0.0,
+                  "life_body": null
+                },
+                "damage": {
+                  "impactDelayMs": 0.0,
+                  "hitFlash": {
+                    "enabled": true,
+                    "frame": 0,
+                    "durationMs": 150.0,
+                    "color": 16737860,
+                    "palette": null
+                  },
+                  "floatingNumber": {
+                    "enabled": true,
+                    "frame": 0,
+                    "durationMs": 900.0,
+                    "label": "Piercing",
+                    "color": 16737860
+                  },
+                  "death": {
+                    "enabled": true,
+                    "frame": 14
+                  }
+                },
+                "results": [
+                  {
+                    "uuid": "7d4ef49b-a224-43dd-97b9-7071c714e5f9",
+                    "lineage_uuid": "5ae0b27e-6892-4a6a-a1ef-024cd607d6ab",
+                    "parent_event": "c94f394a-b923-4475-8914-ae3745f504a5",
+                    "parent_lineage": "08cd3c60-9a95-454e-a4e7-3d17697d1d46",
+                    "phase": "completion",
+                    "canceled": false,
+                    "fact": {
+                      "kind": "damage",
+                      "stage": "applied",
+                      "source_entity_uuid": "dd14cb7d-fe09-4ac2-bd28-52284b332c5d",
+                      "target_entity_uuid": "f16c8727-3858-4c2c-8cf6-4cd89ec3a5fb",
+                      "applied_damage": 2,
+                      "resulting_normal_hp": 16,
+                      "resulting_temporary_hp": 0,
+                      "damage_type": "Piercing",
+                      "body_release": null,
+                      "effect_id": "content.srd_5_1_cc:condition:spatial_effect.spell.spike_growth@1",
+                      "spatial_source": null
+                    },
+                    "resolution_ref": {
+                      "kind": "event",
+                      "lineage_uuid": "08cd3c60-9a95-454e-a4e7-3d17697d1d46"
+                    },
+                    "cancellation": null,
+                    "content_attributions": []
+                  }
+                ],
+                "applied_damage": 2,
+                "resulting_hp": 16,
+                "resulting_life_state": "alive",
+                "owned_life_events": []
+              }
+            ],
+            "body_actions": [],
+            "body_hops": [],
+            "portals": [],
+            "nodes": [],
+            "conditions": [],
+            "healing": [],
+            "lifecycle": [],
+            "equipment": [],
+            "movements": [],
+            "gaps": []
+          }
+        }
+      ]
+    }
+  },
+  {
+    "example": "repeated applications",
+    "trace": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/missile-repeated/trace.json",
+    "trace_sha256": "1b61bce6b2355200cef3ea9921eb851b868eba87345956e5610b7bed471c0c90",
+    "recorded_source": {
+      "branch": "codex/recovery-design",
+      "commit": "b7e202dd36060215462c5068ea01524c66fe34fe",
+      "dirty": null
+    },
+    "head_index": 0,
+    "head_uuid": "cfa6b015-4e41-4fd0-b78e-bdc729266f4f",
+    "presentation_start_ms": 375.0,
+    "payload": {
+      "nodes": [
+        {
+          "event_uuid": "cfa6b015-4e41-4fd0-b78e-bdc729266f4f",
+          "start_ms": 0.0,
+          "primitive": "cast",
+          "timeline": {
+            "source": {
+              "root_event_uuid": "cfa6b015-4e41-4fd0-b78e-bdc729266f4f",
+              "caster": {
+                "actor_uuid": "fdae0df6-3665-44c0-ae50-3de2a24eb0f2",
+                "grid": [
+                  16.0,
+                  22.0
+                ],
+                "facing": "S",
+                "visual_scale": 0.5,
+                "hp": 80,
+                "life_state": "alive",
+                "elevation_steps": 2.0,
+                "rig_id": "neuroclient.modular",
+                "visual_scale_x": 1.0,
+                "body_lift_px": 0.0,
+                "rest_pose": null,
+                "condition_scale": 1.0,
+                "manifestation": null
+              },
+              "applications": [
+                {
+                  "application_id": "25215c61-e12f-5cdb-ad92-fde160ebb726",
+                  "target": {
+                    "actor_uuid": "ad04c6b6-b550-4535-abe4-3147eb5ca5b1",
+                    "grid": [
+                      16.0,
+                      20.0
+                    ],
+                    "facing": "S",
+                    "visual_scale": 0.5,
+                    "hp": 80,
+                    "life_state": "alive",
+                    "elevation_steps": 2.0,
+                    "rig_id": "neuroclient.modular",
+                    "visual_scale_x": 1.0,
+                    "body_lift_px": 0.0,
+                    "rest_pose": null,
+                    "condition_scale": 1.0,
+                    "manifestation": null
+                  },
+                  "damage_applied": true,
+                  "damage_total": 5,
+                  "resulting_hp": 75,
+                  "resulting_life_state": null,
+                  "damage_type": "Force",
+                  "travel_apex_steps": 0.0,
+                  "hit": null,
+                  "removed_condition_tags": [],
+                  "applied_condition_ids": [],
+                  "save_succeeded": null,
+                  "resolution_ref": {
+                    "kind": "application",
+                    "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                    "application_id": "25215c61-e12f-5cdb-ad92-fde160ebb726"
+                  },
+                  "propagation": null,
+                  "results": [
+                    {
+                      "uuid": "9c781b15-0d20-48cb-a4d3-3d8dc32a0e0e",
+                      "lineage_uuid": "a59a98fa-1d43-4b4b-b54d-a8de5a8a239c",
+                      "parent_event": "1a756b7e-4411-428b-a071-83d1a127fceb",
+                      "parent_lineage": "ae142393-1ad1-4865-b50e-ac6418fb2727",
+                      "phase": "completion",
+                      "canceled": false,
+                      "fact": {
+                        "kind": "damage",
+                        "stage": "applied",
+                        "source_entity_uuid": "fdae0df6-3665-44c0-ae50-3de2a24eb0f2",
+                        "target_entity_uuid": "ad04c6b6-b550-4535-abe4-3147eb5ca5b1",
+                        "applied_damage": 5,
+                        "resulting_normal_hp": 75,
+                        "resulting_temporary_hp": 0,
+                        "damage_type": "Force",
+                        "body_release": {
+                          "release_id": "body.blood",
+                          "position": [
+                            16,
+                            20
+                          ],
+                          "occupancy_layer": "ground",
+                          "deposited_position": [
+                            16,
+                            20
+                          ],
+                          "pattern": "blunt",
+                          "critical_hit": false,
+                          "regions": [
+                            {
+                              "ellipse": {
+                                "center": [
+                                  16.0,
+                                  20.0
+                                ],
+                                "radius_x": 1.5,
+                                "radius_y": 1.5,
+                                "angle": 0.0
+                              },
+                              "positions": [
+                                [
+                                  15,
+                                  19
+                                ],
+                                [
+                                  15,
+                                  20
+                                ],
+                                [
+                                  15,
+                                  21
+                                ],
+                                [
+                                  16,
+                                  19
+                                ],
+                                [
+                                  16,
+                                  20
+                                ],
+                                [
+                                  16,
+                                  21
+                                ],
+                                [
+                                  17,
+                                  19
+                                ],
+                                [
+                                  17,
+                                  20
+                                ],
+                                [
+                                  17,
+                                  21
+                                ]
+                              ],
+                              "elevation_steps": 2
+                            }
+                          ],
+                          "primary_damage_type": "Force",
+                          "secondary_damage_type": null
+                        },
+                        "effect_id": null,
+                        "spatial_source": null,
+                        "source_condition_uuid": null
+                      },
+                      "resolution_ref": {
+                        "kind": "application",
+                        "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                        "application_id": "25215c61-e12f-5cdb-ad92-fde160ebb726"
+                      },
+                      "cancellation": null,
+                      "content_attributions": []
+                    }
+                  ]
+                },
+                {
+                  "application_id": "a2250015-541e-5253-b95d-9701acd4774f",
+                  "target": {
+                    "actor_uuid": "6a2d6ebf-e445-4e60-b7b1-5ca451661239",
+                    "grid": [
+                      18.0,
+                      20.0
+                    ],
+                    "facing": "S",
+                    "visual_scale": 0.5,
+                    "hp": 80,
+                    "life_state": "alive",
+                    "elevation_steps": 2.0,
+                    "rig_id": "neuroclient.modular",
+                    "visual_scale_x": 1.0,
+                    "body_lift_px": 0.0,
+                    "rest_pose": null,
+                    "condition_scale": 1.0,
+                    "manifestation": null
+                  },
+                  "damage_applied": true,
+                  "damage_total": 5,
+                  "resulting_hp": 75,
+                  "resulting_life_state": null,
+                  "damage_type": "Force",
+                  "travel_apex_steps": 0.0,
+                  "hit": null,
+                  "removed_condition_tags": [],
+                  "applied_condition_ids": [],
+                  "save_succeeded": null,
+                  "resolution_ref": {
+                    "kind": "application",
+                    "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                    "application_id": "a2250015-541e-5253-b95d-9701acd4774f"
+                  },
+                  "propagation": null,
+                  "results": [
+                    {
+                      "uuid": "1f62206b-886a-49b5-b3cd-e1beb051dab5",
+                      "lineage_uuid": "a9d275af-b999-49e5-a51c-fc81194e33e7",
+                      "parent_event": "27f8093e-0797-4272-8106-c303857b2581",
+                      "parent_lineage": "8c4a5094-6159-44ad-8759-f1ff38ff06a9",
+                      "phase": "completion",
+                      "canceled": false,
+                      "fact": {
+                        "kind": "damage",
+                        "stage": "applied",
+                        "source_entity_uuid": "fdae0df6-3665-44c0-ae50-3de2a24eb0f2",
+                        "target_entity_uuid": "6a2d6ebf-e445-4e60-b7b1-5ca451661239",
+                        "applied_damage": 5,
+                        "resulting_normal_hp": 75,
+                        "resulting_temporary_hp": 0,
+                        "damage_type": "Force",
+                        "body_release": {
+                          "release_id": "body.blood",
+                          "position": [
+                            18,
+                            20
+                          ],
+                          "occupancy_layer": "ground",
+                          "deposited_position": [
+                            18,
+                            20
+                          ],
+                          "pattern": "blunt",
+                          "critical_hit": false,
+                          "regions": [
+                            {
+                              "ellipse": {
+                                "center": [
+                                  18.0,
+                                  20.0
+                                ],
+                                "radius_x": 1.5,
+                                "radius_y": 1.5,
+                                "angle": 0.0
+                              },
+                              "positions": [
+                                [
+                                  17,
+                                  19
+                                ],
+                                [
+                                  17,
+                                  20
+                                ],
+                                [
+                                  17,
+                                  21
+                                ],
+                                [
+                                  18,
+                                  19
+                                ],
+                                [
+                                  18,
+                                  20
+                                ],
+                                [
+                                  18,
+                                  21
+                                ]
+                              ],
+                              "elevation_steps": 2
+                            }
+                          ],
+                          "primary_damage_type": "Force",
+                          "secondary_damage_type": null
+                        },
+                        "effect_id": null,
+                        "spatial_source": null,
+                        "source_condition_uuid": null
+                      },
+                      "resolution_ref": {
+                        "kind": "application",
+                        "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                        "application_id": "a2250015-541e-5253-b95d-9701acd4774f"
+                      },
+                      "cancellation": null,
+                      "content_attributions": []
+                    }
+                  ]
+                },
+                {
+                  "application_id": "f376277c-1665-5ffb-a41c-a8ec1117ff83",
+                  "target": {
+                    "actor_uuid": "ad04c6b6-b550-4535-abe4-3147eb5ca5b1",
+                    "grid": [
+                      16.0,
+                      20.0
+                    ],
+                    "facing": "S",
+                    "visual_scale": 0.5,
+                    "hp": 80,
+                    "life_state": "alive",
+                    "elevation_steps": 2.0,
+                    "rig_id": "neuroclient.modular",
+                    "visual_scale_x": 1.0,
+                    "body_lift_px": 0.0,
+                    "rest_pose": null,
+                    "condition_scale": 1.0,
+                    "manifestation": null
+                  },
+                  "damage_applied": true,
+                  "damage_total": 2,
+                  "resulting_hp": 73,
+                  "resulting_life_state": null,
+                  "damage_type": "Force",
+                  "travel_apex_steps": 0.0,
+                  "hit": null,
+                  "removed_condition_tags": [],
+                  "applied_condition_ids": [],
+                  "save_succeeded": null,
+                  "resolution_ref": {
+                    "kind": "application",
+                    "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                    "application_id": "f376277c-1665-5ffb-a41c-a8ec1117ff83"
+                  },
+                  "propagation": null,
+                  "results": [
+                    {
+                      "uuid": "0d9c621a-6827-48be-be63-daeb4f8b97fa",
+                      "lineage_uuid": "78451f7d-4b7c-4e5a-ae8a-aa85e05dbbd2",
+                      "parent_event": "c131b39d-7b2d-4047-8bdb-fcd766150b81",
+                      "parent_lineage": "427b9003-bab2-4526-b062-b766fef3879b",
+                      "phase": "completion",
+                      "canceled": false,
+                      "fact": {
+                        "kind": "damage",
+                        "stage": "applied",
+                        "source_entity_uuid": "fdae0df6-3665-44c0-ae50-3de2a24eb0f2",
+                        "target_entity_uuid": "ad04c6b6-b550-4535-abe4-3147eb5ca5b1",
+                        "applied_damage": 2,
+                        "resulting_normal_hp": 73,
+                        "resulting_temporary_hp": 0,
+                        "damage_type": "Force",
+                        "body_release": {
+                          "release_id": "body.blood",
+                          "position": [
+                            16,
+                            20
+                          ],
+                          "occupancy_layer": "ground",
+                          "deposited_position": [
+                            16,
+                            20
+                          ],
+                          "pattern": "blunt",
+                          "critical_hit": false,
+                          "regions": [
+                            {
+                              "ellipse": {
+                                "center": [
+                                  16.0,
+                                  20.0
+                                ],
+                                "radius_x": 1.5,
+                                "radius_y": 1.5,
+                                "angle": 0.0
+                              },
+                              "positions": [
+                                [
+                                  15,
+                                  19
+                                ],
+                                [
+                                  15,
+                                  20
+                                ],
+                                [
+                                  15,
+                                  21
+                                ],
+                                [
+                                  16,
+                                  19
+                                ],
+                                [
+                                  16,
+                                  20
+                                ],
+                                [
+                                  16,
+                                  21
+                                ],
+                                [
+                                  17,
+                                  19
+                                ],
+                                [
+                                  17,
+                                  20
+                                ],
+                                [
+                                  17,
+                                  21
+                                ]
+                              ],
+                              "elevation_steps": 2
+                            }
+                          ],
+                          "primary_damage_type": "Force",
+                          "secondary_damage_type": null
+                        },
+                        "effect_id": null,
+                        "spatial_source": null,
+                        "source_condition_uuid": null
+                      },
+                      "resolution_ref": {
+                        "kind": "application",
+                        "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                        "application_id": "f376277c-1665-5ffb-a41c-a8ec1117ff83"
+                      },
+                      "cancellation": null,
+                      "content_attributions": []
+                    }
+                  ]
+                }
+              ],
+              "ground_target": null,
+              "emitter": null,
+              "area_direction": null,
+              "area_geometry": null,
+              "resolved_area_positions": null,
+              "area_radius_feet": 0.0,
+              "area_propagation": "line_of_effect",
+              "protections": []
+            },
+            "facing": "NE",
+            "body_end_ms": 1166.6666666666667,
+            "release_ms": 583.3333333333334,
+            "applications": [
+              {
+                "source": {
+                  "application_id": "25215c61-e12f-5cdb-ad92-fde160ebb726",
+                  "target": {
+                    "actor_uuid": "ad04c6b6-b550-4535-abe4-3147eb5ca5b1",
+                    "grid": [
+                      16.0,
+                      20.0
+                    ],
+                    "facing": "S",
+                    "visual_scale": 0.5,
+                    "hp": 80,
+                    "life_state": "alive",
+                    "elevation_steps": 2.0,
+                    "rig_id": "neuroclient.modular",
+                    "visual_scale_x": 1.0,
+                    "body_lift_px": 0.0,
+                    "rest_pose": null,
+                    "condition_scale": 1.0,
+                    "manifestation": null
+                  },
+                  "damage_applied": true,
+                  "damage_total": 5,
+                  "resulting_hp": 75,
+                  "resulting_life_state": null,
+                  "damage_type": "Force",
+                  "travel_apex_steps": 0.0,
+                  "hit": null,
+                  "removed_condition_tags": [],
+                  "applied_condition_ids": [],
+                  "save_succeeded": null,
+                  "resolution_ref": {
+                    "kind": "application",
+                    "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                    "application_id": "25215c61-e12f-5cdb-ad92-fde160ebb726"
+                  },
+                  "propagation": null,
+                  "results": [
+                    {
+                      "uuid": "9c781b15-0d20-48cb-a4d3-3d8dc32a0e0e",
+                      "lineage_uuid": "a59a98fa-1d43-4b4b-b54d-a8de5a8a239c",
+                      "parent_event": "1a756b7e-4411-428b-a071-83d1a127fceb",
+                      "parent_lineage": "ae142393-1ad1-4865-b50e-ac6418fb2727",
+                      "phase": "completion",
+                      "canceled": false,
+                      "fact": {
+                        "kind": "damage",
+                        "stage": "applied",
+                        "source_entity_uuid": "fdae0df6-3665-44c0-ae50-3de2a24eb0f2",
+                        "target_entity_uuid": "ad04c6b6-b550-4535-abe4-3147eb5ca5b1",
+                        "applied_damage": 5,
+                        "resulting_normal_hp": 75,
+                        "resulting_temporary_hp": 0,
+                        "damage_type": "Force",
+                        "body_release": {
+                          "release_id": "body.blood",
+                          "position": [
+                            16,
+                            20
+                          ],
+                          "occupancy_layer": "ground",
+                          "deposited_position": [
+                            16,
+                            20
+                          ],
+                          "pattern": "blunt",
+                          "critical_hit": false,
+                          "regions": [
+                            {
+                              "ellipse": {
+                                "center": [
+                                  16.0,
+                                  20.0
+                                ],
+                                "radius_x": 1.5,
+                                "radius_y": 1.5,
+                                "angle": 0.0
+                              },
+                              "positions": [
+                                [
+                                  15,
+                                  19
+                                ],
+                                [
+                                  15,
+                                  20
+                                ],
+                                [
+                                  15,
+                                  21
+                                ],
+                                [
+                                  16,
+                                  19
+                                ],
+                                [
+                                  16,
+                                  20
+                                ],
+                                [
+                                  16,
+                                  21
+                                ],
+                                [
+                                  17,
+                                  19
+                                ],
+                                [
+                                  17,
+                                  20
+                                ],
+                                [
+                                  17,
+                                  21
+                                ]
+                              ],
+                              "elevation_steps": 2
+                            }
+                          ],
+                          "primary_damage_type": "Force",
+                          "secondary_damage_type": null
+                        },
+                        "effect_id": null,
+                        "spatial_source": null,
+                        "source_condition_uuid": null
+                      },
+                      "resolution_ref": {
+                        "kind": "application",
+                        "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                        "application_id": "25215c61-e12f-5cdb-ad92-fde160ebb726"
+                      },
+                      "cancellation": null,
+                      "content_attributions": []
+                    }
+                  ]
+                },
+                "facing": "NE",
+                "from_point": [
+                  -183.66649999999998,
+                  586.111
+                ],
+                "to_point": [
+                  -128.0,
+                  562.5
+                ],
+                "travel_start_ms": 583.3333333333334,
+                "travel_end_ms": 733.3333333333334,
+                "curvature": -0.3,
+                "projectile_intervals": [
+                  {
+                    "name": "travel",
+                    "asset": {
+                      "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "displayName": "Magic Missile A \u00b7 Rune Dart \u00b7 Canonical Force \u2014 rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "kind": "projectile",
+                      "sheet": "/authored-vfx/projectiles/codexfx/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/sheet.png",
+                      "preview": null,
+                      "frame": {
+                        "width": 256,
+                        "height": 256,
+                        "cols": 44,
+                        "rows": 8
+                      },
+                      "fps": 24.0,
+                      "rowOrder": [
+                        "E",
+                        "SE",
+                        "S",
+                        "SW",
+                        "W",
+                        "NW",
+                        "N",
+                        "NE"
+                      ],
+                      "phases": {
+                        "travel": {
+                          "start": 16,
+                          "frames": 10,
+                          "fps": 24.0,
+                          "loop": true
+                        },
+                        "cast": {
+                          "start": 0,
+                          "frames": 16,
+                          "fps": 24.0,
+                          "loop": false
+                        },
+                        "impact": {
+                          "start": 26,
+                          "frames": 18,
+                          "fps": 24.0,
+                          "loop": false
+                        }
+                      },
+                      "anchor": {
+                        "x": 0.5,
+                        "y": 1.0
+                      },
+                      "anchorsByFacing": null,
+                      "defaultScale": 0.5,
+                      "tags": [
+                        "projectile",
+                        "force",
+                        "magic-missile",
+                        "directional",
+                        "pixel",
+                        "godot-postprocess",
+                        "cell-256",
+                        "block-2",
+                        "short-wake",
+                        "firebolt-resolution",
+                        "constrained-palette",
+                        "no-white",
+                        "clip-frames-16-10-18",
+                        "shape-alternative",
+                        "rune-dart",
+                        "canonical-force-palette",
+                        "wine-purple"
+                      ],
+                      "palettePreview": {
+                        "colors": [
+                          1246486,
+                          2229802,
+                          3409984,
+                          4721232,
+                          6163803,
+                          7803494,
+                          9509492,
+                          11217541,
+                          12927895,
+                          14442667
+                        ],
+                        "palette": "eldritch-wine10.v1"
+                      },
+                      "paletteSwap": null,
+                      "source": {
+                        "package": "codexfx-vfx-pipeline",
+                        "manifest": "game/data/codexfx/source/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/asset.json",
+                        "asset": null,
+                        "mode": null,
+                        "sourceSheet": null,
+                        "sourceMatrix": null,
+                        "chosenImpact": null,
+                        "palette": null,
+                        "notes": "Generated compatibility record. asset.json/build.json remain authoritative."
+                      },
+                      "validation": {
+                        "emptyCells": 0,
+                        "edgeContacts": 0,
+                        "warnings": []
+                      }
+                    },
+                    "phase": {
+                      "start": 16,
+                      "frames": 10,
+                      "fps": 24.0,
+                      "loop": true
+                    },
+                    "fps": 24.0,
+                    "start_ms": 583.3333333333334,
+                    "end_ms": 733.3333333333334,
+                    "time_map": []
+                  },
+                  {
+                    "name": "impact",
+                    "asset": {
+                      "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "displayName": "Magic Missile A \u00b7 Rune Dart \u00b7 Canonical Force \u2014 rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "kind": "projectile",
+                      "sheet": "/authored-vfx/projectiles/codexfx/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/sheet.png",
+                      "preview": null,
+                      "frame": {
+                        "width": 256,
+                        "height": 256,
+                        "cols": 44,
+                        "rows": 8
+                      },
+                      "fps": 24.0,
+                      "rowOrder": [
+                        "E",
+                        "SE",
+                        "S",
+                        "SW",
+                        "W",
+                        "NW",
+                        "N",
+                        "NE"
+                      ],
+                      "phases": {
+                        "travel": {
+                          "start": 16,
+                          "frames": 10,
+                          "fps": 24.0,
+                          "loop": true
+                        },
+                        "cast": {
+                          "start": 0,
+                          "frames": 16,
+                          "fps": 24.0,
+                          "loop": false
+                        },
+                        "impact": {
+                          "start": 26,
+                          "frames": 18,
+                          "fps": 24.0,
+                          "loop": false
+                        }
+                      },
+                      "anchor": {
+                        "x": 0.5,
+                        "y": 1.0
+                      },
+                      "anchorsByFacing": null,
+                      "defaultScale": 0.5,
+                      "tags": [
+                        "projectile",
+                        "force",
+                        "magic-missile",
+                        "directional",
+                        "pixel",
+                        "godot-postprocess",
+                        "cell-256",
+                        "block-2",
+                        "short-wake",
+                        "firebolt-resolution",
+                        "constrained-palette",
+                        "no-white",
+                        "clip-frames-16-10-18",
+                        "shape-alternative",
+                        "rune-dart",
+                        "canonical-force-palette",
+                        "wine-purple"
+                      ],
+                      "palettePreview": {
+                        "colors": [
+                          1246486,
+                          2229802,
+                          3409984,
+                          4721232,
+                          6163803,
+                          7803494,
+                          9509492,
+                          11217541,
+                          12927895,
+                          14442667
+                        ],
+                        "palette": "eldritch-wine10.v1"
+                      },
+                      "paletteSwap": null,
+                      "source": {
+                        "package": "codexfx-vfx-pipeline",
+                        "manifest": "game/data/codexfx/source/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/asset.json",
+                        "asset": null,
+                        "mode": null,
+                        "sourceSheet": null,
+                        "sourceMatrix": null,
+                        "chosenImpact": null,
+                        "palette": null,
+                        "notes": "Generated compatibility record. asset.json/build.json remain authoritative."
+                      },
+                      "validation": {
+                        "emptyCells": 0,
+                        "edgeContacts": 0,
+                        "warnings": []
+                      }
+                    },
+                    "phase": {
+                      "start": 26,
+                      "frames": 18,
+                      "fps": 24.0,
+                      "loop": false
+                    },
+                    "fps": 24.0,
+                    "start_ms": 733.3333333333334,
+                    "end_ms": 1483.3333333333335,
+                    "time_map": []
+                  }
+                ],
+                "damage": {
+                  "impactDelayMs": 0.0,
+                  "hitFlash": {
+                    "enabled": true,
+                    "frame": 0,
+                    "durationMs": 150.0,
+                    "color": 15610692,
+                    "palette": {
+                      "colors": [
+                        2229802,
+                        3409984,
+                        4721232,
+                        6163803,
+                        7803494,
+                        9509492,
+                        11217541,
+                        12927895,
+                        14442667
+                      ],
+                      "gamma": 0.65,
+                      "noiseSheet": null,
+                      "untinted": false
+                    }
+                  },
+                  "floatingNumber": {
+                    "enabled": true,
+                    "frame": 0,
+                    "durationMs": 900.0,
+                    "label": "Force",
+                    "color": 15610692
+                  },
+                  "death": {
+                    "enabled": true,
+                    "frame": 14
+                  }
+                },
+                "damage_start_ms": 733.3333333333334,
+                "damage_end_ms": 1900.0,
+                "hp_ms": 733.3333333333334,
+                "flash_ms": 733.3333333333334,
+                "number_ms": 733.3333333333334,
+                "life_body": null
+              },
+              {
+                "source": {
+                  "application_id": "a2250015-541e-5253-b95d-9701acd4774f",
+                  "target": {
+                    "actor_uuid": "6a2d6ebf-e445-4e60-b7b1-5ca451661239",
+                    "grid": [
+                      18.0,
+                      20.0
+                    ],
+                    "facing": "S",
+                    "visual_scale": 0.5,
+                    "hp": 80,
+                    "life_state": "alive",
+                    "elevation_steps": 2.0,
+                    "rig_id": "neuroclient.modular",
+                    "visual_scale_x": 1.0,
+                    "body_lift_px": 0.0,
+                    "rest_pose": null,
+                    "condition_scale": 1.0,
+                    "manifestation": null
+                  },
+                  "damage_applied": true,
+                  "damage_total": 5,
+                  "resulting_hp": 75,
+                  "resulting_life_state": null,
+                  "damage_type": "Force",
+                  "travel_apex_steps": 0.0,
+                  "hit": null,
+                  "removed_condition_tags": [],
+                  "applied_condition_ids": [],
+                  "save_succeeded": null,
+                  "resolution_ref": {
+                    "kind": "application",
+                    "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                    "application_id": "a2250015-541e-5253-b95d-9701acd4774f"
+                  },
+                  "propagation": null,
+                  "results": [
+                    {
+                      "uuid": "1f62206b-886a-49b5-b3cd-e1beb051dab5",
+                      "lineage_uuid": "a9d275af-b999-49e5-a51c-fc81194e33e7",
+                      "parent_event": "27f8093e-0797-4272-8106-c303857b2581",
+                      "parent_lineage": "8c4a5094-6159-44ad-8759-f1ff38ff06a9",
+                      "phase": "completion",
+                      "canceled": false,
+                      "fact": {
+                        "kind": "damage",
+                        "stage": "applied",
+                        "source_entity_uuid": "fdae0df6-3665-44c0-ae50-3de2a24eb0f2",
+                        "target_entity_uuid": "6a2d6ebf-e445-4e60-b7b1-5ca451661239",
+                        "applied_damage": 5,
+                        "resulting_normal_hp": 75,
+                        "resulting_temporary_hp": 0,
+                        "damage_type": "Force",
+                        "body_release": {
+                          "release_id": "body.blood",
+                          "position": [
+                            18,
+                            20
+                          ],
+                          "occupancy_layer": "ground",
+                          "deposited_position": [
+                            18,
+                            20
+                          ],
+                          "pattern": "blunt",
+                          "critical_hit": false,
+                          "regions": [
+                            {
+                              "ellipse": {
+                                "center": [
+                                  18.0,
+                                  20.0
+                                ],
+                                "radius_x": 1.5,
+                                "radius_y": 1.5,
+                                "angle": 0.0
+                              },
+                              "positions": [
+                                [
+                                  17,
+                                  19
+                                ],
+                                [
+                                  17,
+                                  20
+                                ],
+                                [
+                                  17,
+                                  21
+                                ],
+                                [
+                                  18,
+                                  19
+                                ],
+                                [
+                                  18,
+                                  20
+                                ],
+                                [
+                                  18,
+                                  21
+                                ]
+                              ],
+                              "elevation_steps": 2
+                            }
+                          ],
+                          "primary_damage_type": "Force",
+                          "secondary_damage_type": null
+                        },
+                        "effect_id": null,
+                        "spatial_source": null,
+                        "source_condition_uuid": null
+                      },
+                      "resolution_ref": {
+                        "kind": "application",
+                        "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                        "application_id": "a2250015-541e-5253-b95d-9701acd4774f"
+                      },
+                      "cancellation": null,
+                      "content_attributions": []
+                    }
+                  ]
+                },
+                "facing": "E",
+                "from_point": [
+                  -179.4445,
+                  591.75
+                ],
+                "to_point": [
+                  -64.0,
+                  594.5
+                ],
+                "travel_start_ms": 663.3333333333334,
+                "travel_end_ms": 813.3333333333334,
+                "curvature": 0.3,
+                "projectile_intervals": [
+                  {
+                    "name": "travel",
+                    "asset": {
+                      "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "displayName": "Magic Missile A \u00b7 Rune Dart \u00b7 Canonical Force \u2014 rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "kind": "projectile",
+                      "sheet": "/authored-vfx/projectiles/codexfx/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/sheet.png",
+                      "preview": null,
+                      "frame": {
+                        "width": 256,
+                        "height": 256,
+                        "cols": 44,
+                        "rows": 8
+                      },
+                      "fps": 24.0,
+                      "rowOrder": [
+                        "E",
+                        "SE",
+                        "S",
+                        "SW",
+                        "W",
+                        "NW",
+                        "N",
+                        "NE"
+                      ],
+                      "phases": {
+                        "travel": {
+                          "start": 16,
+                          "frames": 10,
+                          "fps": 24.0,
+                          "loop": true
+                        },
+                        "cast": {
+                          "start": 0,
+                          "frames": 16,
+                          "fps": 24.0,
+                          "loop": false
+                        },
+                        "impact": {
+                          "start": 26,
+                          "frames": 18,
+                          "fps": 24.0,
+                          "loop": false
+                        }
+                      },
+                      "anchor": {
+                        "x": 0.5,
+                        "y": 1.0
+                      },
+                      "anchorsByFacing": null,
+                      "defaultScale": 0.5,
+                      "tags": [
+                        "projectile",
+                        "force",
+                        "magic-missile",
+                        "directional",
+                        "pixel",
+                        "godot-postprocess",
+                        "cell-256",
+                        "block-2",
+                        "short-wake",
+                        "firebolt-resolution",
+                        "constrained-palette",
+                        "no-white",
+                        "clip-frames-16-10-18",
+                        "shape-alternative",
+                        "rune-dart",
+                        "canonical-force-palette",
+                        "wine-purple"
+                      ],
+                      "palettePreview": {
+                        "colors": [
+                          1246486,
+                          2229802,
+                          3409984,
+                          4721232,
+                          6163803,
+                          7803494,
+                          9509492,
+                          11217541,
+                          12927895,
+                          14442667
+                        ],
+                        "palette": "eldritch-wine10.v1"
+                      },
+                      "paletteSwap": null,
+                      "source": {
+                        "package": "codexfx-vfx-pipeline",
+                        "manifest": "game/data/codexfx/source/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/asset.json",
+                        "asset": null,
+                        "mode": null,
+                        "sourceSheet": null,
+                        "sourceMatrix": null,
+                        "chosenImpact": null,
+                        "palette": null,
+                        "notes": "Generated compatibility record. asset.json/build.json remain authoritative."
+                      },
+                      "validation": {
+                        "emptyCells": 0,
+                        "edgeContacts": 0,
+                        "warnings": []
+                      }
+                    },
+                    "phase": {
+                      "start": 16,
+                      "frames": 10,
+                      "fps": 24.0,
+                      "loop": true
+                    },
+                    "fps": 24.0,
+                    "start_ms": 663.3333333333334,
+                    "end_ms": 813.3333333333334,
+                    "time_map": []
+                  },
+                  {
+                    "name": "impact",
+                    "asset": {
+                      "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "displayName": "Magic Missile A \u00b7 Rune Dart \u00b7 Canonical Force \u2014 rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "kind": "projectile",
+                      "sheet": "/authored-vfx/projectiles/codexfx/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/sheet.png",
+                      "preview": null,
+                      "frame": {
+                        "width": 256,
+                        "height": 256,
+                        "cols": 44,
+                        "rows": 8
+                      },
+                      "fps": 24.0,
+                      "rowOrder": [
+                        "E",
+                        "SE",
+                        "S",
+                        "SW",
+                        "W",
+                        "NW",
+                        "N",
+                        "NE"
+                      ],
+                      "phases": {
+                        "travel": {
+                          "start": 16,
+                          "frames": 10,
+                          "fps": 24.0,
+                          "loop": true
+                        },
+                        "cast": {
+                          "start": 0,
+                          "frames": 16,
+                          "fps": 24.0,
+                          "loop": false
+                        },
+                        "impact": {
+                          "start": 26,
+                          "frames": 18,
+                          "fps": 24.0,
+                          "loop": false
+                        }
+                      },
+                      "anchor": {
+                        "x": 0.5,
+                        "y": 1.0
+                      },
+                      "anchorsByFacing": null,
+                      "defaultScale": 0.5,
+                      "tags": [
+                        "projectile",
+                        "force",
+                        "magic-missile",
+                        "directional",
+                        "pixel",
+                        "godot-postprocess",
+                        "cell-256",
+                        "block-2",
+                        "short-wake",
+                        "firebolt-resolution",
+                        "constrained-palette",
+                        "no-white",
+                        "clip-frames-16-10-18",
+                        "shape-alternative",
+                        "rune-dart",
+                        "canonical-force-palette",
+                        "wine-purple"
+                      ],
+                      "palettePreview": {
+                        "colors": [
+                          1246486,
+                          2229802,
+                          3409984,
+                          4721232,
+                          6163803,
+                          7803494,
+                          9509492,
+                          11217541,
+                          12927895,
+                          14442667
+                        ],
+                        "palette": "eldritch-wine10.v1"
+                      },
+                      "paletteSwap": null,
+                      "source": {
+                        "package": "codexfx-vfx-pipeline",
+                        "manifest": "game/data/codexfx/source/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/asset.json",
+                        "asset": null,
+                        "mode": null,
+                        "sourceSheet": null,
+                        "sourceMatrix": null,
+                        "chosenImpact": null,
+                        "palette": null,
+                        "notes": "Generated compatibility record. asset.json/build.json remain authoritative."
+                      },
+                      "validation": {
+                        "emptyCells": 0,
+                        "edgeContacts": 0,
+                        "warnings": []
+                      }
+                    },
+                    "phase": {
+                      "start": 26,
+                      "frames": 18,
+                      "fps": 24.0,
+                      "loop": false
+                    },
+                    "fps": 24.0,
+                    "start_ms": 813.3333333333334,
+                    "end_ms": 1563.3333333333335,
+                    "time_map": []
+                  }
+                ],
+                "damage": {
+                  "impactDelayMs": 0.0,
+                  "hitFlash": {
+                    "enabled": true,
+                    "frame": 0,
+                    "durationMs": 150.0,
+                    "color": 15610692,
+                    "palette": {
+                      "colors": [
+                        2229802,
+                        3409984,
+                        4721232,
+                        6163803,
+                        7803494,
+                        9509492,
+                        11217541,
+                        12927895,
+                        14442667
+                      ],
+                      "gamma": 0.65,
+                      "noiseSheet": null,
+                      "untinted": false
+                    }
+                  },
+                  "floatingNumber": {
+                    "enabled": true,
+                    "frame": 0,
+                    "durationMs": 900.0,
+                    "label": "Force",
+                    "color": 15610692
+                  },
+                  "death": {
+                    "enabled": true,
+                    "frame": 14
+                  }
+                },
+                "damage_start_ms": 813.3333333333334,
+                "damage_end_ms": 1980.0,
+                "hp_ms": 813.3333333333334,
+                "flash_ms": 813.3333333333334,
+                "number_ms": 813.3333333333334,
+                "life_body": null
+              },
+              {
+                "source": {
+                  "application_id": "f376277c-1665-5ffb-a41c-a8ec1117ff83",
+                  "target": {
+                    "actor_uuid": "ad04c6b6-b550-4535-abe4-3147eb5ca5b1",
+                    "grid": [
+                      16.0,
+                      20.0
+                    ],
+                    "facing": "S",
+                    "visual_scale": 0.5,
+                    "hp": 80,
+                    "life_state": "alive",
+                    "elevation_steps": 2.0,
+                    "rig_id": "neuroclient.modular",
+                    "visual_scale_x": 1.0,
+                    "body_lift_px": 0.0,
+                    "rest_pose": null,
+                    "condition_scale": 1.0,
+                    "manifestation": null
+                  },
+                  "damage_applied": true,
+                  "damage_total": 2,
+                  "resulting_hp": 73,
+                  "resulting_life_state": null,
+                  "damage_type": "Force",
+                  "travel_apex_steps": 0.0,
+                  "hit": null,
+                  "removed_condition_tags": [],
+                  "applied_condition_ids": [],
+                  "save_succeeded": null,
+                  "resolution_ref": {
+                    "kind": "application",
+                    "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                    "application_id": "f376277c-1665-5ffb-a41c-a8ec1117ff83"
+                  },
+                  "propagation": null,
+                  "results": [
+                    {
+                      "uuid": "0d9c621a-6827-48be-be63-daeb4f8b97fa",
+                      "lineage_uuid": "78451f7d-4b7c-4e5a-ae8a-aa85e05dbbd2",
+                      "parent_event": "c131b39d-7b2d-4047-8bdb-fcd766150b81",
+                      "parent_lineage": "427b9003-bab2-4526-b062-b766fef3879b",
+                      "phase": "completion",
+                      "canceled": false,
+                      "fact": {
+                        "kind": "damage",
+                        "stage": "applied",
+                        "source_entity_uuid": "fdae0df6-3665-44c0-ae50-3de2a24eb0f2",
+                        "target_entity_uuid": "ad04c6b6-b550-4535-abe4-3147eb5ca5b1",
+                        "applied_damage": 2,
+                        "resulting_normal_hp": 73,
+                        "resulting_temporary_hp": 0,
+                        "damage_type": "Force",
+                        "body_release": {
+                          "release_id": "body.blood",
+                          "position": [
+                            16,
+                            20
+                          ],
+                          "occupancy_layer": "ground",
+                          "deposited_position": [
+                            16,
+                            20
+                          ],
+                          "pattern": "blunt",
+                          "critical_hit": false,
+                          "regions": [
+                            {
+                              "ellipse": {
+                                "center": [
+                                  16.0,
+                                  20.0
+                                ],
+                                "radius_x": 1.5,
+                                "radius_y": 1.5,
+                                "angle": 0.0
+                              },
+                              "positions": [
+                                [
+                                  15,
+                                  19
+                                ],
+                                [
+                                  15,
+                                  20
+                                ],
+                                [
+                                  15,
+                                  21
+                                ],
+                                [
+                                  16,
+                                  19
+                                ],
+                                [
+                                  16,
+                                  20
+                                ],
+                                [
+                                  16,
+                                  21
+                                ],
+                                [
+                                  17,
+                                  19
+                                ],
+                                [
+                                  17,
+                                  20
+                                ],
+                                [
+                                  17,
+                                  21
+                                ]
+                              ],
+                              "elevation_steps": 2
+                            }
+                          ],
+                          "primary_damage_type": "Force",
+                          "secondary_damage_type": null
+                        },
+                        "effect_id": null,
+                        "spatial_source": null,
+                        "source_condition_uuid": null
+                      },
+                      "resolution_ref": {
+                        "kind": "application",
+                        "lineage_uuid": "34e62167-7ec6-489b-ad5c-6d45e46bb617",
+                        "application_id": "f376277c-1665-5ffb-a41c-a8ec1117ff83"
+                      },
+                      "cancellation": null,
+                      "content_attributions": []
+                    }
+                  ]
+                },
+                "facing": "NE",
+                "from_point": [
+                  -183.66649999999998,
+                  586.111
+                ],
+                "to_point": [
+                  -128.0,
+                  562.5
+                ],
+                "travel_start_ms": 743.3333333333334,
+                "travel_end_ms": 893.3333333333334,
+                "curvature": 0.3,
+                "projectile_intervals": [
+                  {
+                    "name": "travel",
+                    "asset": {
+                      "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "displayName": "Magic Missile A \u00b7 Rune Dart \u00b7 Canonical Force \u2014 rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "kind": "projectile",
+                      "sheet": "/authored-vfx/projectiles/codexfx/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/sheet.png",
+                      "preview": null,
+                      "frame": {
+                        "width": 256,
+                        "height": 256,
+                        "cols": 44,
+                        "rows": 8
+                      },
+                      "fps": 24.0,
+                      "rowOrder": [
+                        "E",
+                        "SE",
+                        "S",
+                        "SW",
+                        "W",
+                        "NW",
+                        "N",
+                        "NE"
+                      ],
+                      "phases": {
+                        "travel": {
+                          "start": 16,
+                          "frames": 10,
+                          "fps": 24.0,
+                          "loop": true
+                        },
+                        "cast": {
+                          "start": 0,
+                          "frames": 16,
+                          "fps": 24.0,
+                          "loop": false
+                        },
+                        "impact": {
+                          "start": 26,
+                          "frames": 18,
+                          "fps": 24.0,
+                          "loop": false
+                        }
+                      },
+                      "anchor": {
+                        "x": 0.5,
+                        "y": 1.0
+                      },
+                      "anchorsByFacing": null,
+                      "defaultScale": 0.5,
+                      "tags": [
+                        "projectile",
+                        "force",
+                        "magic-missile",
+                        "directional",
+                        "pixel",
+                        "godot-postprocess",
+                        "cell-256",
+                        "block-2",
+                        "short-wake",
+                        "firebolt-resolution",
+                        "constrained-palette",
+                        "no-white",
+                        "clip-frames-16-10-18",
+                        "shape-alternative",
+                        "rune-dart",
+                        "canonical-force-palette",
+                        "wine-purple"
+                      ],
+                      "palettePreview": {
+                        "colors": [
+                          1246486,
+                          2229802,
+                          3409984,
+                          4721232,
+                          6163803,
+                          7803494,
+                          9509492,
+                          11217541,
+                          12927895,
+                          14442667
+                        ],
+                        "palette": "eldritch-wine10.v1"
+                      },
+                      "paletteSwap": null,
+                      "source": {
+                        "package": "codexfx-vfx-pipeline",
+                        "manifest": "game/data/codexfx/source/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/asset.json",
+                        "asset": null,
+                        "mode": null,
+                        "sourceSheet": null,
+                        "sourceMatrix": null,
+                        "chosenImpact": null,
+                        "palette": null,
+                        "notes": "Generated compatibility record. asset.json/build.json remain authoritative."
+                      },
+                      "validation": {
+                        "emptyCells": 0,
+                        "edgeContacts": 0,
+                        "warnings": []
+                      }
+                    },
+                    "phase": {
+                      "start": 16,
+                      "frames": 10,
+                      "fps": 24.0,
+                      "loop": true
+                    },
+                    "fps": 24.0,
+                    "start_ms": 743.3333333333334,
+                    "end_ms": 893.3333333333334,
+                    "time_map": []
+                  },
+                  {
+                    "name": "impact",
+                    "asset": {
+                      "assetId": "lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "displayName": "Magic Missile A \u00b7 Rune Dart \u00b7 Canonical Force \u2014 rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1",
+                      "kind": "projectile",
+                      "sheet": "/authored-vfx/projectiles/codexfx/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/sheet.png",
+                      "preview": null,
+                      "frame": {
+                        "width": 256,
+                        "height": 256,
+                        "cols": 44,
+                        "rows": 8
+                      },
+                      "fps": 24.0,
+                      "rowOrder": [
+                        "E",
+                        "SE",
+                        "S",
+                        "SW",
+                        "W",
+                        "NW",
+                        "N",
+                        "NE"
+                      ],
+                      "phases": {
+                        "travel": {
+                          "start": 16,
+                          "frames": 10,
+                          "fps": 24.0,
+                          "loop": true
+                        },
+                        "cast": {
+                          "start": 0,
+                          "frames": 16,
+                          "fps": 24.0,
+                          "loop": false
+                        },
+                        "impact": {
+                          "start": 26,
+                          "frames": 18,
+                          "fps": 24.0,
+                          "loop": false
+                        }
+                      },
+                      "anchor": {
+                        "x": 0.5,
+                        "y": 1.0
+                      },
+                      "anchorsByFacing": null,
+                      "defaultScale": 0.5,
+                      "tags": [
+                        "projectile",
+                        "force",
+                        "magic-missile",
+                        "directional",
+                        "pixel",
+                        "godot-postprocess",
+                        "cell-256",
+                        "block-2",
+                        "short-wake",
+                        "firebolt-resolution",
+                        "constrained-palette",
+                        "no-white",
+                        "clip-frames-16-10-18",
+                        "shape-alternative",
+                        "rune-dart",
+                        "canonical-force-palette",
+                        "wine-purple"
+                      ],
+                      "palettePreview": {
+                        "colors": [
+                          1246486,
+                          2229802,
+                          3409984,
+                          4721232,
+                          6163803,
+                          7803494,
+                          9509492,
+                          11217541,
+                          12927895,
+                          14442667
+                        ],
+                        "palette": "eldritch-wine10.v1"
+                      },
+                      "paletteSwap": null,
+                      "source": {
+                        "package": "codexfx-vfx-pipeline",
+                        "manifest": "game/data/codexfx/source/lelu.magic-missile.rune-dart-lifecycle-256.godot-cie-lab-force-wine10-capture8-final-block2.temporal16-10-18.v1/asset.json",
+                        "asset": null,
+                        "mode": null,
+                        "sourceSheet": null,
+                        "sourceMatrix": null,
+                        "chosenImpact": null,
+                        "palette": null,
+                        "notes": "Generated compatibility record. asset.json/build.json remain authoritative."
+                      },
+                      "validation": {
+                        "emptyCells": 0,
+                        "edgeContacts": 0,
+                        "warnings": []
+                      }
+                    },
+                    "phase": {
+                      "start": 26,
+                      "frames": 18,
+                      "fps": 24.0,
+                      "loop": false
+                    },
+                    "fps": 24.0,
+                    "start_ms": 893.3333333333334,
+                    "end_ms": 1643.3333333333335,
+                    "time_map": []
+                  }
+                ],
+                "damage": {
+                  "impactDelayMs": 0.0,
+                  "hitFlash": {
+                    "enabled": true,
+                    "frame": 0,
+                    "durationMs": 150.0,
+                    "color": 15610692,
+                    "palette": {
+                      "colors": [
+                        2229802,
+                        3409984,
+                        4721232,
+                        6163803,
+                        7803494,
+                        9509492,
+                        11217541,
+                        12927895,
+                        14442667
+                      ],
+                      "gamma": 0.65,
+                      "noiseSheet": null,
+                      "untinted": false
+                    }
+                  },
+                  "floatingNumber": {
+                    "enabled": true,
+                    "frame": 0,
+                    "durationMs": 900.0,
+                    "label": "Force",
+                    "color": 15610692
+                  },
+                  "death": {
+                    "enabled": true,
+                    "frame": 14
+                  }
+                },
+                "damage_start_ms": 893.3333333333334,
+                "damage_end_ms": 2060.0,
+                "hp_ms": 893.3333333333334,
+                "flash_ms": 893.3333333333334,
+                "number_ms": 893.3333333333334,
+                "life_body": null
+              }
+            ],
+            "recovery_start_ms": 2060.0,
+            "complete_ms": 2060.0,
+            "anchors": [
+              {
+                "name": "action_start",
+                "at_ms": 0.0,
+                "application_id": null
+              },
+              {
+                "name": "release",
+                "at_ms": 583.3333333333334,
+                "application_id": null
+              },
+              {
+                "name": "travel",
+                "at_ms": 583.3333333333334,
+                "application_id": "25215c61-e12f-5cdb-ad92-fde160ebb726"
+              },
+              {
+                "name": "travel",
+                "at_ms": 663.3333333333334,
+                "application_id": "a2250015-541e-5253-b95d-9701acd4774f"
+              },
+              {
+                "name": "impact",
+                "at_ms": 733.3333333333334,
+                "application_id": "25215c61-e12f-5cdb-ad92-fde160ebb726"
+              },
+              {
+                "name": "effect",
+                "at_ms": 733.3333333333334,
+                "application_id": "25215c61-e12f-5cdb-ad92-fde160ebb726"
+              },
+              {
+                "name": "vitals",
+                "at_ms": 733.3333333333334,
+                "application_id": "25215c61-e12f-5cdb-ad92-fde160ebb726"
+              },
+              {
+                "name": "travel",
+                "at_ms": 743.3333333333334,
+                "application_id": "f376277c-1665-5ffb-a41c-a8ec1117ff83"
+              },
+              {
+                "name": "impact",
+                "at_ms": 813.3333333333334,
+                "application_id": "a2250015-541e-5253-b95d-9701acd4774f"
+              },
+              {
+                "name": "effect",
+                "at_ms": 813.3333333333334,
+                "application_id": "a2250015-541e-5253-b95d-9701acd4774f"
+              },
+              {
+                "name": "vitals",
+                "at_ms": 813.3333333333334,
+                "application_id": "a2250015-541e-5253-b95d-9701acd4774f"
+              },
+              {
+                "name": "impact",
+                "at_ms": 893.3333333333334,
+                "application_id": "f376277c-1665-5ffb-a41c-a8ec1117ff83"
+              },
+              {
+                "name": "effect",
+                "at_ms": 893.3333333333334,
+                "application_id": "f376277c-1665-5ffb-a41c-a8ec1117ff83"
+              },
+              {
+                "name": "vitals",
+                "at_ms": 893.3333333333334,
+                "application_id": "f376277c-1665-5ffb-a41c-a8ec1117ff83"
+              },
+              {
+                "name": "complete",
+                "at_ms": 2060.0,
+                "application_id": null
+              }
+            ],
+            "ground_delivery": null
+          }
+        }
+      ],
+      "state_times_ms": [
+        733.3333333333334,
+        813.3333333333334,
+        893.3333333333334
+      ]
+    }
+  }
+]

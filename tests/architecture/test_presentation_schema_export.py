@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from game.export_schema import export_schemas
 paths = export_schemas(Path(sys.argv[1]))
-assert len(paths) == 16
+assert len(paths) == 17
 for forbidden in ('dnd.entity', 'dnd.core.events', 'dnd.content_system.runtime', 'server', 'pygame'):
     assert forbidden not in sys.modules, forbidden
 '''
@@ -21,6 +21,7 @@ for forbidden in ('dnd.entity', 'dnd.core.events', 'dnd.content_system.runtime',
     assert result.returncode == 0, result.stderr
     schemas = {path.stem.removesuffix('.schema'): json.loads(path.read_text()) for path in tmp_path.glob('*.json')}
     expected_fields = {
+        'presentation-catalog-v1': {'schema_version', 'catalog', 'time_unit', 'grid_unit', 'elevation_step_feet'},
         'damage-context': {'numberFrame', 'flashFrame', 'conditionFrame', 'deathFrame'},
         'death-context': {'equipmentHideFrame', 'bodyClip'},
         'attack-recipe': {'actor', 'anchors', 'variants', 'attackFeedback'},

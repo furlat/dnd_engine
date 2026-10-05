@@ -6,7 +6,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated, Literal, Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, PositiveFloat, PositiveInt, NonNegativeInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, WrapSerializer, FiniteFloat, PositiveFloat, PositiveInt, NonNegativeInt, model_validator
 
 DeviceFacing = Literal["E", "SE", "S", "SW", "W", "NW", "N", "NE"]
 
@@ -77,6 +77,8 @@ class DeviceDocument(_DeviceSource):
 
 @dataclass(frozen=True, slots=True)
 class DevicePitch:
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
     degrees: float
     sheets: tuple[Path, ...]
     muzzle_pixels: tuple[tuple[tuple[tuple[float, float], ...], ...], ...]
@@ -86,15 +88,19 @@ class DevicePitch:
 
 @dataclass(frozen=True, slots=True)
 class DeviceDestruction:
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
     fps: float
     frame_count: int
-    pitch_banks: Mapping[float, tuple[Path, ...]]
+    pitch_banks: Annotated[Mapping[float, tuple[Path, ...]], WrapSerializer(lambda value, handler: handler(dict(value)))]
     wreck_item_id: str
     wreck_sheets: tuple[Path, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class DeviceArt:
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
     identity: str
     cell: tuple[int, int]
     anchor: tuple[float, float]

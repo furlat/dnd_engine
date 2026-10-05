@@ -46,7 +46,7 @@ def header(fact: ConditionFact, *, applied: bool = True) -> PlayerNode:
 
 def test_entire_original_condition_document_remains_available_and_immutable(recipes) -> None:
     original = json.loads((SOURCE / "conditionPresentation.json").read_text())
-    assert len(recipes) == len(original["recipes"]) == 141
+    assert set(recipes) == {row['definitionRef']['content_id'] for row in original['recipes']}
     for source in original["recipes"]:
         retained = recipes[source["definitionRef"]["content_id"]]
         assert retained.model_dump(mode="json", exclude_unset=True) == source

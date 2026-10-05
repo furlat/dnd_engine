@@ -131,32 +131,7 @@ class NoHealing(BaseCondition):
     name: str = Field(default="No Healing", description="Condition name.")
     description: str = Field(default="Cannot regain hit points", description="Rules-facing condition summary.")
 
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        """Set the target health block to reject healing."""
-        if not self.target_entity_uuid:
-            return [], [], [], [], declaration_event.cancel(status_message="Target entity UUID not set")
-
-        target = Entity.get(self.target_entity_uuid)
-        if not target:
-            return [], [], [], [], declaration_event.cancel(status_message="Target not found")
-
-        target.health.healing_blocked = True
-
-        effect_event = declaration_event.phase_to(
-            EventPhase.EFFECT,
-            update={"condition": self},
-            status_message=f"{target.name} cannot regain hit points"
-        )
-        return [], [], [], [], effect_event
-
-    def _remove(self, event: Optional[Event] = None) -> Optional[Event]:
-        """Reset the target health block when the condition is removed."""
-        if self.target_entity_uuid:
-            target = Entity.get(self.target_entity_uuid)
-            if target:
-                target.health.healing_blocked = False
-
-        return super()._remove(event)
+    blocks_healing: bool = True
 
 
 class ChillTouchEffect(BaseCondition):

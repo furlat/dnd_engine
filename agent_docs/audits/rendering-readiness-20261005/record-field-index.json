@@ -1,0 +1,3164 @@
+[
+  {
+    "file": "game/player_facts.py",
+    "record": "VisualItem",
+    "line": 43,
+    "fields": [
+      {
+        "name": "slot",
+        "type": "str"
+      },
+      {
+        "name": "item_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "item_id",
+        "type": "str"
+      },
+      {
+        "name": "item_kind",
+        "type": "ItemPresentationKind"
+      },
+      {
+        "name": "visual_item_name",
+        "type": "str"
+      },
+      {
+        "name": "visual_variant_id",
+        "type": "str | None"
+      },
+      {
+        "name": "equipped_visual_policy",
+        "type": "EquippedVisualPolicy"
+      },
+      {
+        "name": "item_effects",
+        "type": "tuple[ItemEffectPresentationState, ...]"
+      },
+      {
+        "name": "suppression_provider_uuids",
+        "type": "tuple[UUID, ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "VisualLoadout",
+    "line": 56,
+    "fields": [
+      {
+        "name": "active_weapon_set",
+        "type": "WeaponSet"
+      },
+      {
+        "name": "layers",
+        "type": "tuple[VisualItem, ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "PlayerActor",
+    "line": 62,
+    "fields": [
+      {
+        "name": "uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "name",
+        "type": "str"
+      },
+      {
+        "name": "character_body_id",
+        "type": "str | None"
+      },
+      {
+        "name": "creature_content_ref",
+        "type": "str | None"
+      },
+      {
+        "name": "appearance",
+        "type": "AppearanceConfig"
+      },
+      {
+        "name": "visual_loadout",
+        "type": "VisualLoadout"
+      },
+      {
+        "name": "normal_hp",
+        "type": "int"
+      },
+      {
+        "name": "maximum_hp",
+        "type": "int"
+      },
+      {
+        "name": "temporary_hp",
+        "type": "int"
+      },
+      {
+        "name": "life_state",
+        "type": "LifeState"
+      },
+      {
+        "name": "armor_class",
+        "type": "int"
+      },
+      {
+        "name": "conditions",
+        "type": "tuple[ConditionFact, ...]"
+      },
+      {
+        "name": "last_visual_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "controlled_items",
+        "type": "tuple[ItemPresentationState, ...] | None"
+      },
+      {
+        "name": "occupancy_layer",
+        "type": "OccupancyLayer | None"
+      },
+      {
+        "name": "temporary_hp_grant",
+        "type": "TemporaryHitPointsGrant | None"
+      },
+      {
+        "name": "resolved_size",
+        "type": "Size | None"
+      },
+      {
+        "name": "structural_base_size",
+        "type": "Size | None"
+      },
+      {
+        "name": "manifestation",
+        "type": "SummonManifestation | None"
+      },
+      {
+        "name": "faction",
+        "type": "str | None"
+      },
+      {
+        "name": "present",
+        "type": "bool"
+      },
+      {
+        "name": "remains_disposition",
+        "type": "RemainsDisposition"
+      },
+      {
+        "name": "spatial_disposition",
+        "type": "SpatialDisposition"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "PlayerObservation",
+    "line": 89,
+    "fields": [
+      {
+        "name": "event_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "actor",
+        "type": "PlayerActor"
+      },
+      {
+        "name": "contact",
+        "type": "PerceivedContact | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "AttackFact",
+    "line": 96,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['attack']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "behavior_id",
+        "type": "str | None"
+      },
+      {
+        "name": "name",
+        "type": "str | None"
+      },
+      {
+        "name": "weapon_slot",
+        "type": "WeaponSlot"
+      },
+      {
+        "name": "attack_outcome",
+        "type": "AttackOutcome | None"
+      },
+      {
+        "name": "damage_types",
+        "type": "tuple[DamageType, ...]"
+      },
+      {
+        "name": "source_item_id",
+        "type": "str | None"
+      },
+      {
+        "name": "source_item_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "item_effects",
+        "type": "tuple[ItemEffectPresentationState, ...]"
+      },
+      {
+        "name": "intercepted_by_condition_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "projectile_deflection_position",
+        "type": "tuple[float, float] | None"
+      },
+      {
+        "name": "target_kind",
+        "type": "Literal['creature', 'object']"
+      },
+      {
+        "name": "target_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "target_base_height_steps",
+        "type": "int | None"
+      },
+      {
+        "name": "attack_source_kind",
+        "type": "Literal['equipped', 'unarmed', 'natural']"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "SpellFact",
+    "line": 124,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['spell']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "behavior_id",
+        "type": "str | None"
+      },
+      {
+        "name": "name",
+        "type": "str | None"
+      },
+      {
+        "name": "source_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "declared_target_entity_uuids",
+        "type": "tuple[UUID, ...]"
+      },
+      {
+        "name": "application",
+        "type": "ApplicationMembership | None"
+      },
+      {
+        "name": "propagation",
+        "type": "EffectPropagationLink | None"
+      },
+      {
+        "name": "attack_outcome",
+        "type": "AttackOutcome | None"
+      },
+      {
+        "name": "cast_origin",
+        "type": "Literal['actor', 'source_item']"
+      },
+      {
+        "name": "source_item_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "effect_id",
+        "type": "str | None"
+      },
+      {
+        "name": "aoe_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "area_geometry",
+        "type": "AoEPresentationGeometry | None"
+      },
+      {
+        "name": "resolved_area_positions",
+        "type": "tuple[tuple[int, int], ...] | None"
+      },
+      {
+        "name": "suppressions",
+        "type": "tuple[SpellSuppression, ...]"
+      },
+      {
+        "name": "area_propagation",
+        "type": "Literal['line_of_effect', 'connected']"
+      },
+      {
+        "name": "target_kind",
+        "type": "Literal['creature', 'object']"
+      },
+      {
+        "name": "target_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "target_base_height_steps",
+        "type": "int | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "AreaReachFact",
+    "line": 164,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['area_reach']"
+      },
+      {
+        "name": "stage_index",
+        "type": "int"
+      },
+      {
+        "name": "newly_reached_positions",
+        "type": "tuple[tuple[int, int], ...]"
+      },
+      {
+        "name": "previous_reach_lineage_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "prerequisite_destruction_lineages",
+        "type": "tuple[UUID, ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "MovementFact",
+    "line": 175,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['movement']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "trajectory",
+        "type": "MovementTrajectory"
+      },
+      {
+        "name": "start_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "end_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "requested_end_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "path",
+        "type": "tuple[tuple[int, int], ...]"
+      },
+      {
+        "name": "start_elevation_feet",
+        "type": "int | None"
+      },
+      {
+        "name": "end_elevation_feet",
+        "type": "int | None"
+      },
+      {
+        "name": "movement_mode",
+        "type": "MovementMode | None"
+      },
+      {
+        "name": "start_layer",
+        "type": "OccupancyLayer | None"
+      },
+      {
+        "name": "end_layer",
+        "type": "OccupancyLayer | None"
+      },
+      {
+        "name": "connector_presentation_key",
+        "type": "str | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "StepFact",
+    "line": 193,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['step']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "from_position",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "to_position",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "from_elevation_feet",
+        "type": "int"
+      },
+      {
+        "name": "to_elevation_feet",
+        "type": "int"
+      },
+      {
+        "name": "disclosed_path",
+        "type": "tuple[tuple[int, int], ...]"
+      },
+      {
+        "name": "trajectory",
+        "type": "MovementTrajectory"
+      },
+      {
+        "name": "provocation_policy",
+        "type": "MovementProvocationPolicy"
+      },
+      {
+        "name": "committed",
+        "type": "bool"
+      },
+      {
+        "name": "resolved_speed_feet",
+        "type": "int | None"
+      },
+      {
+        "name": "movement_mode",
+        "type": "MovementMode | None"
+      },
+      {
+        "name": "from_layer",
+        "type": "OccupancyLayer | None"
+      },
+      {
+        "name": "to_layer",
+        "type": "OccupancyLayer | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "ForcedMovementFact",
+    "line": 211,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['forced_movement']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "start_position",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "end_position",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "actual_distance",
+        "type": "int"
+      },
+      {
+        "name": "disclosed_path",
+        "type": "tuple[tuple[int, int], ...]"
+      },
+      {
+        "name": "start_elevation_feet",
+        "type": "int | None"
+      },
+      {
+        "name": "end_elevation_feet",
+        "type": "int | None"
+      },
+      {
+        "name": "drop_feet",
+        "type": "int"
+      },
+      {
+        "name": "landing_kind",
+        "type": "LandingKind"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "PortalTransferFact",
+    "line": 226,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['portal_transfer']"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "portal_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "start_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "end_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "committed",
+        "type": "bool"
+      },
+      {
+        "name": "portal_content_id",
+        "type": "str | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "ShoveFact",
+    "line": 237,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['shove']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "behavior_id",
+        "type": "str | None"
+      },
+      {
+        "name": "contest_success",
+        "type": "bool | None"
+      },
+      {
+        "name": "push_distance",
+        "type": "int"
+      },
+      {
+        "name": "knocked_prone",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "DamageRequestFact",
+    "line": 248,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['damage']"
+      },
+      {
+        "name": "stage",
+        "type": "Literal['taken']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "intercepted_by_condition_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "source_condition_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "relentless_rage",
+        "type": "RelentlessRageIntervention | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "DamageResultFact",
+    "line": 259,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['damage']"
+      },
+      {
+        "name": "stage",
+        "type": "Literal['applied']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "applied_damage",
+        "type": "int"
+      },
+      {
+        "name": "resulting_normal_hp",
+        "type": "int"
+      },
+      {
+        "name": "resulting_temporary_hp",
+        "type": "int"
+      },
+      {
+        "name": "damage_type",
+        "type": "DamageType"
+      },
+      {
+        "name": "body_release",
+        "type": "BodyReleaseResult | None"
+      },
+      {
+        "name": "effect_id",
+        "type": "str | None"
+      },
+      {
+        "name": "spatial_source",
+        "type": "SpatialDamageSource | None"
+      },
+      {
+        "name": "source_condition_uuid",
+        "type": "UUID | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "SavingThrowFact",
+    "line": 278,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['saving_throw']"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "ability_name",
+        "type": "AbilityName"
+      },
+      {
+        "name": "succeeded",
+        "type": "bool"
+      },
+      {
+        "name": "effect_id",
+        "type": "str | None"
+      },
+      {
+        "name": "indomitable_reroll",
+        "type": "IndomitableReroll | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "HealFact",
+    "line": 290,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['heal']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "actual_healing",
+        "type": "int"
+      },
+      {
+        "name": "was_blocked",
+        "type": "bool"
+      },
+      {
+        "name": "resulting_normal_hp",
+        "type": "int | None"
+      },
+      {
+        "name": "resulting_temporary_hp",
+        "type": "int | None"
+      },
+      {
+        "name": "source_condition_uuid",
+        "type": "UUID | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "TemporaryHitPointsFact",
+    "line": 302,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['temporary_hit_points']"
+      },
+      {
+        "name": "entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "resulting_temporary_hp",
+        "type": "int"
+      },
+      {
+        "name": "grant",
+        "type": "TemporaryHitPointsGrant | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "LifeFact",
+    "line": 310,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['life']"
+      },
+      {
+        "name": "entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "previous_state",
+        "type": "LifeState"
+      },
+      {
+        "name": "new_state",
+        "type": "LifeState"
+      },
+      {
+        "name": "reason",
+        "type": "LifeStateChangeReason"
+      },
+      {
+        "name": "normal_hit_points",
+        "type": "int"
+      },
+      {
+        "name": "remains_disposition",
+        "type": "RemainsDisposition"
+      },
+      {
+        "name": "preserved_equipped_item_uuids",
+        "type": "tuple[UUID, ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "DeathSaveFact",
+    "line": 322,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['death_save']"
+      },
+      {
+        "name": "entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "natural_roll",
+        "type": "int | None"
+      },
+      {
+        "name": "succeeded",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "EquipmentFact",
+    "line": 330,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['equipment']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "visual_loadout",
+        "type": "VisualLoadout"
+      },
+      {
+        "name": "armor_class",
+        "type": "int"
+      },
+      {
+        "name": "controlled_items",
+        "type": "tuple[ItemPresentationState, ...] | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "ConditionChangeFact",
+    "line": 339,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['condition']"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "event_type",
+        "type": "EventType"
+      },
+      {
+        "name": "condition",
+        "type": "ConditionFact"
+      },
+      {
+        "name": "consumed",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "ItemEffectChangeFact",
+    "line": 348,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['item_effect']"
+      },
+      {
+        "name": "item_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "effect_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "event_type",
+        "type": "EventType"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "CreationWitness",
+    "line": 358,
+    "fields": [
+      {
+        "name": "birth_event_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "manifestation",
+        "type": "SummonManifestation"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "SpatialFact",
+    "line": 365,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['spatial']"
+      },
+      {
+        "name": "change_type",
+        "type": "SpatialChangeType"
+      },
+      {
+        "name": "entity_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "position",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "object_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "commit_event_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "previous_occupancy_layer",
+        "type": "OccupancyLayer | None"
+      },
+      {
+        "name": "occupancy_layer",
+        "type": "OccupancyLayer | None"
+      },
+      {
+        "name": "terminal_departure",
+        "type": "bool"
+      },
+      {
+        "name": "terminal_cause",
+        "type": "SummonDepartureCause | None"
+      },
+      {
+        "name": "creation",
+        "type": "CreationWitness | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "FactionFact",
+    "line": 380,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['faction']"
+      },
+      {
+        "name": "entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "faction_after",
+        "type": "str | None"
+      },
+      {
+        "name": "control_lost",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "TurnFact",
+    "line": 388,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['turn']"
+      },
+      {
+        "name": "event_type",
+        "type": "EventType"
+      },
+      {
+        "name": "entity_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "round_number",
+        "type": "int | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "ItemChargeFact",
+    "line": 396,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['item_charge']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "item_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "charges_after",
+        "type": "int"
+      },
+      {
+        "name": "stack_count_after",
+        "type": "int"
+      },
+      {
+        "name": "item_destroyed",
+        "type": "bool"
+      },
+      {
+        "name": "resource_change",
+        "type": "ItemResourceChange | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "ActionReaction",
+    "line": 408,
+    "fields": [
+      {
+        "name": "triggered_lineage_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "succeeded",
+        "type": "bool"
+      },
+      {
+        "name": "automatic",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "ActionFact",
+    "line": 417,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['action']"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "behavior_id",
+        "type": "str | None"
+      },
+      {
+        "name": "name",
+        "type": "str | None"
+      },
+      {
+        "name": "source_item_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "reaction",
+        "type": "ActionReaction | None"
+      },
+      {
+        "name": "font_conversion",
+        "type": "FontConversion | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "SensoryFact",
+    "line": 429,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['sensory']"
+      },
+      {
+        "name": "observed_changes",
+        "type": "tuple[ObservedChangeRef, ...]"
+      },
+      {
+        "name": "observer_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "initial",
+        "type": "bool"
+      },
+      {
+        "name": "observer_position",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "observer_position_changed",
+        "type": "bool"
+      },
+      {
+        "name": "effective_light_levels_changed",
+        "type": "dict[str, int]"
+      },
+      {
+        "name": "cause_event_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "visible_cells_added",
+        "type": "tuple[tuple[int, int], ...]"
+      },
+      {
+        "name": "visible_cells_removed",
+        "type": "tuple[tuple[int, int], ...]"
+      },
+      {
+        "name": "seen_cells_added",
+        "type": "tuple[tuple[int, int], ...]"
+      },
+      {
+        "name": "entity_contacts_changed",
+        "type": "dict[UUID, PerceivedContact]"
+      },
+      {
+        "name": "entity_contacts_removed",
+        "type": "frozenset[UUID]"
+      },
+      {
+        "name": "object_contacts_changed",
+        "type": "dict[UUID, PerceivedContact]"
+      },
+      {
+        "name": "object_contacts_removed",
+        "type": "frozenset[UUID]"
+      },
+      {
+        "name": "sense_modes_changed",
+        "type": "bool"
+      },
+      {
+        "name": "sense_modes",
+        "type": "tuple[SenseMode, ...] | None"
+      },
+      {
+        "name": "passive_perception_changed",
+        "type": "bool"
+      },
+      {
+        "name": "passive_perception",
+        "type": "int | None"
+      },
+      {
+        "name": "visual_access_changed",
+        "type": "bool"
+      },
+      {
+        "name": "visual_access",
+        "type": "int | None"
+      },
+      {
+        "name": "paths_dirty",
+        "type": "bool"
+      },
+      {
+        "name": "hazardous_cells_changed",
+        "type": "dict[str, bool]"
+      },
+      {
+        "name": "spatial_effects_changed",
+        "type": "dict[UUID, PerceivedSpatialEffect]"
+      },
+      {
+        "name": "spatial_effects_removed",
+        "type": "frozenset[UUID]"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "SpatialEffectStateFact",
+    "line": 458,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['spatial_effect_state']"
+      },
+      {
+        "name": "spatial_effect_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "positions",
+        "type": "tuple[tuple[int, int], ...]"
+      },
+      {
+        "name": "previous_state",
+        "type": "TrapState | None"
+      },
+      {
+        "name": "state",
+        "type": "TrapState | None"
+      },
+      {
+        "name": "previous_pressed",
+        "type": "bool | None"
+      },
+      {
+        "name": "pressed",
+        "type": "bool | None"
+      },
+      {
+        "name": "operation",
+        "type": "SpatialEffectChangeOperation"
+      },
+      {
+        "name": "interaction_operation",
+        "type": "SpatialEffectInteractionOperation | None"
+      },
+      {
+        "name": "removed_positions",
+        "type": "tuple[tuple[int, int], ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "MechanismActivationFact",
+    "line": 474,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['mechanism_activation']"
+      },
+      {
+        "name": "mechanism_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "mechanism_content_id",
+        "type": "str"
+      },
+      {
+        "name": "target_entity_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "origin_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "direction",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "affected_positions",
+        "type": "tuple[tuple[int, int], ...]"
+      },
+      {
+        "name": "end_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "committed",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "ObjectDamageFact",
+    "line": 489,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['object_damage']"
+      },
+      {
+        "name": "object_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "applied_damage",
+        "type": "int"
+      },
+      {
+        "name": "resulting_hp",
+        "type": "int"
+      },
+      {
+        "name": "damage_type",
+        "type": "DamageType | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "ObjectDestroyedFact",
+    "line": 500,
+    "fields": [
+      {
+        "name": "kind",
+        "type": "Literal['object_destroyed']"
+      },
+      {
+        "name": "object_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "replacement_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "placement",
+        "type": "WorldObjectPlacement"
+      },
+      {
+        "name": "item_id",
+        "type": "str"
+      },
+      {
+        "name": "remnant_state",
+        "type": "ItemRemnantState | None"
+      },
+      {
+        "name": "destruction_outcome",
+        "type": "str | None"
+      },
+      {
+        "name": "remains_disposition",
+        "type": "RemainsDisposition"
+      },
+      {
+        "name": "previous_item",
+        "type": "'FloorItem | None'"
+      },
+      {
+        "name": "affected_volume",
+        "type": "ObjectSectionVolume | None"
+      },
+      {
+        "name": "resulting_placement",
+        "type": "WorldObjectPlacement | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "ContentAttribution",
+    "line": 526,
+    "fields": [
+      {
+        "name": "role",
+        "type": "Literal['behavior', 'source_item', 'effective_handler']"
+      },
+      {
+        "name": "behavior_id",
+        "type": "str"
+      },
+      {
+        "name": "provided_by_id",
+        "type": "str | None"
+      },
+      {
+        "name": "origin_root_id",
+        "type": "str | None"
+      },
+      {
+        "name": "source_entity_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "triggering_event_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "triggering_lineage_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "emitted_lineage_uuids",
+        "type": "tuple[UUID, ...]"
+      },
+      {
+        "name": "handler_name",
+        "type": "str | None"
+      },
+      {
+        "name": "dispatch_index",
+        "type": "int | None"
+      },
+      {
+        "name": "outcome",
+        "type": "HandlerDispatchOutcome | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "ActionCancellation",
+    "line": 541,
+    "fields": [
+      {
+        "name": "phase",
+        "type": "EventPhase | None"
+      },
+      {
+        "name": "action_economy_spent",
+        "type": "bool"
+      },
+      {
+        "name": "outcome_code",
+        "type": "str | None"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "PlayerNode",
+    "line": 548,
+    "fields": [
+      {
+        "name": "uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "lineage_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "parent_event",
+        "type": "UUID | None"
+      },
+      {
+        "name": "parent_lineage",
+        "type": "UUID | None"
+      },
+      {
+        "name": "children_lineages",
+        "type": "tuple[UUID, ...]"
+      },
+      {
+        "name": "phase",
+        "type": "EventPhase"
+      },
+      {
+        "name": "canceled",
+        "type": "bool"
+      },
+      {
+        "name": "fact",
+        "type": "PlayerFact | None"
+      },
+      {
+        "name": "resolution_ref",
+        "type": "ResolutionRef | None"
+      },
+      {
+        "name": "cancellation",
+        "type": "ActionCancellation | None"
+      },
+      {
+        "name": "combat_log",
+        "type": "CombatLogEntry | None"
+      },
+      {
+        "name": "content_attributions",
+        "type": "tuple[ContentAttribution, ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "VersionRow",
+    "line": 564,
+    "fields": [
+      {
+        "name": "source_index",
+        "type": "int"
+      },
+      {
+        "name": "event_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "lineage_uuid",
+        "type": "UUID"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "FloorItem",
+    "line": 571,
+    "fields": [
+      {
+        "name": "item_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "item_id",
+        "type": "str"
+      },
+      {
+        "name": "name",
+        "type": "str"
+      },
+      {
+        "name": "visual_item_name",
+        "type": "str"
+      },
+      {
+        "name": "visual_variant_id",
+        "type": "str | None"
+      },
+      {
+        "name": "map_char",
+        "type": "str"
+      },
+      {
+        "name": "boundary_structure",
+        "type": "BoundaryStructure | None"
+      },
+      {
+        "name": "is_open",
+        "type": "bool | None"
+      },
+      {
+        "name": "is_lit",
+        "type": "bool | None"
+      },
+      {
+        "name": "stack_count",
+        "type": "int"
+      },
+      {
+        "name": "is_pickable",
+        "type": "bool"
+      },
+      {
+        "name": "item_effects",
+        "type": "tuple[ItemEffectPresentationState, ...]"
+      },
+      {
+        "name": "suppression_provider_uuids",
+        "type": "tuple[UUID, ...]"
+      },
+      {
+        "name": "blocks_propagation",
+        "type": "bool"
+      },
+      {
+        "name": "contact_passage",
+        "type": "ContactPassage"
+      },
+      {
+        "name": "supported_by_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "is_engaged",
+        "type": "bool | None"
+      },
+      {
+        "name": "surface_residues",
+        "type": "tuple[ObjectResidueState, ...]"
+      },
+      {
+        "name": "current_hit_points",
+        "type": "int | None"
+      },
+      {
+        "name": "maximum_hit_points",
+        "type": "int | None"
+      },
+      {
+        "name": "concentration_capacity",
+        "type": "int"
+      },
+      {
+        "name": "concentration_slots",
+        "type": "tuple[ItemConcentrationSlot, ...]"
+      },
+      {
+        "name": "door_mechanism",
+        "type": "DoorMechanism | None"
+      },
+      {
+        "name": "door_swing",
+        "type": "DoorSwing | None"
+      },
+      {
+        "name": "remnant_state",
+        "type": "ItemRemnantState | None"
+      },
+      {
+        "name": "integrity",
+        "type": "ItemIntegrity"
+      },
+      {
+        "name": "destruction_outcome",
+        "type": "str | None"
+      },
+      {
+        "name": "construction_owner_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "construction_geometry",
+        "type": "AoEPresentationGeometry | None"
+      },
+      {
+        "name": "construction_suppressions",
+        "type": "tuple[SpellSuppression, ...]"
+      },
+      {
+        "name": "known_to_creator",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "PlayerObject",
+    "line": 606,
+    "fields": [
+      {
+        "name": "placement",
+        "type": "WorldObjectPlacement"
+      },
+      {
+        "name": "item",
+        "type": "FloorItem"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "WorldUpdate",
+    "line": 612,
+    "fields": [
+      {
+        "name": "event_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "tiles",
+        "type": "tuple[WorldTileState, ...]"
+      },
+      {
+        "name": "objects",
+        "type": "tuple[PlayerObject, ...]"
+      },
+      {
+        "name": "objects_removed",
+        "type": "tuple[UUID, ...]"
+      },
+      {
+        "name": "connectors",
+        "type": "tuple[WorldConnectorState, ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "PlayerWorld",
+    "line": 621,
+    "fields": [
+      {
+        "name": "battlefield_id",
+        "type": "str"
+      },
+      {
+        "name": "battlefield_name",
+        "type": "str"
+      },
+      {
+        "name": "bounds",
+        "type": "tuple[int, int, int, int]"
+      },
+      {
+        "name": "width",
+        "type": "int"
+      },
+      {
+        "name": "height",
+        "type": "int"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "PlayerLineage",
+    "line": 630,
+    "fields": [
+      {
+        "name": "generation",
+        "type": "UUID"
+      },
+      {
+        "name": "observer_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "root",
+        "type": "PlayerNode"
+      },
+      {
+        "name": "events",
+        "type": "tuple[PlayerNode, ...]"
+      },
+      {
+        "name": "version_rows",
+        "type": "tuple[VersionRow, ...]"
+      },
+      {
+        "name": "start_cursor",
+        "type": "int"
+      },
+      {
+        "name": "end_cursor",
+        "type": "int"
+      },
+      {
+        "name": "observations",
+        "type": "tuple[PlayerObservation, ...]"
+      },
+      {
+        "name": "world_updates",
+        "type": "tuple[WorldUpdate, ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "PlayerInitialization",
+    "line": 643,
+    "fields": [
+      {
+        "name": "generation",
+        "type": "UUID"
+      },
+      {
+        "name": "observer_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "world",
+        "type": "PlayerWorld"
+      },
+      {
+        "name": "nodes",
+        "type": "tuple[PlayerNode, ...]"
+      },
+      {
+        "name": "version_rows",
+        "type": "tuple[VersionRow, ...]"
+      },
+      {
+        "name": "end_cursor",
+        "type": "int"
+      },
+      {
+        "name": "observations",
+        "type": "tuple[PlayerObservation, ...]"
+      },
+      {
+        "name": "world_updates",
+        "type": "tuple[WorldUpdate, ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "PlayerSequence",
+    "line": 654,
+    "fields": [
+      {
+        "name": "schema_version",
+        "type": "Literal[2]"
+      },
+      {
+        "name": "initialization",
+        "type": "PlayerInitialization"
+      },
+      {
+        "name": "lineages",
+        "type": "tuple[PlayerLineage, ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/player_facts.py",
+    "record": "PlayerState",
+    "line": 662,
+    "fields": [
+      {
+        "name": "generation",
+        "type": "UUID"
+      },
+      {
+        "name": "observer_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "world",
+        "type": "PlayerWorld"
+      },
+      {
+        "name": "tiles",
+        "type": "dict[tuple[int, int], WorldTileState]"
+      },
+      {
+        "name": "objects",
+        "type": "dict[UUID, PlayerObject]"
+      },
+      {
+        "name": "connectors",
+        "type": "tuple[WorldConnectorState, ...]"
+      },
+      {
+        "name": "senses",
+        "type": "SensesSnapshot | None"
+      },
+      {
+        "name": "reducer_cursor",
+        "type": "int"
+      },
+      {
+        "name": "spatial_commit_cursors",
+        "type": "dict[UUID, int]"
+      },
+      {
+        "name": "actors",
+        "type": "dict[UUID, PlayerActor]"
+      },
+      {
+        "name": "current_actor_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "round_number",
+        "type": "int"
+      }
+    ]
+  },
+  {
+    "file": "game/world_animation.py",
+    "record": "DestructionContact",
+    "line": 76,
+    "fields": [
+      {
+        "name": "item_id",
+        "type": "str"
+      },
+      {
+        "name": "position",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "elevation_steps",
+        "type": "float"
+      },
+      {
+        "name": "facing",
+        "type": "DeviceFacing"
+      },
+      {
+        "name": "pitch_degrees",
+        "type": "float"
+      },
+      {
+        "name": "body_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "duration_ms",
+        "type": "float"
+      },
+      {
+        "name": "bank_id",
+        "type": "str | None"
+      },
+      {
+        "name": "incorporated_items",
+        "type": "tuple[UUID, ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/world_animation.py",
+    "record": "SpatialMediaMotion",
+    "line": 91,
+    "fields": [
+      {
+        "name": "before",
+        "type": "PerceivedSpatialEffect"
+      },
+      {
+        "name": "after",
+        "type": "PerceivedSpatialEffect"
+      },
+      {
+        "name": "duration_ms",
+        "type": "float"
+      }
+    ]
+  },
+  {
+    "file": "game/world_animation.py",
+    "record": "ObjectDustContact",
+    "line": 115,
+    "fields": [
+      {
+        "name": "object",
+        "type": "PlayerObject"
+      },
+      {
+        "name": "affected_volume",
+        "type": "ObjectSectionVolume | None"
+      },
+      {
+        "name": "partial",
+        "type": "bool"
+      },
+      {
+        "name": "seed",
+        "type": "int"
+      }
+    ]
+  },
+  {
+    "file": "game/world_animation.py",
+    "record": "ConstructionCollapse",
+    "line": 124,
+    "fields": [
+      {
+        "name": "object",
+        "type": "PlayerObject"
+      },
+      {
+        "name": "contacts",
+        "type": "tuple[tuple[float, float, float], ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/world_animation.py",
+    "record": "WorldTransition",
+    "line": 131,
+    "fields": [
+      {
+        "name": "identity",
+        "type": "UUID"
+      },
+      {
+        "name": "field",
+        "type": "Literal['is_open', 'is_engaged', 'trap_state', 'pressed', 'activation', 'creation', 'removal', 'destruction', 'hit_flash', 'spatial_motion']"
+      },
+      {
+        "name": "previous",
+        "type": "str | None"
+      },
+      {
+        "name": "current",
+        "type": "str | None"
+      },
+      {
+        "name": "start_ms",
+        "type": "float"
+      },
+      {
+        "name": "destruction",
+        "type": "DestructionContact | None"
+      },
+      {
+        "name": "hit_flash",
+        "type": "HitFlash | None"
+      },
+      {
+        "name": "duration_ms",
+        "type": "float | None"
+      },
+      {
+        "name": "projectile",
+        "type": "MechanismProjectileCue | None"
+      },
+      {
+        "name": "spatial_motion",
+        "type": "SpatialMediaMotion | None"
+      },
+      {
+        "name": "object_dust",
+        "type": "ObjectDustContact | None"
+      },
+      {
+        "name": "construction_collapse",
+        "type": "ConstructionCollapse | None"
+      },
+      {
+        "name": "membrane_contact",
+        "type": "tuple[float, float, float] | None"
+      }
+    ]
+  },
+  {
+    "file": "game/world_animation.py",
+    "record": "WorldTransitionSample",
+    "line": 148,
+    "fields": [
+      {
+        "name": "transition",
+        "type": "WorldTransition"
+      },
+      {
+        "name": "elapsed_ms",
+        "type": "float"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "ActionNode",
+    "line": 107,
+    "fields": [
+      {
+        "name": "event_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "start_ms",
+        "type": "float"
+      },
+      {
+        "name": "bound",
+        "type": "BoundAttack | BoundCast"
+      },
+      {
+        "name": "interrupted",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "ActionSample",
+    "line": 115,
+    "fields": [
+      {
+        "name": "node",
+        "type": "ActionNode"
+      },
+      {
+        "name": "sample",
+        "type": "AttackSample | CastSample"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "HealingCue",
+    "line": 121,
+    "fields": [
+      {
+        "name": "event",
+        "type": "PlayerNode"
+      },
+      {
+        "name": "start_ms",
+        "type": "float"
+      },
+      {
+        "name": "contact",
+        "type": "ActorContact | None"
+      },
+      {
+        "name": "body_context",
+        "type": "BodyContext | None"
+      },
+      {
+        "name": "end_ms",
+        "type": "float | None"
+      },
+      {
+        "name": "data",
+        "type": "AnimationData | None"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "EquipmentCue",
+    "line": 131,
+    "fields": [
+      {
+        "name": "event_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "start_ms",
+        "type": "float"
+      },
+      {
+        "name": "bound",
+        "type": "BoundEquipment"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "LifecycleCue",
+    "line": 138,
+    "fields": [
+      {
+        "name": "event",
+        "type": "PlayerNode"
+      },
+      {
+        "name": "start_ms",
+        "type": "float"
+      },
+      {
+        "name": "contact",
+        "type": "ActorContact"
+      },
+      {
+        "name": "feedback",
+        "type": "LifecycleFeedback | None"
+      },
+      {
+        "name": "state_owned",
+        "type": "bool"
+      },
+      {
+        "name": "death_end_ms",
+        "type": "float | None"
+      },
+      {
+        "name": "data",
+        "type": "AnimationData"
+      },
+      {
+        "name": "body",
+        "type": "BodyTransition | None"
+      },
+      {
+        "name": "body_end_ms",
+        "type": "float | None"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "MotionCue",
+    "line": 151,
+    "fields": [
+      {
+        "name": "event_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "start_ms",
+        "type": "float"
+      },
+      {
+        "name": "timeline",
+        "type": "'MotionTimeline'"
+      },
+      {
+        "name": "data",
+        "type": "AnimationData"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "BoundChoreography",
+    "line": 159,
+    "fields": [
+      {
+        "name": "root_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "before",
+        "type": "PlayerState"
+      },
+      {
+        "name": "after",
+        "type": "PlayerState"
+      },
+      {
+        "name": "nodes",
+        "type": "tuple[ActionNode, ...]"
+      },
+      {
+        "name": "conditions",
+        "type": "tuple[ConditionTimeline, ...]"
+      },
+      {
+        "name": "complete_ms",
+        "type": "float"
+      },
+      {
+        "name": "gaps",
+        "type": "tuple[tuple[UUID, str], ...]"
+      },
+      {
+        "name": "healing",
+        "type": "tuple[HealingCue, ...]"
+      },
+      {
+        "name": "lifecycle",
+        "type": "tuple[LifecycleCue, ...]"
+      },
+      {
+        "name": "equipment",
+        "type": "tuple[EquipmentCue, ...]"
+      },
+      {
+        "name": "shoves",
+        "type": "tuple[ShoveCue, ...]"
+      },
+      {
+        "name": "forced_movement",
+        "type": "tuple[ForcedMovementCue, ...]"
+      },
+      {
+        "name": "damage",
+        "type": "tuple[DamageCue, ...]"
+      },
+      {
+        "name": "observations",
+        "type": "tuple[tuple[float, PlayerObservation], ...]"
+      },
+      {
+        "name": "body_actions",
+        "type": "tuple[BodyActionCue, ...]"
+      },
+      {
+        "name": "states",
+        "type": "tuple[tuple[float, PlayerState], ...]"
+      },
+      {
+        "name": "world_transitions",
+        "type": "tuple[WorldTransition, ...]"
+      },
+      {
+        "name": "movements",
+        "type": "tuple[MotionCue, ...]"
+      },
+      {
+        "name": "strips",
+        "type": "tuple[ActionStripCue, ...]"
+      },
+      {
+        "name": "residue_reveals",
+        "type": "tuple[ResidueReveal, ...]"
+      },
+      {
+        "name": "body_hops",
+        "type": "tuple[BodyHopCue, ...]"
+      },
+      {
+        "name": "portals",
+        "type": "tuple[PortalTransferCue, ...]"
+      },
+      {
+        "name": "stationary_media",
+        "type": "tuple[StationaryMediaCue, ...]"
+      },
+      {
+        "name": "turn_starts",
+        "type": "tuple[tuple[float, UUID], ...]"
+      },
+      {
+        "name": "contact_media",
+        "type": "tuple[StationaryMediaCue, ...]"
+      },
+      {
+        "name": "reaction_media",
+        "type": "tuple[ReactionMediaCue, ...]"
+      },
+      {
+        "name": "condition_responses",
+        "type": "tuple[ConditionResponseCue, ...]"
+      },
+      {
+        "name": "entity_lifecycle",
+        "type": "tuple[EntityLifecycleCue, ...]"
+      },
+      {
+        "name": "finite_materials",
+        "type": "tuple[BodyMaterialCue, ...]"
+      },
+      {
+        "name": "spatial_responses",
+        "type": "tuple[SpatialResponseCue, ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "ChoreographySample",
+    "line": 193,
+    "fields": [
+      {
+        "name": "displayed",
+        "type": "PlayerState"
+      },
+      {
+        "name": "clips",
+        "type": "tuple[ActionSample, ...]"
+      },
+      {
+        "name": "conditions",
+        "type": "tuple[ConditionSample, ...]"
+      },
+      {
+        "name": "vitals",
+        "type": "tuple[VitalsSample, ...]"
+      },
+      {
+        "name": "complete",
+        "type": "bool"
+      },
+      {
+        "name": "bodies",
+        "type": "tuple[BodySample, ...]"
+      },
+      {
+        "name": "contacts",
+        "type": "tuple[ActorContact, ...]"
+      },
+      {
+        "name": "strips",
+        "type": "tuple[ActionStripSample, ...]"
+      },
+      {
+        "name": "hidden_actors",
+        "type": "frozenset[str]"
+      },
+      {
+        "name": "portals",
+        "type": "tuple[tuple[PortalTransferCue, float], ...]"
+      },
+      {
+        "name": "stationary_media",
+        "type": "tuple[tuple[StationaryMediaCue, float], ...]"
+      },
+      {
+        "name": "reaction_media",
+        "type": "tuple[tuple[ReactionMediaCue, float], ...]"
+      },
+      {
+        "name": "entity_lifecycle",
+        "type": "tuple[tuple[EntityLifecycleCue, float], ...]"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "MotionLeg",
+    "line": 1972,
+    "fields": [
+      {
+        "name": "start",
+        "type": "tuple[float, float]"
+      },
+      {
+        "name": "end",
+        "type": "tuple[float, float]"
+      },
+      {
+        "name": "start_height",
+        "type": "float"
+      },
+      {
+        "name": "end_height",
+        "type": "float"
+      },
+      {
+        "name": "start_ms",
+        "type": "float"
+      },
+      {
+        "name": "end_ms",
+        "type": "float"
+      },
+      {
+        "name": "body_start_ms",
+        "type": "float"
+      },
+      {
+        "name": "arc_height_px",
+        "type": "float"
+      },
+      {
+        "name": "curve_from",
+        "type": "float"
+      },
+      {
+        "name": "curve_to",
+        "type": "float"
+      },
+      {
+        "name": "initial_lift_px",
+        "type": "float"
+      },
+      {
+        "name": "speed_scale",
+        "type": "float"
+      },
+      {
+        "name": "path_bend",
+        "type": "tuple[float, float]"
+      },
+      {
+        "name": "passage_scale",
+        "type": "tuple[float, float]"
+      },
+      {
+        "name": "passage_body_height_px",
+        "type": "float"
+      },
+      {
+        "name": "passage_socket",
+        "type": "str | None"
+      },
+      {
+        "name": "passage_hold_fraction",
+        "type": "float"
+      },
+      {
+        "name": "lift_phase_edges",
+        "type": "tuple[float, float] | None"
+      },
+      {
+        "name": "support_riser",
+        "type": "tuple[float, float, float] | None"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "MotionReaction",
+    "line": 1996,
+    "fields": [
+      {
+        "name": "choreography",
+        "type": "BoundChoreography"
+      },
+      {
+        "name": "contact",
+        "type": "ActorContact | None"
+      },
+      {
+        "name": "source",
+        "type": "ActorContact | None"
+      },
+      {
+        "name": "start_ms",
+        "type": "float"
+      },
+      {
+        "name": "end_ms",
+        "type": "float"
+      },
+      {
+        "name": "lift_px",
+        "type": "float"
+      },
+      {
+        "name": "action_label",
+        "type": "str | None"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "MotionTimeline",
+    "line": 2007,
+    "fields": [
+      {
+        "name": "actor",
+        "type": "ActorContact"
+      },
+      {
+        "name": "legs",
+        "type": "tuple[MotionLeg, ...]"
+      },
+      {
+        "name": "clip",
+        "type": "str"
+      },
+      {
+        "name": "playback_speed",
+        "type": "float"
+      },
+      {
+        "name": "arc_height_px",
+        "type": "float"
+      },
+      {
+        "name": "complete_ms",
+        "type": "float"
+      },
+      {
+        "name": "reactions",
+        "type": "tuple[MotionReaction, ...]"
+      },
+      {
+        "name": "settled_contact",
+        "type": "ActorContact | None"
+      },
+      {
+        "name": "before",
+        "type": "PlayerState"
+      },
+      {
+        "name": "actor_state",
+        "type": "PlayerActor"
+      },
+      {
+        "name": "settled_lift_px",
+        "type": "float"
+      },
+      {
+        "name": "body_loops",
+        "type": "bool"
+      },
+      {
+        "name": "states",
+        "type": "tuple[tuple[float, PlayerState], ...]"
+      },
+      {
+        "name": "world_transitions",
+        "type": "tuple[WorldTransition, ...]"
+      },
+      {
+        "name": "residue_reveals",
+        "type": "tuple[ResidueReveal, ...]"
+      },
+      {
+        "name": "contact_media",
+        "type": "tuple[StationaryMediaCue, ...]"
+      },
+      {
+        "name": "animation_id",
+        "type": "str | None"
+      },
+      {
+        "name": "body_frame_keys",
+        "type": "tuple[tuple[float, int], ...]"
+      },
+      {
+        "name": "body_context",
+        "type": "BodyContext | None"
+      },
+      {
+        "name": "recovery_body",
+        "type": "BodyContext | None"
+      },
+      {
+        "name": "recovery_start_ms",
+        "type": "float | None"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "TimelineVisit",
+    "line": 2053,
+    "fields": [
+      {
+        "name": "offset_ms",
+        "type": "float"
+      },
+      {
+        "name": "event_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "timeline",
+        "type": "BoundChoreography | MotionTimeline"
+      }
+    ]
+  },
+  {
+    "file": "game/choreography.py",
+    "record": "MotionSample",
+    "line": 2076,
+    "fields": [
+      {
+        "name": "contact",
+        "type": "ActorContact | None"
+      },
+      {
+        "name": "body",
+        "type": "BodySample | None"
+      },
+      {
+        "name": "lift_px",
+        "type": "float"
+      },
+      {
+        "name": "complete",
+        "type": "bool"
+      },
+      {
+        "name": "reaction",
+        "type": "BoundChoreography | None"
+      },
+      {
+        "name": "reaction_elapsed_ms",
+        "type": "float"
+      },
+      {
+        "name": "displayed_vitals",
+        "type": "tuple[VitalsSample, ...]"
+      },
+      {
+        "name": "displayed",
+        "type": "PlayerState | None"
+      },
+      {
+        "name": "reaction_sample",
+        "type": "ChoreographySample | None"
+      }
+    ]
+  },
+  {
+    "file": "game/playback_frame.py",
+    "record": "PlaybackFrame",
+    "line": 63,
+    "fields": [
+      {
+        "name": "displayed",
+        "type": "PlayerState"
+      },
+      {
+        "name": "actors",
+        "type": "tuple[SceneActor, ...]"
+      },
+      {
+        "name": "commands",
+        "type": "tuple[AnimationDrawCommand, ...]"
+      },
+      {
+        "name": "complete",
+        "type": "bool"
+      },
+      {
+        "name": "shown_hp",
+        "type": "Mapping[str, int | None]"
+      },
+      {
+        "name": "facings",
+        "type": "Mapping[str, Facing8]"
+      },
+      {
+        "name": "positions",
+        "type": "Mapping[str, VisualPosition]"
+      },
+      {
+        "name": "world_transitions",
+        "type": "tuple[WorldTransitionSample, ...]"
+      },
+      {
+        "name": "residue_reveals",
+        "type": "tuple[ResidueRevealSample, ...]"
+      },
+      {
+        "name": "deposited_materials",
+        "type": "frozenset[tuple[UUID, str]]"
+      }
+    ]
+  },
+  {
+    "file": "dnd/types/event_facts.py",
+    "record": "EventType",
+    "line": 14,
+    "fields": []
+  },
+  {
+    "file": "dnd/types/event_facts.py",
+    "record": "LandingKind",
+    "line": 102,
+    "fields": []
+  },
+  {
+    "file": "dnd/types/event_facts.py",
+    "record": "MovementTrajectory",
+    "line": 111,
+    "fields": []
+  },
+  {
+    "file": "dnd/types/event_facts.py",
+    "record": "SpatialChangeType",
+    "line": 120,
+    "fields": []
+  },
+  {
+    "file": "dnd/types/event_facts.py",
+    "record": "EventPhase",
+    "line": 136,
+    "fields": []
+  },
+  {
+    "file": "dnd/types/event_facts.py",
+    "record": "WorldTileState",
+    "line": 152,
+    "fields": [
+      {
+        "name": "tile_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "position",
+        "type": "Tuple[int, int]"
+      },
+      {
+        "name": "surface",
+        "type": "TileSurface"
+      },
+      {
+        "name": "name",
+        "type": "str"
+      },
+      {
+        "name": "blocks_optics",
+        "type": "bool"
+      },
+      {
+        "name": "blocks_propagation",
+        "type": "bool"
+      },
+      {
+        "name": "walking_cost",
+        "type": "StrictInt"
+      },
+      {
+        "name": "flying_cost",
+        "type": "StrictInt"
+      },
+      {
+        "name": "swimming_cost",
+        "type": "StrictInt"
+      },
+      {
+        "name": "burrowing_cost",
+        "type": "StrictInt"
+      },
+      {
+        "name": "elevation_steps",
+        "type": "StrictInt"
+      },
+      {
+        "name": "surface_kind",
+        "type": "ElevationSurfaceKind"
+      },
+      {
+        "name": "slope_axis",
+        "type": "Optional[SlopeAxis]"
+      },
+      {
+        "name": "default_light",
+        "type": "LightLevel"
+      },
+      {
+        "name": "resolved_light",
+        "type": "LightLevel"
+      },
+      {
+        "name": "condition_names",
+        "type": "Tuple[str, ...]"
+      },
+      {
+        "name": "residues",
+        "type": "tuple[TileResidueState, ...]"
+      }
+    ]
+  },
+  {
+    "file": "dnd/types/event_facts.py",
+    "record": "WorldConnectorState",
+    "line": 177,
+    "fields": [
+      {
+        "name": "connector_uuid",
+        "type": "UUID"
+      },
+      {
+        "name": "authored_id",
+        "type": "str"
+      },
+      {
+        "name": "kind",
+        "type": "TraversalConnectorKind"
+      },
+      {
+        "name": "presentation_key",
+        "type": "str"
+      },
+      {
+        "name": "endpoints",
+        "type": "Tuple[Tuple[int, int], Tuple[int, int]]"
+      },
+      {
+        "name": "support_tile_uuids",
+        "type": "Tuple[UUID, UUID]"
+      },
+      {
+        "name": "endpoint_elevations_feet",
+        "type": "Tuple[int, int]"
+      },
+      {
+        "name": "movement_cost_feet",
+        "type": "StrictInt"
+      },
+      {
+        "name": "action_cost_type",
+        "type": "Optional[ConnectorActionCostType]"
+      },
+      {
+        "name": "action_cost_amount",
+        "type": "StrictInt"
+      },
+      {
+        "name": "bidirectional",
+        "type": "bool"
+      },
+      {
+        "name": "enabled",
+        "type": "bool"
+      },
+      {
+        "name": "provocation_policy",
+        "type": "ConnectorProvocationPolicy"
+      }
+    ]
+  },
+  {
+    "file": "dnd/types/senses.py",
+    "record": "SensesType",
+    "line": 22,
+    "fields": []
+  },
+  {
+    "file": "dnd/types/senses.py",
+    "record": "SenseMode",
+    "line": 33,
+    "fields": [
+      {
+        "name": "sense_type",
+        "type": "SensesType"
+      },
+      {
+        "name": "range_feet",
+        "type": "int"
+      },
+      {
+        "name": "contribution_owner_uuid",
+        "type": "UUID | None"
+      }
+    ]
+  },
+  {
+    "file": "dnd/types/senses.py",
+    "record": "OpticalObscurement",
+    "line": 41,
+    "fields": []
+  },
+  {
+    "file": "dnd/types/senses.py",
+    "record": "PerceivedContact",
+    "line": 48,
+    "fields": [
+      {
+        "name": "position",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "visual",
+        "type": "bool"
+      },
+      {
+        "name": "special_senses",
+        "type": "tuple[SensesType, ...]"
+      }
+    ]
+  },
+  {
+    "file": "dnd/types/senses.py",
+    "record": "VolumeSurfaceSight",
+    "line": 61,
+    "fields": [
+      {
+        "name": "position",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "lower_height_planes",
+        "type": "tuple[tuple[float, float, float], ...]"
+      }
+    ]
+  },
+  {
+    "file": "dnd/types/senses.py",
+    "record": "PerceivedSpatialEffect",
+    "line": 73,
+    "fields": [
+      {
+        "name": "content_ref",
+        "type": "ContentRef"
+      },
+      {
+        "name": "name",
+        "type": "str"
+      },
+      {
+        "name": "description",
+        "type": "str"
+      },
+      {
+        "name": "positions",
+        "type": "tuple[tuple[int, int], ...]"
+      },
+      {
+        "name": "trap_state",
+        "type": "TrapState | None"
+      },
+      {
+        "name": "pressed",
+        "type": "bool | None"
+      },
+      {
+        "name": "direction",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "anchor_item_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "anchor_entity_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "energy_type",
+        "type": "DamageType | None"
+      },
+      {
+        "name": "presence_mode",
+        "type": "DraconicPresenceMode | None"
+      },
+      {
+        "name": "sustainer_item_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "concentration_slot_uuid",
+        "type": "UUID | None"
+      },
+      {
+        "name": "anchor_position",
+        "type": "tuple[int, int] | None"
+      },
+      {
+        "name": "anchor_elevation_steps",
+        "type": "int | None"
+      },
+      {
+        "name": "area_geometry",
+        "type": "AoEPresentationGeometry | None"
+      },
+      {
+        "name": "construction_sections",
+        "type": "tuple[WallAssemblyPresentationGeometry, ...]"
+      },
+      {
+        "name": "area_propagation",
+        "type": "AreaPropagation | None"
+      },
+      {
+        "name": "deposit_source",
+        "type": "MaterialDepositSource | None"
+      },
+      {
+        "name": "visible_volume_positions",
+        "type": "tuple[tuple[int, int], ...]"
+      },
+      {
+        "name": "upper_volume_surfaces",
+        "type": "tuple[VolumeSurfaceSight, ...]"
+      },
+      {
+        "name": "suppressions",
+        "type": "tuple[SpellSuppression, ...]"
+      }
+    ]
+  },
+  {
+    "file": "dnd/types/senses.py",
+    "record": "SensesView",
+    "line": 102,
+    "fields": [
+      {
+        "name": "position",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "visible",
+        "type": "Mapping[tuple[int, int], object]"
+      },
+      {
+        "name": "entities",
+        "type": "Mapping[UUID, PerceivedContact]"
+      },
+      {
+        "name": "objects",
+        "type": "Mapping[UUID, PerceivedContact]"
+      },
+      {
+        "name": "spatial_effects",
+        "type": "Mapping[UUID, PerceivedSpatialEffect]"
+      }
+    ]
+  },
+  {
+    "file": "dnd/types/senses.py",
+    "record": "SensoryDelta",
+    "line": 116,
+    "fields": []
+  },
+  {
+    "file": "dnd/types/senses.py",
+    "record": "SensesSnapshot",
+    "line": 170,
+    "fields": [
+      {
+        "name": "position",
+        "type": "tuple[int, int]"
+      },
+      {
+        "name": "visible",
+        "type": "set[tuple[int, int]]"
+      },
+      {
+        "name": "seen",
+        "type": "set[tuple[int, int]]"
+      },
+      {
+        "name": "entities",
+        "type": "dict[UUID, PerceivedContact]"
+      },
+      {
+        "name": "objects",
+        "type": "dict[UUID, PerceivedContact]"
+      },
+      {
+        "name": "effective_light_levels",
+        "type": "dict[tuple[int, int], LightLevel]"
+      },
+      {
+        "name": "paths_dirty",
+        "type": "bool"
+      },
+      {
+        "name": "passive_perception",
+        "type": "int"
+      },
+      {
+        "name": "sense_modes_hash",
+        "type": "int"
+      },
+      {
+        "name": "sense_modes",
+        "type": "tuple[SenseMode, ...]"
+      },
+      {
+        "name": "visual_access",
+        "type": "int"
+      },
+      {
+        "name": "hazardous_cells",
+        "type": "dict[tuple[int, int], bool]"
+      },
+      {
+        "name": "spatial_effects",
+        "type": "dict[UUID, PerceivedSpatialEffect]"
+      }
+    ]
+  }
+]

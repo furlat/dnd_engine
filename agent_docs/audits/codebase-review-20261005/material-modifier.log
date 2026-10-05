@@ -1,0 +1,3 @@
+pygame-ce 2.5.8 (SDL 2.32.10, Python 3.13.12)
+ramp False same_with_modifier False pixel_before_after Color(89, 53, 12, 63) Color(0, 0, 0, 0)
+ramp True same_with_modifier True pixel_before_after Color(134, 106, 70, 63) Color(134, 106, 70, 63)

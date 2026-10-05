@@ -61,7 +61,9 @@ def test_real_item_identity_and_birth_clock_survive_carry_cover_drop_loot_suppre
     carried = {}
     saw_suppression = saw_covered = False
     for state, retained, _, _ in rows:
-        assert state.senses is not None and not state.senses.spatial_effects
+        assert state.senses is not None
+        assert all(effect.content_ref.content_id != 'spell.continual_flame'
+            for effect in state.senses.spatial_effects.values())
         for owner, start in retained.items():
             assert start.applied_ms == starts[owner].applied_ms
             if start.source_cursor is not None:

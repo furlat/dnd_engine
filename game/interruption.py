@@ -3,7 +3,7 @@
 from dataclasses import dataclass, replace
 from uuid import UUID
 
-from game.animation import ActorContact, CastSample, CastTimeline, cast_deliveries, sample_cast, projectile_contact, body_elevation_steps
+from game.animation import ActorContact, CastSample, CastTimeline, cast_deliveries, delivery_identity, sample_cast, projectile_contact, body_elevation_steps
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from game.animation_types import AnimationData, InterruptionRule, ReactionMedia
 from game.attack import AttackSample, BoundAttack
@@ -11,6 +11,7 @@ from game.body_action import BodyActionCue
 from game.combat import BoundCast
 from game.player_facts import PlayerNode
 from game.stationary_media import StationaryMediaCue
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference, CompiledTimingReference, TimingTarget, record_timing
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,31 +87,63 @@ def interrupt_body(cue: BodyActionCue, rule: InterruptionRule) -> BodyActionCue:
     stop = cue.start_ms + ((cue.body_end_ms - cue.start_ms) * rule.nonProjectileBodyFraction
         if rule.nonProjectileBodyFraction is not None
         else (cue.effect_ms - cue.start_ms) * rule.anticipationFraction)
+    evidence: list[TimingEvidence] = []
+    record_timing(evidence, TimingReference('event', cue.event_uuid, 'cutoff'), 'interruption',
+        (TimingOperand(TimingReference('event', cue.event_uuid, 'start'), cue.start_ms),
+         TimingOperand(TimingReference('event', cue.event_uuid,
+            'body_end' if rule.nonProjectileBodyFraction is not None else 'effect'),
+            cue.body_end_ms if rule.nonProjectileBodyFraction is not None else cue.effect_ms)),
+        stop, 'fraction', fraction=rule.nonProjectileBodyFraction
+            if rule.nonProjectileBodyFraction is not None else rule.anticipationFraction)
     return replace(cue, effect_ms=stop, body_end_ms=stop, join_ms=stop,
-        complete_ms=stop, recovery=None, condition=None, feedback=None)
+        complete_ms=stop, recovery=None, condition=None, feedback=None, timing_evidence=tuple(evidence))
 
 
 def interrupt_delivery(bound: BoundAttack | BoundCast,
                        rule: InterruptionRule, *, outcome_code: str | None = None) -> BoundAttack | BoundCast:
-    stop = interruption_ms(bound, rule, outcome_code=outcome_code)
+    evidence: list[TimingEvidence] = []
+    stop = interruption_ms(bound, rule, outcome_code=outcome_code, evidence=evidence)
+    target = evidence[-1].target
+    cutoff = TimingOperand(target, stop, evidence[-1].index)
+    record_timing(evidence, replace(target, anchor='body_end'), 'interruption',
+        (TimingOperand(replace(target, anchor='body_end'), bound.timeline.body_end_ms), cutoff),
+        min(bound.timeline.body_end_ms, stop), 'minimum')
+    record_timing(evidence, replace(target, anchor='complete'), 'interruption', (cutoff,), stop)
     return replace(bound, timeline=replace(bound.timeline,
-        body_end_ms=min(bound.timeline.body_end_ms, stop), complete_ms=stop))
+        body_end_ms=min(bound.timeline.body_end_ms, stop), complete_ms=stop,
+        timing_evidence=tuple(evidence)))
 
 
 def interruption_ms(bound: BoundAttack | BoundCast, rule: InterruptionRule, *,
-                    outcome_code: str | None = None, reaction_id: str | None = None) -> float:
+                    outcome_code: str | None = None, reaction_id: str | None = None,
+                    evidence: list[TimingEvidence] | None = None) -> float:
     """A presentation anchor; a failed reaction uses it without cutting the cast."""
     timeline = bound.timeline
+    target: TimingTarget = (CompiledTimingReference('cast', bound.timeline.source.root_event_uuid, 'cutoff')
+        if isinstance(bound, BoundCast) else TimingReference('attack', UUID(bound.timeline.root_event_uuid), 'cutoff'))
     if isinstance(bound, BoundCast):
         profile = bound.timeline.recipe.cancellationMedia
         if profile is not None and (outcome_code == profile.outcomeCode or reaction_id == profile.reactionId):
-            return max(0., bound.timeline.release_ms + profile.cutoffOffsetMs)
+            stop = max(0., bound.timeline.release_ms + profile.cutoffOffsetMs)
+            if evidence is not None:
+                record_timing(evidence, target, 'interruption',
+                    (TimingOperand(replace(target, anchor='start'), 0.),
+                     TimingOperand(replace(target, anchor='release'), bound.timeline.release_ms,
+                        offset_ms=profile.cutoffOffsetMs, authored_field='cancellationMedia.cutoffOffsetMs')),
+                    stop, 'maximum')
+            return stop
     if isinstance(bound, BoundCast) and bound.timeline.source.protections:
-        return protection_contact_ms(bound)
+        stop = protection_contact_ms(bound)
+        if evidence is not None:
+            record_timing(evidence, target, 'interruption',
+                (TimingOperand(replace(target, anchor='contact'), stop,
+                    authored_field='protection_contact_ms.trajectory_sample'),), stop)
+        return stop
     if isinstance(bound, BoundAttack):
         timeline = bound.timeline
         release = timeline.release_ms if timeline.release_ms is not None else timeline.contact_ms
         travels = ((timeline.projectile.start_ms, timeline.projectile.end_ms),) if timeline.projectile else ()
+        application_ids = (None,) if timeline.projectile else ()
     else:
         timeline = bound.timeline
         release = timeline.release_ms
@@ -118,12 +151,31 @@ def interruption_ms(bound: BoundAttack | BoundCast, rule: InterruptionRule, *,
         travels = (tuple((delivery.travel_start_ms, delivery.travel_end_ms)
                          for delivery in cast_deliveries(timeline))
                    if projectile is not None and projectile.targetLocal is None and projectile.travel.enabled else ())
+        application_ids = tuple(delivery_identity(delivery) for delivery in cast_deliveries(timeline)) if travels else ()
     stop = release * rule.anticipationFraction
     if not travels and rule.nonProjectileBodyFraction is not None:
         stop = bound.timeline.body_end_ms * rule.nonProjectileBodyFraction
     if rule.travelFraction is not None:
         stop = min((start + (end - start) * rule.travelFraction
                     for start, end in travels if end > start), default=stop)
+    if evidence is not None:
+        candidates: list[TimingOperand] = []
+        if rule.travelFraction is not None:
+            for (start, end), application_id in zip(travels, application_ids, strict=True):
+                if end > start:
+                    candidates.append(record_timing(evidence, target, 'interruption',
+                        (TimingOperand(replace(target, anchor='launch', application_id=application_id), start),
+                         TimingOperand(replace(target, anchor='contact', application_id=application_id), end)),
+                        start + (end - start) * rule.travelFraction, 'fraction', fraction=rule.travelFraction))
+        if candidates:
+            record_timing(evidence, target, 'interruption', tuple(candidates), stop, 'minimum')
+        else:
+            endpoint = bound.timeline.body_end_ms if not travels and rule.nonProjectileBodyFraction is not None else release
+            fraction = rule.nonProjectileBodyFraction if not travels and rule.nonProjectileBodyFraction is not None else rule.anticipationFraction
+            record_timing(evidence, target, 'interruption',
+                (TimingOperand(replace(target, anchor='start'), 0.),
+                 TimingOperand(replace(target, anchor='body_end' if not travels and rule.nonProjectileBodyFraction is not None else 'release'), endpoint)),
+                stop, 'fraction', fraction=fraction)
     return stop
 
 

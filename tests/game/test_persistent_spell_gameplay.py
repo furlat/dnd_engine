@@ -13,7 +13,8 @@ from game.player_facts import AttackFact, ConditionChangeFact, DamageFact, Equip
 from game.player_reduction import reduce_lineage
 from game.playback_frame import sample_playback_frame
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from tests.game.persistent_spell_scenarios import persistent_spell_history
 from tests.game.player_helpers import player_history
 

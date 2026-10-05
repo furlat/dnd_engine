@@ -8,7 +8,7 @@ from devtools.animation_review.cases import SupportCase, TrueStrikeCase, load_ca
 from dnd.core.base_object import PASSIVE_EVENT_REPLAY, BaseObject
 from dnd.core.base_block import LightLevel
 from dnd.core.events import EventQueue, TakeDamageEvent
-from game.animation import sample_cast
+from game.animation import sample_cast, media_track_frame
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.combat import BoundCast
@@ -64,6 +64,22 @@ def test_support_replay_preserves_contact_lifetime_and_native_results(captured, 
             cast_count += 1
             group = bind_choreography(state, root, data, facings={str(caster): "NW"})
             assert not group.gaps, (program, role, group.gaps)
+            if root.root.fact.behavior_id == 'spell.shield_of_faith':
+                node, = group.nodes
+                assert isinstance(node.bound, BoundCast)
+                timeline = node.bound.timeline
+                application, = timeline.applications
+                assert timeline.release_ms < application.travel_end_ms
+                for track in timeline.recipe.media:
+                    begin = application.travel_end_ms + track.startOffsetMs
+                    assert begin == pytest.approx(0.), 'Shield formation begins with the cast.'
+                    assert media_track_frame(data, track, application.travel_end_ms - begin, timeline.facing) == 21
+                shield_cues = [cue for cue in group.conditions if cue.target_uuid == recipient
+                    and any(member.behavior_id == 'condition.spell.shield_of_faith'
+                            and member not in cue.before_membership for member in cue.after_membership)]
+                assert shield_cues
+                assert all(cue.start_ms == pytest.approx(node.start_ms + application.travel_end_ms)
+                           for cue in shield_cues), [(cue.start_ms, application.travel_end_ms) for cue in shield_cues]
             if healing:
                 node, = group.nodes
                 assert isinstance(node.bound, BoundCast)

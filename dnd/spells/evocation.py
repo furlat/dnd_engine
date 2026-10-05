@@ -2511,6 +2511,7 @@ class GuidingBoltMarked(BaseCondition):
     name: str = Field(default="Guiding Bolt", description="Display name for the guiding bolt marked condition.")
     description: str = Field(default="Next attack against this creature has advantage", description="Rules-facing summary for the guiding bolt marked condition.")
 
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     caster_uuid: Optional[UUID] = Field(default=None, description="Caster UUID used for ownership and effect attribution by guiding bolt marked.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
@@ -2624,6 +2625,7 @@ class GuidingBoltMarked(BaseCondition):
                     event_source_entity_uuid=caster_uuid,
                 )
             ],
+            runs_while_suppressed=True,
             event_processor=expire_on_caster_turn_end,
         )
 
@@ -4316,6 +4318,7 @@ class LightEffect(BaseCondition):
             bright_radius_feet=20,
             dim_radius_feet=20,
             anchor_uuid=target.uuid,
+            contribution_owner_uuid=self.uuid,
             parent_event=declaration_event.uuid,
         )
 
@@ -4423,6 +4426,7 @@ class Light(SpellAction):
 class ContinualFlameCondition(BaseCondition):
     """Permanent heatless light owned by the touched item."""
 
+    tags: Set[ConditionTag] = Field(default_factory=lambda: {ConditionTag.MAGICAL})
     name: str = "Continual Flame"
     description: str = "A permanent heatless flame sheds bright20/dim20 light while exposed."
     semantic_key: Optional[str] = "condition.spell.continual_flame"

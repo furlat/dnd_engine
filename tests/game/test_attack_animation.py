@@ -15,6 +15,7 @@ from dnd.core.events import DamageAppliedEvent, StepMovementEvent
 from dnd.core.life_types import LifeState
 from dnd.runtime_reset import reset_engine_runtime
 from game.animation import ActorContact, body_clip, view_facing
+from game.timing_evidence import validate_timing_evidence
 from game.animation_data import load_animation_data
 from game.animation_draw import actor_draw_commands, load_attack_media
 from game.animation_types import AnimationData
@@ -368,3 +369,26 @@ def test_real_shortbow_uses_original_release_delivery_join_and_retained_loadout(
     finally:
         reset_engine_runtime()
         random.setstate(random_state)
+
+
+@pytest.mark.parametrize('ranged', (False, True))
+def test_attack_dependency_contact_and_hp_match_visible_boundaries(data, ranged):
+    captured = attack_history('weapon.shortbow' if ranged else 'weapon.longsword', 17,
+        weapon_slot=WeaponSlot.RANGED_MAIN if ranged else WeaponSlot.MELEE_MAIN)
+    before, (root,) = player_history(captured)
+    bound = bind_attack(before, root, data)
+    assert bound is not None
+    timeline = bound.timeline
+    assert not validate_timing_evidence(timeline.timing_evidence)
+    anchors = {row.target.anchor: row for row in timeline.timing_evidence}
+    assert anchors['contact'].at_ms == timeline.contact_ms
+    assert anchors['hp'].at_ms == timeline.damage_timing.hp_ms
+    assert anchors['contact'].target.identity == root.root.uuid
+    assert ('release' in anchors) == ranged
+    if ranged:
+        assert anchors['release'].at_ms == timeline.release_ms
+        assert anchors['contact'].inputs[0].producer_index == anchors['release'].index
+    hp = anchors['hp'].at_ms
+    earlier = sample_attack(timeline, hp - .001)
+    current = sample_attack(timeline, hp)
+    assert earlier.vitals[0].hp > current.vitals[0].hp

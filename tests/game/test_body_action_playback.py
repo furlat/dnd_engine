@@ -18,7 +18,8 @@ from game.playback_frame import sample_playback_frame
 from game.player_facts import ActionFact, AttackFact, SpellFact
 from game.player_reduction import reduce_lineage, stage_lineage
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from tests.game.concealment_scenarios import concealment_history
 from tests.game.environment_scenarios import environment_history
 from tests.game.player_helpers import player_history
@@ -76,8 +77,10 @@ def test_utility_drafts_keep_their_selected_source_release_without_projectile(da
     for identity in ("spell.invisibility", "spell.greater_invisibility", "spell.see_invisibility", "spell.true_seeing"):
         draft = data.drafts[identity]
         assert draft.projectile is None and draft.area is None
-        assert (draft.cast.actionClip, draft.cast.bodyPlaybackSpeed, draft.cast.releaseFrame) == ("Special1", 1, 11)
-        assert draft.cast.effects == () and not draft.cast.recovery.enabled
+        clip = data.rigs[data.root_rig].clips[draft.cast.actionClip]
+        assert draft.cast.releaseFrame == next(anchor.frame for anchor in clip.anchors if anchor.name == 'release')
+        assert draft.cast.weaponGlow is not None and draft.cast.weaponGlow.enabled
+        assert not draft.cast.recovery.enabled
 
 
 def test_actual_self_cast_releases_condition_at_authored_frame_in_all_views(histories, data, graphics):
@@ -184,13 +187,15 @@ def test_reveal_feedback_uses_actual_reacquisition_contact(histories, data, grap
     assert len(group.nodes) == 1
     source_id = root.root.fact.source_entity_uuid if isinstance(root.root.fact, AttackFact) else None
     assert source_id is not None
-    staged = sample_choreography(group, 0).displayed
+    removal = next(condition for condition in group.conditions if condition.feedback_text == "−Invisible")
+    early = sample_choreography(group, removal.start_ms - .001).displayed
+    assert early.senses is not None and source_id not in early.senses.entities
+    staged = sample_choreography(group, removal.start_ms).displayed
     assert staged.senses is not None and staged.senses.entities[source_id].position == (9, 3)
     assert before.actors[source_id].last_visual_position == (7, 3)
     assert not staged.actors[source_id].conditions
-    removal = next(condition for condition in group.conditions if condition.feedback_text == "−Invisible")
     assert not sample_choreography(group, removal.start_ms).displayed.actors[source_id].conditions
-    visible = frame(before, root, data, 0, 0, graphics)
+    visible = frame(before, root, data, removal.start_ms, 0, graphics)
     body = next(command for command in visible.commands
                 if command[4][6] == "actor" and str(command[4][0]) == str(source_id))
     assert body[1].get_alpha() in (None, 255)

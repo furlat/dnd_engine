@@ -11,7 +11,7 @@ from game.environment_draw import environment_selection_command, pick_environmen
 from game.player_facts import PlayerObject
 
 from dnd.core.base_actions import AvailableActionInfo, AvailableActionsResult, AvailableTarget, TargetType
-from dnd.core.events import WorldTileState
+from dnd.types.event_facts import WorldTileState
 from game.projection import Camera, TILE_HEIGHT, TILE_WIDTH, pick_support, project_screen
 
 

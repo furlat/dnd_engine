@@ -1,0 +1,11 @@
+# Bounded persistent-appearance inspection
+
+Requested behavior: describe retained public appearance without generating application/removal events from membership. Boundary: `describe_persistent_appearance(PlayerState, AnimationData) -> tuple[str, ...]`. Input: current or remembered observer-permitted state plus existing authored catalog. Expected output: readable condition attachments, exposed item attachments, known field appearance and manifestation material facts; no new spell/gameplay behavior and no invented lifecycle occurrence.
+
+Implemented in `game/presentation_inspection.py`; parent owns integration into narrative UI/export. Existing `resolve_condition_appearance` owns condition composition, suppression and variant selection. The inspector describes eligible idle/life-state attachments, not a selected carousel frame or transition age. Unseen owners/items are marked Last known. Inventory-only attachments are excluded. Current manifestation palette/translucency is described; summon/despawn transition art is intentionally not inferred from that membership.
+
+Actual catalog limitation discovered while implementing: many projectile asset `displayName` fields equal their technical asset IDs (for example continual_flame hold front/back, silence sustain banks, grease hold). The inspector does not print those technical names. It uses the existing condition recipe/public condition label plus attachment when possible; unnamed fields get neutral maintained-field wording. Particle asset names and direct unknown art are not guessed. No metadata expansion or new registry was introduced.
+
+This is inspection, not exact current pixels: no transition age is supplied, and known field suppression may be partial. Consequently wording does not claim all the field currently draws, that an effect was just applied, or that a newly known actor was summoned. Finite lifecycle/delivery descriptions remain with the occurrence lane.
+
+Focused tests cover observer state input, condition suppression, remembered appearance, repeat inspection, manifestation without summon events, exposed item attachment suppression, and remembered fields without raw IDs. Independent ECS/anti-slop review is requested through the parent; this implementation note is not self-approval.

@@ -16,7 +16,8 @@ from game.condition_media_lifetime import ConditionMediaLifetime, sample_conditi
 from game.condition_sampling import sample_condition_media, _loop_samples
 from game.choreography_draw import load_choreography_media
 from game.playback_frame import sample_playback_frame
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.projection import Camera
 from game.choreography import bind_choreography
 from game.combat import BoundCast

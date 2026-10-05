@@ -1,0 +1,64 @@
+.................FF...............................................................
+=================================== FAILURES ===================================
+______________ test_manifest_shape_counts_ordering_and_authority _______________
+
+    def test_manifest_shape_counts_ordering_and_authority() -> None:
+        manifest = _manifest()
+        assert set(manifest) == REQUIRED_TOP_LEVEL_FIELDS
+        assert manifest["schema_version"] == 1
+        assert MANIFEST_PATH.read_bytes() == (
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+    
+        for section, expected_count in EXPECTED_SECTION_COUNTS.items():
+            assert len(manifest[section]) == expected_count
+        assert len(manifest["binding_reconciliation"]["artifact_pairs"]) == 8
+        assert len(manifest["binding_reconciliation"]["rows"]) == 121
+    
+        authority = manifest["authority"]
+        for plan_key in ("governing_plan", "implementation_plan"):
+            plan = authority[plan_key]
+>           assert _sha256((REPOSITORY_ROOT / plan["path"]).read_bytes()) == plan[
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                "sha256"
+            ]
+
+tests/architecture/test_content_recovery_cr0_evidence.py:895: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/tommaso/.local/share/uv/python/cpython-3.13.12-linux-x86_64-gnu/lib/python3.13/pathlib/_abc.py:625: in read_bytes
+    with self.open(mode='rb') as f:
+         ^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/mnt/c/users/tommaso/documents/dev/dnd_engine/DND_JULY_RECONSTRUCTION_CONTENT_RECOVERY_AUDIT_AND_MIGRATION_PLAN_2026-08-30.md')
+mode = 'rb', buffering = -1, encoding = None, errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/mnt/c/users/tommaso/documents/dev/dnd_engine/DND_JULY_RECONSTRUCTION_CONTENT_RECOVERY_AUDIT_AND_MIGRATION_PLAN_2026-08-30.md'
+
+/home/tommaso/.local/share/uv/python/cpython-3.13.12-linux-x86_64-gnu/lib/python3.13/pathlib/_local.py:537: FileNotFoundError
+_____________ test_current_and_accepted_artifact_hashes_are_exact ______________
+
+    def test_current_and_accepted_artifact_hashes_are_exact() -> None:
+        for row in _manifest()["source_artifacts"]:
+            payload = _artifact_bytes(row)
+>           assert _sha256(payload) == row["sha256"]
+E           AssertionError: assert 'a44f35467906...a19dff29f02c0' == '1b2dfb4c2693...b762b3f925375'
+E             
+E             - 1b2dfb4c26934ce539c6addf11bf7b9bfa77ccd9978ad551ccab762b3f925375
+E             + a44f3546790630206ee4cf1a703e7e3604a691957d270f6b2dca19dff29f02c0
+
+tests/architecture/test_content_recovery_cr0_evidence.py:963: AssertionError
+=========================== short test summary info ============================
+FAILED tests/architecture/test_content_recovery_cr0_evidence.py::test_manifest_shape_counts_ordering_and_authority
+FAILED tests/architecture/test_content_recovery_cr0_evidence.py::test_current_and_accepted_artifact_hashes_are_exact
+2 failed, 80 passed in 87.03s (0:01:27)

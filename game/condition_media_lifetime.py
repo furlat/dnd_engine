@@ -8,8 +8,9 @@ from dataclasses import dataclass, replace
 from typing import Mapping
 from types import MappingProxyType
 from uuid import UUID
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference, TimingAnchor, TimingReason
 
-from dnd.core.events import EventType, SpatialChangeType
+from dnd.types.event_facts import EventType, SpatialChangeType
 from dnd.core.creature_types import DamageType
 from dnd.types.actor import SpatialDisposition
 from game.animation_types import AnimationData, Facing8
@@ -43,6 +44,18 @@ class ConditionMediaLifetime:
     returned_ms: float | None = None
     returned_pose: ActorPose | None = None
     energy_type: DamageType | None = None
+    timing_evidence: tuple[TimingEvidence, ...] = ()
+
+
+def _timing(lifetime: ConditionMediaLifetime, anchor: TimingAnchor, at: float,
+            source: TimingReference, reason: TimingReason) -> tuple[TimingEvidence, ...]:
+    row = TimingEvidence(len(lifetime.timing_evidence),
+        TimingReference("condition", lifetime.owner_uuid, anchor), reason, "offset",
+        (TimingOperand(source, at),), at)
+    if any(previous.target == row.target and previous.reason == row.reason and previous.inputs == row.inputs
+            and previous.at_ms == row.at_ms for previous in lifetime.timing_evidence):
+        return lifetime.timing_evidence
+    return (*lifetime.timing_evidence, row)
 
 
 def extra_media_members(actor: PlayerActor) -> tuple[tuple[UUID, str], ...]:
@@ -121,6 +134,22 @@ def _state_edges(before: PlayerState, states: tuple[tuple[float, PlayerState], .
     return result
 
 
+def _fade_sources(lifetime: ConditionMediaLifetime, data: AnimationData) -> tuple[tuple[str, float], ...]:
+    recipe = data.condition_recipes[lifetime.behavior_id]
+    fade_sources = tuple((f"condition_media.{asset}.removal_duration", _removal_duration(data.condition_media[asset], data))
+        for asset in lifetime.removed_layers) + tuple(
+            (f"condition_recipes.{lifetime.behavior_id}.removal.effects[{index}]", effect.startOffsetMs + effect.durationMs)
+            for index, effect in enumerate(recipe.removal.effects)) + (
+        ("persistent.bodyDistortion.removal", recipe.removal.durationMs if recipe.persistent.bodyDistortion else 0.),
+        ("persistent.bodyRamp.removalMs", recipe.persistent.bodyRamp.removalMs if recipe.persistent.bodyRamp else 0.),
+        ("persistent.liveCopies.dissipateMs", recipe.persistent.liveCopies.dissipateMs if recipe.persistent.liveCopies else 0.)) + tuple(
+            (f"persistent.liveCopies.removalEffects[{index}]", effect.startOffsetMs + effect.durationMs)
+            for index, effect in enumerate(recipe.persistent.liveCopies.removalEffects if recipe.persistent.liveCopies else ()))
+    echo = recipe.persistent.absenceEcho
+    return (*fade_sources, ("persistent.absenceEcho.returnPortalMs", echo.returnPortalMs),
+        ("persistent.absenceEcho.clearMs", echo.clearMs)) if echo is not None else fade_sources
+
+
 def register_condition_lifetimes(
     retained: Mapping[UUID, ConditionMediaLifetime], before: PlayerState, data: AnimationData,
     *, absolute_start_ms: float, lineage: PlayerLineage | None = None,
@@ -140,19 +169,10 @@ def register_condition_lifetimes(
     result = {}
     for owner, lifetime in retained.items():
         recipe = data.condition_recipes[lifetime.behavior_id]
-        fade_ms = max((*(_removal_duration(data.condition_media[asset], data)
-                         for asset in lifetime.removed_layers),
-                       max((effect.startOffsetMs + effect.durationMs for effect in recipe.removal.effects), default=0.),
-                       recipe.removal.durationMs if recipe.persistent.bodyDistortion else 0.,
-                       recipe.persistent.bodyRamp.removalMs if recipe.persistent.bodyRamp else 0.,
-                       max(recipe.persistent.liveCopies.dissipateMs,
-                           max((effect.startOffsetMs + effect.durationMs
-                               for effect in recipe.persistent.liveCopies.removalEffects), default=0.))
-                           if recipe.persistent.liveCopies else 0.))
+        fade_sources = _fade_sources(lifetime, data)
+        fade_ms = max(value for _, value in fade_sources)
         responses = tuple(cue for cue in lifetime.responses if cue.end_ms > absolute_start_ms)
         echo = recipe.persistent.absenceEcho
-        if echo is not None:
-            fade_ms = max(fade_ms, echo.returnPortalMs, echo.clearMs)
         pending_return = (echo is not None and lifetime.returned_ms is None
             and lifetime.actor_uuid in before.actors
             and before.actors[lifetime.actor_uuid].spatial_disposition in
@@ -167,6 +187,7 @@ def register_condition_lifetimes(
         count = member.state.duplicate_count if member is not None and member.state is not None else None
         result.setdefault(owner, ConditionMediaLifetime(actor_id, owner, identity, initial_copy_count=count or 0,
             energy_type=energies.get(owner)))
+    application_events: dict[UUID, UUID] = {}
     applications = set()
     consumed = set()
     witnessed_entries = set()
@@ -175,14 +196,16 @@ def register_condition_lifetimes(
             if node.canceled:
                 continue
             fact = node.fact
-            if isinstance(fact, SpatialFact) and fact.change_type is SpatialChangeType.ENTITY_ENTERED:
+            if isinstance(fact, SpatialFact) and fact.change_type is SpatialChangeType.ENTITY_ENTERED and fact.entity_uuid is not None:
                 witnessed_entries.add(fact.entity_uuid)
             if isinstance(fact, ConditionChangeFact) and fact.consumed:
                 consumed.add(fact.condition.condition_uuid)
             if isinstance(fact, ConditionChangeFact) and fact.event_type is EventType.CONDITION_APPLICATION:
                 applications.add(fact.condition.condition_uuid)
+                application_events[fact.condition.condition_uuid] = node.uuid
             elif isinstance(fact, TemporaryHitPointsFact) and fact.grant is not None:
                 applications.add(fact.grant.instance_uuid)
+                application_events[fact.grant.instance_uuid] = node.uuid
     visits = tuple(walk_bound_timelines(choreography, motion))
     edges = [(at + visit.offset_ms, actor, owner, identity, added, layers)
              for visit in visits for at, actor, owner, identity, added, layers
@@ -202,9 +225,22 @@ def register_condition_lifetimes(
                     absolute if owner in applications else None,
                     activated_ms=overlapping.activated_ms if overlapping is not None else None,
                     energy_type=energies.get(owner))
+                value = result[owner]
+                if overlapping is not None:
+                    inherited_dates: tuple[tuple[TimingAnchor, float | None], ...] = (("applied", overlapping.applied_ms), ("activated", overlapping.activated_ms))
+                    for anchor, inherited in inherited_dates:
+                        if inherited is not None:
+                            value = replace(value, timing_evidence=_timing(value, anchor, inherited,
+                                TimingReference("condition", overlapping.owner_uuid, anchor), "lifetime_inheritance"))
+                elif owner in applications:
+                    value = replace(value, timing_evidence=_timing(value, "applied", absolute,
+                        TimingReference("event", application_events[owner], "admission"), "lifetime_application"))
+                result[owner] = value
         elif previous is not None and previous.removed_ms is None:
             result[owner] = replace(previous, removed_ms=absolute, removed_layers=layers,
-                consumed_ms=absolute if owner in consumed else previous.consumed_ms)
+                consumed_ms=absolute if owner in consumed else previous.consumed_ms,
+                timing_evidence=_timing(previous, "removed", absolute,
+                    TimingReference("condition", owner, "admission"), "lifetime_removal"))
     turns = ((at + visit.offset_ms, actor) for visit in visits
              if isinstance(visit.timeline, BoundChoreography) for at, actor in visit.timeline.turn_starts)
     for at, actor_id in turns:
@@ -214,7 +250,9 @@ def register_condition_lifetimes(
                     and (lifetime.applied_ms is None or lifetime.applied_ms <= absolute)
                     and (lifetime.removed_ms is None or lifetime.removed_ms > absolute)
                     and data.condition_recipes[lifetime.behavior_id].activation is not None):
-                result[owner] = replace(lifetime, activated_ms=absolute)
+                result[owner] = replace(lifetime, activated_ms=absolute,
+                    timing_evidence=_timing(lifetime, "activated", absolute,
+                        TimingReference("condition", owner, "admission"), "lifetime_activation"))
     conditions = ((row.start_ms + visit.offset_ms, row) for visit in visits
                   if isinstance(visit.timeline, BoundChoreography) for row in visit.timeline.conditions)
     for at, timeline in sorted(conditions, key=lambda row: row[0]):
@@ -263,7 +301,9 @@ def register_condition_lifetimes(
                             frame = sample_body_presentation(state,None,data,0,when,facings)
                             pose = next((row for row in frame.poses if row.body.actor_uuid == str(lifetime.actor_uuid)),None)
                             if pose is not None:
-                                lifetime = replace(lifetime,returned_ms=when,returned_pose=pose)
+                                lifetime = replace(lifetime,returned_ms=when,returned_pose=pose,
+                                    timing_evidence=_timing(lifetime, "returned", when,
+                                        TimingReference("condition", lifetime.owner_uuid, "admission"), "lifetime_return"))
                                 break
                         prior=state
                     if lifetime.returned_ms is not None:
@@ -294,6 +334,17 @@ def register_condition_lifetimes(
                     max(0., when - .001))[str(lifetime.actor_uuid)]
                 pose = condition_body_pose(data, sampled.body, sampled.actor.contact, prior)
         result[owner] = replace(lifetime, frozen_body=overlapping or pose)
+    for owner, lifetime in tuple(result.items()):
+        if lifetime.removed_ms is None:
+            continue
+        sources = _fade_sources(lifetime, data)
+        inputs = tuple(TimingOperand(TimingReference("condition", owner, "removed"), lifetime.removed_ms,
+            offset_ms=value, authored_field=field) for field, value in sources)
+        evidence = lifetime.timing_evidence
+        if not any(row.reason == "lifetime_retention" and row.inputs == inputs for row in evidence):
+            evidence = (*evidence, TimingEvidence(len(evidence), TimingReference("condition", owner, "fade_deadline"),
+                "lifetime_retention", "maximum", inputs, lifetime.removed_ms + max(value for _, value in sources)))
+            result[owner] = replace(lifetime, timing_evidence=evidence)
     return result
 
 

@@ -25,7 +25,8 @@ from game.assets import SurfaceCache, load_catalog
 from game.choreography import bind_choreography, bind_motion
 from game.choreography_draw import load_choreography_media
 from game.deposit_draw import deposit_draw_commands
-from game.deposit_media import observed_deposits, register_deposit_starts
+from game.deposit_media import DepositStart, observed_deposits, register_deposit_starts
+from game.timing_evidence import validate_timing_evidence
 from game.environment_art import load_environment_art
 from game.maintained_media import maintained_media_frame
 from game.player_facts import ObjectDestroyedFact
@@ -34,7 +35,8 @@ from game.playback_frame import sample_playback_frame
 from game.presentation import capture_interval, reduce_interval
 from game.projection import Camera, HEIGHT_STEP_PIXELS
 from game.replay import ObserverCapture, capture_history
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from tests.game.door_destruction_scenarios import attack_item, review_actor
 from tests.game.liquid_barrel_scenarios import liquid_barrel_history
 from tests.game.test_environment_presentation import _saved
@@ -96,7 +98,11 @@ def test_saved_break_starts_at_authored_release_then_enters_sustain_without_rese
     starts = register_deposit_starts({}, before, data, absolute_start_ms=origin_ms,
         lineage=root, choreography=group)
     start = origin_ms + transition.start_ms + 500
-    assert starts == {deposit.source.deposit_uuid: start}
+    assert {owner: row.at_ms for owner, row in starts.items()} == {deposit.source.deposit_uuid: start}
+    evidence = starts[deposit.source.deposit_uuid].timing_evidence
+    assert not validate_timing_evidence(evidence)
+    assert evidence[0].inputs[0].reference.identity == broken.fact.object_uuid
+    assert evidence[0].inputs[0].offset_ms == 500
     binding = water_binding(data, deposit.source)
     for layer in binding.layers:
         assert layer.applicationAssetId is not None
@@ -224,7 +230,7 @@ def test_real_partial_transform_and_removal_drop_only_current_water_pieces(data)
         assert state.senses is not None
         ice, = state.senses.spatial_effects.values()
         assert ice.name == "Ice Surface" and ice.deposit_source == witnessed[0].source
-        assert register_deposit_starts({witnessed[0].source.deposit_uuid: 500}, state, data, absolute_start_ms=8000) == {}
+        assert register_deposit_starts({witnessed[0].source.deposit_uuid: DepositStart(500)}, state, data, absolute_start_ms=8000) == {}
 
 
 def test_native_injury_contribution_survives_later_barrel_deposit_in_public_bytes():
@@ -249,7 +255,7 @@ def test_registered_water_draws_only_retained_native_pieces_and_seeks_stably(ras
     deposit, = observed_deposits(after, data)
     starts = register_deposit_starts({}, before, data, absolute_start_ms=0,
         lineage=root, choreography=group)
-    start = starts[deposit.source.deposit_uuid]
+    start = starts[deposit.source.deposit_uuid].at_ms
     camera = Camera(quadrant=quadrant, viewport=(600, 450)).with_focus((5, 4))
     assert deposit_draw_commands(after, (deposit,), starts, data, start - .01, camera) == ()
     first = deposit_draw_commands(after, (deposit,), starts, data, start + 6500, camera)
@@ -307,7 +313,7 @@ def test_historical_frame_uses_release_date_without_holding_later_gameplay(raste
     starts = register_deposit_starts({}, before, data, absolute_start_ms=origin_ms,
         lineage=root, choreography=group)
     deposit, = observed_deposits(after, data)
-    release_ms = starts[deposit.source.deposit_uuid] - origin_ms
+    release_ms = starts[deposit.source.deposit_uuid].at_ms - origin_ms
     rows = {}
     body_media = load_scene_media((*scene_actors(before, data, {}), *scene_actors(after, data, {})),
                                   data, body_rows=rows)
@@ -345,7 +351,7 @@ def test_real_raised_water_keeps_floor_and_air_registration_after_wreck_retireme
         assert wreck.item.remnant_state is not None
         starts = register_deposit_starts({}, before, data, absolute_start_ms=1200,
             lineage=root, choreography=group)
-        start = starts[deposit.source.deposit_uuid]
+        start = starts[deposit.source.deposit_uuid].at_ms
 
         cold, roots = _saved(history.views[f"{role}-cold"])
         assert not roots and not cold.objects
@@ -408,7 +414,7 @@ def test_all_authored_liquid_materials_replay_one_native_spill_in_both_views_and
 
         starts = register_deposit_starts({}, before, data, absolute_start_ms=1200,
             lineage=root, choreography=group)
-        start = starts[deposit.source.deposit_uuid]
+        start = starts[deposit.source.deposit_uuid].at_ms
         transition, = [row for row in group.world_transitions if row.destruction is not None]
         assert transition.destruction is not None and transition.destruction.bank_id is not None
         bank = load_environment_art().banks[transition.destruction.bank_id]

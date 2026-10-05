@@ -92,7 +92,9 @@ def test_native_mixed_saves_and_real_eight_heading_pixels(data, direction):
             witnessed = True
             appearance = resolve_condition_appearance(actors['Recipient'].conditions,
                 data.condition_recipes,data.condition_media)
-            assert len(appearance.layers) == 2 and not appearance.unsupported
+            assert not appearance.unsupported
+            assert len([layer for layer in appearance.layers if not layer.layer.markerGroup]) == 2
+            assert [layer.layer.markerGroup for layer in appearance.layers if layer.layer.markerGroup] == ['frightened']
             assert all(c.behavior_id not in ('condition.frightened','condition.spell.fear')
                 for c in actors['Second'].conditions)
     assert witnessed

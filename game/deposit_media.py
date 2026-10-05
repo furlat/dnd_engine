@@ -7,12 +7,19 @@ retains only presentation dates; it never reconstructs a pool from live state.
 from dataclasses import dataclass
 from typing import Mapping
 from uuid import UUID
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference
 
 from dnd.types.material_deposits import MaterialDepositSource
 from game.animation_types import AnimationData
 from game.choreography import BoundChoreography, MotionTimeline
 from game.environment_art import load_environment_art
 from game.player_facts import ObjectDestroyedFact, PlayerLineage, PlayerState
+
+
+@dataclass(frozen=True, slots=True)
+class DepositStart:
+    at_ms: float
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,10 +52,10 @@ def observed_deposits(state: PlayerState, data: AnimationData) -> tuple[Observed
 
 
 def register_deposit_starts(
-    retained: Mapping[UUID, float], before: PlayerState, data: AnimationData, *,
+    retained: Mapping[UUID, DepositStart], before: PlayerState, data: AnimationData, *,
     absolute_start_ms: float, lineage: PlayerLineage | None = None,
     choreography: BoundChoreography | None = None, motion: MotionTimeline | None = None,
-) -> dict[UUID, float]:
+) -> dict[UUID, DepositStart]:
     """Only a witnessed native break starts an intro; cold material sustains."""
     owners = {row.source.deposit_uuid for row in observed_deposits(before, data)}
     result = {identity: start for identity, start in retained.items() if identity in owners}
@@ -66,5 +73,11 @@ def register_deposit_starts(
             continue
         bank = environment.banks[contact.bank_id]
         if bank.release_frame is not None:
-            result.setdefault(identity, absolute_start_ms + transition.start_ms + bank.frame_times_ms[bank.release_frame])
+            at = absolute_start_ms + transition.start_ms + bank.frame_times_ms[bank.release_frame]
+            result.setdefault(identity, DepositStart(at, (TimingEvidence(0,
+                TimingReference("deposit", identity, "applied"), "lifetime_application", "offset",
+                (TimingOperand(TimingReference("object", transition.identity, "destroyed"),
+                    absolute_start_ms + transition.start_ms,
+                    offset_ms=bank.frame_times_ms[bank.release_frame],
+                    authored_field=f"environment.banks.{contact.bank_id}.frame_times_ms[{bank.release_frame}]"),), at),)))
     return result

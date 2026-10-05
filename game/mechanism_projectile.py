@@ -1,19 +1,15 @@
 """A recorded mechanism's directional sprite on the ordinary world painter."""
 
 from dataclasses import dataclass
-from functools import lru_cache
-from math import atan2, cos, degrees, floor, hypot, pi, sin
+from math import atan2, floor, hypot, pi
 from typing import Annotated
 from uuid import UUID
 
-import pygame
 from pydantic import Field
 
 from game.animation import ActorContact, body_elevation_steps, body_rig, rest_pose_offset
 from game.animation_types import AnimationData, MechanismProjectileArt
-from game.asset_types import AssetSpec
-from game.draw_commands import DrawCommand
-from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_WIDTH, inverse_plane, painter_key, project_screen
+from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_WIDTH, inverse_plane, project_screen
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,25 +101,3 @@ def sample_mechanism_projectile(cue: MechanismProjectileCue, elapsed_ms: float,
     height = start_height + (end_height - start_height) * progress
     return MechanismProjectileSample(cue.art.frames_by_pose[camera_pose][column], anchor, rotation,
         inverse_plane(anchor, camera, elevation_steps=height), height, progress)
-
-
-@lru_cache(maxsize=128)
-def _rotated(image: pygame.Surface, rotation: float) -> pygame.Surface:
-    return pygame.transform.rotate(image, -degrees(rotation)) if rotation else image
-
-
-def mechanism_projectile_draw_command(cue: MechanismProjectileCue, sample: MechanismProjectileSample,
-                                      image: pygame.Surface, spec: AssetSpec, camera: Camera) -> DrawCommand:
-    """Use the existing cached surface and preserve its authored center when rotating."""
-    factor = spec.scale * camera.zoom
-    dx = image.width / 2 - spec.pivot[0] * factor
-    dy = image.height / 2 - spec.pivot[1] * factor
-    x = sample.anchor[0] + dx * cos(sample.rotation) - dy * sin(sample.rotation)
-    y = sample.anchor[1] + dx * sin(sample.rotation) + dy * cos(sample.rotation)
-    image = _rotated(image, sample.rotation)
-    return DrawCommand(painter_key(sample.grid, elevation_steps=sample.elevation_steps,
-        quadrant=camera.quadrant, role="projectile", identity=str(cue.event_uuid)),
-        image, (round(x - image.width / 2), round(y - image.height / 2)), 0,
-        (cue.event_uuid, sample.grid, sample.asset_id, "current", None, "authored",
-         "mechanism_projectile", sample.elevation_steps,
-         str(cue.mechanism_uuid) if cue.mechanism_uuid is not None else None, sample.progress))

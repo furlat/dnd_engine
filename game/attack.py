@@ -10,6 +10,7 @@ from types import MappingProxyType
 from typing import Mapping
 from uuid import UUID
 
+from game.timing_evidence import (TimingEvidence, TimingOperand, TimingReference, TimingMeasurement, record_timing)
 from dnd.core.dice import AttackOutcome
 from dnd.core.equipment_types import WeaponSlot
 from dnd.core.life_types import LifeState
@@ -26,7 +27,7 @@ from game.animation_data import resolve_player_layers
 from game.animation_rates import action_playback_rate
 from game.animation_types import (
     ActionFeedback, ActionProjectile, AnimationData, AttackRecipe, AttackVariant, ChildAttackPresentation, ElementColors, Facing8,
-    LayerColors, RigLayer, StudioActorLayer, StudioDamage, WeaponTrailPose, WeaponTrailPresentation,
+    LayerColors, PaletteTreatment, RigLayer, StudioActorLayer, StudioDamage, WeaponTrailPose, WeaponTrailPresentation,
 )
 from game.combat import actor_contact, object_contact
 from game.player_facts import AttackFact, DamageResultFact, ObjectDamageFact, LifeFact, PlayerLineage, PlayerNode, PlayerState
@@ -118,6 +119,7 @@ class AttackTimeline:
     weapon_pose: WeaponTrailPose | None = None
     contact_scale: float = 1
     show_contact: bool = False
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,10 +210,13 @@ def _attack_layers(data: AnimationData, source: ActorContact, profile: AttackVar
             missing.append(f"{source.rig_id}/{profile.actor.clip}/{slot}/{layer.category}")
             continue
         tint = layer.tint if isinstance(layer.tint, int) else tokens[layer.tint]
+        palette = ((colors.tertiary, tint, colors.secondary)
+                   if isinstance(layer.tint, str) and layer.tint.startswith("$element") else (tint,))
         layers.append(StudioActorLayer(
             id=f"attack.{slot}", slot="slash", enabled=True, hidden=False,
             category=layer.category,
-            colors=LayerColors(source="override", primary=tint, mode="tint"),
+            colors=LayerColors(source="override", primary=tint, mode="paletteSwap"),
+            palette=PaletteTreatment(colors=palette),
         ))
     return tuple(layers), tuple(missing)
 
@@ -370,6 +375,12 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
     if frame is None or frame >= clip.frames:
         return None
     release = contact = frame * 1000 / (clip.fps * profile.actor.playbackSpeed)
+    evidence: list[TimingEvidence] = []
+    contact_evidence = record_timing(evidence, TimingReference('attack', root_node.uuid,
+        'release' if profile.projectile is not None else 'contact'), 'body_release',
+        (TimingOperand(TimingReference('attack', root_node.uuid, 'start'), 0., offset_ms=release,
+            authored_field=f'attack_profiles.{profile.id}.anchors', measurements=(TimingMeasurement('anchor.frame', frame),
+                TimingMeasurement('body.fps', clip.fps), TimingMeasurement('actor.playbackSpeed', profile.actor.playbackSpeed))),), release)
     body_end = body_duration(clip, profile.actor.playbackSpeed)
     projectile = None
     if profile.projectile is not None:
@@ -381,7 +392,15 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
                         hypot(planar, height) * 1000 / profile.projectile.speedPxPerSecond)
                     if hypot(planar, height) >= 1 else 0)
         interception = _received_interception(root, before, data, source.grid, target.grid)
-        contact += duration * (interception.fraction if interception is not None else 1)
+        travel_ms = duration * (interception.fraction if interception is not None else 1)
+        contact += travel_ms
+        contact_evidence = record_timing(evidence, replace(contact_evidence.reference, anchor='contact'), 'contact',
+            (replace(contact_evidence, offset_ms=travel_ms,
+                authored_field=f'attack_profiles.{profile.id}.projectile', measurements=(
+                    TimingMeasurement('distance.pixels', hypot(planar, height)),
+                    TimingMeasurement('projectile.minimumTravelDurationMs', profile.projectile.minimumTravelDurationMs),
+                    TimingMeasurement('projectile.speedPxPerSecond', profile.projectile.speedPxPerSecond),
+                    TimingMeasurement('interception.fraction', interception.fraction if interception is not None else 1))),), contact)
         projectile = AttackProjectileTimeline(profile.projectile, release, contact, first, last, _attack_colors(data, root), interception)
     index = causal_index if causal_index is not None else index_player_lineage(lineage)
     reference = root_node.resolution_ref
@@ -401,7 +420,7 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
     damage = (resolve_damage(data, damage_type.value if damage_type is not None else None,
                              critical=root.attack_outcome is AttackOutcome.CRIT)
               if fact is not None or object_damage is not None else None)
-    timing = compile_damage(data, target, damage, contact, life) if damage is not None and isinstance(target, ActorContact) else None
+    timing = compile_damage(data, target, damage, contact, life, timing_evidence=evidence, contact_evidence=contact_evidence) if damage is not None and isinstance(target, ActorContact) else None
     layers, missing = _attack_layers(data, source, profile, root)
     appearances = {source.actor_uuid: resolve_player_layers(data, source_actor, rig_id=source.rig_id,
                                                             active_weapon_set=root.weapon_set)}
@@ -466,6 +485,7 @@ def bind_attack(before: PlayerState, lineage: PlayerLineage, data: AnimationData
         release_ms=release if projectile is not None else None,
         weapon_trail=weapon_trail, weapon_pose=weapon_pose, show_contact=show_contact,
         contact_scale=1.2 if root.attack_outcome is AttackOutcome.CRIT else 1,
+        timing_evidence=tuple(evidence),
     )
     return BoundAttack(timeline, reduce_lineage(before, lineage), MappingProxyType(appearances),
                        frozenset(identity for identity, _ in changes) if timing is not None else frozenset())

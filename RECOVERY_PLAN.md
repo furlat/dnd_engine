@@ -27,6 +27,46 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**October 5 — narrative feature removed by user decision.**
+Keep only the existing projected combat log. The separate narrative formatter,
+inspection/prose layer, transcript CLI/schema, trace entries and F4 text modes
+have been removed. Original encounter log display is restored. Shared graphical
+binding, timing/evidence, catalog exports and renderer fixes remain. The prior
+implementation report and narrative screenshots describe historical work, not a
+current feature or an invitation to resume narrative development. Removal received
+independent source approval; 20 affected checks and the 9-case recorder test pass,
+with clean game/review-tool typing.
+
+**October 5 — shared presentation implementation complete and reviewed.**
+The [final implementation report](agent_docs/audits/SHARED_PRESENTATION_IMPLEMENTATION_2026-10-05.md)
+records shared graphics/narrative binding, exact evidence and timing annotations,
+portable catalog/schema export, headless replay and Scene/Split/Narrative UI.
+All 3,653 game tests were covered across the recorded prefix/partitions; all
+25 discovered failures are fixed with complete affected-file reruns. The
+3,137-test engine/architecture/AI/progression/packaging run's single schema/import
+failure is closed by the 83-test architecture rerun. Typing is clean; 300 current
+headless packets round-trip; both independent final reviews approve the source.
+The report separates sampled visual evidence from full regression coverage and
+states the portable-data/functional-operator boundary. Earlier incomplete
+checkpoints below are superseded by that report.
+
+**October 5 — full presentation coverage and revised plan reviewed.**
+The [full coverage audit](agent_docs/audits/FULL_PRESENTATION_COVERAGE_2026-10-05.md)
+expands the source denominator beyond spells to actions, attacks, movement,
+reactions, combat, world/tile state and spatial outputs. The
+[rewritten plan](agent_docs/SHARED_PRESENTATION_AND_TEXT_RENDERER_PLAN_2026-10-05.md)
+received independent anti-slop and ECS plan/scope approvals. All 53 catalog fields,
+1,367 content rows, 126 top-level game modules and 873 declared cases are indexed.
+Concrete schema-fit, timing/disclosure and visual acceptance remain separate gates;
+no renderer migration or production edits were performed for this planning task.
+
+**October 5 — bounded condition/material corrections.**
+The [scoped acceptance report](agent_docs/audits/CONDITION_MATERIAL_FIXES_ACCEPTANCE_2026-10-05.md)
+records suppression ownership/deadline fixes and item/body material composition,
+130 focused passing checks, clean scoped typing and independent ECS/anti-slop
+reviews. General `/game` restructuring, schema exports and AI changes are deferred
+by the user pending broader discussion.
+
 **October 5 — spell presentation repair implementation and targeted evidence.**
 The [repair report](agent_docs/audits/SPELL_PRESENTATION_REPAIR_ACCEPTANCE_2026-10-05.md)
 records the shared projection, authoring, palette, condition and formation/clearance

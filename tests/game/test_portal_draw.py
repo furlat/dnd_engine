@@ -13,7 +13,8 @@ from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.portal_draw import clip_portal_bodies
 from game.projection import Camera, project_screen
-from game.scene import load_scene_media, scene_actors, scene_draw_commands
+from game.scene import load_scene_media, scene_draw_commands
+from game.scene_actors import scene_actors
 from tests.game.portal_scenarios import portal_history
 
 

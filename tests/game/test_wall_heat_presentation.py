@@ -14,7 +14,7 @@ from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, project_screen
 from game.spatial_contact_media import bind_damage_sweep
-from game.stationary_media import stationary_media_draw_commands
+from game.stationary_draw import stationary_media_draw_commands
 from game.wall_media import wall_media_draw_commands
 from tests.game.wall_spell_scenarios import wall_spell_history
 

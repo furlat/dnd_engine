@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import TypeAdapter
 
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.events import EventType
+from dnd.types.event_facts import EventType
 from game.animation_types import AnimationData
 from game.body_action import ACCEPTED_SOURCE_STRIP_RECIPES, body_action_limitations, body_cast_limitations
 from game.choreography import BoundChoreography, FACT_PRESENTATION, MotionTimeline

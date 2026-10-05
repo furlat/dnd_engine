@@ -1,0 +1,9 @@
+exported_roots 16
+ConditionMediaDocument ABSENT
+ConditionMediaSource ABSENT
+ProjectileStorage ABSENT
+AuthoredProjectileAsset ABSENT
+ContentActionRecipe ABSENT
+MovementPresentation ABSENT
+InterruptionPresentation ABSENT
+AttackProfileFile ABSENT

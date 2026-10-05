@@ -19,7 +19,8 @@ from game.playback_frame import sample_playback_frame
 from game.player_facts import ActionFact, MovementFact, SpatialEffectStateFact
 from game.player_reduction import reduce_lineage, stage_lineage
 from game.projection import Camera, camera_pose
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.world_animation import sample_world_transitions, world_transitions
 from tests.game.player_helpers import player_history
 from tests.game.test_trap_player_replay import recorded_traps as recorded_traps

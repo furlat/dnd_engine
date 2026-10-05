@@ -22,7 +22,8 @@ from game.playback_frame import sample_playback_frame
 from game.player_reduction import reduce_lineage
 from tests.game.player_helpers import player_history
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.visual_position import VisualPosition, placed_contact
 from tests.game.scenarios import attack_history, movement_with_paralysis
 

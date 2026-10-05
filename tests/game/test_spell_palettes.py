@@ -9,7 +9,7 @@ import pytest
 
 from game.animation import ActorContact, BodySample, CastApplication, CastInput, GroundContact, compile_cast, resolve_cast_recipe, sample_cast
 from game.animation_data import load_animation_data
-from game.animation_draw import actor_draw_commands, load_actor_media, load_cast_rows
+from game.animation_draw import actor_draw_commands, load_actor_media, load_cast_rows, load_animation_media
 from game.animation_types import ElementColors, LayerColors, PaletteTreatment, RigLayer
 from game.body_action import bind_body_action
 from game.player_facts import SpellFact
@@ -317,3 +317,46 @@ def test_every_enabled_spell_cast_has_visible_magic_hands(data):
                 palette = draft.elementColors
                 expected = colors(PaletteTreatment(colors=(palette.tertiary, palette.primary, palette.secondary)))
                 assert visible_colors(image) <= expected
+
+
+def test_explicit_unbaked_overlay_uses_exact_palette_and_cache_separates_treatment(data):
+    """An explicit overlay must not multiply or hue-rotate its original colors."""
+    draft = data.drafts['spell.fire_bolt']
+    original = draft.cast.weaponGlow
+    assert original is not None
+    contact = ActorContact('caster', (0, 0), 'E', .5)
+    palettes = ((0x180829, 0x9848D8, 0xF0D8FF), (0x062A30, 0x18C8A8, 0xC8FFF0))
+    rows = {}
+    for palette in palettes:
+        layer = original.model_copy(update={'sourceSheet': None, 'palette': None,
+            'colors': LayerColors(source='override', primary=palette[1],
+                secondary=palette[2], tertiary=palette[0], mode='paletteSwap')})
+        previous = set(rows)
+        load_cast_rows(data, contact, draft.cast.actionClip, contact.facing, (layer,), rows)
+        added = set(rows) - previous
+        assert len(added) == 4
+        expected = {((value >> 16) & 255, (value >> 8) & 255, value & 255) for value in palette}
+        for key in added:
+            assert visible_colors(rows[key]) <= expected
+            assert visible_colors(rows[key])
+
+
+def test_full_cast_loader_accepts_explicit_effect_palette_without_hue_policy(data):
+    original = data.drafts['spell.fire_bolt']
+    assert original.cast.weaponGlow is not None
+    layer = original.cast.weaponGlow.model_copy(update={'category': 'Effect4', 'slot': 'aura',
+        'sourceSheet': None, 'palette': None,
+        'colors': LayerColors(source='override', primary=0x9848D8,
+            secondary=0xF0D8FF, tertiary=0x180829, mode='paletteSwap')})
+    draft = original.model_copy(update={'cast': original.cast.model_copy(update={
+        'weaponGlow': None, 'aura': layer, 'effects': ()})})
+    selected = replace(data, drafts={**data.drafts, 'spell.fire_bolt': draft})
+    caster = ActorContact('caster', (0, 0), 'E', .5)
+    target = ActorContact('target', (4, 0), 'W', .5)
+    timeline = compile_cast(selected, 'spell.fire_bolt', CastInput('explicit-aura', caster,
+        (CastApplication('hit', target, True, 3, 17),)))
+    media = load_animation_media(timeline, {'caster': MODULAR, 'target': MODULAR})
+    overlays = [image for key, image in media.body_rows.items() if key[2].startswith('cast:Effect4:')]
+    assert len(overlays) == 4
+    expected = {(0x18, 0x08, 0x29), (0x98, 0x48, 0xD8), (0xF0, 0xD8, 0xFF)}
+    assert all(visible_colors(image) and visible_colors(image) <= expected for image in overlays)

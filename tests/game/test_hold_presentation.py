@@ -60,8 +60,9 @@ def test_native_hold_clear_and_save_keep_separate_paralysis_facts(data, program,
                 assert not appearance.unsupported
                 assert appearance.frozen_pose is not None and appearance.frozen_pose.framesByRig['neuroclient.modular'] == 3
                 assert appearance.body_outline is not None
-                assert len(appearance.layers) == 2
-                assert {layer.media.asset_id for layer in appearance.layers} == {
+                assert [layer.layer.markerGroup for layer in appearance.layers if layer.layer.markerGroup] == ['paralyzed']
+                assert len([layer for layer in appearance.layers if not layer.layer.markerGroup]) == 2
+                assert {layer.media.asset_id for layer in appearance.layers if not layer.layer.markerGroup} == {
                     'control.hold_human.hold.back', 'control.hold_human.hold.front'}
                 witnessed = True
         assert witnessed_cast
@@ -83,18 +84,21 @@ def test_quiet_hold_never_replays_bind_and_release_preserves_the_original_clock(
     paused = fact('condition.paralyzed', paralysis)
     independent = fact('condition.paralyzed', other)
     appearance = resolve_condition_appearance((held, paused, independent), data.condition_recipes, data.condition_media)
-    assert len(appearance.layers) == 2
+    assert len([layer for layer in appearance.layers if not layer.layer.markerGroup]) == 2
+    assert [layer.layer.markerGroup for layer in appearance.layers if layer.layer.markerGroup] == ['paralyzed']
     record = ConditionMediaLifetime(actor, hold, 'condition.spell.hold_person', applied_ms=None)
     samples = sample_condition_lifetimes({str(actor): appearance}, {hold: record}, data, 8000)[str(actor)]
     assert all(sample.asset_id.endswith('.hold.' + side) and sample.frame == 0
-        for layer, side in zip(samples.layers, ('back', 'front')) for sample in sample_condition_media(data, layer))
+        for layer, side in zip((layer for layer in samples.layers if not layer.layer.markerGroup), ('back', 'front'), strict=True) for sample in sample_condition_media(data, layer))
     survived = resolve_condition_appearance((independent,), data.condition_recipes, data.condition_media)
     removed = replace(record, removed_ms=8000,
-        removed_layers=tuple(layer.layer.assetId for layer in samples.layers))
+        removed_layers=tuple(layer.layer.assetId for layer in samples.layers if layer.owner_uuid == hold))
     at = sample_condition_lifetimes({str(actor): survived}, {hold: removed}, data, 8075)[str(actor)]
     assert at.body_outline is not None and at.frozen_pose is not None
-    assert len(at.layers) == 2
-    for layer in at.layers:
+    chains = tuple(layer for layer in at.layers if not layer.layer.markerGroup)
+    assert len(chains) == 2
+    assert [layer.layer.markerGroup for layer in at.layers if layer.layer.markerGroup] == ['paralyzed']
+    for layer in chains:
         banks = sample_condition_media(data, layer)
         assert len(banks) == 2 and [bank.alpha for bank in banks] == [.5, .5]
         assert '.hold.' in banks[0].asset_id and '.release.' in banks[1].asset_id
@@ -102,4 +106,6 @@ def test_quiet_hold_never_replays_bind_and_release_preserves_the_original_clock(
     pose = condition_body_pose(data, BodySample(str(actor), 'Idle', 12, 'E'), contact, at)
     assert pose.frame == 3 and pose.clip == 'Idle'
     final = sample_condition_lifetimes({str(actor): survived}, {hold: removed}, data, 11000)[str(actor)]
-    assert not final.layers and final.body_outline is not None and final.frozen_pose is not None
+    assert not any(not layer.layer.markerGroup for layer in final.layers)
+    assert [layer.layer.markerGroup for layer in final.layers] == ['paralyzed']
+    assert final.body_outline is not None and final.frozen_pose is not None

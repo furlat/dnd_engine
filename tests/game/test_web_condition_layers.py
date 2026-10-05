@@ -13,16 +13,25 @@ from game.animation_draw import actor_draw_commands, load_actor_media
 from game.asset_types import AssetSpec
 from game.choreography import bind_choreography
 from game.choreography_draw import load_choreography_media
-from game.condition_animation import resolve_condition_appearance
+from game.condition_animation import ConditionAppearance, resolve_condition_appearance
 from game.condition_draw import compose_condition_layers, load_condition_layers
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer
 from game.playback_frame import sample_playback_frame
 from game.player_facts import ActionFact, SpellFact
 from game.player_reduction import reduce_lineage
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from tests.game.player_helpers import player_history
 from tests.game.web_scenarios import web_history
+
+
+def assert_web_wrap_and_marker(appearance: ConditionAppearance):
+    body_layers = [layer for layer in appearance.layers if not layer.layer.markerGroup]
+    assert len(body_layers) == 2
+    assert {layer.layer.assetId for layer in body_layers} == {"web_bound_back", "web_bound_front"}
+    assert [layer.layer.markerGroup for layer in appearance.layers if layer.layer.markerGroup] == ["restrained"]
+    assert not appearance.unsupported
 
 
 @pytest.fixture(scope="module")
@@ -60,7 +69,7 @@ def test_saved_web_wrap_contact_save_escape_cleanup_and_seek(rendering, captured
         assert not second_appearance.layers, "Passing the save while inside the same field must not wrap the body"
         if isinstance(root.root.fact, SpellFact) and root.root.fact.behavior_id == "spell.web":
             wrapped_seen = True
-            assert len(target_appearance.layers) == 2 and not target_appearance.unsupported
+            assert_web_wrap_and_marker(target_appearance)
             contact = next(row.start_ms for row in group.conditions
                 if row.target_uuid == target.uuid and row.after_appearance.layers and not row.before_appearance.layers)
             for quadrant in range(4):
@@ -77,7 +86,8 @@ def test_saved_web_wrap_contact_save_escape_cleanup_and_seek(rendering, captured
                 early, current = sample(contact - .001), sample(contact)
                 early_target = next(actor for actor in early.actors if actor.contact.actor_uuid == str(target.uuid))
                 current_target = next(actor for actor in current.actors if actor.contact.actor_uuid == str(target.uuid))
-                assert not early_target.condition.layers and len(current_target.condition.layers) == 2
+                assert not early_target.condition.layers
+                assert_web_wrap_and_marker(current_target.condition)
                 assert pygame.image.tobytes(body(current).surface, "RGBA") != pygame.image.tobytes(body(early).surface, "RGBA")
                 assert pygame.image.tobytes(body(sample(contact - .001)).surface, "RGBA") == pygame.image.tobytes(body(early).surface, "RGBA")
         if isinstance(root.root.fact, ActionFact) and root.root.fact.name == "Escape Web":
@@ -155,8 +165,8 @@ def test_source_membership_deduplicates_wraps_and_other_restraints_do_not_select
     def appearance(members):
         return resolve_condition_appearance(members, data.condition_recipes, data.condition_media)
 
-    assert len(appearance((generic, web, second_source)).layers) == 2
-    assert len(appearance((generic, second_source)).layers) == 2
+    assert_web_wrap_and_marker(appearance((generic, web, second_source)))
+    assert_web_wrap_and_marker(appearance((generic, second_source)))
     assert [layer.layer.assetId for layer in appearance((generic,)).layers] == ["control.restrained.mark"]
     assert web.behavior_id is not None
     recipe = data.condition_recipes[web.behavior_id]

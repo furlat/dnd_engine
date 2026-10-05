@@ -8,7 +8,7 @@ import pygame
 
 from game.animation import view_facing
 from game.animation_types import AnimationData
-from game.deposit_media import ObservedMaterialDeposit
+from game.deposit_media import DepositStart, ObservedMaterialDeposit
 from game.draw_commands import DrawCommand
 from game.maintained_media import maintained_media_frame
 from game.player_facts import PlayerState
@@ -18,7 +18,7 @@ from game.spatial_field import field_cell
 
 
 def deposit_draw_commands(state: PlayerState, deposits: tuple[ObservedMaterialDeposit, ...],
-                          starts: Mapping[UUID, float], data: AnimationData,
+                          starts: Mapping[UUID, DepositStart], data: AnimationData,
                           presentation_ms: float, camera: Camera) -> tuple[DrawCommand, ...]:
     senses = state.senses
     if senses is None:
@@ -41,7 +41,8 @@ def deposit_draw_commands(state: PlayerState, deposits: tuple[ObservedMaterialDe
         origin_key = painter_key(source.origin, elevation_steps=height, quadrant=camera.quadrant,
                                 role="actor", identity=str(source.deposit_uuid))
         for layer_index, layer in enumerate(binding.layers):
-            selected = maintained_media_frame(data, binding, layer, presentation_ms, starts.get(source.deposit_uuid))
+            selected = maintained_media_frame(data, binding, layer, presentation_ms,
+                starts[source.deposit_uuid].at_ms if source.deposit_uuid in starts else None)
             if selected is None:
                 continue
             asset_id, frame = selected

@@ -22,7 +22,8 @@ from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage, stage_lineage
 from game.replay import RecordedSequence
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.world_animation import sample_world_transitions
 from tests.game.portal_scenarios import portal_history
 

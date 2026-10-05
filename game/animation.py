@@ -17,6 +17,7 @@ from dnd.core.presentation_geometry import AoEPresentationGeometry, LinePresenta
 from dnd.types.summoning import SummonManifestation
 from dnd.core.effect_types import ResolutionRef, EffectPropagationLink
 from game.player_facts import PlayerNode
+from game.timing_evidence import (TimingEvidence, TimingOperand, CompiledTimingReference, TimingMeasurement, record_timing)
 from dnd.core.condition_types import ConditionTag
 from dnd.types.senses import PerceivedSpatialEffect
 from game.animation_types import (
@@ -230,6 +231,7 @@ class CastTimeline:
     complete_ms: float
     anchors: tuple[Anchor, ...]
     ground_delivery: GroundDeliveryTimeline | None = None
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
 
 def cast_deliveries(timeline: CastTimeline) -> tuple[ApplicationTimeline | GroundDeliveryTimeline, ...]:
@@ -284,6 +286,7 @@ class EquipmentTimeline:
     commit_ms: float
     complete_ms: float
     body_context: BodyContext | None = None
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -442,6 +445,24 @@ def adapt_cast_body(data: AnimationData, contact: ActorContact, cast: StudioCast
         "recovery": cast.recovery.model_copy(update={"enabled": False})})
 
 
+def effective_layer_palette(layer: StudioActorLayer) -> PaletteTreatment | None:
+    """Resolve exact replacement colors, or explicitly preserve a baked override.
+
+    An isolated override is already authored artwork. Automatic layers require
+    the owning spell's resolved palette. Unbaked explicit overlays replace their
+    pixels with their declared colors; category hue tables never choose a mode.
+    """
+    if layer.colors.source == "override" and layer.sourceSheet is not None:
+        return None
+    if layer.palette is not None:
+        return layer.palette
+    if layer.colors.source == "auto":
+        raise ValueError("automatic cast palette must be resolved from its spell before loading")
+    colors = layer.colors
+    return PaletteTreatment(colors=tuple(dict.fromkeys(value for value in
+        (colors.tertiary, colors.primary, colors.secondary) if value is not None)))
+
+
 def _layer_palette(layer: StudioActorLayer, colors: ElementColors) -> StudioActorLayer:
     """Replace automatic effect colors; preserve explicitly authored artwork."""
     if layer.colors.source == "override":
@@ -587,6 +608,8 @@ def compile_equipment(data: AnimationData, root_event_uuid: str, actor: ActorCon
     if recipe.media:
         raise NotImplementedError("equipment transition media is outside the selected body-only context")
     duration = commit = 0.0
+    evidence: list[TimingEvidence] = []
+    start = TimingOperand(CompiledTimingReference('equipment', root_event_uuid, 'start'), 0.)
     selected = resolve_body_context(data, actor, "equipment", RoleDefault(), body_context(
         recipe.bodyClip, recipe.bodyPlaybackSpeed, enabled=recipe.bodyEnabled,
         anchors=(ActionFrameAnchor(name="commit", frame=recipe.commitFrame),)))
@@ -596,9 +619,19 @@ def compile_equipment(data: AnimationData, root_event_uuid: str, actor: ActorCon
         # SwitchWeaponClip commits on the authored frame, with a final commit
         # after body completion if a mapped clip never reaches that frame.
         frame = next(row.frame for row in selected.anchors if row.name == "commit")
-        commit = min(duration, (clip.frames - 1 - frame if selected.reversed else frame)
-                     * 1000 / (clip.fps * selected.actor.playbackSpeed))
-    return EquipmentTimeline(root_event_uuid, actor, recipe, data, commit, duration, selected)
+        frame_ms = (clip.frames - 1 - frame if selected.reversed else frame) * 1000 / (clip.fps * selected.actor.playbackSpeed)
+        commit = min(duration, frame_ms)
+        completed = record_timing(evidence, CompiledTimingReference('equipment', root_event_uuid, 'complete'),
+            'equipment_complete', (replace(start, offset_ms=duration, authored_field='equipment.body.duration'),), duration)
+        record_timing(evidence, CompiledTimingReference('equipment', root_event_uuid, 'commit'), 'equipment_commit',
+            (completed, replace(start, offset_ms=frame_ms, authored_field='equipment.body.anchors.commit', measurements=(
+                TimingMeasurement('commit.frame', frame), TimingMeasurement('body.frames', clip.frames),
+                TimingMeasurement('body.fps', clip.fps), TimingMeasurement('body.playbackSpeed', selected.actor.playbackSpeed),
+                TimingMeasurement('body.reversed', int(selected.reversed))))), commit, 'minimum')
+    else:
+        record_timing(evidence, CompiledTimingReference('equipment', root_event_uuid, 'commit'), 'equipment_commit', (start,), commit)
+        record_timing(evidence, CompiledTimingReference('equipment', root_event_uuid, 'complete'), 'equipment_complete', (start,), duration)
+    return EquipmentTimeline(root_event_uuid, actor, recipe, data, commit, duration, selected, tuple(evidence))
 
 
 def sample_idle_body(data: AnimationData, actor: ActorContact, elapsed_ms: float) -> BodySample:
@@ -1116,9 +1149,17 @@ def resolve_damage(data: AnimationData, damage_type: str | None,
 
 
 def compile_damage(data: AnimationData, target: ActorContact, damage: StudioDamage,
-                   contact_ms: float, resulting_life_state: LifeState | None) -> DamageTiming:
+                   contact_ms: float, resulting_life_state: LifeState | None, *,
+                   timing_evidence: list[TimingEvidence] | None = None,
+                   contact_evidence: TimingOperand | None = None) -> DamageTiming:
     """Compile TakeDamage/Die's original callback frames after actual contact."""
     start = contact_ms + damage.impactDelayMs
+    start_evidence = None
+    if timing_evidence is not None:
+        assert contact_evidence is not None
+        start_evidence = record_timing(timing_evidence, replace(contact_evidence.reference, anchor='damage_start'),
+            'damage_start', (replace(contact_evidence, offset_ms=damage.impactDelayMs,
+                authored_field='damage.impactDelayMs'),), start)
     terminal = target.life_state == LifeState.DEAD
     lethal = resulting_life_state == LifeState.DEAD
     if lethal and (damage.death is None or not damage.death.enabled):
@@ -1128,18 +1169,44 @@ def compile_damage(data: AnimationData, target: ActorContact, damage: StudioDama
         death = death_body_context(data, target)
         if lethal and not terminal and actor_rest_pose(data, target) is None:
             end += context_duration(data, target, death)
+        if timing_evidence is not None and start_evidence is not None:
+            record_timing(timing_evidence, replace(start_evidence.reference, anchor='hp'), 'hp_callback',
+                (start_evidence,), start)
+        if timing_evidence is not None and start_evidence is not None:
+            record_timing(timing_evidence, replace(start_evidence.reference, anchor='body_end'), 'body_end',
+                (replace(start_evidence, offset_ms=end-start, authored_field='selected_death_body.duration'),), end)
         return DamageTiming(start, end, start, start, start)
     metadata = body_clip(data, target, data.damage_context.bodyClip)
     _require_frame(metadata, damage.floatingNumber.frame, "vitals")
     if damage.hitFlash.enabled:
         _require_frame(metadata, damage.hitFlash.frame, "hit flash")
     fps = metadata.fps * data.damage_context.bodyPlaybackSpeed
-    hp_ms = start + damage.floatingNumber.frame * 1000 / fps
+    hp_delay = damage.floatingNumber.frame * 1000 / fps
+    hp_ms = start + hp_delay
+    if timing_evidence is not None and start_evidence is not None:
+        record_timing(timing_evidence, replace(start_evidence.reference, anchor='hp'), 'hp_callback',
+            (replace(start_evidence, offset_ms=hp_delay,
+                authored_field='damage.floatingNumber.frame', measurements=(
+                    TimingMeasurement('damage.floatingNumber.frame', damage.floatingNumber.frame),
+                    TimingMeasurement('damage.body.fps', metadata.fps),
+                    TimingMeasurement('damage.bodyPlaybackSpeed', data.damage_context.bodyPlaybackSpeed))),), hp_ms)
     life_body = (compile_life_body(data, target, resulting_life_state, target.rest_pose)
                  if resulting_life_state is not None else None)
-    end = start + body_duration(metadata, data.damage_context.bodyPlaybackSpeed)
+    duration = body_duration(metadata, data.damage_context.bodyPlaybackSpeed)
+    end = start + duration
+    end_evidence = None
+    if timing_evidence is not None and start_evidence is not None:
+        end_evidence = record_timing(timing_evidence, replace(start_evidence.reference, anchor='body_end'), 'body_end',
+            (replace(start_evidence, offset_ms=duration, authored_field='damage_body.duration'),), end)
     if life_body is not None:
-        end = max(end, hp_ms + life_body.frames * 1000 / life_body.fps)
+        life_duration = life_body.frames * 1000 / life_body.fps
+        end = max(end, hp_ms + life_duration)
+        if timing_evidence is not None and end_evidence is not None:
+            hp_source = next(row for row in reversed(timing_evidence)
+                if row.target == replace(end_evidence.reference, anchor='hp'))
+            record_timing(timing_evidence, end_evidence.reference, 'body_end',
+                (end_evidence, TimingOperand(hp_source.target, hp_source.at_ms, hp_source.index,
+                    life_duration, authored_field='life_body.frames/fps')), end, 'maximum')
     return DamageTiming(start, end, hp_ms,
                         start + damage.hitFlash.frame * 1000 / fps,
                         hp_ms, life_body)
@@ -1311,14 +1378,26 @@ def finite_media_end(data: AnimationData, tracks: tuple[StudioMediaTrack, ...], 
     return end
 
 
+def _cast_release_evidence(evidence: list[TimingEvidence], source: CastInput,
+                           cast: StudioCast, clip: BodyClip, release: float) -> TimingOperand:
+    assert cast.bodyPlaybackSpeed is not None
+    return record_timing(evidence, CompiledTimingReference('cast', source.root_event_uuid, 'release'), 'body_release',
+        (TimingOperand(CompiledTimingReference('cast', source.root_event_uuid, 'start'), 0., offset_ms=release,
+            authored_field='cast.releaseFrame', measurements=(TimingMeasurement('cast.releaseFrame', cast.releaseFrame),
+                TimingMeasurement('cast.body.fps', clip.fps), TimingMeasurement('cast.bodyPlaybackSpeed', cast.bodyPlaybackSpeed),
+                TimingMeasurement('cast.enabled', int(cast.enabled)))),), release)
+
+
 def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
                            source: CastInput) -> CastTimeline:
     """Use the same body, application and damage clocks for non-travel media."""
     cast = recipe.cast
+    evidence: list[TimingEvidence] = []
     assert cast.bodyPlaybackSpeed is not None
     clip = body_clip(data, source.caster, cast.actionClip)
     _require_frame(clip, cast.releaseFrame, "release")
     release = cast.releaseFrame * 1000 / (clip.fps * cast.bodyPlaybackSpeed) if cast.enabled else 0
+    release_evidence = _cast_release_evidence(evidence, source, cast, clip, release)
     body_end = body_duration(clip, cast.bodyPlaybackSpeed) if cast.enabled else 0
     target = source.ground_target or (source.applications[0].target if source.applications else None)
     delta = source.area_direction or ((target.grid[0] - source.caster.grid[0], target.grid[1] - source.caster.grid[1])
@@ -1327,11 +1406,18 @@ def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
     rule = recipe.contact
     launch = release + (rule.launchDelayMs if rule is not None else 0)
     contact = launch + (rule.delayMs if rule is not None else 0)
+    launch_evidence = record_timing(evidence, replace(release_evidence.reference, anchor='launch'), 'launch',
+        (replace(release_evidence, offset_ms=rule.launchDelayMs if rule is not None else 0,
+            authored_field='contact.launchDelayMs'),), launch)
+    contact_evidence = record_timing(evidence, replace(release_evidence.reference, anchor='contact'), 'contact',
+        (replace(launch_evidence, offset_ms=rule.delayMs if rule is not None else 0,
+            authored_field='contact.delayMs'),), contact)
     anchors = [Anchor("action_start", 0), Anchor("release", release)]
     applications = []
     complete = max(body_end, contact)
     arcs = recipe.arcs
     arrived: dict[str, float] = {}
+    arrived_evidence: dict[str, TimingOperand] = {}
     line_duration = 0.
     if arcs is not None and arcs.mode == "area_line":
         if not isinstance(source.area_geometry, LinePresentationGeometry):
@@ -1339,6 +1425,12 @@ def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
         line_duration = min(arcs.maximumTravelMs,
             arcs.travelBaseMs + source.area_geometry.length_feet / 5 * arcs.travelPerCellMs)
         contact = release + line_duration
+        contact_evidence = record_timing(evidence, replace(release_evidence.reference, anchor='contact'), 'contact',
+            (replace(release_evidence, offset_ms=line_duration, authored_field='arcs.area_line', measurements=(
+                TimingMeasurement('line.length_feet', source.area_geometry.length_feet),
+                TimingMeasurement('arcs.travelBaseMs', arcs.travelBaseMs),
+                TimingMeasurement('arcs.travelPerCellMs', arcs.travelPerCellMs),
+                TimingMeasurement('arcs.maximumTravelMs', arcs.maximumTravelMs))),), contact)
         complete = max(complete, contact + arcs.decayEndMs)
     if not source.applications:
         anchors.append(Anchor("impact", contact))
@@ -1347,11 +1439,25 @@ def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
         offset = (recipient.grid[0] - source.caster.grid[0], recipient.grid[1] - source.caster.grid[1])
         arrival = contact
         start = launch
+        start_evidence = record_timing(evidence, replace(launch_evidence.reference,
+            application_id=application.application_id), 'launch', (launch_evidence,), start)
+        arrival_evidence = record_timing(evidence, replace(contact_evidence.reference,
+            application_id=application.application_id), 'contact', (contact_evidence,), arrival)
         if rule is not None:
             if rule.speedTilesPerSecond is not None:
-                arrival += hypot(*offset) * 1000 / rule.speedTilesPerSecond
+                travel_ms = hypot(*offset) * 1000 / rule.speedTilesPerSecond
+                arrival += travel_ms
+                arrival_evidence = record_timing(evidence, arrival_evidence.reference, 'contact',
+                    (replace(arrival_evidence, offset_ms=travel_ms,
+                        authored_field='contact.speedTilesPerSecond', measurements=(
+                            TimingMeasurement('distance.cells', hypot(*offset)),
+                            TimingMeasurement('contact.speedTilesPerSecond', rule.speedTilesPerSecond))),), arrival)
             if rule.cellsByFacing is not None:
-                arrival += rule.cellsByFacing[facing].get(f"{int(offset[0])}_{int(offset[1])}", 0)
+                cell_delay = rule.cellsByFacing[facing].get(f"{int(offset[0])}_{int(offset[1])}", 0)
+                arrival += cell_delay
+                arrival_evidence = record_timing(evidence, arrival_evidence.reference, 'contact',
+                    (replace(arrival_evidence, offset_ms=cell_delay,
+                        authored_field=f'contact.cellsByFacing.{facing}.{int(offset[0])}_{int(offset[1])}'),), arrival)
         if arcs is not None:
             if arcs.mode == "applications" and application.propagation is not None:
                 link = application.propagation
@@ -1360,21 +1466,37 @@ def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
                     # retaining the fully disclosed outgoing edge. No hidden
                     # parent trajectory is reconstructed in that case.
                     start = arrived.get(str(link.source.uuid), release) + arcs.branchDelayMs
+                    start_evidence = record_timing(evidence, start_evidence.reference, 'launch',
+                        (replace(arrived_evidence.get(str(link.source.uuid), release_evidence),
+                            offset_ms=arcs.branchDelayMs, authored_field='arcs.branchDelayMs'),), start)
                 distance = hypot(link.target.position[0] - link.source.position[0],
                     link.target.position[1] - link.source.position[1],
                     link.target.base_height_steps - link.source.base_height_steps)
-                arrival = start + min(arcs.maximumTravelMs, arcs.travelBaseMs + distance * arcs.travelPerCellMs)
+                travel_ms = min(arcs.maximumTravelMs, arcs.travelBaseMs + distance * arcs.travelPerCellMs)
+                arrival = start + travel_ms
+                arrival_evidence = record_timing(evidence, arrival_evidence.reference, 'contact',
+                    (replace(start_evidence, offset_ms=travel_ms,
+                        authored_field='arcs.applications', measurements=(TimingMeasurement('distance.cells', distance),
+                            TimingMeasurement('arcs.travelBaseMs', arcs.travelBaseMs), TimingMeasurement('arcs.travelPerCellMs', arcs.travelPerCellMs),
+                            TimingMeasurement('arcs.maximumTravelMs', arcs.maximumTravelMs))),), arrival)
                 arrived[str(link.target.uuid)] = arrival
+                arrived_evidence[str(link.target.uuid)] = arrival_evidence
             elif arcs.mode == "area_line":
                 line = source.area_geometry
                 assert isinstance(line, LinePresentationGeometry)
                 dx, dy = line.direction
                 along = ((recipient.grid[0] - line.origin[0]) * dx
                     + (recipient.grid[1] - line.origin[1]) * dy) / hypot(dx, dy)
-                arrival = release + line_duration * max(0., min(1., along / (line.length_feet / 5)))
+                travel_ms = line_duration * max(0., min(1., along / (line.length_feet / 5)))
+                arrival = release + travel_ms
+                arrival_evidence = record_timing(evidence, arrival_evidence.reference, 'contact',
+                    (replace(release_evidence, offset_ms=travel_ms,
+                        authored_field='arcs.area_line', measurements=(TimingMeasurement('along.cells', along),
+                            TimingMeasurement('line.length_feet', line.length_feet), TimingMeasurement('line.duration_ms', line_duration))),), arrival)
             complete = max(complete, arrival + max(arcs.decayEndMs, arcs.contactDecayEndMs))
         damage = resolve_damage(data, application.damage_type, recipe.damage) if application.damage_applied else None
-        timing = (compile_damage(data, recipient, damage, arrival, application.resulting_life_state)
+        timing = (compile_damage(data, recipient, damage, arrival, application.resulting_life_state,
+            timing_evidence=evidence, contact_evidence=arrival_evidence)
                   if damage is not None and isinstance(recipient, ActorContact) else None)
         applications.append(ApplicationTimeline(application, facing,
             _iso(source.caster.grid, data), _iso(recipient.grid, data), start, arrival, 0, (), damage,
@@ -1401,7 +1523,7 @@ def _compile_anchored_cast(data: AnimationData, recipe: StudioSpellDraft,
         anchors.append(Anchor("recover", recovery_start))
     anchors.append(Anchor("complete", complete))
     return CastTimeline(source, recipe, data, facing, body_end, release, tuple(applications),
-                        recovery_start, complete, tuple(sorted(anchors, key=lambda anchor: anchor.at_ms)), ground)
+                        recovery_start, complete, tuple(sorted(anchors, key=lambda anchor: anchor.at_ms)), ground, tuple(evidence))
 
 
 def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_rate: float = 1,
@@ -1528,6 +1650,9 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
             raise ValueError(f"missing enabled cast layer resource: {layer.category}/{cast.actionClip}")
     body_end = body_duration(casting_clip, cast.bodyPlaybackSpeed) if cast.enabled else 0
     release = cast.releaseFrame * 1000 / (casting_clip.fps * cast.bodyPlaybackSpeed) if cast.enabled else 0
+    evidence: list[TimingEvidence] = []
+    release_evidence = _cast_release_evidence(evidence, source, cast, casting_clip, release)
+    launch_evidence = release_evidence
     anchors = [Anchor("action_start", 0), Anchor("release", release)]
     launch = release
     prepare: ProjectileInterval | None = None
@@ -1542,7 +1667,12 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
         prepare = _phase(data, recipe, projectile.prepare, "prepare", start, duration)
         anchors.append(Anchor("prepare", start))
         launch = release if projectile.prepare.overlapRelease else max(release, prepare.end_ms)
+        if not projectile.prepare.overlapRelease:
+            launch_evidence = record_timing(evidence, replace(release_evidence.reference, anchor='launch'), 'launch',
+                (release_evidence, TimingOperand(CompiledTimingReference('cast', source.root_event_uuid, 'prepare_end'), prepare.end_ms)),
+                launch, 'maximum')
     ground_delivery = None
+    ground_contact_evidence = None
     if source.ground_target is not None:
         target = source.ground_target
         facing = facing_for_delta((target.grid[0] - source_grid[0], target.grid[1] - source_grid[1]), data)
@@ -1560,6 +1690,13 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
         if projectile.targetLocal is not None:
             duration = projectile.targetLocal.contactAfterReleaseMs
         arrival = launch + duration
+        ground_contact_evidence = record_timing(evidence, CompiledTimingReference('cast', source.root_event_uuid, 'contact'),
+            'contact', (replace(launch_evidence, offset_ms=duration,
+                authored_field='projectile.targetLocal.contactAfterReleaseMs' if projectile.targetLocal is not None else 'projectile.travel',
+                measurements=(TimingMeasurement('travel.duration_ms', duration),
+                    TimingMeasurement('projectile.minimumTravelDurationMs', projectile.minimumTravelDurationMs),
+                    TimingMeasurement('projectile.speedPxPerSecond', projectile.speedPxPerSecond),
+                    TimingMeasurement('distance.pixels', hypot(last[0]-first[0], last[1]-first[1], height)))),), arrival)
         intervals = [prepare] if prepare is not None else []
         if projectile.sprite is not None:
             if projectile.travel.enabled:
@@ -1626,6 +1763,22 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
             ):
                 intervals.append(_phase(data, recipe, projectile.impact, "impact",
                                         0 if projectile.targetLocal is not None else arrival))
+        if ground_contact_evidence is not None:
+            start_evidence = record_timing(evidence, CompiledTimingReference('cast', source.root_event_uuid, 'launch', application.application_id),
+                'launch', (launch_evidence,), start)
+            arrival_evidence = record_timing(evidence, CompiledTimingReference('cast', source.root_event_uuid, 'contact', application.application_id),
+                'contact', (ground_contact_evidence,), arrival)
+        else:
+            start_evidence = record_timing(evidence, CompiledTimingReference('cast', source.root_event_uuid, 'launch', application.application_id),
+                'launch', (replace(launch_evidence, offset_ms=index * projectile.missileStaggerMs,
+                    authored_field='projectile.missileStaggerMs', measurements=(TimingMeasurement('application.index', index),
+                        TimingMeasurement('projectile.missileStaggerMs', projectile.missileStaggerMs))),), start)
+            arrival_evidence = record_timing(evidence, replace(start_evidence.reference, anchor='contact'), 'contact',
+                (replace(start_evidence, offset_ms=duration,
+                    authored_field='projectile.targetLocal.contactAfterReleaseMs' if projectile.targetLocal is not None else 'projectile.travel',
+                    measurements=(TimingMeasurement('distance.pixels', hypot(last[0]-first[0], last[1]-first[1], height)),
+                        TimingMeasurement('projectile.speedPxPerSecond', projectile.speedPxPerSecond),
+                        TimingMeasurement('projectile.minimumTravelDurationMs', projectile.minimumTravelDurationMs))),), arrival)
         count, occurrence = counts[feedback_identity(target)], indices.get(feedback_identity(target), 0)
         indices[feedback_identity(target)] = occurrence + 1
         curvature = 0.0
@@ -1643,7 +1796,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
                              if feedback_identity(row.source.target) == target.actor_uuid
                              and row.source.resulting_life_state is not None), target.life_state)
             timing = compile_damage(data, replace(target, life_state=previous), damage,
-                                    arrival, application.resulting_life_state)
+                                    arrival, application.resulting_life_state, timing_evidence=evidence, contact_evidence=arrival_evidence)
             damage_start, damage_end = timing.start_ms, timing.end_ms
             hp_ms, flash_ms, number_ms = timing.hp_ms, timing.flash_ms, timing.number_ms
             life_body = timing.life_body
@@ -1655,6 +1808,10 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
     # TakingHit reentry flushes pending callbacks, then restarts the one body.
     # Current Magic Missile uses frame 0; this also retains the source's exit
     # meaning for an already authored delayed callback on an earlier hit.
+    damage_sources = {row.target.application_id: TimingOperand(row.target, row.at_ms, row.index)
+        for row in evidence if row.target.anchor == 'damage_start'}
+    hp_sources = {row.target.application_id: TimingOperand(row.target, row.at_ms, row.index)
+        for row in evidence if row.target.anchor == 'hp'}
     for index, application in enumerate(applications):
         if application.damage_start_ms is None or application.damage_end_ms is None:
             continue
@@ -1664,8 +1821,16 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
                      and application.damage_start_ms < other.damage_start_ms < application.damage_end_ms]
         if following:
             exit_ms = min(following)
+            reentry_hp = min(application.hp_ms, exit_ms) if application.hp_ms is not None else None
+            if reentry_hp is not None:
+                record_timing(evidence, hp_sources[application.source.application_id].reference, 'hp_reentry',
+                    (hp_sources[application.source.application_id], *(damage_sources[other.source.application_id]
+                        for other in applications if feedback_identity(other.source.target) == feedback_identity(application.source.target)
+                        and other.damage_start_ms is not None
+                        and application.damage_start_ms < other.damage_start_ms < application.damage_end_ms)),
+                    reentry_hp, 'minimum')
             applications[index] = replace(application,
-                hp_ms=min(application.hp_ms, exit_ms) if application.hp_ms is not None else None,
+                hp_ms=reentry_hp,
                 flash_ms=min(application.flash_ms, exit_ms) if application.flash_ms is not None else None,
                 number_ms=min(application.number_ms, exit_ms) if application.number_ms is not None else None)
     delivery_end = max((application.travel_end_ms for application in applications), default=release)
@@ -1700,7 +1865,7 @@ def compile_cast(data: AnimationData, spell_id: str, source: CastInput, *, body_
                      if emitter is not None else ground_delivery.facing if ground_delivery else applications[0].facing)
     return CastTimeline(source, recipe, data, caster_facing,
                         body_end, release, tuple(applications), recovery_start, complete,
-                        tuple(sorted(anchors, key=lambda anchor: anchor.at_ms)), ground_delivery)
+                        tuple(sorted(anchors, key=lambda anchor: anchor.at_ms)), ground_delivery, tuple(evidence))
 
 
 def crossed_anchors(timeline: CastTimeline, previous_ms: float, current_ms: float) -> tuple[Anchor, ...]:

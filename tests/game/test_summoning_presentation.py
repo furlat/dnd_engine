@@ -37,7 +37,7 @@ from game.player_reduction import decode_player_sequence, encode_player_sequence
 from game.presentation import capture_interval, reduce_interval
 from game.projection import Camera, TILE_WIDTH
 from game.replay import ObserverCapture, RecordedSequence, capture_history
-from game.scene import scene_actors
+from game.scene_actors import scene_actors
 from tests.game.visibility_scenarios import visibility_history
 
 

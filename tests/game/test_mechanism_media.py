@@ -10,7 +10,8 @@ from game.animation import ActorContact
 from game.animation_data import load_animation_data
 from game.assets import SurfaceCache, load_catalog, prop_animation_frame
 from game.mechanism_projectile import (MechanismProjectileCue, mechanism_projectile_duration,
-    mechanism_projectile_draw_command, mechanism_projectile_target, sample_mechanism_projectile)
+    mechanism_projectile_target, sample_mechanism_projectile)
+from game.mechanism_projectile_draw import mechanism_projectile_draw_command
 from game.projection import Camera, project_screen
 from game.world_animation import WorldTransition, WorldTransitionSample
 

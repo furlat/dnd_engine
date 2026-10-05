@@ -1,0 +1,2102 @@
+[
+  {
+    "field": "interruptions",
+    "type": "InterruptionPresentation",
+    "line": 2206,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          642
+        ]
+      },
+      {
+        "file": "game/body_action.py",
+        "lines": [
+          198
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          437,
+          1105,
+          1157
+        ]
+      },
+      {
+        "file": "game/interruption.py",
+        "lines": [
+          77,
+          80
+        ]
+      }
+    ]
+  },
+  {
+    "field": "devices",
+    "type": "Mapping[str, DeviceArt]",
+    "line": 2207,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          249
+        ]
+      },
+      {
+        "file": "game/combat.py",
+        "lines": [
+          327
+        ]
+      },
+      {
+        "file": "game/device_art.py",
+        "lines": [
+          131
+        ]
+      },
+      {
+        "file": "game/playback_frame.py",
+        "lines": [
+          259
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          103
+        ]
+      }
+    ]
+  },
+  {
+    "field": "device_wrecks",
+    "type": "Mapping[str, DeviceArt]",
+    "line": 2208,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/playback_frame.py",
+        "lines": [
+          259,
+          266
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          103
+        ]
+      }
+    ]
+  },
+  {
+    "field": "drafts",
+    "type": "Mapping[str, StudioSpellDraft]",
+    "line": 2209,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation.py",
+        "lines": [
+          1410,
+          1412
+        ]
+      },
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          640,
+          689,
+          694
+        ]
+      },
+      {
+        "file": "game/animation_preview.py",
+        "lines": [
+          53,
+          57
+        ]
+      },
+      {
+        "file": "game/body_action.py",
+        "lines": [
+          116
+        ]
+      },
+      {
+        "file": "game/body_hop.py",
+        "lines": [
+          47
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          331,
+          1062,
+          1069,
+          1098,
+          1129,
+          1669
+        ]
+      },
+      {
+        "file": "game/combat.py",
+        "lines": [
+          349
+        ]
+      },
+      {
+        "file": "game/condition_reaction.py",
+        "lines": [
+          78
+        ]
+      },
+      {
+        "file": "game/playback_frame.py",
+        "lines": [
+          120
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          50,
+          51
+        ]
+      }
+    ]
+  },
+  {
+    "field": "attack_recipes",
+    "type": "Mapping[str, AttackRecipe]",
+    "line": 2210,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          726
+        ]
+      },
+      {
+        "file": "game/attack.py",
+        "lines": [
+          321,
+          323
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          60
+        ]
+      }
+    ]
+  },
+  {
+    "field": "shove_recipes",
+    "type": "Mapping[str, ShoveRecipe]",
+    "line": 2211,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          693
+        ]
+      },
+      {
+        "file": "game/forced_movement.py",
+        "lines": [
+          77,
+          79
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          60
+        ]
+      }
+    ]
+  },
+  {
+    "field": "body_action_recipes",
+    "type": "Mapping[str, BodyActionRecipe]",
+    "line": 2212,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation.py",
+        "lines": [
+          1453
+        ]
+      },
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          627,
+          689
+        ]
+      },
+      {
+        "file": "game/body_action.py",
+        "lines": [
+          83,
+          119
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          1101,
+          1641
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          63,
+          70
+        ]
+      }
+    ]
+  },
+  {
+    "field": "body_action_bindings",
+    "type": "Mapping[str, BodyActionBinding]",
+    "line": 2213,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/body_action.py",
+        "lines": [
+          117
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          1084
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          63,
+          68
+        ]
+      }
+    ]
+  },
+  {
+    "field": "condition_recipes",
+    "type": "Mapping[str, ConditionRecipe]",
+    "line": 2214,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/absence_media.py",
+        "lines": [
+          28,
+          62
+        ]
+      },
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          677,
+          690
+        ]
+      },
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          271,
+          298,
+          550
+        ]
+      },
+      {
+        "file": "game/body_action.py",
+        "lines": [
+          105
+        ]
+      },
+      {
+        "file": "game/body_presentation.py",
+        "lines": [
+          124
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          463,
+          470,
+          677,
+          822,
+          1319,
+          1324,
+          1485
+        ]
+      },
+      {
+        "file": "game/combat.py",
+        "lines": [
+          124
+        ]
+      },
+      {
+        "file": "game/condition_media_lifetime.py",
+        "lines": [
+          84,
+          109,
+          116,
+          142,
+          216,
+          245,
+          272,
+          291,
+          355,
+          397
+        ]
+      },
+      {
+        "file": "game/condition_reaction.py",
+        "lines": [
+          111
+        ]
+      },
+      {
+        "file": "game/entity_lifecycle.py",
+        "lines": [
+          54
+        ]
+      },
+      {
+        "file": "game/playback_frame.py",
+        "lines": [
+          105
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          85
+        ]
+      },
+      {
+        "file": "game/scene.py",
+        "lines": [
+          43
+        ]
+      }
+    ]
+  },
+  {
+    "field": "condition_media",
+    "type": "Mapping[str, ConditionLayerMedia]",
+    "line": 2215,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          668
+        ]
+      },
+      {
+        "file": "game/body_presentation.py",
+        "lines": [
+          124
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          465
+        ]
+      },
+      {
+        "file": "game/condition_media_lifetime.py",
+        "lines": [
+          76,
+          109,
+          143,
+          291,
+          308,
+          373,
+          375,
+          479,
+          481
+        ]
+      },
+      {
+        "file": "game/condition_reaction.py",
+        "lines": [
+          122
+        ]
+      },
+      {
+        "file": "game/entity_lifecycle.py",
+        "lines": [
+          54
+        ]
+      },
+      {
+        "file": "game/forced_movement.py",
+        "lines": [
+          176,
+          186,
+          214,
+          217
+        ]
+      },
+      {
+        "file": "game/playback_frame.py",
+        "lines": [
+          105
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          86,
+          87,
+          88,
+          104
+        ]
+      },
+      {
+        "file": "game/scene.py",
+        "lines": [
+          43
+        ]
+      }
+    ]
+  },
+  {
+    "field": "projectile_assets",
+    "type": "Mapping[str, AuthoredProjectileAsset]",
+    "line": 2216,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/absence_media.py",
+        "lines": [
+          85
+        ]
+      },
+      {
+        "file": "game/animation.py",
+        "lines": [
+          941,
+          1054,
+          1056,
+          1239,
+          1258,
+          1431
+        ]
+      },
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          624,
+          632,
+          636,
+          645,
+          651,
+          655,
+          729
+        ]
+      },
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          821,
+          1086
+        ]
+      },
+      {
+        "file": "game/attack.py",
+        "lines": [
+          427,
+          430
+        ]
+      },
+      {
+        "file": "game/cast_media.py",
+        "lines": [
+          51,
+          198
+        ]
+      },
+      {
+        "file": "game/condition_media_lifetime.py",
+        "lines": [
+          55,
+          63,
+          311
+        ]
+      },
+      {
+        "file": "game/condition_sampling.py",
+        "lines": [
+          41,
+          67,
+          77,
+          85,
+          102
+        ]
+      },
+      {
+        "file": "game/construction_media.py",
+        "lines": [
+          47,
+          193
+        ]
+      },
+      {
+        "file": "game/forced_movement.py",
+        "lines": [
+          178,
+          188
+        ]
+      },
+      {
+        "file": "game/interruption_draw.py",
+        "lines": [
+          23,
+          30
+        ]
+      },
+      {
+        "file": "game/maintained_media.py",
+        "lines": [
+          25,
+          38,
+          56,
+          76
+        ]
+      },
+      {
+        "file": "game/motion_media.py",
+        "lines": [
+          39
+        ]
+      },
+      {
+        "file": "game/registered_media.py",
+        "lines": [
+          53
+        ]
+      },
+      {
+        "file": "game/weapon_trail_media.py",
+        "lines": [
+          85,
+          87
+        ]
+      }
+    ]
+  },
+  {
+    "field": "projectile_storage",
+    "type": "Mapping[str, ProjectileStorage]",
+    "line": 2217,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation.py",
+        "lines": [
+          1057
+        ]
+      },
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          633,
+          646,
+          656
+        ]
+      },
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          416
+        ]
+      },
+      {
+        "file": "game/cast_media.py",
+        "lines": [
+          53
+        ]
+      },
+      {
+        "file": "game/projectile_media.py",
+        "lines": [
+          248
+        ]
+      }
+    ]
+  },
+  {
+    "field": "media_root",
+    "type": "Path",
+    "line": 2218,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          303,
+          472,
+          518,
+          595
+        ]
+      },
+      {
+        "file": "game/projectile_media.py",
+        "lines": [
+          264,
+          268,
+          284,
+          289,
+          308,
+          317,
+          322,
+          375
+        ]
+      }
+    ]
+  },
+  {
+    "field": "rig",
+    "type": "RigTables",
+    "line": 2219,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/action_media.py",
+        "lines": [
+          52
+        ]
+      },
+      {
+        "file": "game/animation.py",
+        "lines": [
+          70,
+          629,
+          639,
+          644,
+          653,
+          800,
+          802,
+          814,
+          840,
+          852,
+          889,
+          931,
+          948,
+          963,
+          1035,
+          1556,
+          1557,
+          1608,
+          1609
+        ]
+      },
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          255,
+          258
+        ]
+      },
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          91,
+          95,
+          617,
+          649,
+          817,
+          869,
+          898,
+          952,
+          1091,
+          1300,
+          1302
+        ]
+      },
+      {
+        "file": "game/attack.py",
+        "lines": [
+          232,
+          270,
+          299,
+          379
+        ]
+      },
+      {
+        "file": "game/cast_media.py",
+        "lines": [
+          67,
+          122,
+          128,
+          131,
+          152
+        ]
+      },
+      {
+        "file": "game/cell_media.py",
+        "lines": [
+          55
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          2330,
+          2441,
+          2482,
+          2511
+        ]
+      },
+      {
+        "file": "game/condition_draw.py",
+        "lines": [
+          80,
+          89,
+          92
+        ]
+      },
+      {
+        "file": "game/deposit_draw.py",
+        "lines": [
+          49
+        ]
+      },
+      {
+        "file": "game/directed_contacts.py",
+        "lines": [
+          29
+        ]
+      },
+      {
+        "file": "game/directed_media.py",
+        "lines": [
+          88
+        ]
+      },
+      {
+        "file": "game/directed_mesh_media.py",
+        "lines": [
+          132
+        ]
+      },
+      {
+        "file": "game/interruption_draw.py",
+        "lines": [
+          26
+        ]
+      },
+      {
+        "file": "game/item_draw.py",
+        "lines": [
+          87,
+          88,
+          146,
+          147
+        ]
+      },
+      {
+        "file": "game/mechanism_projectile.py",
+        "lines": [
+          66,
+          72,
+          73
+        ]
+      },
+      {
+        "file": "game/orbit_media.py",
+        "lines": [
+          158
+        ]
+      },
+      {
+        "file": "game/playback_frame.py",
+        "lines": [
+          207
+        ]
+      },
+      {
+        "file": "game/spatial_field_media.py",
+        "lines": [
+          99
+        ]
+      },
+      {
+        "file": "game/spatial_media_draw.py",
+        "lines": [
+          289
+        ]
+      },
+      {
+        "file": "game/stationary_media.py",
+        "lines": [
+          92,
+          101,
+          112
+        ]
+      },
+      {
+        "file": "game/weapon_trail_media.py",
+        "lines": [
+          95
+        ]
+      }
+    ]
+  },
+  {
+    "field": "resources",
+    "type": "Mapping[str, Path]",
+    "line": 2220,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation.py",
+        "lines": [
+          378,
+          1057,
+          1527
+        ]
+      },
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          252,
+          405,
+          476,
+          665,
+          673,
+          675,
+          679,
+          681,
+          701,
+          724,
+          757
+        ]
+      },
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          77,
+          224,
+          230,
+          290,
+          292,
+          328,
+          422,
+          562,
+          589,
+          590,
+          606,
+          661,
+          662
+        ]
+      },
+      {
+        "file": "game/app.py",
+        "lines": [
+          291,
+          672,
+          1428,
+          1452,
+          1467,
+          1469,
+          1496
+        ]
+      },
+      {
+        "file": "game/assets.py",
+        "lines": [
+          107,
+          193,
+          243,
+          318
+        ]
+      },
+      {
+        "file": "game/attack.py",
+        "lines": [
+          207
+        ]
+      },
+      {
+        "file": "game/construction_surface.py",
+        "lines": [
+          155,
+          156,
+          221,
+          275,
+          312
+        ]
+      },
+      {
+        "file": "game/directed_media.py",
+        "lines": [
+          37,
+          39,
+          40,
+          41,
+          42,
+          44,
+          48,
+          235,
+          246,
+          373,
+          490
+        ]
+      },
+      {
+        "file": "game/directed_mesh_media.py",
+        "lines": [
+          145
+        ]
+      },
+      {
+        "file": "game/directed_plasma_media.py",
+        "lines": [
+          81,
+          82
+        ]
+      },
+      {
+        "file": "game/projectile_media.py",
+        "lines": [
+          347
+        ]
+      },
+      {
+        "file": "game/scene.py",
+        "lines": [
+          50
+        ]
+      },
+      {
+        "file": "game/sustained_draw.py",
+        "lines": [
+          125
+        ]
+      },
+      {
+        "file": "game/thorns_surface.py",
+        "lines": [
+          218
+        ]
+      },
+      {
+        "file": "game/wind_flow_media.py",
+        "lines": [
+          69,
+          72,
+          301
+        ]
+      }
+    ]
+  },
+  {
+    "field": "root_rig",
+    "type": "str",
+    "line": 2221,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          92,
+          483,
+          485,
+          570
+        ]
+      },
+      {
+        "file": "game/attack.py",
+        "lines": [
+          362
+        ]
+      },
+      {
+        "file": "game/combat.py",
+        "lines": [
+          119
+        ]
+      }
+    ]
+  },
+  {
+    "field": "rigs",
+    "type": "Mapping[str, BodyRig]",
+    "line": 2222,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation.py",
+        "lines": [
+          367,
+          369
+        ]
+      },
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          91,
+          695,
+          737,
+          745,
+          747
+        ]
+      },
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          287
+        ]
+      },
+      {
+        "file": "game/attack.py",
+        "lines": [
+          198,
+          357,
+          362
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          95,
+          100
+        ]
+      },
+      {
+        "file": "game/scene.py",
+        "lines": [
+          48
+        ]
+      }
+    ]
+  },
+  {
+    "field": "creature_rigs",
+    "type": "Mapping[str, str]",
+    "line": 2223,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/combat.py",
+        "lines": [
+          120,
+          121
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          98
+        ]
+      }
+    ]
+  },
+  {
+    "field": "damage_context",
+    "type": "DamageContext",
+    "line": 2224,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation.py",
+        "lines": [
+          1102,
+          1132,
+          1136,
+          1140,
+          1189
+        ]
+      },
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          707
+        ]
+      },
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          336,
+          340,
+          377,
+          407
+        ]
+      },
+      {
+        "file": "game/attack.py",
+        "lines": [
+          184
+        ]
+      },
+      {
+        "file": "game/cast_media.py",
+        "lines": [
+          125
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          1416,
+          1421
+        ]
+      },
+      {
+        "file": "game/choreography_draw.py",
+        "lines": [
+          134,
+          139
+        ]
+      },
+      {
+        "file": "game/condition_animation.py",
+        "lines": [
+          352
+        ]
+      }
+    ]
+  },
+  {
+    "field": "healing_context",
+    "type": "HealingContext",
+    "line": 2225,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          1394
+        ]
+      },
+      {
+        "file": "game/feedback.py",
+        "lines": [
+          112
+        ]
+      }
+    ]
+  },
+  {
+    "field": "death_save_context",
+    "type": "DeathSaveContext",
+    "line": 2226,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          658
+        ]
+      }
+    ]
+  },
+  {
+    "field": "life_state_context",
+    "type": "LifeStateContext",
+    "line": 2227,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation.py",
+        "lines": [
+          536,
+          571
+        ]
+      },
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          714
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          663
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          92
+        ]
+      }
+    ]
+  },
+  {
+    "field": "death_context",
+    "type": "DeathContext",
+    "line": 2228,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation.py",
+        "lines": [
+          424,
+          1512,
+          1514
+        ]
+      },
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          707
+        ]
+      },
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          679
+        ]
+      },
+      {
+        "file": "game/app.py",
+        "lines": [
+          1499
+        ]
+      },
+      {
+        "file": "game/body_presentation.py",
+        "lines": [
+          185
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          258,
+          669,
+          682
+        ]
+      },
+      {
+        "file": "game/construction_media.py",
+        "lines": [
+          97
+        ]
+      }
+    ]
+  },
+  {
+    "field": "equipment_context",
+    "type": "EquipmentTransitionContext",
+    "line": 2229,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation.py",
+        "lines": [
+          585
+        ]
+      }
+    ]
+  },
+  {
+    "field": "movement_context",
+    "type": "VoluntaryMovementContext",
+    "line": 2230,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          2035,
+          2169,
+          2326
+        ]
+      },
+      {
+        "file": "game/forced_movement.py",
+        "lines": [
+          142
+        ]
+      },
+      {
+        "file": "game/motion_media.py",
+        "lines": [
+          29
+        ]
+      },
+      {
+        "file": "game/portal_animation.py",
+        "lines": [
+          98
+        ]
+      }
+    ]
+  },
+  {
+    "field": "movement_reaction_context",
+    "type": "MovementReactionContext",
+    "line": 2231,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          2110,
+          2336
+        ]
+      },
+      {
+        "file": "game/feedback.py",
+        "lines": [
+          153
+        ]
+      }
+    ]
+  },
+  {
+    "field": "forced_movement_context",
+    "type": "ForcedMovementContext",
+    "line": 2232,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/feedback.py",
+        "lines": [
+          70
+        ]
+      },
+      {
+        "file": "game/forced_movement.py",
+        "lines": [
+          116,
+          224
+        ]
+      }
+    ]
+  },
+  {
+    "field": "forced_movement_profile",
+    "type": "ForcedMovementProfile",
+    "line": 2233,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/forced_movement.py",
+        "lines": [
+          116
+        ]
+      }
+    ]
+  },
+  {
+    "field": "shove_feedback",
+    "type": "Mapping[str, LifecycleFeedback]",
+    "line": 2234,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/forced_movement.py",
+        "lines": [
+          100
+        ]
+      }
+    ]
+  },
+  {
+    "field": "number_style",
+    "type": "FloatingFeedbackStyle",
+    "line": 2235,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation.py",
+        "lines": [
+          1206
+        ]
+      },
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          427,
+          428,
+          870
+        ]
+      },
+      {
+        "file": "game/encounter_play.py",
+        "lines": [
+          119
+        ]
+      },
+      {
+        "file": "game/feedback.py",
+        "lines": [
+          79,
+          91,
+          95,
+          111,
+          122
+        ]
+      }
+    ]
+  },
+  {
+    "field": "badge_style",
+    "type": "FloatingFeedbackStyle",
+    "line": 2236,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          870
+        ]
+      },
+      {
+        "file": "game/attack.py",
+        "lines": [
+          512
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          464
+        ]
+      },
+      {
+        "file": "game/condition_animation.py",
+        "lines": [
+          487
+        ]
+      },
+      {
+        "file": "game/encounter_play.py",
+        "lines": [
+          119
+        ]
+      },
+      {
+        "file": "game/feedback.py",
+        "lines": [
+          62,
+          63,
+          68,
+          69,
+          73,
+          74,
+          97,
+          138,
+          143,
+          153
+        ]
+      }
+    ]
+  },
+  {
+    "field": "dart_style",
+    "type": "DartStyle",
+    "line": 2237,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation.py",
+        "lines": [
+          1043,
+          1803
+        ]
+      },
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          896,
+          897
+        ]
+      }
+    ]
+  },
+  {
+    "field": "bolt_style",
+    "type": "BoltStyle",
+    "line": 2238,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          893,
+          894
+        ]
+      },
+      {
+        "file": "game/attack.py",
+        "lines": [
+          251,
+          252
+        ]
+      }
+    ]
+  },
+  {
+    "field": "vfx_source_hues",
+    "type": "Mapping[str, float]",
+    "line": 2239,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          94,
+          234,
+          390
+        ]
+      }
+    ]
+  },
+  {
+    "field": "context_source_json",
+    "type": "str",
+    "line": 2241,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": []
+  },
+  {
+    "field": "world_animations",
+    "type": "Mapping[str, PropAnimation]",
+    "line": 2242,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          879,
+          994,
+          1636
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          102
+        ]
+      }
+    ]
+  },
+  {
+    "field": "spatial_media",
+    "type": "Mapping[str, SpatialMediaBinding]",
+    "line": 2243,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          491
+        ]
+      },
+      {
+        "file": "game/attack.py",
+        "lines": [
+          60
+        ]
+      },
+      {
+        "file": "game/cast_media.py",
+        "lines": [
+          167,
+          170
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          592,
+          936,
+          997,
+          1013,
+          1307,
+          1506,
+          1514
+        ]
+      },
+      {
+        "file": "game/construction_media.py",
+        "lines": [
+          116,
+          120
+        ]
+      },
+      {
+        "file": "game/interruption.py",
+        "lines": [
+          150
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          105,
+          109,
+          116
+        ]
+      },
+      {
+        "file": "game/spatial_contact_media.py",
+        "lines": [
+          30,
+          57,
+          71,
+          110,
+          140
+        ]
+      },
+      {
+        "file": "game/spatial_media_draw.py",
+        "lines": [
+          80,
+          104,
+          138,
+          144
+        ]
+      },
+      {
+        "file": "game/spatial_media_lifetime.py",
+        "lines": [
+          49,
+          76,
+          78,
+          124,
+          179
+        ]
+      }
+    ]
+  },
+  {
+    "field": "action_media_assets",
+    "type": "Mapping[str, ActionMediaAsset | ParticleMediaAsset]",
+    "line": 2244,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/action_media.py",
+        "lines": [
+          45,
+          48
+        ]
+      }
+    ]
+  },
+  {
+    "field": "body_release_media",
+    "type": "Mapping[str, tuple[MovementMediaTrack, ...]]",
+    "line": 2245,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          1345
+        ]
+      }
+    ]
+  },
+  {
+    "field": "relocation_actions",
+    "type": "frozenset[str]",
+    "line": 2246,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/body_action.py",
+        "lines": [
+          160,
+          232
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          350
+        ]
+      }
+    ]
+  },
+  {
+    "field": "portals",
+    "type": "Mapping[str, PortalArt | DoorwayArt]",
+    "line": 2247,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/body_history.py",
+        "lines": [
+          47
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          831,
+          987,
+          1763,
+          1921,
+          1925
+        ]
+      },
+      {
+        "file": "game/choreography_draw.py",
+        "lines": [
+          122
+        ]
+      },
+      {
+        "file": "game/playback_frame.py",
+        "lines": [
+          289
+        ]
+      },
+      {
+        "file": "game/portal_draw.py",
+        "lines": [
+          68
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          104,
+          153
+        ]
+      }
+    ]
+  },
+  {
+    "field": "blood_responses",
+    "type": "Mapping[str, BloodResponse | None]",
+    "line": 2248,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/action_media.py",
+        "lines": [
+          53,
+          73
+        ]
+      }
+    ]
+  },
+  {
+    "field": "action_playback_rates",
+    "type": "Mapping[str, float]",
+    "line": 2249,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_rates.py",
+        "lines": [
+          8
+        ]
+      }
+    ]
+  },
+  {
+    "field": "action_deliveries",
+    "type": "Mapping[str, str]",
+    "line": 2250,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          50,
+          63,
+          64,
+          65
+        ]
+      }
+    ]
+  },
+  {
+    "field": "movement_reference_speed_feet",
+    "type": "float",
+    "line": 2251,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          2195,
+          2450
+        ]
+      }
+    ]
+  },
+  {
+    "field": "deposit_media",
+    "type": "Mapping[str, DepositMediaBinding]",
+    "line": 2252,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          599
+        ]
+      },
+      {
+        "file": "game/deposit_draw.py",
+        "lines": [
+          31
+        ]
+      },
+      {
+        "file": "game/deposit_media.py",
+        "lines": [
+          30,
+          39
+        ]
+      },
+      {
+        "file": "game/presentation_coverage.py",
+        "lines": [
+          105
+        ]
+      }
+    ]
+  },
+  {
+    "field": "concentration_media",
+    "type": "Mapping[str, SpatialMediaBinding]",
+    "line": 2253,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          514
+        ]
+      },
+      {
+        "file": "game/concentration_media.py",
+        "lines": [
+          57,
+          72,
+          110
+        ]
+      }
+    ]
+  },
+  {
+    "field": "construction_media",
+    "type": "Mapping[str, ConstructionMediaBinding]",
+    "line": 2254,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          515
+        ]
+      },
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          250,
+          972,
+          975,
+          976,
+          1037,
+          1191,
+          1510,
+          1518,
+          1522
+        ]
+      },
+      {
+        "file": "game/construction_media.py",
+        "lines": [
+          108
+        ]
+      },
+      {
+        "file": "game/construction_media_lifetime.py",
+        "lines": [
+          19,
+          21,
+          28
+        ]
+      },
+      {
+        "file": "game/construction_transitions.py",
+        "lines": [
+          27
+        ]
+      }
+    ]
+  },
+  {
+    "field": "body_materials",
+    "type": "Mapping[SummonManifestation, BodyMaterial]",
+    "line": 2255,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          643,
+          1282
+        ]
+      }
+    ]
+  },
+  {
+    "field": "entity_lifecycle_media",
+    "type": "Mapping[str, EntityLifecyclePhase]",
+    "line": 2256,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_data.py",
+        "lines": [
+          619
+        ]
+      },
+      {
+        "file": "game/entity_lifecycle.py",
+        "lines": [
+          46
+        ]
+      }
+    ]
+  },
+  {
+    "field": "item_attachments",
+    "type": "Mapping[str, SpatialMediaBinding]",
+    "line": 2257,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/animation_draw.py",
+        "lines": [
+          725
+        ]
+      },
+      {
+        "file": "game/item_attachment_lifetime.py",
+        "lines": [
+          21
+        ]
+      },
+      {
+        "file": "game/item_draw.py",
+        "lines": [
+          33,
+          80
+        ]
+      },
+      {
+        "file": "game/playback_frame.py",
+        "lines": [
+          275
+        ]
+      }
+    ]
+  },
+  {
+    "field": "action_materials",
+    "type": "Mapping[str, StudioBodyMaterialTrack]",
+    "line": 2258,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/choreography.py",
+        "lines": [
+          1717
+        ]
+      }
+    ]
+  },
+  {
+    "field": "action_intakes",
+    "type": "Mapping[str, ObjectIntake]",
+    "line": 2259,
+    "metadata_materialized_in_initial_inventory": true,
+    "role": "authored/runtime catalog field; source references enumerated",
+    "references": [
+      {
+        "file": "game/playback_frame.py",
+        "lines": [
+          198
+        ]
+      }
+    ]
+  }
+]

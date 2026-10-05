@@ -28,7 +28,8 @@ from game.player_facts import LifeFact, PlayerLineage, PlayerState
 from game.player_reduction import reduce_lineage
 from game.presentation import CompletedLineage, IntervalEnvelope
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.visual_position import VisualPosition
 from tests.game.scenarios import attack_history, lifecycle_history
 from tests.game.player_helpers import player_history, player_inputs

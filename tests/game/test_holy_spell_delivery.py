@@ -17,9 +17,10 @@ from game.orbit_media import orbit_point
 from game.combat import actor_contact
 from game.condition_draw import condition_body_ramp
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.spatial_media_draw import spatial_media_draw_commands
-from game.stationary_media import stationary_media_draw_commands
+from game.stationary_draw import stationary_media_draw_commands
 from tests.game.holy_spell_scenarios import holy_spell_history
 from tests.game.player_helpers import player_history
 

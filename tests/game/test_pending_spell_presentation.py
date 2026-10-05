@@ -20,7 +20,7 @@ from game.player_facts import ActionFact, DamageFact, MovementFact, SpellFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
-from game.stationary_media import stationary_media_draw_commands
+from game.stationary_draw import stationary_media_draw_commands
 from tests.game.pending_spell_scenarios import pending_spell_history
 
 

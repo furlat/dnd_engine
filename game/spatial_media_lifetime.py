@@ -3,6 +3,7 @@
 from dataclasses import dataclass, replace
 from typing import Mapping
 from uuid import UUID
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference, TimingAnchor, TimingReason, TimingMeasurement
 
 from dnd.types.senses import PerceivedSpatialEffect
 from dnd.types.spatial_effects import SpatialEffectChangeOperation
@@ -42,6 +43,19 @@ class SpatialMediaLifetime:
     facings: tuple[tuple[float, Facing8], ...] = ()
     retired_cells: tuple[tuple[tuple[int, int], float], ...] = ()
     committed_ms: float | None = None
+    timing_evidence: tuple[TimingEvidence, ...] = ()
+
+
+def _timing(record: SpatialMediaLifetime, owner: UUID, anchor: TimingAnchor, at: float,
+            source: TimingReference, reason: TimingReason,
+            measurements: tuple[TimingMeasurement, ...] = ()) -> tuple[TimingEvidence, ...]:
+    row = TimingEvidence(len(record.timing_evidence),
+        TimingReference("spatial", owner, anchor), reason, "offset",
+        (TimingOperand(source, at, measurements=measurements),), at)
+    if any(previous.target == row.target and previous.reason == row.reason and previous.inputs == row.inputs
+            and previous.at_ms == row.at_ms for previous in record.timing_evidence):
+        return record.timing_evidence
+    return (*record.timing_evidence, row)
 
 
 def _observed(state: PlayerState, data: AnimationData) -> dict[UUID, PerceivedSpatialEffect]:
@@ -127,8 +141,17 @@ def register_spatial_lifetimes(
                 absolute_start_ms + start if start is not None else None,
                 recipient_endpoints=tuple(row for row in created_recipients.get(owner, ()) if row.track_id in wanted),
                 committed_ms=absolute_start_ms + at)
+            record = result[owner]
+            record = replace(record, timing_evidence=_timing(record, owner, "committed", absolute_start_ms + at,
+                TimingReference("spatial", owner, "admission"), "lifetime_commit"))
+            if start is not None:
+                record = replace(record, timing_evidence=_timing(record, owner, "applied", absolute_start_ms + start,
+                    TimingReference("spatial", owner, "start"), "lifetime_application"))
+            result[owner] = record
         elif not added and old is not None and old.removed_ms is None and owner in removed:
-            result[owner] = replace(old, effect=effect, removed_ms=absolute_start_ms + at)
+            result[owner] = replace(old, effect=effect, removed_ms=absolute_start_ms + at,
+                timing_evidence=_timing(old, owner, "removed", absolute_start_ms + at,
+                    TimingReference("spatial", owner, "admission"), "lifetime_removal"))
     # Reuse the already bound packet contacts and HP dates. An owner or actor
     # merely nearby cannot create a contact; the committed fact names both.
     for visit in visits:
@@ -171,9 +194,14 @@ def register_spatial_lifetimes(
                     continue
                 removed_here = admitted.intersection(previous.positions).difference(following.positions)
                 dates = dict(old.retired_cells)
-                for cell in removed_here:
+                evidence = old.timing_evidence
+                for cell in sorted(removed_here):
+                    if cell not in dates:
+                        evidence = _timing(replace(old, timing_evidence=evidence), owner, "removed",
+                            absolute_start_ms+visit.offset_ms+at, TimingReference("spatial", owner, "admission"),
+                            "lifetime_removal", (TimingMeasurement("cell.x", cell[0]), TimingMeasurement("cell.y", cell[1])))
                     dates.setdefault(cell,absolute_start_ms+visit.offset_ms+at)
-                result[owner] = replace(old,retired_cells=tuple(sorted(dates.items())))
+                result[owner] = replace(old,retired_cells=tuple(sorted(dates.items())), timing_evidence=evidence)
             prior = current
     for owner,old in tuple(result.items()):
         duration = maintained_removal_duration(data,data.spatial_media[old.effect.content_ref.content_id])
@@ -183,7 +211,9 @@ def register_spatial_lifetimes(
                 for row in visit.timeline.world_transitions if row.field == "removal")
     for at, owner in removals:
         if owner in result:
-            result[owner] = replace(result[owner], removed_ms=absolute_start_ms + at)
+            result[owner] = replace(result[owner], removed_ms=absolute_start_ms + at,
+                timing_evidence=_timing(result[owner], owner, "removed", absolute_start_ms + at,
+                    TimingReference("spatial", owner, "start"), "lifetime_removal"))
     for visit in visits:
         if isinstance(visit.timeline, BoundChoreography):
             for response in visit.timeline.spatial_responses:

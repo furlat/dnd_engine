@@ -5,7 +5,12 @@ remain ordinary roots, and the caller keeps its existing playback queue.
 """
 
 from dataclasses import dataclass
+from typing import Mapping
+from uuid import UUID
 
+from game.animation import ActorContact
+from game.animation_types import AnimationData, Facing8
+from game.choreography import BoundChoreography, MotionTimeline, bind_choreography, bind_motion
 from game.player_facts import ActionFact, PlayerLineage, PlayerState
 from game.player_reduction import reduce_lineage, stage_lineage
 
@@ -54,3 +59,16 @@ def stage_presentation_group(before: PlayerState, group: PresentationGroup) -> P
     for lineage in group.lineages:
         staged = stage_lineage(staged, lineage)
     return staged
+
+
+def bind_presentation_group(before: PlayerState, group: PresentationGroup, data: AnimationData, *,
+                            facings: Mapping[str, Facing8], contacts: Mapping[str, ActorContact],
+                            activated_conditions: frozenset[UUID] = frozenset(),
+                            ) -> BoundChoreography | MotionTimeline:
+    """One binding choice for game, recording and headless presentation."""
+    motion = bind_motion(before, group.primary, data, contacts=contacts,
+                         activated_conditions=activated_conditions)
+    if motion is not None:
+        return motion
+    return bind_choreography(before, group.primary, data, facings=facings, contacts=contacts,
+        activated_conditions=activated_conditions, reactions=group.reactions)

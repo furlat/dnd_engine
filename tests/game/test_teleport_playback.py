@@ -13,7 +13,8 @@ from game.playback_frame import sample_playback_frame
 from game.player_facts import SpatialFact, SpellFact
 from game.player_reduction import reduce_lineage, stage_lineage
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from tests.game.player_helpers import player_history
 from tests.game.teleport_scenarios import teleport_history
 

@@ -46,6 +46,8 @@ _IMAGE_RESOURCES = TypeAdapter(dict[str, ImageResourceSource])
 
 @dataclass(frozen=True, slots=True)
 class AssetSpec:
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
     asset_id: str
     path: Path
     native_size: tuple[int, int]

@@ -14,7 +14,8 @@ from dnd.types.world_placement import WorldObjectPlacement, WorldPlacementKind
 from devtools.animation_review.control_cases import control_spell_history
 from game.animation_data import load_animation_data
 from game.animation_types import SpatialMediaBinding, SpatialMediaLayer
-from game.area_media import AreaMedia, AreaSolid
+from game.area_media import AreaMedia
+from game.animation_types import AreaSolid
 from game.maintained_media import maintained_media_alpha, maintained_media_frame, maintained_removal_duration
 from game.player_reduction import reduce_lineage
 from game.projection import Camera, HEIGHT_STEP_PIXELS, inverse_rotate_position

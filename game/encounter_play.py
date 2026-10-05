@@ -6,10 +6,11 @@ the renderer receives neither live entities nor an engine clock.
 """
 
 import asyncio
+import re
+from game.presentation_retained import RetainedPresentation, retain_presentation
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-import re
 from typing import Callable, Mapping, Sequence
 from uuid import UUID
 
@@ -23,27 +24,22 @@ from game.animation_draw import LoadedBodyRows
 from game.animation_types import Facing8
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
-from game.choreography import BoundChoreography, bind_choreography
+from game.choreography import BoundChoreography
 from game.choreography_draw import ChoreographyMedia, load_choreography_media, load_motion_media
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
-from game.condition_media_lifetime import register_condition_lifetimes
-from game.construction_media_lifetime import register_construction_lifetimes
-from game.spatial_media_lifetime import register_spatial_lifetimes
-from game.item_attachment_lifetime import register_item_attachment_starts
-from game.concentration_media import register_concentration_lifetimes
-from game.deposit_media import register_deposit_starts
 from game.motion_media import MotionMediaCue, bind_motion_media, choreography_motion_media
 from game.controls import ActionSelection, EndTurn, MenuState, draw_menu, draw_target_preview, handle_menu_event, initial_menu, selection_target_pool
-from game.motion import MotionTimeline, bind_motion
+from game.motion import MotionTimeline
 from game.playback_frame import sample_playback_frame
 from game.presentation import capture_interval, capture_lineage
 from game.player_facts import AttackFact, MovementFact, PlayerLineage, PlayerState, StepFact
 from game.player_projection import begin_projection, project_lineage
 from game.player_reduction import reduce_initialization, reduce_lineage
 from game.presentation_group import (PresentationGroup, presentation_groups,
-    reduce_presentation_group, stage_presentation_group)
+    reduce_presentation_group, stage_presentation_group, bind_presentation_group)
 from game.projection import Camera, ZOOM_LEVELS
-from game.scene import draw_actor_labels, load_scene_media, scene_actors
+from game.scene import draw_actor_labels, load_scene_media
+from game.scene_actors import scene_actors
 from game.session import (
     Operation, advance_controller, close_session, create_session, discover_player_actions,
     end_player_turn, execute_player_action,
@@ -170,12 +166,7 @@ async def _run(
         restart_requested = False
         frame = issued = 0
         elapsed_ms = presentation_ms = 0.0
-        condition_lifetimes = register_condition_lifetimes({}, historical, data, absolute_start_ms=0, facings=facings)
-        spatial_lifetimes = register_spatial_lifetimes({}, historical, data, absolute_start_ms=0)
-        item_starts = register_item_attachment_starts({}, historical, data, absolute_start_ms=0)
-        construction_lifetimes = register_construction_lifetimes({}, historical, data, absolute_start_ms=0)
-        concentration_lifetimes = register_concentration_lifetimes({}, historical, data, absolute_start_ms=0)
-        deposit_starts = register_deposit_starts({}, historical, data, absolute_start_ms=0)
+        presentation_lifetimes = retain_presentation(RetainedPresentation(), historical, data, absolute_start_ms=0, facings=facings)
         body_history = retain_body_head((), historical, None, start_ms=0, facings=facings, positions=positions)
         clock = pygame.time.Clock()
         if capture_dir is not None:
@@ -298,10 +289,11 @@ async def _run(
                 choreography_media = None
                 contacts = {actor.contact.actor_uuid: actor.contact
                             for actor in scene_actors(historical, data, facings, positions)}
-                activated_conditions = frozenset(owner for owner, lifetime in condition_lifetimes.items()
+                activated_conditions = frozenset(owner for owner, lifetime in presentation_lifetimes.conditions.items()
                     if lifetime.activated_ms is not None and lifetime.activated_ms <= presentation_ms)
-                motion = bind_motion(historical, active, data, contacts=contacts,
-                                     activated_conditions=activated_conditions)
+                bound = bind_presentation_group(historical, active_group, data, facings=facings,
+                    contacts=contacts, activated_conditions=activated_conditions)
+                motion = bound if isinstance(bound, MotionTimeline) else None
                 reaction_media = {}
                 if motion is not None:
                     reaction_media = load_motion_media(motion, data, body_rows=body_media)
@@ -315,23 +307,13 @@ async def _run(
                         for event in active.events
                     ):
                         gaps.append((active.root.uuid, "Movement reaction choreography is not bound"))
-                    choreography = bind_choreography(historical, active, data, facings=facings, contacts=contacts,
-                        activated_conditions=activated_conditions, reactions=active_group.reactions)
+                    assert isinstance(bound, BoundChoreography)
+                    choreography = bound
                     choreography_media = load_choreography_media(choreography, body_rows=body_media)
                     gaps.extend(choreography.gaps)
                     feedback.extend(choreography_feedback(choreography, data, presentation_ms, contacts=contacts))
-                condition_lifetimes = register_condition_lifetimes(condition_lifetimes, historical, data,
-                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion, facings=facings)
-                spatial_lifetimes = register_spatial_lifetimes(spatial_lifetimes, historical, data,
-                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
-                item_starts = register_item_attachment_starts(item_starts, historical, data,
-                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
-                construction_lifetimes = register_construction_lifetimes(construction_lifetimes, historical, data,
-                    absolute_start_ms=presentation_ms, choreography=choreography, motion=motion)
-                concentration_lifetimes = register_concentration_lifetimes(concentration_lifetimes, historical, data,
-                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
-                deposit_starts = register_deposit_starts(deposit_starts, historical, data,
-                    absolute_start_ms=presentation_ms, lineage=active, choreography=choreography, motion=motion)
+                presentation_lifetimes = retain_presentation(presentation_lifetimes, historical, data, absolute_start_ms=presentation_ms,
+                    lineage=active, choreography=choreography, motion=motion, facings=facings)
                 if motion is not None:
                     motion_media.extend(bind_motion_media(motion, data, presentation_ms))
                 elif choreography is not None:
@@ -352,8 +334,8 @@ async def _run(
                 historical, after if active is not None else None, data, elapsed_ms, presentation_ms,
                 camera, facings, body_media, number_font, badge_font,
                 choreography=choreography, choreography_media=choreography_media,
-                motion=motion, reaction_media=reaction_media, feedback=feedback, condition_lifetimes=condition_lifetimes,
-                spatial_lifetimes=spatial_lifetimes, item_starts=item_starts, construction_lifetimes=construction_lifetimes, concentration_lifetimes=concentration_lifetimes, deposit_starts=deposit_starts,
+                motion=motion, reaction_media=reaction_media, feedback=feedback, condition_lifetimes=presentation_lifetimes.conditions,
+                spatial_lifetimes=presentation_lifetimes.spatial, item_starts=presentation_lifetimes.items, construction_lifetimes=presentation_lifetimes.construction, concentration_lifetimes=presentation_lifetimes.concentration, deposit_starts=presentation_lifetimes.deposits,
                 positions=positions, feedback_viewport=feedback_viewport, motion_media=motion_media, body_history=body_history,
             )
             displayed, actors, commands = playback.displayed, playback.actors, playback.commands
@@ -363,7 +345,7 @@ async def _run(
             draw_frame(screen, displayed, catalog, cache, camera, presentation_ms / 1000,
                        show_grid=show_grid, show_debug=show_debug, mouse_position=None,
                        objective_lines=tuple(f"[{identity}] {reason}" for identity, reason in gaps[-8:]),
-                       extra_commands=commands, animation_data=data, item_starts=item_starts,
+                       extra_commands=commands, animation_data=data, item_starts=presentation_lifetimes.items,
                        world_transitions=playback.world_transitions, residue_reveals=playback.residue_reveals, deposited_materials=playback.deposited_materials,
                        revisions=(latest.reducer_cursor, latest.reducer_cursor, historical.reducer_cursor))
             ready = waiting_for_player and active is None and not pending and not paused

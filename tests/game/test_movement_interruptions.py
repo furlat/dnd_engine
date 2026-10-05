@@ -21,6 +21,8 @@ from game.attack import select_attack_profile
 from game.choreography import sample_choreography
 from game.combat import actor_contact
 from game.motion import bind_motion, sample_motion
+from game.timing_evidence import validate_timing_evidence
+from game.presentation_timing import presentation_dependencies
 from game.presentation import reduce_lineage
 from game.player_reduction import reduce_lineage as reduce_player
 from game.player_facts import AttackFact, PlayerState
@@ -111,6 +113,12 @@ def test_real_opportunity_rider_joins_before_the_step_commits_or_stops(
     assert not before.actors[mover_uuid].conditions
 
     motion = bind_motion(player, received, data)
+    assert motion is not None
+    assert not validate_timing_evidence(motion.timing_evidence)
+    assert motion.timing_evidence[-1].at_ms == motion.complete_ms
+    tables = presentation_dependencies(motion=motion, offset_ms=73.)
+    assert all(not validate_timing_evidence(table.evidence) for table in tables)
+    assert any(table.scope == 'motion' and table.owner_uuid == received.root.uuid for table in tables)
     assert motion is not None and len(motion.reactions) == 1
     reaction, = motion.reactions
     # The original Attack recipe/body owns contact, regardless of how the

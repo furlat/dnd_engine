@@ -10,7 +10,8 @@ from game.animation_types import AnimationData, StudioMediaTrack
 from game.choreography import BoundChoreography, MotionLeg, MotionTimeline, motion_leg_contact
 from game.draw_commands import DrawCommand
 from game.projection import Camera
-from game.stationary_media import StationaryMediaCue, stationary_media_draw_commands
+from game.stationary_media import StationaryMediaCue
+from game.stationary_draw import stationary_media_draw_commands
 
 
 @dataclass(frozen=True, slots=True)

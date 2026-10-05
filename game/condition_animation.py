@@ -12,7 +12,7 @@ from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
 from dnd.core.content.identities import ContentRef
-from dnd.core.events import EventType
+from dnd.types.event_facts import EventType
 from dnd.core.life_types import LifeState
 from game.animation import (ActorContact, BodySample, BodyTransition, NumberSample, body_clip,
                             compile_body_transition, sample_body_transition, body_context, resolve_body_context)
@@ -22,7 +22,8 @@ from game.condition_types import (Activity, ConditionBodyColor, ConditionLabel, 
                                   ConditionFrozenPose, ConditionBodyOutline, ConditionAppearanceLayer,
                                   ConditionEquipmentModifier, ConditionAbsenceEcho)
 from game.condition_media import ConditionLayerMedia, ResolvedConditionLayer, supported_layer
-from game.actor_facts import ConditionFact
+from dnd.types.actor_facts import ConditionFact
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference, record_timing
 from game.player_facts import ConditionChangeFact, DamageFact, HealFact, PlayerActor, PlayerNode
 
 
@@ -178,6 +179,7 @@ class ConditionTimeline:
     unsupported: tuple[str, ...]
     body: BodyTransition | None = None
     alpha_end_ms: float | None = None
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,8 +379,16 @@ def bind_condition_body(timeline: ConditionTimeline, recipe: ConditionRecipe | N
         ContentBodyQualifier(contentRef=recipe.definitionRef), body_context(
             animation.bodyClip, animation.bodyPlaybackSpeed, reversed=animation.reversed))
     cue = compile_body_transition(data, contact, animation, body=selected)
+    evidence = list(timeline.timing_evidence)
+    previous = next((row for row in reversed(evidence) if row.target.anchor == 'complete'), None)
+    complete = max(timeline.complete_ms, timeline.start_ms + cue.frames * 1000 / cue.fps)
+    record_timing(evidence, TimingReference('event', timeline.event_uuid, 'complete'), 'condition_transition',
+        (TimingOperand(TimingReference('event', timeline.event_uuid, 'complete'), timeline.complete_ms,
+            producer_index=previous.index if previous is not None else None),
+         TimingOperand(TimingReference('event', timeline.event_uuid, 'start'), timeline.start_ms,
+            offset_ms=cue.frames * 1000 / cue.fps, authored_field='condition.selected_body.duration')), complete, 'maximum')
     return replace(timeline, body=cue, alpha_end_ms=timeline.complete_ms,
-                   complete_ms=max(timeline.complete_ms, timeline.start_ms + cue.frames * 1000 / cue.fps))
+                   complete_ms=complete, timing_evidence=tuple(evidence))
 
 
 def sample_condition_body(timeline: ConditionTimeline, elapsed_ms: float,
@@ -430,6 +440,11 @@ def compile_condition(
         )
     transition = recipe.application if applied else recipe.removal
     start = start_ms + (override.delayMs if override is not None else 0)
+    evidence: list[TimingEvidence] = []
+    start_source = record_timing(evidence, TimingReference('event', event.uuid, 'start'), 'condition_transition',
+        (TimingOperand(TimingReference('event', event.uuid, 'admission'), start_ms,
+            offset_ms=override.delayMs if override is not None else 0,
+            authored_field='spell.condition.delayMs' if override is not None else None),), start)
     # Body filtering changes at entry. Authored alpha and size share this
     # transition; its duration does not delay unrelated steady-state filters.
     alpha_duration = (transition.durationMs
@@ -454,13 +469,24 @@ def compile_condition(
         *old_appearance.unsupported, *new_appearance.unsupported,
         *transition_limitations(recipe.definitionRef.content_id, transition, media),
     )))
+    operands = [start_source,
+        replace(start_source, offset_ms=alpha_duration, authored_field='condition.transition.durationMs'),
+        replace(start_source, offset_ms=ramp_duration, authored_field='condition.persistent.bodyRamp'),
+        replace(start_source, offset_ms=appearance_duration, authored_field='condition.appearance.transition.durationMs')]
+    if changed and (applied or not media_activated and not change.consumed):
+        operands.extend(replace(start_source, offset_ms=effect.startOffsetMs + effect.durationMs,
+            authored_field=f'condition.transition.effects.{effect.id}') for effect in transition.effects)
+    complete = start + max(alpha_duration, media_duration, ramp_duration, appearance_duration)
+    record_timing(evidence, TimingReference('event', event.uuid, 'complete'), 'condition_transition',
+        tuple(operands), complete, 'maximum')
     return ConditionTimeline(
-        event.uuid, change.target_entity_uuid, start, start + max(alpha_duration, media_duration, ramp_duration, appearance_duration),
+        event.uuid, change.target_entity_uuid, start, complete,
         before, after, old_appearance, new_appearance,
         ("+" if applied else "−") + fact.name if feedback else None,
         transition.feedbackColor, badge_style, unsupported,
         alpha_end_ms=(start + alpha_duration
                       if abs(old_appearance.scale - new_appearance.scale) >= .001 else None),
+        timing_evidence=tuple(evidence),
     )
 
 

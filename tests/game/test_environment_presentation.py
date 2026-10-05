@@ -31,7 +31,8 @@ from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera, camera_axis_vectors, camera_pose, project_screen
 from game.replay import RecordedSequence
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.world_animation import WorldTransitionSample
 from tests.game.door_destruction_scenarios import door_destruction_history
 from tests.game.trap_hardware_scenarios import trap_hardware_history

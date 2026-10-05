@@ -13,7 +13,7 @@ from game.choreography import bind_choreography
 from game.condition_animation import condition_body_pose
 from game.player_facts import LifeFact
 from game.player_reduction import reduce_lineage
-from game.scene import scene_actors
+from game.scene_actors import scene_actors
 from tests.game.directed_spell_scenarios import disintegrate_history
 from tests.game.player_helpers import player_history
 

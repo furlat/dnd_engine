@@ -18,7 +18,8 @@ from dnd.types.world import CardinalDirection, LightLevel
 from dnd.types.world_placement import BoundaryStructureKind
 
 from game.area_media import BoundarySprite, compose_area
-from game.mechanism_projectile import sample_mechanism_projectile, mechanism_projectile_draw_command
+from game.mechanism_projectile import sample_mechanism_projectile
+from game.mechanism_projectile_draw import mechanism_projectile_draw_command
 from game.media_blend import blit_media_commands
 from game.draw_commands import DrawCommand
 from game.object_dust import object_dust_commands

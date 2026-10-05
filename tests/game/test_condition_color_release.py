@@ -64,13 +64,13 @@ def test_removal_freezes_current_binding_or_hold_then_finishes_finite_release(da
     outgoing = "release.test.apply" if removed < 53 * 1000 / 32 else "release.test.hold"
     expected_frame = 16 if removed == 500 else 0
     first = sampled(data, actor, records, removed)
-    assert len(first) == 2 and all(s.asset_id == outgoing and s.frame == expected_frame for s in first)
+    assert len(first) == len(layers) and all(s.asset_id == outgoing and s.frame == expected_frame for s in first)
     overlap = sampled(data, actor, records, removed + 75)
-    assert len(overlap) == 4
+    assert len(overlap) == 2 * len(layers)
     assert all(s.alpha == pytest.approx(.5) for s in overlap)
     assert all(s.frame == expected_frame for s in overlap if s.asset_id == outgoing)
     clear = sampled(data, actor, records, removed + 150)
-    assert len(clear) == 2 and all(s.asset_id == "release.test.clear" and s.frame == 4 for s in clear)
+    assert len(clear) == len(layers) and all(s.asset_id == "release.test.clear" and s.frame == 4 for s in clear)
     assert sampled(data, actor, records, removed + 2700)
     assert not sampled(data, actor, records, removed + 87 * 1000 / 32)
     # Seeking again does not mutate a frozen outgoing sample or its owner clock.
@@ -86,7 +86,7 @@ def test_unknown_application_enters_quiet_hold_and_other_owner_suppresses_releas
     assert first and all(s.asset_id == "release.test.hold" for s in first)
     records = {owner: record, remaining: ConditionMediaLifetime(actor, remaining, "condition.spell.slow")}
     kept = sampled(data, actor, records, 3075, (owner_fact(remaining),))
-    assert len(kept) == 2 and all(s.asset_id == "release.test.hold" and s.alpha == 1 for s in kept)
+    assert len(kept) == len(layers) and all(s.asset_id == "release.test.hold" and s.alpha == 1 for s in kept)
 
 
 def test_color_release_fields_load_and_default_without_changing_mask_contract(tmp_path):

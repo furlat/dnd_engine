@@ -1,0 +1,45 @@
+# Remaining selected-artifact semantics: finite implementation list
+
+2026-10-05. Independent source review against approved lanes E–H. This narrows earlier broad coverage concerns; it does not require descriptive fields on every renderer record. No production edits, raster inspection, or fresh tests in this review.
+
+## Latest corrections
+
+The canceled SpellFact application branch now explicitly says application suppressed/canceled and identifies only the permitted target. This closes the actual archived Fireball/globe defect without inventing an application registry.
+
+MotionDescription now carries preparation/release/recovery on the five reviewed casting motions. Cast narration uses existing release/body-end clocks; recovery wording is emitted after body completion. Whole-motion attack/body wording is also deferred to body end. SourceSheet accents are admitted only when absent or exactly equal to the selected clip's original logical sheet. These are appropriately narrow corrections. Interrupted/canceled full gestures remain omitted. Exact equality is conservative: an equivalent baked palette export is intentionally silent unless separately described.
+
+One distinction must remain explicit: the full accent sentence is attached to the preparation entry's detailed text, and some authored accents describe a sequence including later ground flares. This is an authored description of the selected sequence, not a phase-resolved witness of a completed flare. Do not claim each layer's individual appearance/contact phase is timed by the new three body phrases. If strict witnessed-only detailed prose is required, defer that whole accent description to body completion, or author its own actual phase; do not guess a flare clock from the body clock.
+
+## Existing fields should be reused — no new schema required
+
+| Selected artifact family / lane | Existing authoritative description input | Finite work |
+|---|---|---|
+| Attack/action/heal/life result, E | projected combat_log, finite PlayerFact fields, `ActionFeedback.text`, `LifecycleFeedback.text` | Continue exact event/result wording; no prose fields per attack/spell. Use authored feedback only where actually selected and public. |
+| Projectile / exported finite cast-travel-impact art, H | `AuthoredProjectileAsset.displayName`, tags, phase banks; bound application identity and delivery endpoints | Resolve selected asset ID to its display name, use typed delivery/attachment to describe travel/contact. Do not emit asset IDs or invent fire/ice from names of spells. No new description registry. |
+| Body-action / movement strip media, E/F | `ActionMediaAsset.displayName`, `MovementMediaTrack.attachment/depth`, selected timing and context labels | Describe selected strip using existing display name and attachment, only once per native owner/meaningful phase. Camera bank choice is not a separate effect. |
+| Voluntary/forced/connector/portal motion, F | received MovementMode/trajectory/committed endpoints, connector kind, existing movement/forced context `label`, portal opening/closing/transfer clocks | Add finite motion wording from these values and selected BodyClip description. No new walk/fly/window prose registry. Dwell remains hidden/unknown time, not hidden travel. |
+| Conditions/markers using asset IDs, G | public ConditionFact.name, `ConditionLayer.attachment`, ConditionMediaSource asset IDs resolving to named projectile/media assets | Name actual condition and selected head/body/ground attachment. Do not add another name to every condition recipe. Application/quiet reacquisition/retirement remain distinct by existing lifetime evidence. |
+| Named field/construction/world-object state, G | `PerceivedSpatialEffect.name/description`, floor item name/typed facets, construction `surface.material` force_membrane/ice_shell and admitted geometry | Reuse public labels and finite shape/material words. No duplicate wall spell descriptions. Partial sections remain partial; removal and physical break remain distinct. |
+| Summon/despawn portal art, G | `EntityLifecyclePhase.tracksByManifestation`, public manifestation, each selected StudioMediaTrack's asset ID/attachment | Use manifestation and resolved named media, not a per-creature summon-description table. Creation fact is still required to call it a summon. |
+| Weapon coatings/enchanted attachments, E/G | permitted ItemEffectPresentationState and selected item attachment's named asset/layer/material fields | Distinguish item appearance from rules. Reuse same descriptions whether held, dropped or transferred; no per-owner catalog copies. |
+| Material colors, H | resolved PaletteTreatment/elementColors/body material and actual selected geometry | A finite presentation color formatter can describe the resolved color if needed; don't duplicate palette names on every spell. Exact color matching remains graphical evidence, not something prose proves. |
+| Portal/devices, F/G | typed portal lifecycle/aperture, public item/mechanism name, committed mechanism activation | Generic named portal/door/device behavior is sufficient. Raw sheet bank/filename is not prose; no art-specific field is necessary merely to say opens/fires/closes. |
+
+## Actual metadata gaps — smallest existing owner to extend
+
+1. **ParticleMediaAsset lacks the displayName supported by ActionMediaAsset.** `AnimationData.action_media_assets` is a union of those two. Selected independent world-particle media has only assetId and numeric particle/color geometry. Add a human-facing display name on the existing ParticleMediaAsset/source schema if selected particles need prose. Reuse the same asset lookup, not a second particle-name registry. A generic “particles” fallback is safe but does not describe a specific dust/blood/debris asset.
+2. **Direct condition sheet attachments without an asset ID have no artwork meaning.** `ConditionMediaSource/ConditionLayerMedia` can hold only category+animation+images_by_facing (and application/removal resources). When no named asset is selected, the condition name/attachment tells “head marker”, but cannot truthfully distinguish chains, orbiting runes, wings or an outline. If these distinctions are needed by the approved text description coverage, add one optional artwork description on this existing media owner and copy it through the loader. Populate only actual direct-sheet selections; do not add redundant per-condition descriptions for already named exports.
+3. **BodyClip descriptions for fixed rigs are absent unless explicitly authored.** Existing BodyClip.description already solves the schema need. Populate observed descriptions for selected fixed-rig clips using existing reviewed art evidence. Do not copy modular humanoid phrases onto wolves, winged demons or mounted goblins. No new fields needed.
+4. **Replacement sourceSheet accents cannot inherit original geometry prose.** For an arbitrary replacement sheet not equal to the selected original sheet, first determine whether it resolves to an existing named asset. If yes, reuse that asset's label. Only if it is a direct isolated actor-layer sheet with no such named asset should an optional selected-layer description be added to the existing StudioActorLayer. Do not relax the current exact-sheet guard merely to fill a prose gap.
+
+These are conditional **selected-artifact** gaps, not a mandate to blanket-populate new fields across the catalog. Before expanding a source schema, enumerate actual selected IDs that have no existing display name/description; unused source files do not establish a runtime requirement.
+
+## Bounded remaining integration tasks for E–H
+
+- Wire resolved named media and attachment wording into the shared narrative at existing selected delivery/impact/lifetime owners. Current gesture_entries only consumes body layers, so named external VFX are not yet described despite sufficient catalog data.
+- Connect selected motion-leg/connector/portal meaning using current bound legs, without narrating dwell intervals or repeating nested reaction displacement.
+- Expose persistent condition/field/item/construction effect appearance at its exact witnessed application/clearance cut; retained clocks alone do not establish an occurrence. Quiet reacquisition remains inspection.
+- Preserve world update atomicity and content attribution references; do not turn each changed tile into a separate gameplay event or handler callback into a player action.
+- Add a finite selected-owner coverage receipt: named external media, direct sheet, particle, fixed-rig body, state-only/no-visible-component. Each selected owner gets either existing label, explicitly authored description, or intentional silence. This uses current records, not a runtime registry.
+
+The above is the actionable semantic remainder. It does not justify another spell system, particle simulator, lifecycle scheduler, or text-specific reducer. Graphics/media mathematical operators remain functional code as the plan states. Full E–H acceptance still requires the plan's runtime/observer/visual evidence beyond this source audit.

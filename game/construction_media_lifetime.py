@@ -3,11 +3,23 @@
 from dataclasses import replace
 from typing import Mapping
 from uuid import UUID
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference, TimingAnchor, TimingReason
 
 from game.animation_types import AnimationData
 from game.choreography import BoundChoreography, MotionTimeline, walk_bound_timelines
-from game.construction_media import ConstructionMediaLifetime, construction_duration
+from game.construction_transitions import ConstructionMediaLifetime, construction_duration
 from game.player_facts import PlayerState
+
+
+def _timing(record: ConstructionMediaLifetime, anchor: TimingAnchor, at: float,
+            source: TimingReference, reason: TimingReason) -> tuple[TimingEvidence, ...]:
+    row = TimingEvidence(len(record.timing_evidence),
+        TimingReference("object", record.object.item.item_uuid, anchor), reason, "offset",
+        (TimingOperand(source, at),), at)
+    if any(previous.target == row.target and previous.reason == row.reason and previous.inputs == row.inputs
+            and previous.at_ms == row.at_ms for previous in record.timing_evidence):
+        return record.timing_evidence
+    return (*record.timing_evidence, row)
 
 
 def register_construction_lifetimes(retained: Mapping[UUID, ConstructionMediaLifetime], before: PlayerState,
@@ -30,7 +42,9 @@ def register_construction_lifetimes(retained: Mapping[UUID, ConstructionMediaLif
                     result[identity] = replace(old, object=obj) if old is not None else ConstructionMediaLifetime(obj)
                     if identity not in known and result[identity].committed_ms is None:
                         result[identity] = replace(result[identity],
-                            committed_ms=absolute_start_ms + visit.offset_ms + at)
+                            committed_ms=absolute_start_ms + visit.offset_ms + at,
+                            timing_evidence=_timing(result[identity], "committed", absolute_start_ms + visit.offset_ms + at,
+                                TimingReference("object", identity, "admission"), "lifetime_commit"))
                     known.add(identity)
         transitions = timeline.world_transitions
         dust_owners = {row.identity for row in transitions if row.object_dust is not None}
@@ -50,21 +64,29 @@ def register_construction_lifetimes(retained: Mapping[UUID, ConstructionMediaLif
                 at=absolute_start_ms+visit.offset_ms+transition.start_ms
                 for identity,record in tuple(result.items()):
                     if record.object.item.construction_owner_uuid==collapse.object.item.construction_owner_uuid:
-                        result[identity]=replace(record,destroyed_ms=at,removed_ms=None,collapse_contacts=collapse.contacts)
+                        result[identity]=replace(record,destroyed_ms=at,removed_ms=None,collapse_contacts=collapse.contacts,
+                            timing_evidence=_timing(record, "destroyed", at,
+                                TimingReference("object", transition.identity, "destroyed"), "lifetime_destruction"))
                 continue
             record = result.get(transition.identity)
             if record is None:
                 continue
             at = absolute_start_ms+visit.offset_ms+transition.start_ms
             if transition.field == 'removal' and record.destroyed_ms is None and record.removed_ms is None:
-                result[transition.identity] = replace(record, removed_ms=at)
+                result[transition.identity] = replace(record, removed_ms=at,
+                    timing_evidence=_timing(record, "removed", at,
+                        TimingReference("object", transition.identity, "start"), "lifetime_removal"))
             elif transition.field == 'creation' and record.applied_ms is None:
-                result[transition.identity] = replace(record, applied_ms=at)
+                result[transition.identity] = replace(record, applied_ms=at,
+                    timing_evidence=_timing(record, "applied", at,
+                        TimingReference("object", transition.identity, "start"), "lifetime_application"))
             elif transition.object_dust is not None:
                 if not transition.object_dust.partial:
                     result.pop(transition.identity,None)
             elif transition.field == 'destruction' and record.destroyed_ms is None and transition.identity not in dust_owners:
-                result[transition.identity] = replace(record, destroyed_ms=at, removed_ms=None)
+                result[transition.identity] = replace(record, destroyed_ms=at, removed_ms=None,
+                    timing_evidence=_timing(record, "destroyed", at,
+                        TimingReference("object", transition.identity, "start"), "lifetime_destruction"))
         # Witnessed parent removal retires its actually removed section objects.
         # A merely unseen object remains in remembered world state and is not retired.
         if isinstance(timeline, BoundChoreography):
@@ -74,5 +96,7 @@ def register_construction_lifetimes(retained: Mapping[UUID, ConstructionMediaLif
                 for section, record in tuple(result.items()):
                     if (section not in timeline.after.objects and record.destroyed_ms is None
                             and record.object.item.construction_owner_uuid == identity):
-                        result[section] = replace(record, removed_ms=absolute_start_ms+visit.offset_ms+at)
+                        result[section] = replace(record, removed_ms=absolute_start_ms+visit.offset_ms+at,
+                            timing_evidence=_timing(record, "removed", absolute_start_ms+visit.offset_ms+at,
+                                TimingReference("spatial", identity, "start"), "lifetime_removal"))
     return result

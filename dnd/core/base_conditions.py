@@ -537,6 +537,7 @@ class BaseCondition(BaseObject):
     suppression_provider_uuids: Set[UUID] = Field(default_factory=set,
         description="Independent Antimagic providers gating this retained condition.")
     grants_invisibility: bool = False
+    blocks_healing: bool = False
     ignores_difficult_terrain: bool = False
     ignores_magical_speed_reduction: bool = False
     ignores_underwater_penalties: bool = False

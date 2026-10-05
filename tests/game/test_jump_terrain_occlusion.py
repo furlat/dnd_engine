@@ -21,7 +21,8 @@ from game.playback_frame import sample_playback_frame
 from game.player_facts import PlayerState
 from game.player_reduction import reduce_lineage
 from game.projection import Camera, painter_key, project_screen
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.animation_draw import LoadedBodyRows
 from game.choreography_draw import load_motion_media
 from tests.game.movement_scenarios import movement_history

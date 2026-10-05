@@ -15,13 +15,13 @@ from dnd.core.dice import fixed_dice_faces
 from dnd.core.equipment_types import BodyPart, WeaponSlot
 from dnd.core.events import EventPhase, EventQueue
 from dnd.core.gridmap import get_map
-from dnd.core.item_types import ItemLocation
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.evocation import ContinualFlame
+from dnd.spells.abjuration import AntimagicField
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
 
@@ -38,7 +38,7 @@ def continual_flame_history(*, initially_covered: bool = False) -> CapturedHisto
             actor = Entity.create(uuid4(), role.title(), config=EntityConfig(position=position,
                 faction="heroes",
                 ability_scores=AbilityScoresConfig(intelligence=AbilityConfig(ability_score=18)),
-                action_economy=ActionEconomyConfig(spell_slots={2: 3}),
+                action_economy=ActionEconomyConfig(spell_slots={2: 3, 8: 1}),
                 spellcasting=SpellcastingConfig(spellcasting_ability="intelligence"),
                 health=HealthConfig(hit_dices=[HitDiceConfig(hit_dice_value=10,
                     hit_dice_count=12, mode="maximums")]),
@@ -49,6 +49,8 @@ def continual_flame_history(*, initially_covered: bool = False) -> CapturedHisto
             setup_standard_actions(actor)
             if role == "caster":
                 register_spell(actor, ContinualFlame, caster_level=17)
+            else:
+                register_spell(actor, AntimagicField, caster_level=17)
             actor.compose_entity()
             game.deploy_entity(actor, position)
             actors[role] = actor
@@ -96,15 +98,14 @@ def continual_flame_history(*, initially_covered: bool = False) -> CapturedHisto
         assert caster.equip_item(first.uuid, WeaponSlot.MELEE_MAIN)
         perform(caster, "action.move", (4, 6))
         condition = first.active_conditions["Continual Flame"]
-        provider = uuid4()
-        condition.set_suppression(provider, True)
-        get_map().refresh_contribution_lights()
-        first.publish_location_state(ItemLocation.EQUIPMENT, owner_uuid=caster.uuid,
-            equipment_slot=WeaponSlot.MELEE_MAIN)
-        condition.set_suppression(provider, False)
-        get_map().refresh_contribution_lights()
-        first.publish_location_state(ItemLocation.EQUIPMENT, owner_uuid=caster.uuid,
-            equipment_slot=WeaponSlot.MELEE_MAIN)
+        perform(recipient, 'action.move', (4, 8))
+        antimagic = recipient.get_action_template('Antimagic Field')
+        assert antimagic is not None
+        result = antimagic.instantiate().apply()
+        assert result is not None and not result.canceled
+        assert condition.suppression_providers()
+        recipient.remove_condition('Concentrating')
+        assert not condition.suppression_providers()
         assert caster.unequip_item(WeaponSlot.MELEE_MAIN) is first
         assert caster.equip_item(first.uuid, WeaponSlot.MELEE_MAIN)
         assert caster.unequip_item(WeaponSlot.MELEE_MAIN) is first

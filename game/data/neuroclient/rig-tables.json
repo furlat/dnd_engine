@@ -324,5 +324,302 @@
         "frame": 10
       }
     ]
+  },
+  "CLIP_DESCRIPTIONS": {
+    "Special1": {
+      "body": "Raises/gathers the hands, dips through the knees with arms forward, then rises and opens the arms upward/outward before settling.",
+      "layers": {
+        "Magic1": "Fine flickering particles attached to the hands; sparse, airy detail. This sheet follows gather, dip and open.",
+        "Magic2": "Broader smoky/ribbon-like wisps around moving hands; more trailing energy. This sheet follows gather, dip and open.",
+        "Magic3": "Compact, bright hand glows with shorter surrounding flecks. This sheet follows gather, dip and open.",
+        "Effect1": "A small ring forms at the feet, then becomes a broad multi-line ground circle and upward radial flare as the arms open.",
+        "Effect2": "Loose concentric particle spirals surround preparation; a field of upward energy spikes appears around the arm-open phase.",
+        "Effect3": "A wide ring of small particles builds, followed by a relatively narrow vertical cage/column around the rising body.",
+        "Effect4": "Broader bright contour/afterimage follows the moving body and limbs.",
+        "Effect5": "Tighter, finer patterned body contour follows the action with less surrounding spread."
+      },
+      "preparation": "Gathers the hands and dips through the knees.",
+      "release": "Rises and opens the arms upward and outward.",
+      "recovery": "Settles the arms back toward a resting stance."
+    },
+    "Attack1": {
+      "body": "Winds an arm overhead, brings the upper body and hand down through a chopping stroke, then recovers.",
+      "layers": {
+        "Magic1": "Fine flickering particles attached to the hands; sparse, airy detail. This sheet follows overhead chop.",
+        "Magic2": "Broader smoky/ribbon-like wisps around moving hands; more trailing energy. This sheet follows overhead chop.",
+        "Magic3": "Compact, bright hand glows with shorter surrounding flecks. This sheet follows overhead chop.",
+        "Effect4": "Broader bright contour/afterimage follows the moving body and limbs.",
+        "Effect5": "Tighter, finer patterned body contour follows the action with less surrounding spread."
+      }
+    },
+    "Attack2": {
+      "body": "Drops into a low, wide stance and sweeps through a lateral body turn, then returns upright.",
+      "layers": {
+        "Magic1": "Fine flickering particles attached to the hands; sparse, airy detail. This sheet follows low sweeping lunge.",
+        "Magic2": "Broader smoky/ribbon-like wisps around moving hands; more trailing energy. This sheet follows low sweeping lunge.",
+        "Magic3": "Compact, bright hand glows with shorter surrounding flecks. This sheet follows low sweeping lunge.",
+        "Effect4": "Broader bright contour/afterimage follows the moving body and limbs.",
+        "Effect5": "Tighter, finer patterned body contour follows the action with less surrounding spread."
+      }
+    },
+    "Attack3": {
+      "body": "Sets one arm toward the target, draws the other toward the head/shoulder, releases and lowers/repositions the arms.",
+      "layers": {
+        "Magic1": "Fine flickering particles attached to the hands; sparse, airy detail. This sheet follows bow draw and release.",
+        "Magic2": "Broader smoky/ribbon-like wisps around moving hands; more trailing energy. This sheet follows bow draw and release.",
+        "Magic3": "Compact, bright hand glows with shorter surrounding flecks. This sheet follows bow draw and release.",
+        "Effect4": "Broader bright contour/afterimage follows the moving body and limbs.",
+        "Effect5": "Tighter, finer patterned body contour follows the action with less surrounding spread."
+      },
+      "preparation": "Sets one arm toward the target and draws the other toward the shoulder.",
+      "release": "Releases the drawn hand toward the target.",
+      "recovery": "Lowers and repositions the arms."
+    },
+    "Attack4": {
+      "body": "Holds an arm high, sinks into a deep knee bend, and drives the hand/body down toward the ground.",
+      "layers": {
+        "Magic1": "Fine flickering particles attached to the hands; sparse, airy detail. This sheet follows overhead into ground.",
+        "Magic2": "Broader smoky/ribbon-like wisps around moving hands; more trailing energy. This sheet follows overhead into ground.",
+        "Magic3": "Compact, bright hand glows with shorter surrounding flecks. This sheet follows overhead into ground.",
+        "Effect1": "Fine particles precede a foot-centered circle that expands into a broad flashing ring after the downward motion.",
+        "Effect2": "Several radii of tall upward spikes surround the figure through the overhead-to-ground motion.",
+        "Effect3": "Energy descends toward the body, then a segmented radial burst spreads from the feet.",
+        "Effect4": "Broader bright contour/afterimage follows the moving body and limbs.",
+        "Effect5": "Tighter, finer patterned body contour follows the action with less surrounding spread."
+      },
+      "preparation": "Raises an arm and sinks into a deep knee bend.",
+      "release": "Drives the hand down toward the ground.",
+      "recovery": "Rises from the low stance."
+    },
+    "Attack5": {
+      "body": "Keeps a mostly upright stance, brings a hand forward and extends it toward the target, then retracts.",
+      "layers": {
+        "Magic1": "Fine flickering particles attached to the hands; sparse, airy detail. This sheet follows pointed hand release.",
+        "Magic2": "Broader smoky/ribbon-like wisps around moving hands; more trailing energy. This sheet follows pointed hand release.",
+        "Magic3": "Compact, bright hand glows with shorter surrounding flecks. This sheet follows pointed hand release.",
+        "Effect1": "Small directional flare/ring at the forward/off-hand region; it follows the pointing sequence and disappears.",
+        "Effect2": "Two large bright bodies orbit around the caster with long curved trails, then fade.",
+        "Effect3": "A large directional skull grows in front of/over the figure and dissolves.",
+        "Effect4": "Broader bright contour/afterimage follows the moving body and limbs.",
+        "Effect5": "Tighter, finer patterned body contour follows the action with less surrounding spread."
+      },
+      "preparation": "Brings a hand forward from an upright stance.",
+      "release": "Extends the hand toward the target.",
+      "recovery": "Retracts the extended hand."
+    },
+    "Attack6": {
+      "body": "Leans into a low forward lunge with a punching/thrusting arm motion, then straightens and recovers.",
+      "layers": {
+        "Magic1": "Fine flickering particles attached to the hands; sparse, airy detail. This sheet follows low forward thrust.",
+        "Magic2": "Broader smoky/ribbon-like wisps around moving hands; more trailing energy. This sheet follows low forward thrust.",
+        "Magic3": "Compact, bright hand glows with shorter surrounding flecks. This sheet follows low forward thrust.",
+        "Effect1": "Brief narrow directional flare at the thrusting hand during the low lunge.",
+        "Effect2": "A narrower group of tall spikes is strong during preparation, then mostly fades to scattered sparks around the thrust/recovery.",
+        "Effect3": "Descending energy in preparation leads to a segmented foot-centered radial burst after the thrust.",
+        "Effect4": "Broader bright contour/afterimage follows the moving body and limbs.",
+        "Effect5": "Tighter, finer patterned body contour follows the action with less surrounding spread."
+      },
+      "preparation": "Lowers the body into a forward stance.",
+      "release": "Thrusts the arm forward in a low lunge.",
+      "recovery": "Straightens and recovers the stance."
+    },
+    "Idle": {
+      "body": "Small standing weight and arm changes.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "Idle2": {
+      "body": "Bent knees and a guarded arm position with slight shifts.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "Idle3": {
+      "body": "Upright narrow stance with minimal movement.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "Idle4": {
+      "body": "Bent-arm ready stance and small weight shifts.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "Walk": {
+      "body": "Alternating leg stride with arm swing.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "Run": {
+      "body": "Forward-leaning long stride and stronger arm motion.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "RunBackwards": {
+      "body": "Guarded upright torso with retreating footwork.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "StrafeLeft": {
+      "body": "Sideways stepping gait with stable upper-body facing.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "StrafeRight": {
+      "body": "Opposite sideways stepping gait.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "AttackRun": {
+      "body": "Running stride combined with a raised-arm chopping attack.",
+      "layers": {
+        "Magic1": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic2": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic3": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Effect4": "Broader bright contour/afterimage follows the moving body and limbs.",
+        "Effect5": "Tighter, finer patterned body contour follows the action with less surrounding spread."
+      }
+    },
+    "AttackRun2": {
+      "body": "Running stride combined with a more forward-reaching arm strike.",
+      "layers": {
+        "Magic1": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic2": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic3": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Effect4": "Broader bright contour/afterimage follows the moving body and limbs.",
+        "Effect5": "Tighter, finer patterned body contour follows the action with less surrounding spread."
+      }
+    },
+    "Kick": {
+      "body": "Lifts a knee, extends the foot and returns to stance.",
+      "layers": {
+        "Magic1": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic2": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic3": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion."
+      }
+    },
+    "CrouchIdle": {
+      "body": "Low stationary stance.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "CrouchRun": {
+      "body": "Low stepping motion with bent knees.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "Rolling": {
+      "body": "Drops and rotates the body through a low horizontal roll, then rises.",
+      "layers": {
+        "Magic1": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic2": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic3": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion."
+      }
+    },
+    "Slide": {
+      "body": "Drops into a low extended-leg sliding posture then recovers.",
+      "layers": {
+        "Magic1": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic2": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic3": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion."
+      }
+    },
+    "TakeDamage": {
+      "body": "Brief backward upper-body recoil then recovery.",
+      "layers": {
+        "Magic1": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic2": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic3": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion."
+      }
+    },
+    "Die": {
+      "body": "Loses upright posture and falls back to a sprawled terminal pose.",
+      "layers": {
+        "Magic1": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic2": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic3": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion."
+      }
+    },
+    "Taunt": {
+      "body": "Raises an arm and gestures while standing.",
+      "layers": {
+        "Magic1": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic2": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic3": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion."
+      }
+    },
+    "RideIdle": {
+      "body": "Bent seated leg posture and upright arms.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "RideRun": {
+      "body": "Seated pose with riding bounce.",
+      "layers": {
+        "Magic1": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic2": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established.",
+        "Magic3": "Nonzero source alpha, but sampled SW frames 5 and 11 show little or no readily discernible accent. Its per-motion style is not visually established."
+      }
+    },
+    "RideIdleAttack1": {
+      "body": "Seated stance with raised-arm and follow-through attack.",
+      "layers": {
+        "Magic1": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic2": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic3": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Effect1": "Small side ring accompanies the mounted arm strike.",
+        "Effect2": "Early vertical energy streaks surround the raised-arm preparation.",
+        "Effect3": "Energy leads to a broad ground burst in the later sampled strike.",
+        "Effect4": "Broader bright contour/afterimage follows the moving body and limbs.",
+        "Effect5": "Tighter, finer patterned body contour follows the action with less surrounding spread."
+      }
+    },
+    "RideRunAttack1": {
+      "body": "Mounted attack layered into riding motion.",
+      "layers": {
+        "Magic1": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic2": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Magic3": "Source pixels are present; sampled non-core contacts do not establish a full-cycle, layer-specific shape description for this motion.",
+        "Effect1": "Small side ring accompanies the mounted arm strike.",
+        "Effect2": "Early vertical energy streaks surround the raised-arm preparation.",
+        "Effect3": "Energy leads to a broad ground burst in the later sampled strike.",
+        "Effect4": "Broader bright contour/afterimage follows the moving body and limbs.",
+        "Effect5": "Tighter, finer patterned body contour follows the action with less surrounding spread."
+      }
+    }
   }
 }

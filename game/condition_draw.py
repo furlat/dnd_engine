@@ -117,6 +117,11 @@ def compose_condition_layers(body: pygame.Surface, destination: tuple[int, int],
     return result, bounds.topleft
 
 
+def body_ramp_cacheable(ramp: ConditionBodyRamp) -> bool:
+    """Only these mappings are equivalent on a full row at full strength."""
+    return ramp.mapping in {"maximum_rgb", "luminance_texture"}
+
+
 def condition_body_ramp(surface: pygame.Surface, ramp: ConditionBodyRamp, *,
                         texture: pygame.Surface | None = None, cell_size: tuple[int, int] | None = None,
                         strength: float = 1., pulse: float = 0., age_ms: float = 0.,

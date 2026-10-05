@@ -1,0 +1,2102 @@
+[
+  {
+    "file": "game/action_media.py",
+    "line": 43,
+    "condition": "track.loop or track.tint2 is not None or track.attachment != \"body\""
+  },
+  {
+    "file": "game/action_media.py",
+    "line": 46,
+    "condition": "isinstance(asset, ParticleMediaAsset) and asset.region is not None\n                and (release is None or release.pattern is None or release.occupancy_layer is OccupancyLayer.AIR) and asset.legacyAssetId is not None"
+  },
+  {
+    "file": "game/action_media.py",
+    "line": 49,
+    "condition": "isinstance(asset, ParticleMediaAsset) and (\n                track.reversed or track.tint != 0xFFFFFF or track.offsetX or track.offsetY)"
+  },
+  {
+    "file": "game/action_media.py",
+    "line": 56,
+    "condition": "response is not None and isinstance(asset, ParticleMediaAsset) and asset.region is not None and release is not None"
+  },
+  {
+    "file": "game/action_media.py",
+    "line": 79,
+    "condition": "isinstance(asset, ParticleMediaAsset) and spell_color is not None and track.spellTintStrength"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 685,
+    "condition": "isinstance(target_contact, ActorContact)"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 785,
+    "condition": "emitter is not None and isinstance(effect, ProjectileSample)"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 812,
+    "condition": "isinstance(effect, GeometryProjectileSample)"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 830,
+    "condition": "local is not None and isinstance(effect, ProjectileSample) and effect.column < local.approachUntilFrame"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 912,
+    "condition": "isinstance(target, ActorContact)"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 953,
+    "condition": "projectile.orientation.directionSource == \"tangent\" and effect.phase != \"prepare\""
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1475,
+    "condition": "source.caster.life_state != LifeState.ALIVE"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1510,
+    "condition": "cast.equipment.kind not in (\"hidden\", \"unchanged\")"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1520,
+    "condition": "cast.equipment.kind == \"hidden\" and \"weapon\" not in caster_rig.slot_categories"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 789,
+    "condition": "isinstance(target, ActorContact)"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 971,
+    "condition": "control is not None and effect.phase == \"travel\" and projectile_phase_rotation(projectile, effect.phase) != \"none\""
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1157,
+    "condition": "target.life_state is not LifeState.DEAD"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1180,
+    "condition": "death_start_ms is not None or target.life_state is LifeState.DEAD"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1300,
+    "condition": "track.attachment.startswith(\"target_\") and not any(\n                media_target_applies(track, application) for application in applications)"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1337,
+    "condition": "not isinstance(source.area_geometry, LinePresentationGeometry)"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1469,
+    "condition": "projectile is not None or not recipe.media or any(\n                not track.attachment.startswith(\"source_\") for track in recipe.media)"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1593,
+    "condition": "isinstance(target, ActorContact)"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1632,
+    "condition": "projectile.trajectory.type == \"bezier\""
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1639,
+    "condition": "isinstance(target, ActorContact) and target.life_state == LifeState.DEAD"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1641,
+    "condition": "damage is not None and isinstance(target, ActorContact)"
+  },
+  {
+    "file": "game/animation.py",
+    "line": 1430,
+    "condition": "track.attachment == \"source_hand\""
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 210,
+    "condition": "not isinstance(value, dict)"
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 299,
+    "condition": "isinstance(kinds, list) and \"attack\" in kinds"
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 305,
+    "condition": "isinstance(kinds, list) and \"shove\" in kinds"
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 311,
+    "condition": "isinstance(kinds, list) and any(kind in kinds for kind in (\"action\", \"item_action\", \"counterspell\"))"
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 507,
+    "condition": "layer.side not in (\"rear\", \"front\") or layer.composition != \"clump\""
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 629,
+    "condition": "track.clock != 'release' or track.attachment not in ('source_hand','source_ground')"
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 697,
+    "condition": "isinstance(binding.qualifier, ContentBodyQualifier)\n                    and binding.qualifier.contentRef not in references.get(binding.role, ())"
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 730,
+    "condition": "asset is None or asset.phases.impact is None or asset.phases.impact.loop"
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 625,
+    "condition": "asset is None or asset.phases.impact is None or track.assetPhase != \"impact\""
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 634,
+    "condition": "asset is None or storage is None or track.assetPhase not in storage.phases"
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 637,
+    "condition": "(asset.frame,asset.fps,asset.phases,asset.anchor,asset.rowOrder) != (\n                        reference.frame,reference.fps,reference.phases,reference.anchor,reference.rowOrder)"
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 646,
+    "condition": "asset is None or asset.phases.impact is None or identity not in data.projectile_storage"
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 657,
+    "condition": "asset is None or storage is None or track.assetPhase not in storage.phases"
+  },
+  {
+    "file": "game/animation_data.py",
+    "line": 659,
+    "condition": "(asset.frame,asset.fps,asset.phases,asset.anchor,asset.anchorsByFacing,asset.rowOrder) != (\n                        reference.frame,reference.fps,reference.phases,reference.anchor,reference.anchorsByFacing,reference.rowOrder)"
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 116,
+    "condition": "not isinstance(asset, ParticleMediaAsset)"
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 331,
+    "condition": "isinstance(timeline.target, ActorContact)"
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 859,
+    "condition": "effect.phase == \"prepare\""
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 861,
+    "condition": "effect.phase == \"impact\""
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 74,
+    "condition": "isinstance(cue.asset, ParticleMediaAsset)"
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 374,
+    "condition": "isinstance(application.source.target, ActorContact) and application.damage_start_ms is not None"
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 378,
+    "condition": "isinstance(application.source.target, ActorContact) and application.life_body is not None"
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 402,
+    "condition": "damage is None or not damage.hitFlash.enabled or damage.hitFlash.palette is None\n                or not isinstance(application.source.target, ActorContact)"
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 1158,
+    "condition": "number.kind == \"badge\" and badge_font is None"
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 1306,
+    "condition": "isinstance(effect, ProjectileSample) and layer.depth != \"world\""
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 1312,
+    "condition": "ground is not None and effect.phase == \"impact\" and media.area is not None"
+  },
+  {
+    "file": "game/animation_draw.py",
+    "line": 1084,
+    "condition": "authored_phase.composition == \"xyz_volume\""
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 541,
+    "condition": "self.clock == \"contact\" and not self.attachment.startswith(\"target_\")"
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 543,
+    "condition": "self.requireRemovedConditionTag is not None and not self.attachment.startswith(\"target_\")"
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 545,
+    "condition": "self.requiredSaveSuccess is not None and not self.attachment.startswith(\"target_\")"
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 547,
+    "condition": "(self.requireAppliedConditionId is not None or self.requiredLifeState is not None or self.requireDamageApplied) and not self.attachment.startswith(\"target_\")"
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 549,
+    "condition": "self.actorTopClearancePx is not None and not self.attachment.startswith(\"target_\")"
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 561,
+    "condition": "self.clock != 'release' or self.attachment not in ('source_ground','source_hand')"
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 677,
+    "condition": "any(track.attachment != \"source_ground\" or track.clock != \"release\"\n               or track.composition != \"billboard\" for track in self.media)"
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 1080,
+    "condition": "isinstance(self.qualifier, MovementBodyQualifier) and not movement\n                or isinstance(self.qualifier, ContentBodyQualifier) and self.role not in content_roles"
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 2010,
+    "condition": "bool(self.cellVariants) != (self.composition == \"cell_modules\")"
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 2015,
+    "condition": "(self.orbit is not None) != (self.composition == \"orbit\")"
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 2017,
+    "condition": "self.recipientTrackId is not None and self.composition != \"clump\""
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 2019,
+    "condition": "(self.wallAssembly is not None) != (self.composition == \"wall_assembly\")"
+  },
+  {
+    "file": "game/animation_types.py",
+    "line": 2021,
+    "condition": "self.composition == \"wall_modules\""
+  },
+  {
+    "file": "game/area_media.py",
+    "line": 123,
+    "condition": "len(layer.media.compositions) >= 4"
+  },
+  {
+    "file": "game/attack.py",
+    "line": 58,
+    "condition": "owner is None or not isinstance(owner.area_geometry, WallAssemblyPresentationGeometry)"
+  },
+  {
+    "file": "game/attack.py",
+    "line": 319,
+    "condition": "not isinstance(root, AttackFact)"
+  },
+  {
+    "file": "game/attack.py",
+    "line": 408,
+    "condition": "target_actor is not None and isinstance(target, ActorContact)"
+  },
+  {
+    "file": "game/attack.py",
+    "line": 507,
+    "condition": "isinstance(target, ObjectContact) and damage is not None"
+  },
+  {
+    "file": "game/authoring_conversion.py",
+    "line": 135,
+    "condition": "layer.composition != \"wall_modules\""
+  },
+  {
+    "file": "game/authoring_conversion.py",
+    "line": 198,
+    "condition": "projectile.prepare.composition == \"xyz_volume\" or projectile.travel.composition == \"xyz_volume\""
+  },
+  {
+    "file": "game/authoring_conversion.py",
+    "line": 202,
+    "condition": "mode == \"xyz_volume\" and (selected is None or phase not in selected.phases\n                                    or selected.phases[phase].surfaceFrames is None)"
+  },
+  {
+    "file": "game/authoring_conversion.py",
+    "line": 206,
+    "condition": "track.composition == \"xyz_volume\" and (track.orientation != \"authored\" or track.scaleWithActor)"
+  },
+  {
+    "file": "game/authoring_conversion.py",
+    "line": 226,
+    "condition": "asset is None or source is None or binding.assetPhase not in source.phases"
+  },
+  {
+    "file": "game/authoring_conversion.py",
+    "line": 144,
+    "condition": "asset is None or source is None or binding.assetPhase not in source.phases"
+  },
+  {
+    "file": "game/authoring_conversion.py",
+    "line": 120,
+    "condition": "asset is None or source is None or binding.assetPhase not in source.phases"
+  },
+  {
+    "file": "game/authoring_conversion.py",
+    "line": 173,
+    "condition": "asset is None or source is None or \"impact\" not in source.phases"
+  },
+  {
+    "file": "game/body_action.py",
+    "line": 139,
+    "condition": "isinstance(fact, ActionFact) and binding is not None and binding.interaction_target is not None"
+  },
+  {
+    "file": "game/body_action.py",
+    "line": 104,
+    "condition": "isinstance(fact, ConditionChangeFact)"
+  },
+  {
+    "file": "game/body_action.py",
+    "line": 167,
+    "condition": "cast.equipment.kind not in (\"hidden\", \"unchanged\")"
+  },
+  {
+    "file": "game/body_action.py",
+    "line": 194,
+    "condition": "isinstance(fact, ActionFact) and fact.reaction is not None and action.counterspellFeedback is not None"
+  },
+  {
+    "file": "game/body_action.py",
+    "line": 111,
+    "condition": "isinstance(fact, (SpellFact, ActionFact)) and fact.behavior_id is not None"
+  },
+  {
+    "file": "game/body_hop.py",
+    "line": 31,
+    "condition": "not isinstance(mechanism, MechanismActivationFact) or not mechanism.committed"
+  },
+  {
+    "file": "game/body_hop.py",
+    "line": 43,
+    "condition": "movement is None or not isinstance(movement.fact, ForcedMovementFact)"
+  },
+  {
+    "file": "game/body_presentation.py",
+    "line": 161,
+    "condition": "age < cue.start_ms or cue.phase == \"bond\""
+  },
+  {
+    "file": "game/body_presentation.py",
+    "line": 163,
+    "condition": "cue.phase == \"departure\""
+  },
+  {
+    "file": "game/body_presentation.py",
+    "line": 179,
+    "condition": "not isinstance(fact, LifeFact) or fact.remains_disposition is not RemainsDisposition.DISINTEGRATED"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 94,
+    "condition": "track.attachment == \"area_ground\""
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 102,
+    "condition": "track.attachment == \"source_hand\" and isinstance(contact, ActorContact)"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 124,
+    "condition": "track.bodyOffsetsByFacing is not None and body is not None and isinstance(contact, ActorContact)\n            and body.clip == (track.bodyOffsetsClip or data.damage_context.bodyClip)"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 132,
+    "condition": "track.scaleWithActor and isinstance(contact, ActorContact)"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 137,
+    "condition": "track.orientation == \"target_vector\" and isinstance(source.area_geometry, (ConePresentationGeometry, LinePresentationGeometry))"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 46,
+    "condition": "track.attachment.startswith(\"target_\") and not any(\n                media_target_applies(track, application) for application in timeline.source.applications)"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 116,
+    "condition": "track.attachment == \"target_body\" and isinstance(contact, ActorContact)"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 31,
+    "condition": "not isinstance(target, ActorContact) or not media_target_applies(track, application.source)"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 148,
+    "condition": "socket is not None and isinstance(target, ActorContact)"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 209,
+    "condition": "isinstance(contact, ActorContact) and actor_contacts is not None"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 211,
+    "condition": "track.attachment.startswith(\"target_\") and not any(\n                    feedback_identity(application.target) == feedback_identity(contact) and media_target_applies(track, application)\n                    for application in source.applications)"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 220,
+    "condition": "track.composition == \"clump\" and (area is None or area.admitted is None\n                    or (floor(grid[0] + .5), floor(grid[1] + .5)) not in area.admitted)"
+  },
+  {
+    "file": "game/cast_media.py",
+    "line": 242,
+    "condition": "track.composition == \"xyz_volume\""
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 97,
+    "condition": "portal is not None and portal.arrival is not None and not isinstance(fact, (SpatialFact, SensoryFact))"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 211,
+    "condition": "isinstance(owner.bound, BoundAttack)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 220,
+    "condition": "delivery is None or not isinstance(delivery.source.target, ActorContact)\n            or delivery.damage_start_ms is None or delivery.damage_end_ms is None\n            or delivery.hp_ms is None or delivery.flash_ms is None or delivery.number_ms is None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 231,
+    "condition": "not isinstance(fact, SensoryFact) or not fact.observed_changes"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 330,
+    "condition": "isinstance(root_fact, (AttackFact, SpellFact))\n            or isinstance(root_fact, ActionFact) and root_fact.behavior_id in data.drafts"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 2306,
+    "condition": "not isinstance(root, MovementFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 318,
+    "condition": "isinstance(event.fact, ObjectDestroyedFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 336,
+    "condition": "isinstance(root_fact, SpellFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 538,
+    "condition": "phase is not None and isinstance(fact, (SpatialFact, FactionFact)) and fact.entity_uuid is not None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 703,
+    "condition": "isinstance(fact, ConditionChangeFact) and fact.consumed\n                and owner is not None and isinstance(owner.bound, BoundCast)\n                and str(fact.target_entity_uuid) == owner.bound.timeline.source.caster.actor_uuid"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 709,
+    "condition": "isinstance(fact, AreaReachFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 794,
+    "condition": "fact is None or isinstance(fact, (SensoryFact, SpatialFact))"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 807,
+    "condition": "isinstance(fact, TurnFact) and fact.event_type is EventType.TURN_START and fact.entity_uuid is not None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 809,
+    "condition": "isinstance(fact, MovementFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 816,
+    "condition": "event.uuid == lineage.root.uuid and isinstance(fact, SpatialFact)\n                and fact.change_type is SpatialChangeType.ENTITY_ENTERED"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 819,
+    "condition": "isinstance(fact, SpatialFact) and fact.change_type is SpatialChangeType.ENTITY_ENTERED"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 825,
+    "condition": "isinstance(fact, PortalTransferFact) and fact.committed"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 878,
+    "condition": "isinstance(fact, MechanismActivationFact) and fact.committed"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 932,
+    "condition": "isinstance(fact, SpatialEffectStateFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1007,
+    "condition": "isinstance(fact, SensoryFact) and fact.spatial_effects_changed"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1030,
+    "condition": "isinstance(fact, SpatialFact) and fact.object_uuid is not None\n                and fact.change_type is SpatialChangeType.OBJECT_PLACED and not event.canceled"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1033,
+    "condition": "isinstance(fact, SpatialFact) and fact.object_uuid is not None\n                and fact.change_type is SpatialChangeType.OBJECT_REMOVED\n                and event.lineage_uuid not in destruction_owners"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1044,
+    "condition": "isinstance(fact, ObjectDamageFact) and fact.applied_damage > 0"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1049,
+    "condition": "isinstance(fact, ObjectDestroyedFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1065,
+    "condition": "isinstance(fact, AttackFact) and event.parent_lineage is not None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1073,
+    "condition": "child_attack is not None and not any(\n                isinstance(by_lineage[identity].fact, AttackFact) for identity in event.children_lineages)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1088,
+    "condition": "object_interaction and isinstance(fact, ActionFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1090,
+    "condition": "isinstance(fact, (ActionFact, SpellFact)) and not application and not linked_effect and child_attack is None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1130,
+    "condition": "isinstance(fact, (AttackFact, SpellFact))\n                or isinstance(fact, ActionFact) and delivered_action"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1138,
+    "condition": "(isinstance(fact, (AttackFact, SpellFact)) or delivered_action) and not application and visible_action\n                and body_action is None and child_attack is None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1226,
+    "condition": "isinstance(fact, ShoveFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1234,
+    "condition": "isinstance(fact, ForcedMovementFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1250,
+    "condition": "isinstance(fact, DamageFact) and owner is not None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1258,
+    "condition": "(isinstance(fact, DamageFact) and fact.stage == \"taken\") and owner is None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1263,
+    "condition": "isinstance(fact, DamageFact) and fact.stage == \"taken\" and owner is not None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1272,
+    "condition": "isinstance(fact, EquipmentFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1304,
+    "condition": "isinstance(fact, DamageFact) and fact.stage == \"applied\""
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1327,
+    "condition": "isinstance(fact, SpatialEffectStateFact) and bool(fact.removed_positions)\n                or isinstance(fact, SpatialFact) and ground_contact_is_authored(before, fact, data)\n                or isinstance(fact, DamageFact) and fact.stage == \"applied\"\n                and (fact.effect_id is not None or fact.source_condition_uuid is not None or fact.spatial_source is not None)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1341,
+    "condition": "isinstance(fact, DamageFact) and fact.stage == \"applied\" and fact.body_release is not None\n                and fact.target_entity_uuid is not None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1391,
+    "condition": "isinstance(fact, HealFact) and not fact.was_blocked"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1407,
+    "condition": "isinstance(fact, (DeathSaveFact, LifeFact))"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1423,
+    "condition": "isinstance(fact, PortalTransferFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1453,
+    "condition": "not isinstance(node.bound, BoundCast) or not node.bound.staged_area"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1527,
+    "condition": "not event.canceled and isinstance(event.fact, SpatialEffectStateFact)\n                and event.fact.operation in (SpatialEffectChangeOperation.CREATED, SpatialEffectChangeOperation.REMOVED)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1551,
+    "condition": "isinstance(event.fact, SensoryFact) and event.fact.cause_event_uuid is not None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1572,
+    "condition": "isinstance(fact, SpatialEffectStateFact) and fact.operation is SpatialEffectChangeOperation.CREATED"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1585,
+    "condition": "isinstance(fact, SpatialFact) and fact.object_uuid is not None and fact.change_type is SpatialChangeType.OBJECT_PLACED"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1607,
+    "condition": "isinstance(node.fact, SensoryFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1720,
+    "condition": "material.requireAppliedConditionId is not None and not any(\n                isinstance(node.fact, ConditionChangeFact) and not node.canceled\n                and node.fact.event_type is EventType.CONDITION_APPLICATION\n                and node.fact.condition.behavior_id == material.requireAppliedConditionId\n                and owned_by(node.uuid, cue.event_uuid) for node in lineage.events)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1807,
+    "condition": "isinstance(node.bound, BoundCast) and node.bound.staged_area and isinstance(sample, CastSample)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1852,
+    "condition": "actor is not None and actor.life_state is LifeState.ALIVE and actor_is_visible(displayed, actor)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1871,
+    "condition": "elapsed_ms < cue.start_ms or cue.state_owned or not isinstance(cue.event.fact, LifeFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 2145,
+    "condition": "not isinstance(departure.fact, SpatialFact)\n                or departure.fact.entity_uuid != jump.source_entity_uuid\n                or departure.fact.change_type is not SpatialChangeType.ENTITY_LEFT\n                or departure.fact.position != jump.start_position\n                or departure.fact.occupancy_layer is not OccupancyLayer.AIR"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 2203,
+    "condition": "any(isinstance(node.fact, (DamageFact, ConditionChangeFact, SpatialEffectStateFact, MechanismActivationFact, PortalTransferFact,\n                                      AttackFact, SpellFact)) for node in landed.events)\n                or isinstance(landing.fact, SpatialFact) and ground_contact_is_authored(target, landing.fact, data)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 2226,
+    "condition": "not isinstance(event.fact, MovementFact)\n                or event.parent_lineage != lineage.root.lineage_uuid"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 2285,
+    "condition": "not isinstance(step, StepFact) or step.source_entity_uuid != subject or not step.committed"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 2351,
+    "condition": "not isinstance(step, StepFact) or partial_jump"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 520,
+    "condition": "isinstance(node.bound, BoundCast)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 543,
+    "condition": "phase == \"departure\" and parent is not None and isinstance(parent.fact, ConditionChangeFact)\n                    and parent.fact.event_type is EventType.CONDITION_REMOVAL\n                    and parent.fact.target_entity_uuid == fact.entity_uuid"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 715,
+    "condition": "owner is not None and isinstance(owner.bound, BoundCast)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 731,
+    "condition": "isinstance(fact, SpellFact) and fact.application_index is not None and owner is not None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 733,
+    "condition": "rule is not None and isinstance(fact, (AttackFact, SpellFact, ActionFact))"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 992,
+    "condition": "fact.operation is SpatialEffectChangeOperation.CREATED and owner is not None and isinstance(owner.bound, BoundCast)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1067,
+    "condition": "parent is not None and isinstance(parent.fact, SpellFact)\n                    and parent.fact.source_entity_uuid == fact.source_entity_uuid"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1097,
+    "condition": "body_action is None and isinstance(fact, ActionFact) and fact.behavior_id is not None\n                    and fact.behavior_id not in data.drafts"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1204,
+    "condition": "isinstance(fact, SpellFact) and application and owner is not None and isinstance(owner.bound, BoundCast)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1284,
+    "condition": "entity_cue.phase == \"departure\""
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1334,
+    "condition": "isinstance(fact, SpatialFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1425,
+    "condition": "isinstance(fact, SpatialFact) and fact.change_type is SpatialChangeType.ENTITY_ENTERED\n                and event.parent_lineage is not None and event.parent_lineage in by_lineage"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1536,
+    "condition": "not event.canceled and isinstance(event.fact, SpatialFact)\n                and event.fact.object_uuid is not None\n                and event.fact.change_type is SpatialChangeType.OBJECT_PLACED"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1574,
+    "condition": "isinstance(fact, SpatialEffectStateFact) and fact.operation is SpatialEffectChangeOperation.REMOVED"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1590,
+    "condition": "isinstance(fact, SpatialFact) and fact.object_uuid is not None and fact.change_type is SpatialChangeType.OBJECT_REMOVED"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1648,
+    "condition": "track.requireHealingApplied and not any(isinstance(node.fact,HealFact)\n                    and not node.canceled and not node.fact.was_blocked and node.fact.actual_healing > 0\n                    and str(node.fact.target_entity_uuid) == cue.contact.actor_uuid for node in descendants)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1656,
+    "condition": "track.requireAppliedConditionId is not None and not any(isinstance(node.fact,ConditionChangeFact)\n                    and not node.canceled and node.fact.event_type is EventType.CONDITION_APPLICATION\n                    and node.fact.condition.behavior_id == track.requireAppliedConditionId for node in descendants)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1672,
+    "condition": "not isinstance(fact, SpatialFact) or str(fact.entity_uuid) != cue.contact.actor_uuid\n                    or not owned_by(node.uuid, cue.event_uuid)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 2108,
+    "condition": "not isinstance(event.fact, (AttackFact, SpellFact)) or event.parent_lineage != step_node.lineage_uuid"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 612,
+    "condition": "isinstance(packet.fact, DamageFact) and packet.fact.stage == \"applied\"\n                        and packet.parent_lineage == event.lineage_uuid and not packet.canceled"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 657,
+    "condition": "isinstance(fact, DeathSaveFact)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 681,
+    "condition": "isinstance(fact, LifeFact) and fact.remains_disposition is RemainsDisposition.DISINTEGRATED"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 940,
+    "condition": "fact.operation is SpatialEffectChangeOperation.CREATED and any(\n                        layer.composition == \"wall_modules\" for layer in spatial_media.layers)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 988,
+    "condition": "isinstance(portal_art, PortalArt)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1171,
+    "condition": "isinstance(bound, BoundCast)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1183,
+    "condition": "isinstance(bound, BoundAttack)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1293,
+    "condition": "event.uuid in world_events and owner is not None and isinstance(owner.bound, BoundCast)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1428,
+    "condition": "isinstance(parent.fact, PortalTransferFact)\n                    and fact.entity_uuid == parent.fact.target_entity_uuid\n                    and fact.position == parent.fact.end_position"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1446,
+    "condition": "isinstance(child.fact, (ActionFact, AttackFact, SpellFact, MovementFact, ShoveFact, EquipmentFact))"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1684,
+    "condition": "track.attachment == attachment"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1700,
+    "condition": "track.attachment != \"departure_ground\" or departure_height is None\n                        or any(media.track.id == track.id and media.position == position\n                               and owned_by(media.event_uuid, cue.event_uuid) for media in stationary)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 2516,
+    "condition": "not isinstance(entry.fact, SpatialFact)\n                        or entry.fact.change_type not in (SpatialChangeType.ENTITY_LEFT, SpatialChangeType.ENTITY_ENTERED)\n                        or entry.parent_lineage != node.lineage_uuid"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 2521,
+    "condition": "not (any(isinstance(row.fact, (DamageFact, ConditionChangeFact, SpatialEffectStateFact, MechanismActivationFact, PortalTransferFact,\n                                                AttackFact, SpellFact)) for row in entered.events)\n                        or ground_contact_is_authored(working, entry.fact, data))"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1188,
+    "condition": "isinstance(fact, AttackFact) and not event.canceled and fact.attack_outcome in (AttackOutcome.HIT, AttackOutcome.CRIT)"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 2374,
+    "condition": "isinstance(action, (AttackFact, SpellFact))"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1192,
+    "condition": "isinstance(contact, ObjectContact) and binding is not None and binding.surface is not None\n                                and binding.surface.material == 'force_membrane'"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 1371,
+    "condition": "not isinstance(cue.asset, ParticleMediaAsset) or cue.asset.region is None"
+  },
+  {
+    "file": "game/choreography.py",
+    "line": 758,
+    "condition": "isinstance(attempt, BoundCast)"
+  },
+  {
+    "file": "game/choreography_draw.py",
+    "line": 57,
+    "condition": "isinstance(node.bound, BoundAttack)"
+  },
+  {
+    "file": "game/choreography_draw.py",
+    "line": 201,
+    "condition": "isinstance(node.bound, BoundAttack) and isinstance(current, AttackSample)"
+  },
+  {
+    "file": "game/choreography_draw.py",
+    "line": 213,
+    "condition": "isinstance(node.bound, BoundCast) and isinstance(current, CastSample)"
+  },
+  {
+    "file": "game/combat.py",
+    "line": 178,
+    "condition": "not isinstance(root, (SpellFact, ActionFact))"
+  },
+  {
+    "file": "game/combat.py",
+    "line": 383,
+    "condition": "not isinstance(root, EquipmentFact)"
+  },
+  {
+    "file": "game/combat.py",
+    "line": 204,
+    "condition": "isinstance(geometry, (ConePresentationGeometry, LinePresentationGeometry, CubePresentationGeometry))"
+  },
+  {
+    "file": "game/combat.py",
+    "line": 111,
+    "condition": "actor.life_state == LifeState.DEAD and actor.last_visual_position is not None"
+  },
+  {
+    "file": "game/combat.py",
+    "line": 206,
+    "condition": "isinstance(geometry, CubePresentationGeometry) and not geometry.centered and area_direction is not None"
+  },
+  {
+    "file": "game/combat_demo.py",
+    "line": 159,
+    "condition": "terminal is None or terminal.canceled or terminal.phase is not EventPhase.COMPLETION"
+  },
+  {
+    "file": "game/concentration_media.py",
+    "line": 69,
+    "condition": "node is None or node.canceled or not isinstance(node.fact, SpellFact) or not isinstance(cast.bound, BoundCast)"
+  },
+  {
+    "file": "game/condition_animation.py",
+    "line": 128,
+    "condition": "isinstance(fact, ConditionChangeFact) and fact.consumed\n            and fact.event_type is EventType.CONDITION_REMOVAL\n            and fact.condition.category is not ConditionCategory.INTERNAL"
+  },
+  {
+    "file": "game/condition_animation.py",
+    "line": 133,
+    "condition": "isinstance(fact, HealFact)"
+  },
+  {
+    "file": "game/condition_animation.py",
+    "line": 141,
+    "condition": "isinstance(fact, DamageFact) and fact.source_condition_uuid is not None"
+  },
+  {
+    "file": "game/condition_animation.py",
+    "line": 155,
+    "condition": "event.canceled or not isinstance(fact,DamageFact) or fact.stage != 'applied'"
+  },
+  {
+    "file": "game/condition_animation.py",
+    "line": 338,
+    "condition": "appearance is not None and appearance.frozen_pose is not None and contact.life_state is not LifeState.DEAD"
+  },
+  {
+    "file": "game/condition_animation.py",
+    "line": 352,
+    "condition": "body.clip not in (\"Idle\", data.damage_context.bodyClip) or contact.life_state is LifeState.DEAD\n            or appearance is None or appearance.body_pose is None"
+  },
+  {
+    "file": "game/condition_animation.py",
+    "line": 403,
+    "condition": "event.uuid != fact.event_uuid or not isinstance(change, ConditionChangeFact)\n            or change.event_type not in (EventType.CONDITION_APPLICATION, EventType.CONDITION_REMOVAL,\n                                         EventType.CONDITION_STATE_CHANGED)"
+  },
+  {
+    "file": "game/condition_draw.py",
+    "line": 134,
+    "condition": "ramp.mapping == \"frost_texture\""
+  },
+  {
+    "file": "game/condition_draw.py",
+    "line": 158,
+    "condition": "ramp.mapping == \"flowing_film\""
+  },
+  {
+    "file": "game/condition_draw.py",
+    "line": 186,
+    "condition": "ramp.mapping == \"fracture_wave\""
+  },
+  {
+    "file": "game/condition_draw.py",
+    "line": 197,
+    "condition": "ramp.mapping == \"etched_burn\""
+  },
+  {
+    "file": "game/condition_draw.py",
+    "line": 210,
+    "condition": "ramp.mapping in {\"energy_burn\", \"rising_bands\"}"
+  },
+  {
+    "file": "game/condition_draw.py",
+    "line": 237,
+    "condition": "ramp.mapping == \"wither_texture\""
+  },
+  {
+    "file": "game/condition_draw.py",
+    "line": 263,
+    "condition": "ramp.mapping == \"bark_texture\""
+  },
+  {
+    "file": "game/condition_draw.py",
+    "line": 290,
+    "condition": "ramp.mapping == \"luminance_texture\""
+  },
+  {
+    "file": "game/condition_draw.py",
+    "line": 66,
+    "condition": "layer.attachment in (\"head\", \"face\", \"hand\")"
+  },
+  {
+    "file": "game/condition_draw.py",
+    "line": 216,
+    "condition": "ramp.mapping == \"energy_burn\""
+  },
+  {
+    "file": "game/condition_draw.py",
+    "line": 72,
+    "condition": "attachment_anchors is None or layer.attachment not in attachment_anchors"
+  },
+  {
+    "file": "game/condition_media_lifetime.py",
+    "line": 178,
+    "condition": "isinstance(fact, SpatialFact) and fact.change_type is SpatialChangeType.ENTITY_ENTERED"
+  },
+  {
+    "file": "game/condition_media_lifetime.py",
+    "line": 180,
+    "condition": "isinstance(fact, ConditionChangeFact) and fact.consumed"
+  },
+  {
+    "file": "game/condition_media_lifetime.py",
+    "line": 182,
+    "condition": "isinstance(fact, ConditionChangeFact) and fact.event_type is EventType.CONDITION_APPLICATION"
+  },
+  {
+    "file": "game/condition_media_lifetime.py",
+    "line": 184,
+    "condition": "isinstance(fact, TemporaryHitPointsFact) and fact.grant is not None"
+  },
+  {
+    "file": "game/condition_reaction.py",
+    "line": 27,
+    "condition": "isinstance(root, AttackFact) and isinstance(bound, BoundAttack)"
+  },
+  {
+    "file": "game/condition_reaction.py",
+    "line": 32,
+    "condition": "isinstance(root, SpellFact) and isinstance(bound, BoundCast)"
+  },
+  {
+    "file": "game/condition_reaction.py",
+    "line": 59,
+    "condition": "not isinstance(root, (AttackFact, SpellFact))"
+  },
+  {
+    "file": "game/condition_reaction.py",
+    "line": 98,
+    "condition": "not isinstance(root, (AttackFact, SpellFact))"
+  },
+  {
+    "file": "game/condition_reaction.py",
+    "line": 68,
+    "condition": "node.canceled or not isinstance(fact, ConditionChangeFact)\n                or fact.event_type is not EventType.CONDITION_APPLICATION"
+  },
+  {
+    "file": "game/condition_reaction.py",
+    "line": 35,
+    "condition": "not isinstance(fact, DamageRequestFact)\n                    or fact.intercepted_by_condition_uuid is None\n                    or node.resolution_ref is None"
+  },
+  {
+    "file": "game/condition_reaction.py",
+    "line": 125,
+    "condition": "effect.attachment != \"body\" or effect.offsetX or effect.offsetY"
+  },
+  {
+    "file": "game/condition_types.py",
+    "line": 246,
+    "condition": "(self.mapping in {\"luminance_texture\", \"bark_texture\", \"wither_texture\", \"flowing_film\", \"frost_texture\"}) != (self.texture is not None)"
+  },
+  {
+    "file": "game/condition_types.py",
+    "line": 248,
+    "condition": "(self.mapping == \"frost_texture\") != (self.normalTexture is not None)"
+  },
+  {
+    "file": "game/condition_types.py",
+    "line": 250,
+    "condition": "self.mapping in {\"energy_burn\", \"rising_bands\"} and len(self.colors) != 2"
+  },
+  {
+    "file": "game/condition_types.py",
+    "line": 252,
+    "condition": "self.mapping == \"etched_burn\" and len(self.colors) != 3"
+  },
+  {
+    "file": "game/condition_types.py",
+    "line": 254,
+    "condition": "self.mapping == \"bark_texture\" and len(self.colors) != 2"
+  },
+  {
+    "file": "game/condition_types.py",
+    "line": 256,
+    "condition": "self.mapping == \"fracture_wave\" and len(self.colors) != 2"
+  },
+  {
+    "file": "game/condition_types.py",
+    "line": 258,
+    "condition": "self.mapping == \"wither_texture\" and len(self.colors) != 4"
+  },
+  {
+    "file": "game/condition_types.py",
+    "line": 260,
+    "condition": "self.mapping == \"flowing_film\" and len(self.colors) != 4"
+  },
+  {
+    "file": "game/construction_media.py",
+    "line": 56,
+    "condition": "binding.surface is not None and isinstance(geometry, WallAssemblyPresentationGeometry)"
+  },
+  {
+    "file": "game/construction_media.py",
+    "line": 61,
+    "condition": "not isinstance(geometry, WallAssemblyPresentationGeometry) or not isinstance(geometry.path, WallSegment)"
+  },
+  {
+    "file": "game/construction_media.py",
+    "line": 57,
+    "condition": "isinstance(geometry.path, WallDome)"
+  },
+  {
+    "file": "game/construction_media.py",
+    "line": 59,
+    "condition": "not binding.surface.domeOnly and isinstance(geometry.path, WallSegment)"
+  },
+  {
+    "file": "game/construction_media.py",
+    "line": 121,
+    "condition": "binding.surface is not None and (not binding.surface.domeOnly or isinstance(geometry.path, WallDome))"
+  },
+  {
+    "file": "game/construction_media.py",
+    "line": 122,
+    "condition": "binding.surface.material == 'force_membrane' and isinstance(geometry.path, WallSegment)\n                    and dust is None and identity not in pending"
+  },
+  {
+    "file": "game/construction_media.py",
+    "line": 133,
+    "condition": "not isinstance(candidate, WallAssemblyPresentationGeometry) or not isinstance(candidate.path, WallSegment)"
+  },
+  {
+    "file": "game/construction_media_lifetime.py",
+    "line": 70,
+    "condition": "isinstance(timeline, BoundChoreography)"
+  },
+  {
+    "file": "game/construction_surface.py",
+    "line": 149,
+    "condition": "spec.domeOnly and not isinstance(geometry.path,WallDome)"
+  },
+  {
+    "file": "game/construction_surface.py",
+    "line": 163,
+    "condition": "isinstance(path,WallDome)"
+  },
+  {
+    "file": "game/construction_surface.py",
+    "line": 310,
+    "condition": "not isinstance(path,(WallDome,WallSegment)) or alpha<=0"
+  },
+  {
+    "file": "game/construction_surface.py",
+    "line": 335,
+    "condition": "isinstance(path,WallSegment)"
+  },
+  {
+    "file": "game/construction_surface.py",
+    "line": 186,
+    "condition": "isinstance(path,WallSegment) and spec.material=='force_membrane'"
+  },
+  {
+    "file": "game/construction_surface.py",
+    "line": 220,
+    "condition": "spec.material=='ice_shell' and isinstance(path,WallDome) and break_age is None"
+  },
+  {
+    "file": "game/construction_surface.py",
+    "line": 247,
+    "condition": "isinstance(path,WallSegment)"
+  },
+  {
+    "file": "game/construction_surface.py",
+    "line": 289,
+    "condition": "isinstance(path,WallSegment)"
+  },
+  {
+    "file": "game/construction_surface.py",
+    "line": 214,
+    "condition": "isinstance(path,WallSegment)"
+  },
+  {
+    "file": "game/controls.py",
+    "line": 85,
+    "condition": "action.position_selection is not None and action.position_selection.kind in (\"path\", \"entity_destination\")"
+  },
+  {
+    "file": "game/controls.py",
+    "line": 162,
+    "condition": "action.position_selection is not None and action.position_selection.kind == \"entity_destination\"\n                        and len(state.selected_positions) != 2"
+  },
+  {
+    "file": "game/damage.py",
+    "line": 45,
+    "condition": "not isinstance(root, DamageRequestFact)"
+  },
+  {
+    "file": "game/demo.py",
+    "line": 46,
+    "condition": "event is None or event.canceled or event.phase is not EventPhase.COMPLETION"
+  },
+  {
+    "file": "game/directed_contacts.py",
+    "line": 51,
+    "condition": "isinstance(path,(WallDome,WallRing))"
+  },
+  {
+    "file": "game/directed_media.py",
+    "line": 72,
+    "condition": "isinstance(contact, ActorContact)"
+  },
+  {
+    "file": "game/directed_media.py",
+    "line": 85,
+    "condition": "not hand and isinstance(contact, ActorContact)"
+  },
+  {
+    "file": "game/encounter_play.py",
+    "line": 313,
+    "condition": "isinstance(active.root.fact, MovementFact) and any(\n                        isinstance(event.fact, AttackFact) or (isinstance(event.fact, StepFact) and event.fact.committed)\n                        for event in active.events\n                    )"
+  },
+  {
+    "file": "game/entity_lifecycle.py",
+    "line": 32,
+    "condition": "isinstance(fact, SpatialFact)"
+  },
+  {
+    "file": "game/entity_lifecycle.py",
+    "line": 38,
+    "condition": "isinstance(fact, FactionFact) and fact.control_lost"
+  },
+  {
+    "file": "game/entity_lifecycle.py",
+    "line": 77,
+    "condition": "cue.phase != \"departure\" or not cue.start_ms <= elapsed_ms < cue.body_end_ms"
+  },
+  {
+    "file": "game/event_record.py",
+    "line": 127,
+    "condition": "\"application\" in event._recorded_omissions and isinstance(event, ActionEvent)"
+  },
+  {
+    "file": "game/event_record.py",
+    "line": 138,
+    "condition": "isinstance(value, Event)"
+  },
+  {
+    "file": "game/event_record.py",
+    "line": 197,
+    "condition": "isinstance(event, ActionEvent)"
+  },
+  {
+    "file": "game/event_record.py",
+    "line": 227,
+    "condition": "isinstance(event, ActionEvent) and event.application is not None and isinstance(owner, ApplicationResolutionRef)"
+  },
+  {
+    "file": "game/event_record.py",
+    "line": 241,
+    "condition": "isinstance(event, SpatialChangeEvent) and \"commit_event_uuid\" in event._recorded_omissions\n                and event.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT)"
+  },
+  {
+    "file": "game/event_record.py",
+    "line": 209,
+    "condition": "isinstance(event, TakeDamageEvent)"
+  },
+  {
+    "file": "game/event_record.py",
+    "line": 203,
+    "condition": "not isinstance(owner, ActionEvent)"
+  },
+  {
+    "file": "game/feedback.py",
+    "line": 84,
+    "condition": "isinstance(node.bound, BoundAttack)"
+  },
+  {
+    "file": "game/feedback.py",
+    "line": 92,
+    "condition": "isinstance(attack.target, ObjectContact) and damage is not None and damage.floatingNumber.enabled and attack.damage_total is not None"
+  },
+  {
+    "file": "game/feedback.py",
+    "line": 105,
+    "condition": "isinstance(source.target, ActorContact)"
+  },
+  {
+    "file": "game/interruption.py",
+    "line": 38,
+    "condition": "isinstance(bound, BodyActionCue)"
+  },
+  {
+    "file": "game/interruption.py",
+    "line": 76,
+    "condition": "not event.canceled or cancellation is None\n            or cancellation.outcome_code not in data.interruptions.outcomes\n            or cancellation.phase is None"
+  },
+  {
+    "file": "game/interruption.py",
+    "line": 104,
+    "condition": "isinstance(bound, BoundCast)"
+  },
+  {
+    "file": "game/interruption.py",
+    "line": 108,
+    "condition": "isinstance(bound, BoundCast) and bound.timeline.source.protections"
+  },
+  {
+    "file": "game/interruption.py",
+    "line": 110,
+    "condition": "isinstance(bound, BoundAttack)"
+  },
+  {
+    "file": "game/interruption.py",
+    "line": 145,
+    "condition": "sample.phase != \"travel\""
+  },
+  {
+    "file": "game/interruption.py",
+    "line": 151,
+    "condition": "not isinstance(geometry, SpherePresentationGeometry) or binding is None"
+  },
+  {
+    "file": "game/play.py",
+    "line": 136,
+    "condition": "not isinstance(initialization, IntervalEnvelope)"
+  },
+  {
+    "file": "game/play.py",
+    "line": 213,
+    "condition": "not isinstance(native, CompletedLineage)"
+  },
+  {
+    "file": "game/play.py",
+    "line": 221,
+    "condition": "isinstance(lineage.root.fact, SpellFact)"
+  },
+  {
+    "file": "game/play.py",
+    "line": 321,
+    "condition": "capture_dir is not None and isinstance(active, BoundCast)"
+  },
+  {
+    "file": "game/play.py",
+    "line": 337,
+    "condition": "isinstance(active, BoundCast)"
+  },
+  {
+    "file": "game/playback_frame.py",
+    "line": 129,
+    "condition": "isinstance(node.bound, BoundAttack)"
+  },
+  {
+    "file": "game/playback_frame.py",
+    "line": 156,
+    "condition": "isinstance(node.bound, BoundCast)"
+  },
+  {
+    "file": "game/playback_frame.py",
+    "line": 247,
+    "condition": "isinstance(clip.node.bound, BoundCast)"
+  },
+  {
+    "file": "game/playback_frame.py",
+    "line": 123,
+    "condition": "isinstance(node.bound, BoundAttack)"
+  },
+  {
+    "file": "game/playback_frame.py",
+    "line": 131,
+    "condition": "isinstance(node.bound.timeline.target, ActorContact) and timing is not None and timing.start_ms <= local < timing.end_ms"
+  },
+  {
+    "file": "game/playback_frame.py",
+    "line": 136,
+    "condition": "isinstance(application.source.target, ActorContact) and start is not None and end is not None and start <= local < end"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 70,
+    "condition": "log is None or not isinstance(fact, ActionFact) or fact.font_conversion is None\n            or fact.source_entity_uuid == observer"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 660,
+    "condition": "fact is not None and isinstance(event, ActionEvent) and event.behavior_id is not None"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 663,
+    "condition": "fact is not None and isinstance(event, ActionEvent) and event.source_item_presentation is not None"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 862,
+    "condition": "isinstance(declared, (MechanismActivationEvent, DeathEvent))\n                or isinstance(declared, (AttackEvent, SpellEvent)) and declared.target_kind == \"object\"\n                or isinstance(declared, SpellEvent) and declared.area_geometry is not None\n                or isinstance(declared, SpatialChangeEvent) and (\n                    declared.terminal_release is not None and declared.change_type is SpatialChangeType.ENTITY_LEFT\n                    or declared.change_type is SpatialChangeType.OBJECT_REMOVED)\n                or isinstance(declared, SpatialEffectChangeEvent)\n                and declared.operation in (SpatialEffectChangeOperation.REMOVED, SpatialEffectChangeOperation.FOOTPRINT_CHANGED)"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 883,
+    "condition": "isinstance(removed, ItemDestructionEvent) and not removed.canceled"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 970,
+    "condition": "isinstance(event, ActionEvent) and event.source_item_uuid is not None\n                and event.source_item_uuid in private_world.objects\n                and _object_observed(private_world, event.source_item_uuid)"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 974,
+    "condition": "isinstance(event, (AttackEvent, SpellEvent)) and event.target_kind == \"object\"\n                and event.target_entity_uuid is not None\n                and event.target_entity_uuid in private_world.objects\n                and _object_observed(private_world, event.target_entity_uuid)"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 980,
+    "condition": "isinstance(event, SpatialChangeEvent)\n                and event.change_type is SpatialChangeType.ENTITY_LEFT\n                and event.terminal_release is not None\n                and event.terminal_release.cause is SummonDepartureCause.DEFEATED"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 1008,
+    "condition": "isinstance(fact, ConditionChangeFact) and not event.canceled"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 1010,
+    "condition": "isinstance(fact, FactionFact)"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 1026,
+    "condition": "isinstance(event, TakeDamageEvent) and not event.canceled\n                and event.final_damage is not None and event.resulting_hp is not None"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 1038,
+    "condition": "isinstance(event, ItemDestructionEvent) and not event.canceled\n                and (event.remains_disposition is RemainsDisposition.DISINTEGRATED\n                     or event.resulting_state is not None and event.resulting_state.integrity is ItemIntegrity.DESTROYED)"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 1051,
+    "condition": "isinstance(event, ItemLocationStateEvent) and event.location is ItemLocation.DESTROYED\n                and event.item_state.item_uuid not in explicit_destructions"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 1073,
+    "condition": "isinstance(node.fact, SensoryFact)"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 1086,
+    "condition": "isinstance(node.fact, AreaReachFact)"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 1150,
+    "condition": "isinstance(node.fact, DamageRequestFact) and node.resolution_ref is None\n                and \"resolution_ref\" in event._recorded_omissions"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 318,
+    "condition": "event.propagation is not None and source != observer and any(\n                    (endpoint.kind == \"creature\" and not _identified(event, endpoint.uuid, observer)\n                     or endpoint.kind == \"object\" and endpoint.uuid not in observed_objects)\n                    or not (_position_allowed(event, endpoint.position, observer)\n                        or senses is not None and endpoint.position in senses.visible\n                        or declaration_senses is not None and endpoint.position in declaration_senses.visible)\n                    for endpoint in (event.propagation.source, event.propagation.target))"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 885,
+    "condition": "isinstance(removed, SpatialChangeEvent) and not removed.canceled\n                and removed.change_type is SpatialChangeType.OBJECT_REMOVED and removed.object_uuid in destroyed_ids"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 911,
+    "condition": "isinstance(event, EntityCreatedEvent)"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 914,
+    "condition": "isinstance(event, ItemLocationStateEvent)"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 959,
+    "condition": "isinstance(event, SensoryUpdateEvent) and event.observer_uuid == observer"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 989,
+    "condition": "isinstance(cause, DeathEvent) and not cause.canceled and cause.entity_uuid == event.entity_uuid"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 1019,
+    "condition": "event.phase is EventPhase.COMPLETION and not event.canceled\n                    and removed is not None and actor is not None and origin is not None\n                    and origin.control_condition_uuid is not None\n                    and removed.condition_uuid == origin.control_condition_uuid\n                    and any(row.condition_uuid == origin.existence_condition_uuid for row in actor.conditions)\n                    and contact is not None and contact.visual"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 1080,
+    "condition": "isinstance(node.fact, SpellFact) and node.fact.application is not None"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 181,
+    "condition": "isinstance(parent, SpatialEffectInteractionEvent) and not parent.canceled"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 562,
+    "condition": "event.canceled or event.phase is not EventPhase.COMPLETION or event.object_uuid is None"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 1083,
+    "condition": "isinstance(node.fact, ConditionChangeFact)"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 471,
+    "condition": "isinstance(ancestor, StepMovementEvent)\n                                and ancestor.source_entity_uuid == target and _step_allowed(ancestor, observer)\n                                and recorded.position in (ancestor.disclosed_path or (\n                                    ancestor.from_position, ancestor.to_position))\n                                or isinstance(ancestor, ForcedMovementEvent)\n                                and ancestor.target_entity_uuid == target and _forced_allowed(ancestor, observer)\n                                and recorded.position in (ancestor.start_position, ancestor.end_position)"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 931,
+    "condition": "isinstance(committed, LifeFact) and committed.entity_uuid == identity"
+  },
+  {
+    "file": "game/player_projection.py",
+    "line": 935,
+    "condition": "isinstance(committed, DamageResultFact) and committed.target_entity_uuid == identity\n                                    and committed.resulting_normal_hp is not None and committed.resulting_temporary_hp is not None"
+  },
+  {
+    "file": "game/player_reduction.py",
+    "line": 58,
+    "condition": "not node.canceled and isinstance(node.fact, (DamageResultFact, ObjectDamageFact))"
+  },
+  {
+    "file": "game/player_reduction.py",
+    "line": 254,
+    "condition": "isinstance(node.fact, SpatialFact) and node.fact.entity_uuid is not None\n                    and node.fact.change_type in (SpatialChangeType.ENTITY_ENTERED, SpatialChangeType.ENTITY_LEFT)"
+  },
+  {
+    "file": "game/portal_animation.py",
+    "line": 37,
+    "condition": "isinstance(art, DoorwayArt)"
+  },
+  {
+    "file": "game/portal_animation.py",
+    "line": 60,
+    "condition": "isinstance(cue.art, DoorwayArt)"
+  },
+  {
+    "file": "game/portal_animation.py",
+    "line": 72,
+    "condition": "isinstance(cue.art, DoorwayArt)"
+  },
+  {
+    "file": "game/portal_animation.py",
+    "line": 87,
+    "condition": "not isinstance(cue.art, DoorwayArt)"
+  },
+  {
+    "file": "game/portal_draw.py",
+    "line": 93,
+    "condition": "isinstance(cue.art, DoorwayArt)"
+  },
+  {
+    "file": "game/portal_draw.py",
+    "line": 166,
+    "condition": "isinstance(cue.art,DoorwayArt)"
+  },
+  {
+    "file": "game/portal_draw.py",
+    "line": 69,
+    "condition": "not isinstance(art, PortalArt) or effect.trap_state is None"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 217,
+    "condition": "event.phase is not EventPhase.COMPLETION"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 219,
+    "condition": "isinstance(event, EntityCreatedEvent)"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 221,
+    "condition": "isinstance(event, (TurnEvent, RoundEvent, EncounterEvent))"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 223,
+    "condition": "isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent)) and (\n            event.resulting_tile is not None or event.resulting_item is not None)"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 237,
+    "condition": "isinstance(event, (WorldModifiedEvent, TileElevationChangeEvent))"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 516,
+    "condition": "isinstance(event, TurnEvent)"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 656,
+    "condition": "isinstance(copied, ActionEvent)"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 695,
+    "condition": "not isinstance(event, (ConditionApplicationEvent, ConditionRemovalEvent))"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 421,
+    "condition": "isinstance(event, ItemLocationStateEvent)"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 430,
+    "condition": "isinstance(event, EntityCreatedEvent)"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 525,
+    "condition": "isinstance(event, RoundEvent)"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 545,
+    "condition": "birth.phase is not EventPhase.COMPLETION"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 723,
+    "condition": "completed and isinstance(event, EntityCreatedEvent)"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 725,
+    "condition": "not event.canceled and event.phase is EventPhase.EFFECT\n                and isinstance(event, SpatialChangeEvent)\n                and event.change_type in (SpatialChangeType.ENTITY_LEFT, SpatialChangeType.ENTITY_ENTERED)\n                and event.entity_uuid is not None\n                and event.entity_uuid in actors"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 827,
+    "condition": "event.phase not in (EventPhase.COMPLETION, EventPhase.CANCEL)"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 829,
+    "condition": "event.phase is EventPhase.CANCEL"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 962,
+    "condition": "isinstance(event, ItemLocationStateEvent)"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 771,
+    "condition": "isinstance(event, ItemLocationStateEvent)"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 968,
+    "condition": "isinstance(event, (AttackEvent, EquipmentEvent, SpatialChangeEvent))"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 451,
+    "condition": "isinstance(event, (SpatialChangeEvent, WorldModifiedEvent))"
+  },
+  {
+    "file": "game/presentation.py",
+    "line": 457,
+    "condition": "isinstance(event, (TurnEvent, RoundEvent, EncounterEvent))"
+  },
+  {
+    "file": "game/presentation_coverage.py",
+    "line": 218,
+    "condition": "isinstance(fact, (SpellFact, ActionFact, AttackFact, ShoveFact))"
+  },
+  {
+    "file": "game/presentation_coverage.py",
+    "line": 222,
+    "condition": "isinstance(fact, ConditionChangeFact) and fact.condition.behavior_id is not None\n              and fact.condition.category is not ConditionCategory.INTERNAL"
+  },
+  {
+    "file": "game/presentation_group.py",
+    "line": 26,
+    "condition": "isinstance(fact, ActionFact) and fact.reaction is not None"
+  },
+  {
+    "file": "game/presentation_group.py",
+    "line": 29,
+    "condition": "pending and all(isinstance(reaction.root.fact, ActionFact)\n                and reaction.root.fact.reaction is not None\n                and reaction.root.fact.reaction.triggered_lineage_uuid == lineage.root.lineage_uuid\n                for reaction in pending)"
+  },
+  {
+    "file": "game/recording_compat.py",
+    "line": 20,
+    "condition": "isinstance(value, dict)"
+  },
+  {
+    "file": "game/recording_compat.py",
+    "line": 59,
+    "condition": "not isinstance(value, dict) or value.get(\"schema_version\", 1) == 2"
+  },
+  {
+    "file": "game/recording_compat.py",
+    "line": 75,
+    "condition": "not isinstance(fact, dict)"
+  },
+  {
+    "file": "game/recording_compat.py",
+    "line": 99,
+    "condition": "fact.get(\"stage\") == \"applied\" and parent is not None\n                            and isinstance(parent_fact, dict) and parent_fact.get(\"kind\") == \"damage\"\n                            and parent_fact.get(\"stage\") == \"taken\""
+  },
+  {
+    "file": "game/session.py",
+    "line": 147,
+    "condition": "encounter.state is not EncounterState.ACTIVE\n            or encounter.turn_state is not TurnState.IN_PROGRESS\n            or actor_uuid not in session.player_uuids\n            or actor is None or actor.uuid != actor_uuid\n            or not isinstance(encounter.get_current_controller(), HumanController)"
+  },
+  {
+    "file": "game/session.py",
+    "line": 201,
+    "condition": "action.position_selection is None or action.position_selection.kind not in (\"path\", \"entity_destination\")"
+  },
+  {
+    "file": "game/spatial_contact_media.py",
+    "line": 69,
+    "condition": "isinstance(fact,SpatialEffectStateFact)"
+  },
+  {
+    "file": "game/spatial_contact_media.py",
+    "line": 88,
+    "condition": "isinstance(fact, SpatialFact) and ground_contact_is_authored(state, fact, data)"
+  },
+  {
+    "file": "game/spatial_contact_media.py",
+    "line": 158,
+    "condition": "not isinstance(fact, DamageResultFact) or (sweep := damage_sweep_recipe(state, fact, data, created_effects)) is None"
+  },
+  {
+    "file": "game/spatial_contact_media.py",
+    "line": 31,
+    "condition": "binding is None or not isinstance(geometry, SpherePresentationGeometry)"
+  },
+  {
+    "file": "game/spatial_contact_media.py",
+    "line": 90,
+    "condition": "isinstance(fact, DamageResultFact) and fact.stage == \"applied\"\n          and fact.applied_damage is not None and fact.applied_damage > 0\n          and (fact.effect_id is not None or fact.source_condition_uuid is not None)"
+  },
+  {
+    "file": "game/spatial_field_media.py",
+    "line": 27,
+    "condition": "isinstance(geometry, (SpherePresentationGeometry, CylinderPresentationGeometry))"
+  },
+  {
+    "file": "game/spatial_field_media.py",
+    "line": 50,
+    "condition": "geometry is None and (layer.composition != \"clump\" or anchor_position is None)"
+  },
+  {
+    "file": "game/spatial_field_media.py",
+    "line": 65,
+    "condition": "layer.composition == \"xyz_volume\""
+  },
+  {
+    "file": "game/spatial_field_media.py",
+    "line": 91,
+    "condition": "layer.composition == \"clump\" and owner not in supported"
+  },
+  {
+    "file": "game/spatial_field_media.py",
+    "line": 105,
+    "condition": "layer.composition == \"clump\""
+  },
+  {
+    "file": "game/spatial_field_media.py",
+    "line": 118,
+    "condition": "layer.composition == \"xyz_volume\""
+  },
+  {
+    "file": "game/spatial_field_media.py",
+    "line": 131,
+    "condition": "layer.composition == \"xyz_volume\" and isinstance(geometry, SpherePresentationGeometry)"
+  },
+  {
+    "file": "game/spatial_field_media.py",
+    "line": 160,
+    "condition": "layer.composition == \"floor\""
+  },
+  {
+    "file": "game/spatial_field_media.py",
+    "line": 194,
+    "condition": "layer.composition == \"xyz_volume\""
+  },
+  {
+    "file": "game/spatial_field_media.py",
+    "line": 169,
+    "condition": "layer.composition == \"xyz_volume\" and position in upper"
+  },
+  {
+    "file": "game/spatial_media_draw.py",
+    "line": 106,
+    "condition": "binding is None or identity in introducing\n                or geometry is None and not any(layer.composition in (\"clump\", \"cell_modules\") for layer in binding.layers)"
+  },
+  {
+    "file": "game/spatial_media_draw.py",
+    "line": 110,
+    "condition": "anchor is not None and effect.anchor_position is not None and any(layer.composition == 'clump' for layer in binding.layers)"
+  },
+  {
+    "file": "game/spatial_media_draw.py",
+    "line": 131,
+    "condition": "any(layer.composition == \"wall_modules\" for layer in binding.layers)"
+  },
+  {
+    "file": "game/spatial_media_draw.py",
+    "line": 239,
+    "condition": "not isinstance(geometry, (LinePresentationGeometry, SpherePresentationGeometry))"
+  },
+  {
+    "file": "game/spatial_media_draw.py",
+    "line": 243,
+    "condition": "isinstance(geometry, SpherePresentationGeometry)"
+  },
+  {
+    "file": "game/spatial_media_draw.py",
+    "line": 276,
+    "condition": "layer.composition in (\"floor\", \"xy_volume\", \"clump\")\n                    or layer.composition == \"xyz_volume\" and isinstance(geometry, (SpherePresentationGeometry, CylinderPresentationGeometry))"
+  },
+  {
+    "file": "game/spatial_media_draw.py",
+    "line": 226,
+    "condition": "layer.composition == \"xyz_volume\""
+  },
+  {
+    "file": "game/spatial_media_draw.py",
+    "line": 292,
+    "condition": "layer.composition == \"xyz_volume\""
+  },
+  {
+    "file": "game/spatial_media_draw.py",
+    "line": 309,
+    "condition": "isinstance(geometry, SpherePresentationGeometry)"
+  },
+  {
+    "file": "game/spatial_media_draw.py",
+    "line": 318,
+    "condition": "layer.composition != \"line_floor\""
+  },
+  {
+    "file": "game/spatial_media_lifetime.py",
+    "line": 84,
+    "condition": "node.canceled or not isinstance(node.fact, SpatialEffectStateFact)"
+  },
+  {
+    "file": "game/spatial_media_lifetime.py",
+    "line": 135,
+    "condition": "not isinstance(visit.timeline, BoundChoreography)"
+  },
+  {
+    "file": "game/spatial_media_lifetime.py",
+    "line": 188,
+    "condition": "isinstance(visit.timeline, BoundChoreography)"
+  },
+  {
+    "file": "game/spatial_media_lifetime.py",
+    "line": 101,
+    "condition": "node.canceled or not isinstance(node.fact, SpatialEffectStateFact)\n                    or node.fact.operation is not SpatialEffectChangeOperation.CREATED"
+  },
+  {
+    "file": "game/spatial_media_lifetime.py",
+    "line": 147,
+    "condition": "packet.canceled or not isinstance(fact, DamageResultFact)\n                        or fact.applied_damage <= 0"
+  },
+  {
+    "file": "game/stationary_media.py",
+    "line": 24,
+    "condition": "track.composition != \"billboard\""
+  },
+  {
+    "file": "game/thorns_surface.py",
+    "line": 189,
+    "condition": "not isinstance(path, (WallSegment, WallRing)) or removal >= 1 or not modules"
+  },
+  {
+    "file": "game/thorns_surface.py",
+    "line": 208,
+    "condition": "isinstance(path, WallRing)"
+  },
+  {
+    "file": "game/thorns_surface.py",
+    "line": 196,
+    "condition": "isinstance(path, WallRing)"
+  },
+  {
+    "file": "game/wall_assembly_media.py",
+    "line": 25,
+    "condition": "isinstance(path, WallSegment)"
+  },
+  {
+    "file": "game/wall_assembly_media.py",
+    "line": 27,
+    "condition": "isinstance(path, WallPolyline)"
+  },
+  {
+    "file": "game/wall_assembly_media.py",
+    "line": 64,
+    "condition": "not isinstance(geometry, WallAssemblyPresentationGeometry)"
+  },
+  {
+    "file": "game/wall_assembly_media.py",
+    "line": 72,
+    "condition": "isinstance(geometry.path, WallDome)"
+  },
+  {
+    "file": "game/wall_assembly_media.py",
+    "line": 76,
+    "condition": "isinstance(geometry.path, WallRing)"
+  },
+  {
+    "file": "game/wall_assembly_media.py",
+    "line": 110,
+    "condition": "registration.thorns is not None and isinstance(geometry.path, (WallSegment, WallRing))"
+  },
+  {
+    "file": "game/wall_assembly_media.py",
+    "line": 155,
+    "condition": "isinstance(geometry.path, WallRing)"
+  },
+  {
+    "file": "game/wall_assembly_media.py",
+    "line": 118,
+    "condition": "isinstance(path, WallRing)"
+  },
+  {
+    "file": "game/wall_media.py",
+    "line": 38,
+    "condition": "not isinstance(geometry, WallPresentationGeometry)"
+  },
+  {
+    "file": "game/wall_media.py",
+    "line": 40,
+    "condition": "isinstance(geometry.path, WallRing)"
+  },
+  {
+    "file": "game/wall_media.py",
+    "line": 82,
+    "condition": "isinstance(geometry, WallPresentationGeometry) and isinstance(geometry.path, WallRing)"
+  },
+  {
+    "file": "game/wall_media.py",
+    "line": 41,
+    "condition": "binding is None or any(layer.wallRing is None for layer in binding.layers\n                                 if layer.composition == \"wall_modules\")"
+  },
+  {
+    "file": "game/wall_media.py",
+    "line": 52,
+    "condition": "any(_selected_bank(layer, geometry.path) is None for layer in binding.layers\n               if layer.composition == \"wall_modules\")"
+  },
+  {
+    "file": "game/wall_media.py",
+    "line": 93,
+    "condition": "layer.composition != \"wall_modules\""
+  },
+  {
+    "file": "game/wall_media.py",
+    "line": 142,
+    "condition": "layer.composition != \"wall_modules\""
+  },
+  {
+    "file": "game/weapon_trail_media.py",
+    "line": 91,
+    "condition": "isinstance(target,ActorContact)"
+  },
+  {
+    "file": "game/world_animation.py",
+    "line": 103,
+    "condition": "not isinstance(old, (SpherePresentationGeometry, CylinderPresentationGeometry,\n                             ConePresentationGeometry, LinePresentationGeometry))\n            or not isinstance(new, (SpherePresentationGeometry, CylinderPresentationGeometry,\n                                     ConePresentationGeometry, LinePresentationGeometry))"
+  }
+]

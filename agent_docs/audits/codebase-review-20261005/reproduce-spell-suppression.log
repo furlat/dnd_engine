@@ -1,0 +1,9 @@
+guiding_bolt_cast_success: True
+antimagic_field_cast_success: True
+guiding_bolt_magical_origin: False
+guiding_bolt_active_inside_field: True
+shield_suppressed_inside_field: True
+shield_present_after_its_next_turn_start: True
+shield_present_after_field_ends: True
+shield_active_after_field_ends: True
+runtime_cleanup_completed: True

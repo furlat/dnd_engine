@@ -1,0 +1,106 @@
+{
+  "scope": "Effective metadata and source dispatch inventory; no pixel or runtime case validation.",
+  "counts": {
+    "drafts": 149,
+    "attack_recipes": 5,
+    "body_action_recipes": 85,
+    "condition_recipes": 160,
+    "rigs": 44,
+    "creature_rigs": 44,
+    "spatial_media": 25,
+    "construction_media": 3
+  },
+  "coverage_statuses": {
+    "declared": 21,
+    "state_only": 42,
+    "binding_selected": 1296,
+    "missing_binding": 4,
+    "accepted_omission": 4
+  },
+  "coverage_families": {
+    "fact": 27,
+    "spell": 148,
+    "attack": 5,
+    "shove": 1,
+    "action": 93,
+    "action_source_media": 4,
+    "condition": 160,
+    "lifecycle": 2,
+    "rig": 44,
+    "creature": 44,
+    "world": 13,
+    "device": 2,
+    "device_wreck": 2,
+    "portal": 3,
+    "condition_media": 236,
+    "spatial_media": 25,
+    "deposit_media": 6,
+    "contact_media": 2,
+    "environment_bank": 368,
+    "door": 17,
+    "trap": 12,
+    "prop": 113,
+    "environment_wreck": 40
+  },
+  "nonselected_rows": [
+    {
+      "family": "spell",
+      "identity": "spell.aegis_spark",
+      "owner": "cast",
+      "representation": "cast timeline",
+      "status": "missing_binding",
+      "binding": null,
+      "details": [
+        "No selected cast draft; child outcomes may still be presented."
+      ]
+    },
+    {
+      "family": "spell",
+      "identity": "spell.counterspell",
+      "owner": "cast",
+      "representation": "cast timeline",
+      "status": "missing_binding",
+      "binding": null,
+      "details": [
+        "No selected cast draft; child outcomes may still be presented."
+      ]
+    },
+    {
+      "family": "spell",
+      "identity": "spell.necrotic_bless",
+      "owner": "cast",
+      "representation": "cast timeline",
+      "status": "missing_binding",
+      "binding": null,
+      "details": [
+        "No selected cast draft; child outcomes may still be presented."
+      ]
+    },
+    {
+      "family": "spell",
+      "identity": "spell.prismatic_spray",
+      "owner": "cast",
+      "representation": "cast timeline",
+      "status": "missing_binding",
+      "binding": null,
+      "details": [
+        "No selected cast draft; child outcomes may still be presented."
+      ]
+    }
+  ],
+  "spell_delivery": {
+    "projectile": 15,
+    "none": 126,
+    "directed": 4,
+    "arcs": 4
+  },
+  "spell_motions": {
+    "Attack5": 92,
+    "Special1": 43,
+    "Attack1": 2,
+    "Attack6": 4,
+    "Attack4": 8
+  },
+  "source_branches": 420,
+  "feature_values": 90
+}

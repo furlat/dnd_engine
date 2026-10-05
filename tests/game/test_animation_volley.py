@@ -6,6 +6,8 @@ from math import hypot
 from types import MappingProxyType
 
 import pytest
+from pydantic import TypeAdapter
+from game.timing_evidence import TimingEvidence, validate_timing_evidence
 
 from game.animation import (
     ActorContact, CastApplication, CastInput, CastTimeline, GeometryProjectileSample,
@@ -181,3 +183,33 @@ def test_vertical_authored_attachment_changes_height_without_moving_ground_depth
     assert project_world(raised_ground, elevation_steps=raised_height, quadrant=quadrant) == pytest.approx(
         tuple(value / factor for value in lifted.point),
     )
+
+
+@pytest.mark.parametrize('number_frame', (0, 3))
+def test_application_dependency_identity_matches_hp_boundary_and_reentry(timeline, number_frame):
+    data = replace(timeline.data, damage_context=timeline.data.damage_context.model_copy(update={'numberFrame': number_frame}))
+    timeline = compile_cast(data, 'spell.magic_missile', timeline.source)
+    assert not validate_timing_evidence(timeline.timing_evidence)
+    adapter = TypeAdapter(tuple[TimingEvidence, ...])
+    assert adapter.validate_json(adapter.dump_json(timeline.timing_evidence)) == timeline.timing_evidence
+    latest = {(row.target.application_id, row.target.anchor): row for row in timeline.timing_evidence}
+    for application in timeline.applications:
+        identity = application.source.application_id
+        assert latest[identity, 'contact'].at_ms == application.travel_end_ms
+        hp = latest[identity, 'hp']
+        assert hp.at_ms == application.hp_ms
+        assert hp.target.identity == timeline.source.root_event_uuid
+        before = sample_cast(timeline, hp.at_ms - .001)
+        at = sample_cast(timeline, hp.at_ms)
+        target = application.source.target.actor_uuid
+        before_hp = next(row.hp for row in before.vitals if row.actor_uuid == target)
+        current_hp = next(row.hp for row in at.vitals if row.actor_uuid == target)
+        assert before_hp != current_hp
+        # A later hit can be admitted at the same callback-flush boundary.
+        assert current_hp <= application.source.resulting_hp
+    assert {row.target.application_id for row in timeline.timing_evidence
+            if row.target.anchor == 'contact'} == {'A1', 'B1', 'A2'}
+    if number_frame:
+        flushed = latest['A1', 'hp']
+        assert flushed.reason == 'hp_reentry'
+        assert any(source.reference.application_id == 'A2' for source in flushed.inputs)

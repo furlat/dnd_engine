@@ -5,7 +5,7 @@ from math import atan2, pi, sqrt
 from uuid import UUID
 from types import MappingProxyType
 
-from dnd.core.events import SpatialChangeType
+from dnd.types.event_facts import SpatialChangeType
 from dnd.core.presentation_geometry import SpherePresentationGeometry
 from dnd.types.world import OccupancyLayer
 from dnd.types.spatial_effects import SpatialEffectInteractionOperation

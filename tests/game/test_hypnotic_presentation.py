@@ -9,7 +9,8 @@ from dnd.core.presentation_geometry import CubePresentationGeometry
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography
 from game.condition_animation import resolve_condition_appearance
-from game.concentration_media import register_concentration_lifetimes, concentration_media_draw_commands
+from game.concentration_media import register_concentration_lifetimes
+from game.concentration_draw import concentration_media_draw_commands
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera

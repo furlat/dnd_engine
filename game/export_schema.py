@@ -8,7 +8,10 @@ import argparse
 import json
 from pathlib import Path
 
+from pydantic import TypeAdapter
+
 from game.player_facts import PlayerSequence
+from game.presentation_export import PresentationCatalogExport
 from game.animation_types import (StudioDraftFile, DamageContext, DeathContext, AttackRecipe,
     VoluntaryMovementContext, BodyRig, RigTables, EquipmentTransitionContext,
     HealingContext, DeathSaveContext, LifeStateContext, MovementReactionContext, ForcedMovementContext)
@@ -20,6 +23,7 @@ def export_schemas(destination: Path) -> tuple[Path, ...]:
     destination.mkdir(parents=True, exist_ok=True)
     paths = []
     for name, model in (("player-sequence-v2", PlayerSequence),
+                        ("presentation-catalog-v1", PresentationCatalogExport),
                         ("presentation-drafts", StudioDraftFile),
                         ("world-bindings", WorldBindingsSource),
                         ("damage-context", DamageContext), ("death-context", DeathContext),
@@ -29,7 +33,7 @@ def export_schemas(destination: Path) -> tuple[Path, ...]:
                         ("death-save-context", DeathSaveContext), ("life-state-context", LifeStateContext),
                         ("movement-reaction-context", MovementReactionContext), ("forced-movement-context", ForcedMovementContext)):
         path = destination / f"{name}.schema.json"
-        schema = model.model_json_schema(mode="serialization")
+        schema = TypeAdapter(model).json_schema(mode="serialization")
         schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
         path.write_text(json.dumps(schema, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         paths.append(path)

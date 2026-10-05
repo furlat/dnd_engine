@@ -15,7 +15,8 @@ from game.player_reduction import decode_player_sequence, encode_player_sequence
 from game.projection import Camera, project_screen
 from game.spatial_media_draw import spatial_media_draw_commands
 from game.spatial_media_lifetime import register_spatial_lifetimes
-from game.wall_media import wall_media_limitation, wall_module_centers
+from game.wall_media import wall_module_centers
+from game.wall_profile import wall_media_limitation
 from tests.game.wall_spell_scenarios import wall_spell_history
 
 

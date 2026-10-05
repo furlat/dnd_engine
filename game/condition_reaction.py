@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from typing import Mapping, cast
 from uuid import UUID
 
-from dnd.core.events import EventType
+from dnd.types.event_facts import EventType
 from game.animation import ActorContact, body_elevation_steps, facing_for_delta
 from game.animation_types import AnimationData, Facing8, StudioMediaTrack
 from game.attack import BoundAttack

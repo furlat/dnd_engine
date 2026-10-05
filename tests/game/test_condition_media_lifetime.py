@@ -7,6 +7,7 @@ import pygame
 import pytest
 
 from game.animation_data import load_animation_data
+from game.timing_evidence import validate_timing_evidence
 from game.choreography import bind_choreography, bind_motion, sample_choreography
 from game.condition_animation import resolve_condition_appearance
 from game.condition_draw import compose_condition_layers
@@ -17,7 +18,8 @@ from game.condition_media_lifetime import (
 from game.player_facts import ConditionChangeFact, SpellFact, TemporaryHitPointsFact
 from game.playback_frame import sample_playback_frame
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.player_reduction import reduce_lineage
 from tests.game.pending_spell_scenarios import pending_spell_history
 from tests.game.player_helpers import player_history
@@ -88,6 +90,8 @@ def test_actual_membership_contact_later_heads_removal_and_seek(data, captured, 
                 assert not appearances(early, data)[identity].layers
                 assert len(appearances(actual, data)[identity].layers) == 2
         for owner, record in records.items():
+            assert not validate_timing_evidence(record.timing_evidence)
+            assert any(row.target.anchor == "applied" for row in record.timing_evidence)
             assert record.applied_ms is not None, "Witnessed applications cannot become quiet initial admissions"
             starts.setdefault(owner, record.applied_ms)
             assert record.applied_ms == starts[owner]
@@ -275,7 +279,9 @@ def test_head_admission_prunes_expired_fades_without_mutating_old_seek_clocks(da
     assert len(previous_sample[str(actor.uuid)].layers) == 2
     assert all(layer.alpha == .5 for layer in previous_sample[str(actor.uuid)].layers)
     before_end = register_condition_lifetimes(old, after, data, absolute_start_ms=5349.999)
-    assert before_end == old
+    assert {key: replace(value, timing_evidence=old[key].timing_evidence)
+            for key, value in before_end.items()} == old
+    assert not validate_timing_evidence(before_end[owner].timing_evidence)
     expired = register_condition_lifetimes(old, after, data, absolute_start_ms=5350)
     assert set(expired) == set(old) - {owner}
     assert old[owner].removed_ms == 5000
@@ -285,7 +291,10 @@ def test_head_admission_prunes_expired_fades_without_mutating_old_seek_clocks(da
     assert register_condition_lifetimes(active, after, data, absolute_start_ms=9000) == active
     # The map can include this head's future removal before it is sampled.
     pending = {**active, owner: replace(record, removed_ms=10000, removed_layers=removed_layers)}
-    assert register_condition_lifetimes(pending, after, data, absolute_start_ms=9000) == pending
+    admitted = register_condition_lifetimes(pending, after, data, absolute_start_ms=9000)
+    assert {key: replace(value, timing_evidence=pending[key].timing_evidence)
+            for key, value in admitted.items()} == pending
+    assert not validate_timing_evidence(admitted[owner].timing_evidence)
 
 
 @pytest.mark.parametrize("role", ("caster", "target"))

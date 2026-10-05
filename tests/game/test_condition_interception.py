@@ -67,7 +67,7 @@ def test_saved_shield_gesture_precedes_actual_intercept_and_maintained_contacts_
                     assert len(applications) == len(group.body_actions) == 1
                     gesture = group.body_actions[0]
                     assert gesture.event_uuid == applications[0][0].uuid
-                    assert gesture.clip == "Special1" and gesture.cast_layers
+                    assert gesture.clip == data.drafts['spell.shield'].cast.actionClip and gesture.cast_layers
                     assert 0 <= gesture.start_ms < gesture.effect_ms <= min(interception_times)
                     transition = next(row for row in group.conditions if row.event_uuid == gesture.event_uuid)
                     assert transition.start_ms == gesture.effect_ms

@@ -1,0 +1,7564 @@
+{
+  "scope": "game/*.py only; excludes nested data, assets and external repositories",
+  "modules": [
+    {
+      "file": "game/__init__.py",
+      "lines": 2,
+      "imports": [],
+      "definitions": []
+    },
+    {
+      "file": "game/__main__.py",
+      "lines": 39,
+      "imports": [
+        "argparse",
+        "dnd.content_system.bootstrap",
+        "dnd.content_system.runtime",
+        "game.encounter_play",
+        "os",
+        "pathlib"
+      ],
+      "definitions": [
+        {
+          "name": "main",
+          "line": 12
+        }
+      ]
+    },
+    {
+      "file": "game/absence_media.py",
+      "lines": 90,
+      "imports": [
+        "dataclasses",
+        "game.animation",
+        "game.animation_types",
+        "game.body_pose_types",
+        "game.condition_animation",
+        "game.condition_media_lifetime",
+        "game.draw_commands",
+        "game.player_facts",
+        "game.projection",
+        "game.registered_media",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "_ease",
+          "line": 18
+        },
+        {
+          "name": "absence_poses",
+          "line": 23
+        },
+        {
+          "name": "absence_draw_commands",
+          "line": 58
+        }
+      ]
+    },
+    {
+      "file": "game/action_media.py",
+      "lines": 96,
+      "imports": [
+        "dataclasses",
+        "dnd.types.residues",
+        "dnd.types.world",
+        "game.animation",
+        "game.animation_types",
+        "game.residue_media",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "ActionStripCue",
+          "line": 14
+        },
+        {
+          "name": "ActionStripSample",
+          "line": 29
+        },
+        {
+          "name": "bind_action_strips",
+          "line": 35
+        },
+        {
+          "name": "sample_action_strip",
+          "line": 90
+        }
+      ]
+    },
+    {
+      "file": "game/actor_facts.py",
+      "lines": 31,
+      "imports": [
+        "dataclasses",
+        "dnd.core.events",
+        "dnd.core.item_types",
+        "dnd.types.actor_facts",
+        "dnd.types.senses",
+        "dnd.types.world_placement",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "PresentationTarget",
+          "line": 14
+        }
+      ]
+    },
+    {
+      "file": "game/actor_projection.py",
+      "lines": 21,
+      "imports": [
+        "dataclasses",
+        "dnd.actor_projection",
+        "dnd.core.condition_types",
+        "dnd.core.events",
+        "dnd.types.actor_facts"
+      ],
+      "definitions": [
+        {
+          "name": "apply_actor_fact",
+          "line": 14
+        }
+      ]
+    },
+    {
+      "file": "game/animation.py",
+      "lines": 1834,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "dnd.core.condition_types",
+        "dnd.core.effect_types",
+        "dnd.core.life_types",
+        "dnd.core.presentation_geometry",
+        "dnd.types.senses",
+        "dnd.types.summoning",
+        "game.animation_types",
+        "game.condition_types",
+        "game.device_art",
+        "game.player_facts",
+        "game.projection",
+        "math",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "ActorContact",
+          "line": 36
+        },
+        {
+          "name": "ObjectContact",
+          "line": 55
+        },
+        {
+          "name": "feedback_identity",
+          "line": 64
+        },
+        {
+          "name": "body_elevation_steps",
+          "line": 68
+        },
+        {
+          "name": "actor_point_offset",
+          "line": 73
+        },
+        {
+          "name": "rest_pose_offset",
+          "line": 81
+        },
+        {
+          "name": "CastApplication",
+          "line": 98
+        },
+        {
+          "name": "GroundContact",
+          "line": 120
+        },
+        {
+          "name": "CastInput",
+          "line": 128
+        },
+        {
+          "name": "pose_attachment_anchors",
+          "line": 143
+        },
+        {
+          "name": "cast_actor_contacts",
+          "line": 166
+        },
+        {
+          "name": "Anchor",
+          "line": 172
+        },
+        {
+          "name": "ProjectileInterval",
+          "line": 179
+        },
+        {
+          "name": "ApplicationTimeline",
+          "line": 190
+        },
+        {
+          "name": "GroundDeliveryTimeline",
+          "line": 209
+        },
+        {
+          "name": "CastTimeline",
+          "line": 221
+        },
+        {
+          "name": "cast_deliveries",
+          "line": 235
+        },
+        {
+          "name": "delivery_identity",
+          "line": 240
+        },
+        {
+          "name": "delivery_target",
+          "line": 244
+        },
+        {
+          "name": "BodySample",
+          "line": 249
+        },
+        {
+          "name": "BodyTransition",
+          "line": 264
+        },
+        {
+          "name": "EquipmentTimeline",
+          "line": 277
+        },
+        {
+          "name": "EquipmentSample",
+          "line": 290
+        },
+        {
+          "name": "ProjectileSample",
+          "line": 299
+        },
+        {
+          "name": "GeometryProjectileSample",
+          "line": 319
+        },
+        {
+          "name": "NumberSample",
+          "line": 329
+        },
+        {
+          "name": "VitalsSample",
+          "line": 341
+        },
+        {
+          "name": "CastSample",
+          "line": 349
+        },
+        {
+          "name": "body_frame",
+          "line": 360
+        },
+        {
+          "name": "body_rig",
+          "line": 365
+        },
+        {
+          "name": "body_clip",
+          "line": 372
+        },
+        {
+          "name": "body_duration",
+          "line": 384
+        },
+        {
+          "name": "body_context",
+          "line": 390
+        },
+        {
+          "name": "resolve_body_context",
+          "line": 399
+        },
+        {
+          "name": "resolve_body_context",
+          "line": 404
+        },
+        {
+          "name": "resolve_body_context",
+          "line": 408
+        },
+        {
+          "name": "context_duration",
+          "line": 417
+        },
+        {
+          "name": "death_body_context",
+          "line": 421
+        },
+        {
+          "name": "adapt_cast_body",
+          "line": 427
+        },
+        {
+          "name": "_layer_palette",
+          "line": 445
+        },
+        {
+          "name": "resolve_child_attack_palette",
+          "line": 454
+        },
+        {
+          "name": "_cast_palette",
+          "line": 462
+        },
+        {
+          "name": "resolve_cast_recipe",
+          "line": 473
+        },
+        {
+          "name": "context_anchor_ms",
+          "line": 494
+        },
+        {
+          "name": "airborne_weight",
+          "line": 503
+        },
+        {
+          "name": "context_frame",
+          "line": 509
+        },
+        {
+          "name": "sample_context_body",
+          "line": 524
+        },
+        {
+          "name": "life_body_pose",
+          "line": 531
+        },
+        {
+          "name": "actor_rest_pose",
+          "line": 540
+        },
+        {
+          "name": "compile_body_transition",
+          "line": 544
+        },
+        {
+          "name": "sample_body_transition",
+          "line": 552
+        },
+        {
+          "name": "compile_life_body",
+          "line": 561
+        },
+        {
+          "name": "_require_frame",
+          "line": 578
+        },
+        {
+          "name": "compile_equipment",
+          "line": 583
+        },
+        {
+          "name": "sample_idle_body",
+          "line": 604
+        },
+        {
+          "name": "sample_equipment",
+          "line": 615
+        },
+        {
+          "name": "_iso",
+          "line": 627
+        },
+        {
+          "name": "facing_for_delta",
+          "line": 632
+        },
+        {
+          "name": "facing_vector",
+          "line": 642
+        },
+        {
+          "name": "view_facing",
+          "line": 649
+        },
+        {
+          "name": "_anchored_points",
+          "line": 657
+        },
+        {
+          "name": "projectile_endpoints",
+          "line": 708
+        },
+        {
+          "name": "_projectile_point",
+          "line": 734
+        },
+        {
+          "name": "_projectile_rotation",
+          "line": 742
+        },
+        {
+          "name": "_application",
+          "line": 764
+        },
+        {
+          "name": "_projectile_arc",
+          "line": 771
+        },
+        {
+          "name": "projectile_contact",
+          "line": 778
+        },
+        {
+          "name": "reference_point_contact",
+          "line": 849
+        },
+        {
+          "name": "projectile_phase_scale",
+          "line": 858
+        },
+        {
+          "name": "projectile_phase_rotation",
+          "line": 863
+        },
+        {
+          "name": "projectile_registration",
+          "line": 869
+        },
+        {
+          "name": "_projected_endpoints",
+          "line": 884
+        },
+        {
+          "name": "_device_control",
+          "line": 918
+        },
+        {
+          "name": "project_projectile",
+          "line": 935
+        },
+        {
+          "name": "projectile_curve_point",
+          "line": 983
+        },
+        {
+          "name": "projectile_curve_tangent",
+          "line": 998
+        },
+        {
+          "name": "_trail_progresses",
+          "line": 1017
+        },
+        {
+          "name": "project_geometry_projectile",
+          "line": 1028
+        },
+        {
+          "name": "_phase",
+          "line": 1048
+        },
+        {
+          "name": "_media_frame",
+          "line": 1075
+        },
+        {
+          "name": "DamageTiming",
+          "line": 1088
+        },
+        {
+          "name": "resolve_damage",
+          "line": 1097
+        },
+        {
+          "name": "compile_damage",
+          "line": 1118
+        },
+        {
+          "name": "sample_damage_body",
+          "line": 1148
+        },
+        {
+          "name": "sample_damage_number",
+          "line": 1198
+        },
+        {
+          "name": "media_phase_anchor_ms",
+          "line": 1211
+        },
+        {
+          "name": "media_track_duration",
+          "line": 1238
+        },
+        {
+          "name": "media_track_opacity",
+          "line": 1248
+        },
+        {
+          "name": "media_track_frame",
+          "line": 1255
+        },
+        {
+          "name": "_media_segment_frame",
+          "line": 1271
+        },
+        {
+          "name": "media_target_applies",
+          "line": 1276
+        },
+        {
+          "name": "finite_body_material_end",
+          "line": 1286
+        },
+        {
+          "name": "finite_media_end",
+          "line": 1294
+        },
+        {
+          "name": "_compile_anchored_cast",
+          "line": 1314
+        },
+        {
+          "name": "compile_cast",
+          "line": 1407
+        },
+        {
+          "name": "crossed_anchors",
+          "line": 1706
+        },
+        {
+          "name": "sample_cast",
+          "line": 1713
+        }
+      ]
+    },
+    {
+      "file": "game/animation_data.py",
+      "lines": 758,
+      "imports": [
+        "__future__",
+        "dnd.blocks.appearance",
+        "dnd.core.content.identities",
+        "dnd.core.equipment_types",
+        "dnd.core.item_types",
+        "dnd.items.authored_variant_inventory",
+        "dnd.types.summoning",
+        "game.animation_types",
+        "game.authoring_conversion",
+        "game.condition_media",
+        "game.condition_types",
+        "game.device_art",
+        "game.item_appearance",
+        "game.player_facts",
+        "game.portal_art",
+        "game.residue_media",
+        "game.world_animation",
+        "game.world_binding_types",
+        "json",
+        "pathlib",
+        "pydantic",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "resolve_actor_layers",
+          "line": 76
+        },
+        {
+          "name": "resolve_player_layers",
+          "line": 152
+        },
+        {
+          "name": "_Bindings",
+          "line": 166
+        },
+        {
+          "name": "_ResourceBindings",
+          "line": 177
+        },
+        {
+          "name": "_ContextFile",
+          "line": 184
+        },
+        {
+          "name": "_ActionFile",
+          "line": 190
+        },
+        {
+          "name": "_RigBinding",
+          "line": 196
+        },
+        {
+          "name": "_read",
+          "line": 205
+        },
+        {
+          "name": "_object",
+          "line": 209
+        },
+        {
+          "name": "_local_resources",
+          "line": 215
+        },
+        {
+          "name": "_root_body_rig",
+          "line": 222
+        },
+        {
+          "name": "_additional_rigs",
+          "line": 246
+        },
+        {
+          "name": "load_animation_data",
+          "line": 266
+        },
+        {
+          "name": "validate_rig_body_contexts",
+          "line": 687
+        }
+      ]
+    },
+    {
+      "file": "game/animation_draw.py",
+      "lines": 1319,
+      "imports": [
+        "__future__",
+        "colorsys",
+        "dataclasses",
+        "dnd.core.events",
+        "dnd.core.life_types",
+        "dnd.types.world_placement",
+        "game.action_media",
+        "game.animation",
+        "game.animation_types",
+        "game.area_media",
+        "game.attack",
+        "game.blood_draw",
+        "game.body_effects",
+        "game.body_pose_types",
+        "game.cast_media",
+        "game.condition_animation",
+        "game.condition_draw",
+        "game.condition_types",
+        "game.device_draw",
+        "game.directed_media",
+        "game.draw_commands",
+        "game.item_draw",
+        "game.item_effects",
+        "game.media_blend",
+        "game.media_coverage",
+        "game.particle_media",
+        "game.projectile_media",
+        "game.projection",
+        "game.registered_media",
+        "game.spell_palette",
+        "game.weapon_trail_media",
+        "math",
+        "numpy",
+        "pygame",
+        "types",
+        "typing",
+        "uuid",
+        "weakref"
+      ],
+      "definitions": [
+        {
+          "name": "_marker_row_top",
+          "line": 63
+        },
+        {
+          "name": "load_action_strip_media",
+          "line": 70
+        },
+        {
+          "name": "action_strip_draw_command",
+          "line": 82
+        },
+        {
+          "name": "action_media_draw_commands",
+          "line": 112
+        },
+        {
+          "name": "AnimationMedia",
+          "line": 171
+        },
+        {
+          "name": "_rgb",
+          "line": 180
+        },
+        {
+          "name": "_colored",
+          "line": 184
+        },
+        {
+          "name": "_cast_row_key",
+          "line": 203
+        },
+        {
+          "name": "load_cast_rows",
+          "line": 211
+        },
+        {
+          "name": "_actor_media_requests",
+          "line": 243
+        },
+        {
+          "name": "_load_body_rows",
+          "line": 281
+        },
+        {
+          "name": "load_actor_media",
+          "line": 307
+        },
+        {
+          "name": "load_attack_media",
+          "line": 319
+        },
+        {
+          "name": "load_animation_media",
+          "line": 354
+        },
+        {
+          "name": "_appearance_material",
+          "line": 436
+        },
+        {
+          "name": "condition_rig_layers",
+          "line": 453
+        },
+        {
+          "name": "_body_image",
+          "line": 465
+        },
+        {
+          "name": "_ramp_image",
+          "line": 573
+        },
+        {
+          "name": "_reference_screen",
+          "line": 616
+        },
+        {
+          "name": "_reference_actor_depth",
+          "line": 621
+        },
+        {
+          "name": "_actor_blit",
+          "line": 631
+        },
+        {
+          "name": "ProjectileLayerBlit",
+          "line": 795
+        },
+        {
+          "name": "projectile_layer_blits",
+          "line": 802
+        },
+        {
+          "name": "_projectile_layer_blits",
+          "line": 811
+        },
+        {
+          "name": "_projectile_body_contact",
+          "line": 857
+        },
+        {
+          "name": "_number_blit",
+          "line": 867
+        },
+        {
+          "name": "_geometry_blit",
+          "line": 889
+        },
+        {
+          "name": "geometry_draw_command",
+          "line": 923
+        },
+        {
+          "name": "actor_painter_key",
+          "line": 940
+        },
+        {
+          "name": "actor_draw_commands",
+          "line": 957
+        },
+        {
+          "name": "body_trail_draw_command",
+          "line": 1031
+        },
+        {
+          "name": "animation_draw_commands",
+          "line": 1050
+        },
+        {
+          "name": "number_draw_commands",
+          "line": 1150
+        },
+        {
+          "name": "actor_screen_bounds",
+          "line": 1177
+        },
+        {
+          "name": "place_feedback_rect",
+          "line": 1192
+        },
+        {
+          "name": "arrange_feedback_commands",
+          "line": 1219
+        },
+        {
+          "name": "attack_draw_commands",
+          "line": 1239
+        },
+        {
+          "name": "draw_animation",
+          "line": 1266
+        }
+      ]
+    },
+    {
+      "file": "game/animation_preview.py",
+      "lines": 218,
+      "imports": [
+        "__future__",
+        "argparse",
+        "dataclasses",
+        "dnd.core.life_types",
+        "game.animation",
+        "game.animation_data",
+        "game.animation_draw",
+        "game.animation_types",
+        "game.projection",
+        "json",
+        "math",
+        "os",
+        "pathlib",
+        "pygame",
+        "types"
+      ],
+      "definitions": [
+        {
+          "name": "_reference",
+          "line": 49
+        },
+        {
+          "name": "_draw",
+          "line": 73
+        },
+        {
+          "name": "main",
+          "line": 140
+        }
+      ]
+    },
+    {
+      "file": "game/animation_rates.py",
+      "lines": 9,
+      "imports": [
+        "game.animation_types",
+        "game.player_facts"
+      ],
+      "definitions": [
+        {
+          "name": "action_playback_rate",
+          "line": 7
+        }
+      ]
+    },
+    {
+      "file": "game/animation_types.py",
+      "lines": 2259,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "dnd.core.condition_types",
+        "dnd.core.content.identities",
+        "dnd.core.creature_types",
+        "dnd.core.item_types",
+        "dnd.core.life_types",
+        "dnd.types.class_features",
+        "dnd.types.event_facts",
+        "dnd.types.summoning",
+        "dnd.types.world",
+        "game.condition_media",
+        "game.condition_types",
+        "game.device_art",
+        "game.portal_art",
+        "pathlib",
+        "pydantic",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "RigLayer",
+          "line": 56
+        },
+        {
+          "name": "ItemAttachmentStart",
+          "line": 69
+        },
+        {
+          "name": "AuthoredRecord",
+          "line": 77
+        },
+        {
+          "name": "ElementColors",
+          "line": 81
+        },
+        {
+          "name": "LayerColors",
+          "line": 87
+        },
+        {
+          "name": "PaletteTreatment",
+          "line": 95
+        },
+        {
+          "name": "BodyMaterial",
+          "line": 104
+        },
+        {
+          "name": "StudioActorLayer",
+          "line": 111
+        },
+        {
+          "name": "StudioEquipment",
+          "line": 125
+        },
+        {
+          "name": "ChildAttackPose",
+          "line": 129
+        },
+        {
+          "name": "ChildAttackPresentation",
+          "line": 138
+        },
+        {
+          "name": "StudioRecovery",
+          "line": 144
+        },
+        {
+          "name": "StudioCast",
+          "line": 150
+        },
+        {
+          "name": "StudioCondition",
+          "line": 175
+        },
+        {
+          "name": "MediaTimePoint",
+          "line": 181
+        },
+        {
+          "name": "StudioProjectilePhase",
+          "line": 186
+        },
+        {
+          "name": "TargetLocalDelivery",
+          "line": 205
+        },
+        {
+          "name": "Point",
+          "line": 213
+        },
+        {
+          "name": "SourceSockets",
+          "line": 218
+        },
+        {
+          "name": "PaletteSwap",
+          "line": 225
+        },
+        {
+          "name": "ProjectileGeometry",
+          "line": 237
+        },
+        {
+          "name": "ProjectileSprite",
+          "line": 243
+        },
+        {
+          "name": "StraightTrajectory",
+          "line": 257
+        },
+        {
+          "name": "BezierTrajectory",
+          "line": 262
+        },
+        {
+          "name": "ProjectileOrientation",
+          "line": 268
+        },
+        {
+          "name": "TargetAnchor",
+          "line": 275
+        },
+        {
+          "name": "SourceAnchor",
+          "line": 282
+        },
+        {
+          "name": "StudioProjectile",
+          "line": 290
+        },
+        {
+          "name": "AreaShapePhase",
+          "line": 324
+        },
+        {
+          "name": "AreaExplosionPhase",
+          "line": 330
+        },
+        {
+          "name": "AreaPhases",
+          "line": 340
+        },
+        {
+          "name": "AreaGeometry",
+          "line": 345
+        },
+        {
+          "name": "AreaSpriteSource",
+          "line": 358
+        },
+        {
+          "name": "AreaSprite",
+          "line": 363
+        },
+        {
+          "name": "SurfaceReveal",
+          "line": 379
+        },
+        {
+          "name": "StudioArea",
+          "line": 386
+        },
+        {
+          "name": "HitFlash",
+          "line": 394
+        },
+        {
+          "name": "FloatingNumber",
+          "line": 402
+        },
+        {
+          "name": "DamageDeath",
+          "line": 410
+        },
+        {
+          "name": "StudioDamage",
+          "line": 415
+        },
+        {
+          "name": "ApplicationOutcome",
+          "line": 422
+        },
+        {
+          "name": "BodyMaterialPoint",
+          "line": 433
+        },
+        {
+          "name": "RisingMotes",
+          "line": 439
+        },
+        {
+          "name": "ObjectIntake",
+          "line": 455
+        },
+        {
+          "name": "StudioBodyMaterialTrack",
+          "line": 469
+        },
+        {
+          "name": "BodyMaterialSample",
+          "line": 489
+        },
+        {
+          "name": "StudioMediaTrack",
+          "line": 496
+        },
+        {
+          "name": "BodyActionMediaTrack",
+          "line": 554
+        },
+        {
+          "name": "StudioContact",
+          "line": 569
+        },
+        {
+          "name": "StudioArcDelivery",
+          "line": 583
+        },
+        {
+          "name": "StudioDirectedEye",
+          "line": 611
+        },
+        {
+          "name": "StudioNoiseRibbonDelivery",
+          "line": 616
+        },
+        {
+          "name": "StudioDarknessMeshDelivery",
+          "line": 631
+        },
+        {
+          "name": "StudioPlasmaTrailDelivery",
+          "line": 643
+        },
+        {
+          "name": "StudioCancellationMedia",
+          "line": 665
+        },
+        {
+          "name": "StudioCastPalette",
+          "line": 685
+        },
+        {
+          "name": "StudioSpellDraft",
+          "line": 699
+        },
+        {
+          "name": "StudioDraftFile",
+          "line": 731
+        },
+        {
+          "name": "MediaFrameAnchor",
+          "line": 745
+        },
+        {
+          "name": "AuthoredProjectilePhase",
+          "line": 751
+        },
+        {
+          "name": "ProjectileFrame",
+          "line": 767
+        },
+        {
+          "name": "AuthoredProjectilePhases",
+          "line": 774
+        },
+        {
+          "name": "PalettePreview",
+          "line": 780
+        },
+        {
+          "name": "ProjectileSource",
+          "line": 785
+        },
+        {
+          "name": "ProjectileValidation",
+          "line": 797
+        },
+        {
+          "name": "ProjectileAssetAnchor",
+          "line": 803
+        },
+        {
+          "name": "AuthoredProjectileAsset",
+          "line": 808
+        },
+        {
+          "name": "ProjectilePage",
+          "line": 828
+        },
+        {
+          "name": "ProjectileFrameLayer",
+          "line": 835
+        },
+        {
+          "name": "PackedFootpoint",
+          "line": 859
+        },
+        {
+          "name": "RGBMediaTint",
+          "line": 873
+        },
+        {
+          "name": "MaskedMediaTint",
+          "line": 878
+        },
+        {
+          "name": "ProjectileFramePart",
+          "line": 884
+        },
+        {
+          "name": "ProjectileFrameStorage",
+          "line": 894
+        },
+        {
+          "name": "SurfaceArchive",
+          "line": 905
+        },
+        {
+          "name": "PackedSurfaceFrames",
+          "line": 912
+        },
+        {
+          "name": "PackedSurfaceComponent",
+          "line": 940
+        },
+        {
+          "name": "ProjectileStorage",
+          "line": 955
+        },
+        {
+          "name": "ActionFrameAnchor",
+          "line": 959
+        },
+        {
+          "name": "RigTables",
+          "line": 964
+        },
+        {
+          "name": "BodyClip",
+          "line": 981
+        },
+        {
+          "name": "ActionActor",
+          "line": 1007
+        },
+        {
+          "name": "RoleDefault",
+          "line": 1022
+        },
+        {
+          "name": "ContentBodyQualifier",
+          "line": 1026
+        },
+        {
+          "name": "MovementBodyQualifier",
+          "line": 1031
+        },
+        {
+          "name": "BodyContext",
+          "line": 1043
+        },
+        {
+          "name": "RigBodyContextBinding",
+          "line": 1068
+        },
+        {
+          "name": "BodyRig",
+          "line": 1106
+        },
+        {
+          "name": "DamagePaletteEntry",
+          "line": 1192
+        },
+        {
+          "name": "DamagePalette",
+          "line": 1198
+        },
+        {
+          "name": "DamageContext",
+          "line": 1203
+        },
+        {
+          "name": "SilhouetteDust",
+          "line": 1221
+        },
+        {
+          "name": "DeathContext",
+          "line": 1241
+        },
+        {
+          "name": "EquipmentTransitionContext",
+          "line": 1250
+        },
+        {
+          "name": "MovementMediaTrack",
+          "line": 1258
+        },
+        {
+          "name": "ActionMediaAsset",
+          "line": 1283
+        },
+        {
+          "name": "ActionMediaAssetFile",
+          "line": 1295
+        },
+        {
+          "name": "WorldParticle",
+          "line": 1301
+        },
+        {
+          "name": "LandingKernel",
+          "line": 1320
+        },
+        {
+          "name": "LandingParticle",
+          "line": 1329
+        },
+        {
+          "name": "LandingTemplate",
+          "line": 1340
+        },
+        {
+          "name": "ReleaseFamily",
+          "line": 1345
+        },
+        {
+          "name": "BloodVapor",
+          "line": 1350
+        },
+        {
+          "name": "BloodResponse",
+          "line": 1361
+        },
+        {
+          "name": "RegionParticleStyle",
+          "line": 1380
+        },
+        {
+          "name": "ParticleMediaAsset",
+          "line": 1391
+        },
+        {
+          "name": "ParticleMediaAssetFile",
+          "line": 1407
+        },
+        {
+          "name": "MovementRecovery",
+          "line": 1413
+        },
+        {
+          "name": "HealingContext",
+          "line": 1420
+        },
+        {
+          "name": "LifecycleFeedback",
+          "line": 1430
+        },
+        {
+          "name": "DeathSaveContext",
+          "line": 1436
+        },
+        {
+          "name": "LifeStateBodyPose",
+          "line": 1443
+        },
+        {
+          "name": "LifeStateContext",
+          "line": 1455
+        },
+        {
+          "name": "MovementReactionContext",
+          "line": 1462
+        },
+        {
+          "name": "ForcedMovementContext",
+          "line": 1474
+        },
+        {
+          "name": "ForcedMovementProfile",
+          "line": 1486
+        },
+        {
+          "name": "ConnectorMovementProfile",
+          "line": 1496
+        },
+        {
+          "name": "FlightMovementProfile",
+          "line": 1518
+        },
+        {
+          "name": "VoluntaryMovementContext",
+          "line": 1535
+        },
+        {
+          "name": "MovementPresentation",
+          "line": 1563
+        },
+        {
+          "name": "FloatingFeedbackStyle",
+          "line": 1573
+        },
+        {
+          "name": "DartStyle",
+          "line": 1585
+        },
+        {
+          "name": "BoltStyle",
+          "line": 1595
+        },
+        {
+          "name": "AttackProfileMatch",
+          "line": 1604
+        },
+        {
+          "name": "AttackVfxLayer",
+          "line": 1618
+        },
+        {
+          "name": "AttackVfx",
+          "line": 1623
+        },
+        {
+          "name": "ActionProjectile",
+          "line": 1629
+        },
+        {
+          "name": "AttackVariant",
+          "line": 1646
+        },
+        {
+          "name": "WeaponTrailPose",
+          "line": 1656
+        },
+        {
+          "name": "WeaponTrailPresentation",
+          "line": 1669
+        },
+        {
+          "name": "WeaponTrailBinding",
+          "line": 1679
+        },
+        {
+          "name": "AttackProfileFile",
+          "line": 1684
+        },
+        {
+          "name": "ActionFeedback",
+          "line": 1691
+        },
+        {
+          "name": "CounterspellFeedback",
+          "line": 1696
+        },
+        {
+          "name": "AttackRecipe",
+          "line": 1702
+        },
+        {
+          "name": "InterruptionRule",
+          "line": 1720
+        },
+        {
+          "name": "ReactionMedia",
+          "line": 1728
+        },
+        {
+          "name": "InterruptionPresentation",
+          "line": 1737
+        },
+        {
+          "name": "ContentActionRecipe",
+          "line": 1743
+        },
+        {
+          "name": "BodyActionBinding",
+          "line": 1766
+        },
+        {
+          "name": "MechanismProjectileArt",
+          "line": 1773
+        },
+        {
+          "name": "SaveHop",
+          "line": 1784
+        },
+        {
+          "name": "PropDepth",
+          "line": 1794
+        },
+        {
+          "name": "PropAnimation",
+          "line": 1805
+        },
+        {
+          "name": "TetherAnimation",
+          "line": 1826
+        },
+        {
+          "name": "WallModuleAssets",
+          "line": 1834
+        },
+        {
+          "name": "WallAxisMedia",
+          "line": 1841
+        },
+        {
+          "name": "WallRingMedia",
+          "line": 1861
+        },
+        {
+          "name": "AssemblyModuleMedia",
+          "line": 1868
+        },
+        {
+          "name": "AssemblyRingMedia",
+          "line": 1877
+        },
+        {
+          "name": "WindFlowMaterial",
+          "line": 1887
+        },
+        {
+          "name": "ConstructionAirMedia",
+          "line": 1896
+        },
+        {
+          "name": "ThornsMaterial",
+          "line": 1905
+        },
+        {
+          "name": "WallAssemblyMedia",
+          "line": 1913
+        },
+        {
+          "name": "OrbitMedia",
+          "line": 1934
+        },
+        {
+          "name": "GroundEllipse",
+          "line": 1953
+        },
+        {
+          "name": "DirectedSpatialResponse",
+          "line": 1959
+        },
+        {
+          "name": "CellMediaVariant",
+          "line": 1979
+        },
+        {
+          "name": "SpatialMediaLayer",
+          "line": 1985
+        },
+        {
+          "name": "ContactSweepVariant",
+          "line": 2042
+        },
+        {
+          "name": "ContactSweepDirection",
+          "line": 2047
+        },
+        {
+          "name": "ContactSweepNode",
+          "line": 2052
+        },
+        {
+          "name": "ContactSweep",
+          "line": 2058
+        },
+        {
+          "name": "SpatialMediaBinding",
+          "line": 2081
+        },
+        {
+          "name": "DepositMediaBinding",
+          "line": 2123
+        },
+        {
+          "name": "ConstructionPhaseMedia",
+          "line": 2130
+        },
+        {
+          "name": "ConstructionDirectionMedia",
+          "line": 2139
+        },
+        {
+          "name": "ConstructionSurfaceMedia",
+          "line": 2145
+        },
+        {
+          "name": "ConstructionMediaBinding",
+          "line": 2159
+        },
+        {
+          "name": "EntityLifecyclePhase",
+          "line": 2184
+        },
+        {
+          "name": "AnimationData",
+          "line": 2205
+        }
+      ]
+    },
+    {
+      "file": "game/app.py",
+      "lines": 1689,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "dnd.core.events",
+        "dnd.core.item_types",
+        "dnd.core.world_edges",
+        "dnd.types.materials",
+        "dnd.types.world",
+        "dnd.types.world_placement",
+        "game.actor_facts",
+        "game.animation_types",
+        "game.area_media",
+        "game.assets",
+        "game.boundary_occlusion",
+        "game.device_art",
+        "game.device_draw",
+        "game.draw_commands",
+        "game.environment_animation",
+        "game.environment_art",
+        "game.environment_draw",
+        "game.fixture_depth",
+        "game.floor_composition",
+        "game.item_draw",
+        "game.mechanism_projectile",
+        "game.media_blend",
+        "game.object_dust",
+        "game.player_facts",
+        "game.projection",
+        "game.residue_media",
+        "game.spatial_field",
+        "game.surface_residue",
+        "game.sustained_draw",
+        "game.volume_media",
+        "game.water",
+        "game.world_animation",
+        "numpy",
+        "pygame",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "FrameEvidence",
+          "line": 69
+        },
+        {
+          "name": "_incident_positions",
+          "line": 94
+        },
+        {
+          "name": "_treatment",
+          "line": 108
+        },
+        {
+          "name": "_authored_treatment",
+          "line": 119
+        },
+        {
+          "name": "_disclosure",
+          "line": 129
+        },
+        {
+          "name": "_boundary_disclosure",
+          "line": 150
+        },
+        {
+          "name": "_stair_runs",
+          "line": 167
+        },
+        {
+          "name": "_support_evidence",
+          "line": 206
+        },
+        {
+          "name": "_corner_representative",
+          "line": 212
+        },
+        {
+          "name": "_visible_rect",
+          "line": 228
+        },
+        {
+          "name": "_static_blit",
+          "line": 232
+        },
+        {
+          "name": "_marked_wall_surface",
+          "line": 257
+        },
+        {
+          "name": "_split_terrain_depths",
+          "line": 296
+        },
+        {
+          "name": "draw_frame",
+          "line": 340
+        }
+      ]
+    },
+    {
+      "file": "game/area_media.py",
+      "lines": 256,
+      "imports": [
+        "dataclasses",
+        "dnd.core.events",
+        "dnd.types.world",
+        "dnd.types.world_placement",
+        "game.projection",
+        "math",
+        "numpy",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "AreaSolid",
+          "line": 21
+        },
+        {
+          "name": "AreaMedia",
+          "line": 30
+        },
+        {
+          "name": "AreaLayer",
+          "line": 40
+        },
+        {
+          "name": "BoundarySprite",
+          "line": 47
+        },
+        {
+          "name": "WallContactSlice",
+          "line": 57
+        },
+        {
+          "name": "_AreaMasks",
+          "line": 64
+        },
+        {
+          "name": "boundary_in_front",
+          "line": 70
+        },
+        {
+          "name": "_reachable_face_columns",
+          "line": 83
+        },
+        {
+          "name": "compose_area",
+          "line": 107
+        },
+        {
+          "name": "_compose_masks",
+          "line": 139
+        },
+        {
+          "name": "boundary_segment",
+          "line": 187
+        },
+        {
+          "name": "mask_ground_area",
+          "line": 202
+        },
+        {
+          "name": "_ground_mask",
+          "line": 229
+        }
+      ]
+    },
+    {
+      "file": "game/asset_types.py",
+      "lines": 61,
+      "imports": [
+        "dataclasses",
+        "pathlib",
+        "pydantic",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "ImageRegionSource",
+          "line": 13
+        },
+        {
+          "name": "ImageRegion",
+          "line": 20
+        },
+        {
+          "name": "ImageResourceSource",
+          "line": 27
+        },
+        {
+          "name": "AssetSpec",
+          "line": 48
+        },
+        {
+          "name": "image_resources",
+          "line": 57
+        }
+      ]
+    },
+    {
+      "file": "game/assets.py",
+      "lines": 338,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "game.animation_types",
+        "game.asset_types",
+        "game.residue_media",
+        "game.surface_residue",
+        "game.world_animation",
+        "game.world_binding_types",
+        "json",
+        "numpy",
+        "pathlib",
+        "pygame",
+        "types",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "LitAnimation",
+          "line": 29
+        },
+        {
+          "name": "PropBinding",
+          "line": 37
+        },
+        {
+          "name": "AssetCatalog",
+          "line": 46
+        },
+        {
+          "name": "prop_animation_frame",
+          "line": 66
+        },
+        {
+          "name": "catalog_from_documents",
+          "line": 99
+        },
+        {
+          "name": "load_catalog",
+          "line": 158
+        },
+        {
+          "name": "SurfaceCache",
+          "line": 166
+        },
+        {
+          "name": "flame_frame_index",
+          "line": 326
+        }
+      ]
+    },
+    {
+      "file": "game/attack.py",
+      "lines": 527,
+      "imports": [
+        "dataclasses",
+        "dnd.core.dice",
+        "dnd.core.equipment_types",
+        "dnd.core.life_types",
+        "dnd.core.presentation_geometry",
+        "game.animation",
+        "game.animation_data",
+        "game.animation_rates",
+        "game.animation_types",
+        "game.combat",
+        "game.player_facts",
+        "game.player_reduction",
+        "game.projection",
+        "math",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "ProjectileInterception",
+          "line": 45
+        },
+        {
+          "name": "_received_interception",
+          "line": 52
+        },
+        {
+          "name": "AttackProjectileTimeline",
+          "line": 82
+        },
+        {
+          "name": "AttackTimeline",
+          "line": 93
+        },
+        {
+          "name": "AttackSample",
+          "line": 124
+        },
+        {
+          "name": "BoundAttack",
+          "line": 134
+        },
+        {
+          "name": "attack_actor_contacts",
+          "line": 141
+        },
+        {
+          "name": "select_attack_profile",
+          "line": 146
+        },
+        {
+          "name": "_attack_colors",
+          "line": 181
+        },
+        {
+          "name": "_attack_layers",
+          "line": 188
+        },
+        {
+          "name": "_projectile_source_offset",
+          "line": 219
+        },
+        {
+          "name": "_semantic_projectile_endpoints",
+          "line": 228
+        },
+        {
+          "name": "_bolt_sample",
+          "line": 246
+        },
+        {
+          "name": "project_attack_projectile",
+          "line": 259
+        },
+        {
+          "name": "attack_projectile_height",
+          "line": 285
+        },
+        {
+          "name": "attack_projectile_contact",
+          "line": 303
+        },
+        {
+          "name": "bind_attack",
+          "line": 310
+        },
+        {
+          "name": "sample_attack",
+          "line": 474
+        }
+      ]
+    },
+    {
+      "file": "game/authoring_conversion.py",
+      "lines": 240,
+      "imports": [
+        "game.animation_types",
+        "math",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "explicit_attachments",
+          "line": 14
+        },
+        {
+          "name": "explicit_composition",
+          "line": 66
+        },
+        {
+          "name": "explicit_spatial_composition",
+          "line": 88
+        },
+        {
+          "name": "validate_wall_modules",
+          "line": 101
+        },
+        {
+          "name": "validate_contact_sweeps",
+          "line": 163
+        },
+        {
+          "name": "validate_composition",
+          "line": 188
+        },
+        {
+          "name": "validate_cell_modules",
+          "line": 210
+        }
+      ]
+    },
+    {
+      "file": "game/blood_draw.py",
+      "lines": 76,
+      "imports": [
+        "game.animation_types",
+        "game.particle_media",
+        "game.projection",
+        "math",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "blood_particle_image",
+          "line": 12
+        }
+      ]
+    },
+    {
+      "file": "game/body_action.py",
+      "lines": 260,
+      "imports": [
+        "dataclasses",
+        "dnd.core.events",
+        "game.animation",
+        "game.animation_rates",
+        "game.animation_types",
+        "game.combat",
+        "game.player_facts",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "BodyActionCue",
+          "line": 35
+        },
+        {
+          "name": "BodyActionSubject",
+          "line": 63
+        },
+        {
+          "name": "intervention_subjects",
+          "line": 72
+        },
+        {
+          "name": "body_cast_limitations",
+          "line": 87
+        },
+        {
+          "name": "body_action_limitations",
+          "line": 91
+        },
+        {
+          "name": "bind_body_action",
+          "line": 95
+        },
+        {
+          "name": "join_body_action",
+          "line": 237
+        },
+        {
+          "name": "sample_body_action",
+          "line": 244
+        }
+      ]
+    },
+    {
+      "file": "game/body_effects.py",
+      "lines": 148,
+      "imports": [
+        "game.animation_types",
+        "game.condition_types",
+        "math",
+        "numpy",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "reveal_body",
+          "line": 12
+        },
+        {
+          "name": "ghost_body",
+          "line": 32
+        },
+        {
+          "name": "absence_silhouette",
+          "line": 53
+        },
+        {
+          "name": "distort_body",
+          "line": 82
+        },
+        {
+          "name": "silhouette_dust",
+          "line": 95
+        }
+      ]
+    },
+    {
+      "file": "game/body_history.py",
+      "lines": 109,
+      "imports": [
+        "dataclasses",
+        "game.animation_types",
+        "game.body_pose_types",
+        "game.body_presentation",
+        "game.choreography",
+        "game.combat",
+        "game.condition_animation",
+        "game.player_facts",
+        "game.visual_position",
+        "types",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "BodyHistoryHead",
+          "line": 22
+        },
+        {
+          "name": "_state_cuts",
+          "line": 33
+        },
+        {
+          "name": "_group_cuts",
+          "line": 44
+        },
+        {
+          "name": "_motion_cuts",
+          "line": 51
+        },
+        {
+          "name": "retain_body_head",
+          "line": 57
+        },
+        {
+          "name": "sample_body_trails",
+          "line": 70
+        }
+      ]
+    },
+    {
+      "file": "game/body_hop.py",
+      "lines": 73,
+      "imports": [
+        "dataclasses",
+        "game.animation",
+        "game.animation_types",
+        "game.player_facts",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "BodyHopCue",
+          "line": 12
+        },
+        {
+          "name": "bind_save_hop",
+          "line": 26
+        },
+        {
+          "name": "sample_body_hop",
+          "line": 56
+        }
+      ]
+    },
+    {
+      "file": "game/body_pose_types.py",
+      "lines": 31,
+      "imports": [
+        "dataclasses",
+        "game.animation",
+        "game.animation_types",
+        "game.condition_animation"
+      ],
+      "definitions": [
+        {
+          "name": "SceneActor",
+          "line": 11
+        },
+        {
+          "name": "ActorPose",
+          "line": 18
+        },
+        {
+          "name": "BodyTrailPose",
+          "line": 28
+        }
+      ]
+    },
+    {
+      "file": "game/body_presentation.py",
+      "lines": 203,
+      "imports": [
+        "dataclasses",
+        "dnd.core.life_types",
+        "game.animation",
+        "game.animation_data",
+        "game.animation_types",
+        "game.attack",
+        "game.body_pose_types",
+        "game.choreography",
+        "game.condition_animation",
+        "game.entity_lifecycle",
+        "game.player_facts",
+        "game.scene",
+        "game.visual_position",
+        "typing",
+        "zlib"
+      ],
+      "definitions": [
+        {
+          "name": "BodyPresentation",
+          "line": 23
+        },
+        {
+          "name": "sample_body_presentation",
+          "line": 37
+        }
+      ]
+    },
+    {
+      "file": "game/boundary_occlusion.py",
+      "lines": 81,
+      "imports": [
+        "collections.abc",
+        "game.area_media",
+        "game.draw_commands",
+        "game.projection",
+        "numpy",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "clip_actor_boundaries",
+          "line": 13
+        }
+      ]
+    },
+    {
+      "file": "game/cast_media.py",
+      "lines": 256,
+      "imports": [
+        "dnd.core.presentation_geometry",
+        "game.animation",
+        "game.animation_types",
+        "game.area_media",
+        "game.draw_commands",
+        "game.finite_material",
+        "game.media_blend",
+        "game.projectile_media",
+        "game.projection",
+        "game.registered_media",
+        "game.volume_media",
+        "math",
+        "pygame",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "sample_cast_body_materials",
+          "line": 24
+        },
+        {
+          "name": "preload_cast_media",
+          "line": 41
+        },
+        {
+          "name": "_socket",
+          "line": 64
+        },
+        {
+          "name": "_world_offset",
+          "line": 71
+        },
+        {
+          "name": "CastMediaPlacement",
+          "line": 76
+        },
+        {
+          "name": "cast_media_placement",
+          "line": 84
+        },
+        {
+          "name": "cast_surface_volume",
+          "line": 159
+        },
+        {
+          "name": "cast_media_draw_commands",
+          "line": 181
+        }
+      ]
+    },
+    {
+      "file": "game/cell_media.py",
+      "lines": 81,
+      "imports": [
+        "dnd.types.senses",
+        "game.animation",
+        "game.animation_types",
+        "game.area_media",
+        "game.draw_commands",
+        "game.maintained_media",
+        "game.player_facts",
+        "game.projection",
+        "game.registered_media",
+        "game.spatial_media_lifetime",
+        "game.volume_media",
+        "numpy",
+        "pygame",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "cell_media_commands",
+          "line": 21
+        }
+      ]
+    },
+    {
+      "file": "game/choreography.py",
+      "lines": 2719,
+      "imports": [
+        "dataclasses",
+        "dnd.core.condition_types",
+        "dnd.core.dice",
+        "dnd.core.events",
+        "dnd.core.life_types",
+        "dnd.types.spatial_effects",
+        "dnd.types.world",
+        "game.action_media",
+        "game.animation",
+        "game.animation_types",
+        "game.attack",
+        "game.body_action",
+        "game.body_hop",
+        "game.combat",
+        "game.condition_animation",
+        "game.condition_reaction",
+        "game.connector_motion",
+        "game.construction_media",
+        "game.construction_transitions",
+        "game.damage",
+        "game.device_art",
+        "game.directed_contacts",
+        "game.entity_lifecycle",
+        "game.environment_animation",
+        "game.environment_art",
+        "game.finite_material",
+        "game.forced_movement",
+        "game.interruption",
+        "game.mechanism_projectile",
+        "game.player_facts",
+        "game.player_reduction",
+        "game.portal_animation",
+        "game.portal_art",
+        "game.projection",
+        "game.residue_media",
+        "game.spatial_contact_media",
+        "game.spatial_response",
+        "game.stationary_media",
+        "game.wall_media",
+        "game.world_animation",
+        "math",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "_has_standalone_state",
+          "line": 79
+        },
+        {
+          "name": "_child_timing",
+          "line": 85
+        },
+        {
+          "name": "ActionNode",
+          "line": 107
+        },
+        {
+          "name": "ActionSample",
+          "line": 115
+        },
+        {
+          "name": "HealingCue",
+          "line": 121
+        },
+        {
+          "name": "EquipmentCue",
+          "line": 131
+        },
+        {
+          "name": "LifecycleCue",
+          "line": 138
+        },
+        {
+          "name": "MotionCue",
+          "line": 151
+        },
+        {
+          "name": "BoundChoreography",
+          "line": 159
+        },
+        {
+          "name": "ChoreographySample",
+          "line": 193
+        },
+        {
+          "name": "_bound_damage_timing",
+          "line": 209
+        },
+        {
+          "name": "_observed_commit",
+          "line": 229
+        },
+        {
+          "name": "_destruction_transition",
+          "line": 239
+        },
+        {
+          "name": "bind_choreography",
+          "line": 300
+        },
+        {
+          "name": "sample_choreography",
+          "line": 1754
+        },
+        {
+          "name": "MotionLeg",
+          "line": 1972
+        },
+        {
+          "name": "MotionReaction",
+          "line": 1996
+        },
+        {
+          "name": "MotionTimeline",
+          "line": 2007
+        },
+        {
+          "name": "_resolve_motion_body",
+          "line": 2031
+        },
+        {
+          "name": "TimelineVisit",
+          "line": 2053
+        },
+        {
+          "name": "walk_bound_timelines",
+          "line": 2060
+        },
+        {
+          "name": "MotionSample",
+          "line": 2076
+        },
+        {
+          "name": "_bind_jump",
+          "line": 2088
+        },
+        {
+          "name": "_visible_contact",
+          "line": 2252
+        },
+        {
+          "name": "_flight_path_phases",
+          "line": 2258
+        },
+        {
+          "name": "bind_motion",
+          "line": 2296
+        },
+        {
+          "name": "passage_weight",
+          "line": 2575
+        },
+        {
+          "name": "motion_leg_contact",
+          "line": 2583
+        },
+        {
+          "name": "sample_motion",
+          "line": 2609
+        },
+        {
+          "name": "_motion_leg_body",
+          "line": 2683
+        }
+      ]
+    },
+    {
+      "file": "game/choreography_draw.py",
+      "lines": 256,
+      "imports": [
+        "dataclasses",
+        "dnd.core.life_types",
+        "dnd.types.world",
+        "game.animation",
+        "game.animation_data",
+        "game.animation_draw",
+        "game.animation_types",
+        "game.area_media",
+        "game.attack",
+        "game.choreography",
+        "game.combat",
+        "game.condition_animation",
+        "game.condition_draw",
+        "game.interruption_draw",
+        "game.motion",
+        "game.portal_animation",
+        "game.projection",
+        "game.scene",
+        "game.stationary_media",
+        "game.wind_flow_media",
+        "pygame",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "ChoreographyMedia",
+          "line": 35
+        },
+        {
+          "name": "load_choreography_media",
+          "line": 42
+        },
+        {
+          "name": "load_motion_media",
+          "line": 164
+        },
+        {
+          "name": "choreography_draw_commands",
+          "line": 186
+        }
+      ]
+    },
+    {
+      "file": "game/combat.py",
+      "lines": 413,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "dnd.core.dice",
+        "dnd.core.equipment_types",
+        "dnd.core.events",
+        "dnd.core.life_types",
+        "dnd.core.presentation_geometry",
+        "dnd.types.actor",
+        "dnd.types.spatial_effects",
+        "dnd.types.world",
+        "dnd.types.world_placement",
+        "game.animation",
+        "game.animation_data",
+        "game.animation_rates",
+        "game.animation_types",
+        "game.area_media",
+        "game.condition_animation",
+        "game.device_art",
+        "game.player_facts",
+        "game.player_reduction",
+        "math",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "received_cast_palette",
+          "line": 36
+        },
+        {
+          "name": "BoundCast",
+          "line": 68
+        },
+        {
+          "name": "BoundEquipment",
+          "line": 83
+        },
+        {
+          "name": "actor_is_visible",
+          "line": 93
+        },
+        {
+          "name": "actor_contact",
+          "line": 102
+        },
+        {
+          "name": "object_contact",
+          "line": 141
+        },
+        {
+          "name": "bind_cast",
+          "line": 166
+        },
+        {
+          "name": "bind_equipment",
+          "line": 368
+        }
+      ]
+    },
+    {
+      "file": "game/combat_demo.py",
+      "lines": 200,
+      "imports": [
+        "collections.abc",
+        "dnd.actions_functional",
+        "dnd.blocks.action_economy",
+        "dnd.blocks.appearance",
+        "dnd.blocks.health",
+        "dnd.blocks.spellcasting",
+        "dnd.body_responses",
+        "dnd.content.items.authored_item_builders",
+        "dnd.content_system.creature_materialization",
+        "dnd.content_system.runtime",
+        "dnd.controller",
+        "dnd.core.content.materialization",
+        "dnd.core.equipment_types",
+        "dnd.core.events",
+        "dnd.encounter",
+        "dnd.entity",
+        "dnd.game",
+        "dnd.monsters.bestiary_content",
+        "dnd.runtime_reset",
+        "dnd.scenarios.battlefield_catalog",
+        "dnd.spells.evocation",
+        "dnd.types.senses",
+        "game.presentation",
+        "game.replay",
+        "random",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "iter_combat_demo",
+          "line": 45
+        },
+        {
+          "name": "capture_combat_demo",
+          "line": 187
+        }
+      ]
+    },
+    {
+      "file": "game/component_particles.py",
+      "lines": 67,
+      "imports": [
+        "game.animation_types",
+        "game.draw_commands",
+        "game.media_blend",
+        "game.projection",
+        "math",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "_dot",
+          "line": 13
+        },
+        {
+          "name": "rising_mote_commands",
+          "line": 28
+        },
+        {
+          "name": "intake_commands",
+          "line": 47
+        }
+      ]
+    },
+    {
+      "file": "game/concentration_media.py",
+      "lines": 122,
+      "imports": [
+        "dataclasses",
+        "dnd.core.item_types",
+        "dnd.core.presentation_geometry",
+        "game.animation_types",
+        "game.choreography",
+        "game.combat",
+        "game.draw_commands",
+        "game.maintained_media",
+        "game.player_facts",
+        "game.player_reduction",
+        "game.projection",
+        "game.spatial_field_media",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "ConcentrationMediaLifetime",
+          "line": 21
+        },
+        {
+          "name": "_slots",
+          "line": 33
+        },
+        {
+          "name": "register_concentration_lifetimes",
+          "line": 50
+        },
+        {
+          "name": "concentration_media_draw_commands",
+          "line": 105
+        }
+      ]
+    },
+    {
+      "file": "game/condition_animation.py",
+      "lines": 524,
+      "imports": [
+        "dataclasses",
+        "dnd.core.condition_types",
+        "dnd.core.content.identities",
+        "dnd.core.events",
+        "dnd.core.life_types",
+        "game.actor_facts",
+        "game.animation",
+        "game.animation_types",
+        "game.condition_media",
+        "game.condition_types",
+        "game.player_facts",
+        "math",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "LiveCopyAppearance",
+          "line": 30
+        },
+        {
+          "name": "ConditionRigLayer",
+          "line": 40
+        },
+        {
+          "name": "ConditionItemModifier",
+          "line": 47
+        },
+        {
+          "name": "AbsenceBodySample",
+          "line": 53
+        },
+        {
+          "name": "ConditionAppearance",
+          "line": 60
+        },
+        {
+          "name": "ConditionResponseCue",
+          "line": 92
+        },
+        {
+          "name": "bind_condition_response",
+          "line": 109
+        },
+        {
+          "name": "bind_event_condition_response",
+          "line": 123
+        },
+        {
+          "name": "bind_received_damage_responses",
+          "line": 152
+        },
+        {
+          "name": "ConditionTimeline",
+          "line": 166
+        },
+        {
+          "name": "ConditionSample",
+          "line": 184
+        },
+        {
+          "name": "persistent_limitations",
+          "line": 191
+        },
+        {
+          "name": "transition_limitations",
+          "line": 209
+        },
+        {
+          "name": "resolve_condition_appearance",
+          "line": 216
+        },
+        {
+          "name": "condition_contact",
+          "line": 327
+        },
+        {
+          "name": "condition_body_pose",
+          "line": 335
+        },
+        {
+          "name": "bind_condition_body",
+          "line": 367
+        },
+        {
+          "name": "sample_condition_body",
+          "line": 384
+        },
+        {
+          "name": "compile_condition",
+          "line": 392
+        },
+        {
+          "name": "sample_condition",
+          "line": 467
+        },
+        {
+          "name": "condition_transition_appearances",
+          "line": 497
+        }
+      ]
+    },
+    {
+      "file": "game/condition_draw.py",
+      "lines": 376,
+      "imports": [
+        "dnd.core.life_types",
+        "game.animation",
+        "game.animation_types",
+        "game.condition_media",
+        "game.condition_sampling",
+        "game.condition_types",
+        "game.directed_surface",
+        "game.projection",
+        "game.registered_media",
+        "math",
+        "numpy",
+        "pathlib",
+        "pygame",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "load_condition_layers",
+          "line": 29
+        },
+        {
+          "name": "compose_condition_layers",
+          "line": 44
+        },
+        {
+          "name": "body_ramp_cacheable",
+          "line": 120
+        },
+        {
+          "name": "condition_body_ramp",
+          "line": 125
+        },
+        {
+          "name": "_smoothstep",
+          "line": 307
+        },
+        {
+          "name": "blend_body_ramp",
+          "line": 312
+        },
+        {
+          "name": "condition_body_color",
+          "line": 325
+        },
+        {
+          "name": "condition_body_outline",
+          "line": 347
+        }
+      ]
+    },
+    {
+      "file": "game/condition_media.py",
+      "lines": 113,
+      "imports": [
+        "dataclasses",
+        "game.asset_types",
+        "game.condition_types",
+        "json",
+        "pathlib",
+        "pydantic",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "ConditionMediaSource",
+          "line": 19
+        },
+        {
+          "name": "ConditionMediaDocument",
+          "line": 49
+        },
+        {
+          "name": "ConditionLayerMedia",
+          "line": 57
+        },
+        {
+          "name": "ResolvedConditionLayer",
+          "line": 81
+        },
+        {
+          "name": "load_condition_media",
+          "line": 93
+        },
+        {
+          "name": "supported_layer",
+          "line": 107
+        }
+      ]
+    },
+    {
+      "file": "game/condition_media_lifetime.py",
+      "lines": 487,
+      "imports": [
+        "dataclasses",
+        "dnd.core.creature_types",
+        "dnd.core.events",
+        "dnd.types.actor",
+        "game.animation",
+        "game.animation_types",
+        "game.body_pose_types",
+        "game.body_presentation",
+        "game.choreography",
+        "game.condition_animation",
+        "game.condition_media",
+        "game.condition_types",
+        "game.player_facts",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "ConditionMediaLifetime",
+          "line": 28
+        },
+        {
+          "name": "extra_media_members",
+          "line": 48
+        },
+        {
+          "name": "_removal_duration",
+          "line": 53
+        },
+        {
+          "name": "_media_assets",
+          "line": 69
+        },
+        {
+          "name": "_members",
+          "line": 79
+        },
+        {
+          "name": "_effective_assets",
+          "line": 91
+        },
+        {
+          "name": "_state_edges",
+          "line": 99
+        },
+        {
+          "name": "register_condition_lifetimes",
+          "line": 124
+        },
+        {
+          "name": "_transition_layers",
+          "line": 300
+        },
+        {
+          "name": "sample_condition_lifetimes",
+          "line": 325
+        },
+        {
+          "name": "_sample_copies",
+          "line": 443
+        }
+      ]
+    },
+    {
+      "file": "game/condition_reaction.py",
+      "lines": 134,
+      "imports": [
+        "dataclasses",
+        "dnd.core.events",
+        "game.animation",
+        "game.animation_types",
+        "game.attack",
+        "game.body_action",
+        "game.combat",
+        "game.player_facts",
+        "game.stationary_media",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "_Interception",
+          "line": 18
+        },
+        {
+          "name": "_interceptions",
+          "line": 25
+        },
+        {
+          "name": "bind_condition_reaction_bodies",
+          "line": 47
+        },
+        {
+          "name": "bind_condition_interception_media",
+          "line": 92
+        }
+      ]
+    },
+    {
+      "file": "game/condition_sampling.py",
+      "lines": 139,
+      "imports": [
+        "dataclasses",
+        "game.animation_types",
+        "game.condition_media",
+        "math"
+      ],
+      "definitions": [
+        {
+          "name": "ConditionMediaSample",
+          "line": 11
+        },
+        {
+          "name": "_loop_samples",
+          "line": 18
+        },
+        {
+          "name": "sample_condition_media",
+          "line": 35
+        },
+        {
+          "name": "select_condition_markers",
+          "line": 116
+        }
+      ]
+    },
+    {
+      "file": "game/condition_types.py",
+      "lines": 450,
+      "imports": [
+        "dnd.core.content.identities",
+        "dnd.core.creature_types",
+        "dnd.types.abilities",
+        "dnd.types.actor",
+        "dnd.types.class_features",
+        "pathlib",
+        "pydantic",
+        "types",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "_Record",
+          "line": 33
+        },
+        {
+          "name": "ConditionTrigger",
+          "line": 37
+        },
+        {
+          "name": "ConditionRelation",
+          "line": 46
+        },
+        {
+          "name": "ConditionGrantedAction",
+          "line": 52
+        },
+        {
+          "name": "ConditionRelationships",
+          "line": 58
+        },
+        {
+          "name": "ConditionClassification",
+          "line": 64
+        },
+        {
+          "name": "ConditionComposition",
+          "line": 71
+        },
+        {
+          "name": "ConditionColors",
+          "line": 78
+        },
+        {
+          "name": "ConditionLayer",
+          "line": 84
+        },
+        {
+          "name": "ConditionTransitionEffect",
+          "line": 110
+        },
+        {
+          "name": "ConditionActivation",
+          "line": 129
+        },
+        {
+          "name": "ConditionBodyColor",
+          "line": 134
+        },
+        {
+          "name": "EquipmentGlint",
+          "line": 140
+        },
+        {
+          "name": "ConditionEquipmentModifier",
+          "line": 149
+        },
+        {
+          "name": "ConditionAppearanceLayer",
+          "line": 161
+        },
+        {
+          "name": "ConditionLabel",
+          "line": 173
+        },
+        {
+          "name": "ConditionBodyScale",
+          "line": 178
+        },
+        {
+          "name": "BodyWave",
+          "line": 183
+        },
+        {
+          "name": "BodyContour",
+          "line": 189
+        },
+        {
+          "name": "BodyTrail",
+          "line": 196
+        },
+        {
+          "name": "ConditionBodyDistortion",
+          "line": 201
+        },
+        {
+          "name": "ConditionLiveCopies",
+          "line": 211
+        },
+        {
+          "name": "ConditionBodyRamp",
+          "line": 229
+        },
+        {
+          "name": "ConditionResponse",
+          "line": 265
+        },
+        {
+          "name": "ConditionFrozenPose",
+          "line": 270
+        },
+        {
+          "name": "ConditionBodyOutline",
+          "line": 286
+        },
+        {
+          "name": "ConditionAbsenceEcho",
+          "line": 296
+        },
+        {
+          "name": "ConditionPersistent",
+          "line": 318
+        },
+        {
+          "name": "ConditionBodyAnimation",
+          "line": 336
+        },
+        {
+          "name": "ConditionTransition",
+          "line": 342
+        },
+        {
+          "name": "ConditionRecipe",
+          "line": 350
+        },
+        {
+          "name": "ConditionFile",
+          "line": 393
+        },
+        {
+          "name": "ConditionBodyPresentation",
+          "line": 406
+        },
+        {
+          "name": "ConditionOverrides",
+          "line": 413
+        },
+        {
+          "name": "load_condition_recipes",
+          "line": 419
+        }
+      ]
+    },
+    {
+      "file": "game/connector_motion.py",
+      "lines": 31,
+      "imports": [
+        "dnd.core.item_types",
+        "dnd.types.world",
+        "game.environment_art",
+        "game.player_facts"
+      ],
+      "definitions": [
+        {
+          "name": "passage_point",
+          "line": 9
+        }
+      ]
+    },
+    {
+      "file": "game/construction_media.py",
+      "lines": 258,
+      "imports": [
+        "dataclasses",
+        "dnd.core.effect_types",
+        "dnd.core.presentation_geometry",
+        "game.animation",
+        "game.animation_types",
+        "game.body_effects",
+        "game.construction_surface",
+        "game.draw_commands",
+        "game.player_facts",
+        "game.projection",
+        "game.registered_media",
+        "game.volume_media",
+        "game.world_animation",
+        "math",
+        "numpy",
+        "pygame",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "ConstructionMediaLifetime",
+          "line": 27
+        },
+        {
+          "name": "construction_duration",
+          "line": 37
+        },
+        {
+          "name": "construction_media_limitation",
+          "line": 54
+        },
+        {
+          "name": "construction_media_draw_commands",
+          "line": 75
+        },
+        {
+          "name": "_section_mask",
+          "line": 241
+        }
+      ]
+    },
+    {
+      "file": "game/construction_media_lifetime.py",
+      "lines": 78,
+      "imports": [
+        "dataclasses",
+        "game.animation_types",
+        "game.choreography",
+        "game.construction_media",
+        "game.player_facts",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "register_construction_lifetimes",
+          "line": 13
+        }
+      ]
+    },
+    {
+      "file": "game/construction_surface.py",
+      "lines": 388,
+      "imports": [
+        "dataclasses",
+        "dnd.core.presentation_geometry",
+        "functools",
+        "game.animation_types",
+        "game.area_media",
+        "game.directed_surface",
+        "game.draw_commands",
+        "game.projection",
+        "game.volume_media",
+        "math",
+        "numpy",
+        "pathlib"
+      ],
+      "definitions": [
+        {
+          "name": "WallMesh",
+          "line": 20
+        },
+        {
+          "name": "IcePiece",
+          "line": 24
+        },
+        {
+          "name": "IcePose",
+          "line": 29
+        },
+        {
+          "name": "DomeSource",
+          "line": 34
+        },
+        {
+          "name": "ConstructionTextures",
+          "line": 42
+        },
+        {
+          "name": "ForceMote",
+          "line": 49
+        },
+        {
+          "name": "ForceMoteGroup",
+          "line": 55
+        },
+        {
+          "name": "ForceMotes",
+          "line": 61
+        },
+        {
+          "name": "force_motes",
+          "line": 67
+        },
+        {
+          "name": "ConstructionComponents",
+          "line": 71
+        },
+        {
+          "name": "construction_components",
+          "line": 77
+        },
+        {
+          "name": "construction_air_mesh",
+          "line": 82
+        },
+        {
+          "name": "_smooth",
+          "line": 86
+        },
+        {
+          "name": "_clamped_texture",
+          "line": 91
+        },
+        {
+          "name": "force_panel",
+          "line": 97
+        },
+        {
+          "name": "_held_ice_surface",
+          "line": 110
+        },
+        {
+          "name": "_force_impulse",
+          "line": 119
+        },
+        {
+          "name": "construction_surface_commands",
+          "line": 142
+        },
+        {
+          "name": "ice_air_commands",
+          "line": 304
+        }
+      ]
+    },
+    {
+      "file": "game/construction_transitions.py",
+      "lines": 37,
+      "imports": [
+        "dnd.core.events",
+        "dnd.types.spatial_effects",
+        "game.animation_types",
+        "game.construction_media",
+        "game.player_facts",
+        "game.world_animation",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "construction_creation_transitions",
+          "line": 13
+        }
+      ]
+    },
+    {
+      "file": "game/controls.py",
+      "lines": 352,
+      "imports": [
+        "collections",
+        "collections.abc",
+        "dataclasses",
+        "dnd.core.base_actions",
+        "dnd.core.events",
+        "game.environment_draw",
+        "game.player_facts",
+        "game.projection",
+        "pygame",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "MenuState",
+          "line": 19
+        },
+        {
+          "name": "ActionSelection",
+          "line": 29
+        },
+        {
+          "name": "EndTurn",
+          "line": 36
+        },
+        {
+          "name": "_rows_rect",
+          "line": 43
+        },
+        {
+          "name": "_end_button",
+          "line": 47
+        },
+        {
+          "name": "_select_action",
+          "line": 51
+        },
+        {
+          "name": "initial_menu",
+          "line": 60
+        },
+        {
+          "name": "selection_target_pool",
+          "line": 68
+        },
+        {
+          "name": "_target_options",
+          "line": 76
+        },
+        {
+          "name": "_choose_target",
+          "line": 83
+        },
+        {
+          "name": "handle_menu_event",
+          "line": 105
+        },
+        {
+          "name": "_target_text",
+          "line": 205
+        },
+        {
+          "name": "draw_target_preview",
+          "line": 218
+        },
+        {
+          "name": "draw_menu",
+          "line": 292
+        }
+      ]
+    },
+    {
+      "file": "game/damage.py",
+      "lines": 106,
+      "imports": [
+        "dataclasses",
+        "dnd.core.life_types",
+        "game.animation",
+        "game.animation_types",
+        "game.combat",
+        "game.player_facts",
+        "game.player_reduction",
+        "math",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "DamageCue",
+          "line": 19
+        },
+        {
+          "name": "DamageSample",
+          "line": 33
+        },
+        {
+          "name": "bind_damage",
+          "line": 39
+        },
+        {
+          "name": "sample_damage",
+          "line": 86
+        }
+      ]
+    },
+    {
+      "file": "game/demo.py",
+      "lines": 397,
+      "imports": [
+        "__future__",
+        "asyncio",
+        "dataclasses",
+        "dnd.blocks.base_item",
+        "dnd.core.events",
+        "dnd.entity",
+        "dnd.game",
+        "dnd.items.environment",
+        "dnd.items.torches",
+        "dnd.runtime_reset",
+        "dnd.scenarios.battlefield_catalog",
+        "game.app",
+        "game.assets",
+        "game.presentation",
+        "game.projection",
+        "pygame",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "RunSummary",
+          "line": 33
+        },
+        {
+          "name": "_successful",
+          "line": 45
+        },
+        {
+          "name": "_iter_demo_intervals",
+          "line": 51
+        },
+        {
+          "name": "build_demo_intervals",
+          "line": 137
+        },
+        {
+          "name": "_produce_intervals",
+          "line": 143
+        },
+        {
+          "name": "_display_sources",
+          "line": 150
+        },
+        {
+          "name": "_rail_lines",
+          "line": 187
+        },
+        {
+          "name": "_run",
+          "line": 202
+        },
+        {
+          "name": "run",
+          "line": 377
+        }
+      ]
+    },
+    {
+      "file": "game/deposit_draw.py",
+      "lines": 90,
+      "imports": [
+        "game.animation",
+        "game.animation_types",
+        "game.deposit_media",
+        "game.draw_commands",
+        "game.maintained_media",
+        "game.player_facts",
+        "game.projection",
+        "game.registered_media",
+        "game.spatial_field",
+        "numpy",
+        "pygame",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "deposit_draw_commands",
+          "line": 20
+        }
+      ]
+    },
+    {
+      "file": "game/deposit_media.py",
+      "lines": 70,
+      "imports": [
+        "dataclasses",
+        "dnd.types.material_deposits",
+        "game.animation_types",
+        "game.choreography",
+        "game.environment_art",
+        "game.player_facts",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "ObservedMaterialDeposit",
+          "line": 19
+        },
+        {
+          "name": "observed_deposits",
+          "line": 25
+        },
+        {
+          "name": "register_deposit_starts",
+          "line": 47
+        }
+      ]
+    },
+    {
+      "file": "game/device_art.py",
+      "lines": 170,
+      "imports": [
+        "dataclasses",
+        "functools",
+        "pathlib",
+        "pydantic",
+        "types",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "_DeviceSource",
+          "line": 14
+        },
+        {
+          "name": "DevicePitchSource",
+          "line": 18
+        },
+        {
+          "name": "DeviceDestructionPitchSource",
+          "line": 29
+        },
+        {
+          "name": "DeviceDestructionSource",
+          "line": 34
+        },
+        {
+          "name": "DeviceArtSource",
+          "line": 42
+        },
+        {
+          "name": "DeviceDocument",
+          "line": 71
+        },
+        {
+          "name": "DevicePitch",
+          "line": 79
+        },
+        {
+          "name": "DeviceDestruction",
+          "line": 88
+        },
+        {
+          "name": "DeviceArt",
+          "line": 97
+        },
+        {
+          "name": "DeviceEmission",
+          "line": 114
+        },
+        {
+          "name": "load_device_art",
+          "line": 126
+        },
+        {
+          "name": "load_device_wrecks",
+          "line": 149
+        },
+        {
+          "name": "device_bank",
+          "line": 155
+        },
+        {
+          "name": "device_frame",
+          "line": 159
+        },
+        {
+          "name": "device_muzzle_offset",
+          "line": 165
+        }
+      ]
+    },
+    {
+      "file": "game/device_draw.py",
+      "lines": 87,
+      "imports": [
+        "functools",
+        "game.device_art",
+        "game.draw_commands",
+        "game.projection",
+        "numpy",
+        "pathlib",
+        "pygame",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "_sheet",
+          "line": 16
+        },
+        {
+          "name": "_frame",
+          "line": 21
+        },
+        {
+          "name": "device_treatment",
+          "line": 27
+        },
+        {
+          "name": "device_draw_command",
+          "line": 47
+        },
+        {
+          "name": "device_wreck_draw_command",
+          "line": 54
+        },
+        {
+          "name": "_body_draw_command",
+          "line": 71
+        }
+      ]
+    },
+    {
+      "file": "game/directed_contacts.py",
+      "lines": 118,
+      "imports": [
+        "dnd.core.presentation_geometry",
+        "game.animation",
+        "game.animation_types",
+        "game.projection",
+        "numpy"
+      ],
+      "definitions": [
+        {
+          "name": "directed_socket",
+          "line": 11
+        },
+        {
+          "name": "recorded_surface_contact",
+          "line": 39
+        },
+        {
+          "name": "ordinary_object_contact",
+          "line": 93
+        },
+        {
+          "name": "directed_object_contacts",
+          "line": 100
+        }
+      ]
+    },
+    {
+      "file": "game/directed_media.py",
+      "lines": 543,
+      "imports": [
+        "dnd.core.presentation_geometry",
+        "functools",
+        "game.animation",
+        "game.animation_types",
+        "game.area_media",
+        "game.directed_contacts",
+        "game.directed_mesh_media",
+        "game.directed_plasma_media",
+        "game.directed_surface",
+        "game.draw_commands",
+        "game.projection",
+        "game.volume_media",
+        "math",
+        "numpy",
+        "pathlib",
+        "pygame",
+        "zlib"
+      ],
+      "definitions": [
+        {
+          "name": "_texture",
+          "line": 29
+        },
+        {
+          "name": "preload_directed_media",
+          "line": 35
+        },
+        {
+          "name": "_bilinear",
+          "line": 51
+        },
+        {
+          "name": "_smooth",
+          "line": 60
+        },
+        {
+          "name": "_point",
+          "line": 65
+        },
+        {
+          "name": "_jagged",
+          "line": 99
+        },
+        {
+          "name": "_ribbon",
+          "line": 116
+        },
+        {
+          "name": "_flare",
+          "line": 191
+        },
+        {
+          "name": "directed_draw_commands",
+          "line": 220
+        },
+        {
+          "name": "_ground_strike_contacts",
+          "line": 377
+        },
+        {
+          "name": "_smooth_array",
+          "line": 418
+        },
+        {
+          "name": "_noise_ribbon_material",
+          "line": 423
+        },
+        {
+          "name": "_eye_material",
+          "line": 441
+        },
+        {
+          "name": "directed_source_layer_replacements",
+          "line": 473
+        },
+        {
+          "name": "_directed_age",
+          "line": 481
+        },
+        {
+          "name": "_directed_ribbon_commands",
+          "line": 486
+        }
+      ]
+    },
+    {
+      "file": "game/directed_mesh_media.py",
+      "lines": 201,
+      "imports": [
+        "functools",
+        "game.animation",
+        "game.animation_types",
+        "game.area_media",
+        "game.directed_surface",
+        "game.draw_commands",
+        "game.projection",
+        "math",
+        "numpy",
+        "pathlib",
+        "pydantic",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "DonorParameters",
+          "line": 20
+        },
+        {
+          "name": "DonorTextures",
+          "line": 28
+        },
+        {
+          "name": "DonorLayer",
+          "line": 34
+        },
+        {
+          "name": "DarknessGeometry",
+          "line": 41
+        },
+        {
+          "name": "load_darkness_geometry",
+          "line": 47
+        },
+        {
+          "name": "preload_darkness_media",
+          "line": 52
+        },
+        {
+          "name": "_smooth",
+          "line": 59
+        },
+        {
+          "name": "_palette",
+          "line": 64
+        },
+        {
+          "name": "_material",
+          "line": 79
+        },
+        {
+          "name": "_composite_palette",
+          "line": 94
+        },
+        {
+          "name": "_source",
+          "line": 131
+        },
+        {
+          "name": "darkness_mesh_commands",
+          "line": 141
+        }
+      ]
+    },
+    {
+      "file": "game/directed_plasma_media.py",
+      "lines": 179,
+      "imports": [
+        "functools",
+        "game.animation",
+        "game.animation_types",
+        "game.area_media",
+        "game.directed_contacts",
+        "game.directed_surface",
+        "game.draw_commands",
+        "game.projection",
+        "math",
+        "numpy",
+        "pathlib",
+        "pydantic"
+      ],
+      "definitions": [
+        {
+          "name": "PlasmaParticle",
+          "line": 18
+        },
+        {
+          "name": "PlasmaParticles",
+          "line": 24
+        },
+        {
+          "name": "PlasmaSphere",
+          "line": 30
+        },
+        {
+          "name": "plasma_particles",
+          "line": 38
+        },
+        {
+          "name": "plasma_sphere",
+          "line": 43
+        },
+        {
+          "name": "_smooth",
+          "line": 47
+        },
+        {
+          "name": "_rgba",
+          "line": 52
+        },
+        {
+          "name": "_energy",
+          "line": 68
+        },
+        {
+          "name": "plasma_draw_commands",
+          "line": 76
+        }
+      ]
+    },
+    {
+      "file": "game/directed_surface.py",
+      "lines": 233,
+      "imports": [
+        "dataclasses",
+        "functools",
+        "game.animation_types",
+        "game.area_media",
+        "game.draw_commands",
+        "game.projection",
+        "game.volume_media",
+        "numpy",
+        "pathlib",
+        "pygame",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "DonorTexture",
+          "line": 19
+        },
+        {
+          "name": "DonorMesh",
+          "line": 25
+        },
+        {
+          "name": "donor_texture_pixels",
+          "line": 32
+        },
+        {
+          "name": "donor_texture",
+          "line": 42
+        },
+        {
+          "name": "DirectedSurface",
+          "line": 50
+        },
+        {
+          "name": "rasterize_surface",
+          "line": 59
+        },
+        {
+          "name": "repeated_texture",
+          "line": 149
+        },
+        {
+          "name": "palette_blocks",
+          "line": 159
+        },
+        {
+          "name": "surface_command",
+          "line": 179
+        },
+        {
+          "name": "_srgb_lab",
+          "line": 198
+        },
+        {
+          "name": "source_palette_rgba",
+          "line": 208
+        }
+      ]
+    },
+    {
+      "file": "game/draw_commands.py",
+      "lines": 43,
+      "imports": [
+        "game.area_media",
+        "game.device_art",
+        "game.volume_media",
+        "numpy",
+        "pygame",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "DevicePose",
+          "line": 18
+        },
+        {
+          "name": "DrawCommand",
+          "line": 23
+        }
+      ]
+    },
+    {
+      "file": "game/encounter_play.py",
+      "lines": 453,
+      "imports": [
+        "asyncio",
+        "collections",
+        "dataclasses",
+        "dnd.core.base_actions",
+        "dnd.core.events",
+        "dnd.core.life_types",
+        "game.animation_data",
+        "game.animation_draw",
+        "game.animation_types",
+        "game.app",
+        "game.assets",
+        "game.body_history",
+        "game.choreography",
+        "game.choreography_draw",
+        "game.concentration_media",
+        "game.condition_media_lifetime",
+        "game.construction_media_lifetime",
+        "game.controls",
+        "game.deposit_media",
+        "game.feedback",
+        "game.item_attachment_lifetime",
+        "game.motion",
+        "game.motion_media",
+        "game.playback_frame",
+        "game.player_facts",
+        "game.player_projection",
+        "game.player_reduction",
+        "game.presentation",
+        "game.presentation_group",
+        "game.projection",
+        "game.scene",
+        "game.session",
+        "game.spatial_media_lifetime",
+        "game.visual_position",
+        "pathlib",
+        "pygame",
+        "re",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "GameFrame",
+          "line": 57
+        },
+        {
+          "name": "GameSummary",
+          "line": 71
+        },
+        {
+          "name": "_log_lines",
+          "line": 85
+        },
+        {
+          "name": "_run",
+          "line": 92
+        },
+        {
+          "name": "run",
+          "line": 434
+        }
+      ]
+    },
+    {
+      "file": "game/entity_lifecycle.py",
+      "lines": 81,
+      "imports": [
+        "dataclasses",
+        "dnd.types.summoning",
+        "game.animation",
+        "game.animation_data",
+        "game.animation_types",
+        "game.body_pose_types",
+        "game.condition_animation",
+        "game.player_facts",
+        "game.stationary_media",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "EntityLifecycleCue",
+          "line": 18
+        },
+        {
+          "name": "lifecycle_phase",
+          "line": 31
+        },
+        {
+          "name": "bind_entity_lifecycle",
+          "line": 43
+        },
+        {
+          "name": "lifecycle_body_progress",
+          "line": 64
+        },
+        {
+          "name": "retiring_pose",
+          "line": 76
+        }
+      ]
+    },
+    {
+      "file": "game/environment_animation.py",
+      "lines": 38,
+      "imports": [
+        "dnd.core.item_types",
+        "game.environment_art",
+        "game.world_animation"
+      ],
+      "definitions": [
+        {
+          "name": "remnant_bank",
+          "line": 11
+        },
+        {
+          "name": "door_pose",
+          "line": 20
+        },
+        {
+          "name": "trap_pose",
+          "line": 31
+        }
+      ]
+    },
+    {
+      "file": "game/environment_art.py",
+      "lines": 302,
+      "imports": [
+        "bisect",
+        "dataclasses",
+        "functools",
+        "game.animation_types",
+        "game.asset_types",
+        "json",
+        "pathlib",
+        "pydantic",
+        "types",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "_EnvironmentSource",
+          "line": 17
+        },
+        {
+          "name": "EnvironmentDepthSource",
+          "line": 21
+        },
+        {
+          "name": "EnvironmentBankSource",
+          "line": 28
+        },
+        {
+          "name": "EnvironmentDoorSource",
+          "line": 84
+        },
+        {
+          "name": "EnvironmentTrapSource",
+          "line": 91
+        },
+        {
+          "name": "EnvironmentWreckSource",
+          "line": 97
+        },
+        {
+          "name": "EnvironmentPropSource",
+          "line": 102
+        },
+        {
+          "name": "EnvironmentDocument",
+          "line": 116
+        },
+        {
+          "name": "EnvironmentBank",
+          "line": 126
+        },
+        {
+          "name": "EnvironmentDoorArt",
+          "line": 151
+        },
+        {
+          "name": "EnvironmentTrapArt",
+          "line": 159
+        },
+        {
+          "name": "EnvironmentPropArt",
+          "line": 166
+        },
+        {
+          "name": "EnvironmentWreckArt",
+          "line": 180
+        },
+        {
+          "name": "EnvironmentArt",
+          "line": 186
+        },
+        {
+          "name": "prop_state_key",
+          "line": 194
+        },
+        {
+          "name": "sample_environment_frame",
+          "line": 200
+        },
+        {
+          "name": "select_environment_destruction",
+          "line": 208
+        },
+        {
+          "name": "environment_art_from_document",
+          "line": 236
+        },
+        {
+          "name": "load_environment_art",
+          "line": 299
+        }
+      ]
+    },
+    {
+      "file": "game/environment_draw.py",
+      "lines": 130,
+      "imports": [
+        "dnd.core.item_types",
+        "functools",
+        "game.device_draw",
+        "game.draw_commands",
+        "game.environment_art",
+        "game.fixture_depth",
+        "game.item_draw",
+        "game.player_facts",
+        "game.projection",
+        "numpy",
+        "pathlib",
+        "pygame",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "_sheet",
+          "line": 23
+        },
+        {
+          "name": "_frame",
+          "line": 28
+        },
+        {
+          "name": "environment_command",
+          "line": 34
+        },
+        {
+          "name": "environment_depth_sample",
+          "line": 67
+        },
+        {
+          "name": "environment_selection_command",
+          "line": 87
+        },
+        {
+          "name": "environment_aperture_image",
+          "line": 113
+        },
+        {
+          "name": "pick_environment_target",
+          "line": 121
+        }
+      ]
+    },
+    {
+      "file": "game/event_record.py",
+      "lines": 251,
+      "imports": [
+        "dnd.actions",
+        "dnd.blocks.base_item",
+        "dnd.blocks.equipment",
+        "dnd.core.base_actions",
+        "dnd.core.base_conditions",
+        "dnd.core.base_object",
+        "dnd.core.combat_log",
+        "dnd.core.content.runtime",
+        "dnd.core.effect_types",
+        "dnd.core.events",
+        "dnd.spells.abjuration",
+        "dnd.types.event_facts",
+        "game.recording_compat",
+        "json",
+        "pydantic",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "encode_event",
+          "line": 108
+        },
+        {
+          "name": "decode_event",
+          "line": 136
+        },
+        {
+          "name": "upgrade_recorded_resolutions",
+          "line": 177
+        },
+        {
+          "name": "upgrade_recorded_spatial_commits",
+          "line": 233
+        }
+      ]
+    },
+    {
+      "file": "game/export_schema.py",
+      "lines": 47,
+      "imports": [
+        "argparse",
+        "game.animation_types",
+        "game.condition_types",
+        "game.player_facts",
+        "game.world_binding_types",
+        "json",
+        "pathlib"
+      ],
+      "definitions": [
+        {
+          "name": "export_schemas",
+          "line": 19
+        },
+        {
+          "name": "main",
+          "line": 39
+        }
+      ]
+    },
+    {
+      "file": "game/feedback.py",
+      "lines": 163,
+      "imports": [
+        "dataclasses",
+        "game.animation",
+        "game.animation_types",
+        "game.attack",
+        "game.choreography",
+        "game.combat",
+        "game.forced_movement",
+        "game.motion",
+        "game.player_facts",
+        "game.player_reduction",
+        "math",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "FeedbackTrack",
+          "line": 23
+        },
+        {
+          "name": "sample_feedback",
+          "line": 35
+        },
+        {
+          "name": "choreography_feedback",
+          "line": 48
+        },
+        {
+          "name": "motion_feedback",
+          "line": 150
+        }
+      ]
+    },
+    {
+      "file": "game/finite_material.py",
+      "lines": 29,
+      "imports": [
+        "dataclasses",
+        "game.animation_types",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "BodyMaterialCue",
+          "line": 10
+        },
+        {
+          "name": "sample_material_track",
+          "line": 21
+        }
+      ]
+    },
+    {
+      "file": "game/fixture_depth.py",
+      "lines": 196,
+      "imports": [
+        "dataclasses",
+        "functools",
+        "game.animation_types",
+        "game.draw_commands",
+        "math",
+        "numpy",
+        "pathlib",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "FixtureDepthSample",
+          "line": 20
+        },
+        {
+          "name": "_atlas",
+          "line": 34
+        },
+        {
+          "name": "_depth_cell",
+          "line": 39
+        },
+        {
+          "name": "partition_world_depth",
+          "line": 50
+        },
+        {
+          "name": "_floor_below_contacts",
+          "line": 103
+        },
+        {
+          "name": "split_world_depth",
+          "line": 124
+        },
+        {
+          "name": "split_actor_fixtures",
+          "line": 165
+        }
+      ]
+    },
+    {
+      "file": "game/floor_composition.py",
+      "lines": 77,
+      "imports": [
+        "game.draw_commands",
+        "numpy",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "compose_floor_coverings",
+          "line": 9
+        }
+      ]
+    },
+    {
+      "file": "game/forced_movement.py",
+      "lines": 272,
+      "imports": [
+        "dataclasses",
+        "dnd.core.events",
+        "dnd.types.event_facts",
+        "dnd.types.world",
+        "game.animation",
+        "game.animation_types",
+        "game.combat",
+        "game.condition_media",
+        "game.condition_types",
+        "game.player_facts",
+        "game.player_reduction",
+        "math",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "ShoveCue",
+          "line": 30
+        },
+        {
+          "name": "DisplacementPoint",
+          "line": 45
+        },
+        {
+          "name": "ForcedMovementCue",
+          "line": 52
+        },
+        {
+          "name": "bind_shove",
+          "line": 73
+        },
+        {
+          "name": "motion_progress",
+          "line": 103
+        },
+        {
+          "name": "bind_forced_movement",
+          "line": 109
+        },
+        {
+          "name": "sample_displacement_layers",
+          "line": 210
+        },
+        {
+          "name": "forced_contact",
+          "line": 222
+        },
+        {
+          "name": "sample_forced_body",
+          "line": 238
+        },
+        {
+          "name": "sample_shove",
+          "line": 268
+        }
+      ]
+    },
+    {
+      "file": "game/interruption.py",
+      "lines": 186,
+      "imports": [
+        "dataclasses",
+        "dnd.core.presentation_geometry",
+        "game.animation",
+        "game.animation_types",
+        "game.attack",
+        "game.body_action",
+        "game.combat",
+        "game.player_facts",
+        "game.stationary_media",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "ReactionMediaCue",
+          "line": 17
+        },
+        {
+          "name": "bind_reaction_media",
+          "line": 34
+        },
+        {
+          "name": "bind_cancellation_media",
+          "line": 62
+        },
+        {
+          "name": "interruption_rule",
+          "line": 74
+        },
+        {
+          "name": "interrupt_body",
+          "line": 85
+        },
+        {
+          "name": "interrupt_delivery",
+          "line": 93
+        },
+        {
+          "name": "interruption_ms",
+          "line": 100
+        },
+        {
+          "name": "protection_contact_ms",
+          "line": 130
+        },
+        {
+          "name": "interrupt_sample",
+          "line": 176
+        }
+      ]
+    },
+    {
+      "file": "game/interruption_draw.py",
+      "lines": 70,
+      "imports": [
+        "game.animation",
+        "game.animation_draw",
+        "game.draw_commands",
+        "game.interruption",
+        "game.projection",
+        "game.registered_media",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "reaction_media_draw_commands",
+          "line": 14
+        }
+      ]
+    },
+    {
+      "file": "game/item_appearance.py",
+      "lines": 87,
+      "imports": [
+        "dnd.core.equipment_types",
+        "dnd.items.authored_variant_inventory",
+        "functools",
+        "pathlib",
+        "pydantic"
+      ],
+      "definitions": [
+        {
+          "name": "HandAppearance",
+          "line": 12
+        },
+        {
+          "name": "GroundAppearance",
+          "line": 21
+        },
+        {
+          "name": "ItemAppearanceDocument",
+          "line": 41
+        },
+        {
+          "name": "SourcePalette",
+          "line": 48
+        },
+        {
+          "name": "SourcePaletteDocument",
+          "line": 55
+        },
+        {
+          "name": "item_source_palettes",
+          "line": 62
+        },
+        {
+          "name": "load_item_appearances",
+          "line": 69
+        },
+        {
+          "name": "hand_appearance",
+          "line": 79
+        },
+        {
+          "name": "ground_appearance",
+          "line": 85
+        }
+      ]
+    },
+    {
+      "file": "game/item_attachment_lifetime.py",
+      "lines": 51,
+      "imports": [
+        "dataclasses",
+        "dnd.core.events",
+        "dnd.core.item_types",
+        "game.animation_types",
+        "game.choreography",
+        "game.player_facts",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "item_attachment_members",
+          "line": 14
+        },
+        {
+          "name": "register_item_attachment_starts",
+          "line": 24
+        }
+      ]
+    },
+    {
+      "file": "game/item_draw.py",
+      "lines": 167,
+      "imports": [
+        "dnd.core.events",
+        "dnd.core.item_types",
+        "functools",
+        "game.animation_types",
+        "game.draw_commands",
+        "game.item_appearance",
+        "game.item_effects",
+        "game.maintained_media",
+        "game.player_facts",
+        "game.projection",
+        "game.registered_media",
+        "pathlib",
+        "pygame",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "_item_attachment_blits",
+          "line": 23
+        },
+        {
+          "name": "compose_item_attachments",
+          "line": 49
+        },
+        {
+          "name": "item_attachment_commands",
+          "line": 73
+        },
+        {
+          "name": "_sheet",
+          "line": 97
+        },
+        {
+          "name": "_ground_frame",
+          "line": 102
+        },
+        {
+          "name": "item_ground_commands",
+          "line": 122
+        },
+        {
+          "name": "item_selection_command",
+          "line": 165
+        }
+      ]
+    },
+    {
+      "file": "game/item_effects.py",
+      "lines": 143,
+      "imports": [
+        "colorsys",
+        "dnd.core.creature_types",
+        "dnd.core.item_types",
+        "functools",
+        "game.condition_types",
+        "game.item_appearance",
+        "numpy",
+        "pathlib",
+        "pydantic",
+        "pygame",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "ItemMaterialRecipe",
+          "line": 20
+        },
+        {
+          "name": "ItemMaterialDocument",
+          "line": 32
+        },
+        {
+          "name": "item_material_recipes",
+          "line": 39
+        },
+        {
+          "name": "_material_recipe",
+          "line": 48
+        },
+        {
+          "name": "_bounded_bloom",
+          "line": 56
+        },
+        {
+          "name": "item_condition_recipes",
+          "line": 74
+        },
+        {
+          "name": "item_material",
+          "line": 81
+        }
+      ]
+    },
+    {
+      "file": "game/maintained_media.py",
+      "lines": 88,
+      "imports": [
+        "game.animation_types",
+        "math"
+      ],
+      "definitions": [
+        {
+          "name": "maintained_media_alpha",
+          "line": 8
+        },
+        {
+          "name": "maintained_media_frame",
+          "line": 21
+        },
+        {
+          "name": "maintained_removal_duration",
+          "line": 50
+        },
+        {
+          "name": "maintained_media_samples",
+          "line": 64
+        }
+      ]
+    },
+    {
+      "file": "game/mechanism_projectile.py",
+      "lines": 129,
+      "imports": [
+        "dataclasses",
+        "functools",
+        "game.animation",
+        "game.animation_types",
+        "game.asset_types",
+        "game.draw_commands",
+        "game.projection",
+        "math",
+        "pydantic",
+        "pygame",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "MechanismProjectileTarget",
+          "line": 20
+        },
+        {
+          "name": "MechanismProjectileCue",
+          "line": 27
+        },
+        {
+          "name": "MechanismProjectileSample",
+          "line": 43
+        },
+        {
+          "name": "mechanism_projectile_duration",
+          "line": 52
+        },
+        {
+          "name": "mechanism_projectile_target",
+          "line": 60
+        },
+        {
+          "name": "sample_mechanism_projectile",
+          "line": 77
+        },
+        {
+          "name": "_rotated",
+          "line": 111
+        },
+        {
+          "name": "mechanism_projectile_draw_command",
+          "line": 115
+        }
+      ]
+    },
+    {
+      "file": "game/media_blend.py",
+      "lines": 105,
+      "imports": [
+        "functools",
+        "game.draw_commands",
+        "numpy",
+        "pygame",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "blit_media",
+          "line": 15
+        },
+        {
+          "name": "_mix_buffer",
+          "line": 49
+        },
+        {
+          "name": "_blit_mixed",
+          "line": 55
+        },
+        {
+          "name": "blit_media_commands",
+          "line": 92
+        }
+      ]
+    },
+    {
+      "file": "game/media_coverage.py",
+      "lines": 27,
+      "imports": [
+        "numpy",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "covered_media",
+          "line": 7
+        }
+      ]
+    },
+    {
+      "file": "game/motion.py",
+      "lines": 7,
+      "imports": [
+        "game.choreography"
+      ],
+      "definitions": []
+    },
+    {
+      "file": "game/motion_media.py",
+      "lines": 90,
+      "imports": [
+        "dataclasses",
+        "game.animation",
+        "game.animation_types",
+        "game.choreography",
+        "game.draw_commands",
+        "game.projection",
+        "game.stationary_media",
+        "math",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "MotionMediaCue",
+          "line": 17
+        },
+        {
+          "name": "bind_motion_media",
+          "line": 24
+        },
+        {
+          "name": "choreography_motion_media",
+          "line": 70
+        },
+        {
+          "name": "motion_media_draw_commands",
+          "line": 78
+        }
+      ]
+    },
+    {
+      "file": "game/object_dust.py",
+      "lines": 41,
+      "imports": [
+        "game.animation_types",
+        "game.body_effects",
+        "game.draw_commands",
+        "game.world_animation",
+        "numpy",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "object_dust_commands",
+          "line": 12
+        }
+      ]
+    },
+    {
+      "file": "game/orbit_media.py",
+      "lines": 203,
+      "imports": [
+        "functools",
+        "game.animation_types",
+        "game.area_media",
+        "game.draw_commands",
+        "game.media_blend",
+        "game.player_facts",
+        "game.projection",
+        "game.registered_media",
+        "math",
+        "numpy",
+        "pygame",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "_smooth",
+          "line": 19
+        },
+        {
+          "name": "_rgb",
+          "line": 24
+        },
+        {
+          "name": "orbit_point",
+          "line": 28
+        },
+        {
+          "name": "_noise_grid",
+          "line": 41
+        },
+        {
+          "name": "_noise",
+          "line": 51
+        },
+        {
+          "name": "_mist",
+          "line": 62
+        },
+        {
+          "name": "ground_ellipse_command",
+          "line": 87
+        },
+        {
+          "name": "_overlaps_owned",
+          "line": 99
+        },
+        {
+          "name": "orbit_media_commands",
+          "line": 105
+        }
+      ]
+    },
+    {
+      "file": "game/particle_media.py",
+      "lines": 146,
+      "imports": [
+        "dataclasses",
+        "game.action_media",
+        "game.animation",
+        "game.animation_types",
+        "game.residue_media",
+        "math"
+      ],
+      "definitions": [
+        {
+          "name": "ParticleSample",
+          "line": 13
+        },
+        {
+          "name": "sample_particles",
+          "line": 25
+        },
+        {
+          "name": "sample_region_particles",
+          "line": 55
+        },
+        {
+          "name": "_flight_point",
+          "line": 97
+        },
+        {
+          "name": "VaporSample",
+          "line": 106
+        },
+        {
+          "name": "sample_vapor",
+          "line": 115
+        }
+      ]
+    },
+    {
+      "file": "game/play.py",
+      "lines": 408,
+      "imports": [
+        "__future__",
+        "asyncio",
+        "collections",
+        "dataclasses",
+        "dnd.runtime_reset",
+        "game.animation",
+        "game.animation_data",
+        "game.animation_draw",
+        "game.animation_types",
+        "game.app",
+        "game.assets",
+        "game.combat",
+        "game.combat_demo",
+        "game.player_facts",
+        "game.player_projection",
+        "game.player_reduction",
+        "game.presentation",
+        "game.projection",
+        "pathlib",
+        "pygame",
+        "re",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "PlaybackFrame",
+          "line": 44
+        },
+        {
+          "name": "EquipmentPlaybackFrame",
+          "line": 59
+        },
+        {
+          "name": "PlaybackSummary",
+          "line": 72
+        },
+        {
+          "name": "_draw_status",
+          "line": 83
+        },
+        {
+          "name": "_run",
+          "line": 107
+        },
+        {
+          "name": "run",
+          "line": 372
+        }
+      ]
+    },
+    {
+      "file": "game/playback_frame.py",
+      "lines": 300,
+      "imports": [
+        "dataclasses",
+        "dnd.core.item_types",
+        "dnd.core.life_types",
+        "game.absence_media",
+        "game.animation",
+        "game.animation_draw",
+        "game.animation_types",
+        "game.attack",
+        "game.body_history",
+        "game.body_presentation",
+        "game.cast_media",
+        "game.choreography",
+        "game.choreography_draw",
+        "game.combat",
+        "game.component_particles",
+        "game.concentration_media",
+        "game.condition_animation",
+        "game.condition_media_lifetime",
+        "game.condition_types",
+        "game.construction_media",
+        "game.deposit_draw",
+        "game.deposit_media",
+        "game.device_art",
+        "game.device_draw",
+        "game.directed_media",
+        "game.feedback",
+        "game.finite_material",
+        "game.forced_movement",
+        "game.item_draw",
+        "game.motion",
+        "game.motion_media",
+        "game.player_facts",
+        "game.portal_draw",
+        "game.projection",
+        "game.residue_media",
+        "game.scene",
+        "game.spatial_media_draw",
+        "game.spatial_media_lifetime",
+        "game.spatial_response",
+        "game.visual_position",
+        "game.world_animation",
+        "pygame",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "PlaybackFrame",
+          "line": 63
+        },
+        {
+          "name": "sample_playback_frame",
+          "line": 76
+        }
+      ]
+    },
+    {
+      "file": "game/player_facts.py",
+      "lines": 676,
+      "imports": [
+        "dataclasses",
+        "dnd.core.combat_log",
+        "dnd.core.content.identities",
+        "dnd.core.creature_types",
+        "dnd.core.effect_types",
+        "dnd.core.equipment_types",
+        "dnd.core.item_types",
+        "dnd.core.life_types",
+        "dnd.core.presentation_geometry",
+        "dnd.types.abilities",
+        "dnd.types.actor",
+        "dnd.types.actor_facts",
+        "dnd.types.appearance",
+        "dnd.types.class_features",
+        "dnd.types.event_facts",
+        "dnd.types.physical_access",
+        "dnd.types.residues",
+        "dnd.types.senses",
+        "dnd.types.spatial_effects",
+        "dnd.types.spell_suppression",
+        "dnd.types.summoning",
+        "dnd.types.traps",
+        "dnd.types.world",
+        "dnd.types.world_placement",
+        "game.recording_compat",
+        "pydantic",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "VisualItem",
+          "line": 43
+        },
+        {
+          "name": "VisualLoadout",
+          "line": 56
+        },
+        {
+          "name": "PlayerActor",
+          "line": 62
+        },
+        {
+          "name": "PlayerObservation",
+          "line": 89
+        },
+        {
+          "name": "AttackFact",
+          "line": 96
+        },
+        {
+          "name": "SpellFact",
+          "line": 124
+        },
+        {
+          "name": "AreaReachFact",
+          "line": 164
+        },
+        {
+          "name": "MovementFact",
+          "line": 175
+        },
+        {
+          "name": "StepFact",
+          "line": 193
+        },
+        {
+          "name": "ForcedMovementFact",
+          "line": 211
+        },
+        {
+          "name": "PortalTransferFact",
+          "line": 226
+        },
+        {
+          "name": "ShoveFact",
+          "line": 237
+        },
+        {
+          "name": "DamageRequestFact",
+          "line": 248
+        },
+        {
+          "name": "DamageResultFact",
+          "line": 259
+        },
+        {
+          "name": "SavingThrowFact",
+          "line": 278
+        },
+        {
+          "name": "HealFact",
+          "line": 290
+        },
+        {
+          "name": "TemporaryHitPointsFact",
+          "line": 302
+        },
+        {
+          "name": "LifeFact",
+          "line": 310
+        },
+        {
+          "name": "DeathSaveFact",
+          "line": 322
+        },
+        {
+          "name": "EquipmentFact",
+          "line": 330
+        },
+        {
+          "name": "ConditionChangeFact",
+          "line": 339
+        },
+        {
+          "name": "ItemEffectChangeFact",
+          "line": 348
+        },
+        {
+          "name": "CreationWitness",
+          "line": 358
+        },
+        {
+          "name": "SpatialFact",
+          "line": 365
+        },
+        {
+          "name": "FactionFact",
+          "line": 380
+        },
+        {
+          "name": "TurnFact",
+          "line": 388
+        },
+        {
+          "name": "ItemChargeFact",
+          "line": 396
+        },
+        {
+          "name": "ActionReaction",
+          "line": 408
+        },
+        {
+          "name": "ActionFact",
+          "line": 417
+        },
+        {
+          "name": "SensoryFact",
+          "line": 429
+        },
+        {
+          "name": "SpatialEffectStateFact",
+          "line": 458
+        },
+        {
+          "name": "MechanismActivationFact",
+          "line": 474
+        },
+        {
+          "name": "ObjectDamageFact",
+          "line": 489
+        },
+        {
+          "name": "ObjectDestroyedFact",
+          "line": 500
+        },
+        {
+          "name": "ContentAttribution",
+          "line": 526
+        },
+        {
+          "name": "ActionCancellation",
+          "line": 541
+        },
+        {
+          "name": "PlayerNode",
+          "line": 548
+        },
+        {
+          "name": "VersionRow",
+          "line": 564
+        },
+        {
+          "name": "FloorItem",
+          "line": 571
+        },
+        {
+          "name": "PlayerObject",
+          "line": 606
+        },
+        {
+          "name": "WorldUpdate",
+          "line": 612
+        },
+        {
+          "name": "PlayerWorld",
+          "line": 621
+        },
+        {
+          "name": "PlayerLineage",
+          "line": 630
+        },
+        {
+          "name": "PlayerInitialization",
+          "line": 643
+        },
+        {
+          "name": "PlayerSequence",
+          "line": 654
+        },
+        {
+          "name": "PlayerState",
+          "line": 662
+        }
+      ]
+    },
+    {
+      "file": "game/player_projection.py",
+      "lines": 1166,
+      "imports": [
+        "dataclasses",
+        "dnd.actions",
+        "dnd.actor_projection",
+        "dnd.blocks.base_item",
+        "dnd.blocks.equipment",
+        "dnd.core.base_actions",
+        "dnd.core.combat_log",
+        "dnd.core.condition_types",
+        "dnd.core.content.runtime",
+        "dnd.core.events",
+        "dnd.core.item_types",
+        "dnd.core.life_types",
+        "dnd.core.presentation_geometry",
+        "dnd.spells.abjuration",
+        "dnd.types.class_features",
+        "dnd.types.residues",
+        "dnd.types.senses",
+        "dnd.types.spatial_effects",
+        "dnd.types.spell_suppression",
+        "dnd.types.summoning",
+        "dnd.types.world",
+        "game.actor_facts",
+        "game.actor_projection",
+        "game.event_record",
+        "game.player_facts",
+        "game.player_reduction",
+        "game.presentation",
+        "game.recording_compat",
+        "game.replay",
+        "math",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "_identified",
+          "line": 55
+        },
+        {
+          "name": "_action_name",
+          "line": 60
+        },
+        {
+          "name": "_action_log",
+          "line": 67
+        },
+        {
+          "name": "_position_allowed",
+          "line": 80
+        },
+        {
+          "name": "_step_allowed",
+          "line": 85
+        },
+        {
+          "name": "_forced_allowed",
+          "line": 91
+        },
+        {
+          "name": "_visual_loadout",
+          "line": 98
+        },
+        {
+          "name": "_public_actor",
+          "line": 110
+        },
+        {
+          "name": "_sensory_fact",
+          "line": 128
+        },
+        {
+          "name": "_held_item_disclosed",
+          "line": 150
+        },
+        {
+          "name": "_project_fact",
+          "line": 161
+        },
+        {
+          "name": "_content_attributions",
+          "line": 657
+        },
+        {
+          "name": "_observed_remnant",
+          "line": 680
+        },
+        {
+          "name": "_floor_item",
+          "line": 688
+        },
+        {
+          "name": "_object_observed",
+          "line": 714
+        },
+        {
+          "name": "_observed_object",
+          "line": 735
+        },
+        {
+          "name": "_world_update",
+          "line": 785
+        },
+        {
+          "name": "_versions",
+          "line": 808
+        },
+        {
+          "name": "_disclosed_slots",
+          "line": 813
+        },
+        {
+          "name": "_disclosed_item",
+          "line": 819
+        },
+        {
+          "name": "_disclosed_condition",
+          "line": 823
+        },
+        {
+          "name": "_disclosed_actor",
+          "line": 832
+        },
+        {
+          "name": "_project_nodes",
+          "line": 838
+        },
+        {
+          "name": "ProjectionState",
+          "line": 1108
+        },
+        {
+          "name": "begin_projection",
+          "line": 1117
+        },
+        {
+          "name": "project_lineage",
+          "line": 1137
+        },
+        {
+          "name": "project_sequence",
+          "line": 1162
+        }
+      ]
+    },
+    {
+      "file": "game/player_reduction.py",
+      "lines": 334,
+      "imports": [
+        "dataclasses",
+        "dnd.core.condition_types",
+        "dnd.core.effect_types",
+        "dnd.core.events",
+        "dnd.types.actor",
+        "dnd.types.senses",
+        "game.player_facts",
+        "game.recording_compat",
+        "json",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "PlayerCausalIndex",
+          "line": 23
+        },
+        {
+          "name": "index_player_lineage",
+          "line": 33
+        },
+        {
+          "name": "copy_target",
+          "line": 75
+        },
+        {
+          "name": "apply_world_update",
+          "line": 85
+        },
+        {
+          "name": "_observe",
+          "line": 93
+        },
+        {
+          "name": "stage_actors",
+          "line": 102
+        },
+        {
+          "name": "observe_actors",
+          "line": 111
+        },
+        {
+          "name": "stage_lineage",
+          "line": 119
+        },
+        {
+          "name": "apply_player_fact",
+          "line": 136
+        },
+        {
+          "name": "reduce_nodes",
+          "line": 239
+        },
+        {
+          "name": "state_before_event",
+          "line": 275
+        },
+        {
+          "name": "reduce_initialization",
+          "line": 287
+        },
+        {
+          "name": "reduce_lineage",
+          "line": 296
+        },
+        {
+          "name": "lineage_branch",
+          "line": 306
+        },
+        {
+          "name": "encode_player_sequence",
+          "line": 325
+        },
+        {
+          "name": "decode_player_sequence",
+          "line": 329
+        }
+      ]
+    },
+    {
+      "file": "game/portal_animation.py",
+      "lines": 99,
+      "imports": [
+        "dataclasses",
+        "dnd.core.events",
+        "dnd.types.world",
+        "game.animation",
+        "game.animation_types",
+        "game.portal_art",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "PortalTransferCue",
+          "line": 15
+        },
+        {
+          "name": "bind_portal_transfer",
+          "line": 33
+        },
+        {
+          "name": "portal_departure_contact",
+          "line": 57
+        },
+        {
+          "name": "portal_arrival_contact",
+          "line": 69
+        },
+        {
+          "name": "portal_actor_hidden",
+          "line": 81
+        },
+        {
+          "name": "portal_body",
+          "line": 86
+        }
+      ]
+    },
+    {
+      "file": "game/portal_art.py",
+      "lines": 163,
+      "imports": [
+        "dataclasses",
+        "functools",
+        "pathlib",
+        "pydantic",
+        "types",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "_PortalSource",
+          "line": 12
+        },
+        {
+          "name": "PortalBankSource",
+          "line": 16
+        },
+        {
+          "name": "PortalHatchSource",
+          "line": 35
+        },
+        {
+          "name": "PortalApertureSource",
+          "line": 45
+        },
+        {
+          "name": "PortalArtSource",
+          "line": 51
+        },
+        {
+          "name": "DoorwayArt",
+          "line": 66
+        },
+        {
+          "name": "PortalDocument",
+          "line": 83
+        },
+        {
+          "name": "PortalBank",
+          "line": 90
+        },
+        {
+          "name": "PortalHatch",
+          "line": 103
+        },
+        {
+          "name": "PortalAperture",
+          "line": 114
+        },
+        {
+          "name": "PortalArt",
+          "line": 121
+        },
+        {
+          "name": "load_portal_art",
+          "line": 137
+        },
+        {
+          "name": "portal_frame",
+          "line": 157
+        }
+      ]
+    },
+    {
+      "file": "game/portal_draw.py",
+      "lines": 208,
+      "imports": [
+        "functools",
+        "game.animation",
+        "game.animation_types",
+        "game.draw_commands",
+        "game.player_facts",
+        "game.portal_animation",
+        "game.portal_art",
+        "game.projection",
+        "game.registered_media",
+        "game.world_animation",
+        "numpy",
+        "pathlib",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "_page",
+          "line": 21
+        },
+        {
+          "name": "_crop",
+          "line": 26
+        },
+        {
+          "name": "_bank_image",
+          "line": 31
+        },
+        {
+          "name": "_hatch_image",
+          "line": 38
+        },
+        {
+          "name": "hatch_frame",
+          "line": 45
+        },
+        {
+          "name": "_command",
+          "line": 51
+        },
+        {
+          "name": "portal_draw_commands",
+          "line": 60
+        },
+        {
+          "name": "_doorway_commands",
+          "line": 112
+        },
+        {
+          "name": "clip_portal_bodies",
+          "line": 143
+        }
+      ]
+    },
+    {
+      "file": "game/presentation.py",
+      "lines": 1019,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "dnd.actions",
+        "dnd.actor_projection",
+        "dnd.blocks.base_item",
+        "dnd.blocks.equipment",
+        "dnd.core.base_actions",
+        "dnd.core.base_conditions",
+        "dnd.core.base_object",
+        "dnd.core.combat_log",
+        "dnd.core.events",
+        "dnd.core.item_types",
+        "dnd.spells.abjuration",
+        "dnd.subjective_combat_log",
+        "dnd.types.senses",
+        "dnd.world_facts",
+        "enum",
+        "game.actor_facts",
+        "game.actor_projection",
+        "game.event_record",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "Disposition",
+          "line": 65
+        },
+        {
+          "name": "ObjectiveRow",
+          "line": 77
+        },
+        {
+          "name": "SubjectiveTextRow",
+          "line": 100
+        },
+        {
+          "name": "IntervalEnvelope",
+          "line": 108
+        },
+        {
+          "name": "ActorAdmission",
+          "line": 128
+        },
+        {
+          "name": "CompletedLineage",
+          "line": 137
+        },
+        {
+          "name": "ReducedInterval",
+          "line": 159
+        },
+        {
+          "name": "IntervalTerminal",
+          "line": 168
+        },
+        {
+          "name": "_objective_row",
+          "line": 181
+        },
+        {
+          "name": "_safe_to_detach",
+          "line": 203
+        },
+        {
+          "name": "_admitted",
+          "line": 211
+        },
+        {
+          "name": "capture_interval",
+          "line": 260
+        },
+        {
+          "name": "_copy_snapshot",
+          "line": 338
+        },
+        {
+          "name": "apply_world_fact",
+          "line": 358
+        },
+        {
+          "name": "reduce_interval",
+          "line": 385
+        },
+        {
+          "name": "settle_dispositions",
+          "line": 470
+        },
+        {
+          "name": "copy_target",
+          "line": 489
+        },
+        {
+          "name": "_reduce_sensory_fact",
+          "line": 500
+        },
+        {
+          "name": "_reduce_turn_fact",
+          "line": 515
+        },
+        {
+          "name": "seed_actors",
+          "line": 531
+        },
+        {
+          "name": "_event_header",
+          "line": 559
+        },
+        {
+          "name": "_retained_event",
+          "line": 595
+        },
+        {
+          "name": "_actor_participants",
+          "line": 663
+        },
+        {
+          "name": "_condition_fact",
+          "line": 692
+        },
+        {
+          "name": "_capture_actor_admissions",
+          "line": 707
+        },
+        {
+          "name": "capture_lineage",
+          "line": 779
+        },
+        {
+          "name": "capture_lineages",
+          "line": 793
+        },
+        {
+          "name": "_capture_lineage",
+          "line": 816
+        },
+        {
+          "name": "lineage_branch",
+          "line": 888
+        },
+        {
+          "name": "_admit_actor",
+          "line": 910
+        },
+        {
+          "name": "stage_actors",
+          "line": 917
+        },
+        {
+          "name": "stage_lineage",
+          "line": 926
+        },
+        {
+          "name": "reduce_lineage",
+          "line": 937
+        }
+      ]
+    },
+    {
+      "file": "game/presentation_coverage.py",
+      "lines": 245,
+      "imports": [
+        "dnd.core.condition_types",
+        "dnd.core.events",
+        "game.animation_types",
+        "game.body_action",
+        "game.choreography",
+        "game.condition_animation",
+        "game.environment_art",
+        "game.player_facts",
+        "game.player_reduction",
+        "game.stationary_media",
+        "pydantic",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "_row",
+          "line": 27
+        },
+        {
+          "name": "presentation_inventory",
+          "line": 35
+        },
+        {
+          "name": "lineage_coverage",
+          "line": 130
+        },
+        {
+          "name": "missing_observed_bindings",
+          "line": 228
+        }
+      ]
+    },
+    {
+      "file": "game/presentation_group.py",
+      "lines": 56,
+      "imports": [
+        "dataclasses",
+        "game.player_facts",
+        "game.player_reduction"
+      ],
+      "definitions": [
+        {
+          "name": "PresentationGroup",
+          "line": 14
+        },
+        {
+          "name": "presentation_groups",
+          "line": 20
+        },
+        {
+          "name": "reduce_presentation_group",
+          "line": 43
+        },
+        {
+          "name": "stage_presentation_group",
+          "line": 51
+        }
+      ]
+    },
+    {
+      "file": "game/projectile_media.py",
+      "lines": 382,
+      "imports": [
+        "__future__",
+        "collections",
+        "dataclasses",
+        "game.animation_types",
+        "game.spell_palette",
+        "gzip",
+        "numpy",
+        "pathlib",
+        "pygame",
+        "struct",
+        "typing",
+        "zipfile"
+      ],
+      "definitions": [
+        {
+          "name": "PacketKey",
+          "line": 28
+        },
+        {
+          "name": "MaskedFrameKey",
+          "line": 43
+        },
+        {
+          "name": "SurfacePositions",
+          "line": 58
+        },
+        {
+          "name": "CachedSource",
+          "line": 71
+        },
+        {
+          "name": "ProjectileFrameCache",
+          "line": 84
+        },
+        {
+          "name": "FrameCacheUsage",
+          "line": 94
+        },
+        {
+          "name": "FootpointImage",
+          "line": 101
+        },
+        {
+          "name": "ProjectileFrameImage",
+          "line": 109
+        },
+        {
+          "name": "frame_cache_usage",
+          "line": 124
+        },
+        {
+          "name": "_cached",
+          "line": 129
+        },
+        {
+          "name": "_reserve",
+          "line": 137
+        },
+        {
+          "name": "_remember",
+          "line": 143
+        },
+        {
+          "name": "_remember_source",
+          "line": 148
+        },
+        {
+          "name": "_prepare",
+          "line": 156
+        },
+        {
+          "name": "_raw_part",
+          "line": 172
+        },
+        {
+          "name": "_surface_packet",
+          "line": 186
+        },
+        {
+          "name": "_projectile_frame_layers",
+          "line": 231
+        },
+        {
+          "name": "projectile_frame_layers",
+          "line": 357
+        }
+      ]
+    },
+    {
+      "file": "game/projection.py",
+      "lines": 379,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "Camera",
+          "line": 24
+        },
+        {
+          "name": "rotate_position",
+          "line": 100
+        },
+        {
+          "name": "inverse_rotate_position",
+          "line": 116
+        },
+        {
+          "name": "project_world",
+          "line": 124
+        },
+        {
+          "name": "project_screen",
+          "line": 145
+        },
+        {
+          "name": "inverse_plane",
+          "line": 163
+        },
+        {
+          "name": "contains_support_diamond",
+          "line": 180
+        },
+        {
+          "name": "painter_key",
+          "line": 220
+        },
+        {
+          "name": "PickCandidate",
+          "line": 271
+        },
+        {
+          "name": "PickableSupport",
+          "line": 279
+        },
+        {
+          "name": "pick_support",
+          "line": 290
+        },
+        {
+          "name": "camera_pose",
+          "line": 327
+        },
+        {
+          "name": "camera_axis_vectors",
+          "line": 342
+        }
+      ]
+    },
+    {
+      "file": "game/recording_compat.py",
+      "lines": 129,
+      "imports": [
+        "dnd.core.effect_types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "recorded_area_policy",
+          "line": 12
+        },
+        {
+          "name": "upgrade_spell_fact",
+          "line": 19
+        },
+        {
+          "name": "recorded_application",
+          "line": 25
+        },
+        {
+          "name": "legacy_damage_reference",
+          "line": 44
+        },
+        {
+          "name": "upgrade_player_sequence",
+          "line": 57
+        }
+      ]
+    },
+    {
+      "file": "game/reference.py",
+      "lines": 47,
+      "imports": [
+        "argparse",
+        "dnd.content_system.bootstrap",
+        "dnd.content_system.runtime",
+        "game.play",
+        "os",
+        "pathlib"
+      ],
+      "definitions": [
+        {
+          "name": "main",
+          "line": 12
+        }
+      ]
+    },
+    {
+      "file": "game/registered_media.py",
+      "lines": 130,
+      "imports": [
+        "dataclasses",
+        "functools",
+        "game.animation_types",
+        "game.projectile_media",
+        "math",
+        "numpy",
+        "pygame",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "registered_material",
+          "line": 16
+        },
+        {
+          "name": "RegisteredMediaSample",
+          "line": 24
+        },
+        {
+          "name": "_nearest_indices",
+          "line": 35
+        },
+        {
+          "name": "registered_media_samples",
+          "line": 41
+        },
+        {
+          "name": "registered_media_blits",
+          "line": 121
+        }
+      ]
+    },
+    {
+      "file": "game/replay.py",
+      "lines": 100,
+      "imports": [
+        "dataclasses",
+        "dnd.core.base_object",
+        "dnd.core.events",
+        "game.presentation",
+        "pydantic",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "RecordedSequence",
+          "line": 17
+        },
+        {
+          "name": "ObserverCapture",
+          "line": 27
+        },
+        {
+          "name": "CapturedHistory",
+          "line": 36
+        },
+        {
+          "name": "capture_history",
+          "line": 45
+        },
+        {
+          "name": "encode_sequence",
+          "line": 89
+        },
+        {
+          "name": "decode_sequence",
+          "line": 96
+        }
+      ]
+    },
+    {
+      "file": "game/residue_media.py",
+      "lines": 103,
+      "imports": [
+        "dataclasses",
+        "dnd.types.residues",
+        "functools",
+        "game.animation_types",
+        "json",
+        "math",
+        "pathlib",
+        "types",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "particle_schedule",
+          "line": 17
+        },
+        {
+          "name": "landed_fraction",
+          "line": 27
+        },
+        {
+          "name": "region_media_assets",
+          "line": 36
+        },
+        {
+          "name": "surface_start_time",
+          "line": 51
+        },
+        {
+          "name": "_surface_start_time",
+          "line": 57
+        },
+        {
+          "name": "landing_template",
+          "line": 65
+        },
+        {
+          "name": "landing_point",
+          "line": 71
+        },
+        {
+          "name": "target_cell",
+          "line": 77
+        },
+        {
+          "name": "ResidueReveal",
+          "line": 82
+        },
+        {
+          "name": "ResidueRevealSample",
+          "line": 95
+        },
+        {
+          "name": "sample_residue_reveals",
+          "line": 100
+        }
+      ]
+    },
+    {
+      "file": "game/scene.py",
+      "lines": 105,
+      "imports": [
+        "dnd.core.condition_types",
+        "dnd.core.life_types",
+        "game.animation",
+        "game.animation_data",
+        "game.animation_draw",
+        "game.animation_types",
+        "game.body_pose_types",
+        "game.combat",
+        "game.condition_animation",
+        "game.condition_draw",
+        "game.player_facts",
+        "game.projection",
+        "game.visual_position",
+        "pygame",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "scene_actors",
+          "line": 28
+        },
+        {
+          "name": "available_clips",
+          "line": 47
+        },
+        {
+          "name": "load_scene_media",
+          "line": 54
+        },
+        {
+          "name": "scene_draw_commands",
+          "line": 67
+        },
+        {
+          "name": "draw_actor_labels",
+          "line": 80
+        }
+      ]
+    },
+    {
+      "file": "game/session.py",
+      "lines": 223,
+      "imports": [
+        "dataclasses",
+        "dnd.actions_functional",
+        "dnd.ai.runtime.controller",
+        "dnd.content.characters.premades",
+        "dnd.content_system.creature_materialization",
+        "dnd.content_system.runtime",
+        "dnd.controller",
+        "dnd.core.base_actions",
+        "dnd.core.content.materialization",
+        "dnd.core.events",
+        "dnd.encounter",
+        "dnd.entity",
+        "dnd.game",
+        "dnd.monsters.bestiary_content",
+        "dnd.reactions",
+        "dnd.runtime_reset",
+        "dnd.scenarios.battlefield_catalog",
+        "dnd.scenarios.encounter_assembler",
+        "dnd.scenarios.encounter_catalog",
+        "dnd.summoning.system",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "Session",
+          "line": 35
+        },
+        {
+          "name": "Operation",
+          "line": 48
+        },
+        {
+          "name": "create_session",
+          "line": 61
+        },
+        {
+          "name": "_create_authored_session",
+          "line": 115
+        },
+        {
+          "name": "_current_player",
+          "line": 144
+        },
+        {
+          "name": "discover_player_actions",
+          "line": 156
+        },
+        {
+          "name": "_operation",
+          "line": 161
+        },
+        {
+          "name": "execute_player_action",
+          "line": 169
+        },
+        {
+          "name": "player_position_options",
+          "line": 193
+        },
+        {
+          "name": "end_player_turn",
+          "line": 206
+        },
+        {
+          "name": "advance_controller",
+          "line": 214
+        },
+        {
+          "name": "close_session",
+          "line": 220
+        }
+      ]
+    },
+    {
+      "file": "game/spatial_contact_media.py",
+      "lines": 177,
+      "imports": [
+        "dnd.core.events",
+        "dnd.core.presentation_geometry",
+        "dnd.types.senses",
+        "dnd.types.spatial_effects",
+        "dnd.types.world",
+        "game.animation",
+        "game.animation_types",
+        "game.combat",
+        "game.player_facts",
+        "game.spatial_response",
+        "game.stationary_media",
+        "math",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "bind_suppression_media",
+          "line": 21
+        },
+        {
+          "name": "ground_contact_is_authored",
+          "line": 52
+        },
+        {
+          "name": "bind_spatial_contacts",
+          "line": 62
+        },
+        {
+          "name": "damage_sweep_recipe",
+          "line": 125
+        },
+        {
+          "name": "bind_damage_sweep",
+          "line": 153
+        }
+      ]
+    },
+    {
+      "file": "game/spatial_field.py",
+      "lines": 137,
+      "imports": [
+        "dnd.core.geometry",
+        "functools",
+        "game.projection",
+        "math",
+        "numpy",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "_raster_supports",
+          "line": 13
+        },
+        {
+          "name": "field_supports",
+          "line": 25
+        },
+        {
+          "name": "_line_owners",
+          "line": 44
+        },
+        {
+          "name": "_line_owner",
+          "line": 52
+        },
+        {
+          "name": "line_field_supports",
+          "line": 58
+        },
+        {
+          "name": "line_owned_supports",
+          "line": 67
+        },
+        {
+          "name": "_sphere_owners",
+          "line": 77
+        },
+        {
+          "name": "_sphere_owner",
+          "line": 85
+        },
+        {
+          "name": "sphere_field_owners",
+          "line": 92
+        },
+        {
+          "name": "field_cell",
+          "line": 112
+        }
+      ]
+    },
+    {
+      "file": "game/spatial_field_media.py",
+      "lines": 288,
+      "imports": [
+        "dnd.core.geometry",
+        "dnd.core.presentation_geometry",
+        "dnd.types.senses",
+        "game.animation",
+        "game.animation_types",
+        "game.area_media",
+        "game.draw_commands",
+        "game.player_facts",
+        "game.projection",
+        "game.registered_media",
+        "game.spatial_field",
+        "game.volume_media",
+        "math",
+        "numpy",
+        "pygame",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "spatial_origin",
+          "line": 26
+        },
+        {
+          "name": "field_media_commands",
+          "line": 34
+        },
+        {
+          "name": "_moving_sight",
+          "line": 222
+        }
+      ]
+    },
+    {
+      "file": "game/spatial_media_draw.py",
+      "lines": 337,
+      "imports": [
+        "dnd.core.events",
+        "dnd.core.geometry",
+        "dnd.core.presentation_geometry",
+        "dnd.types.world",
+        "dnd.types.world_placement",
+        "functools",
+        "game.animation",
+        "game.animation_types",
+        "game.area_media",
+        "game.cell_media",
+        "game.component_particles",
+        "game.draw_commands",
+        "game.maintained_media",
+        "game.orbit_media",
+        "game.player_facts",
+        "game.projection",
+        "game.registered_media",
+        "game.spatial_field",
+        "game.spatial_field_media",
+        "game.spatial_media_lifetime",
+        "game.volume_media",
+        "game.wall_assembly_media",
+        "game.wall_media",
+        "game.world_animation",
+        "math",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "_observed_area",
+          "line": 35
+        },
+        {
+          "name": "spatial_media_draw_commands",
+          "line": 40
+        }
+      ]
+    },
+    {
+      "file": "game/spatial_media_lifetime.py",
+      "lines": 194,
+      "imports": [
+        "dataclasses",
+        "dnd.types.senses",
+        "dnd.types.spatial_effects",
+        "game.animation",
+        "game.animation_types",
+        "game.choreography",
+        "game.combat",
+        "game.maintained_media",
+        "game.player_facts",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "SpatialRecipientEndpoint",
+          "line": 18
+        },
+        {
+          "name": "SpatialDamageContact",
+          "line": 27
+        },
+        {
+          "name": "SpatialMediaLifetime",
+          "line": 36
+        },
+        {
+          "name": "_observed",
+          "line": 47
+        },
+        {
+          "name": "_edges",
+          "line": 55
+        },
+        {
+          "name": "register_spatial_lifetimes",
+          "line": 67
+        }
+      ]
+    },
+    {
+      "file": "game/spatial_response.py",
+      "lines": 111,
+      "imports": [
+        "dataclasses",
+        "dnd.types.senses",
+        "game.animation",
+        "game.animation_types",
+        "game.draw_commands",
+        "game.media_blend",
+        "game.player_facts",
+        "game.projection",
+        "game.stationary_media",
+        "math",
+        "pygame",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "SpatialResponseCue",
+          "line": 21
+        },
+        {
+          "name": "damage_spatial_owner",
+          "line": 32
+        },
+        {
+          "name": "bind_spatial_response",
+          "line": 40
+        },
+        {
+          "name": "spatial_response_draw_commands",
+          "line": 59
+        }
+      ]
+    },
+    {
+      "file": "game/spell_palette.py",
+      "lines": 97,
+      "imports": [
+        "collections",
+        "dataclasses",
+        "functools",
+        "game.animation_types",
+        "numpy",
+        "pathlib",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "PaletteImageCache",
+          "line": 15
+        },
+        {
+          "name": "cached_palette",
+          "line": 24
+        },
+        {
+          "name": "retain_palette",
+          "line": 31
+        },
+        {
+          "name": "palette_noise",
+          "line": 44
+        },
+        {
+          "name": "recolor_palette",
+          "line": 48
+        },
+        {
+          "name": "replace_palette",
+          "line": 86
+        }
+      ]
+    },
+    {
+      "file": "game/stationary_media.py",
+      "lines": 117,
+      "imports": [
+        "dataclasses",
+        "game.animation",
+        "game.animation_types",
+        "game.draw_commands",
+        "game.media_blend",
+        "game.projection",
+        "game.registered_media",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "stationary_media_limitations",
+          "line": 16
+        },
+        {
+          "name": "StationaryMediaCue",
+          "line": 35
+        },
+        {
+          "name": "stationary_media_draw_commands",
+          "line": 58
+        }
+      ]
+    },
+    {
+      "file": "game/surface_residue.py",
+      "lines": 493,
+      "imports": [
+        "__future__",
+        "collections",
+        "collections.abc",
+        "dataclasses",
+        "dnd.types.residues",
+        "game.animation_types",
+        "game.projection",
+        "game.residue_media",
+        "math",
+        "numpy",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "ResidueSurfaceStyle",
+          "line": 20
+        },
+        {
+          "name": "LiquidSurfaceStyle",
+          "line": 28
+        },
+        {
+          "name": "WallFace",
+          "line": 37
+        },
+        {
+          "name": "ResidueSurfaceCache",
+          "line": 47
+        },
+        {
+          "name": "_read",
+          "line": 59
+        },
+        {
+          "name": "_keep",
+          "line": 66
+        },
+        {
+          "name": "_variation",
+          "line": 78
+        },
+        {
+          "name": "_motif",
+          "line": 83
+        },
+        {
+          "name": "ground_residue_image",
+          "line": 89
+        },
+        {
+          "name": "_wall_texture",
+          "line": 155
+        },
+        {
+          "name": "wall_residue_image",
+          "line": 173
+        },
+        {
+          "name": "geometric_residue_image",
+          "line": 207
+        },
+        {
+          "name": "liquid_surface_image",
+          "line": 239
+        },
+        {
+          "name": "_project_texture",
+          "line": 268
+        },
+        {
+          "name": "_field_noise",
+          "line": 290
+        },
+        {
+          "name": "_deposit_texture",
+          "line": 305
+        },
+        {
+          "name": "_shade_liquid",
+          "line": 376
+        },
+        {
+          "name": "_surface_age",
+          "line": 406
+        },
+        {
+          "name": "_shade_fresh_blood",
+          "line": 415
+        },
+        {
+          "name": "_deposit_patch",
+          "line": 454
+        }
+      ]
+    },
+    {
+      "file": "game/sustained_draw.py",
+      "lines": 138,
+      "imports": [
+        "dataclasses",
+        "functools",
+        "game.actor_facts",
+        "game.animation_types",
+        "game.assets",
+        "game.device_art",
+        "game.draw_commands",
+        "game.player_facts",
+        "game.projection",
+        "math",
+        "numpy",
+        "pygame",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "TetherSection",
+          "line": 22
+        },
+        {
+          "name": "_registered_sections",
+          "line": 29
+        },
+        {
+          "name": "_muzzle_world",
+          "line": 79
+        },
+        {
+          "name": "sustained_draw_commands",
+          "line": 89
+        }
+      ]
+    },
+    {
+      "file": "game/thorns_surface.py",
+      "lines": 235,
+      "imports": [
+        "dataclasses",
+        "dnd.core.presentation_geometry",
+        "functools",
+        "game.animation",
+        "game.animation_types",
+        "game.area_media",
+        "game.directed_surface",
+        "game.draw_commands",
+        "game.projection",
+        "game.volume_media",
+        "math",
+        "numpy",
+        "pathlib"
+      ],
+      "definitions": [
+        {
+          "name": "VineMesh",
+          "line": 21
+        },
+        {
+          "name": "VineTextures",
+          "line": 25
+        },
+        {
+          "name": "VineParameters",
+          "line": 32
+        },
+        {
+          "name": "VineTransform",
+          "line": 44
+        },
+        {
+          "name": "VineStart",
+          "line": 49
+        },
+        {
+          "name": "VineComponents",
+          "line": 55
+        },
+        {
+          "name": "vine_components",
+          "line": 64
+        },
+        {
+          "name": "_smooth",
+          "line": 68
+        },
+        {
+          "name": "vine_mesh",
+          "line": 74
+        },
+        {
+          "name": "vine_surface",
+          "line": 95
+        },
+        {
+          "name": "thorns_commands",
+          "line": 182
+        }
+      ]
+    },
+    {
+      "file": "game/visual_position.py",
+      "lines": 21,
+      "imports": [
+        "dataclasses",
+        "game.animation"
+      ],
+      "definitions": [
+        {
+          "name": "VisualPosition",
+          "line": 9
+        },
+        {
+          "name": "placed_contact",
+          "line": 16
+        }
+      ]
+    },
+    {
+      "file": "game/volume_media.py",
+      "lines": 331,
+      "imports": [
+        "dataclasses",
+        "dnd.core.events",
+        "dnd.core.presentation_geometry",
+        "dnd.core.world_edges",
+        "dnd.types.world_placement",
+        "functools",
+        "game.area_media",
+        "game.projection",
+        "game.spatial_field",
+        "math",
+        "numpy",
+        "pygame",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "ExcludedSphere",
+          "line": 25
+        },
+        {
+          "name": "SurfaceVolume",
+          "line": 34
+        },
+        {
+          "name": "_support_field",
+          "line": 60
+        },
+        {
+          "name": "observed_support_heights",
+          "line": 78
+        },
+        {
+          "name": "_barriers",
+          "line": 93
+        },
+        {
+          "name": "_segments",
+          "line": 110
+        },
+        {
+          "name": "_visible_from",
+          "line": 130
+        },
+        {
+          "name": "unobstructed_volume_points",
+          "line": 142
+        },
+        {
+          "name": "_visibility_origins",
+          "line": 150
+        },
+        {
+          "name": "_visual_boundary_coverage",
+          "line": 169
+        },
+        {
+          "name": "compose_volume",
+          "line": 232
+        }
+      ]
+    },
+    {
+      "file": "game/wall_assembly_media.py",
+      "lines": 194,
+      "imports": [
+        "dnd.core.presentation_geometry",
+        "dnd.core.wall_geometry",
+        "dnd.types.senses",
+        "game.animation",
+        "game.animation_types",
+        "game.area_media",
+        "game.construction_surface",
+        "game.draw_commands",
+        "game.maintained_media",
+        "game.projection",
+        "game.registered_media",
+        "game.thorns_surface",
+        "game.volume_media",
+        "game.wind_flow_media",
+        "math",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "assembly_segments",
+          "line": 23
+        },
+        {
+          "name": "assembly_bank",
+          "line": 32
+        },
+        {
+          "name": "assembly_centers",
+          "line": 43
+        },
+        {
+          "name": "module_is_received",
+          "line": 50
+        },
+        {
+          "name": "assembly_media_limitation",
+          "line": 62
+        },
+        {
+          "name": "assembly_media_draw_commands",
+          "line": 93
+        }
+      ]
+    },
+    {
+      "file": "game/wall_media.py",
+      "lines": 172,
+      "imports": [
+        "dnd.core.presentation_geometry",
+        "dnd.core.wall_geometry",
+        "dnd.types.senses",
+        "game.animation",
+        "game.animation_types",
+        "game.draw_commands",
+        "game.maintained_media",
+        "game.projection",
+        "game.registered_media",
+        "math",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "_selected_bank",
+          "line": 23
+        },
+        {
+          "name": "wall_media_limitation",
+          "line": 33
+        },
+        {
+          "name": "wall_module_centers",
+          "line": 61
+        },
+        {
+          "name": "wall_media_draw_commands",
+          "line": 74
+        },
+        {
+          "name": "_ring_draw_commands",
+          "line": 133
+        }
+      ]
+    },
+    {
+      "file": "game/water.py",
+      "lines": 335,
+      "imports": [
+        "__future__",
+        "dataclasses",
+        "game.projection",
+        "numpy",
+        "pygame",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "WaterSupportInput",
+          "line": 15
+        },
+        {
+          "name": "WaterBatchOutput",
+          "line": 24
+        },
+        {
+          "name": "water_source_origin",
+          "line": 33
+        },
+        {
+          "name": "_number",
+          "line": 47
+        },
+        {
+          "name": "_vector",
+          "line": 54
+        },
+        {
+          "name": "_sample_repeat_nearest",
+          "line": 69
+        },
+        {
+          "name": "shade_water_packed",
+          "line": 107
+        },
+        {
+          "name": "_rgba_surface",
+          "line": 222
+        },
+        {
+          "name": "_support_pixels",
+          "line": 229
+        },
+        {
+          "name": "render_water_batch",
+          "line": 241
+        }
+      ]
+    },
+    {
+      "file": "game/weapon_trail_media.py",
+      "lines": 101,
+      "imports": [
+        "game.animation",
+        "game.attack",
+        "game.directed_surface",
+        "game.draw_commands",
+        "game.projection",
+        "game.registered_media",
+        "math",
+        "numpy"
+      ],
+      "definitions": [
+        {
+          "name": "source_trail_pixels",
+          "line": 15
+        },
+        {
+          "name": "weapon_trail_draw_commands",
+          "line": 39
+        }
+      ]
+    },
+    {
+      "file": "game/wind_flow_media.py",
+      "lines": 306,
+      "imports": [
+        "dataclasses",
+        "dnd.core.presentation_geometry",
+        "functools",
+        "game.animation",
+        "game.animation_types",
+        "game.area_media",
+        "game.directed_surface",
+        "game.draw_commands",
+        "game.projection",
+        "game.volume_media",
+        "math",
+        "numpy",
+        "pathlib",
+        "pygame"
+      ],
+      "definitions": [
+        {
+          "name": "WindTextures",
+          "line": 21
+        },
+        {
+          "name": "WindComponents",
+          "line": 28
+        },
+        {
+          "name": "wind_components",
+          "line": 34
+        },
+        {
+          "name": "WindBlockComponents",
+          "line": 38
+        },
+        {
+          "name": "wind_block_components",
+          "line": 55
+        },
+        {
+          "name": "_block_texture",
+          "line": 60
+        },
+        {
+          "name": "wind_interception_commands",
+          "line": 65
+        },
+        {
+          "name": "WindSheet",
+          "line": 107
+        },
+        {
+          "name": "_smooth",
+          "line": 115
+        },
+        {
+          "name": "joined_sheets",
+          "line": 121
+        },
+        {
+          "name": "_nearest_body",
+          "line": 163
+        },
+        {
+          "name": "_palette_commands",
+          "line": 171
+        },
+        {
+          "name": "_wind_fragments",
+          "line": 198
+        },
+        {
+          "name": "wind_flow_commands",
+          "line": 288
+        }
+      ]
+    },
+    {
+      "file": "game/world_animation.py",
+      "lines": 235,
+      "imports": [
+        "dataclasses",
+        "dnd.core.effect_types",
+        "dnd.core.presentation_geometry",
+        "dnd.types.senses",
+        "dnd.types.world",
+        "game.animation_types",
+        "game.device_art",
+        "game.environment_art",
+        "game.mechanism_projectile",
+        "game.player_facts",
+        "game.world_binding_types",
+        "math",
+        "types",
+        "typing",
+        "uuid"
+      ],
+      "definitions": [
+        {
+          "name": "surface_reveal_delay",
+          "line": 25
+        },
+        {
+          "name": "prop_animation",
+          "line": 55
+        },
+        {
+          "name": "DestructionContact",
+          "line": 76
+        },
+        {
+          "name": "SpatialMediaMotion",
+          "line": 91
+        },
+        {
+          "name": "bind_spatial_media_motion",
+          "line": 99
+        },
+        {
+          "name": "ObjectDustContact",
+          "line": 115
+        },
+        {
+          "name": "ConstructionCollapse",
+          "line": 124
+        },
+        {
+          "name": "WorldTransition",
+          "line": 131
+        },
+        {
+          "name": "WorldTransitionSample",
+          "line": 148
+        },
+        {
+          "name": "world_transition_end",
+          "line": 153
+        },
+        {
+          "name": "world_transitions",
+          "line": 190
+        },
+        {
+          "name": "sample_world_transitions",
+          "line": 210
+        },
+        {
+          "name": "merge_world_transitions",
+          "line": 226
+        }
+      ]
+    },
+    {
+      "file": "game/world_binding_types.py",
+      "lines": 207,
+      "imports": [
+        "dnd.types.residues",
+        "game.animation_types",
+        "game.asset_types",
+        "pydantic",
+        "typing"
+      ],
+      "definitions": [
+        {
+          "name": "_PropSource",
+          "line": 10
+        },
+        {
+          "name": "MechanismProjectileSource",
+          "line": 14
+        },
+        {
+          "name": "SaveHopSource",
+          "line": 30
+        },
+        {
+          "name": "PropDepthSource",
+          "line": 37
+        },
+        {
+          "name": "TetherSource",
+          "line": 45
+        },
+        {
+          "name": "PropAnimationSource",
+          "line": 51
+        },
+        {
+          "name": "_WorldSource",
+          "line": 82
+        },
+        {
+          "name": "ImageAnimationSource",
+          "line": 86
+        },
+        {
+          "name": "WaterSource",
+          "line": 91
+        },
+        {
+          "name": "AssetDocument",
+          "line": 119
+        },
+        {
+          "name": "PropBindingSource",
+          "line": 126
+        },
+        {
+          "name": "TerrainCliffSource",
+          "line": 134
+        },
+        {
+          "name": "TerrainStairSource",
+          "line": 144
+        },
+        {
+          "name": "TreatmentSource",
+          "line": 152
+        },
+        {
+          "name": "ResidueSurfaceSource",
+          "line": 157
+        },
+        {
+          "name": "WallFaceSource",
+          "line": 164
+        },
+        {
+          "name": "WallFacesSource",
+          "line": 171
+        },
+        {
+          "name": "LiquidSurfaceSource",
+          "line": 176
+        },
+        {
+          "name": "WorldBindingsSource",
+          "line": 182
+        }
+      ]
+    }
+  ],
+  "content_literals": [
+    {
+      "file": "game/animation_data.py",
+      "line": 414,
+      "value": "spell."
+    },
+    {
+      "file": "game/animation_preview.py",
+      "line": 70,
+      "value": "spell.fire_bolt"
+    },
+    {
+      "file": "game/animation_preview.py",
+      "line": 53,
+      "value": "spell.fire_bolt"
+    },
+    {
+      "file": "game/animation_preview.py",
+      "line": 57,
+      "value": "spell.fire_bolt"
+    },
+    {
+      "file": "game/body_action.py",
+      "line": 28,
+      "value": "action.item.potion_greater_invisibility.drink"
+    },
+    {
+      "file": "game/body_action.py",
+      "line": 29,
+      "value": "action.item.potion_haste.drink"
+    },
+    {
+      "file": "game/body_action.py",
+      "line": 30,
+      "value": "action.item.potion_healing.drink"
+    },
+    {
+      "file": "game/combat_demo.py",
+      "line": 142,
+      "value": "spell.magic_missile"
+    },
+    {
+      "file": "game/combat_demo.py",
+      "line": 142,
+      "value": "spell.fire_bolt"
+    },
+    {
+      "file": "game/controls.py",
+      "line": 135,
+      "value": "action.move"
+    },
+    {
+      "file": "game/recording_compat.py",
+      "line": 9,
+      "value": "spell.fireball"
+    }
+  ]
+}

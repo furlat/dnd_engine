@@ -1,7 +1,7 @@
 """Original wall-section pixels attached to received physical object geometry."""
 
-from dataclasses import dataclass, replace
-from math import floor, hypot, isclose
+from dataclasses import replace
+from math import floor, hypot
 from typing import Mapping
 from uuid import UUID
 
@@ -12,7 +12,7 @@ from dnd.core.effect_types import ObjectSectionVolume
 
 from dnd.core.presentation_geometry import WallAssemblyPresentationGeometry, WallSegment, WallDome, SpherePresentationGeometry
 from game.animation import view_facing
-from game.animation_types import AnimationData, ConstructionMediaBinding
+from game.animation_types import AnimationData
 from game.draw_commands import DrawCommand
 from game.body_effects import silhouette_dust
 from game.construction_surface import construction_surface_commands
@@ -20,56 +20,8 @@ from game.player_facts import PlayerObject, PlayerState
 from game.projection import Camera, painter_key, project_screen, inverse_rotate_position
 from game.registered_media import RegisteredMediaSample, registered_media_samples
 from game.world_animation import WorldTransitionSample, ObjectDustContact
+from game.construction_transitions import ConstructionMediaLifetime, construction_duration, construction_media_limitation
 from game.volume_media import ExcludedSphere, SurfaceVolume
-
-
-@dataclass(frozen=True, slots=True)
-class ConstructionMediaLifetime:
-    object: PlayerObject
-    applied_ms: float | None = None
-    destroyed_ms: float | None = None
-    removed_ms: float | None = None
-    collapse_contacts: tuple[tuple[float,float,float], ...] = ()
-    membrane_impulses: tuple[tuple[float, tuple[float,float,float]], ...] = ()
-    committed_ms: float | None = None
-
-
-def construction_duration(data: AnimationData, binding: ConstructionMediaBinding, phase: str) -> float:
-    source_duration = ({'application': binding.surface.applicationMs, 'destruction': binding.surface.destructionMs,
-        'removal': binding.surface.removalMs}[phase] if binding.surface is not None else 0.)
-    if phase == 'removal':
-        return max(binding.removalDurationMs or 0., source_duration)
-    banks = (v.application if phase == 'application' else v.destruction
-        for direction in binding.directions for v in direction.variants)
-    durations = []
-    for pair in banks:
-        for identity in pair:
-            asset = data.projectile_assets[identity]
-            selected = asset.phases.impact
-            assert selected is not None
-            durations.append(selected.frames*1000/(selected.fps or asset.fps))
-    return max((*durations, source_duration))
-
-
-def construction_media_limitation(obj: PlayerObject, binding: ConstructionMediaBinding) -> str | None:
-    geometry = obj.item.construction_geometry
-    if binding.surface is not None and isinstance(geometry, WallAssemblyPresentationGeometry):
-        if isinstance(geometry.path, WallDome):
-            return None if geometry.path.radius_feet in (5, 10) else 'Construction radius has no original operator'
-        if not binding.surface.domeOnly and isinstance(geometry.path, WallSegment):
-            return None
-    if not isinstance(geometry, WallAssemblyPresentationGeometry) or not isinstance(geometry.path, WallSegment):
-        return 'Construction geometry has no delivered section profile'
-    if not isclose(geometry.height_feet, binding.heightFeet):
-        return 'Construction height has no matched source bank'
-    path = geometry.path
-    dx, dy = path.end[0]-path.start[0], path.end[1]-path.start[1]
-    length = hypot(dx, dy)*5
-    if not isclose(length/binding.lengthFeet, round(length/binding.lengthFeet)):
-        return 'Construction length is not an exact source-module multiple'
-    if not any(dx*x+dy*y > 0 and abs(dx*y-dy*x) < 1e-8 for x, y in (d.tangent for d in binding.directions)):
-        return 'Construction heading has no native source bank'
-    return None
 
 
 def construction_media_draw_commands(state: PlayerState, data: AnimationData, now_ms: float,

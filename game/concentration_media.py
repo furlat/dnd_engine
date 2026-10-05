@@ -3,18 +3,16 @@
 from dataclasses import dataclass, replace
 from typing import Mapping
 from uuid import UUID
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference
 
 from dnd.core.item_types import ItemConcentrationSlot
 from dnd.core.presentation_geometry import AoEPresentationGeometry
 from game.animation_types import AnimationData
 from game.choreography import BoundChoreography, MotionTimeline, walk_bound_timelines
 from game.combat import BoundCast
-from game.draw_commands import DrawCommand
-from game.maintained_media import maintained_media_alpha, maintained_media_frame, maintained_removal_duration
+from game.maintained_media import maintained_removal_duration
 from game.player_facts import PlayerLineage, PlayerState, SpellFact
 from game.player_reduction import reduce_lineage
-from game.projection import Camera
-from game.spatial_field_media import field_media_commands
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +26,7 @@ class ConcentrationMediaLifetime:
     elevation_steps: float
     applied_ms: float
     removed_ms: float | None = None
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
 
 def _slots(state: PlayerState, actor: UUID, item: UUID | None) -> tuple[ItemConcentrationSlot, ...] | None:
@@ -84,7 +83,11 @@ def register_concentration_lifetimes(
             assert fact.behavior_id is not None
             result[slot.slot_uuid] = ConcentrationMediaLifetime(slot.slot_uuid, fact.behavior_id,
                 fact.source_entity_uuid, fact.source_item_uuid, fact.area_geometry, fact.resolved_area_positions,
-                support.elevation_steps, absolute_start_ms + offset + cast.start_ms + cast.bound.timeline.release_ms)
+                support.elevation_steps, absolute_start_ms + offset + cast.start_ms + cast.bound.timeline.release_ms,
+                timing_evidence=(TimingEvidence(0, TimingReference("concentration", slot.slot_uuid, "applied"),
+                    "lifetime_application", "offset", (TimingOperand(TimingReference("event", node.uuid, "release"),
+                        absolute_start_ms + offset + cast.start_ms + cast.bound.timeline.release_ms),),
+                    absolute_start_ms + offset + cast.start_ms + cast.bound.timeline.release_ms),))
     # Use the final committed observation, so retained slots survive native root
     # replacement. Retirement starts at its observed owner-state change.
     for owner, record in tuple(result.items()):
@@ -98,25 +101,9 @@ def register_concentration_lifetimes(
                             if any(slot.slot_uuid == owner for slot in known)), default=-1)
         at = next((at for index, (at, known) in enumerate(known_states) if index > last_present
                    and not any(slot.slot_uuid == owner for slot in known)), 0.)
-        result[owner] = replace(record, removed_ms=absolute_start_ms + at)
+        result[owner] = replace(record, removed_ms=absolute_start_ms + at,
+            timing_evidence=(*record.timing_evidence, TimingEvidence(len(record.timing_evidence),
+                TimingReference("concentration", owner, "removed"), "lifetime_removal", "offset",
+                (TimingOperand(TimingReference("concentration", owner, "admission"), absolute_start_ms + at),),
+                absolute_start_ms + at)))
     return result
-
-
-def concentration_media_draw_commands(state: PlayerState, data: AnimationData, now_ms: float,
-                                      camera: Camera, retained: Mapping[UUID, ConcentrationMediaLifetime],
-                                      ) -> tuple[DrawCommand, ...]:
-    commands = []
-    for owner, record in retained.items():
-        binding = data.concentration_media[record.spell_id]
-        if now_ms < record.applied_ms:
-            continue
-        for index, layer in enumerate(binding.layers):
-            alpha = maintained_media_alpha(binding, layer, now_ms, record.removed_ms)
-            if binding.formationFadeMs:
-                alpha *= min(1., (now_ms - record.applied_ms) / binding.formationFadeMs)
-            frame = maintained_media_frame(data, binding, layer, now_ms, record.applied_ms, record.removed_ms)
-            if alpha <= 0 or frame is None:
-                continue
-            commands.extend(field_media_commands(state, data, owner, record.geometry, record.positions,
-                binding, layer, index, *frame, camera, alpha, anchor_elevation_steps=record.elevation_steps))
-    return tuple(commands)

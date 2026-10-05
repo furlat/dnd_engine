@@ -8,6 +8,8 @@ from game.choreography import bind_choreography, sample_choreography
 from game.player_facts import DamageFact, SpellFact
 from game.animation import CastSample
 from game.combat import BoundCast
+from game.presentation_timing import presentation_milestones, presentation_dependencies
+from game.timing_evidence import validate_timing_evidence
 from game.presentation_group import presentation_groups, reduce_presentation_group
 from tests.game.interruption_scenarios import interruption_history
 from tests.game.player_helpers import player_history
@@ -38,6 +40,14 @@ def test_saved_cancellation_plays_attempt_without_fabricating_contact(recorded, 
             found = True
             group = bind_choreography(state, head, data, reactions=presentation.reactions)
             assert not group.gaps
+            dependencies = presentation_dependencies(group)
+            assert all(not validate_timing_evidence(table.evidence) for table in dependencies)
+            if blocked:
+                prefixes = [table for table in dependencies if table.owner_uuid == head.root.uuid
+                    and table.scope in ('cast', 'attack', 'body')]
+                assert prefixes
+                assert all(row.reason == 'interruption' for table in prefixes for row in table.evidence)
+                assert all(row.at_ms <= group.complete_ms for table in prefixes for row in table.evidence)
             assert group.after == reduce_presentation_group(state, presentation)
             if blocker == 'counterspell':
                 reaction_ids = {reaction.root.uuid for reaction in presentation.reactions}
@@ -62,6 +72,9 @@ def test_saved_cancellation_plays_attempt_without_fabricating_contact(recorded, 
                 assert not any(isinstance(node.fact, DamageFact) and node.fact.stage == 'applied'
                                for node in head.events)
                 assert not group.damage and not group.conditions and not group.residue_reveals
+                markers = presentation_milestones(group)
+                assert all(marker.at_ms <= group.complete_ms for marker in markers)
+                assert not any(marker.family == 'application' and marker.owner_uuid == head.root.uuid for marker in markers)
                 if spell == 'magic_missile':
                     cast = group.nodes[0].bound
                     assert isinstance(cast, BoundCast)

@@ -1,0 +1,3894 @@
+[
+  {
+    "case": "persistent-shield",
+    "input": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/persistent-shield/input.json",
+    "input_schema": 2,
+    "source": {
+      "branch": "codex/recovery-design",
+      "commit": "b7e202dd36060215462c5068ea01524c66fe34fe",
+      "dirty": null
+    },
+    "historical_not_current_acceptance": true,
+    "examples": [
+      {
+        "node": {
+          "uuid": "82df38ee-0599-4ee7-873d-ddf5adf041a6",
+          "lineage_uuid": "f3f3cd0f-9bf9-44d7-b511-419b1107fb7b",
+          "parent_event": "1ba65413-93af-4bee-8316-fbb06ff53190",
+          "parent_lineage": "295fdad2-d78f-46be-a6cd-4d4f0ed78af1",
+          "children_lineages": [],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "condition",
+            "target_entity_uuid": "184c3696-2110-4f48-9444-817e4eb3f727",
+            "event_type": "condition_application",
+            "condition": {
+              "event_uuid": "82df38ee-0599-4ee7-873d-ddf5adf041a6",
+              "condition_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+              "name": "Shield",
+              "category": "status",
+              "behavior_id": "condition.spell.shield",
+              "resulting_max_hp": null,
+              "resulting_ac": 17,
+              "state": {
+                "condition_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+                "name": "Shield",
+                "category": "status",
+                "semantic_key": "condition.spell.shield",
+                "behavior_id": "condition.spell.shield",
+                "tags": [
+                  "magical"
+                ],
+                "removal_triggers": [],
+                "agency_denial": "none",
+                "outcome_protections": [
+                  {
+                    "protection_id": "dnd.spells.abjuration.ShieldBuff.magic_missile",
+                    "blocked_effect_ids": [
+                      "dnd.spells.evocation.MagicMissile.damage"
+                    ]
+                  }
+                ],
+                "applied_source_event_cursor": null,
+                "suppression_provider_uuids": [],
+                "duplicate_count": null,
+                "size_change": null,
+                "energy_type": null,
+                "metamagic_mode": null,
+                "affected_item_uuid": null,
+                "enhanced_ability": null,
+                "concentration_slots": []
+              },
+              "resulting_stats": {
+                "normal_hp": 240,
+                "maximum_hp": 240,
+                "temporary_hp": 0,
+                "temporary_hp_grant": null,
+                "armor_class": 17,
+                "healing_blocked": false,
+                "damage_affinities": [],
+                "resolved_size": "Medium",
+                "native_plane_id": "material",
+                "current_plane_id": "material",
+                "spatial_disposition": "present"
+              },
+              "resulting_tile": null,
+              "resulting_item": null,
+              "consumed": false
+            },
+            "consumed": false
+          },
+          "resolution_ref": {
+            "kind": "event",
+            "lineage_uuid": "295fdad2-d78f-46be-a6cd-4d4f0ed78af1"
+          },
+          "cancellation": null,
+          "combat_log": {
+            "entry_type": "condition_applied",
+            "source_name": "Caster",
+            "source_uuid": "184c3696-2110-4f48-9444-817e4eb3f727",
+            "target_name": "Caster",
+            "target_uuid": "184c3696-2110-4f48-9444-817e4eb3f727",
+            "compact": "{cyan:Caster} gains **Shield**",
+            "verbose": "{cyan:Caster} gains **Shield**",
+            "detailed": "{cyan:Caster} gains **Shield**",
+            "data": {},
+            "success": true,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 42,
+            "event_uuid": "82df38ee-0599-4ee7-873d-ddf5adf041a6",
+            "lineage_uuid": "f3f3cd0f-9bf9-44d7-b511-419b1107fb7b"
+          }
+        ]
+      },
+      {
+        "world_update": {
+          "event_uuid": "6012ebf5-3198-4aec-860d-b3685b0e7051",
+          "tiles": [
+            {
+              "tile_uuid": "3e1c0360-2810-43de-a290-6c5777c2aba0",
+              "position": [
+                0,
+                5
+              ],
+              "surface": {
+                "base_material": "stone",
+                "layers": [],
+                "description": ""
+              },
+              "name": "Floor",
+              "blocks_optics": false,
+              "blocks_propagation": false,
+              "walking_cost": 1,
+              "flying_cost": 1,
+              "swimming_cost": 0,
+              "burrowing_cost": 0,
+              "elevation_steps": 0,
+              "surface_kind": "ordinary",
+              "slope_axis": null,
+              "default_light": 3,
+              "resolved_light": 3,
+              "condition_names": [
+                "Bloodied"
+              ],
+              "residues": [
+                {
+                  "condition_uuid": "c975efe5-aeb1-4fac-9f7a-939a463ac1c7",
+                  "residue_id": "residue.blood",
+                  "description": "Blood stains the ground.",
+                  "amount": 1,
+                  "max_amount": 5,
+                  "contributions": [
+                    {
+                      "ellipses": [
+                        {
+                          "center": [
+                            2.55,
+                            1.0
+                          ],
+                          "radius_x": 2.25,
+                          "radius_y": 1.45,
+                          "angle": 3.141592653589793
+                        }
+                      ],
+                      "amount": 1,
+                      "deposit_source": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "objects": [],
+          "objects_removed": [],
+          "connectors": []
+        }
+      },
+      {
+        "node": {
+          "uuid": "8256a457-ab63-4e87-93c4-e0b6e631c917",
+          "lineage_uuid": "420666ce-4b28-4a97-8fa4-ea51c5cf7ddd",
+          "parent_event": "a5b93c2c-6121-43a4-bd8c-c01325887d27",
+          "parent_lineage": "13e72483-df3d-4e48-bcd7-6744c9b4b471",
+          "children_lineages": [],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "condition",
+            "target_entity_uuid": "184c3696-2110-4f48-9444-817e4eb3f727",
+            "event_type": "condition_removal",
+            "condition": {
+              "event_uuid": "8256a457-ab63-4e87-93c4-e0b6e631c917",
+              "condition_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+              "name": "Shield",
+              "category": "status",
+              "behavior_id": "condition.spell.shield",
+              "resulting_max_hp": null,
+              "resulting_ac": 12,
+              "state": {
+                "condition_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+                "name": "Shield",
+                "category": "status",
+                "semantic_key": "condition.spell.shield",
+                "behavior_id": "condition.spell.shield",
+                "tags": [
+                  "magical"
+                ],
+                "removal_triggers": [],
+                "agency_denial": "none",
+                "outcome_protections": [
+                  {
+                    "protection_id": "dnd.spells.abjuration.ShieldBuff.magic_missile",
+                    "blocked_effect_ids": [
+                      "dnd.spells.evocation.MagicMissile.damage"
+                    ]
+                  }
+                ],
+                "applied_source_event_cursor": 43,
+                "suppression_provider_uuids": [],
+                "duplicate_count": null,
+                "size_change": null,
+                "energy_type": null,
+                "metamagic_mode": null,
+                "affected_item_uuid": null,
+                "enhanced_ability": null,
+                "concentration_slots": []
+              },
+              "resulting_stats": {
+                "normal_hp": 230,
+                "maximum_hp": 240,
+                "temporary_hp": 0,
+                "temporary_hp_grant": null,
+                "armor_class": 12,
+                "healing_blocked": false,
+                "damage_affinities": [],
+                "resolved_size": "Medium",
+                "native_plane_id": "material",
+                "current_plane_id": "material",
+                "spatial_disposition": "present"
+              },
+              "resulting_tile": null,
+              "resulting_item": null,
+              "consumed": false
+            },
+            "consumed": false
+          },
+          "resolution_ref": null,
+          "cancellation": null,
+          "combat_log": {
+            "entry_type": "condition_removed",
+            "source_name": "Caster",
+            "source_uuid": "184c3696-2110-4f48-9444-817e4eb3f727",
+            "target_name": "Caster",
+            "target_uuid": "184c3696-2110-4f48-9444-817e4eb3f727",
+            "compact": "{cyan:Caster} is no longer **Shield**",
+            "verbose": "{cyan:Caster} is no longer **Shield**",
+            "detailed": "{cyan:Caster} is no longer **Shield**",
+            "data": {
+              "condition_name": "Shield",
+              "reveals_target": false
+            },
+            "success": true,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 177,
+            "event_uuid": "8256a457-ab63-4e87-93c4-e0b6e631c917",
+            "lineage_uuid": "420666ce-4b28-4a97-8fa4-ea51c5cf7ddd"
+          }
+        ]
+      }
+    ],
+    "bound_examples": [
+      {
+        "root_uuid": "fb9e0214-2917-4214-a8f8-1b6b6661bcd5",
+        "presentation_start_ms": 437.5,
+        "bound": {
+          "conditions": [
+            {
+              "event_uuid": "82df38ee-0599-4ee7-873d-ddf5adf041a6",
+              "target_uuid": "184c3696-2110-4f48-9444-817e4eb3f727",
+              "start_ms": 797.1014492753624,
+              "complete_ms": 797.1014492753624,
+              "before_membership": [],
+              "after_membership": [
+                {
+                  "event_uuid": "82df38ee-0599-4ee7-873d-ddf5adf041a6",
+                  "condition_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+                  "name": "Shield",
+                  "category": "status",
+                  "behavior_id": "condition.spell.shield",
+                  "resulting_max_hp": null,
+                  "resulting_ac": 17,
+                  "state": {
+                    "condition_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+                    "name": "Shield",
+                    "category": "status",
+                    "semantic_key": "condition.spell.shield",
+                    "behavior_id": "condition.spell.shield",
+                    "tags": [
+                      "magical"
+                    ],
+                    "removal_triggers": [],
+                    "agency_denial": "none",
+                    "outcome_protections": [
+                      {
+                        "protection_id": "dnd.spells.abjuration.ShieldBuff.magic_missile",
+                        "blocked_effect_ids": [
+                          "dnd.spells.evocation.MagicMissile.damage"
+                        ]
+                      }
+                    ],
+                    "applied_source_event_cursor": null,
+                    "suppression_provider_uuids": [],
+                    "duplicate_count": null,
+                    "size_change": null,
+                    "energy_type": null,
+                    "metamagic_mode": null,
+                    "affected_item_uuid": null,
+                    "enhanced_ability": null,
+                    "concentration_slots": []
+                  },
+                  "resulting_stats": {
+                    "normal_hp": 240,
+                    "maximum_hp": 240,
+                    "temporary_hp": 0,
+                    "temporary_hp_grant": null,
+                    "armor_class": 17,
+                    "healing_blocked": false,
+                    "damage_affinities": [],
+                    "resolved_size": "Medium",
+                    "native_plane_id": "material",
+                    "current_plane_id": "material",
+                    "spatial_disposition": "present"
+                  },
+                  "resulting_tile": null,
+                  "resulting_item": null,
+                  "consumed": false
+                }
+              ],
+              "before_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "after_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [
+                  "condition.spell.shield"
+                ],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [
+                  {
+                    "layer": {
+                      "id": "persistent.shield.back",
+                      "assetId": "persistent.shield.back",
+                      "category": "shield",
+                      "animation": "loop",
+                      "fps": 144.0,
+                      "attachment": "body",
+                      "offsetX": 0.0,
+                      "offsetY": 0.0,
+                      "opacity": 1.0,
+                      "activeDuring": [
+                        "idle",
+                        "move",
+                        "jump",
+                        "forced_move",
+                        "attack",
+                        "cast",
+                        "act",
+                        "hit"
+                      ],
+                      "startOffsetMs": 0.0,
+                      "phaseOffsetMs": 0.0,
+                      "fadeInMs": 0.0,
+                      "priority": 40,
+                      "colors": {
+                        "primary": 16777215,
+                        "secondary": 16777215,
+                        "tertiary": 16777215
+                      },
+                      "drawOrder": "behind_body",
+                      "lifeStates": [
+                        "alive",
+                        "dying",
+                        "stable",
+                        "dead"
+                      ],
+                      "whenEnergyType": null,
+                      "whenAbility": null,
+                      "whenMetamagicMode": null
+                    },
+                    "owner_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+                    "age_ms": 0.0,
+                    "application": false,
+                    "alpha": 1.0,
+                    "finite": false,
+                    "fade_in_age_ms": null,
+                    "removal_age_ms": null
+                  },
+                  {
+                    "layer": {
+                      "id": "persistent.shield.front",
+                      "assetId": "persistent.shield.front",
+                      "category": "shield",
+                      "animation": "loop",
+                      "fps": 144.0,
+                      "attachment": "body",
+                      "offsetX": 0.0,
+                      "offsetY": 0.0,
+                      "opacity": 1.0,
+                      "activeDuring": [
+                        "idle",
+                        "move",
+                        "jump",
+                        "forced_move",
+                        "attack",
+                        "cast",
+                        "act",
+                        "hit"
+                      ],
+                      "startOffsetMs": 0.0,
+                      "phaseOffsetMs": 0.0,
+                      "fadeInMs": 0.0,
+                      "priority": 40,
+                      "colors": {
+                        "primary": 16777215,
+                        "secondary": 16777215,
+                        "tertiary": 16777215
+                      },
+                      "drawOrder": "in_front_of_body",
+                      "lifeStates": [
+                        "alive",
+                        "dying",
+                        "stable",
+                        "dead"
+                      ],
+                      "whenEnergyType": null,
+                      "whenAbility": null,
+                      "whenMetamagicMode": null
+                    },
+                    "owner_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+                    "age_ms": 0.0,
+                    "application": false,
+                    "alpha": 1.0,
+                    "finite": false,
+                    "fade_in_age_ms": null,
+                    "removal_age_ms": null
+                  }
+                ],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "feedback_text": null,
+              "feedback_color": 5688831,
+              "badge_style": {
+                "fontFamily": "monospace",
+                "fontSizePx": 16.0,
+                "fontWeight": "bold",
+                "strokeColor": 0,
+                "strokeWidthPx": 3.0,
+                "anchorLiftPx": 60.0,
+                "risePx": 40.0,
+                "fadeStartFraction": 0.7,
+                "durationMs": 1400.0
+              },
+              "unsupported": [],
+              "body": null,
+              "alpha_end_ms": null
+            }
+          ],
+          "body_actions": [
+            {
+              "event_uuid": "82df38ee-0599-4ee7-873d-ddf5adf041a6",
+              "contact": {
+                "actor_uuid": "184c3696-2110-4f48-9444-817e4eb3f727",
+                "grid": [
+                  3.0,
+                  6.0
+                ],
+                "facing": "SE",
+                "visual_scale": 1.0,
+                "hp": 240,
+                "life_state": "alive",
+                "elevation_steps": 0.0,
+                "rig_id": "neuroclient.modular",
+                "visual_scale_x": 1.0,
+                "body_lift_px": 0.0,
+                "rest_pose": null,
+                "condition_scale": 1.0,
+                "manifestation": null
+              },
+              "recipe_id": "spell.shield",
+              "clip": "Special1",
+              "playback_speed": 1.15,
+              "start_ms": 0.0,
+              "effect_ms": 797.1014492753624,
+              "body_end_ms": 1014.4927536231885,
+              "join_ms": 1014.4927536231885,
+              "complete_ms": 1014.4927536231885,
+              "enabled": true,
+              "hidden_slots": [],
+              "hide_weapon_during_body": true,
+              "recovery": {
+                "enabled": false,
+                "bodyClip": "Taunt",
+                "bodyPlaybackSpeed": 1.0
+              },
+              "condition": {
+                "anchor": "effect",
+                "delayMs": 0.0,
+                "feedbackEnabled": false
+              },
+              "feedback": null,
+              "gaps": [],
+              "interaction_object_uuid": null,
+              "relocates": false,
+              "cast_layers": [
+                {
+                  "id": "cast-weaponGlow",
+                  "slot": "weaponGlow",
+                  "enabled": true,
+                  "hidden": false,
+                  "category": "Magic2",
+                  "colors": {
+                    "source": "auto",
+                    "primary": 8776703,
+                    "secondary": null,
+                    "tertiary": null,
+                    "mode": "paletteSwap"
+                  },
+                  "sourceSheet": "/spritesheets/Magic2/Special1.png",
+                  "palette": {
+                    "colors": [
+                      596022,
+                      8776703,
+                      2259678
+                    ],
+                    "gamma": 0.65,
+                    "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                    "untinted": false
+                  },
+                  "blendMode": "normal"
+                },
+                {
+                  "id": "cast-aura",
+                  "slot": "aura",
+                  "enabled": true,
+                  "hidden": false,
+                  "category": "Effect5",
+                  "colors": {
+                    "source": "auto",
+                    "primary": 8776703,
+                    "secondary": null,
+                    "tertiary": null,
+                    "mode": "paletteSwap"
+                  },
+                  "sourceSheet": "/spritesheets/Effect5/Special1.png",
+                  "palette": {
+                    "colors": [
+                      596022,
+                      8776703,
+                      2259678
+                    ],
+                    "gamma": 0.65,
+                    "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                    "untinted": false
+                  },
+                  "blendMode": "normal"
+                }
+              ],
+              "body_context": {
+                "actor": {
+                  "enabled": true,
+                  "clip": "Special1",
+                  "playbackSpeed": 1.15,
+                  "hiddenSlots": [],
+                  "media": []
+                },
+                "anchors": [
+                  {
+                    "name": "effect",
+                    "frame": 11
+                  }
+                ],
+                "playback": "once",
+                "reversed": false,
+                "frameKeys": [],
+                "restFrame": null
+              },
+              "recovery_body": {
+                "actor": {
+                  "enabled": false,
+                  "clip": "Taunt",
+                  "playbackSpeed": 1.0,
+                  "hiddenSlots": [],
+                  "media": []
+                },
+                "anchors": [],
+                "playback": "once",
+                "reversed": false,
+                "frameKeys": [],
+                "restFrame": null
+              },
+              "save_success": null
+            }
+          ]
+        }
+      },
+      {
+        "root_uuid": "28770e4b-a67a-40ac-aa6d-0df91b59630c",
+        "presentation_start_ms": 6953.351449275363,
+        "bound": {
+          "conditions": [
+            {
+              "event_uuid": "8256a457-ab63-4e87-93c4-e0b6e631c917",
+              "target_uuid": "184c3696-2110-4f48-9444-817e4eb3f727",
+              "start_ms": 0.0,
+              "complete_ms": 0.0,
+              "before_membership": [
+                {
+                  "event_uuid": "82df38ee-0599-4ee7-873d-ddf5adf041a6",
+                  "condition_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+                  "name": "Shield",
+                  "category": "status",
+                  "behavior_id": "condition.spell.shield",
+                  "resulting_max_hp": null,
+                  "resulting_ac": 17,
+                  "state": {
+                    "condition_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+                    "name": "Shield",
+                    "category": "status",
+                    "semantic_key": "condition.spell.shield",
+                    "behavior_id": "condition.spell.shield",
+                    "tags": [
+                      "magical"
+                    ],
+                    "removal_triggers": [],
+                    "agency_denial": "none",
+                    "outcome_protections": [
+                      {
+                        "protection_id": "dnd.spells.abjuration.ShieldBuff.magic_missile",
+                        "blocked_effect_ids": [
+                          "dnd.spells.evocation.MagicMissile.damage"
+                        ]
+                      }
+                    ],
+                    "applied_source_event_cursor": null,
+                    "suppression_provider_uuids": [],
+                    "duplicate_count": null,
+                    "size_change": null,
+                    "energy_type": null,
+                    "metamagic_mode": null,
+                    "affected_item_uuid": null,
+                    "enhanced_ability": null,
+                    "concentration_slots": []
+                  },
+                  "resulting_stats": {
+                    "normal_hp": 240,
+                    "maximum_hp": 240,
+                    "temporary_hp": 0,
+                    "temporary_hp_grant": null,
+                    "armor_class": 17,
+                    "healing_blocked": false,
+                    "damage_affinities": [],
+                    "resolved_size": "Medium",
+                    "native_plane_id": "material",
+                    "current_plane_id": "material",
+                    "spatial_disposition": "present"
+                  },
+                  "resulting_tile": null,
+                  "resulting_item": null,
+                  "consumed": false
+                }
+              ],
+              "after_membership": [],
+              "before_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [
+                  "condition.spell.shield"
+                ],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [
+                  {
+                    "layer": {
+                      "id": "persistent.shield.back",
+                      "assetId": "persistent.shield.back",
+                      "category": "shield",
+                      "animation": "loop",
+                      "fps": 144.0,
+                      "attachment": "body",
+                      "offsetX": 0.0,
+                      "offsetY": 0.0,
+                      "opacity": 1.0,
+                      "activeDuring": [
+                        "idle",
+                        "move",
+                        "jump",
+                        "forced_move",
+                        "attack",
+                        "cast",
+                        "act",
+                        "hit"
+                      ],
+                      "startOffsetMs": 0.0,
+                      "phaseOffsetMs": 0.0,
+                      "fadeInMs": 0.0,
+                      "priority": 40,
+                      "colors": {
+                        "primary": 16777215,
+                        "secondary": 16777215,
+                        "tertiary": 16777215
+                      },
+                      "drawOrder": "behind_body",
+                      "lifeStates": [
+                        "alive",
+                        "dying",
+                        "stable",
+                        "dead"
+                      ],
+                      "whenEnergyType": null,
+                      "whenAbility": null,
+                      "whenMetamagicMode": null
+                    },
+                    "owner_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+                    "age_ms": 0.0,
+                    "application": false,
+                    "alpha": 1.0,
+                    "finite": false,
+                    "fade_in_age_ms": null,
+                    "removal_age_ms": null
+                  },
+                  {
+                    "layer": {
+                      "id": "persistent.shield.front",
+                      "assetId": "persistent.shield.front",
+                      "category": "shield",
+                      "animation": "loop",
+                      "fps": 144.0,
+                      "attachment": "body",
+                      "offsetX": 0.0,
+                      "offsetY": 0.0,
+                      "opacity": 1.0,
+                      "activeDuring": [
+                        "idle",
+                        "move",
+                        "jump",
+                        "forced_move",
+                        "attack",
+                        "cast",
+                        "act",
+                        "hit"
+                      ],
+                      "startOffsetMs": 0.0,
+                      "phaseOffsetMs": 0.0,
+                      "fadeInMs": 0.0,
+                      "priority": 40,
+                      "colors": {
+                        "primary": 16777215,
+                        "secondary": 16777215,
+                        "tertiary": 16777215
+                      },
+                      "drawOrder": "in_front_of_body",
+                      "lifeStates": [
+                        "alive",
+                        "dying",
+                        "stable",
+                        "dead"
+                      ],
+                      "whenEnergyType": null,
+                      "whenAbility": null,
+                      "whenMetamagicMode": null
+                    },
+                    "owner_uuid": "c5457fb6-ad46-4f71-b913-b4a34fcd7385",
+                    "age_ms": 0.0,
+                    "application": false,
+                    "alpha": 1.0,
+                    "finite": false,
+                    "fade_in_age_ms": null,
+                    "removal_age_ms": null
+                  }
+                ],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "after_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "feedback_text": null,
+              "feedback_color": 5688831,
+              "badge_style": {
+                "fontFamily": "monospace",
+                "fontSizePx": 16.0,
+                "fontWeight": "bold",
+                "strokeColor": 0,
+                "strokeWidthPx": 3.0,
+                "anchorLiftPx": 60.0,
+                "risePx": 40.0,
+                "fadeStartFraction": 0.7,
+                "durationMs": 1400.0
+              },
+              "unsupported": [],
+              "body": null,
+              "alpha_end_ms": null
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "case": "spell-handoff-guiding-mark-consumed",
+    "input": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/spell-handoff-guiding-mark-consumed/input.json",
+    "input_schema": 2,
+    "source": {
+      "branch": "codex/recovery-design",
+      "commit": "b7e202dd36060215462c5068ea01524c66fe34fe",
+      "dirty": null
+    },
+    "historical_not_current_acceptance": true,
+    "examples": [
+      {
+        "node": {
+          "uuid": "d7f12b2c-868d-4ebc-8d01-33a76a0d3000",
+          "lineage_uuid": "79878446-b037-4d79-90d8-86ce2af002a2",
+          "parent_event": "002bbd7d-2fba-4e26-96cb-2b339f1c3360",
+          "parent_lineage": "33f61f77-33d0-4335-b51d-20fc7031439e",
+          "children_lineages": [],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "condition",
+            "target_entity_uuid": "4caba813-ec1d-4978-9ef7-023d9daadf9d",
+            "event_type": "condition_application",
+            "condition": {
+              "event_uuid": "d7f12b2c-868d-4ebc-8d01-33a76a0d3000",
+              "condition_uuid": "6471d783-efc3-4030-b244-a721ad103cbb",
+              "name": "Guiding Bolt",
+              "category": "condition",
+              "behavior_id": "condition.spell.guiding_bolt.marked",
+              "resulting_max_hp": null,
+              "resulting_ac": null,
+              "state": {
+                "condition_uuid": "6471d783-efc3-4030-b244-a721ad103cbb",
+                "name": "Guiding Bolt",
+                "category": "condition",
+                "semantic_key": "condition.spell.guiding_bolt.marked",
+                "behavior_id": "condition.spell.guiding_bolt.marked",
+                "tags": [],
+                "removal_triggers": [],
+                "agency_denial": "none",
+                "outcome_protections": [],
+                "applied_source_event_cursor": null,
+                "suppression_provider_uuids": [],
+                "duplicate_count": null,
+                "size_change": null,
+                "energy_type": null,
+                "metamagic_mode": null,
+                "affected_item_uuid": null,
+                "enhanced_ability": null,
+                "concentration_slots": []
+              },
+              "resulting_stats": {
+                "normal_hp": 188,
+                "maximum_hp": 200,
+                "temporary_hp": 0,
+                "temporary_hp_grant": null,
+                "armor_class": 10,
+                "healing_blocked": false,
+                "damage_affinities": [],
+                "resolved_size": "Medium",
+                "native_plane_id": "material",
+                "current_plane_id": "material",
+                "spatial_disposition": "present"
+              },
+              "resulting_tile": null,
+              "resulting_item": null,
+              "consumed": false
+            },
+            "consumed": false
+          },
+          "resolution_ref": {
+            "kind": "event",
+            "lineage_uuid": "33f61f77-33d0-4335-b51d-20fc7031439e"
+          },
+          "cancellation": null,
+          "combat_log": {
+            "entry_type": "condition_applied",
+            "source_name": "Caster",
+            "source_uuid": "62c3f50f-7cba-40b1-9545-f4cfa57e9047",
+            "target_name": "First",
+            "target_uuid": "4caba813-ec1d-4978-9ef7-023d9daadf9d",
+            "compact": "{cyan:First} gains **Guiding Bolt**",
+            "verbose": "{cyan:First} gains **Guiding Bolt** from {yellow:Caster}",
+            "detailed": "{cyan:First} gains **Guiding Bolt** from {yellow:Caster}",
+            "data": {},
+            "success": true,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 95,
+            "event_uuid": "d7f12b2c-868d-4ebc-8d01-33a76a0d3000",
+            "lineage_uuid": "79878446-b037-4d79-90d8-86ce2af002a2"
+          }
+        ]
+      },
+      {
+        "world_update": {
+          "event_uuid": "c437b3f6-858b-4ec6-9cbb-e09a7a258589",
+          "tiles": [
+            {
+              "tile_uuid": "47df9a83-56bd-4f6e-b06a-6be5592e0355",
+              "position": [
+                6,
+                2
+              ],
+              "surface": {
+                "base_material": "stone",
+                "layers": [],
+                "description": ""
+              },
+              "name": "Floor",
+              "blocks_optics": false,
+              "blocks_propagation": false,
+              "walking_cost": 1,
+              "flying_cost": 1,
+              "swimming_cost": 0,
+              "burrowing_cost": 0,
+              "elevation_steps": 0,
+              "surface_kind": "ordinary",
+              "slope_axis": null,
+              "default_light": 3,
+              "resolved_light": 3,
+              "condition_names": [
+                "Bloodied"
+              ],
+              "residues": [
+                {
+                  "condition_uuid": "a9a97e7f-41ad-47fe-abfe-5ee8a82e306a",
+                  "residue_id": "residue.blood",
+                  "description": "Blood stains the ground.",
+                  "amount": 1,
+                  "max_amount": 5,
+                  "contributions": [
+                    {
+                      "ellipses": [
+                        {
+                          "center": [
+                            1.0,
+                            1.0
+                          ],
+                          "radius_x": 1.5,
+                          "radius_y": 1.5,
+                          "angle": 0.0
+                        }
+                      ],
+                      "amount": 1,
+                      "deposit_source": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "objects": [],
+          "objects_removed": [],
+          "connectors": []
+        }
+      },
+      {
+        "node": {
+          "uuid": "b0c7552a-e3f4-409d-a7d0-f3ef85490773",
+          "lineage_uuid": "a6d2be56-dd01-4a85-9a92-7c876f8cd6ac",
+          "parent_event": "e51a04be-05f2-4187-ba2b-dfdc09fa171d",
+          "parent_lineage": "7496ffc1-1b2e-4c9e-aa3e-b2e01e660ca7",
+          "children_lineages": [],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "condition",
+            "target_entity_uuid": "4caba813-ec1d-4978-9ef7-023d9daadf9d",
+            "event_type": "condition_removal",
+            "condition": {
+              "event_uuid": "b0c7552a-e3f4-409d-a7d0-f3ef85490773",
+              "condition_uuid": "6471d783-efc3-4030-b244-a721ad103cbb",
+              "name": "Guiding Bolt",
+              "category": "condition",
+              "behavior_id": "condition.spell.guiding_bolt.marked",
+              "resulting_max_hp": null,
+              "resulting_ac": null,
+              "state": {
+                "condition_uuid": "6471d783-efc3-4030-b244-a721ad103cbb",
+                "name": "Guiding Bolt",
+                "category": "condition",
+                "semantic_key": "condition.spell.guiding_bolt.marked",
+                "behavior_id": "condition.spell.guiding_bolt.marked",
+                "tags": [],
+                "removal_triggers": [],
+                "agency_denial": "none",
+                "outcome_protections": [],
+                "applied_source_event_cursor": 96,
+                "suppression_provider_uuids": [],
+                "duplicate_count": null,
+                "size_change": null,
+                "energy_type": null,
+                "metamagic_mode": null,
+                "affected_item_uuid": null,
+                "enhanced_ability": null,
+                "concentration_slots": []
+              },
+              "resulting_stats": {
+                "normal_hp": 188,
+                "maximum_hp": 200,
+                "temporary_hp": 0,
+                "temporary_hp_grant": null,
+                "armor_class": 10,
+                "healing_blocked": false,
+                "damage_affinities": [],
+                "resolved_size": "Medium",
+                "native_plane_id": "material",
+                "current_plane_id": "material",
+                "spatial_disposition": "present"
+              },
+              "resulting_tile": null,
+              "resulting_item": null,
+              "consumed": false
+            },
+            "consumed": false
+          },
+          "resolution_ref": {
+            "kind": "event",
+            "lineage_uuid": "7496ffc1-1b2e-4c9e-aa3e-b2e01e660ca7"
+          },
+          "cancellation": null,
+          "combat_log": {
+            "entry_type": "condition_removed",
+            "source_name": "Caster",
+            "source_uuid": "62c3f50f-7cba-40b1-9545-f4cfa57e9047",
+            "target_name": "First",
+            "target_uuid": "4caba813-ec1d-4978-9ef7-023d9daadf9d",
+            "compact": "{cyan:First} is no longer **Guiding Bolt**",
+            "verbose": "{cyan:First} is no longer **Guiding Bolt**",
+            "detailed": "{cyan:First} is no longer **Guiding Bolt**",
+            "data": {
+              "condition_name": "Guiding Bolt",
+              "reveals_target": false
+            },
+            "success": true,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 120,
+            "event_uuid": "b0c7552a-e3f4-409d-a7d0-f3ef85490773",
+            "lineage_uuid": "a6d2be56-dd01-4a85-9a92-7c876f8cd6ac"
+          }
+        ]
+      },
+      {
+        "world_update": {
+          "event_uuid": "9aa51a86-a59d-493f-90e9-4707be90eb25",
+          "tiles": [
+            {
+              "tile_uuid": "a2cc5bb9-ebb5-48fe-b71c-e36b2e1f9651",
+              "position": [
+                5,
+                3
+              ],
+              "surface": {
+                "base_material": "stone",
+                "layers": [],
+                "description": ""
+              },
+              "name": "Floor",
+              "blocks_optics": false,
+              "blocks_propagation": false,
+              "walking_cost": 1,
+              "flying_cost": 1,
+              "swimming_cost": 0,
+              "burrowing_cost": 0,
+              "elevation_steps": 0,
+              "surface_kind": "ordinary",
+              "slope_axis": null,
+              "default_light": 3,
+              "resolved_light": 3,
+              "condition_names": [
+                "Bloodied"
+              ],
+              "residues": [
+                {
+                  "condition_uuid": "aafa86fb-87c2-44f7-aaaf-2573c5f4b437",
+                  "residue_id": "residue.blood",
+                  "description": "Blood stains the ground.",
+                  "amount": 1,
+                  "max_amount": 5,
+                  "contributions": [
+                    {
+                      "ellipses": [
+                        {
+                          "center": [
+                            2.4024922359499623,
+                            -0.20124611797498115
+                          ],
+                          "radius_x": 2.25,
+                          "radius_y": 1.45,
+                          "angle": -0.4636476090008061
+                        }
+                      ],
+                      "amount": 1,
+                      "deposit_source": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "objects": [],
+          "objects_removed": [],
+          "connectors": []
+        }
+      }
+    ],
+    "bound_examples": [
+      {
+        "root_uuid": "f186ddda-6b50-4580-852c-a3429c87dd3a",
+        "presentation_start_ms": 375.0,
+        "bound": {
+          "conditions": [
+            {
+              "event_uuid": "d7f12b2c-868d-4ebc-8d01-33a76a0d3000",
+              "target_uuid": "4caba813-ec1d-4978-9ef7-023d9daadf9d",
+              "start_ms": 1262.2786525237798,
+              "complete_ms": 1262.2786525237798,
+              "before_membership": [],
+              "after_membership": [
+                {
+                  "event_uuid": "d7f12b2c-868d-4ebc-8d01-33a76a0d3000",
+                  "condition_uuid": "6471d783-efc3-4030-b244-a721ad103cbb",
+                  "name": "Guiding Bolt",
+                  "category": "condition",
+                  "behavior_id": "condition.spell.guiding_bolt.marked",
+                  "resulting_max_hp": null,
+                  "resulting_ac": null,
+                  "state": {
+                    "condition_uuid": "6471d783-efc3-4030-b244-a721ad103cbb",
+                    "name": "Guiding Bolt",
+                    "category": "condition",
+                    "semantic_key": "condition.spell.guiding_bolt.marked",
+                    "behavior_id": "condition.spell.guiding_bolt.marked",
+                    "tags": [],
+                    "removal_triggers": [],
+                    "agency_denial": "none",
+                    "outcome_protections": [],
+                    "applied_source_event_cursor": null,
+                    "suppression_provider_uuids": [],
+                    "duplicate_count": null,
+                    "size_change": null,
+                    "energy_type": null,
+                    "metamagic_mode": null,
+                    "affected_item_uuid": null,
+                    "enhanced_ability": null,
+                    "concentration_slots": []
+                  },
+                  "resulting_stats": {
+                    "normal_hp": 188,
+                    "maximum_hp": 200,
+                    "temporary_hp": 0,
+                    "temporary_hp_grant": null,
+                    "armor_class": 10,
+                    "healing_blocked": false,
+                    "damage_affinities": [],
+                    "resolved_size": "Medium",
+                    "native_plane_id": "material",
+                    "current_plane_id": "material",
+                    "spatial_disposition": "present"
+                  },
+                  "resulting_tile": null,
+                  "resulting_item": null,
+                  "consumed": false
+                }
+              ],
+              "before_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "after_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [
+                  "condition.spell.guiding_bolt.marked"
+                ],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "feedback_text": "+Guiding Bolt",
+              "feedback_color": 5822180,
+              "badge_style": {
+                "fontFamily": "monospace",
+                "fontSizePx": 16.0,
+                "fontWeight": "bold",
+                "strokeColor": 0,
+                "strokeWidthPx": 3.0,
+                "anchorLiftPx": 60.0,
+                "risePx": 40.0,
+                "fadeStartFraction": 0.7,
+                "durationMs": 1400.0
+              },
+              "unsupported": [],
+              "body": null,
+              "alpha_end_ms": null
+            }
+          ]
+        }
+      },
+      {
+        "root_uuid": "035a9b5f-8770-4338-b5fe-42488f06d782",
+        "presentation_start_ms": 4202.813041495721,
+        "bound": {
+          "conditions": [
+            {
+              "event_uuid": "b0c7552a-e3f4-409d-a7d0-f3ef85490773",
+              "target_uuid": "4caba813-ec1d-4978-9ef7-023d9daadf9d",
+              "start_ms": 1189.7726689852784,
+              "complete_ms": 1189.7726689852784,
+              "before_membership": [
+                {
+                  "event_uuid": "d7f12b2c-868d-4ebc-8d01-33a76a0d3000",
+                  "condition_uuid": "6471d783-efc3-4030-b244-a721ad103cbb",
+                  "name": "Guiding Bolt",
+                  "category": "condition",
+                  "behavior_id": "condition.spell.guiding_bolt.marked",
+                  "resulting_max_hp": null,
+                  "resulting_ac": null,
+                  "state": {
+                    "condition_uuid": "6471d783-efc3-4030-b244-a721ad103cbb",
+                    "name": "Guiding Bolt",
+                    "category": "condition",
+                    "semantic_key": "condition.spell.guiding_bolt.marked",
+                    "behavior_id": "condition.spell.guiding_bolt.marked",
+                    "tags": [],
+                    "removal_triggers": [],
+                    "agency_denial": "none",
+                    "outcome_protections": [],
+                    "applied_source_event_cursor": null,
+                    "suppression_provider_uuids": [],
+                    "duplicate_count": null,
+                    "size_change": null,
+                    "energy_type": null,
+                    "metamagic_mode": null,
+                    "affected_item_uuid": null,
+                    "enhanced_ability": null,
+                    "concentration_slots": []
+                  },
+                  "resulting_stats": {
+                    "normal_hp": 188,
+                    "maximum_hp": 200,
+                    "temporary_hp": 0,
+                    "temporary_hp_grant": null,
+                    "armor_class": 10,
+                    "healing_blocked": false,
+                    "damage_affinities": [],
+                    "resolved_size": "Medium",
+                    "native_plane_id": "material",
+                    "current_plane_id": "material",
+                    "spatial_disposition": "present"
+                  },
+                  "resulting_tile": null,
+                  "resulting_item": null,
+                  "consumed": false
+                }
+              ],
+              "after_membership": [],
+              "before_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [
+                  "condition.spell.guiding_bolt.marked"
+                ],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "after_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "feedback_text": "\u2212Guiding Bolt",
+              "feedback_color": 2581710,
+              "badge_style": {
+                "fontFamily": "monospace",
+                "fontSizePx": 16.0,
+                "fontWeight": "bold",
+                "strokeColor": 0,
+                "strokeWidthPx": 3.0,
+                "anchorLiftPx": 60.0,
+                "risePx": 40.0,
+                "fadeStartFraction": 0.7,
+                "durationMs": 1400.0
+              },
+              "unsupported": [],
+              "body": null,
+              "alpha_end_ms": null
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "case": "construction-ice-retirement",
+    "input": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/construction-ice-retirement/input.json",
+    "input_schema": 2,
+    "source": {
+      "branch": "codex/recovery-design",
+      "commit": "95a47cd5ca508838bce8a2e67d6fe1fc591ce4e6",
+      "dirty": null
+    },
+    "historical_not_current_acceptance": true,
+    "examples": [
+      {
+        "node": {
+          "uuid": "3c2fc7b2-25a5-49b0-b31b-ec5cb2664dca",
+          "lineage_uuid": "d8fd4787-ef9d-4ef9-8eaa-029ba5d26d7c",
+          "parent_event": "83dcb48d-a5ce-4afa-9c70-f6e63a88636a",
+          "parent_lineage": "b4fb9985-7a72-4b61-a89b-1042819e68d8",
+          "children_lineages": [
+            "4b3e90ff-257e-4449-90a4-19539ab29d10",
+            "7a359686-440c-4870-a25e-82d0ea67e06a",
+            "4dfcb2cd-f04b-4fdf-88bf-cce2c24df67f",
+            "1f460c0d-494f-4bd3-a060-882dc608abaa",
+            "97c9c3b5-369b-4b04-b930-201930033389"
+          ],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "spatial_effect_state",
+            "spatial_effect_uuid": "09b46c2a-0bbb-4ed2-b244-d9f34add802f",
+            "positions": [
+              [
+                7,
+                7
+              ],
+              [
+                8,
+                7
+              ],
+              [
+                9,
+                7
+              ],
+              [
+                10,
+                7
+              ],
+              [
+                11,
+                7
+              ],
+              [
+                12,
+                7
+              ],
+              [
+                13,
+                7
+              ]
+            ],
+            "previous_state": null,
+            "state": null,
+            "previous_pressed": null,
+            "pressed": null,
+            "operation": "created",
+            "interaction_operation": null,
+            "removed_positions": []
+          },
+          "resolution_ref": {
+            "kind": "event",
+            "lineage_uuid": "000c2ffb-a2cf-4f59-8d36-3e77b2787d10"
+          },
+          "cancellation": null,
+          "combat_log": {
+            "entry_type": "spatial_effect",
+            "source_name": "Environment",
+            "source_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+            "target_name": null,
+            "target_uuid": null,
+            "compact": "{cyan:Environment} creates {yellow:Wall of Ice}",
+            "verbose": "{cyan:Environment} creates {yellow:Wall of Ice} on 7 cells",
+            "detailed": "{cyan:Environment} creates {yellow:Wall of Ice} on 7 cells",
+            "data": {
+              "operation": "created",
+              "content_identity": "content.srd_5_1_cc:condition:spatial_effect.spell.wall_of_ice@1",
+              "layer": "field",
+              "affected_positions": []
+            },
+            "success": null,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 46,
+            "event_uuid": "3c2fc7b2-25a5-49b0-b31b-ec5cb2664dca",
+            "lineage_uuid": "d8fd4787-ef9d-4ef9-8eaa-029ba5d26d7c"
+          }
+        ]
+      },
+      {
+        "node": {
+          "uuid": "a09568f7-c7c8-46c7-a63e-94f97c6225ed",
+          "lineage_uuid": "894fa584-74b8-4f37-8d53-bb8491029e30",
+          "parent_event": "2d791e81-6e02-460d-9da5-fccfd0a0a35f",
+          "parent_lineage": "000c2ffb-a2cf-4f59-8d36-3e77b2787d10",
+          "children_lineages": [],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "condition",
+            "target_entity_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+            "event_type": "condition_application",
+            "condition": {
+              "event_uuid": "a09568f7-c7c8-46c7-a63e-94f97c6225ed",
+              "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+              "name": "Concentrating",
+              "category": "status",
+              "behavior_id": "condition.concentrating",
+              "resulting_max_hp": null,
+              "resulting_ac": null,
+              "state": {
+                "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+                "name": "Concentrating",
+                "category": "status",
+                "semantic_key": "condition.concentrating",
+                "behavior_id": "condition.concentrating",
+                "tags": [
+                  "concentration"
+                ],
+                "removal_triggers": [],
+                "agency_denial": "none",
+                "outcome_protections": [],
+                "applied_source_event_cursor": null,
+                "suppression_provider_uuids": [],
+                "duplicate_count": null,
+                "size_change": null,
+                "energy_type": null,
+                "affected_item_uuid": null,
+                "enhanced_ability": null,
+                "concentration_slots": []
+              },
+              "resulting_stats": {
+                "normal_hp": 240,
+                "maximum_hp": 240,
+                "temporary_hp": 0,
+                "temporary_hp_grant": null,
+                "armor_class": 10,
+                "healing_blocked": false,
+                "damage_affinities": [],
+                "resolved_size": "Medium",
+                "native_plane_id": "material",
+                "current_plane_id": "material",
+                "spatial_disposition": "present"
+              },
+              "resulting_tile": null,
+              "resulting_item": null,
+              "consumed": false
+            },
+            "consumed": false
+          },
+          "resolution_ref": {
+            "kind": "event",
+            "lineage_uuid": "000c2ffb-a2cf-4f59-8d36-3e77b2787d10"
+          },
+          "cancellation": null,
+          "combat_log": {
+            "entry_type": "condition_applied",
+            "source_name": "Caster",
+            "source_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+            "target_name": "Caster",
+            "target_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+            "compact": "{cyan:Caster} gains **Concentrating**",
+            "verbose": "{cyan:Caster} gains **Concentrating**",
+            "detailed": "{cyan:Caster} gains **Concentrating**",
+            "data": {},
+            "success": true,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 51,
+            "event_uuid": "a09568f7-c7c8-46c7-a63e-94f97c6225ed",
+            "lineage_uuid": "894fa584-74b8-4f37-8d53-bb8491029e30"
+          }
+        ]
+      },
+      {
+        "node": {
+          "uuid": "b9a15159-8ea9-415e-8589-07f296e8be3f",
+          "lineage_uuid": "e254b534-3b8c-4390-b950-561e2e25a120",
+          "parent_event": "2d791e81-6e02-460d-9da5-fccfd0a0a35f",
+          "parent_lineage": "000c2ffb-a2cf-4f59-8d36-3e77b2787d10",
+          "children_lineages": [],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "condition",
+            "target_entity_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+            "event_type": "condition_state_changed",
+            "condition": {
+              "event_uuid": "b9a15159-8ea9-415e-8589-07f296e8be3f",
+              "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+              "name": "Concentrating",
+              "category": "status",
+              "behavior_id": "condition.concentrating",
+              "resulting_max_hp": 240,
+              "resulting_ac": 10,
+              "state": {
+                "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+                "name": "Concentrating",
+                "category": "status",
+                "semantic_key": "condition.concentrating",
+                "behavior_id": "condition.concentrating",
+                "tags": [
+                  "concentration"
+                ],
+                "removal_triggers": [],
+                "agency_denial": "none",
+                "outcome_protections": [],
+                "applied_source_event_cursor": 52,
+                "suppression_provider_uuids": [],
+                "duplicate_count": null,
+                "size_change": null,
+                "energy_type": null,
+                "affected_item_uuid": null,
+                "enhanced_ability": null,
+                "concentration_slots": [
+                  {
+                    "slot_uuid": "74728c13-90e3-4a72-a4ec-f321f246188a",
+                    "cast_lineage_uuid": "000c2ffb-a2cf-4f59-8d36-3e77b2787d10",
+                    "spell_id": "spell.wall_of_ice",
+                    "spell_name": "Wall of Ice"
+                  }
+                ]
+              },
+              "resulting_stats": {
+                "normal_hp": 240,
+                "maximum_hp": 240,
+                "temporary_hp": 0,
+                "temporary_hp_grant": null,
+                "armor_class": 10,
+                "healing_blocked": false,
+                "damage_affinities": [],
+                "resolved_size": "Medium",
+                "native_plane_id": "material",
+                "current_plane_id": "material",
+                "spatial_disposition": "present"
+              },
+              "resulting_tile": null,
+              "resulting_item": null,
+              "consumed": false
+            },
+            "consumed": false
+          },
+          "resolution_ref": {
+            "kind": "event",
+            "lineage_uuid": "000c2ffb-a2cf-4f59-8d36-3e77b2787d10"
+          },
+          "cancellation": null,
+          "combat_log": null,
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 52,
+            "event_uuid": "b9a15159-8ea9-415e-8589-07f296e8be3f",
+            "lineage_uuid": "e254b534-3b8c-4390-b950-561e2e25a120"
+          }
+        ]
+      },
+      {
+        "node": {
+          "uuid": "91b32f3b-b0a7-4e5a-b696-d9f89136a6d0",
+          "lineage_uuid": "a0a0b71f-7f00-41eb-9118-0c9527d2e005",
+          "parent_event": "a8abafb4-77b9-4cb4-849e-290a6f9b79f4",
+          "parent_lineage": "9edc1eb5-e107-450b-8b31-801d0f9d7e1d",
+          "children_lineages": [],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "object_destroyed",
+            "object_uuid": "c4a41b8c-19ae-4247-96e9-1843af6eb2a2",
+            "replacement_uuid": null,
+            "placement": {
+              "object_uuid": "c4a41b8c-19ae-4247-96e9-1843af6eb2a2",
+              "tile_uuid": "33fa54c1-ac3c-4b71-99e2-e894db49ef57",
+              "position": [
+                7,
+                7
+              ],
+              "kind": "center",
+              "occupies_bands": false,
+              "boundary_direction": null,
+              "base_height_steps": 0,
+              "top_height_steps": 2,
+              "orientation": null,
+              "covered_supports": [
+                {
+                  "position": [
+                    7,
+                    7
+                  ],
+                  "tile_uuid": "33fa54c1-ac3c-4b71-99e2-e894db49ef57"
+                },
+                {
+                  "position": [
+                    8,
+                    7
+                  ],
+                  "tile_uuid": "352013a8-6cbe-446f-be11-eb16a7795889"
+                },
+                {
+                  "position": [
+                    9,
+                    7
+                  ],
+                  "tile_uuid": "5fc27008-bc6d-4914-b50f-279e517611a0"
+                }
+              ],
+              "removed_bands": []
+            },
+            "item_id": "spell_construction.ice.section",
+            "remnant_state": null,
+            "destruction_outcome": null
+          },
+          "resolution_ref": {
+            "kind": "event",
+            "lineage_uuid": "e438ff82-3156-4988-91c3-b750c43deaba"
+          },
+          "cancellation": null,
+          "combat_log": null,
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 98,
+            "event_uuid": "91b32f3b-b0a7-4e5a-b696-d9f89136a6d0",
+            "lineage_uuid": "a0a0b71f-7f00-41eb-9118-0c9527d2e005"
+          }
+        ]
+      },
+      {
+        "node": {
+          "uuid": "d2a884ca-d86f-415b-b04c-138a99df3d8c",
+          "lineage_uuid": "1bf96f86-0d2d-4b4f-be22-80a5aae95a2c",
+          "parent_event": "a8abafb4-77b9-4cb4-849e-290a6f9b79f4",
+          "parent_lineage": "9edc1eb5-e107-450b-8b31-801d0f9d7e1d",
+          "children_lineages": [],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "object_destroyed",
+            "object_uuid": "1415070a-b575-4b2c-96a4-8b7619f99518",
+            "replacement_uuid": null,
+            "placement": {
+              "object_uuid": "1415070a-b575-4b2c-96a4-8b7619f99518",
+              "tile_uuid": "5fc27008-bc6d-4914-b50f-279e517611a0",
+              "position": [
+                9,
+                7
+              ],
+              "kind": "center",
+              "occupies_bands": false,
+              "boundary_direction": null,
+              "base_height_steps": 0,
+              "top_height_steps": 2,
+              "orientation": null,
+              "covered_supports": [
+                {
+                  "position": [
+                    9,
+                    7
+                  ],
+                  "tile_uuid": "5fc27008-bc6d-4914-b50f-279e517611a0"
+                },
+                {
+                  "position": [
+                    10,
+                    7
+                  ],
+                  "tile_uuid": "b4263b9f-1f86-458e-a286-1b91cd9057b9"
+                },
+                {
+                  "position": [
+                    11,
+                    7
+                  ],
+                  "tile_uuid": "4be8609c-1f6f-4573-866e-99d9377d2a02"
+                }
+              ],
+              "removed_bands": []
+            },
+            "item_id": "spell_construction.ice.section",
+            "remnant_state": null,
+            "destruction_outcome": null
+          },
+          "resolution_ref": {
+            "kind": "event",
+            "lineage_uuid": "e438ff82-3156-4988-91c3-b750c43deaba"
+          },
+          "cancellation": null,
+          "combat_log": null,
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 102,
+            "event_uuid": "d2a884ca-d86f-415b-b04c-138a99df3d8c",
+            "lineage_uuid": "1bf96f86-0d2d-4b4f-be22-80a5aae95a2c"
+          }
+        ]
+      },
+      {
+        "node": {
+          "uuid": "183000fc-38ef-45ee-a1b7-5ab42afe91fb",
+          "lineage_uuid": "6505b26a-1cb2-4af8-9acf-6c6fad8fb71c",
+          "parent_event": "a8abafb4-77b9-4cb4-849e-290a6f9b79f4",
+          "parent_lineage": "9edc1eb5-e107-450b-8b31-801d0f9d7e1d",
+          "children_lineages": [],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "object_destroyed",
+            "object_uuid": "84b533e8-b10d-4c0e-b13c-e12fa220fd3b",
+            "replacement_uuid": null,
+            "placement": {
+              "object_uuid": "84b533e8-b10d-4c0e-b13c-e12fa220fd3b",
+              "tile_uuid": "4be8609c-1f6f-4573-866e-99d9377d2a02",
+              "position": [
+                11,
+                7
+              ],
+              "kind": "center",
+              "occupies_bands": false,
+              "boundary_direction": null,
+              "base_height_steps": 0,
+              "top_height_steps": 2,
+              "orientation": null,
+              "covered_supports": [
+                {
+                  "position": [
+                    11,
+                    7
+                  ],
+                  "tile_uuid": "4be8609c-1f6f-4573-866e-99d9377d2a02"
+                },
+                {
+                  "position": [
+                    12,
+                    7
+                  ],
+                  "tile_uuid": "402f6d8a-1986-4a66-8063-aaddf164c83c"
+                },
+                {
+                  "position": [
+                    13,
+                    7
+                  ],
+                  "tile_uuid": "37f04811-4f3d-4e3c-b21e-53a8ab4b6b29"
+                }
+              ],
+              "removed_bands": []
+            },
+            "item_id": "spell_construction.ice.section",
+            "remnant_state": null,
+            "destruction_outcome": null
+          },
+          "resolution_ref": {
+            "kind": "event",
+            "lineage_uuid": "e438ff82-3156-4988-91c3-b750c43deaba"
+          },
+          "cancellation": null,
+          "combat_log": null,
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 106,
+            "event_uuid": "183000fc-38ef-45ee-a1b7-5ab42afe91fb",
+            "lineage_uuid": "6505b26a-1cb2-4af8-9acf-6c6fad8fb71c"
+          }
+        ]
+      },
+      {
+        "node": {
+          "uuid": "20cceb9a-7e8b-43cb-86cc-7864179d8332",
+          "lineage_uuid": "9edc1eb5-e107-450b-8b31-801d0f9d7e1d",
+          "parent_event": "8bfe4b6e-4cec-4529-ab89-6d4d677ce755",
+          "parent_lineage": "8f2d23ff-b518-43a0-bb91-491b0e2c5d50",
+          "children_lineages": [
+            "86729467-02db-41f5-a672-253915cb090b",
+            "ca7ee365-e987-4e97-b507-082dce8e6b2b",
+            "22851fb3-a3e6-47ef-abc7-986a6fd91b29",
+            "a0a0b71f-7f00-41eb-9118-0c9527d2e005",
+            "1bf96f86-0d2d-4b4f-be22-80a5aae95a2c",
+            "6505b26a-1cb2-4af8-9acf-6c6fad8fb71c"
+          ],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "spatial_effect_state",
+            "spatial_effect_uuid": "09b46c2a-0bbb-4ed2-b244-d9f34add802f",
+            "positions": [
+              [
+                7,
+                7
+              ],
+              [
+                8,
+                7
+              ],
+              [
+                9,
+                7
+              ],
+              [
+                10,
+                7
+              ],
+              [
+                11,
+                7
+              ],
+              [
+                12,
+                7
+              ],
+              [
+                13,
+                7
+              ]
+            ],
+            "previous_state": null,
+            "state": null,
+            "previous_pressed": null,
+            "pressed": null,
+            "operation": "removed",
+            "interaction_operation": null,
+            "removed_positions": [
+              [
+                7,
+                7
+              ],
+              [
+                8,
+                7
+              ],
+              [
+                9,
+                7
+              ],
+              [
+                10,
+                7
+              ],
+              [
+                11,
+                7
+              ],
+              [
+                12,
+                7
+              ],
+              [
+                13,
+                7
+              ]
+            ]
+          },
+          "resolution_ref": {
+            "kind": "event",
+            "lineage_uuid": "e438ff82-3156-4988-91c3-b750c43deaba"
+          },
+          "cancellation": null,
+          "combat_log": {
+            "entry_type": "spatial_effect",
+            "source_name": "Environment",
+            "source_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+            "target_name": null,
+            "target_uuid": null,
+            "compact": "{cyan:Environment} removes {yellow:Wall of Ice}",
+            "verbose": "{cyan:Environment} removes {yellow:Wall of Ice} on 7 cells",
+            "detailed": "{cyan:Environment} removes {yellow:Wall of Ice} on 7 cells",
+            "data": {
+              "operation": "removed",
+              "content_identity": "content.srd_5_1_cc:condition:spatial_effect.spell.wall_of_ice@1",
+              "layer": "field",
+              "affected_positions": []
+            },
+            "success": null,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 107,
+            "event_uuid": "20cceb9a-7e8b-43cb-86cc-7864179d8332",
+            "lineage_uuid": "9edc1eb5-e107-450b-8b31-801d0f9d7e1d"
+          }
+        ]
+      },
+      {
+        "node": {
+          "uuid": "734ce211-01ea-41f2-824e-6223fa0108e8",
+          "lineage_uuid": "a452001b-295f-46a4-a361-a3a3797b827c",
+          "parent_event": "7a88fbc9-dd00-4bcc-aa10-f91a94ae9b3f",
+          "parent_lineage": "e438ff82-3156-4988-91c3-b750c43deaba",
+          "children_lineages": [
+            "8f2d23ff-b518-43a0-bb91-491b0e2c5d50"
+          ],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "condition",
+            "target_entity_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+            "event_type": "condition_removal",
+            "condition": {
+              "event_uuid": "734ce211-01ea-41f2-824e-6223fa0108e8",
+              "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+              "name": "Concentrating",
+              "category": "status",
+              "behavior_id": "condition.concentrating",
+              "resulting_max_hp": null,
+              "resulting_ac": null,
+              "state": {
+                "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+                "name": "Concentrating",
+                "category": "status",
+                "semantic_key": "condition.concentrating",
+                "behavior_id": "condition.concentrating",
+                "tags": [
+                  "concentration"
+                ],
+                "removal_triggers": [],
+                "agency_denial": "none",
+                "outcome_protections": [],
+                "applied_source_event_cursor": 52,
+                "suppression_provider_uuids": [],
+                "duplicate_count": null,
+                "size_change": null,
+                "energy_type": null,
+                "affected_item_uuid": null,
+                "enhanced_ability": null,
+                "concentration_slots": []
+              },
+              "resulting_stats": {
+                "normal_hp": 240,
+                "maximum_hp": 240,
+                "temporary_hp": 0,
+                "temporary_hp_grant": null,
+                "armor_class": 10,
+                "healing_blocked": false,
+                "damage_affinities": [],
+                "resolved_size": "Medium",
+                "native_plane_id": "material",
+                "current_plane_id": "material",
+                "spatial_disposition": "present"
+              },
+              "resulting_tile": null,
+              "resulting_item": null,
+              "consumed": false
+            },
+            "consumed": false
+          },
+          "resolution_ref": {
+            "kind": "event",
+            "lineage_uuid": "e438ff82-3156-4988-91c3-b750c43deaba"
+          },
+          "cancellation": null,
+          "combat_log": {
+            "entry_type": "condition_removed",
+            "source_name": "Caster",
+            "source_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+            "target_name": "Caster",
+            "target_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+            "compact": "{cyan:Caster} is no longer **Concentrating**",
+            "verbose": "{cyan:Caster} is no longer **Concentrating**",
+            "detailed": "{cyan:Caster} is no longer **Concentrating**",
+            "data": {
+              "condition_name": "Concentrating",
+              "reveals_target": false
+            },
+            "success": true,
+            "sub_entries": [
+              {
+                "entry_type": "condition_removed",
+                "source_name": "Unknown",
+                "source_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+                "target_name": "Unknown",
+                "target_uuid": null,
+                "compact": "{cyan:Unknown} is no longer **Wall of Ice**",
+                "verbose": "{cyan:Unknown} is no longer **Wall of Ice**",
+                "detailed": "{cyan:Unknown} is no longer **Wall of Ice**",
+                "data": {
+                  "condition_name": "Wall of Ice",
+                  "reveals_target": false
+                },
+                "success": true,
+                "sub_entries": [
+                  {
+                    "entry_type": "spatial_effect",
+                    "source_name": "Environment",
+                    "source_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+                    "target_name": null,
+                    "target_uuid": null,
+                    "compact": "{cyan:Environment} removes {yellow:Wall of Ice}",
+                    "verbose": "{cyan:Environment} removes {yellow:Wall of Ice} on 7 cells",
+                    "detailed": "{cyan:Environment} removes {yellow:Wall of Ice} on 7 cells",
+                    "data": {
+                      "operation": "removed",
+                      "content_identity": "content.srd_5_1_cc:condition:spatial_effect.spell.wall_of_ice@1",
+                      "layer": "field",
+                      "affected_positions": []
+                    },
+                    "success": null,
+                    "sub_entries": [],
+                    "perceiver_uuids": [],
+                    "revealed_entity_uuids": []
+                  }
+                ],
+                "perceiver_uuids": [],
+                "revealed_entity_uuids": []
+              }
+            ],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 109,
+            "event_uuid": "734ce211-01ea-41f2-824e-6223fa0108e8",
+            "lineage_uuid": "a452001b-295f-46a4-a361-a3a3797b827c"
+          }
+        ]
+      },
+      {
+        "world_update": {
+          "event_uuid": "da6b2c52-6844-477f-ae0f-b123d8e1441c",
+          "tiles": [],
+          "objects": [],
+          "objects_removed": [
+            "c4a41b8c-19ae-4247-96e9-1843af6eb2a2",
+            "1415070a-b575-4b2c-96a4-8b7619f99518",
+            "84b533e8-b10d-4c0e-b13c-e12fa220fd3b"
+          ],
+          "connectors": []
+        }
+      }
+    ],
+    "bound_examples": [
+      {
+        "root_uuid": "3daea227-4a77-4c41-8eca-58ce92e37e5d",
+        "presentation_start_ms": 406.25,
+        "bound": {
+          "conditions": [
+            {
+              "event_uuid": "a09568f7-c7c8-46c7-a63e-94f97c6225ed",
+              "target_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+              "start_ms": 750.0,
+              "complete_ms": 750.0,
+              "before_membership": [],
+              "after_membership": [
+                {
+                  "event_uuid": "a09568f7-c7c8-46c7-a63e-94f97c6225ed",
+                  "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+                  "name": "Concentrating",
+                  "category": "status",
+                  "behavior_id": "condition.concentrating",
+                  "resulting_max_hp": null,
+                  "resulting_ac": null,
+                  "state": {
+                    "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+                    "name": "Concentrating",
+                    "category": "status",
+                    "semantic_key": "condition.concentrating",
+                    "behavior_id": "condition.concentrating",
+                    "tags": [
+                      "concentration"
+                    ],
+                    "removal_triggers": [],
+                    "agency_denial": "none",
+                    "outcome_protections": [],
+                    "applied_source_event_cursor": null,
+                    "suppression_provider_uuids": [],
+                    "duplicate_count": null,
+                    "size_change": null,
+                    "energy_type": null,
+                    "metamagic_mode": null,
+                    "affected_item_uuid": null,
+                    "enhanced_ability": null,
+                    "concentration_slots": []
+                  },
+                  "resulting_stats": {
+                    "normal_hp": 240,
+                    "maximum_hp": 240,
+                    "temporary_hp": 0,
+                    "temporary_hp_grant": null,
+                    "armor_class": 10,
+                    "healing_blocked": false,
+                    "damage_affinities": [],
+                    "resolved_size": "Medium",
+                    "native_plane_id": "material",
+                    "current_plane_id": "material",
+                    "spatial_disposition": "present"
+                  },
+                  "resulting_tile": null,
+                  "resulting_item": null,
+                  "consumed": false
+                }
+              ],
+              "before_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "after_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [
+                  "condition.concentrating"
+                ],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "feedback_text": null,
+              "feedback_color": 5825685,
+              "badge_style": {
+                "fontFamily": "monospace",
+                "fontSizePx": 16.0,
+                "fontWeight": "bold",
+                "strokeColor": 0,
+                "strokeWidthPx": 3.0,
+                "anchorLiftPx": 60.0,
+                "risePx": 40.0,
+                "fadeStartFraction": 0.7,
+                "durationMs": 1400.0
+              },
+              "unsupported": [],
+              "body": null,
+              "alpha_end_ms": null
+            },
+            {
+              "event_uuid": "b9a15159-8ea9-415e-8589-07f296e8be3f",
+              "target_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+              "start_ms": 750.0,
+              "complete_ms": 750.0,
+              "before_membership": [
+                {
+                  "event_uuid": "a09568f7-c7c8-46c7-a63e-94f97c6225ed",
+                  "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+                  "name": "Concentrating",
+                  "category": "status",
+                  "behavior_id": "condition.concentrating",
+                  "resulting_max_hp": null,
+                  "resulting_ac": null,
+                  "state": {
+                    "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+                    "name": "Concentrating",
+                    "category": "status",
+                    "semantic_key": "condition.concentrating",
+                    "behavior_id": "condition.concentrating",
+                    "tags": [
+                      "concentration"
+                    ],
+                    "removal_triggers": [],
+                    "agency_denial": "none",
+                    "outcome_protections": [],
+                    "applied_source_event_cursor": null,
+                    "suppression_provider_uuids": [],
+                    "duplicate_count": null,
+                    "size_change": null,
+                    "energy_type": null,
+                    "metamagic_mode": null,
+                    "affected_item_uuid": null,
+                    "enhanced_ability": null,
+                    "concentration_slots": []
+                  },
+                  "resulting_stats": {
+                    "normal_hp": 240,
+                    "maximum_hp": 240,
+                    "temporary_hp": 0,
+                    "temporary_hp_grant": null,
+                    "armor_class": 10,
+                    "healing_blocked": false,
+                    "damage_affinities": [],
+                    "resolved_size": "Medium",
+                    "native_plane_id": "material",
+                    "current_plane_id": "material",
+                    "spatial_disposition": "present"
+                  },
+                  "resulting_tile": null,
+                  "resulting_item": null,
+                  "consumed": false
+                }
+              ],
+              "after_membership": [
+                {
+                  "event_uuid": "b9a15159-8ea9-415e-8589-07f296e8be3f",
+                  "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+                  "name": "Concentrating",
+                  "category": "status",
+                  "behavior_id": "condition.concentrating",
+                  "resulting_max_hp": 240,
+                  "resulting_ac": 10,
+                  "state": {
+                    "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+                    "name": "Concentrating",
+                    "category": "status",
+                    "semantic_key": "condition.concentrating",
+                    "behavior_id": "condition.concentrating",
+                    "tags": [
+                      "concentration"
+                    ],
+                    "removal_triggers": [],
+                    "agency_denial": "none",
+                    "outcome_protections": [],
+                    "applied_source_event_cursor": 52,
+                    "suppression_provider_uuids": [],
+                    "duplicate_count": null,
+                    "size_change": null,
+                    "energy_type": null,
+                    "metamagic_mode": null,
+                    "affected_item_uuid": null,
+                    "enhanced_ability": null,
+                    "concentration_slots": [
+                      {
+                        "slot_uuid": "74728c13-90e3-4a72-a4ec-f321f246188a",
+                        "cast_lineage_uuid": "000c2ffb-a2cf-4f59-8d36-3e77b2787d10",
+                        "spell_id": "spell.wall_of_ice",
+                        "spell_name": "Wall of Ice"
+                      }
+                    ]
+                  },
+                  "resulting_stats": {
+                    "normal_hp": 240,
+                    "maximum_hp": 240,
+                    "temporary_hp": 0,
+                    "temporary_hp_grant": null,
+                    "armor_class": 10,
+                    "healing_blocked": false,
+                    "damage_affinities": [],
+                    "resolved_size": "Medium",
+                    "native_plane_id": "material",
+                    "current_plane_id": "material",
+                    "spatial_disposition": "present"
+                  },
+                  "resulting_tile": null,
+                  "resulting_item": null,
+                  "consumed": false
+                }
+              ],
+              "before_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [
+                  "condition.concentrating"
+                ],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "after_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [
+                  "condition.concentrating"
+                ],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "feedback_text": null,
+              "feedback_color": 16777215,
+              "badge_style": {
+                "fontFamily": "monospace",
+                "fontSizePx": 16.0,
+                "fontWeight": "bold",
+                "strokeColor": 0,
+                "strokeWidthPx": 3.0,
+                "anchorLiftPx": 60.0,
+                "risePx": 40.0,
+                "fadeStartFraction": 0.7,
+                "durationMs": 1400.0
+              },
+              "unsupported": [],
+              "body": null,
+              "alpha_end_ms": null
+            }
+          ],
+          "body_actions": [
+            {
+              "event_uuid": "3daea227-4a77-4c41-8eca-58ce92e37e5d",
+              "contact": {
+                "actor_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+                "grid": [
+                  7.0,
+                  6.0
+                ],
+                "facing": "S",
+                "visual_scale": 1.0,
+                "hp": 240,
+                "life_state": "alive",
+                "elevation_steps": 0.0,
+                "rig_id": "neuroclient.modular",
+                "visual_scale_x": 1.0,
+                "body_lift_px": 0.0,
+                "rest_pose": null,
+                "condition_scale": 1.0,
+                "manifestation": null
+              },
+              "recipe_id": "spell.wall_of_ice",
+              "clip": "Attack4",
+              "playback_speed": 1.0,
+              "start_ms": 0.0,
+              "effect_ms": 750.0,
+              "body_end_ms": 1166.6666666666667,
+              "join_ms": 1166.6666666666667,
+              "complete_ms": 1166.6666666666667,
+              "enabled": true,
+              "hidden_slots": [],
+              "hide_weapon_during_body": true,
+              "recovery": {
+                "enabled": false,
+                "bodyClip": "Taunt",
+                "bodyPlaybackSpeed": 1.0
+              },
+              "condition": {
+                "anchor": "effect",
+                "delayMs": 0.0,
+                "feedbackEnabled": false
+              },
+              "feedback": null,
+              "gaps": [],
+              "interaction_object_uuid": null,
+              "relocates": false,
+              "cast_layers": [
+                {
+                  "id": "cast-weaponGlow",
+                  "slot": "weaponGlow",
+                  "enabled": true,
+                  "hidden": false,
+                  "category": "Magic2",
+                  "colors": {
+                    "source": "auto",
+                    "primary": 11060438,
+                    "secondary": null,
+                    "tertiary": null,
+                    "mode": "paletteSwap"
+                  },
+                  "sourceSheet": "/spritesheets/Magic2/Attack4.png",
+                  "palette": {
+                    "colors": [
+                      8558764,
+                      11060438,
+                      15135482
+                    ],
+                    "gamma": 0.65,
+                    "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                    "untinted": false
+                  },
+                  "blendMode": "normal"
+                },
+                {
+                  "id": "cast-aura",
+                  "slot": "aura",
+                  "enabled": true,
+                  "hidden": false,
+                  "category": "Effect4",
+                  "colors": {
+                    "source": "auto",
+                    "primary": 11060438,
+                    "secondary": null,
+                    "tertiary": null,
+                    "mode": "paletteSwap"
+                  },
+                  "sourceSheet": "/spritesheets/Effect4/Attack4.png",
+                  "palette": {
+                    "colors": [
+                      8558764,
+                      11060438,
+                      15135482
+                    ],
+                    "gamma": 0.65,
+                    "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                    "untinted": false
+                  },
+                  "blendMode": "normal"
+                }
+              ],
+              "body_context": {
+                "actor": {
+                  "enabled": true,
+                  "clip": "Attack4",
+                  "playbackSpeed": 1.0,
+                  "hiddenSlots": [],
+                  "media": []
+                },
+                "anchors": [
+                  {
+                    "name": "effect",
+                    "frame": 9
+                  }
+                ],
+                "playback": "once",
+                "reversed": false,
+                "frameKeys": [],
+                "restFrame": null
+              },
+              "recovery_body": {
+                "actor": {
+                  "enabled": false,
+                  "clip": "Taunt",
+                  "playbackSpeed": 1.0,
+                  "hiddenSlots": [],
+                  "media": []
+                },
+                "anchors": [],
+                "playback": "once",
+                "reversed": false,
+                "frameKeys": [],
+                "restFrame": null
+              },
+              "save_success": null
+            }
+          ]
+        }
+      },
+      {
+        "root_uuid": "6cdfe7fd-b768-4196-bb9a-905f98cbe84e",
+        "presentation_start_ms": 2375.0,
+        "bound": {
+          "conditions": [
+            {
+              "event_uuid": "734ce211-01ea-41f2-824e-6223fa0108e8",
+              "target_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+              "start_ms": 0.0,
+              "complete_ms": 0.0,
+              "before_membership": [
+                {
+                  "event_uuid": "b9a15159-8ea9-415e-8589-07f296e8be3f",
+                  "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+                  "name": "Concentrating",
+                  "category": "status",
+                  "behavior_id": "condition.concentrating",
+                  "resulting_max_hp": 240,
+                  "resulting_ac": 10,
+                  "state": {
+                    "condition_uuid": "824ab7a3-a7bc-4b59-83b0-63ac1305f732",
+                    "name": "Concentrating",
+                    "category": "status",
+                    "semantic_key": "condition.concentrating",
+                    "behavior_id": "condition.concentrating",
+                    "tags": [
+                      "concentration"
+                    ],
+                    "removal_triggers": [],
+                    "agency_denial": "none",
+                    "outcome_protections": [],
+                    "applied_source_event_cursor": 52,
+                    "suppression_provider_uuids": [],
+                    "duplicate_count": null,
+                    "size_change": null,
+                    "energy_type": null,
+                    "metamagic_mode": null,
+                    "affected_item_uuid": null,
+                    "enhanced_ability": null,
+                    "concentration_slots": [
+                      {
+                        "slot_uuid": "74728c13-90e3-4a72-a4ec-f321f246188a",
+                        "cast_lineage_uuid": "000c2ffb-a2cf-4f59-8d36-3e77b2787d10",
+                        "spell_id": "spell.wall_of_ice",
+                        "spell_name": "Wall of Ice"
+                      }
+                    ]
+                  },
+                  "resulting_stats": {
+                    "normal_hp": 240,
+                    "maximum_hp": 240,
+                    "temporary_hp": 0,
+                    "temporary_hp_grant": null,
+                    "armor_class": 10,
+                    "healing_blocked": false,
+                    "damage_affinities": [],
+                    "resolved_size": "Medium",
+                    "native_plane_id": "material",
+                    "current_plane_id": "material",
+                    "spatial_disposition": "present"
+                  },
+                  "resulting_tile": null,
+                  "resulting_item": null,
+                  "consumed": false
+                }
+              ],
+              "after_membership": [],
+              "before_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [
+                  "condition.concentrating"
+                ],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "after_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "feedback_text": "\u2212Concentrating",
+              "feedback_color": 2608840,
+              "badge_style": {
+                "fontFamily": "monospace",
+                "fontSizePx": 16.0,
+                "fontWeight": "bold",
+                "strokeColor": 0,
+                "strokeWidthPx": 3.0,
+                "anchorLiftPx": 60.0,
+                "risePx": 40.0,
+                "fadeStartFraction": 0.7,
+                "durationMs": 1400.0
+              },
+              "unsupported": [],
+              "body": null,
+              "alpha_end_ms": null
+            }
+          ],
+          "body_actions": [
+            {
+              "event_uuid": "6cdfe7fd-b768-4196-bb9a-905f98cbe84e",
+              "contact": {
+                "actor_uuid": "e37904df-bb40-4ef6-a7c9-424e08aa02c8",
+                "grid": [
+                  7.0,
+                  6.0
+                ],
+                "facing": "S",
+                "visual_scale": 1.0,
+                "hp": 240,
+                "life_state": "alive",
+                "elevation_steps": 0.0,
+                "rig_id": "neuroclient.modular",
+                "visual_scale_x": 1.0,
+                "body_lift_px": 0.0,
+                "rest_pose": null,
+                "condition_scale": 1.0,
+                "manifestation": null
+              },
+              "recipe_id": "action.drop_concentration",
+              "clip": "Idle",
+              "playback_speed": 1.0,
+              "start_ms": 0.0,
+              "effect_ms": 0.0,
+              "body_end_ms": 0.0,
+              "join_ms": 0.0,
+              "complete_ms": 0.0,
+              "enabled": false,
+              "hidden_slots": [],
+              "hide_weapon_during_body": false,
+              "recovery": null,
+              "condition": null,
+              "feedback": null,
+              "gaps": [],
+              "interaction_object_uuid": null,
+              "relocates": false,
+              "cast_layers": [],
+              "body_context": {
+                "actor": {
+                  "enabled": false,
+                  "clip": "Idle",
+                  "playbackSpeed": 1.0,
+                  "hiddenSlots": [],
+                  "media": []
+                },
+                "anchors": [
+                  {
+                    "name": "effect",
+                    "frame": 0
+                  }
+                ],
+                "playback": "once",
+                "reversed": false,
+                "frameKeys": [],
+                "restFrame": null
+              },
+              "recovery_body": {
+                "actor": {
+                  "enabled": false,
+                  "clip": "Idle",
+                  "playbackSpeed": 1.0,
+                  "hiddenSlots": [],
+                  "media": []
+                },
+                "anchors": [],
+                "playback": "once",
+                "reversed": false,
+                "frameKeys": [],
+                "restFrame": null
+              },
+              "save_success": null
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "case": "persistent-grease-true",
+    "input": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/persistent-grease-true/input.json",
+    "input_schema": 1,
+    "source": {
+      "branch": "codex/recovery-design",
+      "commit": "018954bcd87d164e0c98674f41411574a6d7d502",
+      "dirty": true
+    },
+    "historical_not_current_acceptance": true,
+    "examples": [
+      {
+        "node": {
+          "uuid": "c40f0da4-5158-47ec-876d-c6c9655c8b43",
+          "lineage_uuid": "90421dc9-6c35-40f4-a5e9-437cef4bff2d",
+          "parent_event": "5b464a94-1dcc-4ac4-bf64-13da0175325c",
+          "parent_lineage": "3eb7c70b-721b-46c1-a956-daa3ae73a163",
+          "children_lineages": [
+            "e914886c-b1d6-4252-a3d9-328b98d8c4aa",
+            "b337f9d6-78c4-43f6-9237-e1fc1c4a664f",
+            "546e506f-02b9-4771-b29c-c53d87fb7997",
+            "1d214cc1-c52a-47e1-ae0e-2db7114bcb60"
+          ],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "spatial_effect_state",
+            "spatial_effect_uuid": "203fb73a-634b-4ef1-be1d-9859b40cb91e",
+            "positions": [
+              [
+                6,
+                5
+              ],
+              [
+                6,
+                6
+              ],
+              [
+                7,
+                5
+              ],
+              [
+                7,
+                6
+              ]
+            ],
+            "previous_state": null,
+            "state": null,
+            "previous_pressed": null,
+            "pressed": null,
+            "operation": "created"
+          },
+          "combat_log": {
+            "entry_type": "spatial_effect",
+            "source_name": "Environment",
+            "source_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+            "target_name": null,
+            "target_uuid": null,
+            "compact": "{cyan:Environment} creates {yellow:Grease Zone}",
+            "verbose": "{cyan:Environment} creates {yellow:Grease Zone} on 4 cells",
+            "detailed": "{cyan:Environment} creates {yellow:Grease Zone} on 4 cells",
+            "data": {
+              "operation": "created",
+              "content_identity": "content.srd_5_1_cc:condition:spatial_effect.spell.grease@1",
+              "layer": "ground_surface",
+              "affected_positions": []
+            },
+            "success": null,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 53,
+            "event_uuid": "c40f0da4-5158-47ec-876d-c6c9655c8b43",
+            "lineage_uuid": "90421dc9-6c35-40f4-a5e9-437cef4bff2d"
+          }
+        ]
+      },
+      {
+        "node": {
+          "uuid": "9b8887d1-38a1-483f-abd9-740db871619e",
+          "lineage_uuid": "c3c3d401-4b23-4cb3-a09a-e3bed093493f",
+          "parent_event": "21fce36c-293e-47fc-8f6f-e93d2f3c6a62",
+          "parent_lineage": "05adf731-7c8e-42a0-ae60-f224347590c7",
+          "children_lineages": [],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "condition",
+            "target_entity_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+            "event_type": "condition_application",
+            "condition": {
+              "event_uuid": "9b8887d1-38a1-483f-abd9-740db871619e",
+              "condition_uuid": "9e7bfea5-dcea-4944-b595-03762f30cf08",
+              "name": "Concentrating",
+              "category": "status",
+              "behavior_id": "condition.concentrating",
+              "resulting_max_hp": null,
+              "resulting_ac": null,
+              "state": {
+                "condition_uuid": "9e7bfea5-dcea-4944-b595-03762f30cf08",
+                "name": "Concentrating",
+                "category": "status",
+                "semantic_key": "condition.concentrating",
+                "tags": [
+                  "concentration"
+                ],
+                "removal_triggers": [],
+                "agency_denial": "none",
+                "outcome_protections": [],
+                "applied_source_event_cursor": null,
+                "duplicate_count": null,
+                "size_change": null,
+                "energy_type": null
+              },
+              "resulting_stats": {
+                "normal_hp": 240,
+                "maximum_hp": 240,
+                "temporary_hp": 0,
+                "temporary_hp_grant": null,
+                "armor_class": 12,
+                "healing_blocked": false,
+                "damage_affinities": [],
+                "resolved_size": "Medium"
+              },
+              "resulting_tile": null,
+              "resulting_item": null
+            }
+          },
+          "combat_log": {
+            "entry_type": "condition_applied",
+            "source_name": "Caster",
+            "source_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+            "target_name": "Caster",
+            "target_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+            "compact": "{cyan:Caster} gains **Concentrating**",
+            "verbose": "{cyan:Caster} gains **Concentrating**",
+            "detailed": "{cyan:Caster} gains **Concentrating**",
+            "data": {},
+            "success": true,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 58,
+            "event_uuid": "9b8887d1-38a1-483f-abd9-740db871619e",
+            "lineage_uuid": "c3c3d401-4b23-4cb3-a09a-e3bed093493f"
+          }
+        ]
+      },
+      {
+        "world_update": {
+          "event_uuid": "fc4aa889-954f-4f94-9755-f77c9ab58fa1",
+          "tiles": [
+            {
+              "tile_uuid": "88e3afc7-7ee4-4ea5-be10-2e3ade0f0d8c",
+              "position": [
+                6,
+                5
+              ],
+              "surface": {
+                "base_material": "stone",
+                "layers": [],
+                "description": ""
+              },
+              "name": "Floor",
+              "blocks_optics": false,
+              "blocks_propagation": false,
+              "walking_cost": 2,
+              "flying_cost": 1,
+              "swimming_cost": 0,
+              "burrowing_cost": 0,
+              "elevation_steps": 0,
+              "surface_kind": "ordinary",
+              "slope_axis": null,
+              "default_light": 3,
+              "resolved_light": 3,
+              "condition_names": [],
+              "residues": []
+            }
+          ],
+          "objects": [],
+          "objects_removed": [],
+          "connectors": []
+        }
+      },
+      {
+        "node": {
+          "uuid": "69004229-b877-4b37-bc55-f61199cd77e6",
+          "lineage_uuid": "19a99c59-fd18-4e86-890a-ee317c6c9aa9",
+          "parent_event": "be5441c3-aaae-431f-9a57-28fea2921dc7",
+          "parent_lineage": "dca5fc7e-7588-4f8a-bf25-fa6a0fc4f472",
+          "children_lineages": [
+            "ee3bdf73-deec-4e24-a7c5-9a8ae63909f8",
+            "e80f15c0-83d0-44c2-a41c-28eae4d75970",
+            "a74301b4-13d0-4ffa-8b33-c557364fdabe",
+            "c3daad41-5232-479a-bf9b-636d45ed38de",
+            "5f541112-9aba-4551-a7bd-8d5f30486dfd",
+            "3676f0ee-418d-4cea-a068-fc3ae227281c"
+          ],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "spatial_effect_state",
+            "spatial_effect_uuid": "203fb73a-634b-4ef1-be1d-9859b40cb91e",
+            "positions": [
+              [
+                6,
+                5
+              ],
+              [
+                6,
+                6
+              ],
+              [
+                7,
+                5
+              ],
+              [
+                7,
+                6
+              ]
+            ],
+            "previous_state": null,
+            "state": null,
+            "previous_pressed": null,
+            "pressed": null,
+            "operation": "removed"
+          },
+          "combat_log": {
+            "entry_type": "spatial_effect",
+            "source_name": "Environment",
+            "source_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+            "target_name": null,
+            "target_uuid": null,
+            "compact": "{cyan:Environment} removes {yellow:Grease Zone}",
+            "verbose": "{cyan:Environment} removes {yellow:Grease Zone} on 4 cells",
+            "detailed": "{cyan:Environment} removes {yellow:Grease Zone} on 4 cells",
+            "data": {
+              "operation": "removed",
+              "content_identity": "content.srd_5_1_cc:condition:spatial_effect.spell.grease@1",
+              "layer": "ground_surface",
+              "affected_positions": []
+            },
+            "success": null,
+            "sub_entries": [],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 166,
+            "event_uuid": "69004229-b877-4b37-bc55-f61199cd77e6",
+            "lineage_uuid": "19a99c59-fd18-4e86-890a-ee317c6c9aa9"
+          }
+        ]
+      },
+      {
+        "node": {
+          "uuid": "6ba5f415-57c4-4f68-a3dd-c4762498158e",
+          "lineage_uuid": "99647754-f142-4743-bc16-dd50b233cc34",
+          "parent_event": "3eb2c85d-b2c5-411b-9f67-39dea55dacba",
+          "parent_lineage": "775fd95b-bc52-48da-b28c-12f1a4838a27",
+          "children_lineages": [
+            "dca5fc7e-7588-4f8a-bf25-fa6a0fc4f472"
+          ],
+          "phase": "completion",
+          "canceled": false,
+          "fact": {
+            "kind": "condition",
+            "target_entity_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+            "event_type": "condition_removal",
+            "condition": {
+              "event_uuid": "6ba5f415-57c4-4f68-a3dd-c4762498158e",
+              "condition_uuid": "9e7bfea5-dcea-4944-b595-03762f30cf08",
+              "name": "Concentrating",
+              "category": "status",
+              "behavior_id": "condition.concentrating",
+              "resulting_max_hp": null,
+              "resulting_ac": null,
+              "state": {
+                "condition_uuid": "9e7bfea5-dcea-4944-b595-03762f30cf08",
+                "name": "Concentrating",
+                "category": "status",
+                "semantic_key": "condition.concentrating",
+                "tags": [
+                  "concentration"
+                ],
+                "removal_triggers": [],
+                "agency_denial": "none",
+                "outcome_protections": [],
+                "applied_source_event_cursor": 59,
+                "duplicate_count": null,
+                "size_change": null,
+                "energy_type": null
+              },
+              "resulting_stats": {
+                "normal_hp": 240,
+                "maximum_hp": 240,
+                "temporary_hp": 0,
+                "temporary_hp_grant": null,
+                "armor_class": 12,
+                "healing_blocked": false,
+                "damage_affinities": [],
+                "resolved_size": "Medium"
+              },
+              "resulting_tile": null,
+              "resulting_item": null
+            }
+          },
+          "combat_log": {
+            "entry_type": "condition_removed",
+            "source_name": "Caster",
+            "source_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+            "target_name": "Caster",
+            "target_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+            "compact": "{cyan:Caster} is no longer **Concentrating**",
+            "verbose": "{cyan:Caster} is no longer **Concentrating**",
+            "detailed": "{cyan:Caster} is no longer **Concentrating**",
+            "data": {
+              "condition_name": "Concentrating",
+              "reveals_target": false
+            },
+            "success": true,
+            "sub_entries": [
+              {
+                "entry_type": "condition_removed",
+                "source_name": "Unknown",
+                "source_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+                "target_name": "Unknown",
+                "target_uuid": null,
+                "compact": "{cyan:Unknown} is no longer **Grease Zone**",
+                "verbose": "{cyan:Unknown} is no longer **Grease Zone**",
+                "detailed": "{cyan:Unknown} is no longer **Grease Zone**",
+                "data": {
+                  "condition_name": "Grease Zone",
+                  "reveals_target": false
+                },
+                "success": true,
+                "sub_entries": [
+                  {
+                    "entry_type": "spatial_effect",
+                    "source_name": "Environment",
+                    "source_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+                    "target_name": null,
+                    "target_uuid": null,
+                    "compact": "{cyan:Environment} removes {yellow:Grease Zone}",
+                    "verbose": "{cyan:Environment} removes {yellow:Grease Zone} on 4 cells",
+                    "detailed": "{cyan:Environment} removes {yellow:Grease Zone} on 4 cells",
+                    "data": {
+                      "operation": "removed",
+                      "content_identity": "content.srd_5_1_cc:condition:spatial_effect.spell.grease@1",
+                      "layer": "ground_surface",
+                      "affected_positions": []
+                    },
+                    "success": null,
+                    "sub_entries": [],
+                    "perceiver_uuids": [],
+                    "revealed_entity_uuids": []
+                  }
+                ],
+                "perceiver_uuids": [],
+                "revealed_entity_uuids": []
+              }
+            ],
+            "perceiver_uuids": [],
+            "revealed_entity_uuids": []
+          },
+          "content_attributions": []
+        },
+        "versions": [
+          {
+            "source_index": 168,
+            "event_uuid": "6ba5f415-57c4-4f68-a3dd-c4762498158e",
+            "lineage_uuid": "99647754-f142-4743-bc16-dd50b233cc34"
+          }
+        ]
+      },
+      {
+        "world_update": {
+          "event_uuid": "9e913144-a5bf-4ae5-ae47-632551a0c258",
+          "tiles": [
+            {
+              "tile_uuid": "88e3afc7-7ee4-4ea5-be10-2e3ade0f0d8c",
+              "position": [
+                6,
+                5
+              ],
+              "surface": {
+                "base_material": "stone",
+                "layers": [],
+                "description": ""
+              },
+              "name": "Floor",
+              "blocks_optics": false,
+              "blocks_propagation": false,
+              "walking_cost": 1,
+              "flying_cost": 1,
+              "swimming_cost": 0,
+              "burrowing_cost": 0,
+              "elevation_steps": 0,
+              "surface_kind": "ordinary",
+              "slope_axis": null,
+              "default_light": 3,
+              "resolved_light": 3,
+              "condition_names": [],
+              "residues": []
+            }
+          ],
+          "objects": [],
+          "objects_removed": [],
+          "connectors": []
+        }
+      }
+    ],
+    "bound_examples": [
+      {
+        "root_uuid": "c138e496-6560-4d4d-ab97-49069f20b5d1",
+        "presentation_start_ms": 375.0,
+        "bound": {
+          "conditions": [
+            {
+              "event_uuid": "9b8887d1-38a1-483f-abd9-740db871619e",
+              "target_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+              "start_ms": 750.0,
+              "complete_ms": 750.0,
+              "before_membership": [],
+              "after_membership": [
+                {
+                  "event_uuid": "9b8887d1-38a1-483f-abd9-740db871619e",
+                  "condition_uuid": "9e7bfea5-dcea-4944-b595-03762f30cf08",
+                  "name": "Concentrating",
+                  "category": "status",
+                  "behavior_id": "condition.concentrating",
+                  "resulting_max_hp": null,
+                  "resulting_ac": null,
+                  "state": {
+                    "condition_uuid": "9e7bfea5-dcea-4944-b595-03762f30cf08",
+                    "name": "Concentrating",
+                    "category": "status",
+                    "semantic_key": "condition.concentrating",
+                    "behavior_id": null,
+                    "tags": [
+                      "concentration"
+                    ],
+                    "removal_triggers": [],
+                    "agency_denial": "none",
+                    "outcome_protections": [],
+                    "applied_source_event_cursor": null,
+                    "suppression_provider_uuids": [],
+                    "duplicate_count": null,
+                    "size_change": null,
+                    "energy_type": null,
+                    "metamagic_mode": null,
+                    "affected_item_uuid": null,
+                    "enhanced_ability": null,
+                    "concentration_slots": []
+                  },
+                  "resulting_stats": {
+                    "normal_hp": 240,
+                    "maximum_hp": 240,
+                    "temporary_hp": 0,
+                    "temporary_hp_grant": null,
+                    "armor_class": 12,
+                    "healing_blocked": false,
+                    "damage_affinities": [],
+                    "resolved_size": "Medium",
+                    "native_plane_id": "material",
+                    "current_plane_id": "material",
+                    "spatial_disposition": "present"
+                  },
+                  "resulting_tile": null,
+                  "resulting_item": null,
+                  "consumed": false
+                }
+              ],
+              "before_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "after_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [
+                  "condition.concentrating"
+                ],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "feedback_text": "+Concentrating",
+              "feedback_color": 5825685,
+              "badge_style": {
+                "fontFamily": "monospace",
+                "fontSizePx": 16.0,
+                "fontWeight": "bold",
+                "strokeColor": 0,
+                "strokeWidthPx": 3.0,
+                "anchorLiftPx": 60.0,
+                "risePx": 40.0,
+                "fadeStartFraction": 0.7,
+                "durationMs": 1400.0
+              },
+              "unsupported": [],
+              "body": null,
+              "alpha_end_ms": null
+            }
+          ],
+          "body_actions": [
+            {
+              "event_uuid": "c138e496-6560-4d4d-ab97-49069f20b5d1",
+              "contact": {
+                "actor_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+                "grid": [
+                  3.0,
+                  6.0
+                ],
+                "facing": "S",
+                "visual_scale": 1.0,
+                "hp": 240,
+                "life_state": "alive",
+                "elevation_steps": 0.0,
+                "rig_id": "neuroclient.modular",
+                "visual_scale_x": 1.0,
+                "body_lift_px": 0.0,
+                "rest_pose": null,
+                "condition_scale": 1.0,
+                "manifestation": null
+              },
+              "recipe_id": "spell.grease",
+              "clip": "Attack4",
+              "playback_speed": 1.0,
+              "start_ms": 0.0,
+              "effect_ms": 750.0,
+              "body_end_ms": 1166.6666666666667,
+              "join_ms": 1166.6666666666667,
+              "complete_ms": 1166.6666666666667,
+              "enabled": true,
+              "hidden_slots": [],
+              "hide_weapon_during_body": true,
+              "recovery": {
+                "enabled": false,
+                "bodyClip": "Taunt",
+                "bodyPlaybackSpeed": 1.0
+              },
+              "condition": {
+                "anchor": "effect",
+                "delayMs": 0.0,
+                "feedbackEnabled": true
+              },
+              "feedback": null,
+              "gaps": [],
+              "interaction_object_uuid": null,
+              "relocates": false,
+              "cast_layers": [
+                {
+                  "id": "cast-weaponGlow",
+                  "slot": "weaponGlow",
+                  "enabled": true,
+                  "hidden": false,
+                  "category": "Magic2",
+                  "colors": {
+                    "source": "auto",
+                    "primary": 11645339,
+                    "secondary": null,
+                    "tertiary": null,
+                    "mode": "paletteSwap"
+                  },
+                  "sourceSheet": "/spritesheets/Magic2/Attack4.png",
+                  "palette": {
+                    "colors": [
+                      5852750,
+                      11645339,
+                      8750458
+                    ],
+                    "gamma": 0.65,
+                    "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                    "untinted": false
+                  },
+                  "blendMode": "normal"
+                },
+                {
+                  "id": "cast-aura",
+                  "slot": "aura",
+                  "enabled": true,
+                  "hidden": false,
+                  "category": "Effect5",
+                  "colors": {
+                    "source": "auto",
+                    "primary": 11645339,
+                    "secondary": null,
+                    "tertiary": null,
+                    "mode": "paletteSwap"
+                  },
+                  "sourceSheet": "/spritesheets/Effect5/Attack4.png",
+                  "palette": {
+                    "colors": [
+                      5852750,
+                      11645339,
+                      8750458
+                    ],
+                    "gamma": 0.65,
+                    "noiseSheet": "/spell-palettes/source-hand-noise.png",
+                    "untinted": false
+                  },
+                  "blendMode": "normal"
+                }
+              ],
+              "body_context": {
+                "actor": {
+                  "enabled": true,
+                  "clip": "Attack4",
+                  "playbackSpeed": 1.0,
+                  "hiddenSlots": [],
+                  "media": []
+                },
+                "anchors": [
+                  {
+                    "name": "effect",
+                    "frame": 9
+                  }
+                ],
+                "playback": "once",
+                "reversed": false,
+                "frameKeys": [],
+                "restFrame": null
+              },
+              "recovery_body": {
+                "actor": {
+                  "enabled": false,
+                  "clip": "Taunt",
+                  "playbackSpeed": 1.0,
+                  "hiddenSlots": [],
+                  "media": []
+                },
+                "anchors": [],
+                "playback": "once",
+                "reversed": false,
+                "frameKeys": [],
+                "restFrame": null
+              },
+              "save_success": null
+            }
+          ]
+        }
+      },
+      {
+        "root_uuid": "3bf6c78b-7528-4d87-bb15-2164351bdf50",
+        "presentation_start_ms": 2843.75,
+        "bound": {
+          "conditions": [
+            {
+              "event_uuid": "6ba5f415-57c4-4f68-a3dd-c4762498158e",
+              "target_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+              "start_ms": 0.0,
+              "complete_ms": 0.0,
+              "before_membership": [
+                {
+                  "event_uuid": "9b8887d1-38a1-483f-abd9-740db871619e",
+                  "condition_uuid": "9e7bfea5-dcea-4944-b595-03762f30cf08",
+                  "name": "Concentrating",
+                  "category": "status",
+                  "behavior_id": "condition.concentrating",
+                  "resulting_max_hp": null,
+                  "resulting_ac": null,
+                  "state": {
+                    "condition_uuid": "9e7bfea5-dcea-4944-b595-03762f30cf08",
+                    "name": "Concentrating",
+                    "category": "status",
+                    "semantic_key": "condition.concentrating",
+                    "behavior_id": null,
+                    "tags": [
+                      "concentration"
+                    ],
+                    "removal_triggers": [],
+                    "agency_denial": "none",
+                    "outcome_protections": [],
+                    "applied_source_event_cursor": null,
+                    "suppression_provider_uuids": [],
+                    "duplicate_count": null,
+                    "size_change": null,
+                    "energy_type": null,
+                    "metamagic_mode": null,
+                    "affected_item_uuid": null,
+                    "enhanced_ability": null,
+                    "concentration_slots": []
+                  },
+                  "resulting_stats": {
+                    "normal_hp": 240,
+                    "maximum_hp": 240,
+                    "temporary_hp": 0,
+                    "temporary_hp_grant": null,
+                    "armor_class": 12,
+                    "healing_blocked": false,
+                    "damage_affinities": [],
+                    "resolved_size": "Medium",
+                    "native_plane_id": "material",
+                    "current_plane_id": "material",
+                    "spatial_disposition": "present"
+                  },
+                  "resulting_tile": null,
+                  "resulting_item": null,
+                  "consumed": false
+                }
+              ],
+              "after_membership": [],
+              "before_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [
+                  "condition.concentrating"
+                ],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "after_appearance": {
+                "alpha": 1.0,
+                "body_color": null,
+                "matched_behavior_ids": [],
+                "unsupported": [],
+                "body_pose": null,
+                "label": null,
+                "layers": [],
+                "activity": "idle",
+                "scale": 1.0,
+                "live_copies": null,
+                "distortion": null,
+                "distortion_strength": 1.0,
+                "time_ms": 0.0,
+                "body_ramp": null,
+                "ramp_strength": 1.0,
+                "ramp_age_ms": 0.0,
+                "frozen_pose": null,
+                "body_outline": null,
+                "outline_owner_uuid": null,
+                "outline_age_ms": null,
+                "body_pose_ref": null,
+                "frozen_pose_ref": null,
+                "frozen_body": null,
+                "frozen_owner_uuid": null,
+                "rig_layers": [],
+                "item_modifiers": [],
+                "finite_materials": [],
+                "absence": null
+              },
+              "feedback_text": "\u2212Concentrating",
+              "feedback_color": 2608840,
+              "badge_style": {
+                "fontFamily": "monospace",
+                "fontSizePx": 16.0,
+                "fontWeight": "bold",
+                "strokeColor": 0,
+                "strokeWidthPx": 3.0,
+                "anchorLiftPx": 60.0,
+                "risePx": 40.0,
+                "fadeStartFraction": 0.7,
+                "durationMs": 1400.0
+              },
+              "unsupported": [],
+              "body": null,
+              "alpha_end_ms": null
+            }
+          ],
+          "body_actions": [
+            {
+              "event_uuid": "3bf6c78b-7528-4d87-bb15-2164351bdf50",
+              "contact": {
+                "actor_uuid": "befe82c2-e8b5-4d12-b113-43d2361ad159",
+                "grid": [
+                  3.0,
+                  6.0
+                ],
+                "facing": "S",
+                "visual_scale": 1.0,
+                "hp": 240,
+                "life_state": "alive",
+                "elevation_steps": 0.0,
+                "rig_id": "neuroclient.modular",
+                "visual_scale_x": 1.0,
+                "body_lift_px": 0.0,
+                "rest_pose": null,
+                "condition_scale": 1.0,
+                "manifestation": null
+              },
+              "recipe_id": "action.drop_concentration",
+              "clip": "Idle",
+              "playback_speed": 1.0,
+              "start_ms": 0.0,
+              "effect_ms": 0.0,
+              "body_end_ms": 0.0,
+              "join_ms": 0.0,
+              "complete_ms": 0.0,
+              "enabled": false,
+              "hidden_slots": [],
+              "hide_weapon_during_body": false,
+              "recovery": null,
+              "condition": null,
+              "feedback": null,
+              "gaps": [],
+              "interaction_object_uuid": null,
+              "relocates": false,
+              "cast_layers": [],
+              "body_context": {
+                "actor": {
+                  "enabled": false,
+                  "clip": "Idle",
+                  "playbackSpeed": 1.0,
+                  "hiddenSlots": [],
+                  "media": []
+                },
+                "anchors": [
+                  {
+                    "name": "effect",
+                    "frame": 0
+                  }
+                ],
+                "playback": "once",
+                "reversed": false,
+                "frameKeys": [],
+                "restFrame": null
+              },
+              "recovery_body": {
+                "actor": {
+                  "enabled": false,
+                  "clip": "Idle",
+                  "playbackSpeed": 1.0,
+                  "hiddenSlots": [],
+                  "media": []
+                },
+                "anchors": [],
+                "playback": "once",
+                "reversed": false,
+                "frameKeys": [],
+                "restFrame": null
+              },
+              "save_success": null
+            }
+          ]
+        }
+      }
+    ]
+  }
+]

@@ -8,7 +8,8 @@ import pygame
 
 from dnd.core.life_types import LifeState
 from dnd.types.world import WorldEdgeChannel
-from game.area_media import AreaMedia, AreaSolid
+from game.area_media import AreaMedia
+from game.animation_types import AreaSolid
 from game.animation import cast_actor_contacts, ActorContact, CastSample, actor_rest_pose, BodySample, death_body_context, sample_idle_body
 from game.animation_data import resolve_player_layers
 from game.animation_types import AnimationData, RigLayer
@@ -25,8 +26,10 @@ from game.condition_draw import load_condition_layers
 from game.motion import MotionTimeline
 from game.projection import Camera
 from game.portal_animation import portal_body
-from game.scene import SceneActor, available_clips, load_scene_media, scene_actors
-from game.stationary_media import stationary_media_draw_commands
+from game.body_pose_types import SceneActor
+from game.scene_actors import available_clips, scene_actors
+from game.scene import load_scene_media
+from game.stationary_draw import stationary_media_draw_commands
 from game.interruption_draw import reaction_media_draw_commands
 from game.wind_flow_media import wind_interception_commands
 

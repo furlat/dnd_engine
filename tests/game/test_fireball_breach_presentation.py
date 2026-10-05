@@ -18,6 +18,8 @@ from dnd.spells.evocation import Fireball
 from dnd.types.world import CardinalDirection
 from game.animation_data import load_animation_data
 from game.animation import ActorContact
+from game.presentation_timing import presentation_dependencies
+from game.timing_evidence import validate_timing_evidence
 from game.choreography import bind_choreography, sample_choreography
 from game.choreography_draw import choreography_draw_commands, load_choreography_media
 from game.combat import BoundCast
@@ -101,8 +103,21 @@ def test_cold_breach_replay_waits_for_door_clearance_and_keeps_one_cast():
     assert later_applications
     assert any(isinstance(row.source.target, ActorContact) and row.source.target.grid == (4, 4)
         and row.source.damage_applied for row in later_applications)
+    dependencies = presentation_dependencies(bound)
+    assert dependencies
+    assert all(not validate_timing_evidence(owner.evidence) for owner in dependencies)
+    reach_evidence = [row for row in bound.timing_evidence if row.reason == 'area_reach']
+    assert any(any(source.reference.anchor == 'clearance' for source in row.inputs) for row in reach_evidence)
+    cast_evidence = bound.nodes[0].bound.timeline.timing_evidence
+    final_anchors = {(row.target.application_id, row.target.anchor): row for row in cast_evidence}
     for application in later_applications:
         assert bound.nodes[0].start_ms + application.travel_end_ms >= clear
+        identity = application.source.application_id
+        assert final_anchors[identity, 'contact'].at_ms == application.travel_end_ms
+        if application.hp_ms is not None:
+            assert final_anchors[identity, 'hp'].at_ms == application.hp_ms
+            assert final_anchors[identity, 'hp'].reason == 'staged_area_shift'
+            assert final_anchors[identity, 'hp'].inputs[0].offset_producers is not None
 
     pygame.init()
     pygame.display.set_mode((8, 8))

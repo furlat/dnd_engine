@@ -3,8 +3,9 @@
 from dataclasses import replace
 from typing import Mapping
 from uuid import UUID
+from game.timing_evidence import TimingEvidence, TimingOperand, TimingReference
 
-from dnd.core.events import EventType
+from dnd.types.event_facts import EventType
 from dnd.core.item_types import ItemEffectPresentationState
 from game.animation_types import AnimationData, ItemAttachmentStart
 from game.choreography import BoundChoreography, MotionTimeline, walk_bound_timelines
@@ -34,6 +35,9 @@ def register_item_attachment_starts(
     applications = {node.fact.effect_uuid: versions.get(node.uuid)
         for node in lineage.events if not node.canceled and isinstance(node.fact, ItemEffectChangeFact)
         and node.fact.event_type is EventType.CONDITION_APPLICATION} if lineage else {}
+    application_events = {node.fact.effect_uuid: node.uuid
+        for node in lineage.events if not node.canceled and isinstance(node.fact, ItemEffectChangeFact)
+        and node.fact.event_type is EventType.CONDITION_APPLICATION} if lineage else {}
     visits = tuple(walk_bound_timelines(choreography, motion))
     states = [(at + visit.offset_ms, state) for visit in visits
               for at, state in visit.timeline.states]
@@ -45,7 +49,11 @@ def register_item_attachment_starts(
             if previous is None:
                 result[owner] = ItemAttachmentStart(item,
                     absolute_start_ms + at if owner in applications else None,
-                    effect.applied_source_event_cursor or applications.get(owner))
+                    effect.applied_source_event_cursor or applications.get(owner),
+                    timing_evidence=(TimingEvidence(0, TimingReference("item_effect", owner, "applied"),
+                        "lifetime_application", "offset", (TimingOperand(TimingReference("event",
+                            application_events[owner], "admission"), absolute_start_ms + at),),
+                        absolute_start_ms + at),) if owner in applications else ())
             elif previous.source_cursor is None and effect.applied_source_event_cursor is not None:
                 result[owner] = replace(previous, source_cursor=effect.applied_source_event_cursor)
     return result

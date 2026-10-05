@@ -14,7 +14,8 @@ from game.player_facts import MovementFact, StepFact
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage, stage_lineage
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from game.choreography_draw import load_motion_media
 from tests.game.visibility_scenarios import visibility_history
 

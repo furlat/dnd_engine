@@ -1,6 +1,11 @@
 """Authored support materials preserve real rig pixels and finite event clocks."""
 
 from dataclasses import replace
+from uuid import uuid4
+from dnd.content.items.authored_item_builders import build_authored_item
+from dnd.core.equipment_types import WeaponSlot
+from game.scene_actors import scene_actors
+from game.condition_types import ConditionEquipmentModifier
 
 import numpy as np
 import pygame
@@ -13,15 +18,15 @@ from dnd.core.creature_types import DamageType
 from dnd.core.events import EventType
 from dnd.spells.abjuration import DeathWard, RemoveCurse, Stoneskin
 from dnd.spells.necromancy import NoHealing, AbilityCurseEffect
-from dnd.spells.transmutation import EnhanceAbility, Regenerate
+from dnd.spells.transmutation import EnhanceAbility, Regenerate, Shillelagh
 from game.animation import ActorContact, BodySample, body_clip, media_track_duration, sample_cast
 from game.animation_data import load_animation_data
-from game.animation_draw import actor_draw_commands
+from game.animation_draw import actor_draw_commands, load_actor_media
 from game.animation_types import RigLayer
 from game.choreography import bind_choreography, sample_choreography
 from game.cast_media import cast_media_draw_commands
 from game.combat import bind_cast
-from game.condition_animation import ConditionAppearance, resolve_condition_appearance
+from game.condition_animation import ConditionItemModifier, ConditionAppearance, resolve_condition_appearance
 from game.condition_draw import compose_condition_layers
 from game.condition_media_lifetime import register_condition_lifetimes, sample_condition_lifetimes
 from game.condition_sampling import sample_condition_media
@@ -367,3 +372,73 @@ def test_stone_material_blends_on_application_removal_and_enters_quiet_when_obse
                     assert gone.body_ramp is None
             state, clock = after, clock + group.complete_ms + 25
         assert seen == {"apply", "remove"}
+
+
+@pytest.mark.parametrize("strength", (.5, 1.))
+def test_body_material_preserves_owned_item_modifier(rig_pixels, strength):
+    data, contact, layers, rows = rig_pixels
+    owner = uuid4()
+    layers = tuple(replace(layer, item_uuid=owner) if layer.slot == "weapon" else layer for layer in layers)
+    modifier = ConditionEquipmentModifier(id="hide", slots=("weapon",), alphaMultiplier=0,
+        tintRgb=None, saturation=1, brightness=1, priority=70, affectedItemOnly=True)
+    def render(modifiers):
+        condition = ConditionAppearance(body_ramp=RAMP, ramp_strength=strength, item_modifiers=modifiers)
+        commands = actor_draw_commands(data, BodySample(contact.actor_uuid, "Idle", 0, "S"),
+            contact, layers, rows, Camera(zoom=1), condition=condition)
+        return next(command.surface for command in commands if command.role == "actor")
+    ordinary = render(())
+    unrelated = render((ConditionItemModifier(uuid4(), modifier),))
+    modified = render((ConditionItemModifier(owner, modifier),))
+    assert pygame.image.tobytes(ordinary, "RGBA") == pygame.image.tobytes(unrelated, "RGBA")
+    assert ordinary.get_at((13, 4)).a > 0
+    assert modified.get_at((13, 4)).a == 0
+    assert pygame.image.tobytes(ordinary, "RGBA") == pygame.image.tobytes(render(()), "RGBA")
+
+
+def test_native_stoneskin_shillelagh_material_composition(arena, tmp_path):
+    game, caster, recipient, turns = arena
+    staff = build_authored_item('weapon.quarterstaff', caster.uuid)
+    assert caster.loot_item(staff)
+    assert caster.equip_item(staff.uuid, WeaponSlot.MELEE_MAIN)
+    before, cursor = baseline(caster)
+    for spell, source, target in ((Shillelagh, caster, caster), (Stoneskin, caster, caster)):
+        source.action_economy.reset_all_costs()
+        result = spell(source_entity_uuid=source.uuid, target_entity_uuid=target.uuid, alt_skip_slot=True).apply()
+        assert result is not None
+        assert not result.canceled, result.status_message
+    state, roots = saved_views(game, before, cursor, caster)[caster.name]
+    for root in roots:
+        state = reduce_lineage(state, root)
+    data = load_animation_data()
+    actors = scene_actors(state, data, {str(caster.uuid): 'S'})
+    actor = next(row for row in actors if row.contact.actor_uuid == str(caster.uuid))
+    assert actor.condition.body_ramp is not None and actor.condition.item_modifiers
+    rows = load_actor_media(data, ((actor.contact, actor.layers, ("Idle",)),))
+    body = BodySample(str(caster.uuid), 'Idle', 0, 'S')
+    def render(condition):
+        return next(command.surface for command in actor_draw_commands(data, body, actor.contact,
+            actor.layers, rows, Camera(zoom=1), condition=condition) if command.role == 'actor')
+    images = [render(replace(actor.condition, ramp_strength=.5, time_ms=at)) for at in (0., 500., 1000., 1500.)]
+    assert any(pygame.image.tobytes(image, 'RGBA') != pygame.image.tobytes(images[0], 'RGBA')
+               for image in images[1:])
+    plain = render(replace(actor.condition, ramp_strength=.5, item_modifiers=()))
+    assert any(pygame.image.tobytes(image, 'RGBA') != pygame.image.tobytes(plain, 'RGBA') for image in images)
+    sheet = pygame.Surface((plain.width * 5, plain.height), pygame.SRCALPHA)
+    for index, image in enumerate((*images, plain)):
+        sheet.blit(image, (index * plain.width, 0))
+    pygame.image.save(pygame.transform.scale_by(sheet, 3), tmp_path / "native-material.png")
+
+
+def test_dynamic_persistent_material_uses_sample_date(rig_pixels):
+    data, contact, layers, rows = rig_pixels
+    ramp = ConditionBodyRamp(mapping="energy_burn", colors=(0x00AAFF, 0xFFFFFF))
+    def pixels(age):
+        commands = actor_draw_commands(data, BodySample(contact.actor_uuid, 'Idle', 0, 'S'),
+            contact, layers, rows, Camera(zoom=1),
+            condition=ConditionAppearance(body_ramp=ramp, ramp_age_ms=age))
+        return pygame.image.tobytes(next(row.surface for row in commands if row.role == 'actor'), 'RGBA')
+    # Same date is deterministic even after sampling another date.
+    first = pixels(0)
+    later = pixels(550)
+    assert pixels(0) == first
+    assert first != later

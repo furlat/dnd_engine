@@ -1,61 +1,21 @@
 """Native-view wall modules over disclosed retained flame contacts."""
 
-from math import ceil, cos, floor, hypot, isclose, radians, sqrt
+from math import ceil, floor, hypot, sqrt
 from typing import Collection
 from uuid import UUID
 
-from dnd.core.presentation_geometry import AoEPresentationGeometry, WallPresentationGeometry, WallSegment, WallRing
-from dnd.core.wall_geometry import wall_shell_cells
+from dnd.core.presentation_geometry import WallPresentationGeometry, WallSegment, WallRing
 from dnd.types.senses import PerceivedSpatialEffect
 from game.animation import view_facing
-from game.animation_types import AnimationData, SpatialMediaBinding, MaskedMediaTint, SpatialMediaLayer, WallAxisMedia
+from game.animation_types import AnimationData, SpatialMediaBinding, MaskedMediaTint
 from game.draw_commands import DrawCommand
+from game.wall_profile import select_wall_bank, wall_media_limitation
 from game.maintained_media import maintained_media_alpha, maintained_media_frame
 from game.projection import Camera, painter_key, project_screen, rotate_position, inverse_rotate_position
 from game.registered_media import registered_media_samples
 
 
-_AXIS_TANGENTS = {"x": (1, 0), "y": (0, 1),
-                  "diagonal_positive": (1, 1), "diagonal_negative": (1, -1)}
 _LEGACY_MASK_NORMALS = {"x": (0, 1), "y": (1, 0)}
-
-
-def _selected_bank(layer: SpatialMediaLayer, path: WallSegment) -> WallAxisMedia | None:
-    dx, dy = path.end[0]-path.start[0], path.end[1]-path.start[1]
-    length = hypot(dx, dy)
-    def alignment(bank: WallAxisMedia) -> float:
-        x, y = _AXIS_TANGENTS[bank.axis]
-        return abs(dx*x+dy*y)/(length*hypot(x, y))
-    bank = max(layer.wallAxes, key=alignment)
-    return bank if alignment(bank)+1e-9 >= cos(radians(bank.maxAngleDegrees)) else None
-
-
-def wall_media_limitation(geometry: AoEPresentationGeometry | None,
-                         binding: SpatialMediaBinding | None = None, *,
-                         positions: Collection[tuple[int, int]] | None = None,
-                         suppressed: bool = False) -> str | None:
-    """Missing native directional coverage remains an explicit presentation gap."""
-    if not isinstance(geometry, WallPresentationGeometry):
-        return "Wall module media requires retained wall geometry"
-    if isinstance(geometry.path, WallRing):
-        if binding is None or any(layer.wallRing is None for layer in binding.layers
-                                 if layer.composition == "wall_modules"):
-            return "Curved wall media has not been delivered"
-        if any(not isclose(layer.wallRing.radiusFeet, geometry.path.radius_feet)
-               or not isclose(layer.wallRing.widthFeet, geometry.width_feet)
-               for layer in binding.layers if layer.wallRing is not None):
-            return "Ring media does not match the recorded radius/width"
-        if suppressed or positions is not None and not wall_shell_cells(geometry) <= set(positions):
-            return "Whole-ring media requires a complete disclosed, unprotected shell"
-        return None
-    if binding is not None:
-        if any(_selected_bank(layer, geometry.path) is None for layer in binding.layers
-               if layer.composition == "wall_modules"):
-            return "Diagonal directional wall modules have not been delivered for this angle"
-    elif not (isclose(geometry.path.start[0], geometry.path.end[0])
-              or isclose(geometry.path.start[1], geometry.path.end[1])):
-        return "Diagonal directional wall modules have not been delivered"
-    return None
 
 
 def wall_module_centers(path: WallSegment, positions: Collection[tuple[int, int]],
@@ -92,7 +52,7 @@ def wall_media_draw_commands(effect: PerceivedSpatialEffect, identity: UUID,
     for layer_index, layer in enumerate(binding.layers):
         if layer.composition != "wall_modules":
             continue
-        bank = _selected_bank(layer, geometry.path)
+        bank = select_wall_bank(layer, geometry.path)
         assert bank is not None
         intervals = max(1, ceil(length / bank.spacingCells))
         tint = None

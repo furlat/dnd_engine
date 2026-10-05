@@ -13,10 +13,11 @@ import numpy as np
 import pygame
 
 from dnd.types.world_placement import WorldObjectPlacement
-from dnd.core.events import WorldTileState
+from dnd.types.event_facts import WorldTileState
 from dnd.core.presentation_geometry import LinePresentationGeometry
 from dnd.core.world_edges import SlopeAxis, progressive_elevation_transition
-from game.area_media import AreaSolid, BoundarySprite, boundary_segment
+from game.area_media import BoundarySprite, boundary_segment
+from game.animation_types import AreaSolid
 from game.projection import Camera, inverse_rotate_position, project_world
 from game.spatial_field import sphere_field_owners
 

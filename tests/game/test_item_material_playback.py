@@ -13,7 +13,8 @@ from game.item_effects import item_material
 from game.item_appearance import ground_appearance, item_source_palettes
 from game.player_reduction import reduce_lineage
 from game.projection import TILE_WIDTH, Camera, project_screen
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from tests.game.item_appearance_scenarios import item_transfer_history
 from tests.game.player_helpers import player_history
 

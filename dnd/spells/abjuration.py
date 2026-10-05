@@ -260,6 +260,7 @@ class ShieldBuff(BaseCondition):
                     event_source_entity_uuid=target_uuid
                 )
             ],
+            runs_while_suppressed=True,
             event_processor=shield_turn_start_processor
         )
         target.add_event_handler(handler)

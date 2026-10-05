@@ -20,7 +20,8 @@ from game.playback_frame import sample_playback_frame
 from game.player_projection import project_sequence
 from game.player_reduction import decode_player_sequence, encode_player_sequence, reduce_lineage
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from tests.game.slow_scenarios import slow_history
 
 
@@ -101,12 +102,16 @@ def test_reacquired_loop_skips_onset_and_removal_continues_current_phase(data):
         category=ConditionCategory.CONDITION, behavior_id="condition.spell.slow",
         resulting_max_hp=None, resulting_ac=None)
     appearance = resolve_condition_appearance((fact,), data.condition_recipes, data.condition_media)
-    assert not appearance.unsupported and len(appearance.layers) == 2
+    assert not appearance.unsupported
+    assert len([layer for layer in appearance.layers if not layer.layer.markerGroup]) == 2
+    assert {layer.layer.assetId for layer in appearance.layers if not layer.layer.markerGroup} == {"control.slow.back", "control.slow.front"}
+    assert [layer.layer.markerGroup for layer in appearance.layers if layer.layer.markerGroup] == ["slow"]
     record = ConditionMediaLifetime(actor, owner, "condition.spell.slow", applied_ms=0)
 
     def samples(at, visible=appearance, lifetime=record):
         layers = sample_condition_lifetimes({str(actor): visible}, {owner: lifetime}, data, at)[str(actor)].layers
-        return tuple(sample for layer in layers for sample in sample_condition_media(data, layer))
+        return tuple(sample for layer in layers if not layer.layer.markerGroup
+                     for sample in sample_condition_media(data, layer))
 
     assert all(sample.frame == 127 for sample in samples(3999))
     assert all(sample.frame == 0 for sample in samples(4000))
@@ -117,3 +122,4 @@ def test_reacquired_loop_skips_onset_and_removal_continues_current_phase(data):
     assert len(tail) == 2
     assert all(sample.frame == 40 and sample.alpha == pytest.approx(.5) for sample in tail)
     assert not samples(5550, ConditionAppearance(), removed)
+    assert not sample_condition_lifetimes({str(actor): ConditionAppearance()}, {owner: removed}, data, 5550)[str(actor)].layers

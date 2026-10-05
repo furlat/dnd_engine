@@ -4,10 +4,10 @@ from dataclasses import dataclass, field
 import json
 from pathlib import Path
 from types import MappingProxyType
-from typing import Literal, Mapping
+from typing import Annotated, Literal, Mapping
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat, PositiveFloat, model_validator
+from pydantic import BaseModel, ConfigDict, Field, WrapSerializer, NonNegativeFloat, PositiveFloat, model_validator
 
 from game.asset_types import AssetSpec, image_resources
 from game.condition_types import ConditionLayer
@@ -55,9 +55,11 @@ class ConditionMediaDocument(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class ConditionLayerMedia:
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
     category: str
     animation: str
-    images_by_facing: Mapping[str, AssetSpec] = field(default_factory=lambda: MappingProxyType({}))
+    images_by_facing: Annotated[Mapping[str, AssetSpec], WrapSerializer(lambda value, handler: handler(dict(value)))] = field(default_factory=lambda: MappingProxyType({}))
     asset_id: str | None = None
     application_asset_id: str | None = None
     application_fade_ms: tuple[float, float] = (1500, 2000)

@@ -6,49 +6,19 @@ from uuid import UUID
 import pygame
 
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.life_types import RemainsDisposition
 from game.animation import sample_idle_body
-from game.animation_data import resolve_player_layers
 from game.animation_draw import (
     AnimationDrawCommand, BodyRows, LoadedBodyRows, actor_draw_commands, actor_screen_bounds,
     load_actor_media, place_feedback_rect,
 )
-from game.animation_types import AnimationData, Facing8
-from game.combat import actor_contact, actor_is_visible
-from game.condition_animation import ConditionAppearance, resolve_condition_appearance, condition_body_pose
+from game.animation_types import AnimationData
+from game.condition_animation import ConditionAppearance, condition_body_pose
 from game.condition_draw import load_condition_layers
 from game.player_facts import PlayerState
 from game.projection import Camera, project_screen
-from game.visual_position import VisualPosition, placed_contact
 
 
-from game.body_pose_types import SceneActor as SceneActor
-
-
-def scene_actors(target: PlayerState, data: AnimationData,
-                 facings: Mapping[str, Facing8],
-                 positions: Mapping[str, VisualPosition] | None = None) -> tuple[SceneActor, ...]:
-    """Current visual contacts and witnessed corpses; no stale living positions."""
-    if target.senses is None:
-        return ()
-    result = []
-    for actor in target.actors.values():
-        if not actor_is_visible(target, actor) or actor.remains_disposition is RemainsDisposition.DISINTEGRATED:
-            continue
-        contact = actor_contact(target, actor, data, facings.get(str(actor.uuid), "S"))
-        position = positions.get(contact.actor_uuid) if positions else None
-        contact = placed_contact(contact, position)
-        layers = resolve_player_layers(data, actor, rig_id=contact.rig_id)
-        result.append(SceneActor(contact, layers,
-            resolve_condition_appearance(actor.conditions, data.condition_recipes, data.condition_media)))
-    return tuple(result)
-
-
-def available_clips(actor: SceneActor, data: AnimationData) -> tuple[str, ...]:
-    rig = data.rigs[actor.contact.rig_id]
-    return tuple(name for name, clip in rig.clips.items()
-                 if all(layer.category in clip.sheets and clip.sheets[layer.category] in data.resources
-                        for layer in actor.layers))
+from game.body_pose_types import SceneActor
 
 
 def load_scene_media(actors: tuple[SceneActor, ...], data: AnimationData, *,

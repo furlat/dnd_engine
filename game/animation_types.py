@@ -13,8 +13,10 @@ from types import MappingProxyType
 from typing import Annotated, Literal, Mapping, TypeVar
 from uuid import UUID
 
+from game.timing_evidence import TimingEvidence
+
 from pydantic import (
-    AfterValidator, BaseModel, ConfigDict, Field, JsonValue, PlainSerializer,
+    AfterValidator, BaseModel, ConfigDict, Field, JsonValue, PlainSerializer, WrapSerializer,
     field_serializer, field_validator, model_validator,
 )
 
@@ -35,7 +37,7 @@ from game.portal_art import PortalArt, DoorwayArt
 T = TypeVar("T")
 FrozenMap = Annotated[
     Mapping[str, T], AfterValidator(MappingProxyType),
-    PlainSerializer(dict, return_type=dict),
+    WrapSerializer(lambda value, handler: handler(dict(value))),
 ]
 Facing8 = Literal["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 FacingMap = Annotated[
@@ -53,8 +55,19 @@ BodyFrame = Annotated[int, Field(ge=0, le=14)]
 
 
 @dataclass(frozen=True, slots=True)
+class AreaSolid:
+    """Disclosed solid support; absent top means topology only, not a wall."""
+
+    position: tuple[int, int]
+    base_height_steps: float
+    top_height_steps: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RigLayer:
     """Resolved actor appearance independent of media and mechanical owners."""
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
 
     slot: str
     category: str
@@ -72,6 +85,7 @@ class ItemAttachmentStart:
     item_uuid: UUID
     applied_ms: float | None = None
     source_cursor: int | None = None
+    timing_evidence: tuple[TimingEvidence, ...] = ()
 
 
 class AuthoredRecord(BaseModel):
@@ -961,6 +975,16 @@ class ActionFrameAnchor(AuthoredRecord):
     frame: BodyFrame
 
 
+class MotionDescription(AuthoredRecord):
+    """Observed artwork meaning; no rule, timing or spell-selection policy."""
+
+    body: str
+    layers: FrozenMap[str] = Field(default_factory=dict)
+    preparation: str | None = None
+    release: str | None = None
+    recovery: str | None = None
+
+
 class RigTables(AuthoredRecord):
     FACING_ROW: FacingMap[int]
     FACING_CYCLE: tuple[Facing8, ...]
@@ -976,12 +1000,14 @@ class RigTables(AuthoredRecord):
     TILE_W: Positive
     TILE_H: Positive
     CLIP_ANCHORS: FrozenMap[tuple[ActionFrameAnchor, ...]] = Field(default_factory=dict)
+    CLIP_DESCRIPTIONS: FrozenMap[MotionDescription] = Field(default_factory=dict)
 
 
 class BodyClip(AuthoredRecord):
     """One semantic body clip resolved to exact local sheet bindings."""
 
     source_clip: Identifier
+    description: MotionDescription | None = None
     frames: Annotated[int, Field(ge=1)]
     fps: Positive
     sheets: FrozenMap[str]
@@ -1772,10 +1798,12 @@ class BodyActionBinding(AuthoredRecord):
 @dataclass(frozen=True, slots=True)
 class MechanismProjectileArt:
     """Registered directional media and release socket of a placed mechanism."""
+    __pydantic_config__ = ConfigDict(extra="forbid")
 
-    frames_by_pose: Mapping[str, tuple[str, ...]]
-    tip_offsets_by_pose: Mapping[str, tuple[tuple[float, float], ...]]
-    muzzle_offsets_by_pose: Mapping[str, tuple[float, float]]
+
+    frames_by_pose: FrozenMap[tuple[str, ...]]
+    tip_offsets_by_pose: FrozenMap[tuple[tuple[float, float], ...]]
+    muzzle_offsets_by_pose: FrozenMap[tuple[float, float]]
     muzzle_height_steps: float
     speed_tiles_per_second: float
 
@@ -1783,6 +1811,8 @@ class MechanismProjectileArt:
 @dataclass(frozen=True, slots=True)
 class SaveHop:
     """An authored body reaction to one exact successful saving throw."""
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
 
     effect_id: str
     body_clip: str
@@ -1793,21 +1823,25 @@ class SaveHop:
 @dataclass(frozen=True, slots=True)
 class PropDepth:
     """A registered RG-packed horizontal-depth atlas, independent of gameplay."""
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
 
     asset_id: str
     cell: tuple[int, int]
-    rows_by_pose: Mapping[str, int]
+    rows_by_pose: FrozenMap[int]
     depth_range: tuple[float, float]
-    pixels_per_unit_by_pose: Mapping[str, float]
+    pixels_per_unit_by_pose: FrozenMap[float]
 
 
 @dataclass(frozen=True, slots=True)
 class PropAnimation:
     """Shared finite world poses and timing, independent of a renderer."""
+    __pydantic_config__ = ConfigDict(extra="forbid")
 
-    frames_by_pose: Mapping[str, tuple[str, ...]]
+
+    frames_by_pose: FrozenMap[tuple[str, ...]]
     fps: int
-    state_frames: Mapping[str, int]
+    state_frames: FrozenMap[int]
     default_frame: int = 0
     placement: Literal["cell", "area", "anchor"] = "cell"
     origin_offset: tuple[float, float] = (0, 0)
@@ -1815,7 +1849,7 @@ class PropAnimation:
     footprint_tiles: tuple[int, int] | None = None
     activation_frames: tuple[int, ...] = ()
     contact_frame: int | None = None
-    transition_frames: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
+    transition_frames: FrozenMap[tuple[int, ...]] = field(default_factory=dict)
     projectile: MechanismProjectileArt | None = None
     depth: Literal["ground", "world"] = "ground"
     successful_save_hop: SaveHop | None = None
@@ -2203,24 +2237,26 @@ class EntityLifecyclePhase(AuthoredRecord):
 
 @dataclass(frozen=True, slots=True)
 class AnimationData:
+    __pydantic_config__ = ConfigDict(extra="forbid")
+
     interruptions: InterruptionPresentation
-    devices: Mapping[str, DeviceArt]
-    device_wrecks: Mapping[str, DeviceArt]
-    drafts: Mapping[str, StudioSpellDraft]
-    attack_recipes: Mapping[str, AttackRecipe]
-    shove_recipes: Mapping[str, ShoveRecipe]
-    body_action_recipes: Mapping[str, BodyActionRecipe]
-    body_action_bindings: Mapping[str, BodyActionBinding]
-    condition_recipes: Mapping[str, ConditionRecipe]
-    condition_media: Mapping[str, ConditionLayerMedia]
-    projectile_assets: Mapping[str, AuthoredProjectileAsset]
-    projectile_storage: Mapping[str, ProjectileStorage]
+    devices: FrozenMap[DeviceArt]
+    device_wrecks: FrozenMap[DeviceArt]
+    drafts: FrozenMap[StudioSpellDraft]
+    attack_recipes: FrozenMap[AttackRecipe]
+    shove_recipes: FrozenMap[ShoveRecipe]
+    body_action_recipes: FrozenMap[BodyActionRecipe]
+    body_action_bindings: FrozenMap[BodyActionBinding]
+    condition_recipes: FrozenMap[ConditionRecipe]
+    condition_media: FrozenMap[ConditionLayerMedia]
+    projectile_assets: FrozenMap[AuthoredProjectileAsset]
+    projectile_storage: FrozenMap[ProjectileStorage]
     media_root: Path
     rig: RigTables
-    resources: Mapping[str, Path]
+    resources: FrozenMap[Path]
     root_rig: str
-    rigs: Mapping[str, BodyRig]
-    creature_rigs: Mapping[str, str]
+    rigs: FrozenMap[BodyRig]
+    creature_rigs: FrozenMap[str]
     damage_context: DamageContext
     healing_context: HealingContext
     death_save_context: DeathSaveContext
@@ -2231,29 +2267,29 @@ class AnimationData:
     movement_reaction_context: MovementReactionContext
     forced_movement_context: ForcedMovementContext
     forced_movement_profile: ForcedMovementProfile
-    shove_feedback: Mapping[str, LifecycleFeedback]
+    shove_feedback: FrozenMap[LifecycleFeedback]
     number_style: FloatingFeedbackStyle
     badge_style: FloatingFeedbackStyle
     dart_style: DartStyle
     bolt_style: BoltStyle
-    vfx_source_hues: Mapping[str, float]
+    vfx_source_hues: FrozenMap[float]
     # Unused action contexts remain exact source JSON until their family is ported.
     context_source_json: str
-    world_animations: Mapping[str, PropAnimation]
-    spatial_media: Mapping[str, SpatialMediaBinding]
-    action_media_assets: Mapping[str, ActionMediaAsset | ParticleMediaAsset]
-    body_release_media: Mapping[str, tuple[MovementMediaTrack, ...]]
-    relocation_actions: frozenset[str] = frozenset()
-    portals: Mapping[str, PortalArt | DoorwayArt] = field(default_factory=dict)
-    blood_responses: Mapping[str, BloodResponse | None] = field(default_factory=dict)
-    action_playback_rates: Mapping[str, float] = field(default_factory=dict)
-    action_deliveries: Mapping[str, str] = field(default_factory=dict)
+    world_animations: FrozenMap[PropAnimation]
+    spatial_media: FrozenMap[SpatialMediaBinding]
+    action_media_assets: FrozenMap[ActionMediaAsset | ParticleMediaAsset]
+    body_release_media: FrozenMap[tuple[MovementMediaTrack, ...]]
+    relocation_actions: Annotated[frozenset[str], PlainSerializer(sorted, return_type=list[str])] = frozenset()
+    portals: FrozenMap[PortalArt | DoorwayArt] = field(default_factory=dict)
+    blood_responses: FrozenMap[BloodResponse | None] = field(default_factory=dict)
+    action_playback_rates: FrozenMap[float] = field(default_factory=dict)
+    action_deliveries: FrozenMap[str] = field(default_factory=dict)
     movement_reference_speed_feet: float = 30
-    deposit_media: Mapping[str, DepositMediaBinding] = field(default_factory=dict)
-    concentration_media: Mapping[str, SpatialMediaBinding] = field(default_factory=dict)
-    construction_media: Mapping[str, ConstructionMediaBinding] = field(default_factory=dict)
-    body_materials: Mapping[SummonManifestation, BodyMaterial] = field(default_factory=dict)
-    entity_lifecycle_media: Mapping[str, EntityLifecyclePhase] = field(default_factory=dict)
-    item_attachments: Mapping[str, SpatialMediaBinding] = field(default_factory=dict)
-    action_materials: Mapping[str, StudioBodyMaterialTrack] = field(default_factory=dict)
-    action_intakes: Mapping[str, ObjectIntake] = field(default_factory=dict)
+    deposit_media: FrozenMap[DepositMediaBinding] = field(default_factory=dict)
+    concentration_media: FrozenMap[SpatialMediaBinding] = field(default_factory=dict)
+    construction_media: FrozenMap[ConstructionMediaBinding] = field(default_factory=dict)
+    body_materials: Annotated[Mapping[SummonManifestation, BodyMaterial], WrapSerializer(lambda value, handler: handler(dict(value)))] = field(default_factory=dict)
+    entity_lifecycle_media: FrozenMap[EntityLifecyclePhase] = field(default_factory=dict)
+    item_attachments: FrozenMap[SpatialMediaBinding] = field(default_factory=dict)
+    action_materials: FrozenMap[StudioBodyMaterialTrack] = field(default_factory=dict)
+    action_intakes: FrozenMap[ObjectIntake] = field(default_factory=dict)

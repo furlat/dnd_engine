@@ -14,7 +14,7 @@ from game.presentation import reduce_lineage as reduce_native_lineage
 from game.player_reduction import lineage_branch, reduce_lineage, stage_lineage
 from game.player_facts import SensoryFact, StepFact
 from game.replay import decode_sequence, encode_sequence
-from game.scene import scene_actors
+from game.scene_actors import scene_actors
 from tests.game.discovery_scenarios import discovery_history
 from tests.game.player_helpers import player_history
 

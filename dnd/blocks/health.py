@@ -691,7 +691,10 @@ class Health(BaseBlock):
         Returns:
             True if the entity cannot regain hit points.
         """
-        return self.healing_blocked
+        owner = BaseBlock.get(self.source_entity_uuid)
+        return self.healing_blocked or (owner is not None and any(
+            condition.blocks_healing and condition.contributions_active()
+            for condition in owner.active_conditions_by_uuid.values()))
 
     def heal(self, heal: int) -> None:
         """

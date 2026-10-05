@@ -7,11 +7,11 @@
       "july_reference": "4ebe523"
     },
     "governing_plan": {
-      "path": "DND_JULY_RECONSTRUCTION_CONTENT_RECOVERY_AUDIT_AND_MIGRATION_PLAN_2026-08-30.md",
+      "path": "agent_docs/DND_JULY_RECONSTRUCTION_CONTENT_RECOVERY_AUDIT_AND_MIGRATION_PLAN_2026-08-30.md",
       "sha256": "3e6a38a534331f0cdf92127fe5d9b765bf7e81a7d44baee08876bfd1613bec7b"
     },
     "implementation_plan": {
-      "path": "DND_CONTENT_RECOVERY_CR0_EVIDENCE_FREEZE_IMPLEMENTATION_PLAN_2026-08-30.md",
+      "path": "agent_docs/DND_CONTENT_RECOVERY_CR0_EVIDENCE_FREEZE_IMPLEMENTATION_PLAN_2026-08-30.md",
       "sha256": "55de34336d2e171fb158db5694cd2aed036c16719dbc0a3b10c920ef0b9b8fa5"
     },
     "precedence": [
@@ -61634,6 +61634,8 @@
     {
       "artifact_id": "current.icon_bindings",
       "disposition": "pinned_current_evidence",
+      "frozen_git_object": "998e3ce3ead17ec3b304008c9fbf8a8538c93668:content_data/ledgers/content_icon_bindings.json",
+      "frozen_line_endings": "crlf",
       "git_object_or_path": "content_data/ledgers/content_icon_bindings.json",
       "row_count": 876,
       "sha256": "1b2dfb4c26934ce539c6addf11bf7b9bfa77ccd9978ad551ccab762b3f925375",

@@ -1,26 +1,38 @@
 """Export retained evidence and sampled pixels' coordinates, without live rules."""
 
-from typing import Any
+from typing import Any, Mapping
+from uuid import UUID
 
 from pydantic import TypeAdapter
 
+from game.presentation_timing import (PresentationMilestone, presentation_milestones,
+    PresentationDependencies, presentation_dependencies)
 from game.animation import BodyTransition, CastTimeline, EquipmentTimeline
 from game.attack import AttackTimeline, BoundAttack
-from game.animation_types import RigLayer
+from game.animation_types import RigLayer, ItemAttachmentStart
 from game.action_media import ActionStripCue
 from game.body_action import BodyActionCue
 from game.body_hop import BodyHopCue
 from game.portal_animation import PortalTransferCue
-from game.choreography import BoundChoreography
-from game.condition_animation import ConditionTimeline
+from game.choreography import BoundChoreography, StateCommitEvidence, MotionStateProvenance
+from game.condition_animation import ConditionTimeline, ConditionResponseCue
 from game.damage import DamageCue
 from game.forced_movement import ForcedMovementCue, ShoveCue
 from game.motion import MotionLeg, MotionTimeline
-from game.playback_frame import PlaybackFrame
 from game.player_facts import PlayerLineage, PlayerState
-from game.world_animation import WorldTransitionSample
+from game.world_animation import WorldTransition
+from game.stationary_media import StationaryMediaCue
+from game.finite_material import BodyMaterialCue
+from game.residue_media import ResidueReveal
+from game.condition_media_lifetime import ConditionMediaLifetime
+from game.spatial_media_lifetime import SpatialMediaLifetime
+from game.construction_transitions import ConstructionMediaLifetime
+from game.concentration_media import ConcentrationMediaLifetime
+from game.deposit_media import DepositStart
 
 
+MILESTONES = TypeAdapter(tuple[PresentationMilestone, ...])
+DEPENDENCIES = TypeAdapter(tuple[PresentationDependencies, ...])
 STATE = TypeAdapter(PlayerState)
 LINEAGE = TypeAdapter(PlayerLineage)
 TIMELINE = TypeAdapter(AttackTimeline | CastTimeline)
@@ -36,7 +48,18 @@ BODY_ACTION = TypeAdapter(BodyActionCue)
 BODY_HOP = TypeAdapter(BodyHopCue)
 PORTAL = TypeAdapter(PortalTransferCue)
 ACTION_STRIP = TypeAdapter(ActionStripCue)
-WORLD_TRANSITIONS = TypeAdapter(tuple[WorldTransitionSample, ...])
+WORLD_CHANGES = TypeAdapter(tuple[WorldTransition, ...])
+STATE_COMMITS = TypeAdapter(tuple[StateCommitEvidence, ...])
+MOTION_PROVENANCE = TypeAdapter(tuple[MotionStateProvenance, ...])
+STATIONARY = TypeAdapter(StationaryMediaCue)
+FINITE_MATERIAL = TypeAdapter(BodyMaterialCue)
+CONDITION_RESPONSE = TypeAdapter(ConditionResponseCue)
+RESIDUE_REVEALS = TypeAdapter(tuple[ResidueReveal, ...])
+CONDITION_LIFETIMES = TypeAdapter(dict[UUID, ConditionMediaLifetime])
+SPATIAL_LIFETIMES = TypeAdapter(dict[UUID, SpatialMediaLifetime])
+CONSTRUCTION_LIFETIMES = TypeAdapter(dict[UUID, ConstructionMediaLifetime])
+CONCENTRATION_LIFETIMES = TypeAdapter(dict[UUID, ConcentrationMediaLifetime])
+ITEM_STARTS = TypeAdapter(dict[UUID, ItemAttachmentStart])
 
 
 def state_summary(state: PlayerState) -> dict[str, Any]:
@@ -72,9 +95,40 @@ def state_summary(state: PlayerState) -> dict[str, Any]:
     }
 
 
+def stationary_trace(cue: StationaryMediaCue) -> dict[str, Any]:
+    return {**STATIONARY.dump_python(cue, mode="json", exclude={"data"}, warnings="error"),
+            "end_ms": cue.end_ms}
+
+
 def group_trace(group: BoundChoreography) -> dict[str, Any]:
     return {
+        "trace_version": 2,
+        "milestones": MILESTONES.dump_python(presentation_milestones(group), mode="json", warnings="error"),
+        "dependencies": DEPENDENCIES.dump_python(presentation_dependencies(group), mode="json", warnings="error"),
         "root_uuid": str(group.root_uuid), "complete_ms": group.complete_ms,
+        "state_commits": STATE_COMMITS.dump_python(group.state_commits, mode="json", warnings="error"),
+        "world_changes": WORLD_CHANGES.dump_python(group.world_transitions, mode="json", warnings="error"),
+        "residue_reveals": residue_trace(group.residue_reveals),
+        "stationary_media": [stationary_trace(cue) for cue in group.stationary_media],
+        "contact_media": [stationary_trace(cue) for cue in group.contact_media],
+        "condition_responses": [{**CONDITION_RESPONSE.dump_python(cue, mode="json", warnings="error"),
+                                 "end_ms": cue.end_ms} for cue in group.condition_responses],
+        "turn_starts": [{"at_ms": at, "actor_uuid": str(actor)} for at, actor in group.turn_starts],
+        "reaction_media": [{"event_uuid": str(cue.event_uuid),
+            "incoming_event_uuid": str(cue.incoming_event_uuid), "succeeded": cue.succeeded,
+            "start_ms": cue.start_ms, "complete_ms": cue.complete_ms,
+            "source_point": cue.source_point, "recipe": cue.recipe.model_dump(mode="json")}
+            for cue in group.reaction_media],
+        "entity_lifecycle": [{"event_uuid": str(cue.event_uuid), "phase": cue.phase,
+            "actor_uuid": cue.actor.contact.actor_uuid, "start_ms": cue.start_ms,
+            "body_end_ms": cue.body_end_ms, "recipe": cue.recipe.model_dump(mode="json")}
+            for cue in group.entity_lifecycle],
+        "finite_materials": [FINITE_MATERIAL.dump_python(cue, mode="json", warnings="error")
+            for cue in group.finite_materials],
+        "spatial_responses": [{"owner_uuid": str(cue.owner_uuid),
+            "recipient_uuid": cue.recipient.actor_uuid, "contact_ms": cue.contact_ms,
+            "media": stationary_trace(cue.media), "recipe": cue.recipe.model_dump(mode="json")}
+            for cue in group.spatial_responses],
         "state_times_ms": [at for at, _ in group.states],
         "observations": [{"at_ms": at, "event_uuid": str(observation.event_uuid),
                           "actor_uuid": str(observation.actor.uuid)} for at, observation in group.observations],
@@ -99,7 +153,8 @@ def group_trace(group: BoundChoreography) -> dict[str, Any]:
             "__all__": {"body": {"data": True},
                         **{name: {"layers": {"__all__": {"media": True}}}
                            for name in ("before_appearance", "after_appearance")}}}),
-        "healing": [{"event_uuid": str(cue.event.uuid), "start_ms": cue.start_ms} for cue in group.healing],
+        "healing": [{"event_uuid": str(cue.event.uuid), "start_ms": cue.start_ms,
+                     "end_ms": cue.end_ms} for cue in group.healing],
         "lifecycle": [{"event_uuid": str(cue.event.uuid), "start_ms": cue.start_ms,
                        "death_end_ms": cue.death_end_ms, "state_owned": cue.state_owned,
                        "body_end_ms": cue.body_end_ms,
@@ -134,10 +189,22 @@ def timeline_trace(timeline: AttackTimeline | CastTimeline) -> dict[str, Any]:
 
 def motion_trace(motion: MotionTimeline) -> dict[str, Any]:
     return {
+        "trace_version": 2,
+        "milestones": MILESTONES.dump_python(presentation_milestones(motion=motion), mode="json", warnings="error"),
+        "dependencies": DEPENDENCIES.dump_python(presentation_dependencies(motion=motion), mode="json", warnings="error"),
         "actor_uuid": motion.actor.actor_uuid, "clip": motion.clip,
+        "state_provenance": MOTION_PROVENANCE.dump_python(motion.state_provenance, mode="json", warnings="error"),
         "playback_speed": motion.playback_speed, "body_loops": motion.body_loops,
         "complete_ms": motion.complete_ms,
         "legs": LEGS.dump_python(motion.legs, mode="json", warnings="error"),
+        "arc_height_px": motion.arc_height_px, "settled_lift_px": motion.settled_lift_px,
+        "animation_id": motion.animation_id, "body_frame_keys": motion.body_frame_keys,
+        "body_context": motion.body_context.model_dump(mode="json") if motion.body_context is not None else None,
+        "recovery_body": motion.recovery_body.model_dump(mode="json") if motion.recovery_body is not None else None,
+        "recovery_start_ms": motion.recovery_start_ms,
+        "world_changes": WORLD_CHANGES.dump_python(motion.world_transitions, mode="json", warnings="error"),
+        "residue_reveals": residue_trace(motion.residue_reveals),
+        "contact_media": [stationary_trace(cue) for cue in motion.contact_media],
         "states": [{"at_ms": at, "cursor": state.reducer_cursor,
                     "actors": [str(identity) for identity in state.actors]}
                    for at, state in motion.states],
@@ -147,26 +214,29 @@ def motion_trace(motion: MotionTimeline) -> dict[str, Any]:
     }
 
 
-def frame_trace(frame: PlaybackFrame) -> dict[str, Any]:
+def residue_trace(reveals: tuple[ResidueReveal, ...]) -> list[dict[str, Any]]:
+    rows = RESIDUE_REVEALS.dump_python(reveals, mode="json", warnings="error",
+        exclude={"__all__": {"asset"}})
+    return [{**row, "asset_id": reveal.asset.assetId} for row, reveal in zip(rows, reveals)]
+
+
+def retained_trace(*, conditions: Mapping[UUID, ConditionMediaLifetime],
+                   spatial: Mapping[UUID, SpatialMediaLifetime],
+                   construction: Mapping[UUID, ConstructionMediaLifetime],
+                   concentration: Mapping[UUID, ConcentrationMediaLifetime],
+                   items: Mapping[UUID, ItemAttachmentStart],
+                   deposits: Mapping[UUID, DepositStart]) -> dict[str, Any]:
+    """Snapshot existing owner clocks; never re-register or infer membership."""
+    appearance = {"layers": {"__all__": {"media"}},
+                  "live_copies": {"layers": {"__all__": {1: {"__all__": {"media"}}}}}}
+    pose = {"actor": {"condition": appearance}, "appearance_override": appearance}
     return {
-        "world_transitions": WORLD_TRANSITIONS.dump_python(frame.world_transitions, mode="json"),
-        "residue_reveals": [{"position": row.reveal.position,
-            "condition_uuid": str(row.reveal.after.condition_uuid), "elapsed_ms": row.elapsed_ms,
-            "start_ms": row.reveal.start_ms, "end_ms": row.reveal.end_ms,
-            "before_amount": row.reveal.before.amount if row.reveal.before else 0,
-            "after_amount": row.reveal.after.amount, "pattern": row.reveal.pattern,
-            "asset_id": row.reveal.asset.assetId} for row in frame.residue_reveals],
-        "state": state_summary(frame.displayed), "complete": frame.complete,
-        "contacts": [{"actor_uuid": row.contact.actor_uuid, "grid": row.contact.grid,
-                      "elevation_steps": row.contact.elevation_steps,
-                      "body_lift_px": row.contact.body_lift_px,
-                      "rig": row.contact.rig_id, "facing": frame.facings.get(row.contact.actor_uuid),
-                      "shown_hp": frame.shown_hp.get(row.contact.actor_uuid, row.contact.hp)}
-                     for row in frame.actors],
+        "conditions": CONDITION_LIFETIMES.dump_python(dict(conditions), mode="json", warnings="error",
+            exclude={"__all__": {"absence_pose": pose, "returned_pose": pose}}),
+        "spatial": SPATIAL_LIFETIMES.dump_python(dict(spatial), mode="json", warnings="error"),
+        "construction": CONSTRUCTION_LIFETIMES.dump_python(dict(construction), mode="json", warnings="error"),
+        "concentration": CONCENTRATION_LIFETIMES.dump_python(dict(concentration), mode="json", warnings="error"),
+        "items": ITEM_STARTS.dump_python(dict(items), mode="json", warnings="error"),
+        "deposits": {str(identity): TypeAdapter(DepositStart).dump_python(start, mode="json", warnings="error")
+            for identity, start in deposits.items()},
     }
-
-
-def draw_trace(frame: PlaybackFrame) -> list[dict[str, Any]]:
-    return [{"depth": command.key, "screen_xy": command.destination, "size": command.surface.get_size(),
-             "blend": command.blend, "evidence": command.evidence}
-            for command in frame.commands]

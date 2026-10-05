@@ -1,0 +1,775 @@
+{
+  "files": 348,
+  "counts": {
+    "action": {
+      "logged": 132
+    },
+    "area_reach": {
+      "unlogged": 5
+    },
+    "attack": {
+      "logged": 63,
+      "unlogged": 2
+    },
+    "condition": {
+      "logged": 909,
+      "unlogged": 122
+    },
+    "damage:applied": {
+      "unlogged": 312
+    },
+    "damage:taken": {
+      "logged": 312
+    },
+    "equipment": {
+      "unlogged": 83
+    },
+    "faction": {
+      "unlogged": 2
+    },
+    "forced_movement": {
+      "logged": 10
+    },
+    "heal": {
+      "logged": 53
+    },
+    "item_charge": {
+      "unlogged": 1
+    },
+    "item_effect": {
+      "logged": 6
+    },
+    "life": {
+      "unlogged": 3
+    },
+    "movement": {
+      "logged": 340
+    },
+    "none": {
+      "unlogged": 7247,
+      "logged": 1579
+    },
+    "object_destroyed": {
+      "unlogged": 30
+    },
+    "portal_transfer": {
+      "unlogged": 3
+    },
+    "saving_throw": {
+      "logged": 278
+    },
+    "sensory": {
+      "unlogged": 1854
+    },
+    "spatial": {
+      "unlogged": 1302
+    },
+    "spatial_effect_state": {
+      "logged": 168
+    },
+    "spell": {
+      "logged": 661,
+      "unlogged": 5
+    },
+    "step": {
+      "logged": 605
+    },
+    "temporary_hit_points": {
+      "unlogged": 4
+    },
+    "turn": {
+      "logged": 1371,
+      "unlogged": 526
+    }
+  },
+  "first_unlogged_examples": {
+    "sensory": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/sensory-see-invisibility/input.json",
+      "event_uuid": "d647b854-4761-4582-a5f3-09e96543eb81",
+      "fact": {
+        "kind": "sensory",
+        "observed_changes": [
+          {
+            "source_event_uuid": "246f0e67-e886-4194-a0e8-117a26bad485",
+            "source_index": 28,
+            "resolution_ref": {
+              "kind": "event",
+              "lineage_uuid": "bfdd57fc-417d-4143-8378-fce63a4f9f9d"
+            },
+            "field": "senses",
+            "owner_uuid": "c2829ec5-a25a-41cb-a4a3-4b7b43487ab8"
+          },
+          {
+            "source_event_uuid": "246f0e67-e886-4194-a0e8-117a26bad485",
+            "source_index": 28,
+            "resolution_ref": {
+              "kind": "event",
+              "lineage_uuid": "bfdd57fc-417d-4143-8378-fce63a4f9f9d"
+            },
+            "field": "paths",
+            "owner_uuid": "c2829ec5-a25a-41cb-a4a3-4b7b43487ab8"
+          }
+        ],
+        "observer_uuid": "c2829ec5-a25a-41cb-a4a3-4b7b43487ab8",
+        "initial": false,
+        "observer_position": [
+          3,
+          6
+        ],
+        "observer_position_changed": false,
+        "effective_light_levels_changed": {},
+        "cause_event_uuid": "246f0e67-e886-4194-a0e8-117a26bad485",
+        "visible_cells_added": [],
+        "visible_cells_removed": [],
+        "seen_cells_added": [],
+        "entity_contacts_changed": {},
+        "entity_contacts_removed": [],
+        "object_contacts_changed": {},
+        "object_contacts_removed": [],
+        "sense_modes_changed": true,
+        "sense_modes": [
+          {
+            "sense_type": "See Invisible",
+            "range_feet": 0
+          }
+        ],
+        "passive_perception_changed": false,
+        "passive_perception": null,
+        "visual_access_changed": false,
+        "visual_access": null,
+        "paths_dirty": true,
+        "hazardous_cells_changed": {},
+        "spatial_effects_changed": {},
+        "spatial_effects_removed": []
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "spatial": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/sensory-see-invisibility/input.json",
+      "event_uuid": "a2b17860-940a-48d3-9a27-7a03025e856f",
+      "fact": {
+        "kind": "spatial",
+        "change_type": "perceivability_changed",
+        "entity_uuid": "c2829ec5-a25a-41cb-a4a3-4b7b43487ab8",
+        "position": [
+          3,
+          6
+        ],
+        "commit_event_uuid": null,
+        "previous_occupancy_layer": null,
+        "occupancy_layer": null,
+        "terminal_departure": false,
+        "terminal_cause": null,
+        "creation": null
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "none": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/sensory-see-invisibility/input.json",
+      "event_uuid": "6748e7b4-8453-4b04-8fa3-c8946a0fba21",
+      "fact": null,
+      "phase": "completion",
+      "canceled": false
+    },
+    "turn": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/sensory-see-invisibility/input.json",
+      "event_uuid": "6b27aee1-a3b2-4dc4-8ebe-2c034fbbacf2",
+      "fact": {
+        "kind": "turn",
+        "event_type": "round_end",
+        "entity_uuid": null,
+        "round_number": 1
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "damage:applied": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/batch-shocking-adjacent-axis--perceiver/input.json",
+      "event_uuid": "e353eda8-db52-471a-9f24-70d4c7f15af6",
+      "fact": {
+        "kind": "damage",
+        "stage": "applied",
+        "source_entity_uuid": "c3ce792c-e99e-47d9-b6fa-b265470cd6a1",
+        "target_entity_uuid": "0b4290ed-1d64-461d-ad4b-fb372d74bfdc",
+        "applied_damage": 4,
+        "resulting_normal_hp": 56,
+        "resulting_temporary_hp": 0,
+        "damage_type": "Lightning",
+        "body_release": {
+          "release_id": "body.blood",
+          "position": [
+            3,
+            7
+          ],
+          "occupancy_layer": "ground",
+          "deposited_position": [
+            3,
+            7
+          ],
+          "pattern": "blunt",
+          "critical_hit": false,
+          "regions": [
+            {
+              "ellipse": {
+                "center": [
+                  3.0,
+                  7.0
+                ],
+                "radius_x": 1.5,
+                "radius_y": 1.5,
+                "angle": 0.0
+              },
+              "positions": [
+                [
+                  2,
+                  6
+                ],
+                [
+                  2,
+                  7
+                ],
+                [
+                  2,
+                  8
+                ],
+                [
+                  3,
+                  6
+                ],
+                [
+                  3,
+                  7
+                ],
+                [
+                  3,
+                  8
+                ],
+                [
+                  4,
+                  6
+                ],
+                [
+                  4,
+                  7
+                ],
+                [
+                  4,
+                  8
+                ]
+              ],
+              "elevation_steps": 0
+            }
+          ],
+          "primary_damage_type": "Lightning",
+          "secondary_damage_type": null
+        },
+        "effect_id": null,
+        "spatial_source": null,
+        "source_condition_uuid": null
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "condition": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/gap-thorns-ring--recipient/input.json",
+      "event_uuid": "7870c91b-775b-4124-85fc-9ca6f8c14d3a",
+      "fact": {
+        "kind": "condition",
+        "target_entity_uuid": "c9f2aa41-b892-4d44-ba21-e43ca0ad57b5",
+        "event_type": "condition_state_changed",
+        "condition": {
+          "event_uuid": "7870c91b-775b-4124-85fc-9ca6f8c14d3a",
+          "condition_uuid": "66d69008-215c-47d8-ac3e-24a93b736e95",
+          "name": "Concentrating",
+          "category": "status",
+          "behavior_id": "condition.concentrating",
+          "resulting_max_hp": 360,
+          "resulting_ac": 5,
+          "state": {
+            "condition_uuid": "66d69008-215c-47d8-ac3e-24a93b736e95",
+            "name": "Concentrating",
+            "category": "status",
+            "semantic_key": "condition.concentrating",
+            "behavior_id": "condition.concentrating",
+            "tags": [
+              "concentration"
+            ],
+            "removal_triggers": [],
+            "agency_denial": "none",
+            "outcome_protections": [],
+            "applied_source_event_cursor": 94,
+            "suppression_provider_uuids": [],
+            "duplicate_count": null,
+            "size_change": null,
+            "energy_type": null,
+            "metamagic_mode": null,
+            "affected_item_uuid": null,
+            "enhanced_ability": null,
+            "concentration_slots": [
+              {
+                "slot_uuid": "c7294e16-f113-4220-aef8-62f7e57b0813",
+                "cast_lineage_uuid": "c8e000a1-5b3f-40b7-bfe8-7b8be0c0f1bb",
+                "spell_id": "spell.wall_of_thorns",
+                "spell_name": "Wall of Thorns"
+              }
+            ]
+          },
+          "resulting_stats": {
+            "normal_hp": 360,
+            "maximum_hp": 360,
+            "temporary_hp": 0,
+            "temporary_hp_grant": null,
+            "armor_class": 5,
+            "healing_blocked": false,
+            "damage_affinities": [],
+            "resolved_size": "Medium",
+            "native_plane_id": "material",
+            "current_plane_id": "material",
+            "spatial_disposition": "present"
+          },
+          "resulting_tile": null,
+          "resulting_item": null,
+          "consumed": false
+        },
+        "consumed": false
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "object_destroyed": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/construction-force-panels-retirement/input.json",
+      "event_uuid": "16e3bf3c-2588-41da-aca2-9e81f4235566",
+      "fact": {
+        "kind": "object_destroyed",
+        "object_uuid": "5a1c881e-9dd5-4166-8b4a-82ad4dc57136",
+        "replacement_uuid": null,
+        "placement": {
+          "object_uuid": "5a1c881e-9dd5-4166-8b4a-82ad4dc57136",
+          "tile_uuid": "d749049c-5bf8-4cd6-b654-1959c1bd82c9",
+          "position": [
+            7,
+            7
+          ],
+          "kind": "center",
+          "occupies_bands": false,
+          "boundary_direction": null,
+          "base_height_steps": 0,
+          "top_height_steps": 2,
+          "orientation": null,
+          "covered_supports": [
+            {
+              "position": [
+                7,
+                7
+              ],
+              "tile_uuid": "d749049c-5bf8-4cd6-b654-1959c1bd82c9"
+            },
+            {
+              "position": [
+                8,
+                7
+              ],
+              "tile_uuid": "d05674e6-fc38-4e27-99da-a857f128f0ef"
+            },
+            {
+              "position": [
+                9,
+                7
+              ],
+              "tile_uuid": "608fae2f-010b-421c-8285-08883f9b3910"
+            }
+          ],
+          "removed_bands": []
+        },
+        "item_id": "spell_construction.force.section",
+        "remnant_state": null,
+        "destruction_outcome": null,
+        "remains_disposition": "intact",
+        "previous_item": null,
+        "affected_volume": null,
+        "resulting_placement": null
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "life": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/power-word-kill-applied/input.json",
+      "event_uuid": "c7fa1e0b-7179-4f56-9a78-ed2208377c4d",
+      "fact": {
+        "kind": "life",
+        "entity_uuid": "d8caa7f3-83d3-4424-8f3b-9a3fae3eaec8",
+        "previous_state": "alive",
+        "new_state": "dead",
+        "reason": "instant_death",
+        "normal_hit_points": 0
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "equipment": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/summoning-animals-wolf/input.json",
+      "event_uuid": "3483b134-c43a-4a58-86ca-ce652c5fe145",
+      "fact": {
+        "kind": "equipment",
+        "source_entity_uuid": "20fab500-f5b7-40b6-a6d4-dcc2bbabd999",
+        "visual_loadout": {
+          "active_weapon_set": "none",
+          "layers": [
+            {
+              "slot": "MELEE_MAIN",
+              "item_uuid": "f9b28534-142d-4440-9113-c871cea6f4db",
+              "item_id": "weapon.creature.wolf_bite",
+              "item_kind": "weapon",
+              "visual_item_name": "Bite",
+              "visual_variant_id": null,
+              "equipped_visual_policy": "visible",
+              "item_effects": [],
+              "suppression_provider_uuids": []
+            },
+            {
+              "slot": "Body",
+              "item_uuid": "2127087a-d9fa-4b9a-8e66-adbbebf6d10d",
+              "item_id": "armor.creature.wolf_natural",
+              "item_kind": "armor",
+              "visual_item_name": "Natural Armor",
+              "visual_variant_id": null,
+              "equipped_visual_policy": "visible",
+              "item_effects": [],
+              "suppression_provider_uuids": []
+            }
+          ]
+        },
+        "armor_class": 13,
+        "controlled_items": null
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "spell": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/globe-fireball-edge--target/input.json",
+      "event_uuid": "efe123ab-a171-4420-a32b-f10ea43d10e6",
+      "fact": {
+        "kind": "spell",
+        "source_entity_uuid": "f0882d38-ba63-4a1b-9e98-8f16dfb2bfba",
+        "target_entity_uuid": "2025d0ee-de6d-4456-89b8-e31eca7b934e",
+        "behavior_id": "spell.fireball",
+        "name": "Fireball",
+        "source_position": [
+          1,
+          7
+        ],
+        "declared_target_entity_uuids": [
+          "2025d0ee-de6d-4456-89b8-e31eca7b934e",
+          "4ede4302-e350-4e7a-aee0-77db03d18f11",
+          "8246dd5b-45a5-4c54-bf1a-7c617a227926"
+        ],
+        "application": {
+          "lineage_uuid": "ab6e3cad-6f8a-4d40-a1e6-852b085f7b96",
+          "application_id": "70ae14b1-432f-54c2-b67f-2b0191204ae0",
+          "index": 0
+        },
+        "propagation": null,
+        "attack_outcome": null,
+        "cast_origin": "actor",
+        "source_item_uuid": null,
+        "effect_id": null,
+        "aoe_position": [
+          10,
+          7
+        ],
+        "area_geometry": {
+          "shape": "sphere",
+          "center": [
+            10,
+            7
+          ],
+          "radius_feet": 20
+        },
+        "resolved_area_positions": null,
+        "suppressions": [
+          {
+            "antimagic": false,
+            "provider_uuid": "eefeed31-733e-43f8-9d8a-3738a262a28f",
+            "positions": [
+              [
+                7,
+                7
+              ]
+            ],
+            "provider_content_ref": null,
+            "area_geometry": null,
+            "anchor_elevation_steps": null
+          }
+        ],
+        "area_propagation": "connected",
+        "target_kind": "creature",
+        "target_position": null,
+        "target_base_height_steps": null
+      },
+      "phase": "cancel",
+      "canceled": true
+    },
+    "area_reach": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/globe-fireball-edge--target/input.json",
+      "event_uuid": "79db41a9-4a0c-4df4-9bfa-89c9526e3c78",
+      "fact": {
+        "kind": "area_reach",
+        "stage_index": 0,
+        "newly_reached_positions": [
+          [
+            8,
+            4
+          ],
+          [
+            8,
+            5
+          ],
+          [
+            8,
+            9
+          ],
+          [
+            8,
+            10
+          ],
+          [
+            9,
+            4
+          ],
+          [
+            9,
+            5
+          ],
+          [
+            9,
+            6
+          ],
+          [
+            9,
+            8
+          ],
+          [
+            9,
+            9
+          ],
+          [
+            9,
+            10
+          ],
+          [
+            10,
+            3
+          ],
+          [
+            10,
+            4
+          ],
+          [
+            10,
+            5
+          ],
+          [
+            10,
+            6
+          ],
+          [
+            10,
+            7
+          ],
+          [
+            10,
+            8
+          ],
+          [
+            10,
+            9
+          ],
+          [
+            10,
+            10
+          ],
+          [
+            10,
+            11
+          ],
+          [
+            11,
+            4
+          ],
+          [
+            11,
+            5
+          ],
+          [
+            11,
+            6
+          ],
+          [
+            11,
+            7
+          ],
+          [
+            11,
+            8
+          ],
+          [
+            11,
+            9
+          ],
+          [
+            11,
+            10
+          ],
+          [
+            12,
+            4
+          ],
+          [
+            12,
+            5
+          ],
+          [
+            12,
+            6
+          ],
+          [
+            12,
+            7
+          ],
+          [
+            12,
+            8
+          ],
+          [
+            12,
+            9
+          ],
+          [
+            12,
+            10
+          ],
+          [
+            13,
+            5
+          ],
+          [
+            13,
+            6
+          ],
+          [
+            13,
+            7
+          ],
+          [
+            13,
+            8
+          ],
+          [
+            13,
+            9
+          ],
+          [
+            14,
+            7
+          ]
+        ],
+        "previous_reach_lineage_uuid": null,
+        "prerequisite_destruction_lineages": []
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "portal_transfer": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/dimension-door--recipient/input.json",
+      "event_uuid": "06f34365-aabf-47f5-8c64-c457b674f0bb",
+      "fact": {
+        "kind": "portal_transfer",
+        "target_entity_uuid": "2e66c2bb-7b3a-4e8b-9faa-84438763a7db",
+        "portal_uuid": null,
+        "start_position": [
+          3,
+          5
+        ],
+        "end_position": [
+          9,
+          7
+        ],
+        "committed": true,
+        "portal_content_id": "spell.dimension_door"
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "item_charge": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/queue-holy-feast--recipient/input.json",
+      "event_uuid": "c125300a-4f95-4913-b700-d9425a99e7c9",
+      "fact": {
+        "kind": "item_charge",
+        "source_entity_uuid": "4c9fb750-e487-4498-bfdb-524347c52c1c",
+        "item_uuid": "7765ec07-6af0-4cf0-8393-f0be2cdb63d9",
+        "charges_after": 12,
+        "stack_count_after": 1,
+        "item_destroyed": false,
+        "resource_change": "consume"
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "faction": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/summoning-fey-jaguar--opponent/input.json",
+      "event_uuid": "3e0edaf2-a57c-4460-94ed-b2117b5fd1a8",
+      "fact": {
+        "kind": "faction",
+        "entity_uuid": "60354cb0-008a-431a-840f-368127c925e9",
+        "faction_after": "uncontrolled_summon:60354cb0-008a-431a-840f-368127c925e9",
+        "control_lost": true
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "temporary_hit_points": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/pending-false-life-depletion/input.json",
+      "event_uuid": "c4def932-a3e8-4acf-93a1-928c37659c93",
+      "fact": {
+        "kind": "temporary_hit_points",
+        "entity_uuid": "b74248b5-e6ce-4f11-a73e-21f19b20d98a",
+        "resulting_temporary_hp": 6,
+        "grant": {
+          "instance_uuid": "5b6975c4-644d-4366-99a1-caf9168159d9",
+          "source_id": "spell.false_life"
+        }
+      },
+      "phase": "completion",
+      "canceled": false
+    },
+    "attack": {
+      "path": ".runtime/spell-casting-20261004/persistent/acceptance/runs/20261004-all-spell-casts/cases/persistent-sanctuary/input.json",
+      "event_uuid": "5fc6e9a0-e117-4912-a320-dba49d212a2c",
+      "fact": {
+        "kind": "attack",
+        "source_entity_uuid": "ab293b45-e606-462a-b7f1-4c43683034e3",
+        "target_entity_uuid": "d4ca5da6-41e7-48ea-9246-3bf60ae105eb",
+        "behavior_id": "action.attack",
+        "name": "Attack_MELEE_MAIN",
+        "weapon_slot": "MELEE_MAIN",
+        "attack_outcome": null,
+        "damage_types": [
+          "Piercing"
+        ],
+        "source_item_id": "weapon.shortsword",
+        "source_item_uuid": "063deec2-8f0b-4f13-8f8a-8e1e0b30becf",
+        "item_effects": [],
+        "intercepted_by_condition_uuid": null,
+        "projectile_deflection_position": null,
+        "target_kind": "creature",
+        "target_position": null,
+        "target_base_height_steps": null,
+        "attack_source_kind": "equipped"
+      },
+      "phase": "cancel",
+      "canceled": true
+    }
+  }
+}

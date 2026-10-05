@@ -25,7 +25,8 @@ from game.replay import CapturedHistory
 from game.player_reduction import reduce_lineage as reduce_player_lineage
 from tests.game.player_helpers import player_history
 from game.projection import Camera
-from game.scene import load_scene_media, scene_actors
+from game.scene import load_scene_media
+from game.scene_actors import scene_actors
 from tests.game.equipment_scenarios import equipment_sequence_history
 
 

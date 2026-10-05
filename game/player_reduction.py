@@ -10,7 +10,7 @@ from dnd.core.effect_types import ResolutionRef
 from uuid import UUID
 
 from dnd.core.condition_types import ConditionCategory
-from dnd.core.events import EventType, SpatialChangeType
+from dnd.types.event_facts import EventType, SpatialChangeType
 from dnd.types.senses import reduce_senses_snapshot
 from game.player_facts import (
     AttackFact, ConditionChangeFact, DamageRequestFact, DamageResultFact, ObjectDamageFact, EquipmentFact, HealFact, ItemChargeFact, LifeFact,

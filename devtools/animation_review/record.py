@@ -1,6 +1,7 @@
 """Record finite retained sequences with the game's actual frame compositor."""
 
 import json
+from game.presentation_retained import RetainedPresentation, retain_presentation
 from dataclasses import replace
 from math import ceil
 from pathlib import Path
@@ -18,30 +19,26 @@ from game.animation_draw import LoadedBodyRows, actor_screen_bounds
 from game.animation_types import AnimationData, Facing8
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
-from game.choreography import BoundChoreography, bind_choreography
+from game.choreography import BoundChoreography, bind_choreography, bind_motion
 from game.choreography_draw import ChoreographyMedia, load_choreography_media, load_motion_media
 from game.combat import BoundCast, actor_contact
 from game.feedback import FeedbackTrack, choreography_feedback, motion_feedback
-from game.condition_media_lifetime import register_condition_lifetimes
-from game.construction_media_lifetime import register_construction_lifetimes
-from game.spatial_media_lifetime import register_spatial_lifetimes
-from game.item_attachment_lifetime import register_item_attachment_starts
-from game.concentration_media import register_concentration_lifetimes
-from game.deposit_media import register_deposit_starts
 from game.motion_media import MotionMediaCue, bind_motion_media, choreography_motion_media
-from game.motion import MotionTimeline, bind_motion
+from game.motion import MotionTimeline
 from game.playback_frame import PlaybackFrame, sample_playback_frame
 from game.body_history import retain_body_head
 from game.player_facts import ActionFact, AttackFact, ForcedMovementFact, MovementFact, PlayerState, PortalTransferFact, SpellFact, StepFact
 from game.player_reduction import reduce_lineage, stage_lineage
-from game.presentation_group import presentation_groups, reduce_presentation_group, stage_presentation_group
+from game.presentation_group import presentation_groups, reduce_presentation_group, stage_presentation_group, bind_presentation_group
 from game.presentation_coverage import lineage_coverage, missing_observed_bindings, presentation_inventory
 from game.projection import Camera, TILE_WIDTH, ZOOM_LEVELS, project_screen
-from game.scene import draw_actor_labels, load_scene_media, scene_actors
+from game.scene import draw_actor_labels, load_scene_media
+from game.scene_actors import scene_actors
 from game.visual_position import VisualPosition
 from devtools.animation_review.cases import ReviewCase, ReviewSequence
 from devtools.animation_review.framing import cast_media_bounds, displacement_media_bounds, projected_bounds
-from devtools.animation_review.trace import LINEAGE, STATE, draw_trace, frame_trace, group_trace, motion_trace, state_summary
+from devtools.animation_review.trace import LINEAGE, STATE, group_trace, motion_trace, state_summary, retained_trace
+from devtools.animation_review.frame_trace import draw_trace, frame_trace
 
 
 def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
@@ -254,12 +251,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
     feedback: list[FeedbackTrack] = []
     motion_media: list[MotionMediaCue] = []
     presentation_ms = 0.0
-    condition_lifetimes = register_condition_lifetimes({}, before, data, absolute_start_ms=0, facings=facings)
-    spatial_lifetimes = register_spatial_lifetimes({}, before, data, absolute_start_ms=0)
-    item_starts = register_item_attachment_starts({}, before, data, absolute_start_ms=0)
-    construction_lifetimes = register_construction_lifetimes({}, before, data, absolute_start_ms=0)
-    concentration_lifetimes = register_concentration_lifetimes({}, before, data, absolute_start_ms=0)
-    deposit_starts = register_deposit_starts({}, before, data, absolute_start_ms=0)
+    presentation_lifetimes = retain_presentation(RetainedPresentation(), before, data, absolute_start_ms=0, facings=facings)
     body_history = retain_body_head((), before, None, start_ms=0, facings=facings, positions=positions)
     frame_index = 0
     interval = 1000 / fps
@@ -292,8 +284,8 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     before, after, data, elapsed_ms, presentation_ms, camera, facings,
                     body_media, number_font, badge_font, choreography=choreography,
                     choreography_media=choreography_media, motion=motion, reaction_media=reaction_media,
-                    feedback=feedback, condition_lifetimes=condition_lifetimes,
-                    spatial_lifetimes=spatial_lifetimes, item_starts=item_starts, construction_lifetimes=construction_lifetimes, concentration_lifetimes=concentration_lifetimes, deposit_starts=deposit_starts,
+                    feedback=feedback, condition_lifetimes=presentation_lifetimes.conditions,
+                    spatial_lifetimes=presentation_lifetimes.spatial, item_starts=presentation_lifetimes.items, construction_lifetimes=presentation_lifetimes.construction, concentration_lifetimes=presentation_lifetimes.concentration, deposit_starts=presentation_lifetimes.deposits,
                     positions=positions, feedback_viewport=feedback_viewport, motion_media=motion_media, body_history=body_history,
                 )
                 samples.append(sample)
@@ -301,7 +293,7 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                                       for bounds in actor_screen_bounds(sample.commands).values())
                 draw_frame(view, sample.displayed, catalog, cache, camera, presentation_ms / 1000,
                            show_grid=False, show_debug=False, mouse_position=None, extra_commands=sample.commands,
-                           animation_data=data, item_starts=item_starts,
+                           animation_data=data, item_starts=presentation_lifetimes.items,
                            world_transitions=sample.world_transitions, residue_reveals=sample.residue_reveals, deposited_materials=sample.deposited_materials)
                 draw_actor_labels(view, cache.debug_font, sample.actors, sample.displayed, camera,
                                   shown_hp=sample.shown_hp, active_uuid=None,
@@ -371,10 +363,11 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                             "family": family, "identity": identity})
                 contacts = {actor.contact.actor_uuid: actor.contact
                             for actor in scene_actors(before, data, facings, positions)}
-                activated_conditions = frozenset(owner for owner, lifetime in condition_lifetimes.items()
+                activated_conditions = frozenset(owner for owner, lifetime in presentation_lifetimes.conditions.items()
                     if lifetime.activated_ms is not None and lifetime.activated_ms <= presentation_ms)
-                motion = bind_motion(before, lineage, data, contacts=contacts,
-                                     activated_conditions=activated_conditions)
+                bound = bind_presentation_group(before, presentation, data, facings=facings,
+                    contacts=contacts, activated_conditions=activated_conditions)
+                motion = bound if isinstance(bound, MotionTimeline) else None
                 if isinstance(lineage.root.fact, MovementFact) and any(
                     isinstance(event.fact, AttackFact) or isinstance(event.fact, StepFact) and event.fact.committed
                     for event in lineage.events
@@ -383,23 +376,11 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                           "A committed movement/reaction must execute its movement choreography.")
                     if motion is None:
                         gaps.append(f"{lineage.root.uuid}: Movement reaction choreography is not bound")
-                group = None if motion is not None else bind_choreography(before, lineage, data,
-                    facings=facings, contacts=contacts, activated_conditions=activated_conditions,
-                    reactions=presentation.reactions)
+                group = bound if isinstance(bound, BoundChoreography) else None
                 group_media = load_choreography_media(group, body_rows=body_rows) if group is not None else None
                 reaction_media = load_motion_media(motion, data, body_rows=body_rows) if motion is not None else {}
-                condition_lifetimes = register_condition_lifetimes(condition_lifetimes, before, data,
-                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion, facings=facings)
-                spatial_lifetimes = register_spatial_lifetimes(spatial_lifetimes, before, data,
-                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
-                item_starts = register_item_attachment_starts(item_starts, before, data,
-                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
-                construction_lifetimes = register_construction_lifetimes(construction_lifetimes, before, data,
-                    absolute_start_ms=presentation_ms, choreography=group, motion=motion)
-                concentration_lifetimes = register_concentration_lifetimes(concentration_lifetimes, before, data,
-                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
-                deposit_starts = register_deposit_starts(deposit_starts, before, data,
-                    absolute_start_ms=presentation_ms, lineage=lineage, choreography=group, motion=motion)
+                presentation_lifetimes = retain_presentation(presentation_lifetimes, before, data, absolute_start_ms=presentation_ms,
+                    lineage=lineage, choreography=group, motion=motion, facings=facings)
                 if motion is not None:
                     motion_media.extend(bind_motion_media(motion, data, presentation_ms))
                 elif group is not None:
@@ -427,6 +408,9 @@ def record_case(case: ReviewCase, directory: Path, trace: dict[str, Any], *,
                     "presentation_start_ms": presentation_ms, "duration_ms": duration,
                     "before": state_summary(before), "after": state_summary(after),
                     "composition": composition,
+                    "retained": retained_trace(conditions=presentation_lifetimes.conditions, spatial=presentation_lifetimes.spatial,
+                        construction=presentation_lifetimes.construction, concentration=presentation_lifetimes.concentration,
+                        items=presentation_lifetimes.items, deposits=presentation_lifetimes.deposits),
                 })
                 body_history = retain_body_head(body_history, before, after, start_ms=presentation_ms,
                     facings=facings, positions=positions, choreography=group, motion=motion)
