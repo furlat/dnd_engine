@@ -1,5 +1,7 @@
 """Condition filters preserve authored layer scope, hit priority and actor alpha."""
 
+from dataclasses import replace
+
 import pygame
 import pytest
 
@@ -9,11 +11,14 @@ from game.animation_draw import actor_draw_commands
 from game.animation_types import RigLayer
 from game.condition_animation import ConditionAppearance
 from game.condition_types import ConditionBodyColor
+from game.condition_media import ResolvedConditionLayer
 from game.projection import Camera, TILE_WIDTH
 
 
 @pytest.fixture(scope="module")
 def actor_pixels():
+    pygame.init()
+    pygame.display.set_mode((1, 1))
     data = load_animation_data()
     rig = data.rigs["neuroclient.modular"]
     contact = ActorContact("actor", (0, 0), "S", data.rig.TILE_W / TILE_WIDTH)
@@ -26,7 +31,8 @@ def actor_pixels():
         positions[layer.slot] = (index + 2, 2)
         image.set_at(positions[layer.slot], (180, 60, 30, 255))
         rows[contact.rig_id, "Idle", layer.category, rig.facing_rows["S"]] = image
-    return data, contact, layers, rows, positions
+    yield data, contact, layers, rows, positions
+    pygame.quit()
 
 
 @pytest.mark.parametrize("flash", (None, 0x00FF00))
@@ -60,3 +66,47 @@ def test_source_body_filter_slots_flash_priority_and_whole_actor_alpha(actor_pix
     for layer in layers:
         source = rows[contact.rig_id, "Idle", layer.category, data.rigs[contact.rig_id].facing_rows["S"]]
         assert tuple(source.get_at(positions[layer.slot])) == (180, 60, 30, 255)
+
+
+def test_overhead_marker_stays_fixed_while_idle_pixels_move(actor_pixels):
+    data, contact, layers, source_rows, _ = actor_pixels
+    rig = data.rigs[contact.rig_id]
+    rows = {}
+    for key, source in source_rows.items():
+        row = pygame.Surface((rig.cell_width * 2, rig.cell_height), pygame.SRCALPHA)
+        row.blit(source, (0, 0))
+        row.blit(source, (rig.cell_width, 5))
+        rows[key] = row
+    marker = next(layer for layer in data.condition_recipes['condition.frightened'].persistent.layers
+                  if layer.markerGroup == 'frightened')
+    condition = ConditionAppearance(layers=(ResolvedConditionLayer(marker, data.condition_media[marker.assetId]),))
+    # Original body pixels are coral; the glyph has its own delivered gold palette.
+    points = []
+    for frame in (0, 1):
+        commands = actor_draw_commands(data, BodySample('actor', 'Idle', frame, 'S'), contact,
+            layers, rows, Camera(zoom=1), condition=replace(condition, time_ms=frame*100))
+        command = next(row for row in commands if row[4][6] == 'actor')
+        image, origin = command[1], command[2]
+        glyph = {(origin[0]+x, origin[1]+y) for x in range(image.width) for y in range(image.height)
+                 if image.get_at((x,y)).a and tuple(image.get_at((x,y)))[:3] != (180,60,30)}
+        assert glyph
+        points.append(glyph)
+    assert points[0] == points[1]
+
+
+def test_head_marker_size_does_not_follow_creature_scale(actor_pixels):
+    data, contact, layers, rows, _ = actor_pixels
+    marker = next(layer for layer in data.condition_recipes['condition.frightened'].persistent.layers
+                  if layer.markerGroup == 'frightened')
+    condition = ConditionAppearance(layers=(ResolvedConditionLayer(marker, data.condition_media[marker.assetId]),))
+    shapes = []
+    for size in (.5, 1., 2.):
+        commands = actor_draw_commands(data, BodySample('actor', 'Idle', 0, 'S'),
+            replace(contact, visual_scale=contact.visual_scale*size), layers, rows, Camera(zoom=1), condition=condition)
+        image = next(row[1] for row in commands if row[4][6] == 'actor')
+        pixels = {(x,y) for x in range(image.width) for y in range(image.height)
+                  if image.get_at((x,y)).a and tuple(image.get_at((x,y)))[:3] != (180,60,30)}
+        assert pixels
+        left, top = min(x for x,y in pixels), min(y for x,y in pixels)
+        shapes.append({(x-left,y-top) for x,y in pixels})
+    assert shapes[0] == shapes[1] == shapes[2]

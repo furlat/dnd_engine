@@ -96,7 +96,11 @@ def test_actual_membership_contact_later_heads_removal_and_seek(data, captured, 
                 at = record.removed_ms
                 faded = sample_condition_lifetimes(appearances(after, data), records, data, at + 175)
                 layers = [layer for layer in faded[str(record.actor_uuid)].layers if layer.owner_uuid == owner]
-                assert len(layers) == 2 and all(layer.alpha == .5 for layer in layers)
+                body_layers = [layer for layer in layers if layer.layer.markerGroup is None]
+                markers = [layer for layer in layers if layer.layer.markerGroup is not None]
+                assert len(body_layers) == 2 and all(layer.alpha == .5 for layer in body_layers)
+                if program == "bane":
+                    assert len(markers) == 1 and markers[0].alpha == pytest.approx(.125)
                 gone = sample_condition_lifetimes(appearances(after, data), records, data, at + 350)
                 assert all(layer.owner_uuid != owner for layer in gone[str(record.actor_uuid)].layers)
                 assert sample_condition_lifetimes(appearances(after, data), records, data, at + 175) == faded

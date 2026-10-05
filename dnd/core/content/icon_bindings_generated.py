@@ -3174,12 +3174,6 @@ BUILT_IN_CONTENT_ICON_BINDINGS: dict[
         'condition.dnd-conditions-frightened',
         '9fc741ab2cbc178f2b125de786285f39fecdcffa739c122fa687b813437e1529',
     ),
-    'core.rules:condition:condition.grappled@1#230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa': (
-        '230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa',
-        'bind',
-        'condition.dnd-conditions-grappled',
-        '8fdb9a85790c0ff46fd367ab613a8376ef8101714e90a9ace9d95183845b9204',
-    ),
     'core.rules:condition:condition.hidden@1#230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa': (
         '230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa',
         'bind',

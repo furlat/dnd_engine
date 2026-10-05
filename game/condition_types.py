@@ -100,6 +100,9 @@ class ConditionLayer(_Record):
     drawOrder: Literal["behind_body", "in_front_of_body"] = "in_front_of_body"
     lifeStates: tuple[LifeStage, ...] = ("alive", "dying", "stable", "dead")
     whenEnergyType: DamageType | None = None
+    # Semantic overhead symbol; paired banks share one carousel slot.
+    markerGroup: Name | None = None
+    whenSizeChange: Literal["enlarge", "reduce"] | None = None
     whenAbility: AbilityName | None = None
     whenMetamagicMode: MetamagicMode | None = None
 

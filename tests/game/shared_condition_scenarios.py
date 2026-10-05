@@ -7,25 +7,31 @@ from uuid import uuid4
 from dnd.actions_functional import setup_standard_actions
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
-from dnd.conditions import Incapacitated, Paralyzed, Petrified, Prone, Restrained, Stunned
+from dnd.conditions import Incapacitated, Paralyzed, Petrified, Prone, Restrained, Stunned, NoReactions, Unconscious
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.controller import HumanController
 from dnd.core.equipment_types import BodyPart
 from dnd.core.events import EventQueue
+from dnd.core.base_conditions import Duration
+from dnd.core.condition_types import DurationType
 from dnd.encounter import Encounter
 from dnd.entity import Entity, EntityConfig
 from dnd.game import Game
 from dnd.runtime_reset import reset_engine_runtime
-from dnd.spells.necromancy import SickenedCondition
+from dnd.spells.necromancy import SickenedCondition, NoHealing
+from dnd.spells.evocation import GuidingBoltMarked
+from dnd.monsters.skeleton_abilities import Marked
+from dnd.monsters.traits import LifeDrainReduction
+from dnd.extensions.field_focus import FieldFocus
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from game.presentation import capture_interval, reduce_interval
 from game.replay import CapturedHistory, ObserverCapture, capture_history
 
 
-CONDITIONS = {"petrified": Petrified, "restrained": Restrained, "incapacitated": Incapacitated, "stunned": Stunned, "sickened": SickenedCondition}
+CONDITIONS = {"unconscious": Unconscious,"petrified": Petrified, "restrained": Restrained, "incapacitated": Incapacitated, "stunned": Stunned, "sickened": SickenedCondition, "marked": Marked, "field_focus": FieldFocus, "life_drain": LifeDrainReduction, "no_reactions": NoReactions, "guiding_mark": GuidingBoltMarked, "no_healing": NoHealing}
 
 
-def shared_condition_history(*, program: Literal["petrified", "restrained", "incapacitated", "stunned", "sickened"],
+def shared_condition_history(*, program: Literal["petrified", "restrained", "incapacitated", "stunned", "sickened", "marked", "field_focus", "life_drain", "no_reactions", "guiding_mark", "no_healing", "multiple_marks", "unconscious"],
                              prior: Literal["prone", "paralyzed"] | None = None) -> CapturedHistory:
     random_state = random.getstate()
     reset_engine_runtime()
@@ -58,15 +64,38 @@ def shared_condition_history(*, program: Literal["petrified", "restrained", "inc
         initial = capture_interval(name="Shared condition initialization", start_cursor=0, end_cursor=baseline,
             observer_uuid=actor.uuid, battlefield_id=battlefield)
         before, _ = reduce_interval(None, initial)
-        condition = CONDITIONS[program](source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid)
+        if program == "multiple_marks":
+            active = [NoReactions(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid),
+                      Marked(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid),
+                      LifeDrainReduction(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid, amount=5)]
+            for mark in active:
+                event = actor.add_condition(mark)
+                assert event is not None and not event.canceled
+            for mark in active:
+                assert actor.remove_condition_by_uuid(mark.uuid)
+            captured = capture_history(before, (), observers=(ObserverCapture("recipient", actor.uuid, baseline),))
+            primary = captured.views["recipient"]
+            return CapturedHistory(primary.initialization, before, primary.lineages, captured.views)
+        condition = (LifeDrainReduction(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid, amount=5)
+                     if program == "life_drain" else
+                     GuidingBoltMarked(source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid, caster_uuid=actor.uuid)
+                     if program == "guiding_mark" else
+                     CONDITIONS[program](source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid))
+        if program == "unconscious":
+            condition.duration = Duration(duration=1, duration_type=DurationType.ROUNDS,
+                source_entity_uuid=actor.uuid, target_entity_uuid=actor.uuid)
         applied = actor.add_condition(condition)
         assert applied is not None and not applied.canceled
-        if previous is not None:
+        if previous is not None and program != "unconscious":
             actor.remove_condition_by_uuid(previous.uuid)
-        if program != "sickened":
+        if program in ("petrified", "restrained", "incapacitated", "stunned"):
             actor.on_turn_end()
             actor.on_turn_start()
-        assert actor.remove_condition_by_uuid(condition.uuid)
+        if program == "unconscious":
+            encounter.next_turn()
+            assert "Unconscious" not in actor.active_conditions
+        else:
+            assert actor.remove_condition_by_uuid(condition.uuid)
         captured = capture_history(before, (), observers=(ObserverCapture("recipient", actor.uuid, baseline),))
         primary = captured.views["recipient"]
         return CapturedHistory(primary.initialization, before, primary.lineages, captured.views)

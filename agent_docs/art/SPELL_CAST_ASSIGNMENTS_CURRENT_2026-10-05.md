@@ -11,7 +11,7 @@ Current materialized assignments after the 298-clip feedback. The October 4 Mark
 | spell.guidance | 0 | Attack5 | Magic2 | Transfer a quiet guiding blessing by touch; no surrounding field is created. |
 | spell.light | 0 | Attack5 | Magic2 | Place light on the selected target; the hand gesture precedes the target light, rather than declaring a caster aura. |
 | spell.poison_spray | 0 | Attack5 | Magic2, Effect1 | Expel a short directed spray of poison toward the victim; retain the existing spray as the main footprint. |
-| spell.produce_flame | 0 | Attack5 | Magic2 | Gather flame in the hand and retain it at rest; the hurl continuation releases that flame as a projectile. |
+| spell.produce_flame | 0 | Attack5 | Magic2 | Create and immediately throw flame; directed Attack5 with transient Magic2 hands, no retained flame or light. |
 | spell.ray_of_frost | 0 | Attack5 | Magic2, Effect1 | Release a narrow frost ray from the registered hand toward one victim. |
 | spell.resistance | 0 | Attack5 | Magic2 | Transfer a defensive blessing by touch with a quiet hand accent. |
 | spell.sacred_flame | 0 | Special1 | Magic2 | Invoke radiant fire at the recipient from above; opening upward suits the descending main effect. |
@@ -154,7 +154,6 @@ Current materialized assignments after the 298-clip feedback. The October 4 Mark
 | control.bestow_curse.option_3 | spell.bestow_curse | inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery |
 | control.bestow_curse.option_4 | spell.bestow_curse | inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery |
 | reaction.spell.hellish_rebuke | spell.hellish_rebuke | inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery |
-| action.spell.produce_flame.hurl | spell.produce_flame | inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery |
 | action.spell.eyebite.strike | spell.eyebite | inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery |
 | action.spell.call_lightning.strike | spell.call_lightning | inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery |
 | action.spell.telekinesis.move | spell.telekinesis | inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery |

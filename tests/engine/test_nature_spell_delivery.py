@@ -35,9 +35,11 @@ def test_direct_flame_cannot_cast_in_silence(game):
     silencer = actor(game,'Silencer',(2,5))
     result = Silence(source_entity_uuid=silencer.uuid,end_position=caster.position,alt_skip_slot=True).apply()
     assert result is not None and not result.canceled
+    hp = enemy.get_hp()
     result = ProduceFlame(source_entity_uuid=caster.uuid,target_entity_uuid=enemy.uuid).apply()
     assert result is not None and result.canceled
-    assert caster.action_economy.actions.normalized_score == 1
+    assert enemy.get_hp() == hp
+    assert 'Produce Flame' not in caster.active_conditions
 
 
 @pytest.mark.parametrize('saves',[False,True])

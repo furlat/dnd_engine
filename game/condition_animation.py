@@ -232,12 +232,16 @@ def resolve_condition_appearance(
             unsupported.append(f"Missing condition recipe: {member.behavior_id}")
         else:
             exact[recipe.definitionRef.identity_key] = recipe
-            owners.setdefault(recipe.definitionRef.identity_key, member.condition_uuid)
+            previous = owners.setdefault(recipe.definitionRef.identity_key, member.condition_uuid)
+            if any(layer.markerGroup for layer in recipe.persistent.layers):
+                owners[recipe.definitionRef.identity_key] = min(previous, member.condition_uuid, key=str)
     for owner, identity in extra_members:
         recipe = recipes.get(identity)
         if recipe is not None:
             exact[recipe.definitionRef.identity_key] = recipe
-            owners.setdefault(recipe.definitionRef.identity_key, owner)
+            previous = owners.setdefault(recipe.definitionRef.identity_key, owner)
+            if any(layer.markerGroup for layer in recipe.persistent.layers):
+                owners[recipe.definitionRef.identity_key] = min(previous, owner, key=str)
     ordered = sorted(exact.values(), key=lambda recipe: (
         -recipe.composition.priority, recipe.definitionRef.identity_key,
     ))
@@ -308,7 +312,9 @@ def resolve_condition_appearance(
                       and (layer.whenAbility is None or member is not None and member.state is not None
                            and layer.whenAbility == member.state.enhanced_ability)
                       and (layer.whenMetamagicMode is None or member is not None and member.state is not None
-                           and layer.whenMetamagicMode == member.state.metamagic_mode))
+                           and layer.whenMetamagicMode == member.state.metamagic_mode)
+                      and (layer.whenSizeChange is None or member is not None and member.state is not None
+                           and layer.whenSizeChange == member.state.size_change))
         unsupported.extend(persistent_limitations(recipe, media))
     selected_layers = tuple(sorted(layers, key=lambda value: (-value.layer.priority, value.layer.id)))
     return ConditionAppearance(alpha, body, tuple(selected), tuple(dict.fromkeys(unsupported)), pose, label,

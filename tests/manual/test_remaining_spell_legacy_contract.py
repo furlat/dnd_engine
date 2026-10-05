@@ -520,7 +520,7 @@ def test_jump_spell_composes_modifiers_targets_ally_and_expands_discovery() -> N
 
 
 def test_ray_of_frost_hit_and_slow_expire_on_caster_turn_not_target_turn() -> None:
-    """The speed modifier is caster-owned and survives the target's turn."""
+    """The victim owns the slow, whose deadline is the caster's next turn."""
     reset_spell_regression_arena(16, 9)
     caster = create_spell_regression_actor(
         "Ray Caster",
@@ -551,17 +551,17 @@ def test_ray_of_frost_hit_and_slow_expire_on_caster_turn_not_target_turn() -> No
     assert result.damage_rolls[0].effective_dice_count == 2
     assert get_hp(target) < hp_before
     assert target.action_economy.movement_remaining() == base_speed - 10
-    assert has_condition(caster, "Ray of Frost Effect")
+    assert has_condition(target, "Ray of Frost Effect")
 
     target.on_turn_start()
     target.on_turn_end()
 
     assert target.action_economy.movement_remaining() == base_speed - 10
-    assert has_condition(caster, "Ray of Frost Effect")
+    assert has_condition(target, "Ray of Frost Effect")
 
     caster.on_turn_start()
 
-    assert not has_condition(caster, "Ray of Frost Effect")
+    assert not has_condition(target, "Ray of Frost Effect")
     assert target.action_economy.movement_remaining() == base_speed
 
 

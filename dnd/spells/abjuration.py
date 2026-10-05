@@ -2159,7 +2159,7 @@ class DeathWard(SpellAction):
         )
 
 FREEDOM_OF_MOVEMENT_ESCAPE_ACTION_NAME = "Freedom of Movement Escape"
-FREEDOM_OF_MOVEMENT_RESTRAINT_NAMES = ("Grappled", "Restrained")
+FREEDOM_OF_MOVEMENT_RESTRAINT_NAMES = ("Restrained",)
 
 
 def _freedom_of_movement_nonmagical_restraints(entity: Entity) -> List[BaseCondition]:
@@ -2223,10 +2223,10 @@ def _freedom_of_movement_escape_cost_evaluator(source_entity_uuid: UUID, cost_ty
     sort_order=810,
 )
 class FreedomOfMovementEscape(BaseAction):
-    """Spend movement to escape nonmagical Grappled or Restrained conditions."""
+    """Spend movement to escape nonmagical Restrained conditions."""
 
     name: str = Field(default=FREEDOM_OF_MOVEMENT_ESCAPE_ACTION_NAME, description="Display name for the automatic restraint escape action.")
-    description: str = Field(default="Spend 5 feet of movement to escape nonmagical Grappled or Restrained conditions.", description="Rules-facing action summary.")
+    description: str = Field(default="Spend 5 feet of movement to escape nonmagical Restrained conditions.", description="Rules-facing action summary.")
     target_type: TargetType = Field(default=TargetType.SELF, description="Targeting mode used by action discovery and validation.")
     costs: List[Cost] = Field(
         default_factory=lambda: [
@@ -2330,7 +2330,7 @@ class FreedomOfMovementEffect(BaseCondition):
     ignores_underwater_penalties: bool = True
 
     name: str = Field(default="Freedom of Movement", description="Condition name.")
-    description: str = Field(default="Unaffected by difficult terrain, magical speed reduction, underwater penalties, Grappled, Restrained, magical paralysis, and can spend 5 feet of movement to escape nonmagical restraints", description="Rules-facing condition summary.")
+    description: str = Field(default="Unaffected by difficult terrain, magical speed reduction, underwater penalties, Restrained, magical paralysis, and can spend 5 feet of movement to escape nonmagical restraints", description="Rules-facing condition summary.")
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, description="Condition category.")
     tags: Set[ConditionTag] = Field(
         default_factory=lambda: {ConditionTag.MAGICAL},
@@ -2347,7 +2347,6 @@ class FreedomOfMovementEffect(BaseCondition):
 
         target.senses._paths_dirty = True
 
-        target.add_condition_immunity_source("Grappled", self.uuid)
         target.add_condition_immunity_source("Restrained", self.uuid)
         target.add_condition_immunity_source(
             "Paralyzed", self.uuid,
@@ -2365,7 +2364,6 @@ class FreedomOfMovementEffect(BaseCondition):
         target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
         if target:
             target.senses._paths_dirty = True
-            target.remove_condition_immunity_source("Grappled", self.uuid)
             target.remove_condition_immunity_source("Restrained", self.uuid)
             target.remove_condition_immunity_source("Paralyzed", self.uuid)
             target.unregister_action(FREEDOM_OF_MOVEMENT_ESCAPE_ACTION_NAME)
@@ -2399,7 +2397,6 @@ class FreedomOfMovement(SpellAction):
                     resolution=OutcomeResolution.AUTOMATIC,
                     condition_fact_ids=(
                         "selected_target.ignore_difficult_terrain",
-                        "selected_target.immunity.condition.grappled",
                         "selected_target.immunity.condition.restrained",
                     ),
                     condition_semantic_keys=frozenset({"dnd.spells.abjuration.FreedomOfMovementEffect"}),

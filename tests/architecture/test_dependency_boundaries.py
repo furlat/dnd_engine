@@ -163,7 +163,6 @@ CONCRETE_CONDITION_NAMES = frozenset({
     "Dying",
     "Exhaustion",
     "Frightened",
-    "Grappled",
     "Hidden",
     "Incapacitated",
     "Invisible",

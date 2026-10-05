@@ -933,7 +933,7 @@ class Dodging(BaseCondition):
     """Status condition for the Dodge action's defensive effects."""
 
     name: str = Field(default="Dodging", description="Condition name.")
-    description: str = Field(default="A dodging creature has advantage on Dexterity saving throws against being grappled.", description="Condition description.")
+    description: str = Field(default="A dodging creature has advantage on Dexterity saving throws.", description="Condition description.")
     condition_category: ConditionCategory = Field(default=ConditionCategory.STATUS, description="Status-effect condition category.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
@@ -1341,35 +1341,6 @@ class Frightened(BaseCondition):
         return self.frigthener_in_senses_zero_max_speed(self.source_entity_uuid,
             source_entity_uuid, target_entity_uuid, context)
 
-
-@_core_condition_identity(
-    content_id="condition.grappled",
-    display_name="Grappled",
-    description="Has speed reduced to zero by a grappling effect.",
-    source_anchor="SRD 5.1 (CC-BY-4.0), Appendix PH-A: Conditions — Grappled",
-    sort_order=100,
-)
-class Grappled(BaseCondition):
-    """Movement-lock condition that caps speed at zero."""
-
-    name: str = Field(default="Grappled", description="Condition name.")
-    description: str = Field(default="A grappled creature can't move through the space of the grappler.", description="Condition description.")
-
-    def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
-        if not self.target_entity_uuid:
-            raise ValueError("Target entity UUID is not set")
-        target_entity = Entity.get(self.target_entity_uuid)
-        if not target_entity:
-            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} not found")
-        elif isinstance(target_entity,Entity):
-            outs = []
-            for speed in target_entity.action_economy.speed_values:
-                grappled_modifer_uuid = speed.self_static.add_max_constraint(constraint=NumericalModifier(name="Grappled",value=0,source_entity_uuid=self.target_entity_uuid,target_entity_uuid=self.source_entity_uuid))
-                outs.append((speed.uuid,grappled_modifer_uuid))
-            effect_event = declaration_event.phase_to(EventPhase.EFFECT, update={"condition":self},status_message=f"Applied Grappled max speed constraint to {target_entity.name}")
-            return outs, [], [], [], effect_event
-        else:
-            return [], [], [], [], declaration_event.cancel(status_message=f"Target entity {self.target_entity_uuid} is not an entity but {type(target_entity)}")
 
 @_core_condition_identity(
     content_id="condition.incapacitated",
@@ -2970,7 +2941,6 @@ _CORE_STANDARD_CONDITION_TYPES = (
         Dodging,
         Disengaging,
         Frightened,
-        Grappled,
         Incapacitated,
         Invisible,
         Paralyzed,

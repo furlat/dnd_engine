@@ -7,7 +7,6 @@ from dnd.conditions import (
     Blinded,
     Dashing,
     Dodging,
-    Grappled,
     Poisoned,
     Prone,
     Restrained,
@@ -47,7 +46,7 @@ PRESSURE_SELECTOR = (
 )
 CONTROL_SELECTOR = (
     f"{EB08_FILE}::"
-    "test_eb_08_004_grappled_incapacitated_and_restrained_limit_actions"
+    "test_eb_08_004_incapacitated_and_restrained_limit_actions"
 )
 PRONE_SELECTOR = (
     f"{EB08_FILE}::test_eb_08_005_prone_uses_distance_context_for_incoming_attacks"
@@ -99,9 +98,9 @@ COMBAT_CONDITION_LEGACY_CASES: dict[str, LegacyCoverage] = {
         "Maintained coverage proves the penalty is conditional on sensing the source.",
     ),
     "test_grappled": LegacyCoverage(
-        "active",
+        "stale",
         CONTROL_SELECTOR,
-        "Maintained coverage preserves movement denial without denying the action bucket.",
+        "Grappled removed by user decision; remaining restraint coverage is maintained.",
     ),
     "test_incapacitated": LegacyCoverage(
         "strengthened",
@@ -226,10 +225,8 @@ def test_condition_modifiers_compose_and_clean_up_by_independent_owner() -> None
     assert attack_bonus.advantage is AdvantageStatus.NONE
     attack_bonus.reset_from_target()
 
-    apply_to_target(Grappled, attacker, target)
     apply_to_target(Restrained, attacker, target)
     assert target.action_economy.movement_remaining() == 0
-    target.remove_condition("Grappled")
     assert target.action_economy.movement_remaining() == 0
     target.remove_condition("Restrained")
     assert target.action_economy.movement_remaining() == 30

@@ -10,7 +10,7 @@ from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.appearance import AppearanceConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.conditions import Deafened, Poisoned
+from dnd.conditions import Deafened, Poisoned, Exhaustion, Petrified
 from dnd.content.items.authored_item_builders import build_authored_item
 from dnd.controller import HumanController
 from dnd.core.creature_types import DamageType
@@ -34,7 +34,8 @@ SPELLS = {"aid": Aid, "lesser_restoration": LesserRestoration, "greater_restorat
 
 
 def healing_batch_history(*, program: HealingProgram, self_target: bool = False,
-                          clean_target: bool = False, repeat_aid: bool = False) -> CapturedHistory:
+                          clean_target: bool = False, repeat_aid: bool = False,
+                          recovery_condition: Literal["exhaustion", "petrified"] | None = None) -> CapturedHistory:
     previous_random = random.getstate()
     reset_engine_runtime()
     battlefield = "battlefield.open_floor_bright"
@@ -95,7 +96,8 @@ def healing_batch_history(*, program: HealingProgram, self_target: bool = False,
         for role, actor in actors.items():
             actor.receive_damage(8 if role == "second" else 35, DamageType.PSYCHIC, caster.uuid)
         if not clean_target and program in ("lesser_restoration", "greater_restoration"):
-            recipient.add_condition(Poisoned(source_entity_uuid=caster.uuid, target_entity_uuid=recipient.uuid))
+            condition_type = {"exhaustion": Exhaustion, "petrified": Petrified}.get(recovery_condition, Poisoned)
+            recipient.add_condition(condition_type(source_entity_uuid=caster.uuid, target_entity_uuid=recipient.uuid))
         elif not clean_target and program in ("heal", "mass_heal"):
             recipient.add_condition(Deafened(source_entity_uuid=caster.uuid, target_entity_uuid=recipient.uuid))
         baseline = EventQueue.event_cursor()
@@ -129,7 +131,7 @@ def healing_batch_history(*, program: HealingProgram, self_target: bool = False,
         elif program == "mass_cure_wounds":
             assert recipient.get_normal_hp() == 101 and actors["second"].get_normal_hp() == 120
         else:
-            assert "Poisoned" not in recipient.active_conditions
+            assert {"exhaustion": "Exhaustion", "petrified": "Petrified"}.get(recovery_condition, "Poisoned") not in recipient.active_conditions
             assert recipient.get_normal_hp() == initial_hp["caster" if self_target else "recipient"][0]
         if multi:
             assert actors["bystander"].get_normal_hp() == initial_hp["bystander"][0]

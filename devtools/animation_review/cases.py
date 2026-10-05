@@ -252,6 +252,7 @@ class HealingBatchCase(BaseModel):
     program: Literal["aid", "lesser_restoration", "greater_restoration", "heal", "mass_cure_wounds", "mass_heal"]
     self_target: bool = False
     clean_target: bool = False
+    recovery_condition: Literal["exhaustion", "petrified"] | None = None
 
 
 class SupportConditionCase(BaseModel):
@@ -497,7 +498,8 @@ class DreadResidueCase(BaseModel):
 class SharedConditionCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     kind: Literal["shared-condition"]
-    program: Literal["petrified", "restrained", "incapacitated", "stunned", "sickened"]
+    program: Literal["petrified", "restrained", "incapacitated", "stunned", "sickened", "marked", "field_focus", "life_drain", "no_reactions", "guiding_mark", "no_healing", "multiple_marks", "unconscious"]
+    prior: Literal["prone", "paralyzed"] | None = None
 
 
 class DirectedSpellCase(BaseModel):

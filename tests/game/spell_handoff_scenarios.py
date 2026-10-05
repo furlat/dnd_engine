@@ -155,6 +155,15 @@ def spell_handoff_history(
         elif program in ("ray", "chill"):
             perform(caster, "spell.ray_of_frost" if program=="ray" else "spell.chill_touch",
                 recipient=actors["first"], dice=(1,) if miss else (15,*((3,)*(2 if level==5 else 3))))
+            if program == "ray" and not miss:
+                victim = actors["first"]
+                assert "Ray of Frost Effect" in victim.active_conditions
+                assert "Ray of Frost Effect" not in caster.active_conditions
+                encounter.next_turn()
+                while encounter.get_current_entity() is not caster:
+                    assert "Ray of Frost Effect" in victim.active_conditions
+                    encounter.next_turn()
+                assert "Ray of Frost Effect" not in victim.active_conditions
         elif program=="ice":
             perform(caster,"spell.ice_knife",recipient=actors["first"],
                 dice=((1,) if miss else (15,4))+(2,2,1,20))

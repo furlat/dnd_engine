@@ -195,9 +195,9 @@
       "noise_sheet": "/spell-palettes/source-hand-noise.png",
       "gamma": 0.65,
       "power_budget": "quiet",
-      "rationale": "Gather flame in the hand and retain it at rest; the hurl continuation releases that flame as a projectile. The measured forward hand extension addresses the selected target directly.",
+      "rationale": "One directed Attack5 cast; transient fiery hands release the projectile, with no maintained hand flame or light.",
       "sockets": "Motion-owned measured preparation/release defaults and original eight-facing hand path; fixed rigs retain native overrides.",
-      "manifestation": "Gather flame in the hand and retain it at rest; the hurl continuation releases that flame as a projectile.",
+      "manifestation": "Create and immediately throw a fire projectile at the selected creature.",
       "gesture_meaning": "The measured forward hand extension addresses the selected target directly.",
       "effect_meaning": [],
       "competition": "Keep the main delivered/recipient artwork dominant. Casting accents do not grant additional affected cells, impacts, targets or conditions.",
@@ -3481,13 +3481,6 @@
     {
       "identity": "reaction.spell.hellish_rebuke",
       "owner": "spell.hellish_rebuke",
-      "cast_enabled": true,
-      "source_candidates": [],
-      "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"
-    },
-    {
-      "identity": "action.spell.produce_flame.hurl",
-      "owner": "spell.produce_flame",
       "cast_enabled": true,
       "source_candidates": [],
       "assignment": "inherit owner pose/layers/noise/gamma; retain own elementColors and effect delivery"

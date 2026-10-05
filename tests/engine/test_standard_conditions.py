@@ -34,7 +34,6 @@ from dnd.conditions import (
     Deafened,
     Exhaustion,
     Frightened,
-    Grappled,
     GreaterInvisibilityEffect,
     Hidden,
     Incapacitated,
@@ -195,17 +194,12 @@ def test_eb_08_003_poisoned_and_frightened_penalize_attacks_and_checks() -> None
     assert target.action_economy.movement_remaining() == 0
 
 
-def test_eb_08_004_grappled_incapacitated_and_restrained_limit_actions() -> None:
+def test_eb_08_004_incapacitated_and_restrained_limit_actions() -> None:
     """EB-08-004: movement/action limiting conditions clamp action economy values."""
     reset_condition_state()
     source = configured_entity("Source", (1, 1), "heroes")
     target = configured_entity("Target", (2, 1), "monsters")
 
-    apply_to_target(Grappled, source, target)
-    assert target.action_economy.movement_remaining() == 0
-    assert target.action_economy.actions.normalized_score == 1
-
-    target.remove_condition("Grappled")
     apply_to_target(Incapacitated, source, target)
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0
@@ -515,7 +509,6 @@ def test_eb_08_012_standard_condition_removal_cleans_owned_state() -> None:
         Deafened,
         Exhaustion,
         Frightened,
-        Grappled,
         Incapacitated,
         Invisible,
         Paralyzed,
@@ -789,7 +782,7 @@ if __name__ == "__main__":
     test_eb_08_001_blinded_and_deafened_apply_sensory_failures()
     test_eb_08_002_charmed_blocks_attacks_and_helps_charmer_social_checks()
     test_eb_08_003_poisoned_and_frightened_penalize_attacks_and_checks()
-    test_eb_08_004_grappled_incapacitated_and_restrained_limit_actions()
+    test_eb_08_004_incapacitated_and_restrained_limit_actions()
     test_eb_08_005_prone_uses_distance_context_for_incoming_attacks()
     test_eb_08_006_severe_conditions_own_direct_denial_transforms()
     test_eb_08_007_invisible_sets_perceivability_and_unseen_combat_modifiers()

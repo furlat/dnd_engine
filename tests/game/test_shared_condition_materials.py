@@ -29,10 +29,12 @@ def data():
     pygame.quit()
 
 
-@pytest.mark.parametrize("program", ("petrified", "restrained", "incapacitated", "stunned", "sickened"))
+@pytest.mark.parametrize("program", ("petrified", "restrained", "incapacitated", "stunned", "sickened", "marked", "field_focus", "life_drain", "no_reactions", "guiding_mark", "no_healing"))
 def test_condition_application_and_removal_keep_shared_presentation_owned(data, program):
     state, roots = player_history(shared_condition_history(program=program), role="recipient")
-    identity = "condition.spell.eyebite.sickened" if program == "sickened" else "condition." + program
+    identity = {"sickened": "condition.spell.eyebite.sickened", "marked": "trait.skeleton_archer_marked",
+                "life_drain": "condition.wight.life_drain", "guiding_mark": "condition.spell.guiding_bolt.marked",
+                "no_healing": "condition.spell.no_healing"}.get(program, "condition." + program)
     clock, records, witnessed = 1234., {}, False
     for root in roots:
         group = bind_choreography(state, root, data)
@@ -53,13 +55,18 @@ def test_condition_application_and_removal_keep_shared_presentation_owned(data, 
                 assert condition_body_pose(data, BodySample(str(actor.uuid), "Idle", 9, "W"), contact, current) == current.frozen_body
                 later = sample_condition_lifetimes({str(actor.uuid): appearance}, records, data, clock+5000)[str(actor.uuid)]
                 assert later.frozen_body == current.frozen_body
+            elif program == "marked":
+                assert not current.layers  # Rejected crimson reticle remains unbound.
             else:
                 assert current.layers
         state = after
         clock += group.complete_ms + 2000
     assert witnessed
     assert identity not in appearance.matched_behavior_ids
-    assert next(row for row in records.values() if row.behavior_id == identity).removed_ms is not None
+    if program == "marked":
+        assert not any(row.behavior_id == identity for row in records.values())
+    else:
+        assert next(row for row in records.values() if row.behavior_id == identity).removed_ms is not None
 
 
 def test_stone_material_preserves_alpha_and_uses_cell_local_texture(data):

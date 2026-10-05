@@ -576,7 +576,7 @@
         "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
       },
       "label": "Jaw restraint",
-      "disposition": "state_only",
+      "disposition": "authored",
       "mediaFailurePolicy": "fail_transaction",
       "relationships": {
         "incomingTriggers": [],
@@ -585,33 +585,64 @@
       },
       "classification": {
         "runtimeRole": "active_combat_state",
-        "visualIntensity": "state_only",
+        "visualIntensity": "ambient_passive",
         "presentationDomains": [
-          "hud_only"
+          "body"
         ],
-        "visualFamily": "control.restraint"
+        "visualFamily": "shared.condition.restrained"
       },
       "composition": {
-        "group": "body",
+        "group": "marker.condition.environment.jaw_restrained",
         "exclusiveGroup": null,
-        "priority": 0,
-        "maxLayers": 1
+        "priority": 50,
+        "maxLayers": 3
       },
       "persistent": {
         "alphaMultiplier": 1,
         "bodyColor": null,
         "equipmentModifiers": [],
         "appearanceLayers": [],
-        "layers": []
+        "layers": [
+          {
+            "id": "control.restrained.mark",
+            "assetId": "control.restrained.mark",
+            "category": "restrained",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "offsetY": 0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 50,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive"
+            ],
+            "markerGroup": "restrained"
+          }
+        ]
       },
       "application": {
-        "durationMs": 0,
+        "durationMs": 200,
         "feedbackEnabled": false,
         "feedbackColor": 16777215,
         "effects": []
       },
       "removal": {
-        "durationMs": 0,
+        "durationMs": 200,
         "feedbackEnabled": false,
         "feedbackColor": 16777215,
         "effects": []
@@ -807,8 +838,17 @@
         "maxLayers": 3
       },
       "persistent": {
-        "alphaMultiplier": 1,
+        "alphaMultiplier": 1.0,
         "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
         "equipmentModifiers": [],
         "appearanceLayers": [],
         "layers": [
@@ -817,8 +857,11 @@
             "assetId": "pending.bane.back",
             "category": "bane",
             "animation": "loop",
-            "fps": 32,
+            "fps": 32.0,
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -829,21 +872,38 @@
               "act",
               "hit"
             ],
+            "startOffsetMs": 0.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
           },
           {
             "id": "pending.bane.front",
             "assetId": "pending.bane.front",
             "category": "bane",
             "animation": "loop",
-            "fps": 32,
+            "fps": 32.0,
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -854,28 +914,83 @@
               "act",
               "hit"
             ],
+            "startOffsetMs": 0.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
+          },
+          {
+            "id": "condition.marker.bane.overhead",
+            "assetId": "condition.marker.bane.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "bane"
           }
         ]
       },
       "application": {
-        "durationMs": 220,
+        "durationMs": 220.0,
         "feedbackEnabled": true,
         "feedbackColor": 14989912,
-        "effects": []
+        "effects": [],
+        "bodyAnimation": null
       },
       "removal": {
-        "durationMs": 200,
+        "durationMs": 200.0,
         "feedbackEnabled": true,
         "feedbackColor": 10997287,
-        "effects": []
-      }
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
     },
     {
       "definitionRef": {
@@ -1507,8 +1622,17 @@
         "maxLayers": 3
       },
       "persistent": {
-        "alphaMultiplier": 1,
+        "alphaMultiplier": 1.0,
         "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
         "equipmentModifiers": [],
         "appearanceLayers": [],
         "layers": [
@@ -1517,53 +1641,52 @@
             "assetId": "control.charmed.sustain.back",
             "category": "charmed",
             "animation": "loop",
+            "fps": 32.0,
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "startOffsetMs": 570.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 570,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "fps": 32,
-            "activeDuring": [
-              "idle",
-              "move",
-              "jump",
-              "forced_move",
-              "attack",
-              "cast",
-              "act",
-              "hit"
-            ],
-            "fadeInMs": 0
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
           },
           {
             "id": "control.charmed.sustain.front",
             "assetId": "control.charmed.sustain.front",
             "category": "charmed",
             "animation": "loop",
+            "fps": 32.0,
             "attachment": "body",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 570,
-            "drawOrder": "in_front_of_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "fps": 32,
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -1574,12 +1697,66 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 0
+            "startOffsetMs": 570.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
+          },
+          {
+            "id": "condition.marker.charmed.overhead",
+            "assetId": "condition.marker.charmed.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "charmed"
           }
         ]
       },
       "application": {
-        "durationMs": 220,
+        "durationMs": 220.0,
         "feedbackEnabled": true,
         "feedbackColor": 5825666,
         "effects": [
@@ -1589,20 +1766,25 @@
             "category": "charmed",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 2500.0,
+            "startOffsetMs": 0.0,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 2500.0
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.charm_flower.front",
@@ -1610,20 +1792,25 @@
             "category": "charmed",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 2500.0,
+            "startOffsetMs": 0.0,
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 2500.0
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.charm_hearts.back",
@@ -1631,20 +1818,25 @@
             "category": "charmed",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 450,
+            "durationMs": 1500.0,
+            "startOffsetMs": 450.0,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 1500.0
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.charm_hearts.front",
@@ -1652,29 +1844,40 @@
             "category": "charmed",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 450,
+            "durationMs": 1500.0,
+            "startOffsetMs": 450.0,
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 1500.0
+            "participant": "owner",
+            "whenEnergyType": null
           }
-        ]
+        ],
+        "bodyAnimation": null
       },
       "removal": {
-        "durationMs": 200,
+        "durationMs": 200.0,
         "feedbackEnabled": true,
         "feedbackColor": 2608818,
-        "effects": []
-      }
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
     },
     {
       "definitionRef": {
@@ -1856,7 +2059,7 @@
         "visualFamily": "divine.blinded"
       },
       "composition": {
-        "group": "divine.blinded",
+        "group": "marker.condition.blinded",
         "exclusiveGroup": null,
         "priority": 30,
         "maxLayers": 3
@@ -1892,7 +2095,8 @@
               "hit"
             ],
             "startOffsetMs": 0,
-            "offsetY": -4
+            "offsetY": -4,
+            "markerGroup": "blinded"
           },
           {
             "id": "divine.blinded.front",
@@ -1919,7 +2123,8 @@
               "hit"
             ],
             "startOffsetMs": 0,
-            "offsetY": -4
+            "offsetY": -4,
+            "markerGroup": "blinded"
           }
         ]
       },
@@ -2088,7 +2293,7 @@
         "visualFamily": "divine.deafened"
       },
       "composition": {
-        "group": "divine.deafened",
+        "group": "marker.condition.deafened",
         "exclusiveGroup": null,
         "priority": 30,
         "maxLayers": 3
@@ -2124,7 +2329,8 @@
               "hit"
             ],
             "startOffsetMs": 0,
-            "offsetY": -11.5
+            "offsetY": -11.5,
+            "markerGroup": "deafened"
           },
           {
             "id": "divine.deafened.front",
@@ -2151,7 +2357,8 @@
               "hit"
             ],
             "startOffsetMs": 0,
-            "offsetY": -11.5
+            "offsetY": -11.5,
+            "markerGroup": "deafened"
           }
         ]
       },
@@ -2214,8 +2421,17 @@
         "maxLayers": 3
       },
       "persistent": {
-        "alphaMultiplier": 1,
+        "alphaMultiplier": 1.0,
         "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
         "equipmentModifiers": [],
         "appearanceLayers": [],
         "layers": [
@@ -2224,53 +2440,52 @@
             "assetId": "control.command.sustain.back",
             "category": "command",
             "animation": "loop",
+            "fps": 32.0,
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "startOffsetMs": 500.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 500,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "fps": 32,
-            "activeDuring": [
-              "idle",
-              "move",
-              "jump",
-              "forced_move",
-              "attack",
-              "cast",
-              "act",
-              "hit"
-            ],
-            "fadeInMs": 0
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
           },
           {
             "id": "control.command.sustain.front",
             "assetId": "control.command.sustain.front",
             "category": "command",
             "animation": "loop",
+            "fps": 32.0,
             "attachment": "body",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 500,
-            "drawOrder": "in_front_of_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "fps": 32,
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -2281,12 +2496,66 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 0
+            "startOffsetMs": 500.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
+          },
+          {
+            "id": "condition.marker.commanded.overhead",
+            "assetId": "condition.marker.commanded.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "commanded"
           }
         ]
       },
       "application": {
-        "durationMs": 220,
+        "durationMs": 220.0,
         "feedbackEnabled": true,
         "feedbackColor": 5813732,
         "effects": [
@@ -2296,20 +2565,25 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 500.0,
+            "startOffsetMs": 0.0,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 500.0
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.command.application.front",
@@ -2317,25 +2591,31 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 500.0,
+            "startOffsetMs": 0.0,
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 500.0
+            "participant": "owner",
+            "whenEnergyType": null
           }
-        ]
+        ],
+        "bodyAnimation": null
       },
       "removal": {
-        "durationMs": 200,
+        "durationMs": 200.0,
         "feedbackEnabled": true,
         "feedbackColor": 2571726,
         "effects": [
@@ -2345,20 +2625,25 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 597.2222222222222,
+            "startOffsetMs": 0.0,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 597.2222222222222
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.command.removal.front",
@@ -2366,22 +2651,28 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 597.2222222222222,
+            "startOffsetMs": 0.0,
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 597.2222222222222
+            "participant": "owner",
+            "whenEnergyType": null
           }
-        ]
+        ],
+        "bodyAnimation": null
       },
       "activation": {
         "trigger": "owner_turn_start",
@@ -2392,20 +2683,25 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 1402.7777777777778,
+            "startOffsetMs": 0.0,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 1402.7777777777778
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.command.execute.front",
@@ -2413,23 +2709,31 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 1402.7777777777778,
+            "startOffsetMs": 0.0,
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 1402.7777777777778
+            "participant": "owner",
+            "whenEnergyType": null
           }
         ]
-      }
+      },
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
     },
     {
       "definitionRef": {
@@ -2477,8 +2781,17 @@
         "maxLayers": 3
       },
       "persistent": {
-        "alphaMultiplier": 1,
+        "alphaMultiplier": 1.0,
         "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
         "equipmentModifiers": [],
         "appearanceLayers": [],
         "layers": [
@@ -2487,53 +2800,52 @@
             "assetId": "control.command.sustain.back",
             "category": "command",
             "animation": "loop",
+            "fps": 32.0,
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "startOffsetMs": 500.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 500,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "fps": 32,
-            "activeDuring": [
-              "idle",
-              "move",
-              "jump",
-              "forced_move",
-              "attack",
-              "cast",
-              "act",
-              "hit"
-            ],
-            "fadeInMs": 0
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
           },
           {
             "id": "control.command.sustain.front",
             "assetId": "control.command.sustain.front",
             "category": "command",
             "animation": "loop",
+            "fps": 32.0,
             "attachment": "body",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 500,
-            "drawOrder": "in_front_of_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "fps": 32,
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -2544,12 +2856,66 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 0
+            "startOffsetMs": 500.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
+          },
+          {
+            "id": "condition.marker.commanded.overhead",
+            "assetId": "condition.marker.commanded.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "commanded"
           }
         ]
       },
       "application": {
-        "durationMs": 220,
+        "durationMs": 220.0,
         "feedbackEnabled": true,
         "feedbackColor": 14975576,
         "effects": [
@@ -2559,20 +2925,25 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 500.0,
+            "startOffsetMs": 0.0,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 500.0
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.command.application.front",
@@ -2580,25 +2951,31 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 500.0,
+            "startOffsetMs": 0.0,
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 500.0
+            "participant": "owner",
+            "whenEnergyType": null
           }
-        ]
+        ],
+        "bodyAnimation": null
       },
       "removal": {
-        "durationMs": 200,
+        "durationMs": 200.0,
         "feedbackEnabled": true,
         "feedbackColor": 13546023,
         "effects": [
@@ -2608,20 +2985,25 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 597.2222222222222,
+            "startOffsetMs": 0.0,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 597.2222222222222
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.command.removal.front",
@@ -2629,22 +3011,28 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 597.2222222222222,
+            "startOffsetMs": 0.0,
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 597.2222222222222
+            "participant": "owner",
+            "whenEnergyType": null
           }
-        ]
+        ],
+        "bodyAnimation": null
       },
       "activation": {
         "trigger": "owner_turn_start",
@@ -2655,20 +3043,25 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 1402.7777777777778,
+            "startOffsetMs": 0.0,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 1402.7777777777778
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.command.execute.front",
@@ -2676,23 +3069,31 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 1402.7777777777778,
+            "startOffsetMs": 0.0,
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 1402.7777777777778
+            "participant": "owner",
+            "whenEnergyType": null
           }
         ]
-      }
+      },
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
     },
     {
       "definitionRef": {
@@ -2740,8 +3141,17 @@
         "maxLayers": 3
       },
       "persistent": {
-        "alphaMultiplier": 1,
+        "alphaMultiplier": 1.0,
         "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
         "equipmentModifiers": [],
         "appearanceLayers": [],
         "layers": [
@@ -2750,53 +3160,52 @@
             "assetId": "control.command.sustain.back",
             "category": "command",
             "animation": "loop",
+            "fps": 32.0,
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "startOffsetMs": 500.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 500,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "fps": 32,
-            "activeDuring": [
-              "idle",
-              "move",
-              "jump",
-              "forced_move",
-              "attack",
-              "cast",
-              "act",
-              "hit"
-            ],
-            "fadeInMs": 0
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
           },
           {
             "id": "control.command.sustain.front",
             "assetId": "control.command.sustain.front",
             "category": "command",
             "animation": "loop",
+            "fps": 32.0,
             "attachment": "body",
-            "priority": 30,
-            "colors": {
-              "primary": 16777215,
-              "secondary": 16777215,
-              "tertiary": 16777215
-            },
-            "startOffsetMs": 500,
-            "drawOrder": "in_front_of_body",
-            "lifeStates": [
-              "alive",
-              "dying",
-              "stable"
-            ],
-            "fps": 32,
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -2807,12 +3216,66 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 0
+            "startOffsetMs": 500.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
+          },
+          {
+            "id": "condition.marker.commanded.overhead",
+            "assetId": "condition.marker.commanded.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "commanded"
           }
         ]
       },
       "application": {
-        "durationMs": 220,
+        "durationMs": 220.0,
         "feedbackEnabled": true,
         "feedbackColor": 14964857,
         "effects": [
@@ -2822,20 +3285,25 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 500.0,
+            "startOffsetMs": 0.0,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 500.0
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.command.application.front",
@@ -2843,25 +3311,31 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 500.0,
+            "startOffsetMs": 0.0,
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 500.0
+            "participant": "owner",
+            "whenEnergyType": null
           }
-        ]
+        ],
+        "bodyAnimation": null
       },
       "removal": {
-        "durationMs": 200,
+        "durationMs": 200.0,
         "feedbackEnabled": true,
         "feedbackColor": 13523239,
         "effects": [
@@ -2871,20 +3345,25 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 597.2222222222222,
+            "startOffsetMs": 0.0,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 597.2222222222222
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.command.removal.front",
@@ -2892,22 +3371,28 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 597.2222222222222,
+            "startOffsetMs": 0.0,
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 597.2222222222222
+            "participant": "owner",
+            "whenEnergyType": null
           }
-        ]
+        ],
+        "bodyAnimation": null
       },
       "activation": {
         "trigger": "owner_turn_start",
@@ -2918,20 +3403,25 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 1402.7777777777778,
+            "startOffsetMs": 0.0,
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 1402.7777777777778
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "control.command.execute.front",
@@ -2939,23 +3429,31 @@
             "category": "command",
             "animation": "finite",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "priority": 30,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "startOffsetMs": 0,
+            "durationMs": 1402.7777777777778,
+            "startOffsetMs": 0.0,
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive",
               "dying",
               "stable"
             ],
-            "durationMs": 1402.7777777777778
+            "participant": "owner",
+            "whenEnergyType": null
           }
         ]
-      }
+      },
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
     },
     {
       "definitionRef": {
@@ -3011,7 +3509,7 @@
         "visualFamily": "control.sleep"
       },
       "composition": {
-        "group": "control.sleep",
+        "group": "marker.condition.spell.sleep",
         "exclusiveGroup": null,
         "priority": 30,
         "maxLayers": 3
@@ -3052,7 +3550,8 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 200
+            "fadeInMs": 200,
+            "markerGroup": "asleep"
           },
           {
             "id": "control.sleep.sustain.front",
@@ -3084,7 +3583,8 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 200
+            "fadeInMs": 200,
+            "markerGroup": "asleep"
           }
         ]
       },
@@ -3268,21 +3768,65 @@
         "visualFamily": "pose.prone"
       },
       "composition": {
-        "group": "body",
+        "group": "marker.condition.prone",
         "exclusiveGroup": null,
         "priority": 60,
         "maxLayers": 3
       },
       "persistent": {
-        "alphaMultiplier": 1,
+        "alphaMultiplier": 1.0,
         "bodyColor": null,
+        "bodyPose": "Die",
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
         "equipmentModifiers": [],
         "appearanceLayers": [],
-        "layers": [],
-        "bodyPose": "Die"
+        "layers": [
+          {
+            "id": "condition.marker.prone.overhead",
+            "assetId": "condition.marker.prone.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 50,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "prone"
+          }
+        ]
       },
       "application": {
-        "durationMs": 220,
+        "durationMs": 220.0,
         "feedbackEnabled": true,
         "feedbackColor": 14988120,
         "effects": [],
@@ -3293,7 +3837,7 @@
         }
       },
       "removal": {
-        "durationMs": 200,
+        "durationMs": 200.0,
         "feedbackEnabled": true,
         "feedbackColor": 11521575,
         "effects": [],
@@ -3302,7 +3846,11 @@
           "bodyPlaybackSpeed": 1.5,
           "reversed": true
         }
-      }
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
     },
     {
       "definitionRef": {
@@ -3610,19 +4158,13 @@
         "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
       },
       "label": "Enlarge Reduce",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
       "relationships": {
         "incomingTriggers": [],
         "relatedStates": [],
         "grantsActions": []
       },
-      "composition": {
-        "group": "body",
-        "exclusiveGroup": null,
-        "priority": 50,
-        "maxLayers": 3
-      },
-      "disposition": "authored",
-      "mediaFailurePolicy": "fail_transaction",
       "classification": {
         "runtimeRole": "active_combat_state",
         "visualIntensity": "primary_dynamic",
@@ -3631,19 +4173,70 @@
         ],
         "visualFamily": "persistent.enlarge_reduce"
       },
+      "composition": {
+        "group": "marker.condition.spell.enlarge_reduce",
+        "exclusiveGroup": null,
+        "priority": 50,
+        "maxLayers": 3
+      },
       "persistent": {
-        "alphaMultiplier": 1,
+        "alphaMultiplier": 1.0,
         "bodyColor": null,
-        "equipmentModifiers": [],
-        "appearanceLayers": [],
-        "layers": [],
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
         "bodyScale": {
           "enlarge": 1.175,
           "reduce": 0.75
-        }
+        },
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.marker.reduce.overhead",
+            "assetId": "condition.marker.reduce.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "reduce",
+            "whenSizeChange": "reduce"
+          }
+        ]
       },
       "application": {
-        "durationMs": 480,
+        "durationMs": 480.0,
         "feedbackEnabled": false,
         "feedbackColor": 7385555,
         "effects": [
@@ -3653,15 +4246,26 @@
             "category": "smoke",
             "animation": "once",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 0.95,
             "priority": 50,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "durationMs": 1500,
-            "opacity": 0.95,
-            "drawOrder": "behind_body"
+            "durationMs": 1500.0,
+            "startOffsetMs": 0.0,
+            "drawOrder": "behind_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "persistent.enlarge_reduce.smoke.front",
@@ -3669,20 +4273,32 @@
             "category": "smoke",
             "animation": "once",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 0.8,
             "priority": 50,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "durationMs": 1500,
-            "opacity": 0.8,
-            "drawOrder": "in_front_of_body"
+            "durationMs": 1500.0,
+            "startOffsetMs": 0.0,
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "participant": "owner",
+            "whenEnergyType": null
           }
-        ]
+        ],
+        "bodyAnimation": null
       },
       "removal": {
-        "durationMs": 350,
+        "durationMs": 350.0,
         "feedbackEnabled": false,
         "feedbackColor": 7385555,
         "effects": [
@@ -3692,15 +4308,26 @@
             "category": "smoke",
             "animation": "once",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 0.95,
             "priority": 50,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "durationMs": 1500,
-            "opacity": 0.95,
-            "drawOrder": "behind_body"
+            "durationMs": 1500.0,
+            "startOffsetMs": 0.0,
+            "drawOrder": "behind_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "participant": "owner",
+            "whenEnergyType": null
           },
           {
             "id": "persistent.enlarge_reduce.smoke.front",
@@ -3708,18 +4335,34 @@
             "category": "smoke",
             "animation": "once",
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 0.8,
             "priority": 50,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "durationMs": 1500,
-            "opacity": 0.8,
-            "drawOrder": "in_front_of_body"
+            "durationMs": 1500.0,
+            "startOffsetMs": 0.0,
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "participant": "owner",
+            "whenEnergyType": null
           }
-        ]
-      }
+        ],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
     },
     {
       "definitionRef": {
@@ -6013,7 +6656,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "markerGroup": "cursed"
           },
           {
             "id": "curse.ability.mark.front",
@@ -6038,7 +6682,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "markerGroup": "cursed"
           }
         ]
       },
@@ -6285,7 +6930,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "markerGroup": "cursed"
           },
           {
             "id": "curse.attack.mark.front",
@@ -6310,7 +6956,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "markerGroup": "cursed"
           }
         ]
       },
@@ -6557,7 +7204,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "markerGroup": "cursed"
           },
           {
             "id": "curse.inaction.mark.front",
@@ -6582,7 +7230,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "markerGroup": "cursed"
           }
         ]
       },
@@ -6829,7 +7478,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "markerGroup": "cursed"
           },
           {
             "id": "curse.damage.mark.front",
@@ -6854,7 +7504,8 @@
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "markerGroup": "cursed"
           }
         ]
       },
@@ -7106,8 +7757,17 @@
         "maxLayers": 3
       },
       "persistent": {
-        "alphaMultiplier": 1,
+        "alphaMultiplier": 1.0,
         "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
         "equipmentModifiers": [],
         "appearanceLayers": [],
         "layers": [
@@ -7116,8 +7776,24 @@
             "assetId": "control.slow.back",
             "category": "Slow",
             "animation": "sustain",
-            "fps": 32,
+            "fps": 32.0,
             "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "startOffsetMs": 0.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 150.0,
             "priority": 70,
             "colors": {
               "primary": 16777215,
@@ -7125,6 +7801,28 @@
               "tertiary": 16777215
             },
             "drawOrder": "behind_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
+          },
+          {
+            "id": "control.slow.front",
+            "assetId": "control.slow.front",
+            "category": "Slow",
+            "animation": "sustain",
+            "fps": 32.0,
+            "attachment": "body",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -7135,17 +7833,9 @@
               "act",
               "hit"
             ],
-            "startOffsetMs": 0,
-            "offsetY": 0,
-            "fadeInMs": 150
-          },
-          {
-            "id": "control.slow.front",
-            "assetId": "control.slow.front",
-            "category": "Slow",
-            "animation": "sustain",
-            "fps": 32,
-            "attachment": "body",
+            "startOffsetMs": 0.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 150.0,
             "priority": 70,
             "colors": {
               "primary": 16777215,
@@ -7153,6 +7843,28 @@
               "tertiary": 16777215
             },
             "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
+          },
+          {
+            "id": "condition.marker.slow.overhead",
+            "assetId": "condition.marker.slow.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -7163,24 +7875,41 @@
               "act",
               "hit"
             ],
-            "startOffsetMs": 0,
-            "offsetY": 0,
-            "fadeInMs": 150
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "slow"
           }
         ]
       },
       "application": {
-        "durationMs": 150,
+        "durationMs": 150.0,
         "feedbackEnabled": false,
         "feedbackColor": 11619920,
-        "effects": []
+        "effects": [],
+        "bodyAnimation": null
       },
       "removal": {
-        "durationMs": 550,
+        "durationMs": 550.0,
         "feedbackEnabled": false,
         "feedbackColor": 11619920,
-        "effects": []
-      }
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
     },
     {
       "definitionRef": {
@@ -7570,7 +8299,7 @@
         "visualFamily": "paralysis.alpha-contour"
       },
       "composition": {
-        "group": "body",
+        "group": "marker.condition.paralyzed",
         "exclusiveGroup": null,
         "priority": 60,
         "maxLayers": 3
@@ -7580,20 +8309,22 @@
         "bodyColor": null,
         "bodyPose": null,
         "frozenPose": {
+          "captureCurrent": false,
           "clip": "Idle",
           "frame": 0,
           "framesByRig": {
             "neuroclient.modular": 3
           }
         },
+        "absenceEcho": null,
         "bodyOutline": {
           "color": 16761417,
           "pulseColor": 16766076,
           "alphaThreshold": 100,
           "opacity": 0.55,
           "pulseOpacity": 0.75,
-          "periodMs": 1400,
-          "onsetMs": 300
+          "periodMs": 1400.0,
+          "onsetMs": 300.0
         },
         "label": null,
         "bodyScale": null,
@@ -7602,7 +8333,43 @@
         "bodyRamp": null,
         "equipmentModifiers": [],
         "appearanceLayers": [],
-        "layers": []
+        "layers": [
+          {
+            "id": "condition.marker.paralyzed.overhead",
+            "assetId": "condition.marker.paralyzed.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 50,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "paralyzed"
+          }
+        ]
       },
       "application": {
         "durationMs": 220.0,
@@ -7743,6 +8510,7 @@
         "bodyColor": null,
         "bodyPose": null,
         "frozenPose": null,
+        "absenceEcho": null,
         "bodyOutline": null,
         "label": null,
         "bodyScale": null,
@@ -7757,8 +8525,11 @@
             "assetId": "control.frightened.back",
             "category": "Frightened",
             "animation": "hold",
-            "fps": 32,
+            "fps": 32.0,
             "attachment": "ground",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -7769,21 +8540,38 @@
               "act",
               "hit"
             ],
+            "startOffsetMs": 0.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
             "priority": 70,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
           },
           {
             "id": "frightened.front",
             "assetId": "control.frightened.front",
             "category": "Frightened",
             "animation": "hold",
-            "fps": 32,
+            "fps": 32.0,
             "attachment": "ground",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -7794,25 +8582,74 @@
               "act",
               "hit"
             ],
+            "startOffsetMs": 0.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
             "priority": 70,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
+          },
+          {
+            "id": "condition.marker.frightened.overhead",
+            "assetId": "condition.marker.frightened.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "frightened"
           }
         ]
       },
       "application": {
-        "durationMs": 0,
+        "durationMs": 0.0,
         "feedbackEnabled": false,
         "feedbackColor": 14083160,
         "effects": [],
         "bodyAnimation": null
       },
       "removal": {
-        "durationMs": 0,
+        "durationMs": 0.0,
         "feedbackEnabled": false,
         "feedbackColor": 6606375,
         "effects": [],
@@ -7927,8 +8764,8 @@
         "visualFamily": "control.incapacitated"
       },
       "composition": {
-        "group": "control.incapacitated",
-        "exclusiveGroup": "incapacitated",
+        "group": "marker.condition.spell.hypnotic_pattern",
+        "exclusiveGroup": null,
         "priority": 30,
         "maxLayers": 3
       },
@@ -7974,7 +8811,8 @@
               "cast",
               "act",
               "hit"
-            ]
+            ],
+            "markerGroup": "incapacitated"
           }
         ]
       },
@@ -8959,7 +9797,7 @@
         "visualFamily": "control.stunned"
       },
       "composition": {
-        "group": "control",
+        "group": "marker.condition.stunned",
         "exclusiveGroup": null,
         "priority": 50,
         "maxLayers": 3
@@ -8997,7 +9835,8 @@
             "drawOrder": "behind_body",
             "lifeStates": [
               "alive"
-            ]
+            ],
+            "markerGroup": "stunned"
           },
           {
             "id": "control.stunned.front",
@@ -9026,7 +9865,8 @@
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive"
-            ]
+            ],
+            "markerGroup": "stunned"
           }
         ]
       },
@@ -9068,8 +9908,8 @@
         "visualFamily": "shared.condition.incapacitated"
       },
       "composition": {
-        "group": "control",
-        "exclusiveGroup": "incapacitated",
+        "group": "marker.condition.incapacitated",
+        "exclusiveGroup": null,
         "priority": 30,
         "maxLayers": 3
       },
@@ -9115,7 +9955,8 @@
               "cast",
               "act",
               "hit"
-            ]
+            ],
+            "markerGroup": "incapacitated"
           }
         ]
       },
@@ -9163,8 +10004,8 @@
         "visualFamily": "shared.condition.restrained"
       },
       "composition": {
-        "group": "control",
-        "exclusiveGroup": "restrained",
+        "group": "marker.condition.restrained",
+        "exclusiveGroup": null,
         "priority": 50,
         "maxLayers": 3
       },
@@ -9201,7 +10042,8 @@
             "drawOrder": "in_front_of_body",
             "lifeStates": [
               "alive"
-            ]
+            ],
+            "markerGroup": "restrained"
           }
         ]
       },
@@ -9243,7 +10085,7 @@
         "visualFamily": "shared.condition.petrified"
       },
       "composition": {
-        "group": "body",
+        "group": "marker.condition.petrified",
         "exclusiveGroup": null,
         "priority": 80,
         "maxLayers": 3
@@ -9255,8 +10097,10 @@
         "frozenPose": {
           "captureCurrent": true,
           "clip": "Idle",
-          "frame": 0
+          "frame": 0,
+          "framesByRig": {}
         },
+        "absenceEcho": null,
         "bodyOutline": null,
         "label": null,
         "bodyScale": null,
@@ -9272,14 +10116,54 @@
           ],
           "mapping": "luminance_texture",
           "texture": "/shared-conditions/stone.png",
-          "textureRepeats": 6,
+          "normalTexture": null,
+          "textureRepeats": 6.0,
           "textureWeight": 0.35,
-          "applicationMs": 1100,
-          "removalMs": 1400
+          "textureFrames": 1,
+          "textureFps": 32.0,
+          "gain": 1.0,
+          "applicationMs": 1100.0,
+          "removalMs": 1400.0
         },
         "equipmentModifiers": [],
         "appearanceLayers": [],
-        "layers": []
+        "layers": [
+          {
+            "id": "condition.marker.petrified.overhead",
+            "assetId": "condition.marker.petrified.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 50,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "petrified"
+          }
+        ]
       },
       "application": {
         "durationMs": 220.0,
@@ -9335,6 +10219,7 @@
         "bodyColor": null,
         "bodyPose": null,
         "frozenPose": null,
+        "absenceEcho": null,
         "bodyOutline": null,
         "label": null,
         "bodyScale": null,
@@ -9349,8 +10234,11 @@
             "assetId": "control.sickened.back",
             "category": "Sickened",
             "animation": "hold",
-            "fps": 32,
+            "fps": 32.0,
             "attachment": "ground",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -9361,21 +10249,38 @@
               "act",
               "hit"
             ],
+            "startOffsetMs": 0.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
             "priority": 70,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "behind_body"
+            "drawOrder": "behind_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
           },
           {
             "id": "sickened.front",
             "assetId": "control.sickened.front",
             "category": "Sickened",
             "animation": "hold",
-            "fps": 32,
+            "fps": 32.0,
             "attachment": "ground",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
             "activeDuring": [
               "idle",
               "move",
@@ -9386,25 +10291,74 @@
               "act",
               "hit"
             ],
+            "startOffsetMs": 0.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
             "priority": 70,
             "colors": {
               "primary": 16777215,
               "secondary": 16777215,
               "tertiary": 16777215
             },
-            "drawOrder": "in_front_of_body"
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable",
+              "dead"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": null,
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
+          },
+          {
+            "id": "condition.marker.sickened.overhead",
+            "assetId": "condition.marker.sickened.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "sickened"
           }
         ]
       },
       "application": {
-        "durationMs": 0,
+        "durationMs": 0.0,
         "feedbackEnabled": false,
         "feedbackColor": 14083160,
         "effects": [],
         "bodyAnimation": null
       },
       "removal": {
-        "durationMs": 0,
+        "durationMs": 0.0,
         "feedbackEnabled": false,
         "feedbackColor": 6606375,
         "effects": [],
@@ -9825,7 +10779,7 @@
         "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
       },
       "label": "Harm",
-      "disposition": "state_only",
+      "disposition": "authored",
       "mediaFailurePolicy": "fail_transaction",
       "relationships": {
         "incomingTriggers": [],
@@ -9841,30 +10795,76 @@
         "visualFamily": "health.maximum_reduction"
       },
       "composition": {
-        "group": "harm",
+        "group": "marker.condition.spell.harm",
         "exclusiveGroup": null,
         "priority": 0,
         "maxLayers": 1
       },
       "persistent": {
-        "alphaMultiplier": 1,
+        "alphaMultiplier": 1.0,
         "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
         "equipmentModifiers": [],
         "appearanceLayers": [],
-        "layers": []
+        "layers": [
+          {
+            "id": "condition.mark.life_drain",
+            "assetId": "condition.mark.life_drain",
+            "category": "life_drain",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "offsetY": -12,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 35,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive"
+            ],
+            "markerGroup": "condition.mark.life_drain"
+          }
+        ]
       },
       "application": {
-        "durationMs": 0,
+        "durationMs": 0.0,
         "feedbackEnabled": false,
         "feedbackColor": 16777215,
-        "effects": []
+        "effects": [],
+        "bodyAnimation": null
       },
       "removal": {
-        "durationMs": 0,
+        "durationMs": 0.0,
         "feedbackEnabled": false,
         "feedbackColor": 16777215,
-        "effects": []
-      }
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
     },
     {
       "definitionRef": {
@@ -10206,7 +11206,7 @@
         "visualFamily": "control.sleep"
       },
       "composition": {
-        "group": "control.sleep",
+        "group": "marker.condition.spell.eyebite.asleep",
         "exclusiveGroup": null,
         "priority": 30,
         "maxLayers": 3
@@ -10247,7 +11247,8 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 350
+            "fadeInMs": 350,
+            "markerGroup": "asleep"
           },
           {
             "id": "control.sleep.sustain.front",
@@ -10279,7 +11280,8 @@
               "act",
               "hit"
             ],
-            "fadeInMs": 350
+            "fadeInMs": 350,
+            "markerGroup": "asleep"
           }
         ]
       },
@@ -12464,6 +13466,1442 @@
         "durationMs": 200.0,
         "feedbackEnabled": true,
         "feedbackColor": 2608840,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "trait",
+        "content_id": "trait.skeleton_archer_marked",
+        "content_version": 1,
+        "definition_contract_hash": "8b81685f804e251441a0107c1620212c9d441cf2d4c30a29cd5c34d344201c9a"
+      },
+      "label": "Marked",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "action",
+            "sourceRef": {
+              "pack_id": "content.neurodragon",
+              "definition_kind": "action",
+              "content_id": "action.creature.skeleton_archer.mark_target",
+              "content_version": 1,
+              "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=mark; effect=condition.marked; disposition=harmful; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "ambient_passive",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "condition.mark.mark_target"
+      },
+      "composition": {
+        "group": "marker.trait.skeleton_archer_marked",
+        "exclusiveGroup": null,
+        "priority": 35,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": []
+      },
+      "application": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 10705124,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 13510595,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.neurodragon",
+        "definition_kind": "condition",
+        "content_id": "condition.field_focus",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Field Focus",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "action",
+            "sourceRef": {
+              "pack_id": "content.neurodragon",
+              "definition_kind": "action",
+              "content_id": "action.item.field_kit.deploy",
+              "content_version": 1,
+              "definition_contract_hash": "b348fe0a75aa991c675bf8a82df5884e50463d9a5181b6c224f631857506a8b0"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=neutral; target=source_item; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "ambient_passive",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "condition.mark.field_focus"
+      },
+      "composition": {
+        "group": "marker.condition.field_focus",
+        "exclusiveGroup": null,
+        "priority": 35,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.mark.field_focus",
+            "assetId": "condition.mark.field_focus",
+            "category": "field_focus",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "offsetY": -12,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 35,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive"
+            ],
+            "markerGroup": "condition.mark.field_focus"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 14964829,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 13531687,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.wight.life_drain",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Life Drain",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "ambient_passive",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "condition.mark.life_drain"
+      },
+      "composition": {
+        "group": "marker.condition.wight.life_drain",
+        "exclusiveGroup": null,
+        "priority": 35,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.mark.life_drain",
+            "assetId": "condition.mark.life_drain",
+            "category": "life_drain",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "offsetY": -12,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 35,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive"
+            ],
+            "markerGroup": "condition.mark.life_drain"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 11658328,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 3722791,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "condition",
+        "content_id": "condition.no_reactions",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "No Reactions",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.shocking_grasp",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=harmful; target=selected_target; gates=attack_outcome:hit,critical"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "ambient_passive",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "condition.mark.no_reactions"
+      },
+      "composition": {
+        "group": "marker.condition.no_reactions",
+        "exclusiveGroup": null,
+        "priority": 35,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.mark.no_reactions",
+            "assetId": "condition.mark.no_reactions",
+            "category": "no_reactions",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "offsetY": -12,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 35,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive"
+            ],
+            "markerGroup": "condition.mark.no_reactions"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 14966104,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 13534503,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.guiding_bolt.marked",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Guiding Bolt",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.guiding_bolt",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=harmful; target=selected_target; gates=attack_outcome:hit,critical"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "ambient_passive",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "condition.mark.guiding_mark"
+      },
+      "composition": {
+        "group": "marker.condition.spell.guiding_bolt.marked",
+        "exclusiveGroup": null,
+        "priority": 35,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.mark.guiding_mark",
+            "assetId": "condition.mark.guiding_mark",
+            "category": "guiding_mark",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "offsetY": -12,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 35,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive"
+            ],
+            "markerGroup": "condition.mark.guiding_mark"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 5822180,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 2581710,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.no_healing",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Healing blocked",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.chill_touch",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=hit; effect=condition.no_healing; disposition=harmful; target=selected_target; gates=attack_outcome:hit,critical"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "ambient_passive",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "condition.mark.anti_heal"
+      },
+      "composition": {
+        "group": "marker.condition.spell.no_healing",
+        "exclusiveGroup": null,
+        "priority": 35,
+        "maxLayers": 1
+      },
+      "persistent": {
+        "alphaMultiplier": 1,
+        "bodyColor": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.mark.anti_heal",
+            "assetId": "condition.mark.anti_heal",
+            "category": "anti_heal",
+            "animation": "loop",
+            "fps": 32,
+            "attachment": "head",
+            "offsetY": -12,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "priority": 35,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive"
+            ],
+            "markerGroup": "condition.mark.anti_heal"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 11658328,
+        "effects": []
+      },
+      "removal": {
+        "durationMs": 200,
+        "feedbackEnabled": false,
+        "feedbackColor": 3722791,
+        "effects": []
+      }
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "condition",
+        "content_id": "condition.exhaustion",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Exhaustion",
+      "disposition": "authored",
+      "mediaFailurePolicy": "omit_optional_track",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "reduce",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.greater_restoration",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=exhaustion-reduction; effect=reduce.exhaustion; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.exhaustion"
+      },
+      "composition": {
+        "group": "marker.condition.exhaustion",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.marker.exhaustion.overhead",
+            "assetId": "condition.marker.exhaustion.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "exhaustion"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 220.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 14973272,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 200.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 13543207,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "condition",
+        "content_id": "condition.poisoned",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Poisoned",
+      "disposition": "authored",
+      "mediaFailurePolicy": "omit_optional_track",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "cleanse",
+            "triggerType": "condition",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "condition",
+              "content_id": "condition.spell.heroes_feast",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition-cleanse; effect=cleanse.poisoned; disposition=beneficial; target=actor; gates=automatic"
+          },
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.lesser_restoration",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=exact-condition-cleanse; effect=cleanse.condition.poisoned; disposition=beneficial; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.protection_from_poison",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=poison-cleanse; effect=cleanse.poisoned; disposition=beneficial; target=selected_target; gates=automatic"
+          },
+          {
+            "effect": "cleanse",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.greater_restoration",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=exact-condition-cleanse; effect=cleanse.condition.poisoned; disposition=beneficial; target=selected_target; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.poisoned"
+      },
+      "composition": {
+        "group": "marker.condition.poisoned",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": {
+          "tintRgb": 12118406,
+          "saturation": 0.82,
+          "brightness": 0.94
+        },
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.marker.poisoned.overhead",
+            "assetId": "condition.marker.poisoned.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "poisoned"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 220.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 14964955,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 200.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 13510506,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "core.rules",
+        "definition_kind": "condition",
+        "content_id": "condition.unconscious",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Unconscious",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "life_state_transition",
+            "sourceRef": null,
+            "direct": true,
+            "evidenceStatus": "verified_backend_inventory",
+            "evidence": "Applied by authoritative life-state/rules transitions where creatures become unconscious."
+          },
+          {
+            "effect": "remove",
+            "triggerType": "healing_or_life_state_transition",
+            "sourceRef": null,
+            "direct": true,
+            "evidenceStatus": "verified_backend_inventory",
+            "evidence": "Removed by authoritative recovery/life-state transition."
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "primary_dynamic",
+        "presentationDomains": [
+          "body",
+          "pose_movement"
+        ],
+        "visualFamily": "life.unconscious"
+      },
+      "composition": {
+        "group": "marker.condition.unconscious",
+        "exclusiveGroup": null,
+        "priority": 60,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.marker.unconscious.overhead",
+            "assetId": "condition.marker.unconscious.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 50,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "unconscious"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 220.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 7362788,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 200.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 10233806,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.stinking_cloud.nauseated",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Nauseated",
+      "disposition": "authored",
+      "mediaFailurePolicy": "omit_optional_track",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "condition",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "condition",
+              "content_id": "condition.spell.stinking_cloud.zone",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=harmful; target=each_affected_entity; gates=saving_throw:constitution:failed:actor_spell_save_dc"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.spell.stinking_cloud.nauseated"
+      },
+      "composition": {
+        "group": "marker.condition.spell.stinking_cloud.nauseated",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.marker.sickened.overhead",
+            "assetId": "condition.marker.sickened.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "sickened"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 220.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 14974552,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 200.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 13544487,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.haste.lethargy",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Haste Lethargy",
+      "disposition": "authored",
+      "mediaFailurePolicy": "fail_transaction",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "condition_transition",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "condition",
+              "content_id": "condition.spell.haste",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_source",
+            "evidence": "dnd/spells/transmutation.py: HasteEffect._remove creates one-round HasteLethargyEffect."
+          },
+          {
+            "effect": "remove",
+            "triggerType": "duration",
+            "sourceRef": null,
+            "direct": true,
+            "evidenceStatus": "verified_source",
+            "evidence": "Haste Lethargy has a one-round duration."
+          }
+        ],
+        "relatedStates": [
+          {
+            "relation": "derived_from",
+            "targetRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "condition",
+              "content_id": "condition.spell.haste",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "evidenceStatus": "verified_source"
+          }
+        ],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "derived_or_nested_state",
+        "visualIntensity": "primary_dynamic",
+        "presentationDomains": [
+          "body",
+          "pose_movement"
+        ],
+        "visualFamily": "tempo.haste_lethargy"
+      },
+      "composition": {
+        "group": "marker.condition.spell.haste.lethargy",
+        "exclusiveGroup": null,
+        "priority": 60,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": {
+          "tintRgb": 14217983,
+          "saturation": 1.18,
+          "brightness": 1.08
+        },
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "control.incapacitated.front",
+            "assetId": "control.incapacitated.front",
+            "category": "incapacitated",
+            "animation": "hold",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "startOffsetMs": 0.0,
+            "phaseOffsetMs": 0.0,
+            "fadeInMs": 0.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "whenEnergyType": null,
+            "markerGroup": "incapacitated",
+            "whenSizeChange": null,
+            "whenAbility": null,
+            "whenMetamagicMode": null
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 220.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 6117604,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 200.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 8726478,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.spirit_guardians.slowed",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Spirit Guardians Slowed",
+      "disposition": "authored",
+      "mediaFailurePolicy": "omit_optional_track",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "condition",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "condition",
+              "content_id": "condition.spell.spirit_guardians.zone",
+              "content_version": 1,
+              "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=harmful; target=each_affected_entity; gates=automatic"
+          },
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.spirit_guardians",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=occupant-slow; effect=condition.spirit_guardians_slowed; disposition=harmful; target=each_affected_entity; gates=automatic"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.spell.spirit_guardians.slowed"
+      },
+      "composition": {
+        "group": "marker.condition.spell.spirit_guardians.slowed",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.marker.movement_slowed.overhead",
+            "assetId": "condition.marker.movement_slowed.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "movement_slowed"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 220.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 5817316,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 200.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 2576078,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "activation": null,
+      "responses": [],
+      "reactionCastBinding": null,
+      "interceptionEffectsByDirection": {}
+    },
+    {
+      "definitionRef": {
+        "pack_id": "content.srd_5_1_cc",
+        "definition_kind": "condition",
+        "content_id": "condition.spell.ray_of_frost",
+        "content_version": 1,
+        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa"
+      },
+      "label": "Ray of Frost Effect",
+      "disposition": "authored",
+      "mediaFailurePolicy": "omit_optional_track",
+      "relationships": {
+        "incomingTriggers": [
+          {
+            "effect": "apply",
+            "triggerType": "spell",
+            "sourceRef": {
+              "pack_id": "content.srd_5_1_cc",
+              "definition_kind": "spell",
+              "content_id": "spell.ray_of_frost",
+              "content_version": 1,
+              "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+            },
+            "direct": true,
+            "evidenceStatus": "verified_catalog_effect_profile",
+            "evidence": "branch=condition; effect=condition.apply; disposition=harmful; target=selected_target; gates=attack_outcome:hit,critical"
+          }
+        ],
+        "relatedStates": [],
+        "grantsActions": []
+      },
+      "classification": {
+        "runtimeRole": "active_combat_state",
+        "visualIntensity": "secondary_dynamic",
+        "presentationDomains": [
+          "body"
+        ],
+        "visualFamily": "catalog.condition.spell.ray_of_frost"
+      },
+      "composition": {
+        "group": "marker.condition.spell.ray_of_frost",
+        "exclusiveGroup": null,
+        "priority": 30,
+        "maxLayers": 3
+      },
+      "persistent": {
+        "alphaMultiplier": 1.0,
+        "bodyColor": null,
+        "bodyPose": null,
+        "frozenPose": null,
+        "absenceEcho": null,
+        "bodyOutline": null,
+        "label": null,
+        "bodyScale": null,
+        "liveCopies": null,
+        "bodyDistortion": null,
+        "bodyRamp": null,
+        "equipmentModifiers": [],
+        "appearanceLayers": [],
+        "layers": [
+          {
+            "id": "condition.marker.movement_slowed.overhead",
+            "assetId": "condition.marker.movement_slowed.overhead",
+            "category": "debuff_marker",
+            "animation": "loop",
+            "fps": 32.0,
+            "attachment": "head",
+            "offsetX": 0.0,
+            "offsetY": 0.0,
+            "opacity": 1.0,
+            "activeDuring": [
+              "idle",
+              "move",
+              "jump",
+              "forced_move",
+              "attack",
+              "cast",
+              "act",
+              "hit"
+            ],
+            "fadeInMs": 160.0,
+            "priority": 30,
+            "colors": {
+              "primary": 16777215,
+              "secondary": 16777215,
+              "tertiary": 16777215
+            },
+            "drawOrder": "in_front_of_body",
+            "lifeStates": [
+              "alive",
+              "dying",
+              "stable"
+            ],
+            "markerGroup": "movement_slowed"
+          }
+        ]
+      },
+      "application": {
+        "durationMs": 220.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 5817316,
+        "effects": [],
+        "bodyAnimation": null
+      },
+      "removal": {
+        "durationMs": 200.0,
+        "feedbackEnabled": true,
+        "feedbackColor": 2576078,
         "effects": [],
         "bodyAnimation": null
       },

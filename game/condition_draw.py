@@ -10,7 +10,7 @@ import pygame
 from game.condition_types import Activity, ConditionBodyColor, ConditionBodyRamp, ConditionBodyOutline
 from dnd.core.life_types import LifeState
 from game.condition_media import ResolvedConditionLayer
-from game.condition_sampling import sample_condition_media
+from game.condition_sampling import sample_condition_media, select_condition_markers
 from game.animation_types import AnimationData, Facing8
 from game.animation import view_facing
 from game.registered_media import registered_media_blits
@@ -49,26 +49,35 @@ def compose_condition_layers(body: pygame.Surface, destination: tuple[int, int],
                              floor_ground: tuple[float, float] | None = None, activity: Activity = "idle",
                              attachment_anchors: Mapping[str, tuple[float, float]] | None = None,
                              life_state: LifeState = LifeState.ALIVE,
+                             absolute_ms: float = 0,
+                             marker_anchor: tuple[float, float] | None = None,
+                             marker_scale: float | None = None,
                              ) -> tuple[pygame.Surface, tuple[int, int]]:
     """Keep feet registration while joining back/body/front at one actor depth."""
     behind, front = [], []
     bounds = pygame.Rect(destination, body.size)
-    for resolved in layers:
+    for resolved in select_condition_markers(layers, absolute_ms, activity=activity, life_state=life_state.value):
         layer = resolved.layer
         if activity not in layer.activeDuring or life_state.value not in layer.lifeStates:
             continue
+        head_marker = layer.markerGroup is not None and layer.attachment == "head"
+        layer_scale = marker_scale if head_marker and marker_scale is not None else scale
         anchor = ground if layer.attachment == "body" or floor_ground is None else floor_ground
         if layer.attachment in ("head", "face", "hand"):
-            if attachment_anchors is None or layer.attachment not in attachment_anchors:
-                continue
-            anchor = attachment_anchors[layer.attachment]
-            if resolved.media.actor_top_clearance_px is not None:
-                # Use the rendered actor/gear envelope, never a standing-height
-                # guess. The mark's lowest extent is its registered pivot.
-                top = destination[1] + body.get_bounding_rect().top
-                anchor = (anchor[0], min(anchor[1], top)
-                    - resolved.media.actor_top_clearance_px * scale)
-        factor = scale * TILE_WIDTH / data.rig.TILE_W if data is not None else scale
+            if head_marker and marker_anchor is not None:
+                anchor = marker_anchor
+                if resolved.media.actor_top_clearance_px is not None:
+                    anchor = (anchor[0], anchor[1] - resolved.media.actor_top_clearance_px * layer_scale)
+            else:
+                if attachment_anchors is None or layer.attachment not in attachment_anchors:
+                    continue
+                anchor = attachment_anchors[layer.attachment]
+                if resolved.media.actor_top_clearance_px is not None:
+                    # Ordinary attachments retain their actual per-frame pose.
+                    top = destination[1] + body.get_bounding_rect().top
+                    anchor = (anchor[0], min(anchor[1], top)
+                        - resolved.media.actor_top_clearance_px * scale)
+        factor = layer_scale * TILE_WIDTH / data.rig.TILE_W if data is not None else layer_scale
         anchor = (anchor[0] + layer.offsetX * factor * scale_x, anchor[1] + layer.offsetY * factor)
         media = resolved.media
         if media.asset_id is not None:
@@ -77,10 +86,10 @@ def compose_condition_layers(body: pygame.Surface, destination: tuple[int, int],
                       if media.world_basis is not None else cast(Facing8, facing))
             for sample in sample_condition_media(data, resolved):
                 masks = (registered_media_blits(data, sample.removal_mask[0], "impact", sample.removal_mask[1],
-                    viewed, scale=media.scale * scale * TILE_WIDTH / data.rig.TILE_W, anchor=anchor, rows={})
+                    viewed, scale=media.scale * layer_scale * TILE_WIDTH / data.rig.TILE_W, anchor=anchor, rows={})
                     if sample.removal_mask is not None else ())
                 for image, point, _ in registered_media_blits(data, sample.asset_id, "impact", sample.frame,
-                        viewed, scale=media.scale * scale * TILE_WIDTH / data.rig.TILE_W,
+                        viewed, scale=media.scale * layer_scale * TILE_WIDTH / data.rig.TILE_W,
                         anchor=anchor, rows={}, alpha=sample.alpha * layer.opacity):
                     if sample.removal_mask is not None:
                         mask = pygame.Surface(image.size, pygame.SRCALPHA)
@@ -95,7 +104,7 @@ def compose_condition_layers(body: pygame.Surface, destination: tuple[int, int],
             continue
         spec = resolved.media.images_by_facing[facing]
         image = rows[("condition", layer.assetId, facing, 0)]
-        sy, sx = spec.scale * scale, spec.scale * scale * scale_x
+        sy, sx = spec.scale * layer_scale, spec.scale * layer_scale * scale_x
         image = pygame.transform.scale(image, (max(1, round(image.width * sx)), max(1, round(image.height * sy))))
         if layer.opacity != 1.:
             image.set_alpha(round((image.get_alpha() or 255) * layer.opacity))

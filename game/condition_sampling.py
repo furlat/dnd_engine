@@ -111,3 +111,29 @@ def sample_condition_media(data: AnimationData, resolved: ResolvedConditionLayer
             continue
         result.append(ConditionMediaSample(identity, frame, alpha * opacity, mask))
     return tuple(result)
+
+
+def select_condition_markers(layers: tuple[ResolvedConditionLayer, ...], absolute_ms: float,
+                             *, activity: str, life_state: str) -> tuple[ResolvedConditionLayer, ...]:
+    """One semantic symbol per actor; effects retain their own clocks and layers."""
+    eligible = tuple(row for row in layers
+        if activity in row.layer.activeDuring and life_state in row.layer.lifeStates
+        and row.alpha * row.layer.opacity > 0
+        and (not row.application or row.age_ms >= row.layer.startOffsetMs))
+    active_markers = tuple(row for row in eligible
+        if row.layer.markerGroup is not None and row.removal_age_ms is None)
+    candidates = active_markers or tuple(row for row in eligible if row.layer.markerGroup is not None)
+    groups: dict[str, list[ResolvedConditionLayer]] = {}
+    for row in candidates:
+        if row.layer.markerGroup is not None:
+            groups.setdefault(row.layer.markerGroup, []).append(row)
+    if not groups:
+        return eligible
+    order = sorted(groups, key=lambda key: (-max(row.layer.priority for row in groups[key]), key))
+    chosen = order[int(max(0., absolute_ms) // 1800) % len(order)]
+    # Multiple recipes/owners can expose the same symbol. Keep one complete bank
+    # bundle and retain all others in the authoritative lifetime records.
+    owner = min((row.owner_uuid for row in groups[chosen]), key=str)
+    selected = {row.layer.id: row for row in groups[chosen] if row.owner_uuid == owner}
+    return tuple(row for row in eligible if row.layer.markerGroup is None) + tuple(
+        selected[key] for key in sorted(selected))

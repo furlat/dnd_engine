@@ -67,7 +67,9 @@ def test_senses_use_current_sustained_glyph_until_membership_is_removed(data, id
 def test_command_executes_on_recorded_activation_then_never_returns_to_pending(data):
     actor, appearance, record = cue(data, "condition.spell.command.halt")
     pending = samples(data, actor, appearance, record, 5000)
-    assert len(pending) == 2 and all("command.sustain" in row.asset_id for _, row in pending)
+    assert sum(attachment == "head" for attachment, _ in pending) == 1
+    body_pending = [(attachment, row) for attachment, row in pending if attachment == "body"]
+    assert len(body_pending) == 2 and all("command.sustain" in row.asset_id for _, row in body_pending)
     activated = replace(record, activated_ms=5100)
     execution = samples(data, actor, appearance, activated, 5350)
     assert len(execution) == 2 and all("command.execute" in row.asset_id and row.frame == 8
@@ -86,9 +88,11 @@ def test_command_executes_on_recorded_activation_then_never_returns_to_pending(d
 def test_charm_flower_hearts_and_sustain_overlap_by_authored_offsets(data):
     actor, appearance, record = cue(data, "condition.charmed")
     early = samples(data, actor, appearance, record, 1200)
-    assert len(early) == 2 and all("charm_flower" in row.asset_id for _, row in early)
+    assert sum(attachment == "head" for attachment, _ in early) == 1
+    body_early = [(attachment, row) for attachment, row in early if attachment == "body"]
+    assert len(body_early) == 2 and all("charm_flower" in row.asset_id for _, row in body_early)
     overlap = samples(data, actor, appearance, record, 1500)
-    assert len(overlap) == 4
+    assert len([row for attachment, row in overlap if attachment == "body"]) == 4
     assert any("charm_hearts" in row.asset_id for _, row in overlap)
     later = samples(data, actor, appearance, record, 1700)
     assert any("charmed.sustain" in row.asset_id for _, row in later)

@@ -1,0 +1,2121 @@
+{
+  "scope": "All registered explicit condition-backed behaviors plus core standard conditions. Layer placement is metadata evidence, not automatic gameplay disposition classification.",
+  "rows": [
+    {
+      "id": "class_feature.aegis_training",
+      "label": "Aegis Training",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.brutal_critical",
+      "label": "Brutal Critical",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.danger_sense",
+      "label": "Danger Sense",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.fast_movement",
+      "label": "Fast Movement",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.feral_instinct",
+      "label": "Feral Instinct",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.frenzied",
+      "label": "Frenzied",
+      "kind": "class_feature",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "class.frenzy.mantle-q0-back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "class.frenzy.mantle-q0-front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "class_feature.barbarian.frenzy",
+      "label": "Frenzy Feature",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.indomitable_might",
+      "label": "Indomitable Might",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.intimidating_presence",
+      "label": "Intimidating Presence Feature",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.intimidating_presence_immunity",
+      "label": "Intimidating Presence Immunity",
+      "kind": "class_feature",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.mindless_rage",
+      "label": "Mindless Rage",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.persistent_rage",
+      "label": "PersistentRage",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.primal_champion",
+      "label": "Primal Champion",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.rage",
+      "label": "Rage Feature",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.raging",
+      "label": "Raging",
+      "kind": "class_feature",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "class.rage.mantle-q0-back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "class.rage.mantle-q0-front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "class_feature.barbarian.reckless_attack",
+      "label": "Reckless Attack Feature",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.reckless_attacking",
+      "label": "Reckless Attacking",
+      "kind": "class_feature",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "class.marker.reckless",
+          "attachment": "head",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "class_feature.barbarian.relentless_rage",
+      "label": "Relentless Rage",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.barbarian.retaliation",
+      "label": "Retaliation",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.extra_attack",
+      "label": "Extra Attack",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.action_surge",
+      "label": "Action Surge Feature",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.fighting_style.archery",
+      "label": "Fighting Style: Archery",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.fighting_style.defense",
+      "label": "Fighting Style: Defense",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.fighting_style.dueling",
+      "label": "Fighting Style: Dueling",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.fighting_style.great_weapon_fighting",
+      "label": "Fighting Style: Great Weapon Fighting",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.fighting_style.protection",
+      "label": "Fighting Style: Protection",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.fighting_style.two_weapon_fighting",
+      "label": "Fighting Style: Two-Weapon Fighting",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.improved_critical",
+      "label": "Improved Critical",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.indomitable",
+      "label": "Indomitable",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.second_wind",
+      "label": "Second Wind Feature",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.superior_critical",
+      "label": "Superior Critical",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "class_feature.fighter.survivor",
+      "label": "Survivor",
+      "kind": "class_feature",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.aegis_spark",
+      "label": "Aegis Spark",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.blinded",
+      "label": "Blinded",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "divine.blinded.back",
+          "attachment": "head",
+          "marker_group": "blinded"
+        },
+        {
+          "asset": "divine.blinded.front",
+          "attachment": "head",
+          "marker_group": "blinded"
+        }
+      ]
+    },
+    {
+      "id": "condition.charmed",
+      "label": "Charmed",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.charmed.sustain.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "control.charmed.sustain.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.concentrating",
+      "label": "Concentrating",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.consumable.weapon_coat.basic_poison",
+      "label": "Basic Poison",
+      "kind": "condition",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.consumable.weapon_coat.concentration_fire",
+      "label": "Flaming Coat",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.consumable.weapon_coat.fire",
+      "label": "Flaming Coat",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.consumable.weapon_coat.lightning",
+      "label": "Lightning Coat",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.consumable.weapon_coat.timed_fire",
+      "label": "Flaming Coat",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.dashing",
+      "label": "Dashing",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.deafened",
+      "label": "Deafened",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "divine.deafened.back",
+          "attachment": "head",
+          "marker_group": "deafened"
+        },
+        {
+          "asset": "divine.deafened.front",
+          "attachment": "head",
+          "marker_group": "deafened"
+        }
+      ]
+    },
+    {
+      "id": "condition.disengaging",
+      "label": "Disengaging",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.dodging",
+      "label": "Dodging",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.environment.jaw_restrained",
+      "label": "Jaw restraint",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.restrained.mark",
+          "attachment": "head",
+          "marker_group": "restrained"
+        }
+      ]
+    },
+    {
+      "id": "condition.exhaustion",
+      "label": "Exhaustion",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.field_focus",
+      "label": "Field Focus",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "condition.mark.field_focus",
+          "attachment": "head",
+          "marker_group": "condition.mark.field_focus"
+        }
+      ]
+    },
+    {
+      "id": "condition.frightened",
+      "label": "Frightened",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.frightened.back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "control.frightened.front",
+          "attachment": "ground",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.hidden",
+      "label": "Hidden",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.incapacitated",
+      "label": "Incapacitated",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.incapacitated.front",
+          "attachment": "head",
+          "marker_group": "incapacitated"
+        }
+      ]
+    },
+    {
+      "id": "condition.invisible",
+      "label": "Invisible",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.no_reactions",
+      "label": "No Reactions",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "condition.mark.no_reactions",
+          "attachment": "head",
+          "marker_group": "condition.mark.no_reactions"
+        }
+      ]
+    },
+    {
+      "id": "condition.paralyzed",
+      "label": "Paralyzed",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.petrified",
+      "label": "Petrified",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.poisoned",
+      "label": "Poisoned",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.prone",
+      "label": "Prone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.restrained",
+      "label": "Restrained",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.restrained.mark",
+          "attachment": "head",
+          "marker_group": "restrained"
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.aid",
+      "label": "Aid",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "healing.aid.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "healing.aid.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.antimagic_field.zone",
+      "label": "Antimagic Field Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.bane",
+      "label": "Bane",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "pending.bane.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "pending.bane.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.banishment",
+      "label": "Banished",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.barkskin",
+      "label": "Barkskin",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.beacon_of_hope",
+      "label": "Beacon of Hope",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "divine.beacon_of_hope.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "divine.beacon_of_hope.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.bestow_curse.ability",
+      "label": "Bestow Curse",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "curse.ability.rings.back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "curse.ability.rings.front",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "curse.ability.mark.back",
+          "attachment": "head",
+          "marker_group": "cursed"
+        },
+        {
+          "asset": "curse.ability.mark.front",
+          "attachment": "head",
+          "marker_group": "cursed"
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.bestow_curse.attack",
+      "label": "Bestow Curse",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "curse.attack.rings.back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "curse.attack.rings.front",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "curse.attack.mark.back",
+          "attachment": "head",
+          "marker_group": "cursed"
+        },
+        {
+          "asset": "curse.attack.mark.front",
+          "attachment": "head",
+          "marker_group": "cursed"
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.bestow_curse.damage",
+      "label": "Bestow Curse",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "curse.damage.rings.back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "curse.damage.rings.front",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "curse.damage.mark.back",
+          "attachment": "head",
+          "marker_group": "cursed"
+        },
+        {
+          "asset": "curse.damage.mark.front",
+          "attachment": "head",
+          "marker_group": "cursed"
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.bestow_curse.inaction",
+      "label": "Bestow Curse",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "curse.inaction.rings.back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "curse.inaction.rings.front",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "curse.inaction.mark.back",
+          "attachment": "head",
+          "marker_group": "cursed"
+        },
+        {
+          "asset": "curse.inaction.mark.front",
+          "attachment": "head",
+          "marker_group": "cursed"
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.bless",
+      "label": "Bless",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "pending.bless.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "pending.bless.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.blindness_deafness",
+      "label": "Blindness/Deafness",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.blur",
+      "label": "Blur",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.chill_touch",
+      "label": "Chill Touch Effect",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.cloudkill.zone",
+      "label": "Cloudkill Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.color_spray",
+      "label": "Color Spray",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.command.flee",
+      "label": "Command: Flee",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.command.sustain.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "control.command.sustain.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.command.grovel",
+      "label": "Command: Grovel",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.command.sustain.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "control.command.sustain.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.command.halt",
+      "label": "Command: Halt",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.command.sustain.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "control.command.sustain.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.darkness.zone",
+      "label": "Darkness Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.darkvision",
+      "label": "Darkvision",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "sensory.darkvision.back",
+          "attachment": "head",
+          "marker_group": null
+        },
+        {
+          "asset": "sensory.darkvision.front",
+          "attachment": "head",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.daylight.zone",
+      "label": "Daylight Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.death_ward",
+      "label": "Death Ward",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "support.death_ward.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.death_ward.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.divine_word",
+      "label": "Divine Word",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.enhance_ability",
+      "label": "Enhance Ability",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "support.enhance_bull.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.enhance_bull.front",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.enhance_bear.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.enhance_bear.front",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.enhance_cat.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.enhance_cat.front",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.enhance_fox.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.enhance_fox.front",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.enhance_owl.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.enhance_owl.front",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.enhance_eagle.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.enhance_eagle.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.enlarge_reduce",
+      "label": "Enlarge/Reduce",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.expeditious_retreat",
+      "label": "Expeditious Retreat",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "pending.retreat.back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "pending.retreat.front",
+          "attachment": "ground",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.eyebite.asleep",
+      "label": "Eyebite Asleep",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.sleep.sustain.back",
+          "attachment": "face",
+          "marker_group": "asleep"
+        },
+        {
+          "asset": "control.sleep.sustain.front",
+          "attachment": "face",
+          "marker_group": "asleep"
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.eyebite.casting",
+      "label": "Eyebite Casting",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.eyebite_eye.back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "control.eyebite_eye.front",
+          "attachment": "ground",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.eyebite.panicked",
+      "label": "Eyebite Panicked",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.frightened.back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "control.frightened.front",
+          "attachment": "ground",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.eyebite.sickened",
+      "label": "Sickened",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.sickened.back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "control.sickened.front",
+          "attachment": "ground",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.fear",
+      "label": "Fear",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.fire_shield",
+      "label": "Fire Shield",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "nature.warm.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "nature.warm.front",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "nature.chill.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "nature.chill.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.fly",
+      "label": "Fly",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "fly_wind_back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "fly_wind_front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.fog_cloud.zone",
+      "label": "Fog Cloud Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.freedom_of_movement",
+      "label": "Freedom of Movement",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "support.freedom_of_movement.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.freedom_of_movement.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.globe_of_invulnerability.zone",
+      "label": "Globe of Invulnerability Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.grease.zone",
+      "label": "Grease Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.greater_invisibility",
+      "label": "Invisible",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.guidance",
+      "label": "Guidance",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "support.guidance.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.guidance.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.guiding_bolt.marked",
+      "label": "Guiding Bolt",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "condition.mark.guiding_mark",
+          "attachment": "head",
+          "marker_group": "condition.mark.guiding_mark"
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.gust_of_wind.zone",
+      "label": "Gust of Wind Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.harm",
+      "label": "Harm",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.haste",
+      "label": "Haste",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "pending.haste.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "pending.haste.front",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "pending.haste_feet.back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "pending.haste_feet.front",
+          "attachment": "ground",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.haste.lethargy",
+      "label": "Haste Lethargy",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.heroes_feast",
+      "label": "Heroes' Feast",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.hold_monster",
+      "label": "Hold Monster",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.hold_human.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "control.hold_human.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.hold_person",
+      "label": "Hold Person",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.hold_human.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "control.hold_human.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.hypnotic_pattern",
+      "label": "Hypnotic Pattern",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.incapacitated.front",
+          "attachment": "head",
+          "marker_group": "incapacitated"
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.ice_storm.terrain",
+      "label": "Ice Storm Terrain",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.incendiary_cloud.zone",
+      "label": "Incendiary Cloud Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.insect_plague.zone",
+      "label": "Insect Plague Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.invisibility",
+      "label": "Invisible",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.jump",
+      "label": "Jump",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "pending.jump.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "pending.jump.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.light",
+      "label": "Light",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "support.light.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.light.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.longstrider",
+      "label": "Longstrider",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "fly_wind_back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "fly_wind_front",
+          "attachment": "ground",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.mage_armor",
+      "label": "Mage Armor",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "persistent.mage_armor.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.mage_armor.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.mirror_image",
+      "label": "Mirror Image",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.no_healing",
+      "label": "No Healing",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "condition.mark.anti_heal",
+          "attachment": "head",
+          "marker_group": "condition.mark.anti_heal"
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.power_word_stun",
+      "label": "Power Word Stun",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.prismatic_spray.restrained",
+      "label": "Prismatic Restrained",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.protection_from_energy",
+      "label": "Protection from Energy",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "persistent.energy.acid.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.energy.acid.front",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.energy.cold.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.energy.cold.front",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.energy.fire.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.energy.fire.front",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.energy.lightning.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.energy.lightning.front",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.energy.thunder.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.energy.thunder.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.protection_from_poison",
+      "label": "Protection from Poison",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "support.protection_from_poison.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.protection_from_poison.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.ray_of_frost",
+      "label": "Ray of Frost Effect",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.regenerate",
+      "label": "Regenerating",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "support.regenerate.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.regenerate.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.resistance",
+      "label": "Resistance",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "support.resistance.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.resistance.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.sanctuary",
+      "label": "Sanctuary",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "persistent.sanctuary.back",
+          "attachment": "ground",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.sanctuary.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.see_invisibility",
+      "label": "See Invisibility",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "sensory.see_invisibility.back",
+          "attachment": "head",
+          "marker_group": null
+        },
+        {
+          "asset": "sensory.see_invisibility.front",
+          "attachment": "head",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.shield",
+      "label": "Shield",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "persistent.shield.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "persistent.shield.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.shield_of_faith",
+      "label": "Shield of Faith",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "support.shield_of_faith.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.shield_of_faith.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.shillelagh",
+      "label": "Shillelagh",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.silence.deafened",
+      "label": "Spatial Condition Membership",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.silence.zone",
+      "label": "Silence Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.sleep",
+      "label": "Sleep",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.sleep.sustain.back",
+          "attachment": "face",
+          "marker_group": "asleep"
+        },
+        {
+          "asset": "control.sleep.sustain.front",
+          "attachment": "face",
+          "marker_group": "asleep"
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.sleet_storm.zone",
+      "label": "Sleet Storm Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.slow",
+      "label": "Slowed",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.slow.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "control.slow.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.spike_growth.zone",
+      "label": "Spike Growth Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.spirit_guardians.slowed",
+      "label": "Spirit Guardians Slowed",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.spirit_guardians.zone",
+      "label": "Spirit Guardians Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.stinking_cloud.nauseated",
+      "label": "Nauseated",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.stinking_cloud.zone",
+      "label": "Stinking Cloud Zone",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.stoneskin",
+      "label": "Stoneskin",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "support.stoneskin.back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "support.stoneskin.front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.sunbeam",
+      "label": "Sunbeam",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "solar.sunbeam.hand",
+          "attachment": "hand",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.sunbeam.blinded",
+      "label": "Sunbeam Blindness",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.sunburst.blinded",
+      "label": "Sunburst Blindness",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.true_seeing",
+      "label": "True Seeing",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "sensory.true_seeing.back",
+          "attachment": "head",
+          "marker_group": null
+        },
+        {
+          "asset": "sensory.true_seeing.front",
+          "attachment": "head",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.wall_of_fire.zone",
+      "label": "Wall of Fire",
+      "kind": "condition",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.wall_of_force.zone",
+      "label": "Wall of Force",
+      "kind": "condition",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.wall_of_ice.frigid_air",
+      "label": "Frigid Air",
+      "kind": "condition",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.wall_of_ice.zone",
+      "label": "Wall of Ice",
+      "kind": "condition",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.wall_of_stone.zone",
+      "label": "Wall of Stone",
+      "kind": "condition",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.wall_of_thorns.zone",
+      "label": "Wall of Thorns",
+      "kind": "condition",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.web.restrained",
+      "label": "Web restraint",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "web_bound_back",
+          "attachment": "body",
+          "marker_group": null
+        },
+        {
+          "asset": "web_bound_front",
+          "attachment": "body",
+          "marker_group": null
+        }
+      ]
+    },
+    {
+      "id": "condition.spell.web.zone",
+      "label": "Web Zone",
+      "kind": "condition",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.spell.wind_wall.zone",
+      "label": "Wind Wall",
+      "kind": "condition",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.stunned",
+      "label": "Stunned",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "control.stunned.back",
+          "attachment": "head",
+          "marker_group": "stunned"
+        },
+        {
+          "asset": "control.stunned.front",
+          "attachment": "head",
+          "marker_group": "stunned"
+        }
+      ]
+    },
+    {
+      "id": "condition.summon_control",
+      "label": "Summon Control",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.summoned",
+      "label": "Summoned",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.tile.spike_trap",
+      "label": "Spike Trap",
+      "kind": "condition",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.tile.zone_marker",
+      "label": "Tile Effect",
+      "kind": "condition",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "condition.unconscious",
+      "label": "Unconscious",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.underwater",
+      "label": "Underwater",
+      "kind": "condition",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "condition.wight.life_drain",
+      "label": "Life Drain",
+      "kind": "condition",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "condition.mark.life_drain",
+          "attachment": "head",
+          "marker_group": "condition.mark.life_drain"
+        }
+      ]
+    },
+    {
+      "id": "feat.lucky",
+      "label": "Lucky",
+      "kind": "feat",
+      "recipe": false,
+      "layers": []
+    },
+    {
+      "id": "trait.attack_hit_save_rider",
+      "label": "Hit Save Rider",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.brave",
+      "label": "Brave",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.brute",
+      "label": "Brute",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.circus_dual_wielder",
+      "label": "Dual Wielder",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.circus_elemental_affinity",
+      "label": "Elemental Affinity",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.circus_elemental_weapon_mastery",
+      "label": "Elemental Weapon Mastery",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.circus_performer",
+      "label": "Circus Performer",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.circus_tired",
+      "label": "Tired",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.dark_devotion",
+      "label": "Dark Devotion",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.dire_wolf_bite_prone",
+      "label": "Bite Prone Rider",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.divine_eminence_active",
+      "label": "Divine Eminence Active",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.ghoul_claws_paralysis",
+      "label": "Ghoul Claws Paralysis",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.ghoul_paralysis",
+      "label": "Ghoul Paralysis",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.innate_flight",
+      "label": "Innate Flight",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.keen_hearing_and_sight",
+      "label": "Keen Hearing and Sight",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.keen_hearing_and_smell",
+      "label": "Keen Hearing and Smell",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.keen_perception",
+      "label": "Keen Perception",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.leadership_aura",
+      "label": "Leadership Aura",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.magic_resistance",
+      "label": "Magic Resistance",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.martial_advantage",
+      "label": "Martial Advantage",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.pack_tactics",
+      "label": "Pack Tactics",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.parry",
+      "label": "Parry",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.rampage",
+      "label": "Rampage",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.rampage_available",
+      "label": "Rampage Available",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.skeleton_archer_marked",
+      "label": "Marked",
+      "kind": "trait",
+      "recipe": true,
+      "layers": [
+        {
+          "asset": "condition.mark.mark_target",
+          "attachment": "head",
+          "marker_group": "condition.mark.mark_target"
+        }
+      ]
+    },
+    {
+      "id": "trait.sneak_attack",
+      "label": "Sneak Attack",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.sunlight_sensitivity",
+      "label": "Sunlight Sensitivity",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.surprise_attack",
+      "label": "Surprise Attack",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.undead_fortitude",
+      "label": "Undead Fortitude",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    },
+    {
+      "id": "trait.wolf_bite_prone",
+      "label": "Bite Prone Rider",
+      "kind": "trait",
+      "recipe": true,
+      "layers": []
+    }
+  ]
+}

@@ -11,7 +11,6 @@ from dnd.conditions import (
     Deafened,
     Exhaustion,
     Frightened,
-    Grappled,
     Incapacitated,
     Invisible,
     Paralyzed,
@@ -162,16 +161,11 @@ def test_social_poison_and_fear_conditions_use_context_or_static_pressure() -> N
 
 
 def test_movement_and_control_conditions_clamp_action_economy_values() -> None:
-    """Grappled, Incapacitated, and Restrained limit movement and action choices."""
+    """Incapacitated and Restrained limit movement and action choices."""
     reset_standard_condition_state()
     source = create_tutorial_actor("Source", (1, 1), "heroes")
     target = create_tutorial_actor("Target", (2, 1), "monsters")
 
-    apply_condition(Grappled, source, target)
-    assert target.action_economy.movement_remaining() == 0
-    assert target.action_economy.actions.normalized_score == 1
-
-    target.remove_condition("Grappled")
     apply_condition(Incapacitated, source, target)
     assert target.action_economy.actions.normalized_score == 0
     assert target.action_economy.bonus_actions.normalized_score == 0

@@ -296,3 +296,23 @@ unchanged sheets total 1,523,231 bytes; exact local/private hashes and the prior
 private installer manifest are retained in
 `/home/tommaso/Dev/neurodragon_art/sources/modular-casting-repair-20261005/`.
 Their ordinary NeuroClient resource bindings are installed with the sheets.
+
+October5 remaining-marks intake preserves the original seven isolated overhead
+banks and their source contracts in `sources/remaining-marks-20261005/`.
+`devtools/import_remaining_marks.py` installs unchanged32FPS straight-RGBA sheets
+through existing necrotic media storage; no Steam/surface or actor artwork is
+selected. Seven files total 1521508bytes. Current marker integration remains
+under user review; source acceptance is not a substitute for gameplay acceptance.
+
+October5 steady debuff-marker intake installs thirteen unchanged single-frame
+RGBA glyphs from `steady-markers-v2` (10,282 bytes). Source contracts and original
+PNGs remain in `sources/debuff-markers-steady-20261005/`; the existing verified
+installer records local/private SHA256 equality and preserves the prior manifest.
+`devtools/import_debuff_markers.py` merges ordinary registered-media storage.
+Only new overhead glyphs are bound; existing body/ground effects remain intact.
+
+October 5 marker update: accepted `distinct-slow-v3` adds the fourteenth steady
+bank, `movement_slowed.png` (gold boot/down-arrow). The verified importer retains
+previously authored media sizes when importing an updated delivery. This new
+bank is also sized to the Blindness/Deafness reference footprint; existing body
+VFX and source pixels are preserved.

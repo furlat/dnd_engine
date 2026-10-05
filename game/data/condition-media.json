@@ -2059,6 +2059,348 @@
       "animation": "original",
       "asset_id": "class.affinity.poison.front",
       "scale": 0.5
+    },
+    "condition.mark.mark_target": {
+      "category": "mark_target",
+      "animation": "loop",
+      "asset_id": "condition.mark.mark_target",
+      "scale": 0.25,
+      "actor_top_clearance_px": 8,
+      "removal_fade_ms": 200
+    },
+    "condition.mark.field_focus": {
+      "category": "field_focus",
+      "animation": "loop",
+      "asset_id": "condition.mark.field_focus",
+      "scale": 0.25,
+      "actor_top_clearance_px": 8,
+      "removal_fade_ms": 200
+    },
+    "condition.mark.life_drain": {
+      "category": "life_drain",
+      "animation": "loop",
+      "asset_id": "condition.mark.life_drain",
+      "scale": 0.25,
+      "actor_top_clearance_px": 8,
+      "removal_fade_ms": 200
+    },
+    "condition.mark.no_reactions": {
+      "category": "no_reactions",
+      "animation": "loop",
+      "asset_id": "condition.mark.no_reactions",
+      "scale": 0.25,
+      "actor_top_clearance_px": 8,
+      "removal_fade_ms": 200
+    },
+    "condition.mark.guiding_mark": {
+      "category": "guiding_mark",
+      "animation": "loop",
+      "asset_id": "condition.mark.guiding_mark",
+      "scale": 0.25,
+      "actor_top_clearance_px": 8,
+      "removal_fade_ms": 200
+    },
+    "condition.mark.anti_heal": {
+      "category": "anti_heal",
+      "animation": "loop",
+      "asset_id": "condition.mark.anti_heal",
+      "scale": 0.25,
+      "actor_top_clearance_px": 8,
+      "removal_fade_ms": 200
+    },
+    "condition.marker.frightened.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.frightened.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.28302,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.exhaustion.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.exhaustion.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.30233,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.poisoned.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.poisoned.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.29412,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.paralyzed.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.paralyzed.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.30233,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.petrified.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.petrified.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.28261,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.prone.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.prone.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.30612,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.unconscious.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.unconscious.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.27083,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.commanded.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.commanded.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.30612,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.slow.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.slow.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.31707,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.sickened.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.sickened.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.27273,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.reduce.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.reduce.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.30233,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.bane.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.bane.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.54167,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.charmed.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.charmed.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.8125,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
+    },
+    "condition.marker.movement_slowed.overhead": {
+      "category": "debuff_marker",
+      "animation": "loop",
+      "images_by_facing": {},
+      "asset_id": "condition.marker.movement_slowed.overhead",
+      "application_asset_id": null,
+      "application_fade_ms": [
+        1500.0,
+        2000.0
+      ],
+      "removal_fade_ms": 200.0,
+      "scale": 0.28889,
+      "world_basis": null,
+      "application_mode": "crossfade",
+      "removal_mask_asset_id": null,
+      "sustain_start_ms": 0.0,
+      "loop_crossfade_ms": 0.0,
+      "actor_top_clearance_px": 8.0,
+      "removal_asset_id": null,
+      "removal_crossfade_ms": 0.0
     }
   }
 }

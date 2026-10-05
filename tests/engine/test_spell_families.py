@@ -12,7 +12,7 @@ from dnd.blocks.abilities import AbilityConfig, AbilityScoresConfig
 from dnd.blocks.action_economy import ActionEconomyConfig
 from dnd.blocks.health import HealthConfig, HitDiceConfig
 from dnd.blocks.spellcasting import SpellcastingConfig
-from dnd.conditions import Blinded, Concentrating, Exhaustion, Grappled, Paralyzed, Petrified, Poisoned, Restrained, Stunned, Underwater, Unconscious
+from dnd.conditions import Blinded, Concentrating, Exhaustion, Paralyzed, Petrified, Poisoned, Restrained, Stunned, Underwater, Unconscious
 from dnd.core.base_actions import ActionAvailabilityStatus, TargetType
 from dnd.core.base_block import BaseBlock, LightLevel, SenseMode, SensesType
 from dnd.core.base_conditions import BaseCondition
@@ -981,9 +981,7 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert caster.action_economy.spell_slot_9.normalized_score == 0
 
     caster.action_economy.reset_all_costs()
-    ally.add_condition(Grappled(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     ally.add_condition(Restrained(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
-    assert "Grappled" in ally.active_conditions
     assert "Restrained" in ally.active_conditions
     assert ally.action_economy.movement_remaining() == 0
 
@@ -998,7 +996,6 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert ally.ignore_difficult_terrain
     assert ally.ignore_magical_speed_reduction
     assert caster.action_economy.spell_slot_4.normalized_score == 0
-    assert "Grappled" in ally.active_conditions
     assert "Restrained" in ally.active_conditions
 
     available_escape_actions = ally.get_available_actions()
@@ -1018,7 +1015,6 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert escape_event is not None
     assert not escape_event.canceled
     assert escape_event.phase == EventPhase.COMPLETION
-    assert "Grappled" not in ally.active_conditions
     assert "Restrained" not in ally.active_conditions
     assert ally.action_economy.movement_remaining() == 25
     ally.action_economy.reset_all_costs()
@@ -1076,19 +1072,16 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert "Spirit Guardians Slowed" not in ally.active_conditions
     assert ally.action_economy.movement_remaining() == protected_speed
 
-    caster.add_condition(
+    ally.add_condition(
         RayOfFrostEffect(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            affected_target_uuid=ally.uuid,
+            target_entity_uuid=ally.uuid,
         )
     )
-    assert "Ray of Frost Effect" not in caster.active_conditions
+    assert "Ray of Frost Effect" not in ally.active_conditions
     assert ally.action_economy.movement_remaining() == protected_speed
 
-    ally.add_condition(Grappled(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     ally.add_condition(Restrained(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
-    assert "Grappled" not in ally.active_conditions
     assert "Restrained" not in ally.active_conditions
     ally.add_condition(
         Paralyzed(
@@ -1157,20 +1150,17 @@ def test_eb_15_025_protective_abjurations_prevent_and_absorb_effects() -> None:
     assert ally.action_economy.movement_remaining() == unprotected_speed // 2
     ally.remove_condition("Spirit Guardians Slowed")
 
-    caster.add_condition(
+    ally.add_condition(
         RayOfFrostEffect(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            affected_target_uuid=ally.uuid,
+            target_entity_uuid=ally.uuid,
         )
     )
-    assert "Ray of Frost Effect" in caster.active_conditions
+    assert "Ray of Frost Effect" in ally.active_conditions
     assert ally.action_economy.movement_remaining() == unprotected_speed - 10
-    caster.remove_condition("Ray of Frost Effect")
+    ally.remove_condition("Ray of Frost Effect")
 
-    ally.add_condition(Grappled(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
     ally.add_condition(Restrained(source_entity_uuid=caster.uuid, target_entity_uuid=ally.uuid))
-    assert "Grappled" in ally.active_conditions
     assert "Restrained" in ally.active_conditions
     ally.add_condition(
         Paralyzed(

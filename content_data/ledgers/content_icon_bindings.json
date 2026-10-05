@@ -1,6 +1,6 @@
 {
   "asset_index_digest": "3bd799f4ad12eb9d097f1a9c44790a2d0d0e75a8ee8b83e85ababce79aada632",
-  "binding_digest": "14490816803b696638dd180366ca724226faff1c76a1bd633eb5c2f4f0a9e9d3",
+  "binding_digest": "cc1fc694fc582a859eb5a2b5048259ef9be4bbbda10810a012dc93fe9c4bf0cc",
   "definitions": [
     {
       "asset_sha256": "540da9d7cb94419501c0c8c47d73ca05d826d8d70e2f18c6adae5e13e4c92892",
@@ -9171,20 +9171,6 @@
       "evidence_kind": "backend_condition_class",
       "evidence_token": "dnd.conditions.Frightened",
       "icon_key": "condition.dnd-conditions-frightened"
-    },
-    {
-      "asset_sha256": "8fdb9a85790c0ff46fd367ab613a8376ef8101714e90a9ace9d95183845b9204",
-      "content_ref": {
-        "content_id": "condition.grappled",
-        "content_version": 1,
-        "definition_contract_hash": "230bf50e06127e60dc2313fe14d54ffa41e2c983769dd21428adc9f4082cc1fa",
-        "definition_kind": "condition",
-        "pack_id": "core.rules"
-      },
-      "decision": "bind",
-      "evidence_kind": "backend_condition_class",
-      "evidence_token": "dnd.conditions.Grappled",
-      "icon_key": "condition.dnd-conditions-grappled"
     },
     {
       "asset_sha256": "8e13c9fdb1a173825041eae6f05a4245730bf3e34a3b19ac7a207fb4c37284c5",

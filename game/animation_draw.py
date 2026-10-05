@@ -12,6 +12,7 @@ from math import ceil, cos, degrees, floor, hypot, pi, sin, sqrt
 from types import MappingProxyType
 from typing import Literal, Mapping, NamedTuple, Sequence
 from uuid import UUID
+from weakref import WeakKeyDictionary
 
 import numpy as np
 import pygame
@@ -54,6 +55,16 @@ from game.projection import Camera, HEIGHT_STEP_PIXELS, TILE_WIDTH, painter_key,
 BodyRows = Mapping[tuple[str, str, str, int], pygame.Surface]
 LoadedBodyRows = dict[tuple[str, str, str, int], pygame.Surface]
 ActorMediaRequest = tuple[ActorContact, tuple[RigLayer, ...], tuple[str, ...]]
+
+# Immutable loaded rows own this geometry; weak keys do not retain old media.
+_MARKER_ROW_TOPS: WeakKeyDictionary[pygame.Surface, int | None] = WeakKeyDictionary()
+
+
+def _marker_row_top(row: pygame.Surface) -> int | None:
+    if row not in _MARKER_ROW_TOPS:
+        bounds = row.get_bounding_rect()
+        _MARKER_ROW_TOPS[row] = bounds.top if bounds else None
+    return _MARKER_ROW_TOPS[row]
 
 
 def load_action_strip_media(cues: Sequence[ActionStripCue]) -> dict[str, pygame.Surface]:
@@ -727,11 +738,41 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             image.blit(condition_body_outline(image, condition.body_outline, condition.outline_age_ms,
                 quiet_age_ms=condition.time_ms), (0, 0))
         if condition.layers and not only_shadow:
+            marker_anchor = None
+            if any(row.layer.markerGroup is not None for row in condition.layers):
+                held = condition.frozen_body is not None or condition.body_pose is not None
+                head_rows = rig.pose_sockets.get("head", {}).get(viewed_body.clip)
+                if head_rows is not None:
+                    points = tuple(point for point in (head_rows[viewed_body.facing][body.frame:body.frame+1]
+                        if held else head_rows[viewed_body.facing]) if point is not None)
+                    if points:
+                        head_x = sum(point.x for point in points) / len(points)
+                        top = min(point.y for point in points)
+                        hidden_slots = set(body.hidden_slots) | {layer.slot for layer in body.cast_layers}
+                        if body.hide_weapon:
+                            hidden_slots.add("weapon")
+                        for layer in appearance:
+                            if layer.slot in hidden_slots or layer.suppression_provider_uuids:
+                                continue
+                            row = body_rows.get((contact.rig_id, body.clip, layer.category,
+                                rig.facing_rows[viewed_body.facing]))
+                            if row is None:
+                                continue
+                            if held:
+                                box = row.subsurface((body.frame * rig.cell_width, 0,
+                                    rig.cell_width, rig.cell_height)).get_bounding_rect()
+                                row_top = box.top if box else None
+                            else:
+                                row_top = _marker_row_top(row)
+                            if row_top is not None:
+                                top = min(top, row_top)
+                        marker_anchor = (ground[0] + registration[0] + (head_x-rig.cell_width/2)*scale*contact.visual_scale_x*body_scale[0],
+                            root_y + registration[1] + (top-rig.cell_height)*scale*body_scale[1])
             image, destination = compose_condition_layers(image, destination, ground, viewed_body.facing,
                 contact.visual_scale * camera.zoom, contact.visual_scale_x,
                 condition.layers, body_rows, data=data, quadrant=camera.quadrant,
                 floor_ground=project_screen(contact.grid, camera, elevation_steps=contact.elevation_steps),
-                activity=condition.activity,
+                activity=condition.activity, absolute_ms=condition.time_ms, marker_anchor=marker_anchor, marker_scale=camera.zoom,
                 attachment_anchors=pose_attachment_anchors(rig, viewed_body,
                     (ground[0] + registration[0], ground[1] + registration[1]
                      - body.scale_anchor_height_px * (1 - body_scale[1]) * scale),

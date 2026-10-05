@@ -2671,7 +2671,8 @@
       "death-save",
       "lifecycle",
       "turns",
-      "four-corners"
+      "four-corners",
+      "steady-marker-extra"
     ],
     "description": "Three real successful saves stabilize the player. Later native healing restores 5 HP; original Stable and Revived badges.",
     "scenario": {
@@ -3944,7 +3945,8 @@
       "paired-observers",
       "four-corners",
       "detected",
-      "poisoned"
+      "poisoned",
+      "steady-marker-review"
     ],
     "description": "Real encounter: enter and take damage; leave/re-enter raised spikes; lower by lever; walk in/out/back safely; raise by the other character while the walker remains inside and takes damage. Native passive perception vs concealment DC, not a synthetic Stealth roll. Both perspectives replay saved subjective events.",
     "scenario": {
@@ -7552,7 +7554,8 @@
       "spell",
       "bane",
       "paired-observers",
-      "four-corners"
+      "four-corners",
+      "steady-marker-review"
     ],
     "description": "Two selected creatures fail their native saves and walk under Bane; a successful-save creature and an unselected bystander never gain it. Drop Concentration removes the retained memberships.",
     "scenario": {
@@ -7667,7 +7670,8 @@
       "spell",
       "haste",
       "paired-observers",
-      "four-corners"
+      "four-corners",
+      "steady-marker-review"
     ],
     "description": "A real Haste recipient moves, spends the restricted action on a weapon attack, casts Fire Bolt next turn and uses a Haste Dash. Dropping concentration produces native lethargy.",
     "scenario": {
@@ -7799,7 +7803,8 @@
       "spell",
       "gameplay",
       "four-corners",
-      "paired-observers"
+      "paired-observers",
+      "steady-marker-review"
     ],
     "description": "Real native actions and outcomes, saved once and replayed independently for both participants.",
     "framing": "actors",
@@ -7916,7 +7921,8 @@
       "spell",
       "gameplay",
       "four-corners",
-      "paired-observers"
+      "paired-observers",
+      "steady-marker-extra"
     ],
     "description": "Real native actions and outcomes, saved once and replayed independently for both participants.",
     "framing": "actors",
@@ -7955,7 +7961,8 @@
       "spell",
       "gameplay",
       "four-corners",
-      "paired-observers"
+      "paired-observers",
+      "steady-marker-extra"
     ],
     "description": "Real native actions and outcomes, saved once and replayed independently for both participants.",
     "framing": "actors",
@@ -7994,7 +8001,8 @@
       "spell",
       "gameplay",
       "four-corners",
-      "paired-observers"
+      "paired-observers",
+      "steady-marker-extra"
     ],
     "description": "Real native actions and outcomes, saved once and replayed independently for both participants.",
     "framing": "actors",
@@ -8809,7 +8817,8 @@
     "title": "Grease \u00b7 failed save \u00b7 fall and stand",
     "tags": [
       "persistent-spells",
-      "persistent-grease"
+      "persistent-grease",
+      "steady-marker-review"
     ],
     "description": "Actual spell commands, movement and owned lifecycle; paired subjective event replay in all four cameras.",
     "tail_duration_ms": 1800,
@@ -8896,7 +8905,8 @@
     "title": "Stinking Cloud",
     "tags": [
       "persistent-spells",
-      "persistent-stinking-cloud"
+      "persistent-stinking-cloud",
+      "steady-marker-review"
     ],
     "description": "Actual spell commands, movement and owned lifecycle; paired subjective event replay in all four cameras.",
     "tail_duration_ms": 1800,
@@ -8980,7 +8990,8 @@
     "title": "Enlarge Reduce \u00b7 enlarge",
     "tags": [
       "persistent-spells",
-      "persistent-enlarge-reduce"
+      "persistent-enlarge-reduce",
+      "steady-marker-review"
     ],
     "description": "Actual spell commands, movement and owned lifecycle; paired subjective event replay in all four cameras.",
     "tail_duration_ms": 1800,
@@ -8995,7 +9006,8 @@
     "title": "Enlarge Reduce \u00b7 reduce",
     "tags": [
       "persistent-spells",
-      "persistent-enlarge-reduce"
+      "persistent-enlarge-reduce",
+      "steady-marker-review"
     ],
     "description": "Actual spell commands, movement and owned lifecycle; paired subjective event replay in all four cameras.",
     "tail_duration_ms": 1800,
@@ -10023,7 +10035,8 @@
       "gameplay",
       "support",
       "paired-observers",
-      "four-corners"
+      "four-corners",
+      "steady-marker-extra"
     ],
     "description": "Native Lesser Restoration removes actual Poisoned membership at authored contact, preserving HP.",
     "initial_facings": [
@@ -13544,7 +13557,8 @@
       "control-queue",
       "slow",
       "paired-observers",
-      "four-corners"
+      "four-corners",
+      "steady-marker-review"
     ],
     "description": "Two native failed Wisdom saves establish Slow. The actual recipient moves; concentration clear removes both envelopes. No preview animation-rate multiplier.",
     "scenario": {
@@ -13562,7 +13576,8 @@
       "control-queue",
       "slow",
       "paired-observers",
-      "four-corners"
+      "four-corners",
+      "steady-marker-review"
     ],
     "description": "Native successful Wisdom saves leave no Slow envelope. Actual movement follows the cast.",
     "scenario": {
@@ -13718,7 +13733,8 @@
       "control-queue",
       "paired-observers",
       "four-corners",
-      "native-conditions"
+      "native-conditions",
+      "steady-marker-review"
     ],
     "description": "Native cast and actual source clear on the modular human rig. Accepted humanoid chains for either spell; independent Paralyzed owns the frozen pose and amber alpha contour. Ogre attachment is deferred to the authored Ogre profile.",
     "scenario": {
@@ -13839,7 +13855,8 @@
       "control",
       "fear",
       "paired-observers",
-      "four-corners"
+      "four-corners",
+      "steady-marker-review"
     ],
     "description": "Native discovered cone: one failed save, one successful save and an outside bystander. Real movement and concentration clear; no animation-driven fleeing. Accepted eight-heading finite art and continuous Frightened sustain.",
     "scenario": {
@@ -14948,7 +14965,8 @@
     "title": "Petrified \u00b7 shared condition application and removal",
     "tags": [
       "shared-conditions",
-      "four-corners"
+      "four-corners",
+      "steady-marker-review"
     ],
     "description": "Native condition membership drives the accepted common cue and source-owned removal. Stone preserves the captured pose and original sprite alpha.",
     "scenario": {
@@ -15122,8 +15140,8 @@
   },
   {
     "id": "nature-produce-hit",
-    "title": "Produce Hit",
-    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "title": "Produce Flame \u00b7 direct hit",
+    "description": "One native damage-only Produce Flame cast: ordinary ranged spell attack, no retained flame, light or Hurl/Dismiss action.",
     "tags": [
       "nature-spells",
       "spell-vfx-packet2",
@@ -15139,8 +15157,8 @@
   },
   {
     "id": "nature-produce-miss",
-    "title": "Produce Miss",
-    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "title": "Produce Flame \u00b7 miss",
+    "description": "One native damage-only Produce Flame cast: ordinary ranged spell attack, no retained flame, light or Hurl/Dismiss action.",
     "tags": [
       "nature-spells",
       "spell-vfx-packet2",
@@ -15156,8 +15174,8 @@
   },
   {
     "id": "nature-produce-initial",
-    "title": "Produce Initial",
-    "description": "Native cast, ownership and subsequent actions; paired subjective observers, original artwork and current-frame sockets.",
+    "title": "Produce Flame \u00b7 direct hit",
+    "description": "One native damage-only Produce Flame cast: ordinary ranged spell attack, no retained flame, light or Hurl/Dismiss action.",
     "tags": [
       "nature-spells",
       "spell-vfx-packet2",
@@ -15225,7 +15243,8 @@
     "tags": [
       "necrotic-handoff",
       "paired-observers",
-      "four-corners"
+      "four-corners",
+      "steady-marker-review"
     ],
     "description": "Real native cast, committed save and damage outcomes, current-pose material and original accepted media. Circle recipients resolve together; no persistent damaging smoke.",
     "scenario": {
@@ -15596,7 +15615,8 @@
       "spell-queue",
       "holy",
       "four-corners",
-      "paired-observers"
+      "paired-observers",
+      "steady-marker-extra"
     ],
     "description": "Native spell owner, recorded effect and actual recipient consequences. Original accepted component artwork on the standard compositor.",
     "framing": "scene",
@@ -15837,7 +15857,8 @@
     "tags": [
       "eyebite",
       "directed",
-      "spell-packet3"
+      "spell-packet3",
+      "steady-marker-review"
     ],
     "description": "Native initial gaze, repeat on a distinct recipient and exact concentration cleanup. Four cameras consume retained paired observer histories.",
     "framing": "actors",
@@ -17123,7 +17144,8 @@
       "control-queue",
       "paired-observers",
       "four-corners",
-      "native-conditions"
+      "native-conditions",
+      "steady-marker-review"
     ],
     "description": "Native Enlarge/Reduce changes the recipient before a real Hold Monster cast. Check the same accepted humanoid chains at the resulting body scale in all cameras.",
     "scenario": {
@@ -17136,5 +17158,161 @@
     "settled_hold_ms": 2500,
     "tail_duration_ms": 3000,
     "framing": "actors"
+  },
+  {
+    "id": "remaining-marked",
+    "title": "Marked target \u00b7 owned mark and removal",
+    "tags": [
+      "remaining-handoff",
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Native condition application and removal at ordinary zoom. This lifecycle fixture tests the marker, not the source attack mechanics.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "marked"
+    },
+    "settled_hold_ms": 1800,
+    "tail_duration_ms": 1400
+  },
+  {
+    "id": "remaining-field-focus",
+    "title": "Field Focus \u00b7 owned mark and removal",
+    "tags": [
+      "remaining-handoff",
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Native condition application and removal at ordinary zoom. This lifecycle fixture tests the marker, not the source attack mechanics.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "field_focus"
+    },
+    "settled_hold_ms": 1800,
+    "tail_duration_ms": 1400
+  },
+  {
+    "id": "remaining-life-drain",
+    "title": "Life Drain maximum-HP loss \u00b7 owned mark and removal",
+    "tags": [
+      "remaining-handoff",
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Native condition application and removal at ordinary zoom. This lifecycle fixture tests the marker, not the source attack mechanics.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "life_drain"
+    },
+    "settled_hold_ms": 1800,
+    "tail_duration_ms": 1400
+  },
+  {
+    "id": "remaining-no-reactions",
+    "title": "No Reactions \u00b7 owned mark and removal",
+    "tags": [
+      "remaining-handoff",
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Native condition application and removal at ordinary zoom. This lifecycle fixture tests the marker, not the source attack mechanics.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "no_reactions"
+    },
+    "settled_hold_ms": 1800,
+    "tail_duration_ms": 1400
+  },
+  {
+    "id": "remaining-guiding-mark",
+    "title": "Guiding Bolt mark \u00b7 owned mark and removal",
+    "tags": [
+      "remaining-handoff",
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Native condition application and removal at ordinary zoom. This lifecycle fixture tests the marker, not the source attack mechanics.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "guiding_mark"
+    },
+    "settled_hold_ms": 1800,
+    "tail_duration_ms": 1400
+  },
+  {
+    "id": "remaining-no-healing",
+    "title": "Healing blocked \u00b7 owned mark and removal",
+    "tags": [
+      "remaining-handoff",
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Native condition application and removal at ordinary zoom. This lifecycle fixture tests the marker, not the source attack mechanics.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "no_healing"
+    },
+    "settled_hold_ms": 1800,
+    "tail_duration_ms": 1400
+  },
+  {
+    "id": "remaining-multiple-marks",
+    "title": "Multiple debuffs \u00b7 one cycling overhead slot",
+    "tags": [
+      "remaining-handoff",
+      "shared-conditions",
+      "four-corners"
+    ],
+    "description": "Three real condition owners applied then removed independently. Body state and condition lifetimes continue while the overhead slot cycles.",
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "multiple_marks"
+    },
+    "settled_hold_ms": 5800,
+    "tail_duration_ms": 1400
+  },
+  {
+    "id": "marker-recovery-exhaustion",
+    "title": "Exhaustion \u00b7 Greater Restoration recovery",
+    "description": "Recipient begins with the existing condition. A real paid Greater Restoration removes it; four cameras show the marker and body transition. Starting affliction is fixture setup, not a new spell or ability.",
+    "tags": [
+      "steady-marker-extra",
+      "native-recovery"
+    ],
+    "scenario": {
+      "kind": "healing-batch",
+      "program": "greater_restoration",
+      "recovery_condition": "exhaustion"
+    }
+  },
+  {
+    "id": "marker-recovery-petrified",
+    "title": "Petrified \u00b7 Greater Restoration recovery",
+    "description": "Recipient begins with the existing condition. A real paid Greater Restoration removes it; four cameras show the marker and body transition. Starting affliction is fixture setup, not a new spell or ability.",
+    "tags": [
+      "steady-marker-extra",
+      "native-recovery"
+    ],
+    "scenario": {
+      "kind": "healing-batch",
+      "program": "greater_restoration",
+      "recovery_condition": "petrified"
+    }
+  },
+  {
+    "id": "marker-unconscious-expiry",
+    "title": "Unconscious while Prone \u00b7 native turn expiry",
+    "description": "Recipient begins Prone. Explicit finite Unconscious membership then expires through the native turn. This is a condition fixture, not a new affliction spell or automatic dying-state marker.",
+    "tags": [
+      "steady-marker-state",
+      "condition-fixture"
+    ],
+    "scenario": {
+      "kind": "shared-condition",
+      "program": "unconscious",
+      "prior": "prone"
+    },
+    "settled_hold_ms": 2000,
+    "tail_duration_ms": 1500
   }
 ]

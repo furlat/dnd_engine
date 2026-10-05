@@ -134,7 +134,7 @@ def produce(case: ReviewCase) -> CapturedHistory:
         case SlowCase() as scenario:
             return slow_history(saved=scenario.saved)
         case SharedConditionCase() as scenario:
-            return shared_condition_history(program=scenario.program)
+            return shared_condition_history(program=scenario.program, prior=scenario.prior)
         case AntimagicCase():
             return antimagic_history()
         case TransportSpellCase() as scenario:
@@ -205,7 +205,7 @@ def produce(case: ReviewCase) -> CapturedHistory:
             return support_history(program=scenario.program, diagonal=scenario.diagonal)
         case HealingBatchCase() as scenario:
             return healing_batch_history(program=scenario.program, self_target=scenario.self_target,
-                clean_target=scenario.clean_target)
+                clean_target=scenario.clean_target, recovery_condition=scenario.recovery_condition)
         case SupportConditionCase() as scenario:
             return support_condition_history(program=scenario.program, self_target=scenario.self_target,
                 ability=scenario.ability, mode=scenario.mode)

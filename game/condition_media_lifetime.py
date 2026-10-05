@@ -383,7 +383,7 @@ def sample_condition_lifetimes(
                     max(0., clock - start) if start is not None else clock,
                     start is not None, 1. if media.removal_mask_asset_id or color_release else 1 - (absolute_ms - end) / duration,
                     fade_in_age_ms=max(0., end - start - layer.startOffsetMs) if start is not None else None,
-                    removal_age_ms=absolute_ms - end if media.removal_mask_asset_id or color_release else None))
+                    removal_age_ms=absolute_ms - end))
         copies = appearance.live_copies
         distortion = appearance.distortion
         distortion_strength = 1.

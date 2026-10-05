@@ -259,15 +259,7 @@ class FireBolt(SpellAction):
 
 
 class RayOfFrostEffect(BaseCondition):
-    """Tracks Ray of Frost speed reduction on caster.
-
-    Duration: 1 round (expires at start of caster's next turn).
-
-    This follows the SRD: "until the start of YOUR next turn" = CASTER's turn.
-    The condition lives on the caster but applies a speed modifier to the target.
-    The modifier is tracked via modifiers_uuids, so it gets cleaned up automatically
-    when this condition expires at caster's turn start.
-    """
+    """Victim-owned speed reduction, expiring on the caster's next turn."""
     name: str = Field(default="Ray of Frost Effect", description="Display name for the ray of frost effect condition.")
     description: str = Field(
         default=(
@@ -280,14 +272,13 @@ class RayOfFrostEffect(BaseCondition):
         default_factory=lambda: {ConditionTag.MAGICAL},
         description="Condition tags that classify the ray of frost slow for cleanup and filtering.",
     )
-    affected_target_uuid: Optional[UUID] = Field(default=None, description="Target entity UUID whose state is modified by ray of frost effect.")
 
     def _apply(self, declaration_event: Event) -> Tuple[List[Tuple[UUID, UUID]], List[UUID], List[UUID], List[UUID], Optional[Event]]:
 
-        if not self.affected_target_uuid:
+        if not self.target_entity_uuid:
             return [], [], [], [], declaration_event.cancel(status_message="Affected target UUID not set")
 
-        target = Entity.get(self.affected_target_uuid)
+        target = Entity.get(self.target_entity_uuid)
         if not target:
             return [], [], [], [], declaration_event.cancel(status_message="Target not found")
         if target.ignore_magical_speed_reduction:
@@ -299,7 +290,7 @@ class RayOfFrostEffect(BaseCondition):
             name="Ray of Frost",
             value=-10,
             source_entity_uuid=self.source_entity_uuid or self.target_entity_uuid,
-            target_entity_uuid=self.affected_target_uuid
+            target_entity_uuid=self.target_entity_uuid
         )
         for speed in target.action_economy.speed_values:
             mod_uuid = speed.self_static.add_value_modifier(speed_reduction)
@@ -310,7 +301,12 @@ class RayOfFrostEffect(BaseCondition):
             update={"condition": self},
             status_message=f"Applied Ray of Frost speed reduction to {target.name}"
         )
-        return outs, [], [], [], effect_event
+        def expire(event: Event) -> None:
+            target.remove_condition_by_uuid(self.uuid, parent_event=event)
+
+        handler = _source_turn_expiry_handler(self, declaration_event, at_end=False, expire=expire)
+        target.add_event_handler(handler)
+        return outs, [handler.uuid], [], [], effect_event
 
 
 class RayOfFrost(SpellAction):
@@ -427,17 +423,10 @@ class RayOfFrost(SpellAction):
 
         effect_condition = RayOfFrostEffect(
             source_entity_uuid=caster.uuid,
-            target_entity_uuid=caster.uuid,
-            affected_target_uuid=target.uuid,
+            target_entity_uuid=target.uuid,
             tags={ConditionTag.MAGICAL},
-            duration=Duration(
-                duration=1,
-                duration_type=DurationType.ROUNDS,
-                source_entity_uuid=caster.uuid,
-                target_entity_uuid=caster.uuid
-            )
         )
-        caster.add_condition(effect_condition, parent_event=effect_event)
+        target.add_condition(effect_condition, parent_event=effect_event)
 
         return effect_event.with_updates(
             damages=[cold_damage],
@@ -2038,7 +2027,7 @@ class ConeOfCold(SpellAction):
 
 def _source_turn_expiry_handler(owner: BaseCondition, application: Event, *,
                                 at_end: bool, expire: Callable[[Event], None]) -> EventHandler:
-    """Two brief solar/ice deadlines, using native source turns and world rounds.
+    """Source-turn deadlines, using native source turns and world rounds.
 
     A departed or dead source has no next turn; retain the effect until the
     next world round boundary instead of tying it to a recipient's initiative.
