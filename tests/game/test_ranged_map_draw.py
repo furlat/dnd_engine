@@ -79,7 +79,7 @@ def test_real_shortbow_pixels_cross_the_map_and_retire_at_contact(
                    mouse_position=None, extra_commands=bare)
         without_bolt = pygame.surfarray.array3d(screen)
         evidence = draw_frame(screen, before, catalog, cache, camera, 0, collect_evidence=True, show_grid=False,
-                             mouse_position=None, extra_commands=commands)
+                             mouse_position=None, extra_commands=commands).evidence
         assert evidence is not None
         assert evidence.actual_draws == evidence.expected_draws
         with_bolt = pygame.surfarray.array3d(screen)

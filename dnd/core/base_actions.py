@@ -9,6 +9,8 @@ from dnd.core.attack_types import AttackSourceMetadata
 from dnd.core.creature_types import DamageType
 from dnd.core.action_types import (
     ActionPresentationKind,
+    ActionAffordance,
+    ActionVariantFacet,
     ActionEconomyCostType,
     EntityTargetPerception,
     PositionSelection,
@@ -30,6 +32,8 @@ from dnd.core.content.runtime import (
     runtime_behavior_provider,
 )
 from dnd.core.aoe import AoEShape
+from dnd.core.traversal_connectors import ConnectorTraversalDiscovery
+from dnd.core.presentation_geometry import AoEPresentationGeometry
 from dnd.core.geometry import bresenham_line, grid_distance_feet
 from dnd.core.gridmap import get_map
 from dnd.types.physical_access import PhysicalAccess
@@ -1105,6 +1109,7 @@ class BaseAction(BaseObject):
     position_selection: Optional[PositionSelection] = Field(
         default=None, description="Authored position selection arity and span limit.",
     )
+    interaction_affordance: ActionAffordance = Field(default_factory=ActionAffordance)
     aoe_shape: Optional[AoEShape] = Field(
         default=None,
         description="Shape template used to resolve affected cells and entities for AoE actions.",
@@ -1418,17 +1423,17 @@ class BaseAction(BaseObject):
             if selected or self.target_entity_uuid is None:
                 return
             for position in self.get_valid_positions():
-                bound = self.model_copy(deep=True, update={"end_position": position})
-                if bound.validate_requirements_for_discovery(subjective=subjective):
+                bound = self.model_copy(deep=False, update={"end_position": position})
+                if bound.selection_preview_error() is None:
                     yield position
             return
         if selection is None or selection.kind != "path" or len(selected) >= selection.max_segments:
             return
         for position in self.get_valid_positions():
-            bound = self.model_copy(deep=True, update={
+            bound = self.model_copy(deep=False, update={
                 "end_position": start, "extra_target_positions": [*selected, position],
             })
-            if bound.validate_requirements_for_discovery(subjective=subjective):
+            if bound.selection_preview_error() is None:
                 yield position
 
     def get_valid_extra_target_positions(
@@ -1535,6 +1540,23 @@ class BaseAction(BaseObject):
 
     def get_movement_mode(self) -> MovementMode:
         return MovementMode.WALKING
+
+    def get_allocation_completion(self) -> Literal["selected_only", "fill_primary"]:
+        """How the native action resolves an incomplete recipient allocation."""
+        return "selected_only"
+
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        return ()
+
+    def get_connector_traversal_discovery(self) -> Optional[ConnectorTraversalDiscovery]:
+        return None
+
+    def selection_preview_error(self) -> Optional[str]:
+        """Read-only selection admission; never invokes eventful validation."""
+        return self.position_selection_error()
+
+    def get_selection_geometry(self) -> AoEPresentationGeometry | None:
+        return None
 
     def get_multi_target_count(self) -> Optional[int]:
         """Get the number of targets/projectiles for MULTI_ENTITY actions.
@@ -2611,12 +2633,22 @@ class AvailableTarget(BaseModel):
     affected_positions: Optional[List[Tuple[int, int]]] = Field(default=None, description="All positions in AoE shape (for map preview)")
 
 
+def prefers_safe_movement_path(target: AvailableTarget, movement_remaining: int, *, prefer_safe: bool = True) -> bool:
+    """The native route preference shared by execution and disclosed previews."""
+    return (prefer_safe and target.safe_path is not None and target.safe_path_cost is not None
+            and target.safe_path_cost <= movement_remaining)
+
+
 class AvailableActionInfo(BaseModel):
     """Information about an available action and its valid targets.
 
     This is returned by Entity.get_available_actions() and contains everything
     needed to display the action in UI and execute it.
     """
+    discovery_generation: int = 0
+    discovery_index: int = 0
+    discovery_runtime: UUID | None = None
+    discovery_actor_uuid: UUID | None = None
     template_name: str = Field(
         description=(
             "Engine command token for execution; never authored presentation "
@@ -2738,6 +2770,10 @@ class AvailableActionInfo(BaseModel):
         ge=0,
         description="Deterministic hit points restored when declared by the action rule.",
     )
+    allocation_completion: Literal["selected_only", "fill_primary"] = "selected_only"
+    variant_facets: tuple[ActionVariantFacet, ...] = ()
+    interaction_affordance: ActionAffordance = Field(default_factory=ActionAffordance)
+    connector_traversal: Optional[ConnectorTraversalDiscovery] = None
     _execution_template: Optional[BaseAction] = PrivateAttr(default=None)
 
     @model_validator(mode="after")
@@ -2779,6 +2815,36 @@ class AvailableActionInfo(BaseModel):
         self._execution_template = template
 
 
+class AvailableSelectionPreview(BaseModel):
+    """Detached result of inspecting one admitted ordered selection prefix."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    can_confirm: bool
+    reason: str | None = None
+    effective_target_uuids: tuple[UUID, ...] = ()
+    next_targets: tuple[AvailableTarget, ...] = ()
+    next_positions: tuple[tuple[int, int], ...] = ()
+    geometry: AoEPresentationGeometry | None = None
+    affected_positions: tuple[tuple[int, int], ...] = ()
+
+
+class AvailableWorldInteraction(BaseModel):
+    """Observed world verb; this descriptor alone is never executable."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    subject_uuid: UUID
+    behavior_id: str
+    label: str
+    description: str = ""
+    default_priority: int = 100
+    contact_positions: tuple[tuple[int, int], ...] = ()
+    connector_uuid: UUID | None = None
+    template_name: str | None = None
+    configured_action_ref: ContentRef | None = None
+    variant_facets: tuple[ActionVariantFacet, ...] = ()
+    reason: str | None = None
+
+
 class AvailableHandlerInfo(BaseModel):
     """Player-toggleable event handler exposed with available actions."""
 
@@ -2807,12 +2873,14 @@ class AvailableActionsResult(BaseModel):
     Returned by Entity.get_available_actions(). Groups actions by type for
     easy iteration and UI rendering.
     """
+    discovery_generation: int = 0
     entity_uuid: UUID = Field(description="UUID of the entity these actions are for")
     entity_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Actions targeting entities (Attack)")
     position_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Actions targeting positions (Move)")
     self_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Self-targeting actions (Dash, Dodge, etc.)")
     object_actions: List[AvailableActionInfo] = Field(default_factory=list, description="Actions targeting objects (Pick Up, interactions)")
     remaining_movement: int = Field(default=0, description="Remaining movement in feet")
+    world_interactions: tuple[AvailableWorldInteraction, ...] = ()
     handler_details: List[AvailableHandlerInfo] = Field(
         default_factory=list,
         description="Player-toggleable event handlers and their current state.",

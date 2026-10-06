@@ -100,7 +100,7 @@ def draw_world(state, camera, changes, rendering, *, clean=False, reveals=()):
     screen, catalog, cache, _, clean_catalog, clean_cache = rendering
     evidence = draw_frame(screen, state, clean_catalog if clean else catalog,
         clean_cache if clean else cache, camera, 0, show_grid=False, show_debug=False,
-        mouse_position=None, collect_evidence=True, world_transitions=changes, residue_reveals=reveals)
+        mouse_position=None, collect_evidence=True, world_transitions=changes, residue_reveals=reveals).evidence
     assert evidence is not None and evidence.matches
     return evidence.actual_draws, pygame.surfarray.array3d(screen)
 

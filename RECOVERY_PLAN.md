@@ -27,6 +27,64 @@ is now imported through the original Studio schema, independently of gameplay.
 
 ### Current position — read this before the checkpoint details
 
+**October 6 — player UI complete and independently reviewed.**
+The [implementation report](agent_docs/audits/PLAYER_UI_IMPLEMENTATION_2026-10-06.md)
+records the exact native changes and view boundaries. Compact pinned shortcuts,
+native rank/form/ordered targeting, world click/Ctrl/context/Alt, authorized
+initiative/sheets/resources, creation, inventory and the original dice-rich log
+are integrated. Five persistent real-SDL gameplay clips include Fighter,
+Sorcerer, lever interaction, chest/loot/drop/pickup and native encounter victory;
+all retain complete player packets and report zero presentation gaps. Fifteen
+refreshed HUD/sheet/inventory images cover 960×540 through 2560×1440.
+All 3,695 current game cases are covered by completed partitions and the new
+glyph-zoom case; all 132 exposed game failures and seven native broad-run
+failures are closed by complete affected-file reruns. The final 32-case input
+rerun passes and game/action-adapter/importer typing is clean. Both local
+reviewers have approved source, sampled visuals and final reconciled
+completion receipts. These checks are not exhaustive manual
+inspection of every spell/frame. Whole-world save/load remains deferred, ground
+consumables still need authored floor appearances, and repeated anonymous native
+Bloodied log entries remain an existing producer/projection issue.
+
+The following UI contract and earlier checkpoint details remain historical context.
+The human approved the full UI plan and Fighter/Sorcerer playable encounter goal.
+Native detached discovery, partial allocation/preview, mode facets, connector
+registration, active-turn equipment adapters and authorized HUD/log facts have
+passed their independent native checkpoint. Media bindings and shared post-cut
+scene picking received bounded independent source approval, including the
+review-found terrain/rug selection cut. Those checkpoint gates are now superseded
+by the implementation report above. Existing portraits/icons are preferred;
+missing UI artwork receives a Markdown handoff for the human, with no other-chat
+communication. Do not treat the earlier planning-only paragraph as current status.
+The human rejected the bulky framed HUD and asks for a minimal NeuroClient/PvP
+WoW-style shortcut bar. The new CIE28 handoff supplies accepted 28-pixel icons
+and a thin separate slot frame: one touching row, integer nearest scaling,
+compact unboxed vitals, and panels on demand. New choice/skin artwork remains
+a review candidate. Straight Wall of Fire uses endpoint order for its hot side;
+no extra left/right picker. Text remains readable and antialiased. Fullscreen/resolution coverage is capped at the human's current monitor,
+reported by Windows as 2560×1440. The later human clarification explicitly removes
+4K/larger-than-monitor checks from this phase. These are UI choices, not new mechanics.
+The October 6 design constraints are strict: quiet backgrounds behind readable
+text, small live-game panels, maximum battlefield visibility, and no persistent
+targeting instructions. Explanations belong in authored descriptions/tooltips.
+Player-facing names use native names and content descriptors; UUIDs, hashes,
+underscored keys and engine identifiers never substitute for those labels.
+Image-generation suggestions are reference material only and do not override
+these constraints or supply invented game content. Combat-log dice and modifiers
+come from the recorded native wording, never recalculation. The delivered
+summon/goblin portraits join the existing role-specific portrait bank through
+exact content and rig identities, without older-creature aliases.
+The [revised UI plan](agent_docs/PLAYER_UI_PLAN_2026-10-05.md) and linked
+targeting, combat-log, character and icon studies specify world-click interaction
+(including window traversal), shared hover/Alt/target highlights, action variants,
+partial/repeated targets, portraits, rich combat-log presentation and supported
+creation/inventory flows. They name the bounded missing native discovery and
+projection contracts instead of putting rules in widgets. Whole-map/character
+save/load is deferred under the user's "only if easy" limit: passive recordings
+cannot resume live mechanics, and no complete native restoration path exists.
+Do not substitute character-only persistence or resume the removed narrative
+feature. Review receipts and implementation acceptance gates are in the plan.
+
 **October 5 — narrative feature removed by user decision.**
 Keep only the existing projected combat log. The separate narrative formatter,
 inspection/prose layer, transcript CLI/schema, trace entries and F4 text modes

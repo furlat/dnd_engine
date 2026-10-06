@@ -309,7 +309,7 @@ async def _run(
                 objective_lines=objective_lines,
                 subjective_lines=displayed_subjective_lines,
                 revisions=(engine_cursor, target.reducer_cursor, display_cursor),
-            )
+            ).evidence
             assert evidence is not None
             if not evidence.matches:
                 raise RuntimeError("calculated and post-blit frame evidence differ")

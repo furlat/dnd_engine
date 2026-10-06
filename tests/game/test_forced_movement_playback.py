@@ -140,15 +140,15 @@ def test_native_displacement_plays_brace_travel_release_and_idle_without_latest_
         paused = frame_at(scene, data, fonts, halfway, camera)
         assert paused.displayed == travelling.displayed
         assert paused.actors == travelling.actors
-        assert [(row[0], row[2:], body_pixels(row)) for row in paused.commands] == [
-            (row[0], row[2:], body_pixels(row)) for row in travelling.commands]
+        assert [(row[0], (row.destination, row.blend, row.evidence), body_pixels(row)) for row in paused.commands] == [
+            (row[0], (row.destination, row.blend, row.evidence), body_pixels(row)) for row in travelling.commands]
         completed = frame_at(scene, data, fonts, group.complete_ms, camera)
         assert completed.complete and completed.displayed == group.after
         assert actor_contact(completed, identity).grid == end
         assert actor_body(completed, identity)[4][8] == "Idle"
         idle = sample_playback_frame(group.after, None, data, 0, 5000 + group.complete_ms,
             camera, completed.facings, scene.bodies, *fonts, positions=completed.positions)
-        assert actor_body(completed, identity)[2:] == actor_body(idle, identity)[2:]
+        assert actor_body(completed, identity)[2:5] == actor_body(idle, identity)[2:5]
         assert body_pixels(actor_body(completed, identity)) == body_pixels(actor_body(idle, identity))
         if group.shoves:
             source = group.shoves[0].source.actor_uuid
@@ -227,7 +227,7 @@ def test_lethal_entry_stays_at_native_reached_cell_across_completion_and_idle(
             assert actor_contact(frame, identity).grid == (2, 11)
             assert actor_contact(frame, identity).hp == -1
         assert completed.displayed == idle.displayed == group.after
-        assert actor_body(completed, identity)[2:] == actor_body(idle, identity)[2:]
+        assert actor_body(completed, identity)[2:5] == actor_body(idle, identity)[2:5]
         assert body_pixels(actor_body(completed, identity)) == body_pixels(actor_body(idle, identity))
 
 

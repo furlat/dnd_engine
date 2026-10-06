@@ -7,6 +7,7 @@ import pygame
 
 from game.area_media import BoundarySprite, boundary_segment
 from game.draw_commands import DrawCommand
+from game.interaction_frame import cut_selection
 from game.projection import Camera, HEIGHT_STEP_PIXELS, project_screen, project_world
 
 
@@ -77,5 +78,6 @@ def clip_actor_boundaries(
         alpha = pygame.surfarray.pixels_alpha(image)
         alpha[blocked] = 0
         del alpha
-        result.append(command._replace(surface=image))
+        selection, blocker = cut_selection(command, ~blocked)
+        result.append(command._replace(surface=image, selection=selection, selection_block_mask=blocker))
     return result

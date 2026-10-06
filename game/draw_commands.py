@@ -8,11 +8,12 @@ import pygame
 from game.area_media import AreaLayer
 from game.device_art import DeviceFacing
 from game.volume_media import SurfaceVolume
+from game.interaction_types import SelectionCoverage
 
 
 DrawRole = Literal["other", "actor", "actor_shadow", "body_copy", "body_contour",
                    "body_trail", "floating_number", "device", "device_wreck",
-                   "deposit_floor", "deposit_air", "environment_floor", "terrain_floor", "item"]
+                   "deposit_floor", "deposit_air", "environment_floor", "terrain_floor", "item", "construction"]
 
 
 class DevicePose(NamedTuple):
@@ -41,3 +42,7 @@ class DrawCommand(NamedTuple):
     cell: tuple[int, int] | None = None
     device_pose: DevicePose | None = None
     support_height_steps: float = 0
+    selection: tuple[SelectionCoverage, ...] = ()
+    selection_occluder: bool = False
+    # Physical body coverage can differ from the visual surface's aura/markers.
+    selection_block_mask: np.ndarray | None = None

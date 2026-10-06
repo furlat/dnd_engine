@@ -350,6 +350,14 @@ DRAGONBORN_ANCESTRY_DEFINITIONS: Mapping[
 })
 
 
+def origin_choices(species: Species, species_variant: SpeciesVariant | None,
+                   background: Background) -> tuple[OriginChoiceDefinition, ...]:
+    """Ordered cold requirements shared with character draft authoring."""
+    variant = SPECIES_VARIANT_DEFINITIONS[species_variant] if species_variant is not None else None
+    return (*SPECIES_DEFINITIONS[species].choices, *(variant.choices if variant is not None else ()),
+            *BACKGROUND_DEFINITIONS[background].choices)
+
+
 def resolve_origin(
     *,
     species: Species,
@@ -384,11 +392,7 @@ def resolve_origin(
         raise ValueError("character creation requires one +2 and one +1 bonus")
 
     background_definition = BACKGROUND_DEFINITIONS[background]
-    requirements = (
-        *species_definition.choices,
-        *(variant_definition.choices if variant_definition is not None else ()),
-        *background_definition.choices,
-    )
+    requirements = origin_choices(species, species_variant, background)
     if tuple(choice.choice_id for choice in state.choices) != tuple(
         requirement.choice_id for requirement in requirements
     ):

@@ -492,7 +492,7 @@ class Event(BaseModel):
                         for position, observer_uuids in temp_event.located_position_observer_uuids.items()
                     }
                     if EventQueue._perceiver_computer:
-                        combat_log.perceiver_uuids = EventQueue._perceiver_computer(temp_event)
+                        combat_log.perceiver_uuids = EventQueue.perceivers_for_event(temp_event)
 
                     child_logs = temp_event._collect_child_combat_logs()
                     if child_logs:
@@ -1444,6 +1444,11 @@ class EventQueue:
                 UUIDs that currently identify each participant.
         """
         cls._identified_entity_observer_computer = func
+
+    @classmethod
+    def perceivers_for_event(cls, event: 'Event') -> Set[str]:
+        """Use the installed event-time observation policy for informational entries."""
+        return set(cls._perceiver_computer(event)) if cls._perceiver_computer else set()
 
     @classmethod
     def push_combat_log(cls, entry: 'CombatLogEntry', source_entity_uuid: UUID) -> None:
@@ -4547,7 +4552,7 @@ class StepMovementEvent(Event):
 
         compact_text = f"{md_color(source_name, 'cyan')} steps to {self.to_position}"
         verbose_text = f"{md_color(source_name, 'cyan')} {self.from_position} → {self.to_position}"
-        detailed_text = f"{verbose_text} (step {self.path_index}/{self.total_path_length - 1}, {self.movement_cost}ft)"
+        detailed_text = f"{verbose_text} (step {self.path_index}/{self.total_path_length - 1}; {self.movement_cost}ft)"
 
         return CombatLogEntry(
             entry_type=CombatLogEntryType.MOVEMENT,

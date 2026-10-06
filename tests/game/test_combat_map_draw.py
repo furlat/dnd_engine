@@ -65,7 +65,7 @@ def frame_pixels(scene: MapScene, target: PresentationTarget, camera: Camera,
         scene.screen, target, scene.catalog, scene.cache, camera, 1.0,
         collect_evidence=True, show_grid=False, mouse_position=None,
         extra_commands=animation_draw_commands(timeline, sample, scene.media, camera) if sample is not None else (),
-    )
+    ).evidence
     assert evidence is not None
     assert evidence.actual_draws == evidence.expected_draws
     return pygame.surfarray.array3d(scene.screen)
@@ -78,12 +78,12 @@ def test_optional_draw_evidence_keeps_the_same_pixels(scene: MapScene) -> None:
         camera = Camera(quadrant=quadrant, viewport=scene.screen.get_size()).with_focus((16, 22))
         commands = animation_draw_commands(timeline, sample, scene.media, camera)
         plain = draw_frame(scene.screen, scene.target, scene.catalog, scene.cache, camera, 1,
-                           show_grid=False, show_debug=False, mouse_position=None, extra_commands=commands)
+                           show_grid=False, show_debug=False, mouse_position=None, extra_commands=commands).evidence
         assert plain is None
         pixels = pygame.surfarray.array3d(scene.screen)
         evidence = draw_frame(scene.screen, scene.target, scene.catalog, scene.cache, camera, 1,
                               show_grid=False, show_debug=False, mouse_position=None, extra_commands=commands,
-                              collect_evidence=True)
+                              collect_evidence=True).evidence
         assert evidence is not None and evidence.matches
         np.testing.assert_array_equal(pygame.surfarray.array3d(scene.screen), pixels)
 

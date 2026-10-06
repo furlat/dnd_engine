@@ -1,0 +1,1108 @@
+[
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "wolf",
+    "icon_key": "choice.summon.wolf",
+    "label": "Wolf",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "hound",
+    "icon_key": "choice.summon.hound",
+    "label": "Hound",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "boar",
+    "icon_key": "choice.summon.boar",
+    "label": "Boar",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "stag",
+    "icon_key": "choice.summon.stag",
+    "label": "Stag",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "jaguar",
+    "icon_key": "choice.summon.jaguar",
+    "label": "Jaguar",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "bison",
+    "icon_key": "choice.summon.bison",
+    "label": "Bison",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "ostrich",
+    "icon_key": "choice.summon.ostrich",
+    "label": "Ostrich",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "brown_bear",
+    "icon_key": "choice.summon.brown_bear",
+    "label": "Brown Bear",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "lion",
+    "icon_key": "choice.summon.lion",
+    "label": "Lion",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "tiger",
+    "icon_key": "choice.summon.tiger",
+    "label": "Tiger",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "polar_bear",
+    "icon_key": "choice.summon.polar_bear",
+    "label": "Polar Bear",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "rhinoceros",
+    "icon_key": "choice.summon.rhinoceros",
+    "label": "Rhinoceros",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "blue_raptor",
+    "icon_key": "choice.summon.blue_raptor",
+    "label": "Blue Raptor",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "stegosaurus",
+    "icon_key": "choice.summon.stegosaurus",
+    "label": "Stegosaurus",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "elephant",
+    "icon_key": "choice.summon.elephant",
+    "label": "Elephant",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "triceratops",
+    "icon_key": "choice.summon.triceratops",
+    "label": "Triceratops",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "mammoth",
+    "icon_key": "choice.summon.mammoth",
+    "label": "Mammoth",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_animals",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "raptor",
+    "icon_key": "choice.summon.raptor",
+    "label": "Raptor",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "wolf",
+    "icon_key": "choice.summon.wolf",
+    "label": "Wolf",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "hound",
+    "icon_key": "choice.summon.hound",
+    "label": "Hound",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "boar",
+    "icon_key": "choice.summon.boar",
+    "label": "Boar",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "stag",
+    "icon_key": "choice.summon.stag",
+    "label": "Stag",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "jaguar",
+    "icon_key": "choice.summon.jaguar",
+    "label": "Jaguar",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "bison",
+    "icon_key": "choice.summon.bison",
+    "label": "Bison",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "ostrich",
+    "icon_key": "choice.summon.ostrich",
+    "label": "Ostrich",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "brown_bear",
+    "icon_key": "choice.summon.brown_bear",
+    "label": "Brown Bear",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "lion",
+    "icon_key": "choice.summon.lion",
+    "label": "Lion",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "tiger",
+    "icon_key": "choice.summon.tiger",
+    "label": "Tiger",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "polar_bear",
+    "icon_key": "choice.summon.polar_bear",
+    "label": "Polar Bear",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "rhinoceros",
+    "icon_key": "choice.summon.rhinoceros",
+    "label": "Rhinoceros",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "blue_raptor",
+    "icon_key": "choice.summon.blue_raptor",
+    "label": "Blue Raptor",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "stegosaurus",
+    "icon_key": "choice.summon.stegosaurus",
+    "label": "Stegosaurus",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "elephant",
+    "icon_key": "choice.summon.elephant",
+    "label": "Elephant",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "triceratops",
+    "icon_key": "choice.summon.triceratops",
+    "label": "Triceratops",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "mammoth",
+    "icon_key": "choice.summon.mammoth",
+    "label": "Mammoth",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fey",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "raptor",
+    "icon_key": "choice.summon.raptor",
+    "label": "Raptor",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.neurodragon",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fiend",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "dretch",
+    "icon_key": "choice.summon.dretch",
+    "label": "Dretch",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.neurodragon",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fiend",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "claw_mote_devil",
+    "icon_key": "choice.summon.claw_mote_devil",
+    "label": "Claw Mote Devil",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.neurodragon",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fiend",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "corrosive_demon",
+    "icon_key": "choice.summon.corrosive_demon",
+    "label": "Corrosive Demon",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.neurodragon",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fiend",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "dread_demon",
+    "icon_key": "choice.summon.dread_demon",
+    "label": "Dread Demon",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.neurodragon",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fiend",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "huntsman_wing_devil",
+    "icon_key": "choice.summon.huntsman_wing_devil",
+    "label": "Huntsman Wing Devil",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.neurodragon",
+      "definition_kind": "spell",
+      "content_id": "spell.conjure_fiend",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "fellwing_devil",
+    "icon_key": "choice.summon.fellwing_devil",
+    "label": "Fellwing Devil",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.fire_shield",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "warm",
+    "icon_key": "choice.fire-shield.warm",
+    "label": "Warm",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.fire_shield",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "chill",
+    "icon_key": "choice.fire-shield.chill",
+    "label": "Chill",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.enhance_ability",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "ability",
+    "value": "strength",
+    "icon_key": "choice.ability.strength",
+    "label": "Strength",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.enhance_ability",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "ability",
+    "value": "dexterity",
+    "icon_key": "choice.ability.dexterity",
+    "label": "Dexterity",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.enhance_ability",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "ability",
+    "value": "constitution",
+    "icon_key": "choice.ability.constitution",
+    "label": "Constitution",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.enhance_ability",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "ability",
+    "value": "intelligence",
+    "icon_key": "choice.ability.intelligence",
+    "label": "Intelligence",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.enhance_ability",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "ability",
+    "value": "wisdom",
+    "icon_key": "choice.ability.wisdom",
+    "label": "Wisdom",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.enhance_ability",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "ability",
+    "value": "charisma",
+    "icon_key": "choice.ability.charisma",
+    "label": "Charisma",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.enlarge_reduce",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "enlarge",
+    "icon_key": "choice.size.enlarge",
+    "label": "Enlarge",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.enlarge_reduce",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "reduce",
+    "icon_key": "choice.size.reduce",
+    "label": "Reduce",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.spirit_guardians",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "damage_type",
+    "value": "Radiant",
+    "icon_key": "choice.spirit-guardians.radiant",
+    "label": "Radiant",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.spirit_guardians",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "damage_type",
+    "value": "Necrotic",
+    "icon_key": "choice.spirit-guardians.necrotic",
+    "label": "Necrotic",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_fire",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "segment",
+    "icon_key": "choice.shape.segment",
+    "label": "Segment",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_fire",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "ring",
+    "icon_key": "choice.shape.ring",
+    "label": "Ring",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_fire",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "left",
+    "icon_key": "choice.side.left",
+    "label": "Left",
+    "requirements": {
+      "form": "segment"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_fire",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "right",
+    "icon_key": "choice.side.right",
+    "label": "Right",
+    "requirements": {
+      "form": "segment"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_fire",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "inside",
+    "icon_key": "choice.side.inside",
+    "label": "Inside",
+    "requirements": {
+      "form": "ring"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_fire",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "outside",
+    "icon_key": "choice.side.outside",
+    "label": "Outside",
+    "requirements": {
+      "form": "ring"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_thorns",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "segment",
+    "icon_key": "choice.shape.segment",
+    "label": "Segment",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_thorns",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "ring",
+    "icon_key": "choice.shape.ring",
+    "label": "Ring",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_ice",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "panels",
+    "icon_key": "choice.shape.segment",
+    "label": "Panels",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_ice",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "dome",
+    "icon_key": "choice.shape.dome",
+    "label": "Dome",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_ice",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "left",
+    "icon_key": "choice.side.left",
+    "label": "Left",
+    "requirements": {
+      "form": "panels"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_ice",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "right",
+    "icon_key": "choice.side.right",
+    "label": "Right",
+    "requirements": {
+      "form": "panels"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_ice",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "inside",
+    "icon_key": "choice.side.inside",
+    "label": "Inside",
+    "requirements": {
+      "form": "dome"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_ice",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "outside",
+    "icon_key": "choice.side.outside",
+    "label": "Outside",
+    "requirements": {
+      "form": "dome"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_force",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "panels",
+    "icon_key": "choice.shape.segment",
+    "label": "Panels",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_force",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "dome",
+    "icon_key": "choice.shape.dome",
+    "label": "Dome",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_force",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "left",
+    "icon_key": "choice.side.left",
+    "label": "Left",
+    "requirements": {
+      "form": "panels"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_force",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "right",
+    "icon_key": "choice.side.right",
+    "label": "Right",
+    "requirements": {
+      "form": "panels"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_force",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "inside",
+    "icon_key": "choice.side.inside",
+    "label": "Inside",
+    "requirements": {
+      "form": "dome"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_force",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "outside",
+    "icon_key": "choice.side.outside",
+    "label": "Outside",
+    "requirements": {
+      "form": "dome"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_stone",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "form",
+    "value": "panels",
+    "icon_key": "choice.shape.segment",
+    "label": "Panels",
+    "requirements": {}
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_stone",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "left",
+    "icon_key": "choice.side.left",
+    "label": "Left",
+    "requirements": {
+      "form": "panels"
+    }
+  },
+  {
+    "owner": {
+      "pack_id": "content.srd_5_1_cc",
+      "definition_kind": "spell",
+      "content_id": "spell.wall_of_stone",
+      "content_version": 1,
+      "definition_contract_hash": "e4d439f0a9828e38cd3ff0522ba3e140b0d419f4c24de2900d8c3a8e7349cb00"
+    },
+    "facet": "side",
+    "value": "right",
+    "icon_key": "choice.side.right",
+    "label": "Right",
+    "requirements": {
+      "form": "panels"
+    }
+  }
+]

@@ -46,6 +46,8 @@ from game.blood_draw import blood_particle_image
 from game.area_media import AreaLayer, AreaMedia, mask_ground_area
 from game.animation_types import AreaSolid
 from game.draw_commands import DrawCommand as AnimationDrawCommand
+from game.interaction_types import SelectionCoverage, WorldHit
+from game.interaction_frame import align_coverage
 from game.media_blend import SCREEN_BLEND, blit_media
 from game.directed_media import directed_draw_commands, preload_directed_media
 from game.registered_media import registered_media_samples
@@ -456,12 +458,18 @@ def condition_rig_layers(rig: BodyRig, appearance: tuple[RigLayer, ...],
 def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLayer, ...],
                 body_rows: BodyRows, data: AnimationData,
                 flash: int | PaletteTreatment | None, *, only_shadow: bool | None = None,
+                physical_only: bool = False,
                 condition: ConditionAppearance | None = None) -> pygame.Surface:
     rig = body_rig(data, contact)
     extra_layers = condition_rig_layers(rig, appearance, condition)
-    treatment = flash if isinstance(flash, PaletteTreatment) and only_shadow is not True else None
+    treatment = flash if isinstance(flash, PaletteTreatment) and only_shadow is not True and not physical_only else None
     key = (data.media_root, contact.rig_id, body.clip, body.facing, appearance,
            body.hide_weapon, body.hidden_slots, body.cast_layers, treatment, extra_layers)
+    physical_key = ("selection-pose", *key, body.frame)
+    if physical_only:
+        cached = cached_palette(physical_key)
+        if cached is not None:
+            return cached
     colored_row = cached_palette(key) if treatment is not None else None
     if colored_row is not None:
         colored = colored_row.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
@@ -483,10 +491,12 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
     overlays = {layer.slot: layer for layer in body.cast_layers}
     row = rig.facing_rows[body.facing]
     ramped = (_ramp_image(body, contact, appearance, body_rows, data, condition)
-              if flash is None and only_shadow is not True and condition is not None
+              if not physical_only and flash is None and only_shadow is not True and condition is not None
               and condition.body_ramp is not None and condition.ramp_strength > 0 else None)
     material_drawn = False
     for slot in rig.slot_order:
+        if physical_only and slot in rig.selection_excluded_slots:
+            continue
         if slot in body.hidden_slots:
             continue
         if only_shadow is not None and (slot == "shadow") != only_shadow:
@@ -500,6 +510,9 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             continue
         overlay = overlays.get(slot)
         layer = layers.get(slot)
+        if physical_only and (overlay is not None or
+                layer is not None and layer.category in rig.selection_excluded_categories):
+            continue
         for extra in extra_layers:
             if extra.layer.slot != slot or extra.alpha <= 0:
                 continue
@@ -526,7 +539,9 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
         frame = atlas if treatment is not None else atlas.subsurface((body.frame * rig.cell_width, 0, rig.cell_width, rig.cell_height))
         # Source hit flash clears filters and replaces tint. Never tint already
         # filtered pixels and then try to reconstruct the previous equipment.
-        if slot == "shadow":
+        if physical_only:
+            colored = frame
+        elif slot == "shadow":
             assert layer is not None
             colored = frame.copy()
             colored.set_alpha(round(layer.alpha * 255))
@@ -558,7 +573,7 @@ def _body_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             return colored
         result = _body_image(body, contact, appearance, body_rows, data, None, only_shadow=True)
         result.blit(colored, (0, 0))
-    return result
+    return retain_palette(physical_key, result) if physical_only else result
 
 
 def _ramp_image(body: BodySample, contact: ActorContact, appearance: tuple[RigLayer, ...],
@@ -622,6 +637,7 @@ def _reference_actor_depth(grid: tuple[float, float], actor_uuid: str) -> float:
 def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLayer, ...], body_rows: BodyRows,
                 data: AnimationData, camera: Camera, flash: int | PaletteTreatment | None,
                 *, only_shadow: bool | None = None,
+                physical_only: bool = False,
                 condition: ConditionAppearance | None = None,
                 ghost: tuple[tuple[int, int, int, int], float] | None = None,
                 copy_recipe: ConditionLiveCopies | None = None, copy_slot: int = 0,
@@ -644,8 +660,8 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
     scale = contact.visual_scale * factor
     viewed_body = replace(body, facing=view_facing(body.facing, camera.quadrant, data))
     image = _body_image(viewed_body, contact, appearance, body_rows, data, flash,
-                        only_shadow=only_shadow, condition=condition)
-    if condition is not None and only_shadow is not True:
+                        only_shadow=only_shadow, condition=condition, physical_only=physical_only)
+    if not physical_only and condition is not None and only_shadow is not True:
         for sample in condition.finite_materials:
             ramp = sample.material
             image = condition_body_ramp(image, ramp,
@@ -705,7 +721,7 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             )
             destination = (round(destination[0] + registration[0]), round(destination[1] + registration[1]))
     attachments = []
-    if not only_shadow and ghost is None:
+    if not physical_only and not only_shadow and ghost is None:
         item_bounds: dict[UUID, pygame.Rect] = {}
         item_effects = {}
         hidden = set(body.hidden_slots) | {layer.slot for layer in body.cast_layers}
@@ -729,7 +745,7 @@ def _actor_blit(body: BodySample, contact: ActorContact, appearance: tuple[RigLa
             anchor = (destination[0] + box.centerx * scale * contact.visual_scale_x * body_scale[0],
                       destination[1] + box.centery * scale * body_scale[1])
             attachments.append((item_effects[identity], anchor))
-    if condition is not None:
+    if condition is not None and not physical_only:
         if condition.body_outline is not None and not only_shadow:
             image.blit(condition_body_outline(image, condition.body_outline, condition.outline_age_ms,
                 quiet_age_ms=condition.time_ms), (0, 0))
@@ -862,14 +878,13 @@ def _number_blit(number: NumberSample, contact: ActorContact | ObjectContact, fo
     height = body_elevation_steps(contact, data) if isinstance(contact, ActorContact) else contact.elevation_steps
     ground = project_screen(contact.grid, camera, elevation_steps=height)
     label = number.label if number.kind == "badge" else f"{number.value} {number.label}".rstrip()
-    fill = font.render(label, False, _rgb(number.color))
-    stroke = font.render(label, False, _rgb(style.strokeColor))
+    fill = font.render(label, True, _rgb(number.color))
+    stroke = font.render(label, True, _rgb(style.strokeColor))
     radius = round(style.strokeWidthPx)
     text = pygame.Surface((fill.width + radius * 2, fill.height + radius * 2), pygame.SRCALPHA)
     for x, y in ((-radius, 0), (radius, 0), (0, -radius), (0, radius)):
         text.blit(stroke, (radius + x, radius + y))
     text.blit(fill, (radius, radius))
-    text = pygame.transform.scale(text, (max(1, round(text.width * factor)), max(1, round(text.height * factor))))
     text.set_alpha(round(number.alpha * 255))
     anchor = ((body_rig(data, contact).origin_y_from_ground - style.anchorLiftPx) * contact.visual_scale
               if isinstance(contact, ActorContact) else -style.anchorLiftPx)
@@ -972,6 +987,21 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
                 1 - condition.distortion_strength * (1 - condition.distortion.bodyOpacity)))
                        if condition is not None and condition.distortion is not None and not shadow else condition),
         )
+        selection = ()
+        blocker = None
+        if not shadow and dust_elapsed_ms is None:
+            physical, physical_destination = _actor_blit(body, contact, layers, body_rows,
+                data, camera, None, only_shadow=False, physical_only=True,
+                coverage=coverage, condition=condition)
+            aligned = align_coverage(pygame.surfarray.array_alpha(physical) > 0,
+                physical_destination, AnimationDrawCommand(
+                    (0, 0., 0., 0, ()), image, destination, 0, ()))
+            if physical.get_alpha() == 0:
+                aligned = np.zeros(image.get_size(), dtype=bool)
+                aligned.setflags(write=False)
+            selection = (SelectionCoverage(WorldHit("actor", contact.actor_uuid,
+                contact.grid, contact.elevation_steps), aligned),)
+            blocker = aligned
         commands.append(AnimationDrawCommand(
             actor_painter_key(data, body, contact, camera, role=role, height=height,
                               identity=contact.actor_uuid),
@@ -979,6 +1009,7 @@ def actor_draw_commands(data: AnimationData, body: BodySample, contact: ActorCon
             (contact.actor_uuid, contact.grid, contact.rig_id, "current", None, "authored",
              role, height, body.clip, body.frame),
             role=role, owner=contact.actor_uuid, support_height_steps=contact.elevation_steps,
+            selection=selection, selection_occluder=bool(selection), selection_block_mask=blocker,
         ))
     if condition is not None and condition.live_copies is not None:
         copies = condition.live_copies

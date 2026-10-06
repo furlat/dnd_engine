@@ -7,7 +7,7 @@ from pydantic import Field
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
 from dnd.core.base_actions import BaseAction, Cost, TargetType
-from dnd.core.action_types import PositionSelection, PositionPathSelection, SinglePositionSelection
+from dnd.core.action_types import ActionVariantFacet, PositionSelection, PositionPathSelection, SinglePositionSelection
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
 from dnd.core.content.identities import ContentDefinitionKind, ContentRef
@@ -181,7 +181,7 @@ class WallOfFire(SpellAction):
     """Create an opaque, permeable straight or ring wall with one heated side."""
 
     name: str = "Wall of Fire"
-    description: str = "Create an opaque wall of flame; choose the side radiating heat."
+    description: str = "Create an opaque wall of flame. A straight wall radiates to the left of its ordered endpoints; reverse the endpoints to reverse the hot side. A ring burns inside or outside."
     spell_level: int = 4
     spell_school: str = "evocation"
     spell_damage_type: DamageType = DamageType.FIRE
@@ -224,6 +224,12 @@ class WallOfFire(SpellAction):
         if isinstance(event, SpellEvent):
             return event.with_updates(area_geometry=self.wall_geometry())
         return event
+
+    def selection_preview_error(self) -> str | None:
+        return self.position_selection_error() or self.position_placement_error(subjective=True)
+
+    def get_selection_geometry(self):
+        return self.wall_geometry()
 
     def position_placement_error(self, *, subjective: bool = False) -> str | None:
         caster = Entity.get(self.source_entity_uuid)
@@ -287,11 +293,15 @@ class WallOfFire(SpellAction):
             concentration.add_linked_condition(zone.uuid, zone.uuid)
         return effect
 
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        form = ActionVariantFacet(key="form", value=self.wall_form, label=self.wall_form.title())
+        return ((form,) if self.wall_form == "segment" else
+                (form, ActionVariantFacet(key="side", value=self.hot_side, label=f"Heat {self.hot_side}")))
+
     def get_discovery_variants(self, entity) -> list[BaseAction]:
         variants = []
         for slot in super().get_discovery_variants(entity):
-            for side in ("left", "right"):
-                variants.append(slot.model_copy(update={"wall_form": "segment", "hot_side": side}))
+            variants.append(slot.model_copy(update={"wall_form": "segment", "hot_side": "left"}))
             for side in ("inside", "outside"):
                 variants.append(slot.model_copy(update={"wall_form": "ring", "hot_side": side}))
         return variants
@@ -300,4 +310,5 @@ class WallOfFire(SpellAction):
         return f"{super().get_discovery_template_name()}__wall_{self.wall_form}_{self.hot_side}"
 
     def get_discovery_display_name(self) -> str:
-        return f"{super().get_discovery_display_name()} · {self.wall_form}, heat {self.hot_side}"
+        suffix = "straight" if self.wall_form == "segment" else f"ring, heat {self.hot_side}"
+        return f"{super().get_discovery_display_name()} · {suffix}"

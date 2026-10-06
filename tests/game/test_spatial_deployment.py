@@ -126,7 +126,7 @@ def test_deployment_and_resting_field_share_clipped_ground_pixels_and_fractional
             transitions = sample_world_transitions((change,), elapsed) if active else ()
             evidence = draw_frame(screen, snapshot, catalog, cache, camera, 0,
                 show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True,
-                world_transitions=transitions, extra_commands=(actor,))
+                world_transitions=transitions, extra_commands=(actor,)).evidence
             assert evidence is not None and evidence.matches
             rows = tuple(row for row in evidence.actual_draws if len(row) > 6 and row[6] == "spatial_effect")
             return rows, pygame.surfarray.array3d(screen)

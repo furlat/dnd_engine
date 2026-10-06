@@ -295,7 +295,7 @@ def test_late_observer_initialization_draws_settled_prop_without_replaying_fract
         for quadrant in range(4):
             camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus(body.placement.position)
             evidence = draw_frame(screen, state, catalog, cache, camera, 0,
-                show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True)
+                show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True).evidence
             assert evidence is not None
             drawn, = (row for row in evidence.actual_draws if len(row) > 9 and row[0] == body.item.item_uuid)
             assert drawn[6] == "environment_wreck" and drawn[9] == bank.frame_count - 1

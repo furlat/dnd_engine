@@ -43,6 +43,24 @@ PositionSelection: TypeAlias = Annotated[
 ]
 
 
+class ActionVariantFacet(BaseModel):
+    """One action-owned choice exposed without parsing execution tokens."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    key: Literal["form", "side", "radius", "ability", "damage_type", "movement", "width"]
+    value: str
+    label: str
+
+
+class ActionAffordance(BaseModel):
+    """Authored interaction surface of an existing executable action."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    surface: Literal["action_bar", "world", "inventory"] = "action_bar"
+    binding: Literal["target", "source_item", "connector"] = "target"
+    default_priority: int = 0
+
+
 class ActionPresentationKind(str, Enum):
     """Stable presentation semantics for an action event."""
 

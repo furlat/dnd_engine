@@ -12,6 +12,23 @@ Keep pixels, binary geometry and generated previews private. Keep code and
 authored JSON contracts public. Put review output in `.runtime/` or `output/`.
 Importers update media registration/storage, never rewrite selected recipes.
 
+October 6 player UI intake keeps the original CIE28 icon delivery and the
+portrait-only exports unchanged. `devtools/import_ui_icons.py` registers selected
+icons in `game/data/ui_media.json`; role-specific portraits use the same media
+catalog and native `ContentPresentation.portrait_key`. The 56 existing player
+portraits have 36×48 initiative, 48×64 HUD and 96×128 sheet exports; optional
+artist repaints remain unselected. Full sources are preserved privately under
+`sources/ui-pixelated-portraits-20261006/`.
+
+The later summon/goblin handoff adds 41 exact creature portrait associations
+(123 unchanged PNGs), stored in `sources/creature-portraits-20261006/` and installed
+under `game/assets/ui_pixelated/creatures/`. `--creatures` validates the pinned
+runtime archive, exact content and rig identities, body source hashes and all
+three portrait roles. Animals and their fey instances use the same creature
+descriptor. Older goblin identities are not aliases for the 17 new portraits.
+The large artist authoring archive remains private and is not installed as game
+media. Public Git receives bindings and provenance, never these images or clips.
+
 October 4 spell-hand completion selects six unchanged original modular
 `Magic2/Attack1–6.png` sheets from the existing NeuroClient authoring directory.
 They are registered as `/support-spells/cast-hands/Magic2-AttackN.png`, installed

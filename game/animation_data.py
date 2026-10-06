@@ -237,6 +237,8 @@ def _root_body_rig(rig: RigTables, resources: Mapping[str, Path], body_anchor: P
         pose_sockets=pose_sockets,
         facing_rows=rig.FACING_ROW, slot_order=rig.SLOT_RENDER_ORDER,
         slot_categories=rig.SLOT_CATEGORIES,
+        selection_excluded_slots=("shadow", "weaponGlow", "aura", "slash", "effect", "effect2", "effect3"),
+        selection_excluded_categories=("Magic1", "Magic2", "Magic3"),
         clips={name: BodyClip(source_clip=name, frames=rig.SHEET_COLS, fps=rig.ANIM_FPS,
                              sheets=sheets, anchors=rig.CLIP_ANCHORS.get(name, ()),
                              description=rig.CLIP_DESCRIPTIONS.get(name))

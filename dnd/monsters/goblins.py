@@ -269,7 +269,7 @@ def _declare_goblin(definition: GoblinDefinition) -> ContentDeclaration:
         descriptor=ContentDescriptorSpec(display_name=definition.name,
             description="Authored goblinoid kit using ordinary equipment and existing creature abilities.",
             tags=("creature", "goblinoid", "humanoid", "adapted"), visibility=ContentVisibility.PUBLIC,
-            presentation=ContentPresentation(visual_variant_key=definition.key, ui_group="creatures.neurodragon")),
+            presentation=ContentPresentation(portrait_key=f"creature.{definition.key}", visual_variant_key=definition.key, ui_group="creatures.neurodragon")),
         provenance=ContentProvenance(primary_source_id="neurodragon.original_b2b3930",
             source_anchor="SRD 5.1 Goblin, Mage and Bugbear numerical benchmarks; authored kits 2026-10-03",
             relation=ContentProvenanceRelation.COMPATIBLE_ADAPTATION, adapted_from_source_id="wotc.srd_5_1_cc",

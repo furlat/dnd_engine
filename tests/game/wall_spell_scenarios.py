@@ -105,7 +105,8 @@ def wall_spell_history(*, axis: Literal["x", "y", "diagonal", "oblique"] = "x", 
                     encounter.next_turn()
             options = [(action, target) for action in get_available_actions(actor).all_actions
                 if action.behavior_id == behavior and (behavior != "spell.wall_of_fire"
-                    or (f"ring, heat {ring_hot_side}" if ring_hot_side else "segment, heat left") in action.display_name)
+                    or {facet.key:facet.value for facet in action.variant_facets} ==
+                        ({"form":"ring","side":ring_hot_side} if ring_hot_side else {"form":"segment"}))
                 for target in action.valid_targets if position is None or target.position == position]
             assert options, (role, behavior, position)
             with fixed_dice_faces(*([4] * 100)):

@@ -1063,7 +1063,7 @@ def _project_nodes(events: tuple[Event, ...], versions: tuple[VersionRow, ...],
             parent_event=event.parent_event, parent_lineage=event.parent_lineage,
             children_lineages=tuple(event.children_lineages), phase=event.phase,
             canceled=event.canceled, fact=fact, combat_log=_action_log(event.combat_log, fact, observer),
-            resolution_ref=event.resolution_ref,
+            resolution_ref=event.resolution_ref, turn_execution_id=event.turn_execution_id,
             cancellation=ActionCancellation(phase=event.canceled_from_phase,
                 action_economy_spent=event.action_economy_spent, outcome_code=event.outcome_code)
                 if event.canceled and isinstance(event, ActionEvent) and fact is not None else None))
@@ -1162,5 +1162,15 @@ def project_lineage(state: ProjectionState, lineage: CompletedLineage) -> Player
 def project_sequence(native: RecordedSequence) -> PlayerSequence:
     """Produce one observer's packet entirely from their private saved capture."""
     state, initial = begin_projection(native.initialization)
+    if any(row.generation != initial.generation or row.observer_uuid != initial.observer_uuid
+           for row in native.combat_log_appends):
+        raise ValueError("Combat log append belongs to a different observer or generation")
+    if any(row.generation != initial.generation or row.observer_uuid != initial.observer_uuid
+           for row in native.hud_snapshots):
+        raise ValueError("HUD snapshot belongs to a different observer or generation")
+    starting = next((row for row in native.hud_snapshots if row.revision == initial.end_cursor), None)
+    initial = replace(initial, hud_snapshot=starting)
     return PlayerSequence(initialization=initial, lineages=tuple(
-        projected for row in native.lineages if (projected := project_lineage(state, row)) is not None))
+        projected for row in native.lineages if (projected := project_lineage(state, row)) is not None),
+        combat_log_appends=native.combat_log_appends,
+        hud_snapshots=tuple(row for row in native.hud_snapshots if row is not starting))

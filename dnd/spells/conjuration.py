@@ -32,7 +32,7 @@ from dnd.core.base_actions import (
     TopologyEffectProfile,
 )
 from dnd.core.aoe import Sphere
-from dnd.core.action_types import EntityDestinationSelection
+from dnd.core.action_types import ActionVariantFacet, EntityDestinationSelection
 from dnd.core.positioning import PositionPublicationError
 from dnd.core.base_conditions import BaseCondition, ConditionStateChangedEvent, Duration
 from dnd.core.content.descriptors import (
@@ -419,6 +419,16 @@ class AcidSplash(SpellAction):
         targets.extend(self.extra_target_entity_uuids)
         return targets[:2]
 
+    def selection_preview_error(self) -> str | None:
+        positions = [target.position for identity in self.get_all_targets()
+                     if (target := Entity.get(identity)) is not None]
+        if len(positions) == 2:
+            a, b = positions
+            distance = max(abs(a[0] - b[0]), abs(a[1] - b[1])) * 5
+            if distance > 5:
+                return f"Targets must be within 5ft of each other (distance: {distance}ft)"
+        return None
+
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         """Validate range, LOS, and 5ft proximity for 2-target case."""
         source = Entity.get(self.source_entity_uuid)
@@ -446,15 +456,9 @@ class AcidSplash(SpellAction):
                 )
             target_entities.append(target)
 
-        if len(target_entities) == 2:
-            t1, t2 = target_entities
-            dx = abs(t1.position[0] - t2.position[0])
-            dy = abs(t1.position[1] - t2.position[1])
-
-            if dx > 1 or dy > 1:
-                return declaration_event.cancel(
-                    status_message=f"Targets must be within 5ft of each other (distance: {max(dx, dy) * 5}ft)"
-                )
+        selection_error = self.selection_preview_error()
+        if selection_error is not None:
+            return declaration_event.cancel(status_message=selection_error)
 
         parent_result = super()._validate(declaration_event)
         return type_cast(Optional[SpellEvent], parent_result)
@@ -2491,6 +2495,10 @@ class SpiritGuardians(SpellAction):
             for variant in super().get_discovery_variants(entity)
             for kind in (DamageType.RADIANT, DamageType.NECROTIC)]
 
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        return (ActionVariantFacet(key="damage_type", value=self.damage_type.value.lower(),
+                                   label=self.damage_type.value),)
+
     def get_discovery_template_name(self) -> str:
         return f"{super().get_discovery_template_name()}__{self.damage_type.value.lower()}"
 
@@ -4343,6 +4351,9 @@ class DimensionDoor(SpellAction):
         if not (x0 <= x <= x1 and y0 <= y <= y1):
             return "Destination lies outside this map"
         return self.target_position_error(self.end_position)
+
+    def selection_preview_error(self) -> str | None:
+        return self._selection_error()
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         error = self._selection_error()

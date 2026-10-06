@@ -137,6 +137,8 @@ class ItemEffectPresentationState(BaseModel):
     effect_uuid: UUID
     contribution_uuid: UUID | None = None
     behavior_id: str
+    display_name: str = 'Magical effect'
+    description: str = ''
     damage_type: DamageType | None = None
     applied_source_event_cursor: int | None = None
     suppression_provider_uuids: tuple[UUID, ...] = ()

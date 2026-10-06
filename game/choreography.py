@@ -222,7 +222,7 @@ class BoundChoreography:
     body_hops: tuple[BodyHopCue, ...] = ()
     portals: tuple[PortalTransferCue, ...] = ()
     stationary_media: tuple[StationaryMediaCue, ...] = ()
-    turn_starts: tuple[tuple[float, UUID], ...] = ()
+    turn_starts: tuple[tuple[float, UUID, UUID], ...] = ()
     contact_media: tuple[StationaryMediaCue, ...] = ()
     reaction_media: tuple[ReactionMediaCue, ...] = ()
     condition_responses: tuple[ConditionResponseCue, ...] = ()
@@ -457,7 +457,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             sources or (TimingOperand(TimingReference('event', lineage.root.uuid, 'group_origin'), 0.),), floor, 'maximum')
         return floor
     commit_milestones: dict[UUID, float] = {}
-    turn_starts: list[tuple[float, UUID]] = []
+    turn_starts: list[tuple[float, UUID, UUID]] = []
     recorded_transitions: list[WorldTransition] = []
     external_reactions: list[BodyActionCue] = []
     reaction_media: list[ReactionMediaCue] = []
@@ -953,7 +953,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
             placed_contacts[placed.actor_uuid] = placed
         end = at
         if isinstance(fact, TurnFact) and fact.event_type is EventType.TURN_START and fact.entity_uuid is not None:
-            turn_starts.append((at, fact.entity_uuid))
+            turn_starts.append((at, fact.entity_uuid, event.uuid))
         if isinstance(fact, MovementFact):
             motion = bind_motion(_before_event(before, lineage, event),
                 lineage_branch(lineage, event), data, contacts=placed_contacts,
@@ -1652,7 +1652,7 @@ def bind_choreography(before: PlayerState, lineage: PlayerLineage, data: Animati
                 if anchor.name in ("recover", "complete") else anchor for anchor in timeline.anchors))
         nodes[index] = replace(node, bound=replace(node.bound, timeline=timeline))
         complete = max(complete, node.start_ms + timeline.complete_ms)
-    for at, actor_id in turn_starts:
+    for at, actor_id, _ in turn_starts:
         actor = before.actors.get(actor_id)
         if actor is not None:
             for member in actor.conditions:

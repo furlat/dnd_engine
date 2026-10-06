@@ -25,7 +25,7 @@ def test_full_round_moves_conditions_and_enemy_actions_while_history_paused() ->
         commands += 1
         if stage == 2:
             if commands == 6:
-                pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+                pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_PAUSE))
             return EndTurn()
         behavior = "action.move" if stage == 0 else "action.dodge"
         index, action = next((index, row) for index, row in enumerate(available.all_actions)
@@ -41,7 +41,7 @@ def test_full_round_moves_conditions_and_enemy_actions_while_history_paused() ->
         result = run(player_input=choose, stop_after_commands=6, frame_deltas=(0.1,), max_frames=240,
                      collect_frames=True,
                      frame_events={
-                         80: (pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE),)})
+                         80: (pygame.event.Event(pygame.KEYDOWN, key=pygame.K_PAUSE),)})
     finally:
         random.setstate(state)
     assert result.player_commands == 6

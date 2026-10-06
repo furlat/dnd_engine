@@ -62,7 +62,7 @@ def drawn(frame, camera, rendering):
     screen, catalog, cache, _, _ = rendering
     evidence = draw_frame(screen, frame.displayed, catalog, cache, camera, 0,
         show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True,
-        extra_commands=frame.commands, world_transitions=frame.world_transitions)
+        extra_commands=frame.commands, world_transitions=frame.world_transitions).evidence
     assert evidence is not None and evidence.matches
     return evidence.actual_draws
 
@@ -207,7 +207,7 @@ def test_unseen_toggle_reacquisition_uses_received_endpoint_without_replaying_mo
     camera = Camera(viewport=screen.get_size()).with_focus((3, 1))
     evidence = draw_frame(screen, after, catalog, cache, camera, 0,
         show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True,
-        world_transitions=transitions)
+        world_transitions=transitions).evidence
     assert evidence is not None
     effect, = (row for row in evidence.actual_draws if len(row) > 6 and row[6] == "spatial_effect")
     assert effect[2] == f"spikes.{camera_pose('east', 0)}.6"

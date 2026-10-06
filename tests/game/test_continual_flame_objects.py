@@ -122,7 +122,7 @@ def test_saved_real_object_flame_reaches_map_painter_and_keeps_one_birth(media, 
         screen = pygame.Surface(camera.viewport, pygame.SRCALPHA)
         evidence = draw_frame(screen, state, catalog, cache, camera, clock / 1000,
             show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True,
-            animation_data=selected_data, item_starts=starts)
+            animation_data=selected_data, item_starts=starts).evidence
         assert evidence is not None and evidence.matches
         return pygame.image.tobytes(screen, "RGBA"), evidence.actual_draws
 

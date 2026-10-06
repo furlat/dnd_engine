@@ -2523,10 +2523,11 @@ class GridMap:
         self, requester_uuid: UUID, object_uuid: UUID, *,
         access: PhysicalAccess = PhysicalAccess.HAND,
         subjective: bool = False,
+        origin: Optional[Tuple[int, int]] = None,
     ) -> Optional[Tuple[int, int]]:
         """Find a hand-use contact without expanding manual interaction reach."""
         return self.attack_object_contact(requester_uuid, object_uuid,
-            range_feet=5, access=access, subjective=subjective)
+            range_feet=5, access=access, subjective=subjective, origin=origin)
 
     def attack_object_contact(
         self, requester_uuid: UUID, object_uuid: UUID, *,

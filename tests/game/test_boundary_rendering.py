@@ -164,7 +164,7 @@ def test_every_owner_tile_wall_subset_has_exact_four_camera_composition(
         0.2,
         collect_evidence=True, show_grid=False,
         mouse_position=None,
-    )
+    ).evidence
     assert evidence is not None
     rows = _boundary_rows(evidence)
     pair = frozenset(directions)
@@ -211,7 +211,7 @@ def test_corner_coalescing_ignores_support_light_but_requires_equal_base_height(
         0.2,
         collect_evidence=True, show_grid=False,
         mouse_position=None,
-    )
+    ).evidence
     assert treatment_evidence is not None
     treatment_rows = _boundary_rows(treatment_evidence)
     assert [row[6] for row in treatment_rows] == ["wall_corner"]
@@ -230,7 +230,7 @@ def test_corner_coalescing_ignores_support_light_but_requires_equal_base_height(
         0.2,
         collect_evidence=True, show_grid=False,
         mouse_position=None,
-    )
+    ).evidence
     assert height_evidence is not None
     height_rows = _boundary_rows(height_evidence)
     assert [row[6] for row in height_rows] == ["wall", "wall"]
@@ -269,7 +269,7 @@ def test_same_owner_mixed_materials_remain_two_identifiable_straights(
         0.2,
         collect_evidence=True, show_grid=False,
         mouse_position=None,
-    )
+    ).evidence
     assert evidence is not None
     rows = _boundary_rows(evidence)
 
@@ -303,7 +303,7 @@ def test_real_lodge_and_storehouse_use_matching_corners_and_straights(
         0.2,
         collect_evidence=True, show_grid=False,
         mouse_position=None,
-    )
+    ).evidence
     assert evidence is not None
     rows_by_position = {}
     for row in _boundary_rows(evidence):
@@ -363,7 +363,7 @@ def test_current_composite_wall_uses_neutral_treatment_in_every_quadrant(
             0.2,
             collect_evidence=True, show_grid=False,
             mouse_position=None,
-        )
+        ).evidence
         assert evidence is not None
         rows.append(_boundary_rows(evidence)[0])
 
@@ -402,7 +402,7 @@ def test_memory_only_composite_wall_keeps_memory_treatment(
         0.2,
         collect_evidence=True, show_grid=False,
         mouse_position=None,
-    )
+    ).evidence
     assert evidence is not None
     row = _boundary_rows(evidence)[0]
     assert row[0] == wall_uuid
@@ -435,7 +435,7 @@ def test_door_frame_does_not_disclose_leaf_or_settle_state_without_contact(
         0.7,
         collect_evidence=True, show_grid=False,
         mouse_position=None,
-    )
+    ).evidence
     assert evidence is not None
     rows = [row for row in _boundary_rows(evidence) if row[0] == opened.door_uuid]
     represented, hidden = _display_sources(reduced, evidence)
@@ -467,7 +467,7 @@ def test_stale_leaf_placement_cannot_settle_the_door_event(
         0.7,
         collect_evidence=True, show_grid=False,
         mouse_position=None,
-    )
+    ).evidence
     assert evidence is not None
     def stale_leaf(row: tuple) -> tuple:
         if len(row) <= 8 or row[6] != "door_leaf":
@@ -519,7 +519,7 @@ def test_standing_torch_body_and_flame_share_committed_placement_base(
         0.2,
         collect_evidence=True, show_grid=False,
         mouse_position=None,
-    )
+    ).evidence
     assert evidence is not None
     fixture_rows = [row for row in evidence.actual_draws if row[0] == fixture_uuid]
 
@@ -547,7 +547,7 @@ def test_disclosed_props_follow_received_light_state_and_camera(rendering, base_
                 "item": fixture.item.model_copy(update={"item_id": item_id, "is_lit": lit}),
             })}
             evidence = draw_frame(screen, target, catalog, cache, camera, 0.2,
-                show_grid=False, mouse_position=None, show_debug=False, collect_evidence=True)
+                show_grid=False, mouse_position=None, show_debug=False, collect_evidence=True).evidence
             assert evidence is not None
             rows = [row for row in evidence.actual_draws if row[0] == identity]
             assert rows, "a disclosed placed prop must be visible"
@@ -567,7 +567,7 @@ def test_disclosed_props_follow_received_light_state_and_camera(rendering, base_
     }[item_id]
     target.senses.objects.pop(identity)
     evidence = draw_frame(screen, target, catalog, cache, camera, 0.2,
-        show_grid=False, mouse_position=None, show_debug=False, collect_evidence=True)
+        show_grid=False, mouse_position=None, show_debug=False, collect_evidence=True).evidence
     assert evidence is not None and all(row[0] != identity for row in evidence.actual_draws)
 
 
@@ -596,7 +596,7 @@ def test_received_prop_state_selects_visible_pose_in_all_views(
                 }),
             })}
             evidence = draw_frame(screen, target, catalog, cache, camera, 0.2,
-                show_grid=False, mouse_position=None, show_debug=False, collect_evidence=True)
+                show_grid=False, mouse_position=None, show_debug=False, collect_evidence=True).evidence
             assert evidence is not None
             row, = (row for row in evidence.actual_draws if row[0] == identity)
             selected[state].add(row[2])
@@ -650,7 +650,7 @@ def test_real_q0_water_wall_overlap_uses_planar_then_spatial_pixel_order(
         0.2,
         collect_evidence=True, show_grid=False,
         mouse_position=None,
-    )
+    ).evidence
     assert evidence is not None
 
     water_uuid = target.tiles[position].tile_uuid

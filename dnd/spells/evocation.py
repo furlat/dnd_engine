@@ -20,6 +20,7 @@ from dnd.types.physical_access import PhysicalAccess
 from pydantic import Field, PrivateAttr
 from pydantic_core import PydanticUndefined
 
+from dnd.core.action_types import ActionVariantFacet
 from dnd.core.base_actions import (
     ActionCategory,
     AvailableTarget,
@@ -595,6 +596,9 @@ class MagicMissile(SpellAction):
             effect_id=MAGIC_MISSILE_DAMAGE_EFFECT_ID,
         )
 
+    def get_allocation_completion(self) -> Literal["selected_only", "fill_primary"]:
+        return "fill_primary"
+
     def get_multi_target_count(self) -> Optional[int]:
         return self.get_num_projectiles()
 
@@ -737,6 +741,9 @@ class ScorchingRay(SpellAction):
             damage_type=DamageType.FIRE,
             applications=self.get_num_projectiles(),
         )
+
+    def get_allocation_completion(self) -> Literal["selected_only", "fill_primary"]:
+        return "fill_primary"
 
     def get_multi_target_count(self) -> Optional[int]:
         return self.get_num_projectiles()
@@ -2799,6 +2806,9 @@ class EldritchBlast(SpellAction):
         """Each beam gets its own attack; an explicit action override still applies."""
         return self.alt_target_count if self.alt_target_count is not None else self._get_cantrip_dice_count(self.caster_level)
 
+    def get_allocation_completion(self) -> Literal["selected_only", "fill_primary"]:
+        return "fill_primary"
+
     def get_multi_target_count(self) -> Optional[int]:
         return self.get_num_projectiles()
 
@@ -4437,6 +4447,7 @@ class ContinualFlameCondition(BaseCondition):
     def snapshot_item_effect(self) -> ItemEffectPresentationState:
         return ItemEffectPresentationState(effect_uuid=self.uuid,
             behavior_id=self.get_semantic_key(),
+            display_name=self.name, description=self.description,
             applied_source_event_cursor=self.applied_source_event_cursor)
 
     def _commit_application(self, effect_event: Event) -> None:
@@ -5243,6 +5254,9 @@ class DivineWord(SpellAction):
              evaluator=entity_action_economy_cost_evaluator)
     ], description="Action economy costs paid to execute divine word.")
 
+    def get_multi_target_count(self) -> int:
+        return self.get_num_projectiles()
+
     def get_num_projectiles(self) -> int:
         return 6
 
@@ -5385,6 +5399,9 @@ class FireShield(SpellAction):
         return [variant.model_copy(deep=True, update={"uuid":uuid4(), "shield_kind":kind,
             "registered_template_uuid":self.registered_template_uuid or self.uuid})
             for variant in super().get_discovery_variants(entity) for kind in ("warm","chill")]
+
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        return (ActionVariantFacet(key="form", value=self.shield_kind, label=self.shield_kind.title()),)
 
     def get_discovery_template_name(self) -> str:
         return f"{super().get_discovery_template_name()}__{self.shield_kind}"

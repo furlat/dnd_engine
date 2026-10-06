@@ -108,10 +108,11 @@ from dnd.creature_transforms import (
     apply_life_state_transform,
     remove_modifier_ownership,
 )
+from dnd.core.action_types import ActionAffordance
 from dnd.core.base_actions import (
     ActionAvailabilityStatus, AttackRollBaseline, BaseAction, BaseCost,
     DamageRollProfile, TargetType,
-    AvailableTarget, AvailableActionInfo, AvailableActionsResult, AvailableHandlerInfo,
+    AvailableTarget, AvailableActionInfo, AvailableActionsResult, AvailableHandlerInfo, AvailableWorldInteraction,
     OpportunityAttackExposure,
     PositionDiscoveryContract, target_resolution_sort_key,
 )
@@ -2151,6 +2152,11 @@ class Entity(BaseBlock):
                     verbose=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
                     detailed=f"{{yellow:{target_name}}} is **immune** to {condition_name}",
                     success=False,
+                    perceiver_uuids=EventQueue.perceivers_for_event(declaration_event),
+                    identified_entity_observer_uuids={identity: set(observers) for identity, observers
+                        in declaration_event.identified_entity_observer_uuids.items()},
+                    located_entity_observer_uuids={identity: set(observers) for identity, observers
+                        in declaration_event.located_entity_observer_uuids.items()},
                 )
                 EventQueue.push_combat_log(entry, self.uuid)
 
@@ -4274,6 +4280,9 @@ class Entity(BaseBlock):
         """
         if level < 1 or level > 9:
             return False
+        capacity = self.action_economy.get_normal_spell_slot_capacities().get(level)
+        if capacity is not None:
+            return capacity > 0
         slot_attr = self.action_economy.spell_slot_value(level)
         base_modifier = slot_attr.get_base_modifier()
         return bool(
@@ -5456,6 +5465,13 @@ class Entity(BaseBlock):
             configured_action_ref=template.configured_action_ref,
             target_type=target_type,
             position_selection=template.get_position_selection(),
+            allocation_completion=template.get_allocation_completion(),
+            variant_facets=template.get_variant_facets(),
+            interaction_affordance=(ActionAffordance(surface="world", binding="source_item", default_priority=100)
+                if is_item_use and source_item_uuid is not None
+                and get_map().get_object_placement(source_item_uuid) is not None
+                else template.interaction_affordance),
+            connector_traversal=template.get_connector_traversal_discovery(),
             availability_status=availability_status,
             valid_targets=valid_targets,
             can_afford=can_afford,
@@ -7275,6 +7291,15 @@ class Entity(BaseBlock):
         ):
             result.position_actions.append(action_info)
 
+    def observed_world_use_sources(self) -> tuple[tuple[BaseAction, UUID, str], ...]:
+        """Describe observed devices before reach admission; never execute them."""
+        sources = []
+        for identity in self.senses.objects:
+            item = BaseBlock.get(identity)
+            if isinstance(item, UsableItem) and item.should_include_in_available_object_actions():
+                sources.extend((action, identity, item.name) for action in item.get_use_actions(self.uuid))
+        return tuple(sources)
+
     def _collect_use_actions(
         self,
         result: AvailableActionsResult,
@@ -7313,18 +7338,40 @@ class Entity(BaseBlock):
                 (use_template, item_uuid, item_name, item_stack, True),
             )
 
-        for obj_uuid in self.senses.objects:
-            obj = BaseBlock.get(obj_uuid)
-            if not isinstance(obj, UsableItem):
+        observed_sources = self.observed_world_use_sources()
+        candidates = {self.position} | {target.position for row in result.position_actions
+            if row.behavior_id == "action.move" for target in row.valid_targets if target.position is not None}
+        descriptors = []
+        for action, identity, _name in observed_sources:
+            if action.behavior_binding is None:
+                raise ValueError("Observed world use action requires a behavior binding")
+            descriptors.append(AvailableWorldInteraction(subject_uuid=identity,
+                behavior_id=action.behavior_binding.behavior_id, label=action.name or "Use",
+                description=action.description or "",
+                template_name=f"{action.get_discovery_template_name()}__item_{identity}",
+                configured_action_ref=action.configured_action_ref, variant_facets=action.get_variant_facets(),
+                contact_positions=tuple(sorted(position for position in candidates
+                    if grid.manual_object_contact(self.uuid, identity, subjective=True, origin=position) is not None))))
+        for identity in self.senses.objects:
+            item = BaseBlock.get(identity)
+            if isinstance(item, BaseItem) and item.is_pickable:
+                descriptors.append(AvailableWorldInteraction(subject_uuid=identity, behavior_id="action.pick_up",
+                    label="Pick up", contact_positions=tuple(sorted(position for position in candidates
+                        if grid.manual_object_contact(self.uuid, identity, subjective=True, origin=position) is not None))))
+        for connector in grid.get_all_connectors():
+            if connector.aperture is None or connector.aperture.frame_uuid not in self.senses.objects:
                 continue
-            if not obj.should_include_in_available_object_actions():
-                continue
-            if grid.manual_object_contact(self.uuid, obj_uuid, subjective=True) is None:
-                continue
-            for use_template in obj.get_use_actions(self.uuid):
-                use_sources.append(
-                    (use_template, obj_uuid, obj.name, None, False),
-                )
+            endpoints = connector.endpoints if connector.bidirectional else connector.endpoints[:1]
+            admitted = tuple(endpoint.position for endpoint in endpoints if endpoint.position in candidates
+                and connector.enabled and grid.connector_movement_cost(connector, endpoint.position,
+                    self.uuid, self.size, subjective=True, ignore_difficult_terrain=self.ignore_difficult_terrain) is not None)
+            descriptors.append(AvailableWorldInteraction(subject_uuid=connector.aperture.frame_uuid,
+                behavior_id="action.traverse_connector", label="Crawl through", connector_uuid=connector.uuid,
+                contact_positions=admitted, reason=None if admitted else "Passage is blocked or out of reach"))
+        result.world_interactions = tuple(descriptors)
+        for use_template, obj_uuid, item_name in observed_sources:
+            if grid.manual_object_contact(self.uuid, obj_uuid, subjective=True) is not None:
+                use_sources.append((use_template, obj_uuid, item_name, None, False))
 
         for (
             use_template,

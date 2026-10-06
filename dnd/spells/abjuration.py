@@ -3149,6 +3149,9 @@ class BeaconOfHope(SpellAction):
     include_self: bool = Field(default=True, description="Whether self-targeting is allowed.")
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
 
+    def get_multi_target_count(self) -> int:
+        return self.get_num_projectiles()
+
     def get_num_projectiles(self) -> int:
         """Return the engine cap for affected allies."""
         return 6

@@ -1,0 +1,111 @@
+{
+  "panel": {
+    "normal": {
+      "resource_id": "skin:panel.normal",
+      "inset": [
+        8,
+        8,
+        8,
+        8
+      ]
+    }
+  },
+  "slot": {
+    "normal": {
+      "resource_id": "skin:slot.normal",
+      "inset": [
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    "hover": {
+      "resource_id": "skin:slot.hover",
+      "inset": [
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    "selected": {
+      "resource_id": "skin:slot.selected",
+      "inset": [
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    "disabled": {
+      "resource_id": "skin:slot.disabled",
+      "inset": [
+        6,
+        6,
+        6,
+        6
+      ]
+    }
+  },
+  "button": {
+    "normal": {
+      "resource_id": "skin:button.normal",
+      "inset": [
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    "hover": {
+      "resource_id": "skin:button.hover",
+      "inset": [
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    "pressed": {
+      "resource_id": "skin:button.pressed",
+      "inset": [
+        6,
+        6,
+        6,
+        6
+      ]
+    },
+    "disabled": {
+      "resource_id": "skin:button.disabled",
+      "inset": [
+        6,
+        6,
+        6,
+        6
+      ]
+    }
+  },
+  "tooltip": {
+    "normal": {
+      "resource_id": "skin:tooltip.normal",
+      "inset": [
+        6,
+        6,
+        6,
+        6
+      ]
+    }
+  },
+  "pixel_slot": {
+    "normal": {
+      "resource_id": "skin:slot.pixel28",
+      "inset": [
+        2,
+        2,
+        2,
+        2
+      ]
+    }
+  }
+}

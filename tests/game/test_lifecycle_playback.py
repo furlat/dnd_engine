@@ -173,7 +173,7 @@ def test_native_downed_death_does_not_refall_and_revival_preserves_position_in_f
                     idle = sample_playback_frame(after, None, data, 0, 5000 + time, camera, facings,
                         media, number, badge, positions=frame.positions)
                     idle_body = actor_body(idle, identity)
-                    assert command[2:] == idle_body[2:]
+                    assert command.destination == idle_body.destination and command.blend == idle_body.blend and command.evidence == idle_body.evidence
                     assert pygame.image.tobytes(command[1], "RGBA") == pygame.image.tobytes(idle_body[1], "RGBA")
                     if after.actors[target].life_state is LifeState.DEAD:
                         rendered = (command[2], pygame.image.tobytes(command[1], "RGBA"))
@@ -343,7 +343,7 @@ def test_opportunity_downing_falls_and_holds_with_original_dying_child_badge(
             media, number, badge, positions=frame.positions)
         command, idle_command = actor_body(frame, final.contact.actor_uuid), actor_body(idle, final.contact.actor_uuid)
         assert frame.shown_hp[final.contact.actor_uuid] == idle.displayed.actors[target_uuid].normal_hp == 0
-        assert command[4][8] == "Die" and command[2:] == idle_command[2:]
+        assert command[4][8] == "Die" and command.destination == idle_command.destination and command.blend == idle_command.blend and command.evidence == idle_command.evidence
         assert pygame.image.tobytes(command[1], "RGBA") == pygame.image.tobytes(idle_command[1], "RGBA")
 
 

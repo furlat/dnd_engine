@@ -182,7 +182,7 @@ def test_shared_equipment_gesture_preserves_identity_until_settlement_and_attack
                             camera, frame.facings, media, *fonts, positions=frame.positions)
                         idle_body = next(command for command in idle.commands
                                          if command[4][0] == identity and command[4][6] == "actor")
-                        assert commands[0][2:] == idle_body[2:]
+                        assert commands[0][2:5] == idle_body[2:5]
                         assert pygame.image.tobytes(commands[0][1], "RGBA") == pygame.image.tobytes(idle_body[1], "RGBA")
         before = after
     assert equipment_count == 1 and before == latest

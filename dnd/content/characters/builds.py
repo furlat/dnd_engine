@@ -62,6 +62,7 @@ class CharacterAppearance:
     hair_tint: int = 0
     has_beard: bool = False
     beard_tint: int = 0
+    portrait_key: str | None = None
 
     def config(self) -> AppearanceConfig:
         """Validate and project these values onto the existing owner config."""
@@ -74,6 +75,7 @@ class CharacterAppearance:
             hair_tint=self.hair_tint,
             has_beard=self.has_beard,
             beard_tint=self.beard_tint,
+            portrait_key=self.portrait_key,
         )
 
 

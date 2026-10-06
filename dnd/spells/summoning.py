@@ -5,6 +5,7 @@ from typing import cast
 from pydantic import Field
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
+from dnd.core.action_types import ActionVariantFacet
 from dnd.core.base_actions import BaseAction, Cost, PositionDiscoveryContract, TargetType
 from dnd.core.events import EventPhase, EventQueue, Range, RangeType, SummonAdmissionEvent
 from dnd.entity import Entity
@@ -49,6 +50,12 @@ class SummonSpell(SpellAction):
         if proposal.binding_uuid is None:
             return "Summoning is not bound to this encounter"
         return None
+
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        form = next((form for form in available_forms(self.family, self.cast_at_level)
+                     if form.form_id == self.form_id), None)
+        return (ActionVariantFacet(key="form", value=self.form_id or "choose",
+                                  label=form.display_name if form else "Choose creature"),)
 
     def get_discovery_variants(self, entity: Entity) -> list[BaseAction]:
         return [slot.model_copy(update={"form_id": form.form_id})

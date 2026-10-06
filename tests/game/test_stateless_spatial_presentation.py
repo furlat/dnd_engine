@@ -40,7 +40,7 @@ def test_observed_effect_without_trap_state_draws_its_authored_frame_until_remov
 
             def render(snapshot, time):
                 evidence = draw_frame(screen, snapshot, catalog, cache, camera, time,
-                    show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True)
+                    show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True).evidence
                 assert evidence is not None and evidence.matches
                 return evidence.actual_draws, pygame.surfarray.array3d(screen)
 

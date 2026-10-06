@@ -15,6 +15,9 @@ from game.environment_art import prop_state_key
 from game.player_facts import PlayerObject
 from game.item_draw import item_selection_command
 from dnd.core.item_types import ItemIntegrity
+from dnd.core.events import WorldObjectState
+from game.interaction_types import SelectionCoverage, WorldHit
+from game.interaction_frame import align_coverage
 from game.fixture_depth import FixtureDepthSample
 from game.projection import Camera, HEIGHT_STEP_PIXELS, camera_pose, painter_key, project_screen
 
@@ -61,7 +64,8 @@ def environment_command(bank: EnvironmentBank, frame: int, *, identity: UUID,
         image, destination, 0,
         (identity, position, bank.identity, "current", None, "authored", role, elevation, pose, frame),
         world_depth=depth, role="environment_floor" if flat_ground else "other",
-        support_height_steps=elevation)
+        support_height_steps=elevation, owner=str(identity), cell=position,
+        selection_occluder=True)
 
 
 def environment_depth_sample(command: DrawCommand, index: int, bank: EnvironmentBank,
@@ -84,7 +88,7 @@ def environment_depth_sample(command: DrawCommand, index: int, bank: Environment
         origin_offset, source_rect=region.rect if region is not None else None)
 
 
-def environment_selection_command(obj: PlayerObject, camera: Camera) -> DrawCommand | None:
+def environment_selection_command(obj: PlayerObject | WorldObjectState, camera: Camera) -> DrawCommand | None:
     """Use a registered target region at the received object's exact mount."""
     art = load_environment_art().props.get(obj.item.item_id)
     if art is None:
@@ -116,6 +120,34 @@ def environment_aperture_image(item_id: str, pose: str, camera: Camera) -> pygam
     region = prop.aperture_masks_by_pose.get(pose) if prop is not None else None
     bank = prop.intact.get('default') if prop is not None else None
     return _frame(region.path,region.rect,bank.scale*camera.zoom) if region is not None and bank is not None else None
+
+
+def bind_object_selection(command: DrawCommand, obj: PlayerObject | WorldObjectState,
+                          camera: Camera, *, component: DrawCommand | None = None) -> DrawCommand:
+    """Attach the registered target region to the actual displayed piece."""
+    registered = component or environment_selection_command(obj, camera)
+    if registered is None:
+        mask = pygame.surfarray.array_alpha(command.surface) > 0
+        mask.setflags(write=False)
+    else:
+        mask = align_coverage(pygame.surfarray.array_alpha(registered.surface) > 0,
+                              registered.destination, command)
+        mask = mask & (pygame.surfarray.array_alpha(command.surface) > 0)
+        mask.setflags(write=False)
+    hit = WorldHit("object", str(obj.item.item_uuid), obj.placement.position, obj.placement.base_height_steps)
+    direction = obj.placement.boundary_direction or obj.placement.orientation
+    pose = camera_pose(direction.value if direction is not None else "east", camera.quadrant)
+    opening = environment_aperture_image(obj.item.item_id, pose, camera)
+    coverage = []
+    if opening is not None:
+        aperture = align_coverage(pygame.surfarray.array_alpha(opening) > 0, command.destination, command)
+        mask = mask & ~aperture & (pygame.surfarray.array_alpha(command.surface) > 0)
+        mask.setflags(write=False)
+        coverage.append(SelectionCoverage(WorldHit("aperture", str(obj.item.item_uuid),
+            obj.placement.position, obj.placement.base_height_steps), aperture))
+    coverage.insert(0, SelectionCoverage(hit, mask))
+    return command._replace(selection=(*command.selection, *coverage),
+                            selection_occluder=True)
 
 
 def pick_environment_target(point: tuple[int, int], objects: Mapping[UUID, PlayerObject],

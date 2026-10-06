@@ -995,6 +995,14 @@ class ActionEconomy(BaseBlock):
         base_mod = value.get_base_modifier()
         return base_mod.normalized_value if base_mod else 0
 
+    def channel_capacity(self, cost_type: CostType) -> int:
+        """Resolve the native channel with expenditure omitted, preserving grants and constraints."""
+        if cost_type == "movement":
+            return self.current_speed() * (1 + self.dash_count)
+        value = self._get_value_for_cost_type(cost_type)
+        return max(0, value.normalized_score_excluding_static_modifiers(
+            {modifier.uuid for modifier in self.get_cost_modifiers(cost_type)}))
+
     def get_cost_modifiers(self, cost_type: CostType) -> List[NumericalModifier]:
         """Get all cost modifiers (negative values) for a given action type."""
         if cost_type == "movement":

@@ -14,6 +14,7 @@ import pygame
 
 from game.animation_types import PropDepth
 from game.draw_commands import DrawCommand
+from game.interaction_frame import cut_selection
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,15 +68,21 @@ def partition_world_depth(command: DrawCommand, depth: np.ndarray,
         del remainder_alpha
         if command.blend == pygame.BLEND_RGB_ADD:
             pygame.surfarray.pixels3d(remainder)[:] *= (~coverage)[:, :, None]
-        pieces.append(command._replace(surface=remainder))
+        selection, blocker = cut_selection(command, ~coverage)
+        pieces.append(command._replace(surface=remainder, selection=selection, selection_block_mask=blocker))
     minimum, maximum = float(depth[occupied].min()), float(depth[occupied].max())
     cuts = sorted({value for value in peer_depths if ordered_bands or minimum <= value <= maximum})
     previous = -float("inf")
     for cutoff in (*cuts, float("inf")):
-        selected = occupied & (depth > previous) & (depth <= cutoff)
+        band = (depth > previous) & (depth <= cutoff)
+        retained = band if coverage is None else band & coverage
+        selected = occupied & band
+        extent = selected.copy()
+        for selection in command.selection:
+            extent |= selection.mask & retained
         lower = previous
         previous = cutoff
-        xs, ys = np.nonzero(selected)
+        xs, ys = np.nonzero(extent)
         if not len(xs):
             continue
         left, top, right, bottom = int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
@@ -92,9 +99,12 @@ def partition_world_depth(command: DrawCommand, depth: np.ndarray,
             sort_depth = (nextafter(cutoff, -float("inf")) if cutoff != float("inf")
                           else nextafter(lower, float("inf")) if cuts else command.key[1])
         else:
-            sort_depth = min(float(depth[selected].mean()), nextafter(cutoff, -float("inf")))
+            sort_depth = min(float(depth[selected if np.any(selected) else extent].mean()),
+                             nextafter(cutoff, -float("inf")))
+        selection, blocker = cut_selection(command, retained, (left, top, right-left, bottom-top))
         pieces.append(command._replace(key=(command.key[0], sort_depth, *command.key[2:]),
             surface=part, destination=(command.destination[0] + left, command.destination[1] + top),
+            selection=selection, selection_block_mask=blocker,
             world_depth=(command.world_depth[left:right, top:bottom]
                          if command.world_depth is not None else None)))
     return pieces

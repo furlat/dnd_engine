@@ -76,7 +76,7 @@ def test_pickup_clears_ground_dagger_in_every_playback_view_and_preserves_spare_
                     evidence = draw_frame(screen, frame.displayed, catalog, cache, camera, elapsed / 1000,
                         show_grid=False, show_debug=False, mouse_position=None, extra_commands=frame.commands,
                         world_transitions=frame.world_transitions, residue_reveals=frame.residue_reveals,
-                        deposited_materials=frame.deposited_materials, collect_evidence=True)
+                        deposited_materials=frame.deposited_materials, collect_evidence=True).evidence
                     assert evidence is not None and evidence.matches
                     ground_items = {row[0] for row in evidence.actual_draws if len(row) == 4}
                     assert (str(identity) in ground_items) is expected_dagger

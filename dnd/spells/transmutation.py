@@ -19,7 +19,7 @@ from dnd.core.life_types import RemainsDisposition
 from dnd.core.base_block import BaseBlock
 from dnd.types.physical_access import PhysicalAccess
 
-from dnd.core.action_types import EntityTargetPerception
+from dnd.core.action_types import EntityTargetPerception, ActionVariantFacet
 from dnd.core.action_types import EntityDestinationSelection
 from dnd.core.base_actions import (
     ActionCategory,
@@ -1352,6 +1352,20 @@ class EnhanceAbility(SpellAction):
     valid_target_filter: str = Field(default="self_or_allies", description="Target filter key for available action discovery.")
     enhance_ability_type: AbilityName = Field(default="strength", description="Ability key selected for enhancement.")
 
+    def get_discovery_variants(self, entity: Entity) -> list[BaseAction]:
+        return [variant.model_copy(update={"enhance_ability_type": value})
+                for variant in super().get_discovery_variants(entity)
+                for value in ('strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma')]
+
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        return (ActionVariantFacet(key="ability", value=self.enhance_ability_type, label=self.enhance_ability_type.title()),)
+
+    def get_discovery_template_name(self) -> str:
+        return f"{super().get_discovery_template_name()}__enhance_ability_type_{self.enhance_ability_type}"
+
+    def get_discovery_display_name(self) -> str:
+        return f"{super().get_discovery_display_name()} · {self.enhance_ability_type.title()}"
+
     def _create_declaration_event(
         self, parent_event: Optional[Event] = None, use_register: bool = True,
     ) -> Optional[Event]:
@@ -1520,6 +1534,20 @@ class EnlargeReduce(SpellAction):
             and target.uuid != caster.uuid and caster.is_enemy(target)
         ]
         return bool(unwilling), unwilling
+
+    def get_discovery_variants(self, entity: Entity) -> list[BaseAction]:
+        return [variant.model_copy(update={"enlarge_mode": value})
+                for variant in super().get_discovery_variants(entity)
+                for value in ('enlarge', 'reduce')]
+
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        return (ActionVariantFacet(key="form", value=self.enlarge_mode, label=self.enlarge_mode.title()),)
+
+    def get_discovery_template_name(self) -> str:
+        return f"{super().get_discovery_template_name()}__enlarge_mode_{self.enlarge_mode}"
+
+    def get_discovery_display_name(self) -> str:
+        return f"{super().get_discovery_display_name()} · {self.enlarge_mode.title()}"
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         caster = Entity.get(self.source_entity_uuid)
@@ -1724,6 +1752,13 @@ class TelekinesisMove(BaseAction):
         marker = caster.active_conditions_by_uuid.get(self.marker_uuid) if caster else None
         return marker is not None and marker.applied and marker.contributions_active()
 
+    def selection_preview_error(self) -> str | None:
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return "Caster is unavailable"
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        return self.position_selection_error() or _telekinesis_selection_error(caster, target, self.end_position)
+
     def _validate(self, declaration_event: ActionEvent) -> ActionEvent:
         if len(self.get_all_targets()) != 1:
             return declaration_event.cancel(status_message="Choose exactly one creature")
@@ -1770,6 +1805,13 @@ class Telekinesis(SpellAction):
         recipients = [target_uuid for target_uuid in targets
             if (target := Entity.get(target_uuid)) is not None and not caster.is_ally(target)]
         return bool(recipients), recipients
+
+    def selection_preview_error(self) -> str | None:
+        caster = Entity.get(self.source_entity_uuid)
+        if caster is None:
+            return "Caster is unavailable"
+        target = Entity.get(self.target_entity_uuid) if self.target_entity_uuid else None
+        return self.position_selection_error() or _telekinesis_selection_error(caster, target, self.end_position)
 
     def _validate(self, declaration_event: SpellEvent) -> Optional[SpellEvent]:
         if len(self.get_all_targets()) != 1:

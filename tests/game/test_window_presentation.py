@@ -12,7 +12,8 @@ from dnd.core.events import EventQueue
 from dnd.core.item_types import ItemIntegrity
 from dnd.entity import Entity
 from dnd.types.world import CardinalDirection
-from game.controls import MenuState, handle_menu_event
+from game.ui.world_interaction import target_at
+from game.interaction_frame import pick_world
 from game.environment_animation import remnant_bank
 from game.environment_art import load_environment_art, sample_environment_frame
 from game.environment_draw import environment_selection_command, pick_environment_target
@@ -268,7 +269,7 @@ def test_broken_insert_leaves_no_standing_wall_after_parent_collapse(raster, cod
                    show_debug=False, mouse_position=None, extra_commands=())
         cleared = pygame.surfarray.array3d(screen)
         evidence = draw_frame(screen, state, catalog, cache, camera, 0, show_grid=False,
-            show_debug=False, mouse_position=None, extra_commands=(), collect_evidence=True)
+            show_debug=False, mouse_position=None, extra_commands=(), collect_evidence=True).evidence
         assert evidence is not None
         assert any(row[0] == insert.item.item_uuid for row in evidence.actual_draws)
         pixels = pygame.surfarray.array3d(screen)
@@ -412,6 +413,9 @@ def test_disallowed_window_mask_does_not_select_unmasked_target_behind_it(raster
         availability_status=ActionAvailabilityStatus.AVAILABLE, can_afford=True, cost_type="actions",
         valid_targets=[AvailableTarget(index=0, target_uuid=uuid4(), position=(5,4))])
     actions = AvailableActionsResult(entity_uuid=state.observer_uuid, object_actions=[row])
+    frame = draw_frame(raster[0],state,raster[1],SurfaceCache(raster[1]),camera,0,
+                       collect_interaction=True,show_debug=False,show_grid=False,mouse_position=None).interaction
+    assert frame is not None
     checked = 0
     for obj in objects.values():
         command = environment_selection_command(obj, camera)
@@ -424,10 +428,10 @@ def test_disallowed_window_mask_does_not_select_unmasked_target_behind_it(raster
                      and support.position == (5,4)), None)
         if point is None:
             continue
-        _, selected = handle_menu_event(MenuState(), pygame.event.Event(pygame.MOUSEBUTTONDOWN,
-            button=1, pos=point), actions, camera, state.tiles.values(),
-            panel_rect=pygame.Rect(700,0,260,640), visible_objects=objects)
-        assert selected is None
+        hit = pick_world(frame,point)
+        if hit is None or hit.kind != 'object':
+            continue
+        assert target_at(tuple(row.valid_targets),hit) is None
         checked += 1
     assert checked > 0
 

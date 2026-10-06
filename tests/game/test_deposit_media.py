@@ -294,7 +294,7 @@ def test_real_door_constrained_water_media_stays_in_received_cells_and_replaces_
             assert commands and {row.evidence[1] for row in commands} <= set(observed.positions)
             evidence = draw_frame(screen, state, catalog, cache, camera, 0,
                 show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True,
-                extra_commands=commands, deposited_materials=covered)
+                extra_commands=commands, deposited_materials=covered).evidence
             assert evidence is not None and evidence.matches
             assert any(len(row) > 6 and row[6] == "deposit_floor" for row in evidence.actual_draws)
             assert not any(row[2] == "particles.region.water" for row in evidence.actual_draws)
@@ -445,7 +445,7 @@ def test_all_authored_liquid_materials_replay_one_native_spill_in_both_views_and
             assert all((row.evidence[2], row.evidence[9]) in selected for row in commands)
             evidence = draw_frame(screen, state, catalog, cache, camera, 0,
                 show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True,
-                extra_commands=commands, deposited_materials=handled)
+                extra_commands=commands, deposited_materials=handled).evidence
             assert evidence is not None and evidence.matches
             assert any(len(row) > 6 and row[6] == "deposit_floor" for row in evidence.actual_draws)
             assert not any(len(row) > 6 and row[6] == "ground_residue" for row in evidence.actual_draws)

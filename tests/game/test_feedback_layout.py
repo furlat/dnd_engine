@@ -87,3 +87,21 @@ def test_all_feedback_avoids_bodies_and_each_other_at_screen_edges(
     assert actor_screen_bounds(without_diagnostics) == bounds
     assert arrange_feedback_commands(without_diagnostics, bounds, viewport) == tuple(
         row._replace(evidence=()) for row in commands)
+
+
+def test_floating_text_keeps_display_glyphs_when_the_world_is_zoomed(media) -> None:
+    data, _, font, badge_font = media
+    actor = ActorContact("actor", (6, 6), "E", .5)
+    number = NumberSample(actor.actor_uuid, 12, "Fire", 0xFF3030, 0, 1)
+    images = []
+    destinations = []
+    for zoom in (.35, .5, 1.):
+        camera = Camera(zoom=zoom, viewport=(720, 480)).with_focus(actor.grid)
+        command, = number_draw_commands(data, (number,), {actor.actor_uuid: actor},
+            font, camera, badge_font=badge_font)
+        images.append((command.surface.get_size(), pygame.image.tobytes(command.surface, "RGBA")))
+        destinations.append(command.destination)
+    assert images[0] == images[1] == images[2]
+    assert len(set(destinations)) == 3  # The label's anchor still follows the world.
+    alpha = pygame.surfarray.array_alpha(command.surface)
+    assert ((alpha > 0) & (alpha < 255)).any()  # Antialiased edges, not enlarged sprite pixels.

@@ -8,7 +8,7 @@ from pydantic import Field, PrivateAttr
 
 from dnd.actions import Move, SpellAction, SpellEvent, commit_forced_movement, entity_action_economy_cost_evaluator
 from dnd.blocks.base_item import BaseItem, WorldItem, PreparedItemRetirement
-from dnd.core.action_types import PositionPathSelection, PositionSelection, SinglePositionSelection
+from dnd.core.action_types import ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.base_block import BaseBlock
 from dnd.core.base_conditions import BaseCondition, Duration
@@ -602,6 +602,12 @@ class ConstructWall(SpellAction):
         return WallAssemblyPresentationGeometry(path=path, base_height_steps=tile.height,
             width_feet=width, height_feet=self.dome_radius_feet if self.wall_form == "dome" else 10) if tile is not None else None
 
+    def selection_preview_error(self) -> str | None:
+        return self.position_selection_error() or self.position_placement_error(subjective=True)
+
+    def get_selection_geometry(self):
+        return self.wall_geometry()
+
     def position_placement_error(self, *, subjective=False) -> str | None:
         geometry = self.wall_geometry()
         error = wall_support_error(self, geometry, subjective=subjective)
@@ -715,6 +721,17 @@ class ConstructWall(SpellAction):
                 zone.sections = remaining
                 if not remaining and not zone.applied:
                     zone.discard_from_runtime_owner()
+
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        facets = (ActionVariantFacet(key="form", value=self.wall_form, label=self.wall_form.title()),
+                  ActionVariantFacet(key="side", value=self.displacement_side, label=f"Push {self.displacement_side}"))
+        if self.wall_form == "dome":
+            return (*facets, ActionVariantFacet(key="radius", value=str(self.dome_radius_feet),
+                                               label=f"{self.dome_radius_feet} ft radius"))
+        if self.construction_material == "stone":
+            return (*facets, ActionVariantFacet(key="width", value=str(self.stone_panel_width_feet),
+                                               label=f"{self.stone_panel_width_feet} ft panels"))
+        return facets
 
     def get_discovery_variants(self, entity) -> list[BaseAction]:
         variants = []

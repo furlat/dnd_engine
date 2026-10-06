@@ -12,7 +12,8 @@ from dnd.runtime_reset import reset_engine_runtime
 from dnd.scenarios.battlefield_catalog import build_battlefield
 from dnd.spells.conjuration import DimensionDoor
 from dnd.world_authoring import project_world_tile
-from game.controls import ActionSelection, MenuState, handle_menu_event
+from game.controls import ActionSelection, confirm_targeting
+from tests.game.ui_selection_helpers import selected_prefix
 from game.animation_data import load_animation_data
 from game.choreography import bind_choreography, sample_choreography
 from game.player_facts import PortalTransferFact
@@ -36,17 +37,12 @@ def test_existing_two_stage_keyboard_route_selects_unseen_dimension_door_destina
     index, row = next((i, row) for i, row in enumerate(available.all_actions)
         if row.behavior_id == "spell.dimension_door")
     recipient = next(option for option in row.valid_targets if option.target_uuid == companion.uuid)
-    state = MenuState(selected_action=index, target_cursor=row.valid_targets.index(recipient))
-    tiles = tuple(project_world_tile(tile) for point, tile in get_map().get_all_tiles().items()
-        if caster.senses.visible.get(point, False))
     destination = (12, 2)
     assert not caster.senses.visible.get(destination, False)
-    options = tuple(get_extra_position_options(caster, row, recipient))
-    assert destination in options
-    for key, positions in ((pygame.K_RETURN, ()), (pygame.K_p, (destination,)), (pygame.K_RETURN, ())):
-        state, command = handle_menu_event(state, pygame.event.Event(pygame.KEYDOWN, key=key),
-            available, Camera(), tiles, panel_rect=pygame.Rect(750, 0, 210, 640),
-            next_position_options=positions)
+    state, preview = selected_prefix(caster,row,index,(recipient,))
+    assert destination in preview.next_positions and not preview.can_confirm
+    state, preview = selected_prefix(caster,row,index,(recipient,),(destination,))
+    command = confirm_targeting(state,preview)
     assert command == ActionSelection(index, (recipient.index,), (destination,))
 
 

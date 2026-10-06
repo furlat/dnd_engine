@@ -1,5 +1,6 @@
 """Four ordinary frozen builds consumed by the direct character path."""
 
+from dataclasses import replace
 from types import MappingProxyType
 from typing import Mapping
 from uuid import UUID
@@ -263,6 +264,7 @@ _SORCERER_SUPPLEMENT = (
 )
 
 _BARBARIAN_APPEARANCE = CharacterAppearance(
+    portrait_key="hero.barbarian_l5_berserker_torch.hero",
     visual_scale=1.1,
     visual_scale_x=1.1,
     skin_tint=0xD4AA78,
@@ -270,6 +272,7 @@ _BARBARIAN_APPEARANCE = CharacterAppearance(
     hair_tint=0xD0BFA1,
 )
 _FIGHTER_APPEARANCE = CharacterAppearance(
+    portrait_key="hero.fighter_l5_shield_torch.hero",
     skin_tint=0xE6BC98,
     head_category="Head10",
     hair_tint=0x993F00,
@@ -277,6 +280,7 @@ _FIGHTER_APPEARANCE = CharacterAppearance(
     beard_tint=0x993F00,
 )
 _SORCERER_APPEARANCE = CharacterAppearance(
+    portrait_key="hero.sorcerer_l5_standard_torch.hero",
     visual_scale=0.9,
     visual_scale_x=0.9,
     skin_tint=0xE6BC98,
@@ -387,7 +391,7 @@ PREMADE_CHARACTER_BUILDS: Mapping[str, CharacterBuild] = MappingProxyType({
             ItemLoadoutEntry("apparel.spellblade_crown", equipment_slot=BodyPart.HEAD),
             ItemLoadoutEntry("equipment.portable_torch"),
         ),
-        appearance=_FIGHTER_APPEARANCE,
+        appearance=replace(_FIGHTER_APPEARANCE,portrait_key="hero.fighter_2_sorcerer_3_spellblade.hero"),
     ),
 })
 

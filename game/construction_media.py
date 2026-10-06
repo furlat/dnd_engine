@@ -22,6 +22,8 @@ from game.registered_media import RegisteredMediaSample, registered_media_sample
 from game.world_animation import WorldTransitionSample, ObjectDustContact
 from game.construction_transitions import ConstructionMediaLifetime, construction_duration, construction_media_limitation
 from game.volume_media import ExcludedSphere, SurfaceVolume
+from game.volume_media import volume_world_coordinates
+from game.interaction_types import SelectionCoverage, WorldHit
 
 
 def construction_media_draw_commands(state: PlayerState, data: AnimationData, now_ms: float,
@@ -71,6 +73,7 @@ def construction_media_draw_commands(state: PlayerState, data: AnimationData, no
             and row.anchor_elevation_steps is not None and row.provider_content_ref is not None
             and row.provider_content_ref.content_id in data.spatial_media)
         if binding.surface is not None and (not binding.surface.domeOnly or isinstance(geometry.path, WallDome)):
+            members = [(identity, obj)]
             if (binding.surface.material == 'force_membrane' and isinstance(geometry.path, WallSegment)
                     and dust is None and identity not in pending):
                 path = geometry.path
@@ -96,6 +99,7 @@ def construction_media_draw_commands(state: PlayerState, data: AnimationData, no
                         else:
                             continue
                         consumed.add(other_id); remaining.remove((other_id,other)); joined = True
+                        members.append((other_id, other))
                     if not joined:
                         break
                 geometry = geometry.model_copy(update={'path': path})
@@ -110,11 +114,15 @@ def construction_media_draw_commands(state: PlayerState, data: AnimationData, no
                     image, offset = silhouette_dust(command.surface, dust_recipe, dust_age, dust.seed)
                     result.append(command._replace(surface=image,
                         destination=(command.destination[0]+offset[0], command.destination[1]+offset[1]),
-                        volume=None, world_depth_group=None))
+                        volume=None, world_depth_group=None, role="other", selection_occluder=False))
             else:
-                result.extend(command._replace(volume=replace(command.volume, exclusions=exclusions,
-                    admitted=pending.get(identity, command.volume.admitted)))
-                    if command.volume is not None else command for command in commands)
+                for command in commands:
+                    if command.volume is not None:
+                        command = command._replace(volume=replace(command.volume, exclusions=exclusions,
+                            admitted=pending.get(identity, command.volume.admitted)))
+                    if command.role == "construction" and identity not in pending:
+                        command = command._replace(selection=_construction_selection(command, members, camera))
+                    result.append(command)
             continue
         assert isinstance(geometry.path, WallSegment)
         if (record is not None and record.removed_ms is not None
@@ -186,7 +194,34 @@ def construction_media_draw_commands(state: PlayerState, data: AnimationData, no
                         image, destination, part.blend,
                         (str(identity), point, asset_id, 'current', None, 'authored', 'construction_media',
                          geometry.base_height_steps, 'impact', frame), owner=str(identity), volume=volume,
-                        support_height_steps=geometry.base_height_steps))
+                         support_height_steps=geometry.base_height_steps, role="construction",
+                         selection_occluder=dust is None))
+    return tuple(result)
+
+
+def _construction_selection(command: DrawCommand, members: list[tuple[UUID, PlayerObject]],
+                            camera: Camera) -> tuple[SelectionCoverage, ...]:
+    """A merged drawing keeps each native section's genuine surface coverage."""
+    if command.volume is None:
+        return ()
+    x, height, z = volume_world_coordinates(command.volume, camera)
+    visible = (command.volume.ownership != 0) & (pygame.surfarray.array_alpha(command.surface) > 0)
+    result = []
+    for identity, obj in members:
+        geometry = obj.item.construction_geometry
+        if not isinstance(geometry, WallAssemblyPresentationGeometry):
+            continue
+        mask = visible.copy()
+        if isinstance(geometry.path, WallSegment):
+            start, end = geometry.path.start, geometry.path.end
+            dx, dz = end[0]-start[0], end[1]-start[1]
+            progress = ((x-start[0])*dx+(z-start[1])*dz)/(dx*dx+dz*dz)
+            mask &= (progress >= -1e-6) & (progress <= 1+1e-6)
+        mask &= (height >= geometry.base_height_steps-1e-6) & (
+            height <= geometry.base_height_steps+geometry.height_feet/5+1e-6)
+        mask.setflags(write=False)
+        result.append(SelectionCoverage(WorldHit("object", str(identity),
+            obj.placement.position, obj.placement.base_height_steps), mask))
     return tuple(result)
 
 

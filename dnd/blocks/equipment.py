@@ -488,6 +488,7 @@ class Weapon(EquippableItem):
         effects = (*state.item_effects, *(ItemEffectPresentationState(
             effect_uuid=bonus.uuid, contribution_uuid=bonus.uuid,
             behavior_id="item.property.additional_damage", damage_type=damage_type,
+            display_name=bonus.name,
             suppression_provider_uuids=tuple(sorted(self.suppression_provider_uuids, key=str)) if self.is_magical else (),
         ) for bonus, damage_type in zip(self.extra_damage_bonus, self.extra_damage_type)
             if bonus.uuid not in owned))

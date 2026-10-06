@@ -10,6 +10,8 @@ import pygame
 
 from dnd.core.item_types import ItemEffectPresentationState, ItemIntegrity, ItemPresentationState
 from game.draw_commands import DrawCommand
+from game.interaction_types import SelectionCoverage, WorldHit
+from game.interaction_frame import align_coverage
 from game.item_appearance import ground_appearance
 from dnd.core.events import WorldObjectState
 from game.item_effects import item_condition_recipes, item_material
@@ -140,6 +142,8 @@ def item_ground_commands(obj: PlayerObject | WorldObjectState, camera: Camera, *
         crop = pygame.transform.rotate(crop, binding.rotation)
         center.rotate_ip(-binding.rotation)
     point = (round(ground[0] + center.x - crop.width / 2), round(ground[1] + center.y - crop.height / 2))
+    physical = pygame.surfarray.array_alpha(crop) > 0
+    physical_point = point
     if data is not None and not item.suppression_provider_uuids:
         anchor = (point[0] + crop.get_bounding_rect().centerx, point[1] + crop.get_bounding_rect().centery)
         crop, point = compose_item_attachments(crop, point, data, ((item.item_effects, anchor),),
@@ -156,12 +160,16 @@ def item_ground_commands(obj: PlayerObject | WorldObjectState, camera: Camera, *
         shadow.set_alpha(100)
         commands.append(DrawCommand(key, shadow, (round(ground[0]-shadow.width/2), round(ground[1]-shadow.height/2)),
             0, (), owner=str(item.item_uuid), cell=obj.placement.position))
-    commands.append(DrawCommand(key, crop, point, 0,
+    command = DrawCommand(key, crop, point, 0,
         (str(item.item_uuid), item.stack_count, binding.sprite_key, binding.frame),
-        owner=str(item.item_uuid), cell=obj.placement.position))
+        owner=str(item.item_uuid), cell=obj.placement.position)
+    aligned = align_coverage(physical, physical_point, command)
+    commands.append(command._replace(selection=(SelectionCoverage(WorldHit("object", str(item.item_uuid),
+        obj.placement.position, obj.placement.base_height_steps), aligned),),
+        selection_occluder=True, selection_block_mask=aligned))
     return tuple(commands)
 
 
-def item_selection_command(obj: PlayerObject, camera: Camera) -> DrawCommand | None:
+def item_selection_command(obj: PlayerObject | WorldObjectState, camera: Camera) -> DrawCommand | None:
     commands = item_ground_commands(obj, camera)
     return commands[-1] if commands else None

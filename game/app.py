@@ -51,7 +51,8 @@ from game.floor_composition import compose_floor_coverings
 from game.volume_media import compose_volume
 from game.environment_art import load_environment_art, prop_state_key, sample_environment_frame
 from game.environment_animation import door_pose, trap_pose, remnant_bank
-from game.environment_draw import environment_command, environment_depth_sample, environment_aperture_image
+from game.environment_draw import environment_command, environment_depth_sample, environment_aperture_image, bind_object_selection
+from game.interaction_frame import support_selection, InteractionFrame, compose_interaction_frame, cut_selection
 from game.item_draw import item_ground_commands, item_attachment_commands
 from game.animation_types import AnimationData, ItemAttachmentStart
 from game.boundary_occlusion import clip_actor_boundaries
@@ -89,6 +90,12 @@ class FrameEvidence:
             self.expected_calculations == self.actual_calculations
             and self.expected_draws == self.actual_draws
         )
+
+
+@dataclass(frozen=True, slots=True)
+class SceneFrameResult:
+    evidence: FrameEvidence | None
+    interaction: InteractionFrame | None = None
 
 
 
@@ -357,15 +364,16 @@ def draw_frame(
     deposited_materials: frozenset[tuple[UUID, str]] = frozenset(),
     show_debug: bool = True,
     collect_evidence: bool = False,
+    collect_interaction: bool = False,
     animation_data: AnimationData | None = None,
     item_starts: Mapping[UUID, ItemAttachmentStart] = MappingProxyType({}),
-) -> FrameEvidence | None:
+) -> SceneFrameResult:
     """Draw disclosed state; duplicate calculation/draw evidence is opt-in."""
     screen.fill(BACKGROUND)
     senses = target.senses
     if target.world is None or senses is None:
-        return (FrameEvidence(frozenset(), frozenset(), (), (), 0, 0, 0, 0, 0, 0, 0, None)
-                if collect_evidence else None)
+        return SceneFrameResult(FrameEvidence(frozenset(), frozenset(), (), (), 0, 0, 0, 0, 0, 0, 0, None)
+                if collect_evidence else None, InteractionFrame() if collect_interaction else None)
     screen_rect = screen.get_rect()
     authored_treatment_id, authored_multiplier = _authored_treatment(catalog)
 
@@ -386,7 +394,10 @@ def draw_frame(
                                   if command.role not in ("device", "device_wreck", "item")]
 
     def append_object(command: DrawCommand, item: ItemPresentationState | FloorItem) -> int:
-        command = command._replace(owner=str(item.item_uuid))
+        command = command._replace(owner=str(item.item_uuid), selection_occluder=True)
+        obj = target.objects.get(item.item_uuid)
+        if collect_interaction and item.item_uuid in senses.objects and obj is not None and item.item_uuid not in dust_objects:
+            command = bind_object_selection(command, obj, camera)
         rear, front = ((), ()) if item.item_uuid in dust_objects else item_attachment_commands(
             command, item, animation_data, camera, time_ms=presentation_time * 1000, starts=item_starts)
         commands.extend(rear)
@@ -479,7 +490,7 @@ def draw_frame(
                     bed, destination, 0,
                     (tile.tile_uuid, position, bed_id, "structural", None, authored_treatment_id,
                      "terrain_bed", bed_height, tile.elevation_steps),
-                ))
+                 selection_occluder=True))
         if tile.elevation_steps >= cliff_rise:
             faces = []
             lower_supports = []
@@ -527,7 +538,7 @@ def draw_frame(
                          "structural", None, authored_treatment_id, "cliff", base_height,
                          tile.elevation_steps, tuple(_support_evidence(target, support)
                                                     for support in (tile, *lower_supports))),
-                    ))
+                     selection_occluder=True))
                     # Retain the cliff's existing order below its upper support;
                     # its image cannot hide pixels above the terrain's ceiling.
                     top_depth = ((destination[1] + np.arange(surface.height) + .5 - camera.pan[1])
@@ -629,7 +640,9 @@ def draw_frame(
             0,
             evidence,
             role="terrain_floor", support_height_steps=tile.elevation_steps,
-        ))
+         selection_occluder=True))
+        if collect_interaction and position in senses.visible:
+            commands[-1] = support_selection(commands[-1], tile, camera)
         if tile.elevation_steps > 0:
             top_depth = ((destination[1] + np.arange(surface.height) + .5 - camera.pan[1])
                          / camera.zoom + tile.elevation_steps * HEIGHT_STEP_PIXELS)
@@ -656,7 +669,11 @@ def draw_frame(
                 (identities, tuple(t.position for t in (lower, middle, upper)), asset_id,
                  "structural", None, authored_treatment_id, "stairs",
                  tuple(_support_evidence(target, t) for t in (lower, middle, upper)), contacts),
-            ))
+             selection_occluder=True))
+            if collect_interaction:
+                for support in (lower,middle,upper):
+                    if support.position in senses.visible:
+                        commands[-1] = support_selection(commands[-1], support, camera)
             # The whole-flight image retains its existing depth below the
             # highest support. It cannot occlude a billboard above that plane.
             top_depth = ((destination[1] + np.arange(surface.height) + .5 - camera.pan[1])
@@ -768,8 +785,11 @@ def draw_frame(
                 surface,
                 destination,
                 pygame.BLEND_PREMULTIPLIED,
-                evidence,
+                evidence, support_height_steps=target.tiles[position].elevation_steps,
+                selection_occluder=True,
             ))
+            if collect_interaction and position in senses.visible:
+                commands[-1] = support_selection(commands[-1],target.tiles[position],camera)
 
     stone_straight_bindings = cast(
         Mapping[str, str], catalog.bindings["stone_wall_straight"]
@@ -836,7 +856,8 @@ def draw_frame(
                 frame_command = DrawCommand(painter_key(position, elevation_steps=base_height,
                     quadrant=camera.quadrant, role="frame", identity=identity,
                     boundary_poses=(boundary_pose,)), frame_image, destination, 0,
-                    (identity, position, frame_id, "current", None, "authored", "door_frame", base_height))
+                    (identity, position, frame_id, "current", None, "authored", "door_frame", base_height),
+                    selection_occluder=True)
                 commands.append(frame_command)
                 boundary_sprites.append(BoundarySprite((obj.placement,), frame_image, destination, frame_command.key))
         if not current_contact:
@@ -981,7 +1002,7 @@ def draw_frame(
                         "door_frame",
                         base_height,
                     ),
-                ))
+                 selection_occluder=True))
                 boundary_sprites.append(BoundarySprite((world_object.placement,), frame, frame_destination, commands[-1].key))
             if object_uuid not in senses.objects:
                 continue
@@ -1104,7 +1125,7 @@ def draw_frame(
                         "wall_corner",
                         base_height,
                     ),
-                )
+                 selection_occluder=True)
                 rear, front = [], []
                 for identity, obj, direction, _, _, _, multiplier in rows:
                     if identity not in senses.objects:
@@ -1116,6 +1137,9 @@ def draw_frame(
                         contact, multiplier, screen)
                     if original is None:
                         continue
+                    if collect_interaction:
+                        command = bind_object_selection(command, obj, camera, component=command._replace(
+                            surface=original[0], destination=original[1], selection=()))
                     back, fore = item_attachment_commands(command._replace(
                         surface=original[0], destination=original[1]), obj.item,
                         animation_data, camera, time_ms=presentation_time * 1000, starts=item_starts)
@@ -1162,7 +1186,7 @@ def draw_frame(
                     "wall",
                     base_height,
                 ),
-            )
+             selection_occluder=True)
             if object_uuid in senses.objects:
                 append_object(command, world_object.item)
             else:
@@ -1496,6 +1520,13 @@ def draw_frame(
             commands.append(mechanism_projectile_draw_command(cue, sample,
                 cache.scaled(sample.asset_id, camera.zoom), catalog.resources[sample.asset_id], camera))
 
+    if collect_interaction:
+        # Device bodies already use the same physical commands during idle/cast.
+        commands = [bind_object_selection(command, target.objects[UUID(command.owner)], camera)
+            if command.role in ("device", "device_wreck", "construction") and command.owner
+            and UUID(command.owner) in senses.objects and UUID(command.owner) in target.objects
+            and UUID(command.owner) not in dust_objects and not command.selection
+            else command for command in commands]
     commands = object_dust_commands(commands,world_transitions,
         animation_data.death_context.silhouetteDust if animation_data is not None else None)
     commands = compose_floor_coverings(commands)
@@ -1509,14 +1540,18 @@ def draw_frame(
             image, depth = compose_volume(command.surface, command.volume, camera,
                 destination=command.destination, visual_boundaries=registered_boundaries,
                 world_bounds=target.world.bounds)
-            composed.append(command._replace(surface=image, volume=None, world_depth=depth))
+            selection, blocker = cut_selection(command, pygame.surfarray.array_alpha(image) > 0)
+            composed.append(command._replace(surface=image, volume=None, world_depth=depth,
+                selection=selection, selection_block_mask=blocker))
             continue
         if command.area is None:
             composed.append(command)
             continue
         image, wall_contacts = compose_area(command.surface, command.destination,
             command.area, camera, boundary_sprites, command.blend)
-        composed.append(command._replace(surface=image, area=None))
+        selection, blocker = cut_selection(command, pygame.surfarray.array_alpha(image) > 0)
+        composed.append(command._replace(surface=image, area=None,
+            selection=selection, selection_block_mask=blocker))
         composed.extend(DrawCommand(contact.key, contact.image, contact.destination,
             command.blend, (*command.evidence[:6], "wall_contact", *command.evidence[7:]))
             for contact in wall_contacts)
@@ -1579,8 +1614,10 @@ def draw_frame(
             animated_fixtures=animated_fixtures,
             flame_frame=flame_index,
         )
+    result = SceneFrameResult(frame_evidence,
+        compose_interaction_frame(commands, screen.get_size()) if collect_interaction else None)
     if not show_debug:
-        return frame_evidence
+        return result
 
     hover_text = "hover: outside world"
     boundary_text = "boundaries=none"
@@ -1687,4 +1724,4 @@ def draw_frame(
         screen.blit(font.render(text[:72], True, (210, 215, 225)), (rail_x, y))
         y += 17
 
-    return frame_evidence
+    return result

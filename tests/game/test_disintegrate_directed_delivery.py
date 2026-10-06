@@ -89,7 +89,7 @@ def test_real_object_retains_its_silhouette_only_for_committed_dust_tail(media,i
                     screen=pygame.Surface(camera.viewport,pygame.SRCALPHA)
                     evidence=draw_frame(screen,group.after,catalog,cache,camera,elapsed/1000,
                         show_grid=False,show_debug=False,mouse_position=None,collect_evidence=True,
-                        animation_data=data,world_transitions=transitions)
+                        animation_data=data,world_transitions=transitions).evidence
                     assert evidence is not None and evidence.matches
                     return pygame.image.tobytes(screen,'RGBA')
                 at=cue.start_ms+450

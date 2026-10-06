@@ -43,7 +43,7 @@ def render(raster: tuple[pygame.Surface, AssetCatalog, SurfaceCache], state: Pla
     screen, catalog, cache = raster
     camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus((5, 4))
     evidence = draw_frame(screen, state, catalog, cache, camera, 0, show_grid=False,
-        show_debug=False, mouse_position=None, collect_evidence=True)
+        show_debug=False, mouse_position=None, collect_evidence=True).evidence
     assert evidence is not None and evidence.matches
     return evidence, pygame.surfarray.array3d(screen)
 

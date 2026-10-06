@@ -116,7 +116,10 @@ def test_stone_ramp_preserves_frames_equipment_alpha_and_independent_effects(rig
 
 
 def test_stone_blend_progress_does_not_grow_the_decoded_row_cache(rig_pixels):
-    draw(rig_pixels, 0, 0, strength=1.)
+    # Admit each source pose first: pose silhouettes are finite reusable pixels,
+    # while continuously changing the stone blend must not create new rows.
+    for frame in range(3):
+        draw(rig_pixels, frame, 0, strength=1.)
     before = BODY_PALETTES.decoded_bytes
     for progress in range(1, 100):
         draw(rig_pixels, progress % 3, 0, strength=progress / 100)
@@ -289,7 +292,7 @@ def test_repeated_actual_heals_and_final_pulse_survive_expiry(arena, mode, deliv
 def test_ability_layers_select_the_recorded_choice_including_late_observation(arena, ability):
     game, caster, recipient, _ = arena
     caster.register_action(EnhanceAbility(source_entity_uuid=caster.uuid, template=True, enhance_ability_type=ability))
-    cast(caster, recipient, "spell.enhance_ability")
+    cast(caster, recipient, "spell.enhance_ability", ability=ability)
     before, cursor = baseline(caster)
     state, _ = saved_views(game, before, cursor, recipient)[recipient.name]
     member = next(row for row in state.actors[recipient.uuid].conditions if row.name == "Enhance Ability")

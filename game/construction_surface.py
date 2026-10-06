@@ -270,7 +270,8 @@ def construction_surface_commands(geometry: WallAssemblyPresentationGeometry,
             rgba=source_palette_rgba(rgb,alpha*admitted,spec.palette,sample_pixels=2*camera.zoom)
             command=surface_command(surface,rgba,camera,center,area,f'{owner}:{index}:{side}')
             if command is not None:
-                commands.append(command._replace(owner=owner,world_depth_group=(owner,str(index),str(side))))
+                commands.append(command._replace(owner=owner,world_depth_group=(owner,str(index),str(side)),
+                    role="construction", selection_occluder=True))
     if spec.material=='force_membrane' and spec.motes is not None and break_age is not None and 0<=break_age<1.2:
         motes_path=data.resources[spec.motes];motes=force_motes(motes_path)
         size=path.radius_feet if isinstance(path,WallDome) else round(length*5)

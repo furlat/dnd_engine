@@ -31,13 +31,16 @@ storage regardless of the checkout location. These are fresh-process import
 measurements after setup, not whole-game startup times. See the
 [startup comparison](agent_docs/PERFORMANCE_REPAIR_RESULTS_2026-09-12.md).
 
-`python -m game` starts the playable Goblin skirmish: the existing fighter and
-sorcerer premades, canonical Goblins and native enemy controller on a flat,
-bright map. Choose discovered actions with Up/Down, choose targets with Tab
-and Enter or click their map cells, and end a turn with N. Multi-target actions
-collect the engine-declared number of selections, including repeated targets
-where allowed. Backspace clears the allocation. Costs, unavailable reasons,
-movement and conditions come from the current engine and retained history.
+`python -m game` opens party creation before the playable Goblin skirmish.
+Use `--quick-start` for the existing Fighter and Sorcerer premades or
+`--fullscreen` for the current monitor. The compact icon bar pins a small set
+of discovered abilities; K opens the full ability library. Click the world to
+move, attack or use an object, Ctrl-click to force an attack, right-click for
+available interactions and hold Alt to highlight usable objects. Native spell
+rank/form choices open behind an ability. Click recipients or ordered points,
+Backspace to undo and Enter to confirm partial/repeated allocations where
+the native action allows them. Space ends the turn in neutral input state.
+Costs, unavailable reasons, movement and conditions stay native.
 
 `uv run --no-sync python -m game --encounter encounter.residue_workshop` opens
 the Blood and Bone Workshop: a clothed fighter, modular skeleton warrior,
@@ -45,11 +48,14 @@ fixed skeleton archer, corrosive/dread demons, and a lever/spike lane. Creature
 injuries leave native tile residue; movement and turns exercise its effects.
 The same controls and historical playback apply to both encounters.
 
-Space pauses historical playback; enemy progression remains independent.
-Q/E rotate, WASD pan, the wheel zooms, G toggles the grid, F3 shows diagnostics,
-and Esc closes. `--headless --frames 120` is a bounded SDL run; `--capture-dir`
-saves displayed frames. The gameplay tests submit commands through the same
-boundary and exercise complete rounds while playback is paused.
+I opens inventory, N the character sheet, L reaction preferences and the Log
+control the canonical combat log, including recorded dice and modifiers.
+Q/E rotate, WASD pan, the wheel zooms, G toggles the grid and F12 shows
+diagnostics. Escape cancels the current selection or closes the current panel;
+from neutral state it opens the pause/settings panel. Pause pauses historical
+playback; enemy progression remains independent. `--headless --frames 120`
+is a bounded SDL run; `--capture-dir` saves displayed frames. Whole-encounter
+save/load remains deferred; character build editing is available before play.
 
 For the current clip-extraction checkpoint, run
 `python -m devtools.animation_review.capture` once and

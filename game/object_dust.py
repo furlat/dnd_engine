@@ -37,5 +37,5 @@ def object_dust_commands(commands: Sequence[DrawCommand], transitions: Sequence[
                 mode='edge')
         result.append(command._replace(surface=image,
             destination=(command.destination[0]+offset[0],command.destination[1]+offset[1]),
-            world_depth=depth,owner=owner))
+            world_depth=depth,owner=owner,selection=(),selection_occluder=False,selection_block_mask=None))
     return result

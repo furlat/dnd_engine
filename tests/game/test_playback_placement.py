@@ -97,7 +97,7 @@ def test_interrupted_pose_survives_completion_and_idle_in_every_camera(
                     continue
                 next_command = idle_commands[command[4][0], command[4][6]]
                 assert command[0] == next_command[0]
-                assert command[2:] == next_command[2:]
+                assert command[2:5] == next_command[2:5]
                 assert pygame.image.tobytes(command[1], "RGBA") == pygame.image.tobytes(next_command[1], "RGBA")
         legal = actor_contact(after, after.actors[captured.lineages[0].root.source_entity_uuid], data)
         assert legal.grid == ((3, 2) if later_step else (3, 3)) and legal.body_lift_px == 0

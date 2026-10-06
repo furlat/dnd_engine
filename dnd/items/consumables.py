@@ -433,6 +433,7 @@ class _WeaponCoatCondition(BaseCondition):
         return ItemEffectPresentationState(
             effect_uuid=self.uuid, contribution_uuid=self.damage_contribution_uuid,
             behavior_id=self.get_semantic_key(), damage_type=self.coat_damage_type,
+            display_name=self.name, description=self.description,
             applied_source_event_cursor=self.applied_source_event_cursor,
         )
 

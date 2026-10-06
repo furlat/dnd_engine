@@ -113,7 +113,8 @@ def group_trace(group: BoundChoreography) -> dict[str, Any]:
         "contact_media": [stationary_trace(cue) for cue in group.contact_media],
         "condition_responses": [{**CONDITION_RESPONSE.dump_python(cue, mode="json", warnings="error"),
                                  "end_ms": cue.end_ms} for cue in group.condition_responses],
-        "turn_starts": [{"at_ms": at, "actor_uuid": str(actor)} for at, actor in group.turn_starts],
+        "turn_starts": [{"at_ms": at, "actor_uuid": str(actor), "event_uuid": str(event)}
+                        for at, actor, event in group.turn_starts],
         "reaction_media": [{"event_uuid": str(cue.event_uuid),
             "incoming_event_uuid": str(cue.incoming_event_uuid), "succeeded": cue.succeeded,
             "start_ms": cue.start_ms, "complete_ms": cue.complete_ms,

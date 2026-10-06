@@ -285,7 +285,7 @@ def test_jump_draws_one_complete_clip_over_its_airtime_and_lands_without_a_camer
                     idle = sample_playback_frame(after, None, data, 0, 5000 + time, camera, frame.facings,
                         media, number, badge, positions=frame.positions)
                     idle_body, = (row for row in idle.commands if row[4][0] == identity and row[4][6] == "actor")
-                    assert command[2:] == idle_body[2:]
+                    assert command[2:5] == idle_body[2:5]
                     assert pygame.image.tobytes(command[1], "RGBA") == pygame.image.tobytes(idle_body[1], "RGBA")
     finally:
         pygame.quit()

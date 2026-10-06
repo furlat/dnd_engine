@@ -154,7 +154,7 @@ def test_known_bone_and_demonic_floor_memberships_draw_the_delivered_profiles(re
         for quadrant in range(4):
             camera = Camera(quadrant=quadrant, zoom=1, viewport=screen.get_size()).with_focus((6, 3))
             evidence = draw_frame(screen, state, catalog, SurfaceCache(catalog), camera, 0,
-                show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True)
+                show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True).evidence
             assert evidence is not None and evidence.matches
             drawn = {row[0] for row in evidence.actual_draws if len(row) > 6 and row[6] == "ground_residue"}
             assert drawn == {r.condition_uuid for tile in state.tiles.values() for r in tile.residues}

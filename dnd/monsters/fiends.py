@@ -117,7 +117,7 @@ def _declare_fiend(definition: FiendDefinition) -> ContentDeclaration:
         descriptor=ContentDescriptorSpec(display_name=definition.name,
             description=f"Authored Devil {definition.source_id}; intrinsic attacks and explicit passive traits.",
             tags=("creature", "fiend", "devil"), visibility=ContentVisibility.PUBLIC,
-            presentation=ContentPresentation(visual_variant_key=definition.key, ui_group="creatures.neurodragon")),
+            presentation=ContentPresentation(portrait_key=f"creature.{definition.key}", visual_variant_key=definition.key, ui_group="creatures.neurodragon")),
         provenance=ContentProvenance(primary_source_id="neurodragon.original_b2b3930",
             source_anchor=f"Authored Devils study 2026-10-01, {definition.source_id}",
             relation=ContentProvenanceRelation.ORIGINAL_CONTENT, fidelity=ContentFidelity.COMPLETE,

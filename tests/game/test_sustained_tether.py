@@ -95,7 +95,7 @@ def _render(state, raster, camera, *, cable=True, commands=()):
     selected = catalog if cable else replace(catalog, spatial_tethers={})
     evidence = draw_frame(screen, state, selected, cache, camera, 0,
         show_grid=False, show_debug=False, mouse_position=None, collect_evidence=True,
-        extra_commands=commands)
+        extra_commands=commands).evidence
     assert evidence is not None and evidence.matches
     return [row for row in evidence.actual_draws if len(row) > 6 and row[6] == "sustained_tether"], pygame.surfarray.array3d(screen)
 

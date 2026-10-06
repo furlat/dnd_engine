@@ -83,7 +83,7 @@ def test_whole_stair_frame_retains_contacts_and_individual_support_knowledge(ren
     )
     camera = Camera(quadrant=q, zoom=1.0, viewport=screen.get_size()).with_focus(mid, elevation_steps=1)
     evidence = draw_frame(screen, target, catalog, cache, camera, .2,
-                          collect_evidence=True, show_grid=False, mouse_position=None)
+                          collect_evidence=True, show_grid=False, mouse_position=None).evidence
     assert evidence is not None
     assert evidence.matches
     flights = [row for row in evidence.actual_draws if len(row) > 6 and row[6] == "stairs"]
@@ -124,7 +124,7 @@ def test_terrace_frames_have_cliff_corners_and_no_void_below_the_flight(renderin
     target, screen, catalog, cache = rendering
     camera = Camera(quadrant=q, zoom=1.0, viewport=screen.get_size()).with_focus((16, 22))
     evidence = draw_frame(screen, target, catalog, cache, camera, .2,
-                          collect_evidence=True, show_grid=False, mouse_position=None)
+                          collect_evidence=True, show_grid=False, mouse_position=None).evidence
     assert evidence is not None
     cliffs = [row for row in evidence.actual_draws if len(row) > 6 and row[6] == "cliff"]
     assert len(cliffs) == 21  # 19 outer-rim owners plus two inner bank faces
@@ -181,7 +181,7 @@ def test_raised_floor_and_lower_wall_occlude_in_physical_depth_order(rendering, 
     camera = Camera(zoom=1.0, viewport=screen.get_size()).with_focus(
         floor_position, elevation_steps=2).with_screen_pan((120, 60))
     evidence = draw_frame(screen, target, catalog, cache, camera, .2,
-                          collect_evidence=True, show_grid=False, mouse_position=None)
+                          collect_evidence=True, show_grid=False, mouse_position=None).evidence
     assert evidence is not None
     assert evidence.matches
     layers = {}

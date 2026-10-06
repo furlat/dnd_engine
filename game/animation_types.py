@@ -1145,6 +1145,8 @@ class BodyRig(AuthoredRecord):
     facing_rows: FacingMap[int]
     slot_order: tuple[str, ...]
     slot_categories: FrozenMap[tuple[str, ...]]
+    selection_excluded_slots: tuple[str, ...] = ("shadow", "weaponGlow", "aura", "slash", "effect", "effect2", "effect3")
+    selection_excluded_categories: tuple[str, ...] = ()
     clips: FrozenMap[BodyClip]
     body_contexts: tuple[RigBodyContextBinding, ...] = ()
 

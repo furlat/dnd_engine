@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from dnd.actions import SpellAction, SpellEvent, entity_action_economy_cost_evaluator
-from dnd.core.action_types import PositionPathSelection, PositionSelection, SinglePositionSelection
+from dnd.core.action_types import ActionVariantFacet, PositionPathSelection, PositionSelection, SinglePositionSelection
 from dnd.core.base_actions import BaseAction, Cost, TargetType
 from dnd.core.base_conditions import Duration
 from dnd.core.condition_types import ConditionTag, DurationType, HazardFilter
@@ -270,6 +270,12 @@ class WallOfThorns(SpellAction):
         event = super()._create_declaration_event(parent_event, use_register)
         return event.with_updates(area_geometry=self.wall_geometry()) if isinstance(event, SpellEvent) else event
 
+    def selection_preview_error(self) -> str | None:
+        return self.position_selection_error() or self.position_placement_error(subjective=True)
+
+    def get_selection_geometry(self):
+        return self.wall_geometry()
+
     def position_placement_error(self, *, subjective=False) -> str | None:
         return wall_support_error(self, self.wall_geometry(), subjective=subjective)
 
@@ -299,6 +305,9 @@ class WallOfThorns(SpellAction):
             self.ensure_concentration(effect).add_linked_condition(zone.uuid, zone.uuid)
             return effect
         return effect.cancel(status_message="Thorn wall creation was canceled")
+
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        return (ActionVariantFacet(key="form", value=self.wall_form, label=self.wall_form.title()),)
 
     def get_discovery_variants(self, entity) -> list[BaseAction]:
         return [slot.model_copy(update={"wall_form": form}) for slot in super().get_discovery_variants(entity)
@@ -332,6 +341,12 @@ class WindWall(SpellAction):
     def _create_declaration_event(self, parent_event=None, use_register=True) -> Event | None:
         event = super()._create_declaration_event(parent_event, use_register)
         return event.with_updates(area_geometry=self.wall_geometry()) if isinstance(event, SpellEvent) else event
+
+    def selection_preview_error(self) -> str | None:
+        return self.position_selection_error() or self.position_placement_error(subjective=True)
+
+    def get_selection_geometry(self):
+        return self.wall_geometry()
 
     def position_placement_error(self, *, subjective=False) -> str | None:
         return wall_support_error(self, self.wall_geometry(), subjective=subjective)

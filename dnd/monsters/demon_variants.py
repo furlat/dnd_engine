@@ -43,7 +43,7 @@ def _declare_variant(
             display_name=name, description=description,
             tags=("creature", "demon", "fiend", "small", "body_material"),
             visibility=ContentVisibility.PUBLIC,
-            presentation=ContentPresentation(visual_variant_key=variant, ui_group="creatures.neurodragon"),
+            presentation=ContentPresentation(portrait_key=f"creature.{variant}", visual_variant_key=variant, ui_group="creatures.neurodragon"),
         ),
         provenance=ContentProvenance(
             primary_source_id="neurodragon.original_b2b3930",

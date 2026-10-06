@@ -230,6 +230,7 @@ def thorns_commands(geometry: WallAssemblyPresentationGeometry, spec: ThornsMate
         return ()
     assert command.volume is not None
     return (command._replace(owner=owner, world_depth_group=(owner, 'thorns'),
+        selection_occluder=True,
         volume=replace(command.volume, exclusions=exclusions),
         evidence=(owner, path.center if isinstance(path, WallRing) else path.start,
                   f'thorns.{phase}.native', *command.evidence)),)

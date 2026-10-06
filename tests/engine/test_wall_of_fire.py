@@ -260,8 +260,10 @@ def test_wall_endpoints_discover_and_execute_through_normal_spell_route():
     register_spell(caster, WallOfFire)
     available = caster.get_available_actions()
     rows = [row for row in available.position_actions if row.display_name.startswith("Wall of Fire")]
-    assert len(rows) == 4
-    chosen = next(row for row in rows if "segment, heat left" in row.display_name)
+    assert len(rows) == 3
+    assert {tuple((facet.key,facet.value) for facet in row.variant_facets) for row in rows} == {
+        (("form","segment"),), (("form","ring"),("side","inside")), (("form","ring"),("side","outside"))}
+    chosen = next(row for row in rows if tuple((facet.key,facet.value) for facet in row.variant_facets)==(("form","segment"),))
     assert chosen.position_selection.kind == "path"
     target_index = next(index for index, target in enumerate(chosen.valid_targets) if target.position == (5, 5))
     assert (9, 5) in get_extra_position_options(caster, chosen, chosen.valid_targets[target_index])

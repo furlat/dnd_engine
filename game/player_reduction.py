@@ -290,6 +290,12 @@ def reduce_initialization(initialization: PlayerInitialization) -> PlayerState:
     target = reduce_nodes(target, initialization.nodes, initialization.version_rows,
                      initialization.observations, initialization.world_updates)
     target.reducer_cursor = initialization.end_cursor
+    if initialization.hud_snapshot is not None:
+        snapshot = initialization.hud_snapshot
+        if (snapshot.generation != target.generation or snapshot.observer_uuid != target.observer_uuid
+                or snapshot.revision > initialization.end_cursor):
+            raise ValueError("HUD facts belong to a different or future boundary")
+    target.hud_snapshot = initialization.hud_snapshot
     return target
 
 
@@ -300,6 +306,13 @@ def reduce_lineage(target: PlayerState, lineage: PlayerLineage) -> PlayerState:
         raise ValueError("player lineage precedes this reduction position")
     result = reduce_nodes(target, lineage.events, lineage.version_rows, lineage.observations, lineage.world_updates)
     result.reducer_cursor = lineage.end_cursor
+    if lineage.hud_snapshot is not None:
+        snapshot = lineage.hud_snapshot
+        if (snapshot.generation != result.generation or snapshot.observer_uuid != result.observer_uuid
+                or snapshot.revision > lineage.end_cursor
+                or (result.hud_snapshot is not None and snapshot.revision < result.hud_snapshot.revision)):
+            raise ValueError("HUD facts belong to a different observer or generation")
+        result.hud_snapshot = snapshot
     return result
 
 
@@ -319,7 +332,7 @@ def lineage_branch(lineage: PlayerLineage, root: PlayerNode) -> PlayerLineage:
     return replace(lineage, root=root, events=nodes, version_rows=versions,
         start_cursor=versions[0].source_index, end_cursor=versions[-1].source_index + 1,
         observations=tuple(row for row in lineage.observations if row.event_uuid in identities),
-        world_updates=tuple(row for row in lineage.world_updates if row.event_uuid in identities))
+        world_updates=tuple(row for row in lineage.world_updates if row.event_uuid in identities), hud_snapshot=None)
 
 
 def encode_player_sequence(sequence: PlayerSequence) -> bytes:

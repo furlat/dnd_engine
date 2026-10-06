@@ -61,9 +61,11 @@ def actor(game, name="Caster", position=(3, 3)):
     return entity
 
 
-def cast(entity, behavior, *, face=4, position=None, target_entity=None):
+def cast(entity, behavior, *, face=4, position=None, target_entity=None, ability=None):
     choices = [(action, target) for action in get_available_actions(entity).all_actions
                if action.behavior_id == behavior and action.can_afford
+               and (ability is None or any(facet.key == "ability" and facet.value == ability
+                                           for facet in action.variant_facets))
                for target in action.valid_targets
                if (target.position == position if position is not None else target.target_uuid in (None, (target_entity or entity).uuid))]
     assert choices, (behavior, position)
@@ -127,7 +129,7 @@ def test_temporary_hp_accepted_owner_survives_partial_damage_and_ignored_casts(a
     assert second is not None and second.instance_uuid != first.instance_uuid
     snapshots.append((8, second))
     next_turn(turns, caster)
-    cast(caster, "spell.enhance_ability", face=6)
+    cast(caster, "spell.enhance_ability", face=6, ability="constitution")
     other = caster.health.temporary_hit_points_grant
     assert other is not None and other.source_id is None and other.instance_uuid != second.instance_uuid
     snapshots.append((12, other))

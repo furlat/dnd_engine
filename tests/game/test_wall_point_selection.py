@@ -19,7 +19,9 @@ from dnd.core.gridmap import get_map
 from dnd.entity import Entity
 from dnd.spells.walls import WallOfFire, WallOfFireZone
 from dnd.world_authoring import project_world_tile
-from game.controls import ActionSelection, MenuState, draw_target_preview, handle_menu_event
+from game.controls import ActionSelection, begin_targeting, append_position, confirm_targeting, undo_targeting
+from game.ui.targeting import draw_selection_preview
+from tests.game.ui_selection_helpers import selected_prefix
 from game.projection import Camera, project_screen
 from tests.manual.spell_regression_support import create_spell_regression_actor, reset_spell_regression_arena
 
@@ -35,7 +37,7 @@ def wall_scene():
     Entity.update_all_entities_senses()
     available = caster.get_available_actions()
     index, row = next((i, row) for i, row in enumerate(available.all_actions)
-                      if "segment, heat left" in row.display_name)
+                      if row.behavior_id=="spell.wall_of_fire" and {facet.key:facet.value for facet in row.variant_facets}=={"form":"segment"})
     first = next(target for target in row.valid_targets if target.position == (4, 4))
     tiles = tuple(project_world_tile(tile) for position, tile in get_map().get_all_tiles().items()
                   if caster.senses.visible.get(position, False))
@@ -44,105 +46,71 @@ def wall_scene():
     reset_spell_regression_arena(1, 1)
 
 
-def test_clicks_undo_and_confirm_preserve_explicit_endpoints(wall_scene):
+def test_ordered_selection_undo_and_confirm_preserve_explicit_endpoints(wall_scene):
     caster, available, index, row, first, tiles, camera = wall_scene
     before = EventQueue.event_cursor()
-    state = MenuState(selected_action=index)
-
-    def input_event(event, options=()):
-        nonlocal state
-        state, command = handle_menu_event(state, event, available, camera, tiles,
-                                           panel_rect=PANEL, next_position_options=options)
-        return command
-
-    def click(position, options=()):
-        return input_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
-                                             pos=project_screen(position, camera)), options)
-
-    assert click(first.position) is None
-    assert state.selected_positions == ((4, 4),)
-    admitted = tuple(get_extra_position_options(caster, row, first))
-    assert (8, 4) in admitted
-    assert click((4, 4), admitted) is None
-    assert state.selected_positions == ((4, 4),)
-    assert click((8, 4), admitted) is None
-    assert state.selected_positions == ((4, 4), (8, 4))
-    assert input_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_BACKSPACE)) is None
-    assert state.selected_positions == ((4, 4),)
-    assert click((8, 4), admitted) is None
-    command = input_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN))
-    assert command == ActionSelection(index, (first.index,), ((8, 4),))
-    assert not state.selected_positions and EventQueue.event_cursor() == before
-    result = execute_available_action(caster, row, first, extra_target_positions=list(command.extra_target_positions))
-    assert isinstance(result, SpellEvent) and not result.canceled
-    assert result.area_geometry.path.start == (4, 4) and result.area_geometry.path.end == (8, 4)
+    state,preview=selected_prefix(caster,row,index,(first,))
+    assert not state.selected_positions and state.selected_targets==(first.index,)
+    assert (8,4) in preview.next_positions
+    assert append_position(state,preview,(4,4)).selected_positions==()
+    state,preview=selected_prefix(caster,row,index,(first,),((8,4),))
+    assert state.selected_positions==((8,4),)
+    state=undo_targeting(state)
+    assert not state.selected_positions and state.selected_targets==(first.index,)
+    state,preview=selected_prefix(caster,row,index,(first,),((8,4),))
+    command=confirm_targeting(state,preview)
+    assert command==ActionSelection(index,(first.index,),((8,4),))
+    assert EventQueue.event_cursor()==before
+    result=execute_available_action(caster,row,first,extra_target_positions=list(command.extra_target_positions))
+    assert isinstance(result,SpellEvent) and not result.canceled
+    assert result.area_geometry.path.start==(4,4) and result.area_geometry.path.end==(8,4)
 
 
-def test_keyboard_shorthand_and_action_change_clear_the_path(wall_scene):
+def test_single_point_shorthand_and_action_change_clear_the_path(wall_scene):
     caster, available, index, row, first, tiles, camera = wall_scene
-    cursor = row.valid_targets.index(first)
-    state = MenuState(selected_action=index, target_cursor=cursor)
-
-    def press(key):
-        nonlocal state
-        state, command = handle_menu_event(state, pygame.event.Event(pygame.KEYDOWN, key=key),
-                                           available, camera, tiles, panel_rect=PANEL)
-        return command
-
-    assert press(pygame.K_RETURN) is None
-    assert state.selected_positions == ((4, 4),)
-    assert press(pygame.K_DOWN) is None
-    assert not state.selected_positions
-    state = MenuState(selected_action=index, target_cursor=cursor)
-    assert press(pygame.K_RETURN) is None
-    command = press(pygame.K_RETURN)
-    assert command == ActionSelection(index, (first.index,))
-    result = execute_available_action(caster, row, first)
-    assert isinstance(result, SpellEvent) and not result.canceled
-    assert result.area_geometry.path.start != caster.position
-    assert result.area_geometry.path.end == (4, 4)
+    state,preview=selected_prefix(caster,row,index,(first,))
+    assert begin_targeting(index).selected_targets==()
+    command=confirm_targeting(state,preview)
+    assert command==ActionSelection(index,(first.index,))
+    result=execute_available_action(caster,row,first)
+    assert isinstance(result,SpellEvent) and not result.canceled
+    assert result.area_geometry.path.start!=caster.position
+    assert result.area_geometry.path.end==(4,4)
 
 
 def test_point_preview_stays_on_disclosed_supports_without_executing(wall_scene):
-    _, available, index, _, first, tiles, camera = wall_scene
-    pygame.font.init()
-    image = pygame.Surface(camera.viewport, pygame.SRCALPHA)
-    cursor = EventQueue.event_cursor()
-    state = MenuState(selected_action=index, selected_targets=(first.index,),
-                      selected_positions=((4, 4), (8, 4)))
-    draw_target_preview(image, state, available, camera, tiles)
-    assert pygame.mask.from_surface(image).count() > 0
-    moved_cursor = pygame.Surface(camera.viewport, pygame.SRCALPHA)
-    draw_target_preview(moved_cursor, replace(state, target_cursor=3), available, camera, tiles)
-    assert pygame.image.tobytes(image, "RGBA") == pygame.image.tobytes(moved_cursor, "RGBA")
-    hidden = pygame.Surface(camera.viewport, pygame.SRCALPHA)
-    draw_target_preview(hidden, state, available, camera, ())
-    assert pygame.mask.from_surface(hidden).count() == 0
-    assert EventQueue.event_cursor() == cursor
-
-
-def test_keyboard_add_uses_admitted_vertex_without_taking_the_pause_key(wall_scene):
     caster, available, index, row, first, tiles, camera = wall_scene
-    admitted = tuple(get_extra_position_options(caster, row, first))
-    state = MenuState(selected_action=index, selected_targets=(first.index,),
-                      selected_positions=((4, 4),), target_cursor=admitted.index((8, 4)))
-    unchanged, command = handle_menu_event(state, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE),
-        available, camera, tiles, panel_rect=PANEL, next_position_options=admitted)
-    assert command is None and unchanged == state
-    state, command = handle_menu_event(state, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_p),
-        available, camera, tiles, panel_rect=PANEL, next_position_options=admitted)
-    assert command is None and state.selected_positions == ((4, 4), (8, 4))
-    _, command = handle_menu_event(state, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN),
-        available, camera, tiles, panel_rect=PANEL)
-    assert command == ActionSelection(index, (first.index,), ((8, 4),))
+    pygame.font.init()
+    image=pygame.Surface(camera.viewport,pygame.SRCALPHA)
+    cursor=EventQueue.event_cursor()
+    state,preview=selected_prefix(caster,row,index,(first,),((8,4),))
+    supports={tile.position:tile for tile in tiles}
+    points=(first.position,*state.selected_positions)
+    draw_selection_preview(image,preview,supports,camera,selected=(first,),points=points)
+    assert pygame.mask.from_surface(image).count()>0
+    hidden=pygame.Surface(camera.viewport,pygame.SRCALPHA)
+    draw_selection_preview(hidden,preview,{},camera,selected=(first,),points=points)
+    assert pygame.mask.from_surface(hidden).count()==0
+    assert EventQueue.event_cursor()==cursor
+
+
+def test_admitted_extra_vertex_requires_explicit_confirmation(wall_scene):
+    caster, available, index, row, first, tiles, camera = wall_scene
+    state,preview=selected_prefix(caster,row,index,(first,),((8,4),))
+    assert state.active and state.selected_positions==((8,4),)
+    assert confirm_targeting(state,preview)==ActionSelection(index,(first.index,),((8,4),))
 
 
 def ai_decision(caster):
     projector = SubjectiveAIStateProjector(assignment_id="wall-test", controlled_entity_uuids=(caster.uuid,))
     context = TurnContext(source_entity_uuid=caster.uuid, entity_uuid=caster.uuid)
     state = projector.project_decision(caster, context, reason=DecisionEpochReason.SNAPSHOT)
+    template = next(row.template_name for row in caster.get_available_actions().all_actions
+                    if row.behavior_id == "spell.wall_of_fire"
+                    and {facet.key:facet.value for facet in row.variant_facets} == {"form":"segment"})
     row = next(row for row in state.epoch_build.epoch.affordances.all_rows
-               if "segment, heat left" in row.display_name and row.targets[0].position == (4, 4))
+               if row.source.template_name==template
+               and row.targets[0].position == (4, 4))
     return projector, context, state, row
 
 

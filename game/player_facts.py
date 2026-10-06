@@ -37,6 +37,54 @@ from dnd.types.actor import TemporaryHitPointsGrant, SpatialDisposition
 from dnd.types.class_features import FontConversion, IndomitableReroll, RelentlessRageIntervention
 from dnd.types.actor_facts import ConditionFact
 from dnd.types.summoning import SummonManifestation, SummonDepartureCause
+from dnd.types.character_progression import Species, SpeciesVariant, Background, AppliedOriginState, AppliedClassLevel
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlayerResource:
+    key: str
+    label: str
+    current: int
+    maximum: int
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlayerCharacterSheet:
+    """Evaluated controlled-character data, without executable owners."""
+
+    actor_uuid: UUID
+    species: Species | None
+    species_variant: SpeciesVariant | None
+    background: Background | None
+    origin: AppliedOriginState | None
+    class_levels: tuple[AppliedClassLevel, ...]
+    abilities: tuple[tuple[AbilityName, int], ...]
+    skills: tuple[str, ...]
+    expertise: tuple[str, ...]
+    saves: tuple[str, ...]
+    proficiency_bonus: int
+    resources: tuple[PlayerResource, ...]
+    compatible_item_slots: tuple[tuple[UUID, tuple[str, ...]], ...] = ()
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlayerHUDSnapshot:
+    """Authorized operation-end display; its revision is a conservative gate."""
+
+    generation: UUID
+    observer_uuid: UUID
+    revision: int
+    initiative: tuple[UUID, ...]
+    sheets: tuple[PlayerCharacterSheet, ...]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CombatLogAppend:
+    generation: UUID
+    observer_uuid: UUID
+    encounter_log_index: int
+    operation_end_cursor: int
+    entry: CombatLogEntry
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -557,6 +605,7 @@ class PlayerNode:
     resolution_ref: ResolutionRef | None = None
     cancellation: ActionCancellation | None = None
     combat_log: CombatLogEntry | None = None
+    turn_execution_id: UUID | None = None
     content_attributions: tuple[ContentAttribution, ...] = ()
 
 
@@ -637,6 +686,7 @@ class PlayerLineage:
     end_cursor: int
     observations: tuple[PlayerObservation, ...] = ()
     world_updates: tuple[WorldUpdate, ...] = ()
+    hud_snapshot: PlayerHUDSnapshot | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -649,6 +699,7 @@ class PlayerInitialization:
     end_cursor: int
     observations: tuple[PlayerObservation, ...]
     world_updates: tuple[WorldUpdate, ...]
+    hud_snapshot: PlayerHUDSnapshot | None = None
 
 
 class PlayerSequence(BaseModel):
@@ -656,6 +707,8 @@ class PlayerSequence(BaseModel):
     schema_version: Literal[2] = 2
     initialization: PlayerInitialization
     lineages: tuple[PlayerLineage, ...]
+    combat_log_appends: tuple[CombatLogAppend, ...] = ()
+    hud_snapshots: tuple[PlayerHUDSnapshot, ...] = ()
 
 
 @dataclass(slots=True, kw_only=True)
@@ -674,3 +727,4 @@ class PlayerState:
     actors: dict[UUID, PlayerActor] = field(default_factory=dict)
     current_actor_uuid: UUID | None = None
     round_number: int = 0
+    hud_snapshot: PlayerHUDSnapshot | None = None

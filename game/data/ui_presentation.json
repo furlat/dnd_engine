@@ -1,0 +1,3412 @@
+{
+  "direct_features": {
+    "class_feature.barbarian.brutal_critical": {
+      "label": "Brutal Critical",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-brutalcritical"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.danger_sense": {
+      "label": "Danger Sense",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-dangersense"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.fast_movement": {
+      "label": "Fast Movement",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-fastmovement"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.feral_instinct": {
+      "label": "Feral Instinct",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-feralinstinct"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.frenzy": {
+      "label": "Frenzy",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-rage-frenzyfeature"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.indomitable_might": {
+      "label": "Indomitable Might",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-indomitablemight"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.intimidating_presence": {
+      "label": "Intimidating Presence",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-intimidatingpresencefeature"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.mindless_rage": {
+      "label": "Mindless Rage",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-mindlessrage"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.persistent_rage": {
+      "label": "Persistent Rage",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-persistentrage"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.primal_champion": {
+      "label": "Primal Champion",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-primalchampion"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.rage": {
+      "label": "Rage",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-rage-ragefeature"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.reckless_attack": {
+      "label": "Reckless Attack",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-recklessattackfeature"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.relentless_rage": {
+      "label": "Relentless Rage",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-relentlessrage"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.retaliation": {
+      "label": "Retaliation",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-barbarian-retaliation"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.barbarian.unarmored_defense": {
+      "label": "Unarmored Defense",
+      "presentation": {
+        "icon_key": "item.natural-armor"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.extra_attack": {
+      "label": "Extra Attack",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-extraattackfeature"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.action_surge": {
+      "label": "Action Surge",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-actionsurgefeature"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.fighting_style.archery": {
+      "label": "Archery",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-fightingstylearchery"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.fighting_style.defense": {
+      "label": "Defense",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-fightingstyledefense"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.fighting_style.dueling": {
+      "label": "Dueling",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-fightingstyledueling"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.fighting_style.great_weapon_fighting": {
+      "label": "Great Weapon Fighting",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-greatweaponfighting"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.fighting_style.protection": {
+      "label": "Protection",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-fightingstyleprotection"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.fighting_style.two_weapon_fighting": {
+      "label": "Two Weapon Fighting",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-fightingstyletwoweaponfighting"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.improved_critical": {
+      "label": "Improved Critical",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-improvedcritical"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.indomitable": {
+      "label": "Indomitable",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-indomitable"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.remarkable_athlete": {
+      "label": "Remarkable Athlete",
+      "presentation": {
+        "icon_key": "action.jump"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.second_wind": {
+      "label": "Second Wind",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-secondwindfeature"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.superior_critical": {
+      "label": "Superior Critical",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-superiorcritical"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.fighter.survivor": {
+      "label": "Survivor",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-fighter-survivor"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_ancestry.black": {
+      "label": "Black",
+      "presentation": {
+        "icon_key": "spell.acid-splash"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_ancestry.blue": {
+      "label": "Blue",
+      "presentation": {
+        "icon_key": "spell.lightning-bolt"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_ancestry.brass": {
+      "label": "Brass",
+      "presentation": {
+        "icon_key": "spell.fire-bolt"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_ancestry.bronze": {
+      "label": "Bronze",
+      "presentation": {
+        "icon_key": "spell.lightning-bolt"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_ancestry.copper": {
+      "label": "Copper",
+      "presentation": {
+        "icon_key": "spell.acid-splash"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_ancestry.gold": {
+      "label": "Gold",
+      "presentation": {
+        "icon_key": "spell.fire-bolt"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_ancestry.green": {
+      "label": "Green",
+      "presentation": {
+        "icon_key": "spell.poison-spray"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_ancestry.red": {
+      "label": "Red",
+      "presentation": {
+        "icon_key": "spell.fire-bolt"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_ancestry.silver": {
+      "label": "Silver",
+      "presentation": {
+        "icon_key": "spell.ray-of-frost"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_ancestry.white": {
+      "label": "White",
+      "presentation": {
+        "icon_key": "spell.ray-of-frost"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_presence": {
+      "label": "Draconic Presence",
+      "presentation": {
+        "icon_key": "spell.fear"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.draconic_resilience": {
+      "label": "Draconic Resilience",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-sorcerer-draconicresilience"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.dragon_wings": {
+      "label": "Dragon Wings",
+      "presentation": {
+        "icon_key": "spell.haste"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.elemental_affinity": {
+      "label": "Elemental Affinity",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-sorcerer-elementalaffinity"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.metamagic.distant_spell": {
+      "label": "Distant Spell",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-sorcerer-sorcerypointsfeature"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.metamagic.quickened_spell": {
+      "label": "Quickened Spell",
+      "presentation": {
+        "icon_key": "action.quickened-spell"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.metamagic.twinned_spell": {
+      "label": "Twinned Spell",
+      "presentation": {
+        "icon_key": "action.twinned-spell"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.sorcerous_restoration": {
+      "label": "Sorcerous Restoration",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-sorcerer-sorcerypointsfeature"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    },
+    "class_feature.sorcerer.sorcery_points": {
+      "label": "Sorcery Points",
+      "presentation": {
+        "icon_key": "condition.dnd-classes-sorcerer-sorcerypointsfeature"
+      },
+      "approximation": "Recovered icon; provisional reuse where noted in UI_ICON_COVERAGE_2026-10-05.md"
+    }
+  },
+  "direct_items": {
+    "apparel.armored_boots": {
+      "label": "Armored Boots",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.bracers": {
+      "label": "Bracers",
+      "presentation": {
+        "icon_key": "item.gauntlets"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.chain_coif": {
+      "label": "Chain Coif",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.cloak": {
+      "label": "Cloak",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.cloth_hood": {
+      "label": "Cloth Hood",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.cloth_shoes": {
+      "label": "Cloth Shoes",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.cloth_shoes.blue": {
+      "label": "Blue Cloth Shoes",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.cloth_shoes.dark": {
+      "label": "Dark Cloth Shoes",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.cloth_shoes.red": {
+      "label": "Red Cloth Shoes",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.common_clothes": {
+      "label": "Common Clothes",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.common_clothes.farmhand_tunic": {
+      "label": "Farmhand's Tunic",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.common_clothes.peasant_rags": {
+      "label": "Peasant's Rags",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.costume": {
+      "label": "Costume",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.costume.pit_fighter_wrap": {
+      "label": "Pit Fighter's Wrap",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.crown": {
+      "label": "Crown",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.fine_clothes": {
+      "label": "Fine Clothes",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.gauntlets": {
+      "label": "Gauntlets",
+      "presentation": {
+        "icon_key": "item.gauntlets"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.great_helm": {
+      "label": "Great Helm",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.horned_helmet": {
+      "label": "Horned Helmet",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.iron_helmet": {
+      "label": "Iron Helmet",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.iron_helmet.steel": {
+      "label": "Steel Helmet",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.leather_boots": {
+      "label": "Leather Boots",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.leather_boots.brown": {
+      "label": "Brown Boots",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.leather_boots.dark": {
+      "label": "Dark Boots",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.leather_gloves": {
+      "label": "Leather Gloves",
+      "presentation": {
+        "icon_key": "item.gauntlets"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.leather_hood": {
+      "label": "Leather Hood",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.leather_shoes": {
+      "label": "Leather Shoes",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.leather_shoes.brown": {
+      "label": "Brown Leather Shoes",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.monster_hands": {
+      "label": "Monster Hands",
+      "presentation": {
+        "icon_key": "item.gauntlets"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.monster_helm": {
+      "label": "Monster Helm",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.robes": {
+      "label": "Robes",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.robes.acolyte_vestments": {
+      "label": "Acolyte's Vestments",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.robes.dark_cultist": {
+      "label": "Dark Cultist Robes",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.robes.hedge_wizard": {
+      "label": "Hedge Wizard's Robe",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.robes.necromancer": {
+      "label": "Necromancer's Robe",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.robes.priest_vestments": {
+      "label": "Priest's Vestments",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.robes.red_mage": {
+      "label": "Red Mage Robe",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.robes.wizard": {
+      "label": "Wizard's Robe",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.armored_boots_b000000d": {
+      "label": "Armored Boots",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.bracers_g0000003": {
+      "label": "Bracers",
+      "presentation": {
+        "icon_key": "item.gauntlets"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.cloth_hood_44e704af2cf6": {
+      "label": "Cloth Hood",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.cloth_hood_7d8178761a23": {
+      "label": "Cloth Hood",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.cloth_hood_828192008429": {
+      "label": "Cloth Hood",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.common_clothes_16dea1f65105": {
+      "label": "Common Clothes",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.common_clothes_21ae119f8607": {
+      "label": "Common Clothes",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.common_clothes_3b03cd4905fa": {
+      "label": "Common Clothes",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.gauntlets_g0000009": {
+      "label": "Gauntlets",
+      "presentation": {
+        "icon_key": "item.gauntlets"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.iron_helmet_6b64ee00bd15": {
+      "label": "Iron Helmet",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.iron_helmet_h000000a": {
+      "label": "Iron Helmet",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.robes_51a81ec5104c": {
+      "label": "Robes",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.roster.robes_ac36c74adec6": {
+      "label": "Robes",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.sandals": {
+      "label": "Sandals",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.sandals.rope": {
+      "label": "Rope Sandals",
+      "presentation": {
+        "icon_key": "item.leather-boots"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.spellblade_crown": {
+      "label": "Spellblade Crown",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.travelers_clothes": {
+      "label": "Traveler's Clothes",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.travelers_clothes.thief_garb": {
+      "label": "Thief's Garb",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.wizard_hat": {
+      "label": "Wizard's Hat",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "apparel.wizard_hat.red": {
+      "label": "Red Wizard Hat",
+      "presentation": {
+        "icon_key": "item.iron-helmet"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.armor_scraps": {
+      "label": "Armor Scraps",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.breastplate": {
+      "label": "Breastplate",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.chain_mail": {
+      "label": "Chain Mail",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.chain_shirt": {
+      "label": "Chain Shirt",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.circus.performer_leather": {
+      "label": "Performer's Leather Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.cloth": {
+      "label": "Cloth Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.bison_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.blue_raptor_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.boar_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.brown_bear_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.dire_wolf_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.dretch_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.elephant_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.fellwing_devil_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.huntsman_wing_devil_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.mammoth_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.polar_bear_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.raptor_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.rhinoceros_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.stegosaurus_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.triceratops_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.creature.wolf_natural": {
+      "label": "Natural Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.half_plate": {
+      "label": "Half Plate",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.hide": {
+      "label": "Hide Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.leather": {
+      "label": "Leather Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.padded": {
+      "label": "Padded Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.plate": {
+      "label": "Plate Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.ring_mail": {
+      "label": "Ring Mail",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.roster.armor_scraps_5b5b6ba7ea35": {
+      "label": "Armor Scraps",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.roster.armor_scraps_8ab959786f2a": {
+      "label": "Armor Scraps",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.roster.armor_scraps_d6b6c79a6d59": {
+      "label": "Armor Scraps",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.roster.armor_scraps_f8d0f71d39aa": {
+      "label": "Armor Scraps",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.scale_mail": {
+      "label": "Scale Mail",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.splint": {
+      "label": "Splint Armor",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "armor.studded_leather": {
+      "label": "Studded Leather",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "consumable.acid_flask": {
+      "label": "Acid Flask",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "consumable.healing_potion": {
+      "label": "Potion of Healing",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "consumable.potion_greater_invisibility": {
+      "label": "Potion of Greater Invisibility",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "consumable.potion_haste": {
+      "label": "Potion of Haste",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "consumable.potion_true_seeing": {
+      "label": "Potion of True Seeing",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "consumable.weapon_coat.basic_poison": {
+      "label": "Basic Poison",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "consumable.weapon_coat.concentration_fire": {
+      "label": "Concentrated Weapon Coat of Flame",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "consumable.weapon_coat.fire": {
+      "label": "Weapon Coat of Flame",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "consumable.weapon_coat.lightning": {
+      "label": "Weapon Coat of Lightning",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "consumable.weapon_coat.timed_fire": {
+      "label": "Timed Weapon Coat of Flame",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.arcane_device": {
+      "label": "Arcane Device",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.arcane_machine_gun": {
+      "label": "Arcane Machine Gun",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.blocker.barricade": {
+      "label": "Barricade",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.blocker.blood_barrel": {
+      "label": "Blood Barrel",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.blocker.boulder": {
+      "label": "Boulder",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.blocker.crate": {
+      "label": "Crate",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.blocker.dread_blood_barrel": {
+      "label": "Dread Blood Barrel",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.blocker.grease_barrel": {
+      "label": "Grease Barrel",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.blocker.oil_barrel": {
+      "label": "Oil Barrel",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.blocker.poison_barrel": {
+      "label": "Poison Barrel",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.blocker.water_barrel": {
+      "label": "Water Barrel",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.campfire": {
+      "label": "Campfire",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.chest.fantasy_a1": {
+      "label": "Chest A1",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.chest.fantasy_a3": {
+      "label": "Chest A3",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.chest.fantasy_b1": {
+      "label": "Chest B1",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.cliff_face": {
+      "label": "Cliff Face",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.directional_door": {
+      "label": "Directional Door",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.directional_wall": {
+      "label": "Directional Wall",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.door.desert_a1": {
+      "label": "Desert double door",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.desert_c1": {
+      "label": "Desert iron lift gate 1",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.desert_c3": {
+      "label": "Desert iron lift gate 3",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.desert_c5": {
+      "label": "Desert iron lift gate 5",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.desert_c7": {
+      "label": "Desert wooden door 7",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.desert_c9": {
+      "label": "Desert wooden door 9",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.fantasy_a1": {
+      "label": "Fantasy double door",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.fantasy_c1": {
+      "label": "Fantasy iron lift gate 1",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.fantasy_c3": {
+      "label": "Fantasy iron lift gate 3",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.fantasy_c5": {
+      "label": "Fantasy iron lift gate 5",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.indoor_door_elegant": {
+      "label": "Elegant indoor door",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.indoor_door_elegant_three_panel": {
+      "label": "Elegant Three Panel indoor door",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.indoor_door_shabby": {
+      "label": "Shabby indoor door",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.indoor_door_shabby_battens": {
+      "label": "Shabby Battens indoor door",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.indoor_door_shabby_patched": {
+      "label": "Shabby Patched indoor door",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.door.indoor_door_shabby_plain": {
+      "label": "Shabby Plain indoor door",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.fireball_cannon": {
+      "label": "Fireball Cannon",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.furniture.alchemy_bench": {
+      "label": "Alchemy bench",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.animal_statue": {
+      "label": "Animal statue",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.anvil": {
+      "label": "Anvil",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.archery_target": {
+      "label": "Archery target",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.barrel_cluster": {
+      "label": "Barrel cluster",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.bed": {
+      "label": "Wooden bed",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.bedside_stand": {
+      "label": "Bedside stand",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.bookshelf": {
+      "label": "Bookshelf",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.cannonball_pile": {
+      "label": "Cannonball pile",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.clay_oven": {
+      "label": "Unlit clay oven",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.clay_stove": {
+      "label": "Unlit clay stove",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.cold_fire_pit": {
+      "label": "Cold fire pit",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.covered_handcart": {
+      "label": "Parked covered handcart",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.covered_market_counter": {
+      "label": "Covered market counter",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.crate_stack": {
+      "label": "Crate stack",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.feed_trough": {
+      "label": "Feed trough",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.felled_log": {
+      "label": "Felled log",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.framed_notice_board": {
+      "label": "Framed notice board",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.grave_marker": {
+      "label": "Stone grave marker",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.green_market_stall": {
+      "label": "Green market stall",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.grindstone": {
+      "label": "Grindstone",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.hay_bale": {
+      "label": "Hay bale",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.hay_bales_leaning": {
+      "label": "Leaning hay bales",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.hay_bales_stacked": {
+      "label": "Stacked hay bales",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.hay_bales_upright": {
+      "label": "Upright hay bales",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.hide_drying_rack": {
+      "label": "Hide drying rack",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.ingredient_shelves": {
+      "label": "Ingredient shelves",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.large_crate_stack": {
+      "label": "Large crate stack",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.lidded_vessel": {
+      "label": "Lidded pottery vessel",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.loaded_wagon": {
+      "label": "Parked loaded wagon",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.loose_floorboards": {
+      "label": "Loose floorboards",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.loose_straw_1": {
+      "label": "Loose straw 1",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.loose_straw_2": {
+      "label": "Loose straw 2",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.loose_straw_3": {
+      "label": "Loose straw 3",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.loose_straw_4": {
+      "label": "Loose straw 4",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.loose_straw_5": {
+      "label": "Loose straw 5",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.loose_straw_6": {
+      "label": "Loose straw 6",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.loose_straw_7": {
+      "label": "Loose straw 7",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.notice_board": {
+      "label": "Notice board",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.pale_covered_table": {
+      "label": "Pale covered table",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.pale_market_stall": {
+      "label": "Pale market stall",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.pale_rug": {
+      "label": "Pale rug",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.parked_cart": {
+      "label": "Parked wooden cart",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.pottery_cluster": {
+      "label": "Pottery stack",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.pottery_group": {
+      "label": "Pottery jars",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.pottery_jar": {
+      "label": "Pottery jar",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.preparation_counter": {
+      "label": "Preparation counter",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.produce_tub": {
+      "label": "Produce tub",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.red_covered_table": {
+      "label": "Red covered table",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.red_produce_stall": {
+      "label": "Red produce stall",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.red_rug": {
+      "label": "Red rug",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.rough_market_stall": {
+      "label": "Rough market stall",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.sack_bundles": {
+      "label": "Sack bundles",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.short_red_banner": {
+      "label": "Short freestanding red banner",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.slender_monument": {
+      "label": "Slender stone monument",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.small_wooden_table": {
+      "label": "Small wooden table",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.spent_ashes": {
+      "label": "Spent fire remains",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.stone_bench": {
+      "label": "Stone bench",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.stone_pedestal": {
+      "label": "Stone pedestal",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.storage_shelving": {
+      "label": "Storage shelving",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.table": {
+      "label": "Wooden table",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.tall_red_banner": {
+      "label": "Tall freestanding red banner",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.timber_pile": {
+      "label": "Timber pile",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.training_dummy": {
+      "label": "Training dummy",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.unlit_candlesticks": {
+      "label": "Unlit candlesticks",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.unlit_crucible": {
+      "label": "Unlit stone crucible",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.wardrobe": {
+      "label": "Wooden wardrobe",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.wheelbarrow": {
+      "label": "Parked wheelbarrow",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.winged_statue": {
+      "label": "Winged statue",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.wooden_bench": {
+      "label": "Wooden bench",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.wooden_chair": {
+      "label": "Wooden chair",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.wooden_crib": {
+      "label": "Wooden crib",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.wooden_signpost": {
+      "label": "Wooden signpost",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.work_stool": {
+      "label": "Work stool",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.workshop_apparatus": {
+      "label": "Workshop apparatus",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.furniture.writing_desk": {
+      "label": "Writing desk",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.spell_object.heroes_feast": {
+      "label": "Heroes' Feast",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.storage_chest": {
+      "label": "Chest",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.trap.crusher.stone.brassbound": {
+      "label": "Brassbound crusher",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.crusher.stone.fortress": {
+      "label": "Fortress crusher",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.crusher.stone.workshop": {
+      "label": "Workshop crusher",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.crusher.wood.brassbound": {
+      "label": "Brassbound crusher",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.crusher.wood.fortress": {
+      "label": "Fortress crusher",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.crusher.wood.workshop": {
+      "label": "Workshop crusher",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.dart_emitter": {
+      "label": "Dart emitter",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.gas_vent": {
+      "label": "Gas vent",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.jaw": {
+      "label": "Jaw trap",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.portal_hatch": {
+      "label": "Portal hatch",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.pressure_plate": {
+      "label": "Pressure plate",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.spikes": {
+      "label": "Spike housing",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.swinging_blade.stone.brassbound": {
+      "label": "Brassbound swinging blade",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.swinging_blade.stone.fortress": {
+      "label": "Fortress swinging blade",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.swinging_blade.stone.workshop": {
+      "label": "Workshop swinging blade",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.swinging_blade.wood.brassbound": {
+      "label": "Brassbound swinging blade",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.swinging_blade.wood.fortress": {
+      "label": "Fortress swinging blade",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.swinging_blade.wood.workshop": {
+      "label": "Workshop swinging blade",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap.tripwire": {
+      "label": "Tripwire",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.trap_lever": {
+      "label": "Trap Lever",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.wall_torch": {
+      "label": "Wall Torch",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "environment.window.fantasy_a4.insert": {
+      "label": "Window grille A4",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_a4.wall": {
+      "label": "Window wall A4",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_a5.insert": {
+      "label": "Window grille A5",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_a5.wall": {
+      "label": "Window wall A5",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_c4.insert": {
+      "label": "Window grille C4",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_c4.wall": {
+      "label": "Window wall C4",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_d16.insert": {
+      "label": "Window grille D16",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_d16.wall": {
+      "label": "Window wall D16",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_d7.insert": {
+      "label": "Window grille D7",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_d7.wall": {
+      "label": "Window wall D7",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_f16.insert": {
+      "label": "Window grille F16",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_f16.wall": {
+      "label": "Window wall F16",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_f7.insert": {
+      "label": "Window grille F7",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_f7.wall": {
+      "label": "Window wall F7",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_g7.wall": {
+      "label": "Empty window wall G7",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_g8.insert": {
+      "label": "Window grille G8",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_g8.wall": {
+      "label": "Window wall G8",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_g9.insert": {
+      "label": "Window shutter G9",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "environment.window.fantasy_g9.wall": {
+      "label": "Shuttered window wall G9",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "equipment.portable_torch": {
+      "label": "Torch",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "focus.wand": {
+      "label": "Wand",
+      "presentation": {
+        "icon_key": "item.wand-of-magic-missiles"
+      },
+      "approximation": "Recovered matching base-item icon."
+    },
+    "gear.canister": {
+      "label": "Back Canister",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "gear.common_clothes": {
+      "label": "Common Clothes",
+      "presentation": {
+        "icon_key": "item.common-clothes"
+      },
+      "approximation": "Recovered matching base-item icon."
+    },
+    "gear.ember_quiver": {
+      "label": "Ember Quiver",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "gear.field_kit": {
+      "label": "Field Kit",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "gear.holy_symbol": {
+      "label": "Holy Symbol",
+      "presentation": {
+        "icon_key": "item.holy-symbol"
+      },
+      "approximation": "Recovered matching base-item icon."
+    },
+    "gear.incense": {
+      "label": "Incense",
+      "presentation": {
+        "icon_key": "item.incense"
+      },
+      "approximation": "Recovered matching base-item icon."
+    },
+    "gear.prayer_book": {
+      "label": "Prayer Book",
+      "presentation": {
+        "icon_key": "item.prayer-book"
+      },
+      "approximation": "Recovered matching base-item icon."
+    },
+    "gear.quiver": {
+      "label": "Quiver",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "gear.roster.quiver_6c39094102d0": {
+      "label": "Quiver",
+      "presentation": {
+        "icon_key": "item.leather-armor"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "gear.saddle": {
+      "label": "Saddle and Tack",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "gear.vestments": {
+      "label": "Vestments",
+      "presentation": {
+        "icon_key": "item.vestments"
+      },
+      "approximation": "Recovered matching base-item icon."
+    },
+    "gear.warden_pack": {
+      "label": "Warden's Pack",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "gear.wayfarer_pack": {
+      "label": "Wayfarer's Pack",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing icon for the native equipment slot."
+    },
+    "shield.roster.shield_a000000a": {
+      "label": "Shield",
+      "presentation": {
+        "icon_key": "item.shield"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "shield.roster.wooden_90000006": {
+      "label": "Wooden Shield",
+      "presentation": {
+        "icon_key": "item.shield"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "shield.shield": {
+      "label": "Shield",
+      "presentation": {
+        "icon_key": "item.shield"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "shield.wooden": {
+      "label": "Wooden Shield",
+      "presentation": {
+        "icon_key": "item.shield"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "spell_item.scroll_fire_bolt": {
+      "label": "Scroll of Fire Bolt",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "spell_item.scroll_fireball": {
+      "label": "Scroll of Fireball",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "spell_item.scroll_hold_person": {
+      "label": "Scroll of Hold Person",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "spell_item.scroll_invisibility": {
+      "label": "Scroll of Invisibility",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "spell_item.scroll_mage_armor": {
+      "label": "Scroll of Mage Armor",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "spell_item.scroll_magic_missile": {
+      "label": "Scroll of Magic Missile",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "spell_item.scroll_spike_growth": {
+      "label": "Scroll of Spike Growth",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "spell_item.wand_fire": {
+      "label": "Wand of Fire",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "spell_item.wand_magic_missiles": {
+      "label": "Wand of Magic Missiles",
+      "presentation": {
+        "icon_key": "item.potion-of-healing"
+      },
+      "approximation": "Shares an existing item-family icon."
+    },
+    "tool.banner": {
+      "label": "Banner",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "tool.crowbar": {
+      "label": "Crowbar",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "weapon.arcane_staff": {
+      "label": "Arcane Staff",
+      "presentation": {
+        "icon_key": "item.quarterstaff"
+      },
+      "approximation": null
+    },
+    "weapon.assassin_dagger": {
+      "label": "Assassin's Dagger",
+      "presentation": {
+        "icon_key": "item.dagger"
+      },
+      "approximation": null
+    },
+    "weapon.battleaxe": {
+      "label": "Battleaxe",
+      "presentation": {
+        "icon_key": "item.battleaxe"
+      },
+      "approximation": null
+    },
+    "weapon.circus.flaming_scimitar": {
+      "label": "Flaming Scimitar",
+      "presentation": {
+        "icon_key": "item.scimitar"
+      },
+      "approximation": null
+    },
+    "weapon.circus.longsword_plus_one": {
+      "label": "Longsword +1",
+      "presentation": {
+        "icon_key": "item.longsword"
+      },
+      "approximation": null
+    },
+    "weapon.circus.rusty_dagger": {
+      "label": "Rusty Dagger",
+      "presentation": {
+        "icon_key": "item.dagger"
+      },
+      "approximation": null
+    },
+    "weapon.circus.soul_draining_morningstar": {
+      "label": "Soul-Draining Morningstar",
+      "presentation": {
+        "icon_key": "item.morningstar"
+      },
+      "approximation": null
+    },
+    "weapon.club": {
+      "label": "Club",
+      "presentation": {
+        "icon_key": "item.club"
+      },
+      "approximation": null
+    },
+    "weapon.creature.bandit_captain_thrown_dagger": {
+      "label": "Thrown Dagger",
+      "presentation": {
+        "icon_key": "item.dagger"
+      },
+      "approximation": null
+    },
+    "weapon.creature.bison_ram": {
+      "label": "Ram",
+      "presentation": {
+        "icon_key": "item.slam"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.blue_raptor_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.blue_raptor_claws": {
+      "label": "Claws",
+      "presentation": {
+        "icon_key": "item.claws"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.boar_tusk": {
+      "label": "Tusk",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.brown_bear_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.brown_bear_claws": {
+      "label": "Claws",
+      "presentation": {
+        "icon_key": "item.claws"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.bugbear_morningstar": {
+      "label": "Morningstar",
+      "presentation": {
+        "icon_key": "item.morningstar"
+      },
+      "approximation": null
+    },
+    "weapon.creature.claw_mote_devil_claws": {
+      "label": "Claws",
+      "presentation": {
+        "icon_key": "item.claws"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.dire_wolf_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.dretch_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.dretch_claws": {
+      "label": "Claws",
+      "presentation": {
+        "icon_key": "item.claws"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.elephant_trunk": {
+      "label": "Trunk Sweep",
+      "presentation": {
+        "icon_key": "item.slam"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.fellwing_devil_claws": {
+      "label": "Claws",
+      "presentation": {
+        "icon_key": "item.claws"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.fellwing_devil_gore": {
+      "label": "Gore",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.ghoul_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.ghoul_claws": {
+      "label": "Claws",
+      "presentation": {
+        "icon_key": "item.claws"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.hound_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.huntsman_wing_devil_claws": {
+      "label": "Claws",
+      "presentation": {
+        "icon_key": "item.claws"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.jaguar_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.jaguar_claws": {
+      "label": "Claws",
+      "presentation": {
+        "icon_key": "item.claws"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.kobold_sling": {
+      "label": "Sling",
+      "presentation": {
+        "icon_key": "item.sling"
+      },
+      "approximation": null
+    },
+    "weapon.creature.lion_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.lion_claws": {
+      "label": "Claws",
+      "presentation": {
+        "icon_key": "item.claws"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.mammoth_gore": {
+      "label": "Gore",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.ogre_greatclub": {
+      "label": "Greatclub",
+      "presentation": {
+        "icon_key": "item.club"
+      },
+      "approximation": "Shares an existing weapon-family icon; no new weapon artwork."
+    },
+    "weapon.creature.ogre_thrown_javelin": {
+      "label": "Thrown Javelin",
+      "presentation": {
+        "icon_key": "item.javelin"
+      },
+      "approximation": null
+    },
+    "weapon.creature.ogre_zombie_morningstar": {
+      "label": "Morningstar",
+      "presentation": {
+        "icon_key": "item.morningstar"
+      },
+      "approximation": null
+    },
+    "weapon.creature.ostrich_beak": {
+      "label": "Beak",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.polar_bear_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.polar_bear_claws": {
+      "label": "Claws",
+      "presentation": {
+        "icon_key": "item.claws"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.raptor_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.raptor_tail": {
+      "label": "Tail",
+      "presentation": {
+        "icon_key": "item.slam"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.rhinoceros_gore": {
+      "label": "Gore",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.spy_hand_crossbow": {
+      "label": "Hand Crossbow",
+      "presentation": {
+        "icon_key": "item.light-crossbow"
+      },
+      "approximation": "Shares an existing weapon-family icon; no new weapon artwork."
+    },
+    "weapon.creature.stag_ram": {
+      "label": "Ram",
+      "presentation": {
+        "icon_key": "item.slam"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.stegosaurus_tail": {
+      "label": "Tail",
+      "presentation": {
+        "icon_key": "item.slam"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.thrown_javelin": {
+      "label": "Thrown Javelin",
+      "presentation": {
+        "icon_key": "item.javelin"
+      },
+      "approximation": null
+    },
+    "weapon.creature.tiger_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.tiger_claws": {
+      "label": "Claws",
+      "presentation": {
+        "icon_key": "item.claws"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.triceratops_gore": {
+      "label": "Gore",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.wolf_bite": {
+      "label": "Bite",
+      "presentation": {
+        "icon_key": "item.bite"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.creature.zombie_slam": {
+      "label": "Slam",
+      "presentation": {
+        "icon_key": "item.slam"
+      },
+      "approximation": "Shares the existing natural attack-family icon."
+    },
+    "weapon.dagger": {
+      "label": "Dagger",
+      "presentation": {
+        "icon_key": "item.dagger"
+      },
+      "approximation": null
+    },
+    "weapon.dart": {
+      "label": "Dart",
+      "presentation": {
+        "icon_key": "item.dagger"
+      },
+      "approximation": "Shares an existing weapon-family icon; no new weapon artwork."
+    },
+    "weapon.double_bladed_sword": {
+      "label": "Double-Bladed Sword",
+      "presentation": {
+        "icon_key": "item.double-bladed-sword"
+      },
+      "approximation": null
+    },
+    "weapon.greataxe": {
+      "label": "Greataxe",
+      "presentation": {
+        "icon_key": "item.greataxe"
+      },
+      "approximation": null
+    },
+    "weapon.greatsword": {
+      "label": "Greatsword",
+      "presentation": {
+        "icon_key": "item.greatsword"
+      },
+      "approximation": null
+    },
+    "weapon.handaxe": {
+      "label": "Handaxe",
+      "presentation": {
+        "icon_key": "item.handaxe"
+      },
+      "approximation": null
+    },
+    "weapon.heavy_crossbow": {
+      "label": "Heavy Crossbow",
+      "presentation": {
+        "icon_key": "item.heavy-crossbow"
+      },
+      "approximation": null
+    },
+    "weapon.javelin": {
+      "label": "Javelin",
+      "presentation": {
+        "icon_key": "item.javelin"
+      },
+      "approximation": null
+    },
+    "weapon.light_crossbow": {
+      "label": "Light Crossbow",
+      "presentation": {
+        "icon_key": "item.light-crossbow"
+      },
+      "approximation": null
+    },
+    "weapon.light_hammer": {
+      "label": "Light Hammer",
+      "presentation": {
+        "icon_key": "item.light-hammer"
+      },
+      "approximation": null
+    },
+    "weapon.longbow": {
+      "label": "Longbow",
+      "presentation": {
+        "icon_key": "item.longbow"
+      },
+      "approximation": null
+    },
+    "weapon.longsword": {
+      "label": "Longsword",
+      "presentation": {
+        "icon_key": "item.longsword"
+      },
+      "approximation": null
+    },
+    "weapon.mace": {
+      "label": "Mace",
+      "presentation": {
+        "icon_key": "item.mace"
+      },
+      "approximation": null
+    },
+    "weapon.maul": {
+      "label": "Maul",
+      "presentation": {
+        "icon_key": "item.warhammer"
+      },
+      "approximation": "Shares an existing weapon-family icon; no new weapon artwork."
+    },
+    "weapon.morningstar": {
+      "label": "Morningstar",
+      "presentation": {
+        "icon_key": "item.morningstar"
+      },
+      "approximation": null
+    },
+    "weapon.musket": {
+      "label": "Musket",
+      "presentation": {
+        "icon_key": "item.longbow"
+      },
+      "approximation": "Shares an existing weapon-family icon; no new weapon artwork."
+    },
+    "weapon.pistol": {
+      "label": "Pistol",
+      "presentation": {
+        "icon_key": "item.light-crossbow"
+      },
+      "approximation": "Shares an existing weapon-family icon; no new weapon artwork."
+    },
+    "weapon.quarterstaff": {
+      "label": "Quarterstaff",
+      "presentation": {
+        "icon_key": "item.quarterstaff"
+      },
+      "approximation": null
+    },
+    "weapon.rapier": {
+      "label": "Rapier",
+      "presentation": {
+        "icon_key": "item.rapier"
+      },
+      "approximation": null
+    },
+    "weapon.roster.ember_greatsword": {
+      "label": "Ember Greatsword",
+      "presentation": {
+        "icon_key": "item.greatsword"
+      },
+      "approximation": null
+    },
+    "weapon.roster.ember_longsword": {
+      "label": "Ember Longsword",
+      "presentation": {
+        "icon_key": "item.longsword"
+      },
+      "approximation": null
+    },
+    "weapon.roster.psychic_greataxe": {
+      "label": "Mindcleaver Greataxe",
+      "presentation": {
+        "icon_key": "item.greataxe"
+      },
+      "approximation": null
+    },
+    "weapon.roster.psychic_longsword": {
+      "label": "Mindreaver Longsword",
+      "presentation": {
+        "icon_key": "item.longsword"
+      },
+      "approximation": null
+    },
+    "weapon.roster.psychic_longsword_greater": {
+      "label": "Soulbreaker Longsword",
+      "presentation": {
+        "icon_key": "item.longsword"
+      },
+      "approximation": null
+    },
+    "weapon.roster.psychic_scimitar": {
+      "label": "Mindreaver Scimitar",
+      "presentation": {
+        "icon_key": "item.scimitar"
+      },
+      "approximation": null
+    },
+    "weapon.roster.psychic_trident": {
+      "label": "Thoughtpiercer Trident",
+      "presentation": {
+        "icon_key": "item.trident"
+      },
+      "approximation": null
+    },
+    "weapon.roster.quarterstaff_a0000005": {
+      "label": "Quarterstaff",
+      "presentation": {
+        "icon_key": "item.quarterstaff"
+      },
+      "approximation": null
+    },
+    "weapon.roster.shortbow_20000002": {
+      "label": "Shortbow",
+      "presentation": {
+        "icon_key": "item.shortbow"
+      },
+      "approximation": null
+    },
+    "weapon.roster.shortbow_a0000007": {
+      "label": "Shortbow",
+      "presentation": {
+        "icon_key": "item.shortbow"
+      },
+      "approximation": null
+    },
+    "weapon.scimitar": {
+      "label": "Scimitar",
+      "presentation": {
+        "icon_key": "item.scimitar"
+      },
+      "approximation": null
+    },
+    "weapon.shortbow": {
+      "label": "Shortbow",
+      "presentation": {
+        "icon_key": "item.shortbow"
+      },
+      "approximation": null
+    },
+    "weapon.shortsword": {
+      "label": "Shortsword",
+      "presentation": {
+        "icon_key": "item.shortsword"
+      },
+      "approximation": null
+    },
+    "weapon.sickle": {
+      "label": "Sickle",
+      "presentation": {
+        "icon_key": "item.sickle"
+      },
+      "approximation": null
+    },
+    "weapon.sling": {
+      "label": "Sling",
+      "presentation": {
+        "icon_key": "item.sling"
+      },
+      "approximation": null
+    },
+    "weapon.spear": {
+      "label": "Spear",
+      "presentation": {
+        "icon_key": "item.spear"
+      },
+      "approximation": null
+    },
+    "weapon.trident": {
+      "label": "Trident",
+      "presentation": {
+        "icon_key": "item.trident"
+      },
+      "approximation": null
+    },
+    "weapon.warhammer": {
+      "label": "Warhammer",
+      "presentation": {
+        "icon_key": "item.warhammer"
+      },
+      "approximation": null
+    }
+  },
+  "portrait_choices": {
+    "dragonborn-blue-m-02": {
+      "label": "Dragonborn Blue M 02",
+      "presentation": {
+        "portrait_key": "dragonborn-blue-m-02"
+      },
+      "approximation": null
+    },
+    "dragonborn-copper-f-01": {
+      "label": "Dragonborn Copper F 01",
+      "presentation": {
+        "portrait_key": "dragonborn-copper-f-01"
+      },
+      "approximation": null
+    },
+    "dragonborn-gold-m-01": {
+      "label": "Dragonborn Gold M 01",
+      "presentation": {
+        "portrait_key": "dragonborn-gold-m-01"
+      },
+      "approximation": null
+    },
+    "dragonborn-red-a-02": {
+      "label": "Dragonborn Red A 02",
+      "presentation": {
+        "portrait_key": "dragonborn-red-a-02"
+      },
+      "approximation": null
+    },
+    "dwarf-a-02": {
+      "label": "Dwarf A 02",
+      "presentation": {
+        "portrait_key": "dwarf-a-02"
+      },
+      "approximation": null
+    },
+    "dwarf-f-01": {
+      "label": "Dwarf F 01",
+      "presentation": {
+        "portrait_key": "dwarf-f-01"
+      },
+      "approximation": null
+    },
+    "dwarf-f-02": {
+      "label": "Dwarf F 02",
+      "presentation": {
+        "portrait_key": "dwarf-f-02"
+      },
+      "approximation": null
+    },
+    "dwarf-m-01": {
+      "label": "Dwarf M 01",
+      "presentation": {
+        "portrait_key": "dwarf-m-01"
+      },
+      "approximation": null
+    },
+    "elf-f-01": {
+      "label": "Elf F 01",
+      "presentation": {
+        "portrait_key": "elf-f-01"
+      },
+      "approximation": null
+    },
+    "elf-f-02": {
+      "label": "Elf F 02",
+      "presentation": {
+        "portrait_key": "elf-f-02"
+      },
+      "approximation": null
+    },
+    "elf-m-01": {
+      "label": "Elf M 01",
+      "presentation": {
+        "portrait_key": "elf-m-01"
+      },
+      "approximation": null
+    },
+    "elf-m-02": {
+      "label": "Elf M 02",
+      "presentation": {
+        "portrait_key": "elf-m-02"
+      },
+      "approximation": null
+    },
+    "gnome-a-02": {
+      "label": "Gnome A 02",
+      "presentation": {
+        "portrait_key": "gnome-a-02"
+      },
+      "approximation": null
+    },
+    "gnome-f-01": {
+      "label": "Gnome F 01",
+      "presentation": {
+        "portrait_key": "gnome-f-01"
+      },
+      "approximation": null
+    },
+    "gnome-m-01": {
+      "label": "Gnome M 01",
+      "presentation": {
+        "portrait_key": "gnome-m-01"
+      },
+      "approximation": null
+    },
+    "half-elf-f-01": {
+      "label": "Half Elf F 01",
+      "presentation": {
+        "portrait_key": "half-elf-f-01"
+      },
+      "approximation": null
+    },
+    "half-elf-m-01": {
+      "label": "Half Elf M 01",
+      "presentation": {
+        "portrait_key": "half-elf-m-01"
+      },
+      "approximation": null
+    },
+    "half-orc-f-01": {
+      "label": "Half Orc F 01",
+      "presentation": {
+        "portrait_key": "half-orc-f-01"
+      },
+      "approximation": null
+    },
+    "half-orc-m-01": {
+      "label": "Half Orc M 01",
+      "presentation": {
+        "portrait_key": "half-orc-m-01"
+      },
+      "approximation": null
+    },
+    "halfling-f-01": {
+      "label": "Halfling F 01",
+      "presentation": {
+        "portrait_key": "halfling-f-01"
+      },
+      "approximation": null
+    },
+    "halfling-m-01": {
+      "label": "Halfling M 01",
+      "presentation": {
+        "portrait_key": "halfling-m-01"
+      },
+      "approximation": null
+    },
+    "tiefling-a-02": {
+      "label": "Tiefling A 02",
+      "presentation": {
+        "portrait_key": "tiefling-a-02"
+      },
+      "approximation": null
+    },
+    "tiefling-f-01": {
+      "label": "Tiefling F 01",
+      "presentation": {
+        "portrait_key": "tiefling-f-01"
+      },
+      "approximation": null
+    },
+    "tiefling-m-01": {
+      "label": "Tiefling M 01",
+      "presentation": {
+        "portrait_key": "tiefling-m-01"
+      },
+      "approximation": null
+    },
+    "hero.barbarian_l5_berserker_torch.hero": {
+      "label": "Hero.Barbarian L5 Berserker Torch.Hero",
+      "presentation": {
+        "portrait_key": "hero.barbarian_l5_berserker_torch.hero"
+      },
+      "approximation": null
+    },
+    "hero.fighter_2_sorcerer_3_spellblade.hero": {
+      "label": "Hero.Fighter 2 Sorcerer 3 Spellblade.Hero",
+      "presentation": {
+        "portrait_key": "hero.fighter_2_sorcerer_3_spellblade.hero"
+      },
+      "approximation": null
+    },
+    "hero.fighter_l5_archer_torch.hero": {
+      "label": "Hero.Fighter L5 Archer Torch.Hero",
+      "presentation": {
+        "portrait_key": "hero.fighter_l5_archer_torch.hero"
+      },
+      "approximation": null
+    },
+    "hero.fighter_l5_shield_torch.hero": {
+      "label": "Hero.Fighter L5 Shield Torch.Hero",
+      "presentation": {
+        "portrait_key": "hero.fighter_l5_shield_torch.hero"
+      },
+      "approximation": null
+    },
+    "hero.sorcerer_l5_standard_torch.hero": {
+      "label": "Hero.Sorcerer L5 Standard Torch.Hero",
+      "presentation": {
+        "portrait_key": "hero.sorcerer_l5_standard_torch.hero"
+      },
+      "approximation": null
+    },
+    "monsters.goblin_water_cell.monster_1": {
+      "label": "Monsters.Goblin Water Cell.Monster 1",
+      "presentation": {
+        "portrait_key": "monsters.goblin_water_cell.monster_1"
+      },
+      "approximation": null
+    },
+    "monsters.goblin_water_cell.monster_2": {
+      "label": "Monsters.Goblin Water Cell.Monster 2",
+      "presentation": {
+        "portrait_key": "monsters.goblin_water_cell.monster_2"
+      },
+      "approximation": null
+    },
+    "monsters.goblin_water_cell.monster_3": {
+      "label": "Monsters.Goblin Water Cell.Monster 3",
+      "presentation": {
+        "portrait_key": "monsters.goblin_water_cell.monster_3"
+      },
+      "approximation": null
+    },
+    "monsters.skeleton_trio.monster_1": {
+      "label": "Monsters.Skeleton Trio.Monster 1",
+      "presentation": {
+        "portrait_key": "monsters.skeleton_trio.monster_1"
+      },
+      "approximation": null
+    },
+    "monsters.skeleton_trio.monster_2": {
+      "label": "Monsters.Skeleton Trio.Monster 2",
+      "presentation": {
+        "portrait_key": "monsters.skeleton_trio.monster_2"
+      },
+      "approximation": null
+    },
+    "monsters.skeleton_trio.monster_3": {
+      "label": "Monsters.Skeleton Trio.Monster 3",
+      "presentation": {
+        "portrait_key": "monsters.skeleton_trio.monster_3"
+      },
+      "approximation": null
+    },
+    "monsters.srd_divine_cult_cell.monster_1": {
+      "label": "Monsters.Srd Divine Cult Cell.Monster 1",
+      "presentation": {
+        "portrait_key": "monsters.srd_divine_cult_cell.monster_1"
+      },
+      "approximation": null
+    },
+    "monsters.srd_divine_cult_cell.monster_2": {
+      "label": "Monsters.Srd Divine Cult Cell.Monster 2",
+      "presentation": {
+        "portrait_key": "monsters.srd_divine_cult_cell.monster_2"
+      },
+      "approximation": null
+    },
+    "monsters.srd_divine_cult_cell.monster_3": {
+      "label": "Monsters.Srd Divine Cult Cell.Monster 3",
+      "presentation": {
+        "portrait_key": "monsters.srd_divine_cult_cell.monster_3"
+      },
+      "approximation": null
+    },
+    "monsters.srd_divine_cult_cell.monster_4": {
+      "label": "Monsters.Srd Divine Cult Cell.Monster 4",
+      "presentation": {
+        "portrait_key": "monsters.srd_divine_cult_cell.monster_4"
+      },
+      "approximation": null
+    },
+    "monsters.srd_elite_mercenaries.monster_1": {
+      "label": "Monsters.Srd Elite Mercenaries.Monster 1",
+      "presentation": {
+        "portrait_key": "monsters.srd_elite_mercenaries.monster_1"
+      },
+      "approximation": null
+    },
+    "monsters.srd_elite_mercenaries.monster_2": {
+      "label": "Monsters.Srd Elite Mercenaries.Monster 2",
+      "presentation": {
+        "portrait_key": "monsters.srd_elite_mercenaries.monster_2"
+      },
+      "approximation": null
+    },
+    "monsters.srd_elite_mercenaries.monster_3": {
+      "label": "Monsters.Srd Elite Mercenaries.Monster 3",
+      "presentation": {
+        "portrait_key": "monsters.srd_elite_mercenaries.monster_3"
+      },
+      "approximation": null
+    },
+    "monsters.srd_elite_mercenaries.monster_4": {
+      "label": "Monsters.Srd Elite Mercenaries.Monster 4",
+      "presentation": {
+        "portrait_key": "monsters.srd_elite_mercenaries.monster_4"
+      },
+      "approximation": null
+    },
+    "monsters.srd_goblinoid_warband.monster_1": {
+      "label": "Monsters.Srd Goblinoid Warband.Monster 1",
+      "presentation": {
+        "portrait_key": "monsters.srd_goblinoid_warband.monster_1"
+      },
+      "approximation": null
+    },
+    "monsters.srd_goblinoid_warband.monster_2": {
+      "label": "Monsters.Srd Goblinoid Warband.Monster 2",
+      "presentation": {
+        "portrait_key": "monsters.srd_goblinoid_warband.monster_2"
+      },
+      "approximation": null
+    },
+    "monsters.srd_goblinoid_warband.monster_3": {
+      "label": "Monsters.Srd Goblinoid Warband.Monster 3",
+      "presentation": {
+        "portrait_key": "monsters.srd_goblinoid_warband.monster_3"
+      },
+      "approximation": null
+    },
+    "monsters.srd_goblinoid_warband.monster_4": {
+      "label": "Monsters.Srd Goblinoid Warband.Monster 4",
+      "presentation": {
+        "portrait_key": "monsters.srd_goblinoid_warband.monster_4"
+      },
+      "approximation": null
+    },
+    "monsters.srd_low_cr_patrol.monster_1": {
+      "label": "Monsters.Srd Low Cr Patrol.Monster 1",
+      "presentation": {
+        "portrait_key": "monsters.srd_low_cr_patrol.monster_1"
+      },
+      "approximation": null
+    },
+    "monsters.srd_low_cr_patrol.monster_2": {
+      "label": "Monsters.Srd Low Cr Patrol.Monster 2",
+      "presentation": {
+        "portrait_key": "monsters.srd_low_cr_patrol.monster_2"
+      },
+      "approximation": null
+    },
+    "monsters.srd_low_cr_patrol.monster_3": {
+      "label": "Monsters.Srd Low Cr Patrol.Monster 3",
+      "presentation": {
+        "portrait_key": "monsters.srd_low_cr_patrol.monster_3"
+      },
+      "approximation": null
+    },
+    "monsters.srd_low_cr_patrol.monster_4": {
+      "label": "Monsters.Srd Low Cr Patrol.Monster 4",
+      "presentation": {
+        "portrait_key": "monsters.srd_low_cr_patrol.monster_4"
+      },
+      "approximation": null
+    },
+    "monsters.srd_low_cr_patrol.monster_5": {
+      "label": "Monsters.Srd Low Cr Patrol.Monster 5",
+      "presentation": {
+        "portrait_key": "monsters.srd_low_cr_patrol.monster_5"
+      },
+      "approximation": null
+    },
+    "monsters.srd_undead_crypt.monster_1": {
+      "label": "Monsters.Srd Undead Crypt.Monster 1",
+      "presentation": {
+        "portrait_key": "monsters.srd_undead_crypt.monster_1"
+      },
+      "approximation": null
+    },
+    "monsters.srd_undead_crypt.monster_2": {
+      "label": "Monsters.Srd Undead Crypt.Monster 2",
+      "presentation": {
+        "portrait_key": "monsters.srd_undead_crypt.monster_2"
+      },
+      "approximation": null
+    },
+    "monsters.srd_undead_crypt.monster_3": {
+      "label": "Monsters.Srd Undead Crypt.Monster 3",
+      "presentation": {
+        "portrait_key": "monsters.srd_undead_crypt.monster_3"
+      },
+      "approximation": null
+    },
+    "monsters.srd_undead_crypt.monster_4": {
+      "label": "Monsters.Srd Undead Crypt.Monster 4",
+      "presentation": {
+        "portrait_key": "monsters.srd_undead_crypt.monster_4"
+      },
+      "approximation": null
+    }
+  },
+  "common": {
+    "unarmed": {
+      "label": "Unarmed",
+      "presentation": {
+        "icon_key": null
+      },
+      "approximation": null
+    },
+    "end_turn": {
+      "label": "End Turn",
+      "presentation": {
+        "icon_key": "ui.end-turn-medallion"
+      },
+      "approximation": null
+    },
+    "waiting": {
+      "label": "Waiting",
+      "presentation": {
+        "icon_key": "ui.waiting-medallion"
+      },
+      "approximation": null
+    },
+    "page_next": {
+      "label": "Page Next",
+      "presentation": {
+        "icon_key": "ui.page-next"
+      },
+      "approximation": null
+    },
+    "page_previous": {
+      "label": "Page Previous",
+      "presentation": {
+        "icon_key": "ui.page-previous"
+      },
+      "approximation": null
+    },
+    "abilities": {
+      "label": "Abilities",
+      "presentation": {
+        "icon_key": "ui.filter-spells"
+      },
+      "approximation": null
+    },
+    "inventory": {
+      "label": "Inventory",
+      "presentation": {
+        "icon_key": "ui.filter-items"
+      },
+      "approximation": null
+    },
+    "reactions": {
+      "label": "Reactions",
+      "presentation": {
+        "icon_key": "ui.filter-reactions"
+      },
+      "approximation": null
+    }
+  }
+}

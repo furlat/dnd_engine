@@ -132,6 +132,7 @@ def _original(
 
 
 ACTION_BEHAVIOR_IDENTITY_SPECS: tuple[ActionBehaviorIdentitySpec, ...] = (
+    _original(actions.TraverseConnector, "action.traverse_connector", "Traverse Connector", "Traverse an admitted existing passage using its native costs and endpoints."),
     _original(summoning.DismissSummon, "action.summon.dismiss", "Dismiss Summon", "Spend one action to dismiss a temporary creature whose control is retained."),
     _srd(monster_traits.InnateInvisibility,"action.monster.innate_invisibility","Innate Invisibility","Concentrate on indefinite innate invisibility.",root_owned=True),
     _srd(monster_traits.WightLifeDrain,"action.monster.wight.life_drain","Life Drain","Intrinsic necrotic contact with saved maximum HP reduction.",root_owned=True),

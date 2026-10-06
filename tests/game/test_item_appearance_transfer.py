@@ -22,7 +22,8 @@ from game.attack import select_attack_profile
 from game.app import draw_frame
 from game.assets import SurfaceCache, load_catalog
 from dnd.runtime_reset import reset_engine_runtime
-from game.controls import MenuState, handle_menu_event
+from game.ui.world_interaction import target_at
+from game.interaction_types import WorldHit
 from game.environment_draw import pick_environment_target
 from game.item_draw import item_ground_commands
 from game.player_facts import AttackFact
@@ -52,15 +53,12 @@ def test_coated_dagger_hand_floor_transfer_and_attack_replay(display):
     pickup_index = next(i for i, row in enumerate(floor_actions.all_actions) if row.behavior_id == "action.pick_up")
     pickup = floor_actions.all_actions[pickup_index]
     assert len({row.target_uuid for row in pickup.valid_targets if row.position == (3, 3)}) >= 2
-    menu = MenuState(selected_action=pickup_index)
     camera = Camera(quadrant=0, zoom=1, viewport=display.get_size())
     choices = set()
-    for _ in pickup.valid_targets:
-        _, choice = handle_menu_event(menu, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN),
-            floor_actions, camera, (), panel_rect=pygame.Rect(400, 0, 200, 400))
-        choices.add(choice.target_indices)
-        menu, _ = handle_menu_event(menu, pygame.event.Event(pygame.KEYDOWN, key=pygame.K_TAB),
-            floor_actions, camera, (), panel_rect=pygame.Rect(400, 0, 200, 400))
+    for target in pickup.valid_targets:
+        chosen = target_at(tuple(pickup.valid_targets),WorldHit('object',str(target.target_uuid),target.position,0))
+        assert chosen is not None and chosen.target_uuid == target.target_uuid
+        choices.add(chosen.index)
     assert len(choices) == len(pickup.valid_targets)
     data = load_animation_data()
     saw_floor = saw_original_off = saw_recipient = saw_effect_change = False

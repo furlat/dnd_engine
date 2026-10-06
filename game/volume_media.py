@@ -230,6 +230,23 @@ def _visual_boundary_coverage(keep: np.ndarray, depth: np.ndarray, x: np.ndarray
             np.minimum(depth[selection], np.nextafter(boundary.key[1], -np.inf)), depth[selection])
 
 
+def volume_world_coordinates(volume: SurfaceVolume, camera: Camera) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Decode the genuine source coordinates once for composition/selection."""
+    local = volume.positions
+    rotated_origin = inverse_rotate_position((0., 0.), camera.quadrant)
+    end_x = inverse_rotate_position((1., 0.), camera.quadrant)
+    end_z = inverse_rotate_position((0., 1.), camera.quadrant)
+    axis_x = end_x[0] - rotated_origin[0], end_x[1] - rotated_origin[1]
+    axis_z = end_z[0] - rotated_origin[0], end_z[1] - rotated_origin[1]
+    dx, dh, dz = volume.translation
+    x = local[:, :, 0] * axis_x[0] + local[:, :, 2] * axis_z[0]
+    z = local[:, :, 0] * axis_x[1] + local[:, :, 2] * axis_z[1]
+    x += volume.center[0] + dx * axis_x[0] + dz * axis_z[0]
+    z += volume.center[1] + dx * axis_x[1] + dz * axis_z[1]
+    height = local[:, :, 1] * volume.vertical_scale + volume.elevation + dh
+    return x, height, z
+
+
 def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera, *,
                    destination: tuple[int, int] = (0, 0),
                    visual_boundaries: tuple[BoundarySprite, ...] | None = None,
@@ -237,17 +254,8 @@ def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
                    ) -> tuple[pygame.Surface, np.ndarray]:
     """Return masked color plus ground depths for the shared painter splitter."""
     local = volume.positions
-    rotated_origin = inverse_rotate_position((0., 0.), camera.quadrant)
-    end_x = inverse_rotate_position((1., 0.), camera.quadrant)
-    end_z = inverse_rotate_position((0., 1.), camera.quadrant)
-    axis_x = end_x[0] - rotated_origin[0], end_x[1] - rotated_origin[1]
-    axis_z = end_z[0] - rotated_origin[0], end_z[1] - rotated_origin[1]
-    x = local[:, :, 0] * axis_x[0] + local[:, :, 2] * axis_z[0]
-    z = local[:, :, 0] * axis_x[1] + local[:, :, 2] * axis_z[1]
     dx, dh, dz = volume.translation
-    x += volume.center[0] + dx*axis_x[0] + dz*axis_z[0]
-    z += volume.center[1] + dx*axis_x[1] + dz*axis_z[1]
-    height = local[:, :, 1] * volume.vertical_scale + volume.elevation + dh
+    x, height, z = volume_world_coordinates(volume, camera)
     owned = volume.ownership != 0
     keep = np.ones(owned.shape, dtype=bool)
     barriers = _barriers(volume.boundaries, volume.solids)
@@ -293,7 +301,9 @@ def compose_volume(image: pygame.Surface, volume: SurfaceVolume, camera: Camera,
             keep &= ((along >= 0) & (along <= line.length_feet/5)
                      & (np.abs(across) <= line.width_feet/10))
     # The host projection has direction (1,1,1) in view-grid/height units.
-    vx, vz = axis_x[0] + axis_z[0], axis_x[1] + axis_z[1]
+    ray_origin = inverse_rotate_position((0., 0.), camera.quadrant)
+    ray_endpoint = inverse_rotate_position((1., 1.), camera.quadrant)
+    vx, vz = ray_endpoint[0] - ray_origin[0], ray_endpoint[1] - ray_origin[1]
     occluders = _barriers(volume.boundaries if visual_boundaries is None else (), volume.solids)
     for axis, plane, low, high, bottom, top in occluders:
         if top is None:

@@ -137,7 +137,8 @@ def pending_spell_history(*, program: PendingProgram, miss: bool = False, saved:
         def perform(actor: Entity, behavior: str, *, recipient: Entity | None = None,
                     position: tuple[int, int] | None = None, extras: tuple[Entity, ...] = (),
                     dice: tuple[int, ...] = (4,) * 40, fresh: bool = False,
-                    cost_type: str | None = None, resource: str | None = None) -> Event:
+                    cost_type: str | None = None, resource: str | None = None,
+                    facet: tuple[str,str] | None = None) -> Event:
             if fresh:
                 encounter.next_turn()
             while encounter.get_current_entity() is not actor:
@@ -146,6 +147,7 @@ def pending_spell_history(*, program: PendingProgram, miss: bool = False, saved:
             choices = [(action, choice) for action in available.all_actions
                        if action.behavior_id == behavior and (cost_type is None or action.cost_type == cost_type)
                        and (resource is None or any(cost.resource_name == resource for cost in action.costs))
+                       and (facet is None or any(row.key==facet[0] and row.value==facet[1] for row in action.variant_facets))
                        for choice in action.valid_targets
                        if (recipient is None or choice.target_uuid == recipient.uuid)
                        and (position is None or choice.position == position)]
@@ -188,7 +190,7 @@ def pending_spell_history(*, program: PendingProgram, miss: bool = False, saved:
             assert caster.health.temporary_hit_points.normalized_score == 3
             assert caster.health.temporary_hit_points_grant == first_grant
             if unrelated_grant:
-                perform(caster, "spell.enhance_ability", recipient=caster, dice=(6, 6))
+                perform(caster, "spell.enhance_ability", recipient=caster, dice=(6, 6),facet=('ability','constitution'))
                 assert caster.health.temporary_hit_points.normalized_score == 12
                 assert caster.health.temporary_hit_points_grant is not None
                 assert caster.health.temporary_hit_points_grant.source_id is None

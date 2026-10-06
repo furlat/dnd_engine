@@ -115,7 +115,7 @@ def test_native_jump_terrain_pixels(
         number, badge, motion=motion)
     body, = (command for command in frame.commands if command[4][6] == "actor")
     evidence = draw_frame(screen, frame.displayed, catalog, cache, camera, elapsed / 1000,
-        collect_evidence=True, show_grid=False, mouse_position=None, show_debug=False, extra_commands=frame.commands)
+        collect_evidence=True, show_grid=False, mouse_position=None, show_debug=False, extra_commands=frame.commands).evidence
     assert evidence is not None
     assert evidence.matches
     assert screen.get_rect().contains(body[1].get_bounding_rect().move(body[2]))

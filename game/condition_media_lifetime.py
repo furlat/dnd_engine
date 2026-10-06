@@ -242,7 +242,7 @@ def register_condition_lifetimes(
                 timing_evidence=_timing(previous, "removed", absolute,
                     TimingReference("condition", owner, "admission"), "lifetime_removal"))
     turns = ((at + visit.offset_ms, actor) for visit in visits
-             if isinstance(visit.timeline, BoundChoreography) for at, actor in visit.timeline.turn_starts)
+             if isinstance(visit.timeline, BoundChoreography) for at, actor, _ in visit.timeline.turn_starts)
     for at, actor_id in turns:
         absolute = absolute_start_ms + at
         for owner, lifetime in tuple(result.items()):

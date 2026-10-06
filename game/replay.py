@@ -12,6 +12,7 @@ from game.presentation import (
     CompletedLineage, IntervalEnvelope, PresentationTarget, capture_interval, capture_lineages,
     reduce_interval,
 )
+from game.player_facts import CombatLogAppend, PlayerHUDSnapshot
 
 
 class RecordedSequence(BaseModel):
@@ -21,6 +22,8 @@ class RecordedSequence(BaseModel):
     schema_version: Literal[2] = 2
     initialization: IntervalEnvelope
     lineages: tuple[CompletedLineage, ...]
+    combat_log_appends: tuple[CombatLogAppend, ...] = ()
+    hud_snapshots: tuple[PlayerHUDSnapshot, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,9 +89,11 @@ def capture_history(
     return CapturedHistory(initialization, before, lineages, views)
 
 
-def encode_sequence(initialization: IntervalEnvelope, lineages: tuple[CompletedLineage, ...]) -> bytes:
+def encode_sequence(initialization: IntervalEnvelope, lineages: tuple[CompletedLineage, ...],
+                    *, combat_log_appends: tuple[CombatLogAppend, ...] = (),
+                    hud_snapshots: tuple[PlayerHUDSnapshot, ...] = ()) -> bytes:
     """Encode original initialization facts and retained causal roots."""
-    return RecordedSequence(initialization=initialization, lineages=lineages).model_dump_json(
+    return RecordedSequence(initialization=initialization, lineages=lineages, combat_log_appends=combat_log_appends, hud_snapshots=hud_snapshots).model_dump_json(
         warnings="error",
     ).encode("utf-8")
 

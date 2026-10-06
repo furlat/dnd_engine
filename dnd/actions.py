@@ -27,7 +27,7 @@ from dnd.types.summoning import SummonApplication
 from dnd.core.elevation import support_distance_feet
 from dnd.core.equipment_types import WeaponSet, WeaponSlot
 from dnd.core.effect_types import AntimagicException, EffectOrigin
-from dnd.core.action_types import RestrictedActionKind
+from dnd.core.action_types import ActionAffordance, ActionVariantFacet, RestrictedActionKind
 from dnd.core.content.descriptors import (
     ContentDescriptorSpec,
     ContentOrdering,
@@ -573,6 +573,10 @@ class Move(BaseAction):
         if self.end_position is not None and not self.template:
             self._setup_path()
             self._setup_costs_from_path()
+
+    def get_variant_facets(self) -> tuple[ActionVariantFacet, ...]:
+        return (ActionVariantFacet(key="movement", value=self.movement_mode.value,
+                                  label=self.movement_mode.value.title()),)
 
     def get_movement_mode(self) -> MovementMode:
         return self.movement_mode
@@ -5300,7 +5304,7 @@ class SpellAction(BaseAction):
             variants.append(self._create_variant(cast_at_level=0))
         else:
             for slot_level in range(self.spell_level, 10):
-                if entity.has_spell_slot(slot_level):
+                if entity.has_spell_slot_capacity(slot_level):
                     variants.append(self._create_variant(cast_at_level=slot_level))
 
         return variants
@@ -5620,6 +5624,8 @@ class Drop(BaseAction):
     The item_uuid is bound at creation time (one Drop per item).
     """
     name: str = Field(default="Drop", description="Action name for dropping an inventory item.")
+    interaction_affordance: ActionAffordance = Field(default_factory=lambda: ActionAffordance(
+        surface="inventory", binding="source_item"))
     description: str = Field(
         default="Drop an item from inventory",
         description="Action description shown for inventory item drops.",

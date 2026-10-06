@@ -302,7 +302,7 @@ async def _run(
                 mouse_position=pygame.mouse.get_pos() if show_debug else None,
                 extra_commands=commands,
                 revisions=(latest.reducer_cursor, latest.reducer_cursor, historical.reducer_cursor),
-            )
+            ).evidence
             assert evidence is not None
             if not evidence.matches:
                 raise RuntimeError("map draw evidence differs from the published candidates")

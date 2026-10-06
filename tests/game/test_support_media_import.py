@@ -115,7 +115,11 @@ def test_support_recipes_retain_duration_ground_registration_and_no_damage():
     for name, (duration_ms, cell, contact_ms) in expected.items():
         recipe = data.drafts[f"spell.{name}"]
         assert recipe.damage is None and recipe.projectile is None and recipe.area is None
-        assert recipe.contact is not None and recipe.contact.delayMs == 0
+        assert recipe.contact is not None
+        # Shield of Faith's approved contact milestone follows the cast release;
+        # its two halves remain registered relative to that contact, not release.
+        contact_delay = 1000 / 12 if name == "shield_of_faith" else 0
+        assert recipe.contact.delayMs == pytest.approx(contact_delay)
         assert recipe.cast.weaponGlow is not None
         assert recipe.cast.weaponGlow.category == "Magic2"
         assert recipe.cast.weaponGlow.sourceSheet == f"/spritesheets/Magic2/{recipe.cast.actionClip}.png"
@@ -124,6 +128,7 @@ def test_support_recipes_retain_duration_ground_registration_and_no_damage():
         for track, depth in zip(recipe.media, ("behind_body", "front_body"), strict=True):
             assert track.depth == depth and track.scale == .5 and track.fps == 32
             assert track.attachment == ("source_ground" if name == "thaumaturgy" else "target_ground")
+            assert track.clock == ("contact" if name == "shield_of_faith" else "release")
             assert track.startOffsetMs + contact_ms == pytest.approx(0)
             assert track.durationMs == duration_ms
             asset = data.projectile_assets[track.assetId]

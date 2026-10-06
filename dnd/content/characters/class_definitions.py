@@ -350,6 +350,8 @@ class ClassChoiceDefinition:
     choice_id: str
     selections: tuple[int, ...]
     allowed_values: tuple[str, ...]
+    optional: bool = False
+    selection_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -697,6 +699,8 @@ def _sorcerer_choices(level: int) -> tuple[ClassChoiceDefinition, ...]:
             f"class.sorcerer.level_{level}.spell_replacement",
             (2,),
             _sorcerer_ranked_spells(level),
+            optional=True,
+            selection_labels=('Replace known spell', 'Learn replacement'),
         ))
     metamagic_count = _SORCERER_METAMAGIC_LEARN_COUNTS.get(level)
     if metamagic_count is not None:
@@ -794,6 +798,39 @@ def _parse_asi(values: tuple[str, ...]) -> tuple[
     raise ValueError("ASI must be one +2, two distinct +1 values, or feat.lucky")
 
 
+def next_class_level(class_id: CharacterClass, applied_levels: tuple[AppliedClassLevel, ...]) -> AppliedClassLevel:
+    """Cold next-level input; choice values still require ordinary resolution."""
+    count = sum(row.class_id is class_id for row in applied_levels) + 1
+    subclass = (CharacterSubclass.DRACONIC_BLOODLINE if class_id is CharacterClass.SORCERER
+                else CharacterSubclass.CHAMPION if class_id is CharacterClass.FIGHTER and count >= 3
+                else CharacterSubclass.BERSERKER if class_id is CharacterClass.BARBARIAN and count >= 3 else None)
+    return AppliedClassLevel(step_id=f"{class_id.value}.level_{count}",
+        character_level=len(applied_levels)+1, class_id=class_id,
+        resulting_class_level=count, subclass_id=subclass)
+
+
+def class_level_choices(level: AppliedClassLevel, *, first_class: bool) -> tuple[ClassChoiceDefinition, ...]:
+    """The same authored ordered requirements used by resolvers and draft views."""
+    rank = level.resulting_class_level - 1
+    match level.class_id:
+        case CharacterClass.FIGHTER:
+            starting, skills = FIGHTER_STARTING_EQUIPMENT, FIGHTER_CLASS_SKILLS
+            rows = (*FIGHTER_DEFINITION.levels[rank].choices,
+                    *(FIGHTER_DEFINITION.champion_levels[rank].choices
+                      if level.subclass_id is CharacterSubclass.CHAMPION else ()))
+        case CharacterClass.BARBARIAN:
+            starting, skills = BARBARIAN_STARTING_EQUIPMENT, BARBARIAN_CLASS_SKILLS
+            rows = BARBARIAN_DEFINITION.levels[rank].choices
+        case CharacterClass.SORCERER:
+            starting, skills = SORCERER_STARTING_EQUIPMENT, SORCERER_CLASS_SKILLS
+            rows = (*SORCERER_DEFINITION.levels[rank].choices, *SORCERER_DEFINITION.draconic_levels[rank].choices)
+    if first_class:
+        prefix = level.class_id.value
+        rows = (ClassChoiceDefinition(f"{prefix}.first_class.starting_equipment", (1,), starting),
+                ClassChoiceDefinition(f"{prefix}.proficiencies.skills", (2,), tuple(skills)), *rows)
+    return rows
+
+
 def resolve_fighter_level(
     level: AppliedClassLevel,
     applied_levels: tuple[AppliedClassLevel, ...],
@@ -828,25 +865,7 @@ def resolve_fighter_level(
     )
     if first_class_entry and not inferred_first_class:
         raise ValueError("first-class Fighter entry must be character level one")
-    expected_choices: list[ClassChoiceDefinition] = []
-    if expected_class_level == 1 and first_class_entry:
-        expected_choices.extend((
-            ClassChoiceDefinition(
-                "class.fighter.first_class.starting_equipment",
-                (1,),
-                FIGHTER_STARTING_EQUIPMENT,
-            ),
-            ClassChoiceDefinition(
-                "class.fighter.proficiencies.skills",
-                (2,),
-                tuple(FIGHTER_CLASS_SKILLS),
-            ),
-        ))
-    expected_choices.extend(FIGHTER_DEFINITION.levels[expected_class_level - 1].choices)
-    if level.subclass_id is CharacterSubclass.CHAMPION:
-        expected_choices.extend(
-            FIGHTER_DEFINITION.champion_levels[expected_class_level - 1].choices,
-        )
+    expected_choices = class_level_choices(level, first_class=first_class_entry)
 
     choices = _choice_values(level)
     expected_ids = tuple(row.choice_id for row in expected_choices)
@@ -970,23 +989,7 @@ def resolve_barbarian_level(
     )
     if first_class_entry and not inferred_first_class:
         raise ValueError("first-class Barbarian entry must be character level one")
-    expected_choices: list[ClassChoiceDefinition] = []
-    if first_class_entry:
-        expected_choices.extend((
-            ClassChoiceDefinition(
-                "class.barbarian.first_class.starting_equipment",
-                (1,),
-                BARBARIAN_STARTING_EQUIPMENT,
-            ),
-            ClassChoiceDefinition(
-                "class.barbarian.proficiencies.skills",
-                (2,),
-                tuple(BARBARIAN_CLASS_SKILLS),
-            ),
-        ))
-    expected_choices.extend(
-        BARBARIAN_DEFINITION.levels[expected_class_level - 1].choices,
-    )
+    expected_choices = class_level_choices(level, first_class=first_class_entry)
 
     choices = _choice_values(level)
     expected_ids = tuple(row.choice_id for row in expected_choices)
@@ -1109,32 +1112,13 @@ def resolve_sorcerer_level(
     )
     if first_class_entry and not inferred_first_class:
         raise ValueError("first-class Sorcerer entry must be character level one")
-    expected_choices: list[ClassChoiceDefinition] = []
-    if first_class_entry:
-        expected_choices.extend((
-            ClassChoiceDefinition(
-                "class.sorcerer.first_class.starting_equipment",
-                (1,),
-                SORCERER_STARTING_EQUIPMENT,
-            ),
-            ClassChoiceDefinition(
-                "class.sorcerer.proficiencies.skills",
-                (2,),
-                tuple(SORCERER_CLASS_SKILLS),
-            ),
-        ))
-    expected_choices.extend(
-        SORCERER_DEFINITION.levels[expected_class_level - 1].choices,
-    )
-    expected_choices.extend(
-        SORCERER_DEFINITION.draconic_levels[expected_class_level - 1].choices,
-    )
+    expected_choices = class_level_choices(level, first_class=first_class_entry)
 
     choices = _choice_values(level)
     required_ids = tuple(
         row.choice_id
         for row in expected_choices
-        if not row.choice_id.endswith(".spell_replacement")
+        if not row.optional
     )
     replacement_id = f"class.sorcerer.level_{expected_class_level}.spell_replacement"
     accepted_ids = tuple(row.choice_id for row in expected_choices)
@@ -1149,7 +1133,7 @@ def resolve_sorcerer_level(
     for requirement in expected_choices:
         values = choices.get(requirement.choice_id)
         if values is None:
-            if requirement.choice_id.endswith(".spell_replacement"):
+            if requirement.optional:
                 continue
             raise ValueError(f"missing Sorcerer choice {requirement.choice_id}")
         if len(values) not in requirement.selections:
@@ -1299,6 +1283,8 @@ __all__ = [
     "SORCERER_SPELL_RANKS",
     "SORCERER_STARTING_EQUIPMENT",
     "SorcererDefinition",
+    "class_level_choices",
+    "next_class_level",
     "resolve_barbarian_level",
     "resolve_fighter_level",
     "resolve_sorcerer_level",

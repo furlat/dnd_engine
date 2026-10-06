@@ -80,7 +80,7 @@ def test_real_frames_prove_disclosure_door_torch_memory_and_locality() -> None:
                 time_seconds,
                 collect_evidence=True, show_grid=True,
                 mouse_position=None,
-            )
+            ).evidence
             assert evidence is not None
             assert evidence.matches
             assert evidence.candidate_coordinates == 4096
@@ -104,7 +104,7 @@ def test_real_frames_prove_disclosure_door_torch_memory_and_locality() -> None:
             1.3,
             collect_evidence=True, show_grid=True,
             mouse_position=None,
-        )
+        ).evidence
         assert later_closed is not None
         assert later_closed.flame_frame != closed.flame_frame
         assert next(
@@ -198,7 +198,7 @@ def test_real_frames_prove_disclosure_door_torch_memory_and_locality() -> None:
             1.2,
             collect_evidence=True, show_grid=False,
             mouse_position=None,
-        )
+        ).evidence
         assert local_evidence is not None
         assert (
             local_evidence.candidate_coordinates,
@@ -238,7 +238,7 @@ def test_real_frames_prove_disclosure_door_torch_memory_and_locality() -> None:
                 time_seconds,
                 collect_evidence=True, show_grid=False,
                 mouse_position=None,
-            )
+            ).evidence
             assert memory_evidence is not None
             assert memory_evidence.matches
             assert {row[3] for row in memory_evidence.actual_calculations} == {0.0}
@@ -324,7 +324,7 @@ def test_transparent_margin_fringe_preserves_world_draw_obligation() -> None:
             0.2,
             collect_evidence=True, show_grid=False,
             mouse_position=None,
-        )
+        ).evidence
         assert evidence is not None
         represented, hidden = _display_sources(reduced, evidence)
         world_index = next(

@@ -4,6 +4,7 @@ import numpy as np
 import pygame
 
 from game.draw_commands import DrawCommand
+from game.interaction_frame import cut_selection
 
 
 def compose_floor_coverings(commands: list[DrawCommand]) -> list[DrawCommand]:
@@ -49,7 +50,11 @@ def compose_floor_coverings(commands: list[DrawCommand]) -> list[DrawCommand]:
             alpha = pygame.surfarray.pixels_alpha(remainder)
             alpha[source.left:source.right, source.top:source.bottom] *= ~selected
             del alpha
-            result[ground_index] = ground._replace(surface=remainder)
+            retained = np.ones(ground.surface.get_size(), dtype=bool)
+            retained[source.left:source.right, source.top:source.bottom] &= ~selected
+            selection, blocker = cut_selection(ground, retained)
+            result[ground_index] = ground._replace(surface=remainder, selection=selection,
+                                                   selection_block_mask=blocker)
             transferred = True
         if transferred:
             underlay.blit(command.surface, (0, 0))

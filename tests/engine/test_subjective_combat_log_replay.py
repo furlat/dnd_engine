@@ -402,6 +402,7 @@ def _completed_atomic_movement_log(
         )
         step = step_event.generate_combat_log()
         assert isinstance(step, CombatLogEntry)
+        assert f"step {index}/{len(path) - 1}; {step_event.movement_cost}ft" in step.detailed
         step.perceiver_uuids = {OBSERVER_UUID}
         step.identified_entity_observer_uuids = {
             HIDDEN_SOURCE_UUID: {OBSERVER_UUID},
@@ -411,6 +412,9 @@ def _completed_atomic_movement_log(
             position_evidence_key(destination): {OBSERVER_UUID},
         }
         steps.append(step)
+        visible_step = _project(step)
+        assert visible_step is not None
+        assert f"step {index}/{len(path) - 1}; {step_event.movement_cost}ft" in visible_step.detailed
 
     if movement_type == "jump":
         event = JumpEvent(

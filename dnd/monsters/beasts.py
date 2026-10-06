@@ -184,7 +184,7 @@ def _declare_beast(definition: BeastDefinition) -> ContentDeclaration:
         descriptor=ContentDescriptorSpec(display_name=definition.name,
             description=definition.adaptation, tags=("creature", "beast", "adapted"),
             visibility=ContentVisibility.PUBLIC,
-            presentation=ContentPresentation(visual_variant_key=definition.key, ui_group="creatures.neurodragon")),
+            presentation=ContentPresentation(portrait_key=f"creature.{definition.key}", visual_variant_key=definition.key, ui_group="creatures.neurodragon")),
         provenance=ContentProvenance(primary_source_id="neurodragon.original_b2b3930",
             source_anchor=definition.source, relation=ContentProvenanceRelation.COMPATIBLE_ADAPTATION,
             adapted_from_source_id=definition.source_id, fidelity=ContentFidelity.PARTIAL,

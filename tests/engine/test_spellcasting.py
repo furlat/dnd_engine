@@ -481,7 +481,10 @@ def test_eb_14_007_registered_spells_surface_executable_slot_variants() -> None:
         info for info in exhausted.entity_actions if info.base_template_name == "Magic Missile"
     ]
 
-    assert [info.template_name for info in remaining_missile_actions] == ["Magic Missile__slot_3"]
+    assert [info.template_name for info in remaining_missile_actions] == [
+        "Magic Missile__slot_1", "Magic Missile__slot_3"]
+    assert not remaining_missile_actions[0].can_afford and not remaining_missile_actions[0].valid_targets
+    assert remaining_missile_actions[1].can_afford and remaining_missile_actions[1].valid_targets
     assert any(info.template_name == "Fire Bolt" for info in exhausted.all_actions)
     assert caster.has_spell_slot(3)
 

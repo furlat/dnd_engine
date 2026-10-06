@@ -136,7 +136,7 @@ def test_native_destruction_settles_same_device_body_after_contact_without_retai
                 choreography=None if idle else group, choreography_media=None if idle else media)
             evidence = draw_frame(screen, frame.displayed, catalog, cache, camera, 3,
                 show_grid=False, show_debug=False, mouse_position=None, extra_commands=frame.commands,
-                world_transitions=frame.world_transitions, collect_evidence=True)
+                world_transitions=frame.world_transitions, collect_evidence=True).evidence
             assert evidence is not None and evidence.matches
             devices = [row for row in evidence.actual_draws if len(row) > 6 and row[6] in ("device", "device_wreck")]
             tethers = [row for row in evidence.actual_draws if len(row) > 6 and row[6] == "sustained_tether"]
@@ -283,7 +283,7 @@ def test_unseen_old_device_does_not_gain_a_break_animation_from_late_wreck_sight
     screen, catalog, cache, _, _ = raster
     camera = Camera(viewport=screen.get_size()).with_focus(original.placement.position)
     evidence = draw_frame(screen, state, catalog, cache, camera, 0, show_grid=False,
-        show_debug=False, mouse_position=None, collect_evidence=True)
+        show_debug=False, mouse_position=None, collect_evidence=True).evidence
     assert evidence is not None
     wreck, = (row for row in evidence.actual_draws if len(row) > 6 and row[6] == "device_wreck")
     assert wreck[0] == str(original.replacement_uuid) and wreck[9] == 0

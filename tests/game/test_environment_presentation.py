@@ -70,7 +70,7 @@ def _render_head(raster, before, root):
         evidence = draw_frame(screen, frame.displayed, catalog, cache, camera, 0,
             show_grid=False, show_debug=False, mouse_position=None,
             extra_commands=frame.commands if actors else (), world_transitions=frame.world_transitions,
-            collect_evidence=True)
+            collect_evidence=True).evidence
         assert evidence is not None and evidence.matches
         return frame, evidence.actual_draws, pygame.surfarray.array3d(screen)
 
@@ -107,7 +107,7 @@ def test_recovered_rotated_banks_fit_the_native_east_boundary(raster, item_id):
     for quadrant, source_pose in enumerate(("n", "e", "s", "w")):
         camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus((5, 4))
         evidence = draw_frame(screen, state, catalog, cache, camera, 0, show_grid=False,
-            show_debug=False, mouse_position=None, collect_evidence=True)
+            show_debug=False, mouse_position=None, collect_evidence=True).evidence
         assert evidence is not None
         poses = {row[8] for row in evidence.actual_draws
                  if len(row) > 9 and row[0] == identity and row[6] == "environment_door"}
@@ -229,7 +229,7 @@ def test_late_saved_initialization_uses_recorded_wreck_state_without_replaying_b
         for quadrant in range(4):
             camera = Camera(quadrant=quadrant, viewport=screen.get_size()).with_focus(wreck.placement.position)
             evidence = draw_frame(screen, state, catalog, cache, camera, 0, show_grid=False,
-                show_debug=False, mouse_position=None, collect_evidence=True)
+                show_debug=False, mouse_position=None, collect_evidence=True).evidence
             assert evidence is not None and evidence.matches
             assert _bank_frames(evidence.actual_draws, "environment_wreck", wreck.item.item_uuid) == {
                 (bank.identity, bank.frame_count - 1)}
@@ -347,7 +347,7 @@ def test_native_trap_hardware_owns_one_body_during_actual_plate_activation(raste
         assert len(hardware_ids) == len(mechanism_ids) == 2
         camera = Camera(viewport=screen.get_size()).with_focus((6, 4))
         initial = draw_frame(screen, state, catalog, cache, camera, 0, show_grid=False,
-            show_debug=False, mouse_position=None, collect_evidence=True)
+            show_debug=False, mouse_position=None, collect_evidence=True).evidence
         assert initial is not None
         stages = [initial.actual_draws]
         for root in roots:
@@ -384,7 +384,7 @@ def test_retained_architecture_keeps_only_its_frame_without_disclosing_leaf_stat
         retained_pixels = []
         for current, expected in ((state, True), (hidden, False), (stale_open, False)):
             evidence = draw_frame(screen, current, catalog, cache, camera, 0, show_grid=False,
-                show_debug=False, mouse_position=None, collect_evidence=True)
+                show_debug=False, mouse_position=None, collect_evidence=True).evidence
             assert evidence is not None
             parts = {row[6] for row in evidence.actual_draws if len(row) > 6 and row[0] == identity}
             assert ("environment_door" in parts) is expected

@@ -72,9 +72,11 @@ def arena():
         reset_engine_runtime()
 
 
-def cast(caster, target, behavior):
+def cast(caster, target, behavior, *, ability=None):
     choices = [(action, option) for action in get_available_actions(caster).all_actions
                if action.behavior_id == behavior and action.can_afford
+               and (ability is None or any(facet.key == "ability" and facet.value == ability
+                                          for facet in action.variant_facets))
                for option in action.valid_targets if option.target_uuid == target.uuid]
     assert choices, (behavior, target.name)
     with fixed_dice_faces(*([2] * 20)):
@@ -121,7 +123,7 @@ def test_enhance_choice_and_one_paid_cast_survive_both_recorded_boundaries(arena
                                          enhance_ability_type=ability))
     before, cursor = baseline(caster)
     slots = caster.action_economy.spell_slot_2.normalized_score
-    result = cast(caster, target, "spell.enhance_ability")
+    result = cast(caster, target, "spell.enhance_ability", ability=ability)
     assert result.effect_id == f"support.enhance_ability.{ability}"
     assert caster.action_economy.spell_slot_2.normalized_score == slots - 1
     member = target.active_conditions["Enhance Ability"]
@@ -146,7 +148,7 @@ def test_enhance_choice_is_in_late_observation_without_inventing_a_default(arena
     game, caster, recipient, _ = arena
     caster.register_action(EnhanceAbility(source_entity_uuid=caster.uuid, template=True,
                                          enhance_ability_type=ability))
-    cast(caster, recipient, "spell.enhance_ability")
+    cast(caster, recipient, "spell.enhance_ability", ability=ability)
     observer = actor(game, "Late observer", (5, 6))
     before, cursor = baseline(observer)
     member = next(row for row in before.actors[recipient.uuid].conditions if row.name == "Enhance Ability")

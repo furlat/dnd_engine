@@ -25,7 +25,7 @@ MilestoneAnchor = Literal['commit', 'reconciliation', 'start', 'release', 'conta
 class PresentationMilestone:
     __pydantic_config__ = ConfigDict(extra='forbid')
     owner_uuid: UUID | None
-    family: Literal['state', 'action', 'body', 'equipment', 'motion', 'application', 'ground_delivery', 'damage', 'healing', 'life']
+    family: Literal['state', 'action', 'body', 'equipment', 'motion', 'application', 'ground_delivery', 'damage', 'healing', 'life', 'turn']
     index: int
     anchor: MilestoneAnchor
     at_ms: FiniteFloat
@@ -50,6 +50,9 @@ def presentation_milestones(choreography: BoundChoreography | None = None,
         timeline, offset = visit.timeline, visit.offset_ms
         if isinstance(timeline, BoundChoreography):
             commits(timeline.root_uuid, timeline.state_commits, offset)
+            for index, (at, _, event_uuid) in enumerate(timeline.turn_starts):
+                result.append(PresentationMilestone(event_uuid, 'turn', index,
+                    'start', offset + at, (event_uuid,)))
             for index, action in enumerate(timeline.nodes):
                 bound = action.bound.timeline
                 clocks: list[tuple[MilestoneAnchor, float]] = [('start', 0.), ('body_end', bound.body_end_ms), ('complete', bound.complete_ms)]
@@ -107,6 +110,9 @@ def presentation_milestones(choreography: BoundChoreography | None = None,
                 if healing.end_ms is not None:
                     result.append(PresentationMilestone(healing.event.uuid, 'healing', index,
                         'complete', offset + healing.end_ms, (healing.event.uuid,)))
+            for index, lifecycle in enumerate(timeline.lifecycle):
+                result.append(PresentationMilestone(lifecycle.event.uuid, 'life', index,
+                    'start', offset + lifecycle.start_ms, (lifecycle.event.uuid,)))
         else:
             for index, leg in enumerate(timeline.legs):
                 leg_clocks: tuple[tuple[MilestoneAnchor, float], ...] = (('start', leg.start_ms), ('complete', leg.end_ms))
